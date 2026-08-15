@@ -99,10 +99,10 @@ This project maintains 5 documentation files in the repository root. Read them i
 **Rule for agents:** Before proposing an alternative approach (e.g., "let's use Redux instead of Zustand", "let's switch from Minimal APIs to Controllers"), read `TECHNICAL-SOLUTIONS.md`. If the topic is covered there — follow the documented decision. If you believe the decision is outdated — propose updating `TECHNICAL-SOLUTIONS.md` with new rationale, do not silently override.
 
 ## Sub-Agent Rules (Mandatory)
-- **Allowed models for sub-agents ONLY**: `Kimi K2.7` and `Kimi K2.7 coding highspeed`.
+- **Allowed models for sub-agents ONLY**: `Kimi K2.7` and `Kimi K2.7 coding highspeed`. For extra choice - `Kimi K3` - like orchestration and audit of long context tasks.
 - **No other models** may be spawned as sub-agents — no exceptions, no fallbacks, no "just this once".
 - **The `primary` alias (main agent's model) is FORBIDDEN for sub-agent spawns**, even though the runtime offers it. Always pick an explicit pool model.
-- **Default choice**: `Kimi K2.7 coding highspeed` for coding/execution sub-agents (coder, fixer); `Kimi K2.7` for review/analysis sub-agents (reviewer, researcher).
+- **Default choice**: `Kimi K2.7 coding highspeed` for coding/execution sub-agents (coder, fixer); `Kimi K2.7` for review/analysis sub-agents (reviewer, researcher); `Kimi K3` for orchestration and audit;
 - If a sub-agent model is unavailable or fails to spawn — STOP and report to the user. Do NOT silently substitute another model.
 - Sub-agents inherit this file's rules: communication style, code conventions, workflow and no-auto-commits apply to them too.
 

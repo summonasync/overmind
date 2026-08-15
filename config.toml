@@ -84,11 +84,10 @@ display_name = "K3-256k"
 support_efforts = [ "low", "high", "max" ]
 default_effort = "high"
 
-# ===== Sub-agent model pool =====
-# Требует: export KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1
 [secondary_model]
 default_model = "kimi-code/kimi-for-coding-highspeed"
 
 [secondary_model.models]
 "kimi-code/kimi-for-coding-highspeed" = "K2.7 Coding Highspeed: coding, refactoring, small edits, exploration — default for coder/fixer sub-agents"
 "kimi-code/kimi-for-coding" = "K2.7 Coding: heavier tasks — review, planning, deep debugging"
+"kimi-code/k3"= "K3 Coding: audit big tasks, orchestrator tasks, deep planning of the project"
