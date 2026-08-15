@@ -98,6 +98,26 @@ This project maintains 5 documentation files in the repository root. Read them i
 
 **Rule for agents:** Before proposing an alternative approach (e.g., "let's use Redux instead of Zustand", "let's switch from Minimal APIs to Controllers"), read `TECHNICAL-SOLUTIONS.md`. If the topic is covered there — follow the documented decision. If you believe the decision is outdated — propose updating `TECHNICAL-SOLUTIONS.md` with new rationale, do not silently override.
 
+## Sub-Agent Rules (Mandatory)
+- **Allowed models for sub-agents ONLY**: `Kimi K2.7` and `Kimi K2.7 coding highspeed`.
+- **No other models** may be spawned as sub-agents — no exceptions, no fallbacks, no "just this once".
+- **The `primary` alias (main agent's model) is FORBIDDEN for sub-agent spawns**, even though the runtime offers it. Always pick an explicit pool model.
+- **Default choice**: `Kimi K2.7 coding highspeed` for coding/execution sub-agents (coder, fixer); `Kimi K2.7` for review/analysis sub-agents (reviewer, researcher).
+- If a sub-agent model is unavailable or fails to spawn — STOP and report to the user. Do NOT silently substitute another model.
+- Sub-agents inherit this file's rules: communication style, code conventions, workflow and no-auto-commits apply to them too.
+
+**Enforcement (config, not just prompt):** this policy is backed by the sub-agent model pool in `~/.kimi-code/config.toml` (Kimi Code CLI, v2 engine):
+
+```toml
+[secondary_model]
+default_model = "kimi-code/kimi-for-coding-highspeed"
+[secondary_model.models]
+"kimi-code/kimi-for-coding-highspeed" = "K2.7 Coding Highspeed: coding, refactoring, small edits, exploration — default for coder/fixer sub-agents"
+"kimi-code/kimi-for-coding" = "K2.7 Coding: heavier tasks — review, planning, deep debugging"
+```
+
+The feature is experimental: enable with `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1` (or `KIMI_CODE_EXPERIMENTAL_FLAG=1`). TUI equivalent: `/secondary-model`. The pool makes the `Agent`/`AgentSwarm` `model` parameter list ONLY these aliases — this file's rules cover the rest (`primary` ban, role mapping).
+
 ## Development Workflow (Mandatory)
 1. **Complexity Assessment** — Before coding, determine if task is Simple (<3 files, single layer) or Complex.
 2. **Simple tasks** — Coder can execute directly.
