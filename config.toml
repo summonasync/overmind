@@ -2,6 +2,7 @@ default_plan_mode = false
 merge_all_available_skills = false
 extra_skill_dirs = [ "~/.kimi-code/skills" ]
 default_model = "kimi-code/k3"
+default_permission_mode = "yolo"
 
 [loop_control]
 max_steps_per_turn = 500
@@ -85,9 +86,9 @@ support_efforts = [ "low", "high", "max" ]
 default_effort = "high"
 
 [secondary_model]
-default_model = "kimi-code/kimi-for-coding-highspeed"
+default_model = "kimi-code/kimi-for-coding"
 
 [secondary_model.models]
-"kimi-code/kimi-for-coding-highspeed" = "K2.7 Coding Highspeed: coding, refactoring, small edits, exploration — default for coder/fixer sub-agents"
-"kimi-code/kimi-for-coding" = "K2.7 Coding: heavier tasks — review, planning, deep debugging"
-"kimi-code/k3"= "K3 Coding: audit big tasks, orchestrator tasks, deep planning of the project"
+"kimi-code/kimi-for-coding" = "K2.7 Coding: coding, refactoring, small edits, exploration — default for coder/fixer sub-agents"
+"kimi-code/k3" = "K3 Coding: audit big tasks, orchestrator tasks, deep planning of the project"
+
