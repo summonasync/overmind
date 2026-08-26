@@ -17,6 +17,8 @@ This skill handles **task-based development workflows** only: planning → codin
 
 For **system-wide audits** (sprint retrospectives, phase-end validation, security/compliance checks, comprehensive health checks) — use `audit-orchestrator`. Do NOT attempt to perform full-project audits within this skill.
 
+For **coding challenges / тестовые задания** (any task marked as a test task, where the deliverable must show zero AI-agent traces) — hand over to `coding-challenge-orchestrator` immediately. Its fixed pipeline (coding → review → obfuscation via K3 → obfuscation review → validation) replaces this skill's pipeline entirely. Detect the marker at intake: task tagged as тестовое/challenge, or the user states the work is a test assignment.
+
 
 ## Start-of-Work Protocol (MANDATORY — execute before ANY task)
 
@@ -57,16 +59,21 @@ After reading all 4 files, verify consistency:
 ---
 
 ## Execution Pipeline
-For ANY complex task (more than 3 files changed, or cross-layer changes, or new API + frontend integration), execute STRICT sequence:
+For ANY complex task (more than 3 files changed, or cross-layer changes, or new API + frontend integration), execute STRICT sequence.
+
+**Exception:** pure documentation tasks (`documentation-writer`) and learning-material tasks (`tutor-master`) skip Phase 3 code review — apply the target skill's own verification checklist instead.
 
 ### Phase 1: Architecture (if needed)
 - If task involves new routes, API contracts, or service boundaries → consult `dotnet-architect` or `next-js-architect` first.
 - Output: updated `context.md`, folder structure, API contract.
 
 ### Phase 2: Implementation
-- Delegate coding to appropriate skill:
+- Delegate work to the appropriate skill:
   - `.NET backend` → `dotnet-coder`
   - `Next.js frontend` → `next-js-coder`
+  - `.NET MAUI app` (pages, view models, XAML, platform code) → `maui-coder`
+  - `Documentation` (README, ADR, runbooks, doc restructure) → `documentation-writer`
+  - `Learning materials` (study plans, concept explanations, assessments) → `tutor-master`
 - Coder MUST follow all rules from their skill file.
 - Coder MUST output list of changed files.
 
@@ -76,6 +83,7 @@ After Phase 2 completion, run reviews in this order:
 **ALWAYS run:**
 - `.NET code changed` → apply `dotnet-code-reviewer` checklist
 - `Next.js code changed` → apply `next-js-coder-reviewer` checklist
+- `MAUI code changed` → apply `dotnet-code-reviewer` checklist + `maui-coder` rules (MVVM, code-behind purity, platform isolation)
 
 **CONDITIONALLY run additional reviews:**
 - **Security-related changes?** (auth, new endpoints, config, secrets, PII handling) → run `dotnet-code-reviewer` Security section with elevated priority.
@@ -128,6 +136,8 @@ Task is COMPLEX if:
 | Architecture | >10 files, phase completion, structural refactoring | `architect-review` or `dotnet-architect` |
 | Frontend | Next.js files changed | `next-js-coder-reviewer` |
 | Backend | C# files changed | `dotnet-code-reviewer` |
+| MAUI | .NET MAUI files changed (XAML, view models, Platforms/) | `dotnet-code-reviewer` + `maui-coder` rules |
+| Docs | Documentation files created/changed | `documentation-writer` verification checklist |
 
 ---
 

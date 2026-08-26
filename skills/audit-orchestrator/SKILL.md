@@ -40,6 +40,9 @@ Based on documentation analysis, determine which audit types are relevant:
 | Deferred items, TODO/FIXME in code, legacy mentions | **Tech Debt Audit** | Deprecated APIs, uncompleted tasks, migration blockers |
 | MassTransit topology changes, saga additions | **Messaging Audit** | Queue design, retry policies, outbox, saga state machines |
 | Frontend changes, Next.js upgrades, BFF modifications | **Frontend Audit** | RSC compliance, BFF pattern, component decomposition |
+| MAUI project present, mobile/desktop tasks | **MAUI Audit** | MVVM compliance, code-behind purity, platform code isolation, main-thread violations |
+| Doc tasks, doc drift suspected, onboarding complaints | **Documentation Audit** | Docs vs code accuracy, stale commands/paths, contradiction with AGENTS.md/STRUCTURE.md |
+| Incoming vendor repo, AI-usage suspicion, pre/post-obfuscation check | **AI Trace Audit** | Delegate to `ai-code-detector` (K3): where AI code lives, volume, signatures |
 
 **If no specific triggers** — run Base + Architecture + Security as default.
 
@@ -107,6 +110,21 @@ Check the entire codebase against project rules:
 - [ ] **Message contracts:** Versioned, immutable, no breaking changes without versioning.
 - [ ] **Saga state:** Sagas use `MassTransitStateMachine`, not custom orchestration.
 - [ ] **Consumer idempotency:** All consumers handle duplicate messages gracefully.
+
+### MAUI Audit (if triggered)
+Run against `maui-coder` skill rules:
+- [ ] **MVVM:** No business logic in code-behind. View models use CommunityToolkit.Mvvm generators.
+- [ ] **Compiled bindings:** `x:DataType` set on pages/views.
+- [ ] **Platform isolation:** Platform code in `Platforms/<Platform>/`, no scattered `#if` blocks.
+- [ ] **Threading:** No `Task.Run` for UI work; main-thread marshalling where needed.
+- [ ] **DI:** Pages/view models registered in `MauiProgram` via feature extension methods.
+
+### Documentation Audit (if triggered)
+Run against `documentation-writer` skill rules:
+- [ ] **Accuracy:** Commands/paths in docs exist and run. Spot-check at least the quickstart.
+- [ ] **Consistency:** No contradictions between `context.md`, `STRUCTURE.md`, `TECHNICAL-SOLUTIONS.md`, `AGENTS.md`.
+- [ ] **Language:** Each doc follows the language convention from the `AGENTS.md` documentation table.
+- [ ] **Drift:** Docs describing features changed since last audit were updated in the same commits.
 
 ---
 

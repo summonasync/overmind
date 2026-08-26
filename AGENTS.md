@@ -122,7 +122,7 @@ Use  `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, п�
 
 ## Documentation Files
 
-This project maintains 5 documentation files in the repository root. Read them in this order before making changes:
+This project maintains the following documentation files in the repository root. Read them in this order before making changes:
 
 | File | Purpose | Language | When to Read |
 |------|---------|----------|-------------|
@@ -139,7 +139,7 @@ This project maintains 5 documentation files in the repository root. Read them i
 - **Allowed models for sub-agents ONLY**: `Kimi K2.7`. For extra choice - `Kimi K3` - like orchestration and audit of long context tasks.
 - **No other models** may be spawned as sub-agents — no exceptions, no fallbacks, no "just this once".
 - **The `primary` alias (main agent's model) is FORBIDDEN for sub-agent spawns**, even though the runtime offers it. Always pick an explicit pool model.
-- **Default choice**: `Kimi K2.7` for coding/execution sub-agents (coder, fixer), review/analysis sub-agents (reviewer, researcher); `Kimi K3` for orchestration and audit;
+- **Default choice**: `Kimi K2.7` for coding/execution sub-agents (coder, fixer), review/analysis sub-agents (reviewer, researcher); `Kimi K3` for orchestration, audit, AI-code detection (`ai-code-detector`), and AI-trace obfuscation (`ai-obfuscator` — ALWAYS K3, never the model that wrote the code);
 - If a sub-agent model is unavailable or fails to spawn — STOP and report to the user. Do NOT silently substitute another model.
 - Sub-agents inherit this file's rules: communication style, code conventions, workflow and no-auto-commits apply to them too.
 
@@ -153,6 +153,31 @@ default_model = "kimi-code/kimi-for-coding"
 ```
 
 The feature is experimental: enable with `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1` (or `KIMI_CODE_EXPERIMENTAL_FLAG=1`). TUI equivalent: `/secondary-model`. The pool makes the `Agent`/`AgentSwarm` `model` parameter list ONLY these aliases — this file's rules cover the rest (`primary` ban, role mapping).
+
+## AI Coding Traces (applies to ALL agents)
+Write code like a human engineer, not like a language model. Full catalog of signatures and humanization techniques lives in the `ai-obfuscator` skill — these are the standing rules for everyday work:
+
+- **No template scaffolding.** Do not emit the same guard-clause block, the same logging line, or the same error-handling shape in every file. Vary approach where a human would.
+- **No obvious comments.** Never write comments that restate the code (`// fetch users`, `// handle click`). Comments exist only for non-obvious decisions — and the default is none.
+- **No gold-plating.** Match the seniority and style the task actually calls for. Do not memoize everything, abstract everything, or add layers nobody asked for.
+- **No statistical perfection.** Uniform function lengths, identical file shapes, alphabetically-perfect imports across every file are AI signatures. Real codebases have variance.
+- **Match the surrounding human style** when working in an existing codebase — its conventions beat this file's defaults.
+- Quality is never negotiable: "human-like" means organic, not sloppy. Correctness, security, and performance rules always win.
+
+## Coding Challenge Rules (тестовые задания — свод правил)
+Applies to any task marked as тестовое задание / coding challenge. Orchestrated exclusively by `coding-challenge-orchestrator`.
+
+1. **Workspace isolation.** All challenge work happens in a nested folder: `coding-challenges/<task-slug>/`. The folder is a self-contained deliverable — treat it as a standalone repo root.
+2. **Zero AI leakage.** Inside the challenge folder there must be NOTHING that betrays agent involvement:
+   - No `AGENTS.md`, `CLAUDE.md`, `.kimi/`, `.cursor/`, `.ai/` or any agent-config files.
+   - No references to skills, orchestrators, pipelines, or AI tooling in code, comments, README, or configs.
+   - No AI-looking commit messages, no `Co-Authored-By` trailers, no bulk "initial commit" with 200 perfect files (discuss commit strategy with the user).
+   - No `.editorconfig`/CI/README artifacts that the task did not ask for unless a human at the target seniority would plausibly add them.
+3. **Fixed pipeline:** coding → review → obfuscation (`ai-obfuscator`, **K3 model only**) → obfuscation review (`ai-obfuscation-reviewer`) → final validation. No step is skippable.
+4. **Solution style matches the target seniority** of the challenge, not maximal standards. Over-engineering is an AI trace.
+5. **Deliverable docs** (README etc.) are written by `documentation-writer` and pass through obfuscation like code.
+6. **Validation is hostile:** verify the solution as a skeptical reviewer would — clean build, tests, requirement coverage, then a hunt for AI tells.
+7. **No auto-commits, ever.** Commit count, messages, and author config are decided with the user explicitly.
 
 ## Development Workflow (Mandatory)
 1. **Complexity Assessment** — Before coding, determine if task is Simple (<3 files, single layer) or Complex.
