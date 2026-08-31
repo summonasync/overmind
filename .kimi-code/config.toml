@@ -42,7 +42,7 @@ key = "oauth/kimi-code"
 
 [thinking]
 enabled = true
-effort = "low"
+effort = "high"
 
 [providers."managed:kimi-code"]
 type = "kimi"
