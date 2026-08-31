@@ -13,9 +13,9 @@ Kimi-специфичный контент физически переезжае
 </goal>
 
 <context>
-Первая таска фичи 001. Корень репо сейчас: `agents/` (17), `skills/` (18), `TASKS/`,
-`SOCIAL_DICTIONARY.md`, `config.toml`, `AGENTS.md`, `.gitignore`, `TASKS/001-dual-tool-repo-layout/`
-(эта фича). `TASKS/` НЕ мувается — решение v2: шаблон `_TEMPLATE/` глобальный, фича-папки
+Первая таска фичи 001. Корень репо сейчас: `agents/` (17), `skills/` (18), `BACKLOG/`,
+`SOCIAL_DICTIONARY.md`, `config.toml`, `AGENTS.md`, `.gitignore`, `BACKLOG/001-dual-tool-repo-layout/`
+(эта фича). `BACKLOG/` НЕ мувается — решение v2: шаблон `_TEMPLATE/` глобальный, фича-папки
 локальные; деплой шаблона делает sync-скрипт (task 05).
 </context>
 
@@ -30,7 +30,7 @@ Kimi-специфичный контент физически переезжае
 </scope>
 
 <anti-scope>
-- `TASKS/` не трогаем — остаётся в корне.
+- `BACKLOG/` не трогаем — остаётся в корне.
 - Ничего не создаём в `.claude/` (это task 03).
 - AGENTS.md, README, SYNC-STRUCTURE, скрипты — не трогаем.
 - Никаких коммитов без явного подтверждения пользователя.
@@ -44,7 +44,7 @@ Kimi-специфичный контент физически переезжае
 <acceptance-criteria>
 - [ ] `ls .kimi-code/agents | wc -l` = 18, `ls -d .kimi-code/skills/*/ | wc -l` = 20
 - [ ] `.kimi-code/SKILLFLOW.md` существует
-- [ ] В корне остались: `.kimi-code/`, `TASKS/`, `.gitignore`, `AGENTS.md`, `.git/`
+- [ ] В корне остались: `.kimi-code/`, `BACKLOG/`, `.gitignore`, `AGENTS.md`, `.git/`
 - [ ] `git log --follow --oneline -1 .kimi-code/agents/dotnet-coder.md` показывает старый коммит
 - [ ] `grep -rn 'skills/' .kimi-code/agents/ | grep -v '~/.kimi-code/skills'` — пусто
 - [ ] `grep -rn 'SOCIAL_DICTIONARY\|config\.toml' .kimi-code/agents/ .kimi-code/skills/ | grep -v '~/\.kimi-code'` — только допустимые prose-упоминания; stale-пути исправлены на `~/.kimi-code/...`
@@ -52,7 +52,7 @@ Kimi-специфичный контент физически переезжае
 </acceptance-criteria>
 
 <refs>
-- @../feature.md — requirements (git mv, верификация, TASKS/ не переезжает)
+- @../feature.md — requirements (git mv, верификация, BACKLOG/ не переезжает)
 - @../plan.md — task 01
 </refs>
 

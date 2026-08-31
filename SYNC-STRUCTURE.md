@@ -66,7 +66,7 @@ Everything else — rules, workflow phases, review gates, sub-agent policy, conv
 
 | Entry | Location | Rule |
 |-------|----------|------|
-| `.kimi-code/TASKS/_TEMPLATE/` | `.claude/TASKS/_TEMPLATE/` | Verbatim mirror — canonical task-file templates, deployed to both tool homes. Root `TASKS/` (feature folders, repo-local tracking) is NEVER deployed. |
+| `.kimi-code/BACKLOG/_TEMPLATE/` | `.claude/BACKLOG/_TEMPLATE/` | Verbatim mirror — canonical task-file templates, deployed to both tool homes. Root `BACKLOG/` (feature folders, repo-local tracking) is NEVER deployed. |
 | `.kimi-code/SOCIAL_DICTIONARY.md` | `.kimi-code/` only in repo | Referenced by both sides via path. The install script copies it into both tool homes. |
 | `.kimi-code/config.toml` | `.kimi-code/` only | Kimi-only (secondary-model pool). Claude analog is `~/.claude/settings.json` — NOT content-synced; each side's runtime config is managed independently. |
 | `manifest.json` + `install.ps1` / `install.sh` / `uninstall.ps1` / `uninstall.sh` | repo root | Deployment scripts driven by `manifest.json` (single source of truth for the deploy set). Not mirrored to each other — they are per-OS entry points to the same logic. Replaced the former `sync.ps1` / `sync.sh`. |

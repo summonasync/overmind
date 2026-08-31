@@ -36,10 +36,10 @@ feature.md, sync dry-run зелёный.
 - [ ] `grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|config\.toml' .claude/` — пусто (включая `.claude/CLAUDE.md`)
 - [ ] `grep -rni 'claude code\|sonnet\|opus\|haiku' .kimi-code/` — пусто; `grep -rni 'claude' .kimi-code/` — хиты допустимы ТОЛЬКО в: layout note `.kimi-code/AGENTS.md` и стоп-листе `.kimi-code/skills/coding-challenge-orchestrator/SKILL.md` (user ruling, whitelist)
 - [ ] Паритет: `ls .kimi-code/agents/*.md | wc -l` = `ls .claude/agents/*.md | wc -l` = 18; `ls -d .kimi-code/skills/*/ | wc -l` = `ls -d .claude/skills/*/ | wc -l` = 20
-- [ ] `ls .kimi-code` = agents skills AGENTS.md SKILLFLOW.md SOCIAL_DICTIONARY.md config.toml; `ls .claude` = agents skills CLAUDE.md SKILLFLOW.md; `TASKS/` в корне; в корне НЕТ AGENTS.md и CLAUDE.md
+- [ ] `ls .kimi-code` = agents skills AGENTS.md SKILLFLOW.md SOCIAL_DICTIONARY.md config.toml; `ls .claude` = agents skills CLAUDE.md SKILLFLOW.md; `BACKLOG/` в корне; в корне НЕТ AGENTS.md и CLAUDE.md
 - [ ] `powershell -File sync.ps1 -DryRun` — зелёный; план включает `.kimi-code/AGENTS.md` → `~/.kimi-code` и `.claude/CLAUDE.md` → `~/.claude`
 - [ ] Ссылка на SYNC-STRUCTURE.md из layout note в `.kimi-code/AGENTS.md` и `.claude/CLAUDE.md` резолвится (файл в корне)
-- [ ] `.gitignore` не исключает `.kimi-code/`, `.claude/`, `TASKS/`
+- [ ] `.gitignore` не исключает `.kimi-code/`, `.claude/`, `BACKLOG/`
 - [ ] Финальный список изменённых файлов доложен пользователю с вопросом о коммите
 </acceptance-criteria>
 

@@ -22,13 +22,13 @@ created: 2026-08-31
 - `SYNC-STRUCTURE.md`:
   - Правило: «Edit one side — edit the other in the same commit». Различия сторон допустимы ТОЛЬКО для tool-специфики (имена моделей, home-пути, runtime-фичи).
   - Таблица маппинга: `AGENTS.md`↔`CLAUDE.md`, `.kimi-code/SKILLFLOW.md`↔`.claude/SKILLFLOW.md`, `.kimi-code/agents/<n>.md`↔`.claude/agents/<n>.md` (18 строк — сгенерить из `ls .kimi-code/agents/`), `.kimi-code/skills/<n>/`↔`.claude/skills/<n>/` (20 строк — из `ls .kimi-code/skills/`).
-  - Отдельно зафиксировать: `TASKS/` живёт только в корне репо; sync-скрипт деплоит `TASKS/_TEMPLATE/` в оба home. `SOCIAL_DICTIONARY.md` живёт в `.kimi-code/`, sync копирует в оба home. `config.toml` — только Kimi; у Claude аналог — `~/.claude/settings.json`, контентом не синкается.
+  - Отдельно зафиксировать: `BACKLOG/` живёт только в корне репо; sync-скрипт деплоит `BACKLOG/_TEMPLATE/` в оба home. `SOCIAL_DICTIONARY.md` живёт в `.kimi-code/`, sync копирует в оба home. `config.toml` — только Kimi; у Claude аналог — `~/.claude/settings.json`, контентом не синкается.
   - Translation table Kimi→Claude: вставить replacement-table из plan.md.
   - Pre-commit checklist: пары синхронизированы; `grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm' .claude/` пусто; `grep -rni 'claude code\|sonnet\|opus\|haiku' .kimi-code/` пусто.
 - `README.md`:
   - What this is: единый источник правды для agent crew поверх Kimi Code CLI и Claude Code.
   - Prerequisites: Kimi Code CLI + обязательный `superpowers` plugin (`~/.kimi-code/plugins/managed/superpowers` — workflow-скиллы brainstorming/writing-plans/TDD зависят от него); Claude Code; для паритета workflow — Superpowers plugin для Claude Code.
-  - Layout: дерево `.kimi-code/`, `.claude/`, `TASKS/`, CLAUDE.md, AGENTS.md, SYNC-STRUCTURE.md, sync-скрипты.
+  - Layout: дерево `.kimi-code/`, `.claude/`, `BACKLOG/`, CLAUDE.md, AGENTS.md, SYNC-STRUCTURE.md, sync-скрипты.
   - Install/update: `sync.ps1 [-DryRun]` / `sync.sh [--dry-run]`, что куда копируется.
   - Editing rule: ссылка на SYNC-STRUCTURE.md.
 </scope>

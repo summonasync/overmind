@@ -12,17 +12,17 @@ created: 2026-08-31
 <approach>
 Сначала физический git mv в `.kimi-code/` (история сохраняется), затем верификация
 self-references. Дальше порты: CLAUDE.md из AGENTS.md, `.claude/skills` + `.claude/agents`
-копированием с механической таблицей замен + ручной проход фронтматтера, mirror TASKS/.
+копированием с механической таблицей замен + ручной проход фронтматтера, mirror BACKLOG/.
 Потом доки (SYNC-STRUCTURE.md, README.md), sync-скрипты, финальный grep-гейт на
 кросс-контаминацию. Коммиты — только после явного подтверждения пользователя.
 </approach>
 
 <tasks>
-- [x] 01-move-to-kimi-home — git mv agents/skills/dictionary/config в .kimi-code/ (TASKS/ НЕ трогаем — остаётся в корне), проверка целостности → tasks/01-move-to-kimi-home.md
+- [x] 01-move-to-kimi-home — git mv agents/skills/dictionary/config в .kimi-code/ (BACKLOG/ НЕ трогаем — остаётся в корне), проверка целостности → tasks/01-move-to-kimi-home.md
 - [x] 02-port-claude-md — `.claude/CLAUDE.md` (полный порт AGENTS.md) + layout note в AGENTS.md; v5: AGENTS.md живёт в `.kimi-code/`, CLAUDE.md — в `.claude/` → tasks/02-port-claude-md.md
 - [x] 03-adapt-claude-skills-agents — .claude/skills + .claude/agents + .claude/SKILLFLOW.md: копии + таблица замен + фронтматтер → tasks/03-adapt-claude-skills-agents.md
 - [x] 04-sync-structure-and-readme — SYNC-STRUCTURE.md + README.md с prerequisites (superpowers) → tasks/04-sync-structure-and-readme.md
-- [x] 05-sync-scripts — sync.ps1 (-DryRun) + sync.sh (--dry-run); деплоят .kimi-code/ (включая AGENTS.md), .claude/ (включая CLAUDE.md) и TASKS/_TEMPLATE в оба home → tasks/05-sync-scripts.md
+- [x] 05-sync-scripts — sync.ps1 (-DryRun) + sync.sh (--dry-run); деплоят .kimi-code/ (включая AGENTS.md), .claude/ (включая CLAUDE.md) и BACKLOG/_TEMPLATE в оба home → tasks/05-sync-scripts.md
 - [x] 06-cross-contamination-gate — финальные grep-гейты обеих сторон → tasks/06-cross-contamination-gate.md
 </tasks>
 
@@ -67,5 +67,5 @@ self-references. Дальше порты: CLAUDE.md из AGENTS.md, `.claude/ski
 - `grep -rni 'claude code\|sonnet\|opus\|haiku' .kimi-code/` — пусто (AGENTS.md внутри `.kimi-code/`).
 - Паритет количеств: 18/18 агентов, 20/20 скиллов.
 - `powershell -File sync.ps1 -DryRun` — план копирования без изменений ФС.
-- `ls .kimi-code .claude` соответствует целевой структуре из feature.md: `.kimi-code/` = agents skills AGENTS.md SKILLFLOW.md SOCIAL_DICTIONARY.md config.toml; `.claude/` = agents skills CLAUDE.md SKILLFLOW.md; `TASKS/` — в корне; AGENTS.md/CLAUDE.md в корне отсутствуют.
+- `ls .kimi-code .claude` соответствует целевой структуре из feature.md: `.kimi-code/` = agents skills AGENTS.md SKILLFLOW.md SOCIAL_DICTIONARY.md config.toml; `.claude/` = agents skills CLAUDE.md SKILLFLOW.md; `BACKLOG/` — в корне; AGENTS.md/CLAUDE.md в корне отсутствуют.
 </verification>

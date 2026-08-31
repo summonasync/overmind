@@ -13,10 +13,10 @@ The graph suggests — the user decides. Skills NEVER auto-proceed to the next s
 
 | Step | Skill / Owner | Artifacts | Gate |
 |------|---------------|-----------|------|
-| 0.0 Intake | task-orchestrator (intake mode) | `TASKS/nnn-slug/requirements.md` | User confirms requirements are complete |
-| 0.1 Spec | `superpowers:brainstorming` via task-orchestrator | `TASKS/nnn-slug/feature.md` | **USER APPROVAL — frozen after** |
-| 0.2 Plan | `superpowers:writing-plans` via task-orchestrator | `TASKS/nnn-slug/plan.md` | **USER APPROVAL — frozen after** |
-| Tasks | task-orchestrator | `TASKS/nnn-slug/tasks/NN-*.md` + BACKLOG.md index row | — |
+| 0.0 Intake | task-orchestrator (intake mode) | `BACKLOG/nnn-slug/requirements.md` | User confirms requirements are complete |
+| 0.1 Spec | `superpowers:brainstorming` via task-orchestrator | `BACKLOG/nnn-slug/feature.md` | **USER APPROVAL — frozen after** |
+| 0.2 Plan | `superpowers:writing-plans` via task-orchestrator | `BACKLOG/nnn-slug/plan.md` | **USER APPROVAL — frozen after** |
+| Tasks | task-orchestrator | `BACKLOG/nnn-slug/tasks/NN-*.md` + BACKLOG.md index row | — |
 | 2 Implement | `dotnet-coder` / `next-js-coder` / `maui-coder` (K2.7) | code + `<obstacles>`/`<log>` in task file | `nuget-licensing-guard` before any NuGet change |
 | 3 Review | `dotnet-code-reviewer` / `next-js-coder-reviewer` (K2.7); depth from task frontmatter `review:` — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `review-NNN-NN.md` | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
 | 4 Fix loop | coder ← review comments | updated code | back to Phase 3 |

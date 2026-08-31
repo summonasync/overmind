@@ -35,7 +35,7 @@ The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-
 │   ├── agents/            # 20 agent definitions (Claude format)
 │   ├── skills/            # 22 skill directories
 │   └── SKILLFLOW.md
-└── TASKS/                 # feature tracking — lives in repo root ONLY (templates are inside each tool dir)
+└── BACKLOG/                 # feature tracking — lives in repo root ONLY (templates are inside each tool dir)
 ```
 
 ## Install / update deployment to tool homes
@@ -70,15 +70,15 @@ What goes where (mirrors `manifest.json`):
 
 | Source (repo) | Destination |
 |---------------|-------------|
-| `.kimi-code/agents/`, `.kimi-code/skills/`, `.kimi-code/TASKS/`, `.kimi-code/SKILLFLOW.md`, `.kimi-code/config.toml`, `.kimi-code/AGENTS.md` | `~/.kimi-code/` |
-| `.claude/agents/`, `.claude/skills/`, `.claude/TASKS/`, `.claude/SKILLFLOW.md`, `.claude/CLAUDE.md` | `~/.claude/` |
+| `.kimi-code/agents/`, `.kimi-code/skills/`, `.kimi-code/BACKLOG/`, `.kimi-code/SKILLFLOW.md`, `.kimi-code/config.toml`, `.kimi-code/AGENTS.md` | `~/.kimi-code/` |
+| `.claude/agents/`, `.claude/skills/`, `.claude/BACKLOG/`, `.claude/SKILLFLOW.md`, `.claude/CLAUDE.md` | `~/.claude/` |
 | `.kimi-code/SOCIAL_DICTIONARY.md` | both homes |
 
-`TASKS/` itself (feature folders, BACKLOG.md) is never deployed — only `.kimi-code/TASKS/` / `.claude/TASKS/` (templates) go to the homes.
+`BACKLOG/` itself (feature folders, BACKLOG.md) is never deployed — only `.kimi-code/BACKLOG/` / `.claude/BACKLOG/` (templates) go to the homes.
 
 > Bash note: `install.sh` uses `rsync -a --delete` when rsync is available (true mirror, like robocopy `/MIR`); without rsync it falls back to `cp -r`, which is **additive only** — stale files left in the home dirs are not deleted.
 
-> Note: `install.*` / `uninstall.*` + `manifest.json` replaced the older `sync.ps1` / `sync.sh` (see `TASKS/001-dual-tool-repo-layout/`, task 05 log).
+> Note: `install.*` / `uninstall.*` + `manifest.json` replaced the older `sync.ps1` / `sync.sh` (see `BACKLOG/001-dual-tool-repo-layout/`, task 05 log).
 
 ## Editing rule
 
@@ -88,4 +88,4 @@ Any change to crew behavior, agents, skills, or policies must be applied to **bo
 
 - `.kimi-code/AGENTS.md` / `.claude/CLAUDE.md` — stack, conventions, workflow, sub-agent policy (authoritative crew contract)
 - `.kimi-code/SKILLFLOW.md` / `.claude/SKILLFLOW.md` — phase graph and skill output contract
-- `TASKS/` — feature tracking index (`BACKLOG.md`) and per-feature folders
+- `BACKLOG/` — feature tracking index (`BACKLOG.md`) and per-feature folders

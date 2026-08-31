@@ -10,7 +10,7 @@ created: 2026-08-31
 
 <goal>
 Идемпотентные sync-скрипты раскатывают `.kimi-code/`, `.claude/`, `CLAUDE.md` и
-`TASKS/_TEMPLATE/` в `~/.kimi-code` и `~/.claude`. Оба с dry-run режимом.
+`BACKLOG/_TEMPLATE/` в `~/.kimi-code` и `~/.claude`. Оба с dry-run режимом.
 </goal>
 
 <context>
@@ -41,14 +41,14 @@ function Copy-One($src, $dstDir) {
 
 Mirror (Join-Path $root '.kimi-code/agents') (Join-Path $kimiHome 'agents')
 Mirror (Join-Path $root '.kimi-code/skills') (Join-Path $kimiHome 'skills')
-Mirror (Join-Path $root 'TASKS/_TEMPLATE')  (Join-Path $kimiHome 'TASKS/_TEMPLATE')
+Mirror (Join-Path $root 'BACKLOG/_TEMPLATE')  (Join-Path $kimiHome 'BACKLOG/_TEMPLATE')
 Copy-One (Join-Path $root '.kimi-code/SOCIAL_DICTIONARY.md') $kimiHome
 Copy-One (Join-Path $root '.kimi-code/SKILLFLOW.md') $kimiHome
 Copy-One (Join-Path $root '.kimi-code/config.toml') $kimiHome
 
 Mirror (Join-Path $root '.claude/agents') (Join-Path $claudeHome 'agents')
 Mirror (Join-Path $root '.claude/skills') (Join-Path $claudeHome 'skills')
-Mirror (Join-Path $root 'TASKS/_TEMPLATE') (Join-Path $claudeHome 'TASKS/_TEMPLATE')
+Mirror (Join-Path $root 'BACKLOG/_TEMPLATE') (Join-Path $claudeHome 'BACKLOG/_TEMPLATE')
 Copy-One (Join-Path $root 'CLAUDE.md') $claudeHome
 Copy-One (Join-Path $root '.claude/SKILLFLOW.md') $claudeHome
 Copy-One (Join-Path $root '.kimi-code/SOCIAL_DICTIONARY.md') $claudeHome
@@ -66,10 +66,10 @@ DRY=""
 [[ "${1:-}" == "--dry-run" ]] && DRY="echo"
 
 $DRY cp -r "$ROOT/.kimi-code/agents" "$ROOT/.kimi-code/skills" "$HOME/.kimi-code/"
-$DRY cp -r "$ROOT/TASKS/_TEMPLATE" "$HOME/.kimi-code/TASKS/"
+$DRY cp -r "$ROOT/BACKLOG/_TEMPLATE" "$HOME/.kimi-code/BACKLOG/"
 $DRY cp "$ROOT/.kimi-code/SOCIAL_DICTIONARY.md" "$ROOT/.kimi-code/SKILLFLOW.md" "$ROOT/.kimi-code/config.toml" "$HOME/.kimi-code/"
 $DRY cp -r "$ROOT/.claude/agents" "$ROOT/.claude/skills" "$HOME/.claude/"
-$DRY cp -r "$ROOT/TASKS/_TEMPLATE" "$HOME/.claude/TASKS/"
+$DRY cp -r "$ROOT/BACKLOG/_TEMPLATE" "$HOME/.claude/BACKLOG/"
 $DRY cp "$ROOT/CLAUDE.md" "$ROOT/.claude/SKILLFLOW.md" "$ROOT/.kimi-code/SOCIAL_DICTIONARY.md" "$HOME/.claude/"
 ```
 
@@ -77,7 +77,7 @@ $DRY cp "$ROOT/CLAUDE.md" "$ROOT/.claude/SKILLFLOW.md" "$ROOT/.kimi-code/SOCIAL_
 
 <anti-scope>
 - Реальный (не dry-run) запуск против `~/` — НЕ выполнять в этой таске; только по отдельной команде пользователя.
-- Не синкаем `TASKS/001-...` (локальные фичи) — только `_TEMPLATE`.
+- Не синкаем `BACKLOG/001-...` (локальные фичи) — только `_TEMPLATE`.
 - Коммиты — только после подтверждения пользователя.
 </anti-scope>
 
@@ -89,7 +89,7 @@ $DRY cp "$ROOT/CLAUDE.md" "$ROOT/.claude/SKILLFLOW.md" "$ROOT/.kimi-code/SOCIAL_
 <acceptance-criteria>
 - [ ] `powershell -File sync.ps1 -DryRun` — выводит план копирования, exit code < 8, ФС не изменена
 - [ ] `./sync.sh --dry-run` — echo команд, никаких изменений
-- [ ] Оба скрипта покрывают: agents/skills обеих сторон, TASKS/_TEMPLATE в оба home, SOCIAL_DICTIONARY.md в оба home, config.toml только в kimi, CLAUDE.md только в claude
+- [ ] Оба скрипта покрывают: agents/skills обеих сторон, BACKLOG/_TEMPLATE в оба home, SOCIAL_DICTIONARY.md в оба home, config.toml только в kimi, CLAUDE.md только в claude
 - [ ] Изменённые файлы доложены; коммит только после подтверждения
 </acceptance-criteria>
 
@@ -101,7 +101,7 @@ $DRY cp "$ROOT/CLAUDE.md" "$ROOT/.claude/SKILLFLOW.md" "$ROOT/.kimi-code/SOCIAL_
 <obstacles>
 - Verbatim ps1 dry-run piped robocopy /L to Out-Null -> план не выводился (конфликт с acceptance-criteria). Убрал Out-Null в обеих ветках Mirror().
 - В verbatim телах не было обработки robocopy exit codes (требуется constraints). Добавлено `if ($LASTEXITCODE -ge 8) { exit $LASTEXITCODE }` + финальный `exit 0`.
-- sync.sh падал бы на холодном старте: `cp -r TASKS/_TEMPLATE` требует существующий родительский `TASKS/` в home. Добавлен `mkdir -p` (echo в dry-run).
+- sync.sh падал бы на холодном старте: `cp -r BACKLOG/_TEMPLATE` требует существующий родительский `BACKLOG/` в home. Добавлен `mkdir -p` (echo в dry-run).
 - README.md таблица обещает деплой AGENTS.md в ~/.kimi-code — скрипты его не синкают (вне scope тела таски). README обновлён с caveat; решить: добавить AGENTS.md в скрипты или убрать строку из таблицы.
 </obstacles>
 

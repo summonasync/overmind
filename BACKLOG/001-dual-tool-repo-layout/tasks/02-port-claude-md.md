@@ -34,10 +34,10 @@ Kimi-специфики; AGENTS.md получает layout-note и обновл�
   - Применить replacement-table 1-16 из plan.md.
   - Секцию `Sub-Agent Rules` переписать: разрешённые модели `sonnet` (дефолт coder/reviewer) / `opus` (orchestration, audit, ai-code-detector, ai-obfuscator, ai-obfuscation-reviewer); enforcement — через `model:` поле во frontmatter `.claude/agents/*.md`, НЕ через config.toml pool.
   - Блок `**Enforcement (config, not just prompt):**` с TOML-сниппетом заменить на: «sub-agent model choice is enforced by the `model` field in each `.claude/agents/*.md` frontmatter (sonnet for coder/reviewer agents, opus for orchestration/audit/obfuscation) — not by prompt text alone.»
-  - Таблица Documentation Files: `TASKS/nnn-slug/` остаётся как есть (repo-root конвенция); `SOCIAL_DICTIONARY.md` → `~/.kimi-code/SOCIAL_DICTIONARY.md` на Kimi-стороне; на Claude-стороне путь деплоя словаря — `~/.claude/SOCIAL_DICTIONARY.md` (sync копирует).
+  - Таблица Documentation Files: `BACKLOG/nnn-slug/` остаётся как есть (repo-root конвенция); `SOCIAL_DICTIONARY.md` → `~/.kimi-code/SOCIAL_DICTIONARY.md` на Kimi-стороне; на Claude-стороне путь деплоя словаря — `~/.claude/SOCIAL_DICTIONARY.md` (sync копирует).
   - В CLAUDE.md: «Superpowers Integration» — ссылки на плагин адаптировать к Claude Code (superpowers plugin for Claude Code).
 - Правка AGENTS.md (корень): под `# Global Agent Context` добавить:
-  > Repo layout: this file's crew lives in `.kimi-code/` (agents, skills, dictionary, config). Claude Code mirror lives in `.claude/` + `CLAUDE.md`. TASKS/ stays in repo root (feature tracking). Dual-edit rule: see `SYNC-STRUCTURE.md`.
+  > Repo layout: this file's crew lives in `.kimi-code/` (agents, skills, dictionary, config). Claude Code mirror lives in `.claude/` + `CLAUDE.md`. BACKLOG/ stays in repo root (feature tracking). Dual-edit rule: see `SYNC-STRUCTURE.md`.
   - В таблице Documentation Files обновить упоминание SOCIAL_DICTIONARY.md на `~/.kimi-code/SOCIAL_DICTIONARY.md`.
 </constraints>
 
