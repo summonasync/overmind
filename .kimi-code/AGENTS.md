@@ -125,7 +125,7 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 1. **Done** — one-paragraph summary of what was produced + artifact paths.
 2. **Next step** — the recommended follow-up per `SKILLFLOW.md` (exact command/skill name).
 3. **Alternatives** — 2–3 other valid follow-ups.
-Mandatory skill requirements can be proceeds (like gates), but for others the skill suggests, not auto-proceeds - The user picks the next step.
+Mandatory workflow gates (e.g. review after Complex) proceed without asking; all other next steps are suggestions — the user picks.
 
 **Rule for agents:** Before proposing an alternative approach (e.g., "let's use Redux instead of Zustand", "let's switch from Minimal APIs to Controllers"), read `TECHNICAL-SOLUTIONS.md`. If the topic is covered there — follow the documented decision. If you believe the decision is outdated — propose updating `TECHNICAL-SOLUTIONS.md` with new rationale, do not silently override.
 
