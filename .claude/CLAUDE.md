@@ -138,11 +138,23 @@ The skill suggests, never auto-proceeds. The user picks the next step.
 **Enforcement (config, not just prompt):** sub-agent model choice is enforced by the `model` field in each `.claude/agents/*.md` frontmatter (sonnet for coder/reviewer agents, opus for orchestration/audit/obfuscation) — not by prompt text alone.
 
 ## Deterministic Enforcement (hooks > prompts)
-Rules that must hold EVERY time should be enforced by hooks/config, not by prompt text alone.
-Current prompt-only candidates to migrate when hooks are available:
-- **No auto-commits** → PreToolUse hook blocking `git commit`/`git push` unless user explicitly asked in this session.
-- **dotnet build after changes** → PostToolUse hook on Edit/Write of `*.cs`.
-- **License check** → PreToolUse hook on edits to `*.csproj` / `Directory.Packages.props`.
+Rules that must hold EVERY time are enforced by hooks/config, not by prompt text alone.
+
+**Deny-list (block unconditionally, any agent, any skill):**
+- `git push --force`, `git reset --hard`, `git clean -f`, `git checkout -- .` — destructive git
+- `git commit` / `git push` — unless the user explicitly asked in THIS session (PreToolUse hook)
+- `rm -rf` outside `node_modules`/`bin`/`obj` build output; any `rm` on `.git/`
+- Reading or printing `.env*`, `*secrets*`, `*.pfx`, `*.key` files into chat
+- Writing to `settings.json`, hook configs, or this file's own enforcement sections — config self-modification is human-only
+- `npm install` / `dotnet add package` without `nuget-licensing-guard` / user approval (PreToolUse hook on `*.csproj`, `Directory.Packages.props`, `package.json`)
+- **Cloud CLI mutations** — `gcloud` / `az` / `aws` commands that change infrastructure (resize, create, delete, IAM, billing-relevant settings): unconditional STOP + user approval, EVERY time, even inside an approved task. An agent must never change cloud spend autonomously. Read-only (`describe`/`list`/`get`) is allowed. Infra changes go through IaC (Terraform/Bicep) reviewed as code, not through ad-hoc CLI.
+
+**PostToolUse hooks:**
+- Edit/Write of `*.cs` → run `dotnet build`; failure output goes back to the agent as feedback.
+- Edit/Write of frontend sources → `npm run lint && npx tsc --noEmit`.
+- Agent/task completion → user notification («агент отработал»).
+
+**Onboarding mode:** for users new to this system, strip ALL shell permissions from the allow-list — the agent must request each command explicitly. Restore incrementally as trust is earned.
 
 ## Superpowers Integration (plugin = technique library, NOT process owner)
 The superpowers plugin for Claude Code is installed. Its skills are used as TECHNIQUES inside this system's phases — they never own the process, the documents, or the git history. This file and `task-orchestrator` win every conflict.
@@ -185,3 +197,6 @@ Its full rule set (workspace isolation, zero AI leakage, fixed pipeline, seniori
 5. **No task is "done" until review passes or user explicitly overrides.**
 6. **No auto-commits.** Agents must NOT run `git commit` or `git push` unless user explicitly asks.
 7. **Feature folders.** Complex work lives in `TASKS/nnn-slug/`: `feature.md` → user validation gate → `plan.md` → user validation gate → `tasks/NN-foo.md` per task (templates: `TASKS/_TEMPLATE/`). feature.md/plan.md are READ-ONLY snapshots once approved — changes require re-validation with the user, never silent edits. BACKLOG.md is the index only (folder links + statuses + order) — content is never duplicated there. The executing sub-agent gets ONLY its task file as input; `<acceptance-criteria>` plus spec-compliance is the review gate; any agent that hits a workaround/quirk MUST append it to the task file's `<obstacles>` section.
+8. **Tombstoning (context-clash defense).** When a requirement, feature, or decision is REMOVED from any doc (feature.md, CONTEXT.md, BACKLOG.md), it is never silently deleted — mark it `<removed YYYY-MM-DD — reason>` (or `[-] removed` in BACKLOG). Agents resurrect deleted things from conversation/context history unless they see an explicit tombstone. A visible "this is dead" beats an absent trace.
+9. **Explicit dependencies, not prose.** Any forward/backward reference between tasks or features ("this logic is done when X is ready") MUST be materialized as a `<refs>` entry and/or a BACKLOG row with `[?]` blocked status — never left as free text. Agents silently ignore prose cross-references; structured dependencies they follow.
+10. **Bug reports = task files.** QA findings are written directly as `TASKS/nnn-slug/tasks/NN-foo.md` files (goal = expected behavior, scope = what's broken, acceptance = how to verify the fix) — a bug report is a ready-made execution contract, not a chat message.

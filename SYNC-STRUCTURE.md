@@ -36,6 +36,8 @@ Everything else — rules, workflow phases, review gates, sub-agent policy, conv
 | `.kimi-code/agents/next-js-code-reviewer.md` | `.claude/agents/next-js-code-reviewer.md` |
 | `.kimi-code/agents/next-js-coder.md` | `.claude/agents/next-js-coder.md` |
 | `.kimi-code/agents/task-orchestrator.md` | `.claude/agents/task-orchestrator.md` |
+| `.kimi-code/agents/naming-helper.md` | `.claude/agents/naming-helper.md` |
+| `.kimi-code/agents/pipeline-doctor.md` | `.claude/agents/pipeline-doctor.md` |
 | `.kimi-code/agents/tutor-master.md` | `.claude/agents/tutor-master.md` |
 | `.kimi-code/skills/ai-code-detector/` | `.claude/skills/ai-code-detector/` |
 | `.kimi-code/skills/ai-obfuscation-reviewer/` | `.claude/skills/ai-obfuscation-reviewer/` |
@@ -56,16 +58,18 @@ Everything else — rules, workflow phases, review gates, sub-agent policy, conv
 | `.kimi-code/skills/next-js-coder/` | `.claude/skills/next-js-coder/` |
 | `.kimi-code/skills/nuget-licensing-guard/` | `.claude/skills/nuget-licensing-guard/` |
 | `.kimi-code/skills/task-orchestrator/` | `.claude/skills/task-orchestrator/` |
+| `.kimi-code/skills/naming-helper/` | `.claude/skills/naming-helper/` |
+| `.kimi-code/skills/pipeline-doctor/` | `.claude/skills/pipeline-doctor/` |
 | `.kimi-code/skills/tutor-master/` | `.claude/skills/tutor-master/` |
 
 ## Non-paired entries
 
 | Entry | Location | Rule |
 |-------|----------|------|
-| `TASKS/` | repo root only | Single source for feature tracking. The sync script deploys only `TASKS/_TEMPLATE/` into both tool homes; the rest of `TASKS/` is never copied. |
-| `.kimi-code/SOCIAL_DICTIONARY.md` | `.kimi-code/` only in repo | Referenced by both sides via path. The sync script copies it into both tool homes. |
+| `.kimi-code/TASKS/_TEMPLATE/` | `.claude/TASKS/_TEMPLATE/` | Verbatim mirror — canonical task-file templates, deployed to both tool homes. Root `TASKS/` (feature folders, repo-local tracking) is NEVER deployed. |
+| `.kimi-code/SOCIAL_DICTIONARY.md` | `.kimi-code/` only in repo | Referenced by both sides via path. The install script copies it into both tool homes. |
 | `.kimi-code/config.toml` | `.kimi-code/` only | Kimi-only (secondary-model pool). Claude analog is `~/.claude/settings.json` — NOT content-synced; each side's runtime config is managed independently. |
-| `sync.ps1` / `sync.sh` | repo root | Deployment scripts (planned, task 05). Not mirrored to each other — they are per-OS entry points to the same logic. |
+| `manifest.json` + `install.ps1` / `install.sh` / `uninstall.ps1` / `uninstall.sh` | repo root | Deployment scripts driven by `manifest.json` (single source of truth for the deploy set). Not mirrored to each other — they are per-OS entry points to the same logic. Replaced the former `sync.ps1` / `sync.sh`. |
 
 ## Known intentional differences
 

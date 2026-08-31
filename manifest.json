@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "entries": [
+    { "source": ".kimi-code/agents", "home": "kimi", "type": "dir" },
+    { "source": ".kimi-code/skills", "home": "kimi", "type": "dir" },
+    { "source": ".kimi-code/TASKS", "home": "kimi", "type": "dir" },
+    { "source": ".kimi-code/AGENTS.md", "home": "kimi", "type": "file" },
+    { "source": ".kimi-code/SKILLFLOW.md", "home": "kimi", "type": "file" },
+    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "kimi", "type": "file" },
+    { "source": ".kimi-code/config.toml", "home": "kimi", "type": "file" },
+    { "source": ".claude/agents", "home": "claude", "type": "dir" },
+    { "source": ".claude/skills", "home": "claude", "type": "dir" },
+    { "source": ".claude/TASKS", "home": "claude", "type": "dir" },
+    { "source": ".claude/CLAUDE.md", "home": "claude", "type": "file" },
+    { "source": ".claude/SKILLFLOW.md", "home": "claude", "type": "file" },
+    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "claude", "type": "file" }
+  ]
+}

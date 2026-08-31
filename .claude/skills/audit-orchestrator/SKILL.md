@@ -134,7 +134,12 @@ Run against `documentation-writer` skill rules:
 - [ ] **Index/folders sync:** `BACKLOG.md` index rows match existing `TASKS/nnn-slug/` folders (no orphans either way).
 - [ ] **Feature folder integrity:** no loose task files outside `TASKS/nnn-slug/tasks/`; no `feature.md` without at least one task file; no task file whose `<refs>` points to a missing spec/plan.
 - [ ] **Frozen artifacts:** `feature.md`/`plan.md` with `status: approved` were not edited after approval without a `version:` bump (check git history) — silent edits of frozen artifacts are a WARNING.
+- [ ] **Tombstoning:** removed features/requirements carry `<removed>` / `[-] removed` markers — silent deletions (git diff shows removals without tombstones in docs) are a WARNING: agents resurrect untombstoned deletions from context history.
+- [ ] **Dependency materialization:** no prose cross-references between tasks/features ("done when X is ready") outside `<refs>` — every such reference must exist as a `<refs>` entry or a `[?]` BACKLOG row.
+- [ ] **Cloud spend guard:** no `gcloud`/`az`/`aws` mutations in shell history or scripts without a corresponding user-approved task — flag any autonomous infra change as BLOCKER.
 - [ ] **Superpowers containment:** no `docs/superpowers/` directory exists as a source of truth — if found, flag as WARNING: content must be migrated into `TASKS/nnn-slug/feature.md` / `plan.md` / `CONTEXT.md` / `TECHNICAL-SOLUTIONS.md` per AGENTS.md «Superpowers Integration».
+- [ ] **Artifact provenance:** every generated report/doc outside `TASKS/` carries a skill-prefix (`audit-*`, `review-*`, `obfuscation-*`, `intake-*`) per AGENTS.md provenance rule — anonymous artifacts are a WARNING.
+- [ ] **SKILLFLOW.md consistency:** routes and transitions described in `SKILLFLOW.md` still match reality (skills referenced there exist, gates listed there are actually enforced in task-orchestrator).
 
 ---
 

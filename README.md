@@ -1,6 +1,10 @@
-# bob.ai .NET Coding Agents Crew
+# Bob.Kit-Uncensored
+
+> One agent crew. Two runtimes. Zero corporate polish.
 
 Single source of truth for one AI agent crew running on two runtimes: **Kimi Code CLI** and **Claude Code**. The repo holds both mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code. Content (rules, workflows, skills, agents) is semantically identical across the two; only tool-specific details (model names, home paths, runtime features) differ.
+
+The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`) and a naming maniac (`naming-helper`) — 20 agents, 22 skills, one workflow graph.
 
 ## Prerequisites
 
@@ -14,50 +18,67 @@ Single source of truth for one AI agent crew running on two runtimes: **Kimi Cod
 ```
 .
 ├── SYNC-STRUCTURE.md      # dual-edit contract: file mapping, translation table, checklist
-├── sync.ps1               # deploy to tool homes (Windows); -DryRun prints plan only
-├── sync.sh                # deploy to tool homes (Git Bash/Linux); --dry-run prints plan only
+├── manifest.json          # deploy manifest: single source of truth for install/uninstall scripts
+├── install.ps1            # deploy to tool homes (Windows); -DryRun prints plan only
+├── install.sh             # deploy to tool homes (Git Bash/Linux); --dry-run prints plan only
+├── uninstall.ps1          # remove deployed paths (Windows); -DryRun / -Force
+├── uninstall.sh           # remove deployed paths (Git Bash/Linux); --dry-run / --force
 ├── .kimi-code/
 │   ├── AGENTS.md          # Kimi-side crew contract (global tool memory)
-│   ├── agents/            # 18 agent definitions
-│   ├── skills/            # 20 skill directories
+│   ├── agents/            # 20 agent definitions
+│   ├── skills/            # 22 skill directories
 │   ├── SKILLFLOW.md       # workflow graph shared by all skills
 │   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to both homes)
 │   └── config.toml        # Kimi runtime config (secondary-model pool) — Kimi only
 ├── .claude/
 │   ├── CLAUDE.md          # Claude-side mirror of AGENTS.md
-│   ├── agents/            # 18 agent definitions (Claude format)
-│   ├── skills/            # 20 skill directories
+│   ├── agents/            # 20 agent definitions (Claude format)
+│   ├── skills/            # 22 skill directories
 │   └── SKILLFLOW.md
-└── TASKS/                 # feature tracking — lives in repo root ONLY
-    └── _TEMPLATE/         # task-file templates; the only TASKS/ part deployed to tool homes
+└── TASKS/                 # feature tracking — lives in repo root ONLY (templates are inside each tool dir)
 ```
 
 ## Install / update deployment to tool homes
 
-Sync scripts copy repo content into the runtime home directories (`~/.kimi-code/`, `~/.claude/`). Both support a dry-run mode that prints the full copy plan without touching the filesystem:
+Install scripts read `manifest.json` and copy repo content into the runtime home directories (`~/.kimi-code/`, `~/.claude/`). A home that does not exist is skipped with a note. Both support a dry-run mode that prints the full copy plan without touching the filesystem:
 
 ```powershell
-powershell -File sync.ps1 -DryRun    # plan only
-powershell -File sync.ps1            # apply
+powershell -File install.ps1 -DryRun    # plan only
+powershell -File install.ps1            # apply
 ```
 
 ```bash
-./sync.sh --dry-run                  # plan only
-./sync.sh                            # apply
+./install.sh --dry-run                  # plan only
+./install.sh                            # apply
 ```
 
-What goes where:
+Uninstall removes exactly the manifest's deployed paths from existing homes (never the home root itself), with empty-parent cleanup:
+
+```powershell
+powershell -File uninstall.ps1 -DryRun  # plan only
+powershell -File uninstall.ps1          # asks for confirmation
+powershell -File uninstall.ps1 -Force   # no confirmation
+```
+
+```bash
+./uninstall.sh --dry-run                # plan only
+./uninstall.sh                          # asks for confirmation
+./uninstall.sh --force                  # no confirmation
+```
+
+What goes where (mirrors `manifest.json`):
 
 | Source (repo) | Destination |
 |---------------|-------------|
-| `.kimi-code/agents/`, `.kimi-code/skills/`, `.kimi-code/SKILLFLOW.md`, `.kimi-code/config.toml`, `.kimi-code/AGENTS.md` | `~/.kimi-code/` |
-| `.claude/agents/`, `.claude/skills/`, `.claude/SKILLFLOW.md`, `.claude/CLAUDE.md` | `~/.claude/` |
+| `.kimi-code/agents/`, `.kimi-code/skills/`, `.kimi-code/TASKS/`, `.kimi-code/SKILLFLOW.md`, `.kimi-code/config.toml`, `.kimi-code/AGENTS.md` | `~/.kimi-code/` |
+| `.claude/agents/`, `.claude/skills/`, `.claude/TASKS/`, `.claude/SKILLFLOW.md`, `.claude/CLAUDE.md` | `~/.claude/` |
 | `.kimi-code/SOCIAL_DICTIONARY.md` | both homes |
-| `TASKS/_TEMPLATE/` | both homes |
 
-`TASKS/` itself (feature folders, BACKLOG.md) is never deployed — it is repo-local tracking.
+`TASKS/` itself (feature folders, BACKLOG.md) is never deployed — only `.kimi-code/TASKS/` / `.claude/TASKS/` (templates) go to the homes.
 
-> Note: `sync.ps1` / `sync.sh` are implemented (see `TASKS/001-dual-tool-repo-layout/`, task 05).
+> Bash note: `install.sh` uses `rsync -a --delete` when rsync is available (true mirror, like robocopy `/MIR`); without rsync it falls back to `cp -r`, which is **additive only** — stale files left in the home dirs are not deleted.
+
+> Note: `install.*` / `uninstall.*` + `manifest.json` replaced the older `sync.ps1` / `sync.sh` (see `TASKS/001-dual-tool-repo-layout/`, task 05 log).
 
 ## Editing rule
 

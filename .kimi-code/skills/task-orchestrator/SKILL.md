@@ -29,7 +29,8 @@ Before proposing ANY changes, read documentation in this exact order:
 3. **`BACKLOG.md`** — Sprint backlog, tasks per phase, execution order, blocked items (Mixed EN/RU)
 4. **`STRUCTURE.md`** — Project structure, code style, Do/Don't (English)
 5. **`TECHNICAL-SOLUTIONS.md`** — Architecture Decision Records, trade-offs, historical context (English)
-6. **`TASKS/`** — after identifying the current feature in BACKLOG.md (Step 2), open its folder `TASKS/nnn-slug/`. Orchestrator reads `feature.md` and `plan.md` (if present); the executing sub-agent reads ONLY its `tasks/NN-foo.md` IN FULL. Task files are the authoritative execution contracts; BACKLOG.md is only the index.
+6. **`SKILLFLOW.md`** — workflow graph: valid transitions and alternative routes; used for every «next step» suggestion.
+7. **`TASKS/`** — after identifying the current feature in BACKLOG.md (Step 2), open its folder `TASKS/nnn-slug/`. Orchestrator reads `feature.md` and `plan.md` (if present); the executing sub-agent reads ONLY its `tasks/NN-foo.md` IN FULL. Task files are the authoritative execution contracts; BACKLOG.md is only the index.
 
 **Naming rule:** root filenames are exact and case-sensitive — always ALL CAPS as listed above. Inside feature folders, files are lowercase: `feature.md`, `plan.md`, `tasks/NN-foo.md`.
 
@@ -68,6 +69,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 **Exception:** pure documentation tasks (`documentation-writer`) and learning-material tasks (`tutor-master`) skip Phase 3 code review — apply the target skill's own verification checklist instead.
 
 ### Phase 0: Spec & Plan Gates (Complex features — MANDATORY, sequential)
+0. **Requirements intake.** If requirements arrive in arbitrary form (ticket, letter, chat dump, CSV, design files) — first normalize them into `TASKS/nnn-slug/requirements.md` from `TASKS/_TEMPLATE/requirements.md`: parse, deduplicate, decompose into actionable items, mark contradictions and gaps. **STOP. User confirms requirements are complete.** Skip only when the user provides an already-structured spec.
 1. **Spec gate.** Build `TASKS/nnn-slug/feature.md` from `TASKS/_TEMPLATE/feature.md` — use `superpowers:brainstorming` as the questioning engine (Socratic, one question at a time) until requirements are unambiguous. **STOP. Present feature.md to the user. No planning until explicit approval.**
 2. **Plan gate.** Build `TASKS/nnn-slug/plan.md` from `TASKS/_TEMPLATE/plan.md` — decomposition style per `superpowers:writing-plans` (small tasks, exact file paths, verification step per task). **STOP. Present plan.md to the user. No task breakdown until explicit approval.**
 3. **Task breakdown.** After plan approval: create `TASKS/nnn-slug/tasks/NN-foo.md` per task from `TASKS/_TEMPLATE/task.md`, each linking back to feature.md/plan.md via `<refs>`. Add/update the BACKLOG.md index row.
@@ -90,6 +92,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 - Coder MUST output list of changed files.
 - Coder receives ONLY its task file `TASKS/nnn-slug/tasks/NN-foo.md` as primary input (feature.md/plan.md stay with orchestrator and reviewer). Coder MUST append discovered workarounds, quirks, and environment issues to the task file's `<obstacles>` section, and a one-line entry to `<log>`.
 - **Before adding/upgrading any third-party NuGet dependency** → consult `nuget-licensing-guard`.
+- **`.NET` coders load `dotnet-best-practices` with the task file** — BP-rules are constraints; reviewers cite violations by BP-ID.
 - **Decomposition style** → `superpowers:writing-plans` (small tasks, exact file paths, verification steps per task); the plan itself lives in `TASKS/nnn-slug/plan.md` (Phase 0 plan gate).
 - **TDD** → `superpowers:test-driven-development` applies ONLY to domain/business logic per AGENTS.md «Superpowers Integration» rule 4. Its commit step is DISABLED — see Git & Commit Control below.
 - **Stuck on a bug?** → `superpowers:systematic-debugging` (root cause first, no guess-fixes) before any fix attempt.
@@ -98,7 +101,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 After Phase 2 completion, run reviews in this order:
 
 **ALWAYS run:**
-- `.NET code changed` → apply `dotnet-code-reviewer` checklist
+- `.NET code changed` → apply `dotnet-code-reviewer` checklist + `dotnet-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
 - `Next.js code changed` → apply `next-js-coder-reviewer` checklist
 - `MAUI code changed` → apply `dotnet-code-reviewer` checklist + `maui-coder` rules (MVVM, code-behind purity, platform isolation)
 
@@ -127,8 +130,8 @@ Review output must include:
 
 ### Phase 5: Architecture Gate (End-of-Phase only)
 - Run ONLY after completing a sprint phase or large refactoring.
-- Executed by `architect-review` (Hard checklist): layers intact, no dependency inversions, service boundaries respected, ADR coverage.
-- Output: `architect-review-YYYY-MM-DD.md` + `TECHNICAL-SOLUTIONS.md` update (new ADR entry) if structural changes occurred — user approves ADR writes.
+- Verify: Clean Architecture layers intact, no dependency inversions, service boundaries respected.
+- Output: `TECHNICAL-SOLUTIONS.md` update (new ADR entry) if structural changes occurred.
 
 ---
 
@@ -176,3 +179,8 @@ Task is COMPLEX if:
 - **Never skip Phase 3.** Review is mandatory for complex tasks.
 - **If Security BLOCKER:** explicitly say: "Найдена критическая уязвимость безопасности. Авто-исправление запрещено. Требуется ручное ревью."
 - **At finish:** "Работа завершена. Изменены файлы: [список]. Хотите сделать коммит?"
+- **Output contract (MANDATORY — this skill and every delegated skill):** end with a fixed block, then STOP:
+  1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+  2. **Next step** — recommended follow-up per `SKILLFLOW.md` (exact skill/command name).
+  3. **Alternatives** — 2–3 other valid follow-ups.
+  Suggest, never auto-proceed. The user picks the next step.

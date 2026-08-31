@@ -70,6 +70,7 @@ Severity: **[B]** BLOCKER, **[W]** WARNING, **[S]** SUGGESTION.
 - **BP-91 [W]** No God-Services: a service exceeding ~300 lines or >5 dependencies is a split candidate — reviewer flags, human decides.
 - **BP-92 [W]** Mediator (martinothamar) for CQRS dispatch; Wolverine for messaging — version-pinned rules in `nuget-licensing-guard`.
 - **BP-93 [S]** API, DTO, Service in separate files. No `#region`. No comments restating code. Match surrounding human style (AI Coding Traces rules apply).
+- **BP-94 [B] No unexplained magic.** Payment, integration, and infrastructure code must be explainable by the responsible developer. "It works but nobody understands how" = BLOCKER — undocumented side effects (temporary objects, invisible state, deleted-but-existing records) are exactly how AI-generated integrations blow up in production. If the reviewer can't trace what the code does against external systems, it doesn't pass — document the mechanism in an ADR or simplify until traceable.
 
 ## Usage
 - **Coder:** load with the task file; rules are constraints, not aspirations.
