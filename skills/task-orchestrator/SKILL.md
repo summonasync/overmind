@@ -29,6 +29,7 @@ Before proposing ANY changes, read documentation in this exact order:
 3. **`BACKLOG.md`** — Sprint backlog, tasks per phase, execution order, blocked items (Mixed EN/RU)
 4. **`STRUCTURE.md`** — Project structure, code style, Do/Don't (English)
 5. **`TECHNICAL-SOLUTIONS.md`** — Architecture Decision Records, trade-offs, historical context (English)
+6. **`TASK/`** — after identifying the current task in BACKLOG.md (Step 2), read its file `TASK/NNN-slug.md` IN FULL. The task file is the authoritative spec; BACKLOG.md is only the index.
 
 **Naming rule:** filenames are exact and case-sensitive — always ALL CAPS as listed above.
 
@@ -41,12 +42,13 @@ After reading documentation, determine the working mode:
 - We are **LOCKED to the backlog scope**. No new features, no scope changes, no "while we're at it" suggestions.
 - Identify the **first unchecked task** (`[ ]`) or task in progress (`[~]`).
 - If the task is marked `[?]` (Blocked / Needs Human) — **STOP**. Report to user: "Задача заблокирована: [описание блокера]. Требуется решение человека."
-- If the task has an **Anti-Scope** section — treat it as hard constraints. Do NOT touch anything listed there.
-- **Never rewrite BACKLOG.md without explicit user approval.** Only update statuses: `[ ]` → `[~]` → `[x]`.
+- Load the task file `TASK/NNN-slug.md`. Its `<anti-scope>` section is hard constraints — do NOT touch anything listed there. `<acceptance-criteria>` becomes the Phase 3 review checklist.
+- **Never rewrite BACKLOG.md or task files without explicit user approval.** Only update statuses in the BACKLOG.md index (`[ ]` → `[~]` → `[x]`) and append to `<log>` / `<obstacles>` in the task file.
 
 **IF `BACKLOG.md` DOES NOT EXIST or is empty:**
-- Ask the user: "Бэклог не найден или пуст. Создать задачу '[описание]' в новом бэклоге?"
-- Do NOT start coding until scope is defined and written to BACKLOG.md.
+- Ask the user: "Бэклог не найден или пуст. Создать задачу '[описание]'?"
+- On approval for a Complex task: create `TASK/NNN-slug.md` from `TASK/_TEMPLATE.md` AND add an index row to BACKLOG.md. Simple tasks stay one-liners in BACKLOG.md.
+- Do NOT start coding until scope is defined and written down.
 
 **IF user asks for something OUTSIDE BACKLOG.md:**
 - Respond: "Этот запрос выходит за рамки текущего бэклога. Добавить как новую задачу в бэклог или работать вне бэклога?"
@@ -78,6 +80,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
   - `Learning materials` (study plans, concept explanations, assessments) → `tutor-master`
 - Coder MUST follow all rules from their skill file.
 - Coder MUST output list of changed files.
+- Coder receives the task file `TASK/NNN-slug.md` as primary input. Coder MUST append discovered workarounds, quirks, and environment issues to the task file's `<obstacles>` section, and a one-line entry to `<log>`.
 - **Before adding/upgrading any third-party NuGet dependency** → consult `nuget-licensing-guard`.
 
 ### Phase 3: Mandatory Review (AUTO-TRIGGER)
@@ -146,7 +149,7 @@ Task is COMPLEX if:
 
 ## Communication Rules
 - **Speak Russian.**
-- **At start:** Report what was found in documentation: "Бэклог найден, текущая задача: [X]. Anti-Scope: [Y]. Скоуп зафиксирован."
+- **At start:** Report what was found in documentation: "Бэклог найден, текущая задача: [X] (`TASK/NNN-slug.md`). Anti-Scope: [Y]. Скоуп зафиксирован."
 - **During work:** Report progress after each phase: "Фаза 1 завершена...", "Фаза 2: изменены файлы...", "Фаза 3: ревью..."
 - **If scope violation detected:** "Этот запрос выходит за рамки бэклога. Добавить задачу?"
 - **If blocked task:** "Задача [N] заблокирована: [причина]. Требуется решение человека."

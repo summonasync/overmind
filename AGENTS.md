@@ -105,7 +105,8 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 | File | Purpose | Language | When to Read |
 |------|---------|----------|-------------|
 | `CONTEXT.md` | System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design | English | First — for all architectural context |
-| `BACKLOG.md` | Sprint backlog: tasks per phase with checkboxes, deferred items, execution order | Mixed (EN headers, RU descriptions) | Before starting work — to understand what's done and what's planned |
+| `BACKLOG.md` | Task board INDEX: ordered task list with statuses (`[ ]`/`[~]`/`[x]`/`[?]`), deferred items, execution order. Task CONTENT never lives here — only one-line titles and links to task files | Mixed (EN headers, RU descriptions) | Before starting work — to understand what's done, what's planned, and which task file to load |
+| `TASK/NNN-slug.md` | Self-contained task spec with XML structure (`<goal>`, `<scope>`, `<anti-scope>`, `<constraints>`, `<acceptance-criteria>`, `<refs>`, `<obstacles>`, `<log>`). Template: `TASK/_TEMPLATE.md`. Only for Complex tasks — Simple tasks stay one-liners in BACKLOG.md | English | Read IN FULL before executing the task — it is the only input an executing sub-agent needs |
 | `STRUCTURE.md` | Project structure, code style guidelines, architecture rules, AI agent guidelines, Do/Don't | English | Before writing code — for conventions and patterns |
 | `TECHNICAL-SOLUTIONS.md` | Architecture Decision Records (ADRs): chosen technical solutions, trade-offs, reasons why X was chosen over Y | English | Before proposing alternative approaches or challenging existing patterns — to understand historical context |
 | `AGENTS.md` | Project-level: tech stack, build commands, security, conventions for AI coding agents | English | For build/run commands and agent-specific rules |
@@ -163,3 +164,4 @@ Its full rule set (workspace isolation, zero AI leakage, fixed pipeline, seniori
 4. **Review Trigger** — After complex task completion, agent MUST run matching reviewer skill before considering task done.
 5. **No task is "done" until review passes or user explicitly overrides.**
 6. **No auto-commits.** Agents must NOT run `git commit` or `git push` unless user explicitly asks.
+7. **Task files.** For Complex tasks, the spec lives in `TASK/NNN-slug.md` (template: `TASK/_TEMPLATE.md`). BACKLOG.md is the index only (statuses + order) — task content is never duplicated there. The executing sub-agent gets the task file as its primary input; `<acceptance-criteria>` is the review gate's checklist; any agent that hits a workaround/quirk MUST append it to the task file's `<obstacles>` section.

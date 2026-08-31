@@ -109,7 +109,7 @@ Check the entire codebase against project rules:
 - [ ] **Migration backlog:** Pending EF migrations not applied. Migration naming convention followed.
 - [ ] **Package versions:** Outdated NuGet/npm packages with known vulnerabilities.
 - [ ] **License time-bombs:** MassTransit v8 installations flagged with migration plan (support ends after 2026; evaluate OpenTransit readiness).
-- [ ] **Documentation drift:** `CONTEXT.md` / `BACKLOG.md` / `STRUCTURE.md` out of sync with actual code.
+- [ ] **Documentation drift:** `CONTEXT.md` / `BACKLOG.md` / `STRUCTURE.md` out of sync with actual code. BACKLOG.md index statuses match task files in `TASK/` (no content duplication between index and files).
 
 ### Messaging Audit (if triggered)
 - [ ] **Transport:** RabbitMQ/ASB configured with retry, dead-letter, and outbox (via Wolverine/Rebus; MassTransit only in legacy).
@@ -157,7 +157,7 @@ After completing all audit types, generate a structured report:
 - **Problem:** [Description]
 - **Impact:** [Why this matters]
 - **Recommendation:** [Concrete fix or architectural change]
-- **Backlog link:** [If applicable, link to BACKLOG.md task #N]
+- **Backlog link:** [If applicable, link to TASK/NNN-slug.md]
 
 ## Action Items
 | Priority | Task | Owner | Due | Linked Backlog Item |
