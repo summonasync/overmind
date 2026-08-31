@@ -13,7 +13,7 @@ whenToUse: |
 # Task Orchestrator Skill
 
 ## Scope Boundary (DO NOT CROSS)
-This skill handles **task-based development workflows** only: planning → coding → review for a specific feature/bug/fix. 
+This skill handles **task-based development workflows** only: planning → coding → review for a specific feature/bug/fix.
 
 For **system-wide audits** (sprint retrospectives, phase-end validation, security/compliance checks, comprehensive health checks) — use `audit-orchestrator`. Do NOT attempt to perform full-project audits within this skill.
 
@@ -25,35 +25,37 @@ For **coding challenges / тестовые задания** (any task marked as 
 ### Step 1: Read Project Documentation (strict order)
 Before proposing ANY changes, read documentation in this exact order:
 1. **`AGENTS.md`** — Tech stack, build commands, conventions, documentation file order
-2. **`context.md`** — System design, architecture decisions, current phase, service boundaries (Russian)
-3. **`Backlog.md`** — Sprint backlog, tasks per phase, execution order, blocked items (Mixed EN/RU)
+2. **`CONTEXT.md`** — System design, architecture decisions, current phase, service boundaries (Russian)
+3. **`BACKLOG.md`** — Sprint backlog, tasks per phase, execution order, blocked items (Mixed EN/RU)
 4. **`STRUCTURE.md`** — Project structure, code style, Do/Don't (English)
 5. **`TECHNICAL-SOLUTIONS.md`** — Architecture Decision Records, trade-offs, historical context (English)
+
+**Naming rule:** filenames are exact and case-sensitive — always ALL CAPS as listed above.
 
 If any of these files are missing, report which ones are absent and ask the user if they should be created.
 
 ### Step 2: Determine Scope Lock
 After reading documentation, determine the working mode:
 
-**IF `Backlog.md` EXISTS and is not empty:**
+**IF `BACKLOG.md` EXISTS and is not empty:**
 - We are **LOCKED to the backlog scope**. No new features, no scope changes, no "while we're at it" suggestions.
 - Identify the **first unchecked task** (`[ ]`) or task in progress (`[~]`).
 - If the task is marked `[?]` (Blocked / Needs Human) — **STOP**. Report to user: "Задача заблокирована: [описание блокера]. Требуется решение человека."
 - If the task has an **Anti-Scope** section — treat it as hard constraints. Do NOT touch anything listed there.
-- **Never rewrite Backlog.md without explicit user approval.** Only update statuses: `[ ]` → `[~]` → `[x]`.
+- **Never rewrite BACKLOG.md without explicit user approval.** Only update statuses: `[ ]` → `[~]` → `[x]`.
 
-**IF `Backlog.md` DOES NOT EXIST or is empty:**
+**IF `BACKLOG.md` DOES NOT EXIST or is empty:**
 - Ask the user: "Бэклог не найден или пуст. Создать задачу '[описание]' в новом бэклоге?"
-- Do NOT start coding until scope is defined and written to Backlog.md.
+- Do NOT start coding until scope is defined and written to BACKLOG.md.
 
-**IF user asks for something OUTSIDE Backlog.md:**
+**IF user asks for something OUTSIDE BACKLOG.md:**
 - Respond: "Этот запрос выходит за рамки текущего бэклога. Добавить как новую задачу в бэклог или работать вне бэклога?"
 - Do NOT silently expand scope.
 
 ### Step 3: Context Validation
-After reading all 4 files, verify consistency:
-- Does `context.md` current phase match the active tasks in `Backlog.md`?
-- Are there completed tasks in Backlog.md that are not reflected in context.md?
+After reading all 5 files, verify consistency:
+- Does `CONTEXT.md` current phase match the active tasks in `BACKLOG.md`?
+- Are there completed tasks in BACKLOG.md that are not reflected in CONTEXT.md?
 - Report mismatches to user before starting work.
 
 ---
@@ -65,7 +67,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 
 ### Phase 1: Architecture (if needed)
 - If task involves new routes, API contracts, or service boundaries → consult `dotnet-architect` or `next-js-architect` first.
-- Output: updated `context.md`, folder structure, API contract.
+- Output: updated `CONTEXT.md`, folder structure, API contract.
 
 ### Phase 2: Implementation
 - Delegate work to the appropriate skill:
@@ -76,6 +78,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
   - `Learning materials` (study plans, concept explanations, assessments) → `tutor-master`
 - Coder MUST follow all rules from their skill file.
 - Coder MUST output list of changed files.
+- **Before adding/upgrading any third-party NuGet dependency** → consult `nuget-licensing-guard`.
 
 ### Phase 3: Mandatory Review (AUTO-TRIGGER)
 After Phase 2 completion, run reviews in this order:
@@ -103,7 +106,7 @@ Review output must include:
 ### Phase 5: Architecture Gate (End-of-Phase only)
 - Run ONLY after completing a sprint phase or large refactoring.
 - Verify: Clean Architecture layers intact, no dependency inversions, service boundaries respected.
-- Output: `ARCHITECTURE_DECISIONS.md` update if structural changes occurred.
+- Output: `TECHNICAL-SOLUTIONS.md` update (new ADR entry) if structural changes occurred.
 
 ---
 
@@ -123,7 +126,7 @@ Task is COMPLEX if:
 - Spans both frontend and backend
 - Introduces new API endpoints or Server Actions
 - Modifies database schema or EF migrations
-- Changes MassTransit topology or message contracts
+- Changes messaging topology or message contracts (Wolverine/Rebus; MassTransit in legacy codebases)
 - Creates new microservice or Aspire project
 - Touches auth, authorization, or secrets management
 
