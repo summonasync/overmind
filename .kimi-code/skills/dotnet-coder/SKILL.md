@@ -19,7 +19,7 @@ Before writing or editing ANY code, read project documentation in this strict or
 2. `Backlog.md` — Current sprint tasks and execution order (Mixed EN/RU)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
-5. `~/.kimi-code/skills/dotnet-best-practices/SKILL.md` — codified BP-IDs; enforceable during implementation. When executing a `TASKS/` task file, load this together with the task file.
+5. `~/.kimi-code/skills/dotnet-best-practices/SKILL.md` — codified BP-IDs; enforceable during implementation. When executing a `BACKLOG/` task file, load this together with the task file.
 
 ## Tech Stack
 - **Runtime**: .NET 9/10+ (latest LTS)

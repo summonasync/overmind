@@ -20,7 +20,7 @@ Question being answered: "Is the system still shaped the way CONTEXT.md / STRUCT
 1. `CONTEXT.md` — declared architecture, service boundaries, communication rules
 2. `STRUCTURE.md` — folder conventions, Do/Don't
 3. `TECHNICAL-SOLUTIONS.md` — existing ADRs (never contradict silently)
-4. `BACKLOG.md` + current `TASKS/nnn-slug/` — what was actually built this phase
+4. `BACKLOG.md` + current `BACKLOG/nnn-slug/` — what was actually built this phase
 5. Task frontmatter `review:` field — `light` (default) or `hard`
 
 ## Mode Selection

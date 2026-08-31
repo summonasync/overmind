@@ -109,7 +109,7 @@ Check the entire codebase against project rules:
 - [ ] **Migration backlog:** Pending EF migrations not applied. Migration naming convention followed.
 - [ ] **Package versions:** Outdated NuGet/npm packages with known vulnerabilities.
 - [ ] **License time-bombs:** MassTransit v8 installations flagged with migration plan (support ends after 2026; evaluate OpenTransit readiness).
-- [ ] **Documentation drift:** `CONTEXT.md` / `BACKLOG.md` / `STRUCTURE.md` out of sync with actual code. BACKLOG.md index statuses match feature folders in `TASKS/` (no content duplication between index and folders).
+- [ ] **Documentation drift:** `CONTEXT.md` / `BACKLOG.md` / `STRUCTURE.md` out of sync with actual code. BACKLOG.md index statuses match feature folders in `BACKLOG/` (no content duplication between index and folders).
 
 ### Messaging Audit (if triggered)
 - [ ] **Transport:** RabbitMQ/ASB configured with retry, dead-letter, and outbox (via Wolverine/Rebus; MassTransit only in legacy).
@@ -131,14 +131,14 @@ Run against `documentation-writer` skill rules:
 - [ ] **Consistency:** No contradictions between `CONTEXT.md`, `STRUCTURE.md`, `TECHNICAL-SOLUTIONS.md`, `AGENTS.md`.
 - [ ] **Language:** Each doc follows the language convention from the `AGENTS.md` documentation table.
 - [ ] **Drift:** Docs describing features changed since last audit were updated in the same commits.
-- [ ] **Index/folders sync:** `BACKLOG.md` index rows match existing `TASKS/nnn-slug/` folders (no orphans either way).
-- [ ] **Feature folder integrity:** no loose task files outside `TASKS/nnn-slug/tasks/`; no `feature.md` without at least one task file; no task file whose `<refs>` points to a missing spec/plan.
+- [ ] **Index/folders sync:** `BACKLOG.md` index rows match existing `BACKLOG/nnn-slug/` folders (no orphans either way).
+- [ ] **Feature folder integrity:** no loose task files outside `BACKLOG/nnn-slug/tasks/`; no `feature.md` without at least one task file; no task file whose `<refs>` points to a missing spec/plan.
 - [ ] **Frozen artifacts:** `feature.md`/`plan.md` with `status: approved` were not edited after approval without a `version:` bump (check git history) — silent edits of frozen artifacts are a WARNING.
 - [ ] **Tombstoning:** removed features/requirements carry `<removed>` / `[-] removed` markers — silent deletions (git diff shows removals without tombstones in docs) are a WARNING: agents resurrect untombstoned deletions from context history.
 - [ ] **Dependency materialization:** no prose cross-references between tasks/features ("done when X is ready") outside `<refs>` — every such reference must exist as a `<refs>` entry or a `[?]` BACKLOG row.
 - [ ] **Cloud spend guard:** no `gcloud`/`az`/`aws` mutations in shell history or scripts without a corresponding user-approved task — flag any autonomous infra change as BLOCKER.
-- [ ] **Superpowers containment:** no `docs/superpowers/` directory exists as a source of truth — if found, flag as WARNING: content must be migrated into `TASKS/nnn-slug/feature.md` / `plan.md` / `CONTEXT.md` / `TECHNICAL-SOLUTIONS.md` per AGENTS.md «Superpowers Integration».
-- [ ] **Artifact provenance:** every generated report/doc outside `TASKS/` carries a skill-prefix (`audit-*`, `review-*`, `obfuscation-*`, `intake-*`) per AGENTS.md provenance rule — anonymous artifacts are a WARNING.
+- [ ] **Superpowers containment:** no `docs/superpowers/` directory exists as a source of truth — if found, flag as WARNING: content must be migrated into `BACKLOG/nnn-slug/feature.md` / `plan.md` / `CONTEXT.md` / `TECHNICAL-SOLUTIONS.md` per AGENTS.md «Superpowers Integration».
+- [ ] **Artifact provenance:** every generated report/doc outside `BACKLOG/` carries a skill-prefix (`audit-*`, `review-*`, `obfuscation-*`, `intake-*`) per AGENTS.md provenance rule — anonymous artifacts are a WARNING.
 - [ ] **SKILLFLOW.md consistency:** routes and transitions described in `SKILLFLOW.md` still match reality (skills referenced there exist, gates listed there are actually enforced in task-orchestrator).
 
 ---
@@ -166,7 +166,7 @@ After completing all audit types, generate a structured report:
 - **Problem:** [Description]
 - **Impact:** [Why this matters]
 - **Recommendation:** [Concrete fix or architectural change]
-- **Backlog link:** [If applicable, link to TASKS/nnn-slug/]
+- **Backlog link:** [If applicable, link to BACKLOG/nnn-slug/]
 
 ## Action Items
 | Priority | Task | Owner | Due | Linked Backlog Item |

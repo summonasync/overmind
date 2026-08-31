@@ -30,7 +30,7 @@ Before proposing ANY changes, read documentation in this exact order:
 4. **`STRUCTURE.md`** — Project structure, code style, Do/Don't (English)
 5. **`TECHNICAL-SOLUTIONS.md`** — Architecture Decision Records, trade-offs, historical context (English)
 6. **`SKILLFLOW.md`** — workflow graph: valid transitions and alternative routes; used for every «next step» suggestion.
-7. **`TASKS/`** — after identifying the current feature in BACKLOG.md (Step 2), open its folder `TASKS/nnn-slug/`. Orchestrator reads `feature.md` and `plan.md` (if present); the executing sub-agent reads ONLY its `tasks/NN-foo.md` IN FULL. Task files are the authoritative execution contracts; BACKLOG.md is only the index.
+7. **`BACKLOG/`** — after identifying the current feature in BACKLOG.md (Step 2), open its folder `BACKLOG/nnn-slug/`. Orchestrator reads `feature.md` and `plan.md` (if present); the executing sub-agent reads ONLY its `tasks/NN-foo.md` IN FULL. Task files are the authoritative execution contracts; BACKLOG.md is only the index.
 
 **Naming rule:** root filenames are exact and case-sensitive — always ALL CAPS as listed above. Inside feature folders, files are lowercase: `feature.md`, `plan.md`, `tasks/NN-foo.md`.
 
@@ -43,12 +43,12 @@ After reading documentation, determine the working mode:
 - We are **LOCKED to the backlog scope**. No new features, no scope changes, no "while we're at it" suggestions.
 - Identify the **first unchecked task** (`[ ]`) or task in progress (`[~]`).
 - If the task is marked `[?]` (Blocked / Needs Human) — **STOP**. Report to user: "Задача заблокирована: [описание блокера]. Требуется решение человека."
-- Open the feature folder `TASKS/nnn-slug/`, then load the current task file `tasks/NN-foo.md`. Its `<anti-scope>` section is hard constraints — do NOT touch anything listed there. `<acceptance-criteria>` + spec-compliance becomes the Phase 3 review checklist.
+- Open the feature folder `BACKLOG/nnn-slug/`, then load the current task file `tasks/NN-foo.md`. Its `<anti-scope>` section is hard constraints — do NOT touch anything listed there. `<acceptance-criteria>` + spec-compliance becomes the Phase 3 review checklist.
 - **Never rewrite BACKLOG.md, feature.md, plan.md or task files without explicit user approval.** Only update statuses in the BACKLOG.md index (`[ ]` → `[~]` → `[x]`), task-file frontmatter `status:`, and append to `<log>` / `<obstacles>`. Approved feature.md/plan.md are frozen — changes require re-validation with the user.
 
 **IF `BACKLOG.md` DOES NOT EXIST or is empty:**
 - Ask the user: "Бэклог не найден или пуст. Создать задачу '[описание]'?"
-- On approval for a Complex task: create the feature folder `TASKS/nnn-slug/` from `TASKS/_TEMPLATE/` AND add an index row to BACKLOG.md. Simple tasks stay one-liners in BACKLOG.md.
+- On approval for a Complex task: create the feature folder `BACKLOG/nnn-slug/` from `BACKLOG/_TEMPLATE/` AND add an index row to BACKLOG.md. Simple tasks stay one-liners in BACKLOG.md.
 - Do NOT start coding until scope is defined and written down.
 
 **IF user asks for something OUTSIDE BACKLOG.md:**
@@ -69,17 +69,17 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 **Exception:** pure documentation tasks (`documentation-writer`) and learning-material tasks (`tutor-master`) skip Phase 3 code review — apply the target skill's own verification checklist instead.
 
 ### Phase 0: Spec & Plan Gates (Complex features — MANDATORY, sequential)
-0. **Requirements intake.** If requirements arrive in arbitrary form (ticket, letter, chat dump, CSV, design files) — first normalize them into `TASKS/nnn-slug/requirements.md` from `TASKS/_TEMPLATE/requirements.md`: parse, deduplicate, decompose into actionable items, mark contradictions and gaps. **STOP. User confirms requirements are complete.** Skip only when the user provides an already-structured spec.
-1. **Spec gate.** Build `TASKS/nnn-slug/feature.md` from `TASKS/_TEMPLATE/feature.md` — use `superpowers:brainstorming` as the questioning engine (Socratic, one question at a time) until requirements are unambiguous. **STOP. Present feature.md to the user. No planning until explicit approval.**
-2. **Plan gate.** Build `TASKS/nnn-slug/plan.md` from `TASKS/_TEMPLATE/plan.md` — decomposition style per `superpowers:writing-plans` (small tasks, exact file paths, verification step per task). **STOP. Present plan.md to the user. No task breakdown until explicit approval.**
-3. **Task breakdown.** After plan approval: create `TASKS/nnn-slug/tasks/NN-foo.md` per task from `TASKS/_TEMPLATE/task.md`, each linking back to feature.md/plan.md via `<refs>`. Add/update the BACKLOG.md index row.
+0. **Requirements intake.** If requirements arrive in arbitrary form (ticket, letter, chat dump, CSV, design files) — first normalize them into `BACKLOG/nnn-slug/requirements.md` from `BACKLOG/_TEMPLATE/requirements.md`: parse, deduplicate, decompose into actionable items, mark contradictions and gaps. **STOP. User confirms requirements are complete.** Skip only when the user provides an already-structured spec.
+1. **Spec gate.** Build `BACKLOG/nnn-slug/feature.md` from `BACKLOG/_TEMPLATE/feature.md` — use `superpowers:brainstorming` as the questioning engine (Socratic, one question at a time) until requirements are unambiguous. **STOP. Present feature.md to the user. No planning until explicit approval.**
+2. **Plan gate.** Build `BACKLOG/nnn-slug/plan.md` from `BACKLOG/_TEMPLATE/plan.md` — decomposition style per `superpowers:writing-plans` (small tasks, exact file paths, verification step per task). **STOP. Present plan.md to the user. No task breakdown until explicit approval.**
+3. **Task breakdown.** After plan approval: create `BACKLOG/nnn-slug/tasks/NN-foo.md` per task from `BACKLOG/_TEMPLATE/task.md`, each linking back to feature.md/plan.md via `<refs>`. Add/update the BACKLOG.md index row.
 4. Approved feature.md/plan.md become **frozen snapshots**. Any change mid-flight → re-validate with the user, bump `version:` in frontmatter, never edit silently.
 5. Medium features (no validation ceremony needed) MAY skip spec/plan — folder with `tasks/` only. Simple tasks never get a folder.
 
 ### Phase 1: Architecture (if needed)
 - If task involves new routes, API contracts, or service boundaries → consult `dotnet-architect` or `next-js-architect` first.
 - Output: updated `CONTEXT.md`, folder structure, API contract.
-- **Requirements unclear or feature under-specified?** → return to Phase 0 spec gate: `superpowers:brainstorming` as the questioning engine (Socratic, one question at a time). Output lands in `TASKS/nnn-slug/feature.md` / `CONTEXT.md` — NEVER in `docs/superpowers/`.
+- **Requirements unclear or feature under-specified?** → return to Phase 0 spec gate: `superpowers:brainstorming` as the questioning engine (Socratic, one question at a time). Output lands in `BACKLOG/nnn-slug/feature.md` / `CONTEXT.md` — NEVER in `docs/superpowers/`.
 
 ### Phase 2: Implementation
 - Delegate work to the appropriate skill:
@@ -90,10 +90,10 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
   - `Learning materials` (study plans, concept explanations, assessments) → `tutor-master`
 - Coder MUST follow all rules from their skill file.
 - Coder MUST output list of changed files.
-- Coder receives ONLY its task file `TASKS/nnn-slug/tasks/NN-foo.md` as primary input (feature.md/plan.md stay with orchestrator and reviewer). Coder MUST append discovered workarounds, quirks, and environment issues to the task file's `<obstacles>` section, and a one-line entry to `<log>`.
+- Coder receives ONLY its task file `BACKLOG/nnn-slug/tasks/NN-foo.md` as primary input (feature.md/plan.md stay with orchestrator and reviewer). Coder MUST append discovered workarounds, quirks, and environment issues to the task file's `<obstacles>` section, and a one-line entry to `<log>`.
 - **Before adding/upgrading any third-party NuGet dependency** → consult `nuget-licensing-guard`.
 - **`.NET` coders load `dotnet-best-practices` with the task file** — BP-rules are constraints; reviewers cite violations by BP-ID.
-- **Decomposition style** → `superpowers:writing-plans` (small tasks, exact file paths, verification steps per task); the plan itself lives in `TASKS/nnn-slug/plan.md` (Phase 0 plan gate).
+- **Decomposition style** → `superpowers:writing-plans` (small tasks, exact file paths, verification steps per task); the plan itself lives in `BACKLOG/nnn-slug/plan.md` (Phase 0 plan gate).
 - **TDD** → `superpowers:test-driven-development` applies ONLY to domain/business logic per AGENTS.md «Superpowers Integration» rule 4. Its commit step is DISABLED — see Git & Commit Control below.
 - **Stuck on a bug?** → `superpowers:systematic-debugging` (root cause first, no guess-fixes) before any fix attempt.
 
@@ -119,7 +119,7 @@ Review output must include:
 2. File:line references
 3. Concrete fix diffs
 
-**Two-stage review (per superpowers):** first stage — spec-compliance against `TASKS/nnn-slug/feature.md` + `<acceptance-criteria>`; second stage — code quality. Spec violation is a BLOCKER even if the code is clean.
+**Two-stage review (per superpowers):** first stage — spec-compliance against `BACKLOG/nnn-slug/feature.md` + `<acceptance-criteria>`; second stage — code quality. Spec violation is a BLOCKER even if the code is clean.
 
 **Before reporting ANY task as done** → apply `superpowers:verification-before-completion`: prove the fix/feature works (build + tests green, behavior demonstrated), never claim completion on "should work now".
 
@@ -172,7 +172,7 @@ Task is COMPLEX if:
 
 ## Communication Rules
 - **Speak Russian.**
-- **At start:** Report what was found in documentation: "Бэклог найден, текущая фича: [X] (`TASKS/nnn-slug/`), задача: `tasks/NN-foo.md`. Anti-Scope: [Y]. Скоуп зафиксирован."
+- **At start:** Report what was found in documentation: "Бэклог найден, текущая фича: [X] (`BACKLOG/nnn-slug/`), задача: `tasks/NN-foo.md`. Anti-Scope: [Y]. Скоуп зафиксирован."
 - **During work:** Report progress after each phase: "Фаза 1 завершена...", "Фаза 2: изменены файлы...", "Фаза 3: ревью..."
 - **If scope violation detected:** "Этот запрос выходит за рамки бэклога. Добавить задачу?"
 - **If blocked task:** "Задача [N] заблокирована: [причина]. Требуется решение человека."
