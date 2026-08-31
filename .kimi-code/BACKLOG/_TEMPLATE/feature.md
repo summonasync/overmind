@@ -1,7 +1,7 @@
 ---
 feature: 001
 slug: example-feature
-status: draft        # draft | approved (approved = FROZEN)
+status: draft        # draft | ready
 version: 1
 created: YYYY-MM-DD
 ---
@@ -16,21 +16,13 @@ created: YYYY-MM-DD
 - Проверяемые требования, по одному на строку (outcome-level, не implementation-level)
 </requirements>
 
-<decisions>
-- Ключевые решения, принятые в brainstorm: что выбрали и почему (кратко; полный разбор — ADR в TECHNICAL-SOLUTIONS.md)
-</decisions>
-
 <non-goals>
 - Что явно НЕ входит в эту фичу (защита от scope creep на уровне фичи)
 </non-goals>
 
-<open-questions>
-- Нерешённые вопросы. spec не может стать approved, пока список не пуст.
-</open-questions>
-
 <!--
-LIFECYCLE: после status: approved файл ЗАМОРОЖЕН.
-Изменение = ре-валидация с пользователем + bump version. Молчаливые правки запрещены.
-Читатели: оркестратор, ревьюер. Исполняющий субагент spec НЕ читает —
-его контракт — tasks/NN-foo.md.
+LIFECYCLE: создаётся при постановке фичи в бэклог ДО старта работы.
+Не замораживается гейтом, но изменения после status: ready проходят через пользователя (bump version).
+Молчаливые правки запрещены.
+Вход для spec gate: на его основе строится spec.md через superpowers:brainstorming.
 -->

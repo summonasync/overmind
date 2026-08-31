@@ -14,9 +14,11 @@ The graph suggests — the user decides. Skills NEVER auto-proceed to the next s
 | Step | Skill / Owner | Artifacts | Gate |
 |------|---------------|-----------|------|
 | 0.0 Intake | task-orchestrator (intake mode) | `BACKLOG/nnn-slug/requirements.md` | User confirms requirements are complete |
-| 0.1 Spec | `superpowers:brainstorming` via task-orchestrator | `BACKLOG/nnn-slug/feature.md` | **USER APPROVAL — frozen after** |
+| 0.1 Spec | `superpowers:brainstorming` via task-orchestrator | `BACKLOG/nnn-slug/spec.md` | **USER APPROVAL — frozen after** |
 | 0.2 Plan | `superpowers:writing-plans` via task-orchestrator | `BACKLOG/nnn-slug/plan.md` | **USER APPROVAL — frozen after** |
 | Tasks | task-orchestrator | `BACKLOG/nnn-slug/tasks/NN-*.md` + BACKLOG.md index row | — |
+
+`feature.md` is created when a feature enters the backlog, **before Phase 0**.
 | 2 Implement | `dotnet-coder` / `next-js-coder` / `maui-coder` (Sonnet) | code + `<obstacles>`/`<log>` in task file | `nuget-licensing-guard` before any NuGet change |
 | 3 Review | `dotnet-code-reviewer` / `next-js-coder-reviewer` (Sonnet); depth from task frontmatter `review:` — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `review-NNN-NN.md` | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
 | 4 Fix loop | coder ← review comments | updated code | back to Phase 3 |
@@ -46,7 +48,7 @@ coder directly → done. No folder, BACKLOG.md one-liner only.
 
 - No auto-commits, ever — `git commit`/`git push` only on explicit user request.
 - Sub-agents: `Claude Sonnet` (default) / `Claude Opus` (orchestration, audit, detection, obfuscation) only. `primary` alias forbidden.
-- Executing sub-agent reads ONLY its task file. feature.md/plan.md belong to orchestrator + reviewer.
-- Frozen artifacts (approved feature.md/plan.md) change only via re-validation + version bump. Removed content gets a `<removed>` tombstone, never silent deletion (context-clash defense).
+- Executing sub-agent reads ONLY its task file. spec.md/plan.md belong to orchestrator + reviewer; feature.md is readable by all.
+- Frozen artifacts (approved spec.md/plan.md) change only via re-validation + version bump. Removed content gets a `<removed>` tombstone, never silent deletion (context-clash defense).
 - Cloud CLI mutations (`gcloud`/`az`/`aws`) are never autonomous — user approval every time; infra goes through IaC.
 - Every skill ends with the output contract: Done → Next step → Alternatives → STOP.

@@ -3,7 +3,7 @@ feature: 001
 slug: example-feature
 status: draft        # draft | approved (approved = FROZEN)
 version: 1
-feature: feature.md    # ссылка на фича-файл, которому соответствует план
+spec: spec.md          # ссылка на спеку, которой соответствует план
 created: YYYY-MM-DD
 ---
 
@@ -29,6 +29,6 @@ created: YYYY-MM-DD
 </verification>
 
 <!--
-LIFECYCLE: после status: approved файл ЗАМОРОЖЕН (как feature.md).
+LIFECYCLE: после status: approved файл ЗАМОРОЖЕН (как spec.md).
 Чекбоксы в <tasks> — единственное, что обновляется по ходу работы.
 -->
