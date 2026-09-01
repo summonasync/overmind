@@ -31,7 +31,7 @@ For regular project tasks — use `task-orchestrator`. For system-wide audits �
 ### Phase 0: Task Intake
 1. Read the task statement verbatim. Extract: explicit requirements, implicit expectations (framework versions, project layout the reviewer expects), submission format, deadline.
 2. **Set up the isolated workspace:** all challenge work lives in `coding-challenges/<task-slug>/`. This folder is the deliverable root. Nothing outside it is touched; nothing from the outer project (docs, configs, agent files) is copied into it.
-3. Read project docs per standard order (`AGENTS.md` → `context.md` → `Backlog.md` → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md`) **only if the challenge lives inside an existing repo**. For a standalone challenge — the task statement overrides project conventions. The "Coding Challenge Rules" section of `AGENTS.md` ALWAYS applies.
+3. Read project docs per standard order (`AGENTS.md` → `CONTEXT.md` → `BACKLOG.md` → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md`) **only if the challenge lives inside an existing repo**. For a standalone challenge — the task statement overrides project conventions. The "Coding Challenge Rules" section of `AGENTS.md` ALWAYS applies.
 4. Confirm scope with the user: "Задача: [X]. Требования: [список]. Формат сдачи: [Y]. Workspace: `coding-challenges/<slug>/`. Скоуп зафиксирован, приступаю."
 
 ### Phase 1: Implementation
@@ -62,7 +62,7 @@ For regular project tasks — use `task-orchestrator`. For system-wide audits �
   - lint / format checks **as configured in the challenge repo** (not our project defaults)
   - requirements checklist: every explicit requirement from Phase 0 mapped to where it's implemented
 - **AI-leakage sweep of the deliverable folder** (mandatory, hostile review):
-  - no `AGENTS.md`, `CLAUDE.md`, `.kimi/`, `.cursor/`, `.ai/`, agent configs, or skill references anywhere in `coding-challenges/<task-slug>/`
+  - no `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.kimi-code/`, `.kimi/`, `.claude/`, `.gemini/`, `.cursor/`, `.ai/`, `.superpowers/`, agent configs, or skill references anywhere in `coding-challenges/<task-slug>/` — regardless of which runtime ran the challenge
   - no mentions of AI tooling in code comments, README, configs, or git history
   - no AI-perfect README (delegate README to `documentation-writer`, then obfuscate it too — AI-perfect READMEs are a common tell)
   - commit history (if any) looks human: message style, count, no co-author trailers
@@ -91,3 +91,12 @@ Coding challenges are **always complex by definition** — the full pipeline app
 - Report at each phase boundary: "Фаза N завершена: [итог]. Переход к фазе N+1."
 - If the task statement is ambiguous — STOP and ask before Phase 1. Guessing wrong on a challenge wastes the whole pipeline.
 - Never mention obfuscation phases in any artifact that ships with the deliverable (README, commit messages, code comments).
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — final validation report to the user — they review and submit the deliverable.
+3. **Alternatives** — extra `ai-code-detector` pass before submission; stop if any phase reports a BLOCKER.
+Suggest, never auto-proceed. The user picks the next step.

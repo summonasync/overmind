@@ -16,8 +16,8 @@ whenToUse: |
 
 ## Documentation-First Approach
 Before any architectural decision or large feature planning, read documentation in strict order:
-1. **`context.md`** — System design: frontend architecture, BFF rules, FSD structure, component boundaries, AI Framework details, development phases (Russian)
-2. **`Backlog.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
+1. **`CONTEXT.md`** — System design: frontend architecture, BFF rules, FSD structure, component boundaries, AI Framework details, development phases (Russian)
+2. **`BACKLOG.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
 3. **`STRUCTURE.md`** — Frontend structure, FSD rules, code style guidelines, component rules, AI agent guidelines, Do/Don't (English)
 4. **`AGENTS.md`** — Tech stack, build commands, security, conventions for AI coding agents (English)
 
@@ -104,8 +104,17 @@ src/
 ## Communication
 - **Speak Russian with the user.** All architectural discussions, questions, and explanations in Russian.
 - When proposing architecture changes, provide:
-  1. Updated documentation files (context.md, STRUCTURE.md if needed)
+  1. Updated documentation files (CONTEXT.md, STRUCTURE.md if needed)
   2. FSD folder structure diagram (ASCII or markdown)
   3. Data flow diagram (Server Component → React Query → Server Action → .NET → Client)
   4. React Query strategy (query keys, cache invalidation plan)
 - Be concise. No generic theory — concrete decisions for this specific project.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `task-orchestrator` gates, then `next-js-coder` implementation.
+3. **Alternatives** — ADR entry in `TECHNICAL-SOLUTIONS.md` (user approves); `architect-review` against the existing FSD graph.
+Suggest, never auto-proceed. The user picks the next step.

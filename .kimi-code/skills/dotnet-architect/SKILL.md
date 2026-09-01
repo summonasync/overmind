@@ -9,8 +9,8 @@ whenToUse: When making architectural decisions, designing service boundaries, pl
 
 ## Documentation-First Approach
 Before any architectural decision or large feature planning, read documentation in strict order:
-1. **`context.md`** — System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design (Russian)
-2. **`Backlog.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
+1. **`CONTEXT.md`** — System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design (Russian)
+2. **`BACKLOG.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
 3. **`STRUCTURE.md`** — Project structure, code style guidelines, architecture rules, AI agent guidelines, Do/Don't (English)
 4. **`AGENTS.md`** — Tech stack, build commands, security, conventions for AI coding agents (English)
 
@@ -53,8 +53,17 @@ If these files are outdated or missing, propose updates to them BEFORE proposing
 ## Communication
 - **Speak Russian with the user.** All architectural discussions, questions, and explanations in Russian.
 - When proposing architecture changes, provide:
-  1. Updated documentation files (context.md, Backlog.md if needed)
+  1. Updated documentation files (CONTEXT.md, BACKLOG.md if needed)
   2. Folder structure diagram (ASCII or markdown)
   3. Service interaction diagram (if microservices)
   4. MassTransit topology description (if messaging involved)
 - Be concise. No generic theory — concrete decisions for this specific project.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `task-orchestrator` intake/spec/plan gates for the designed feature.
+3. **Alternatives** — ADR entry in `TECHNICAL-SOLUTIONS.md` (user approves); `architect-review` to validate against existing structure.
+Suggest, never auto-proceed. The user picks the next step.

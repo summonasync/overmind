@@ -19,7 +19,7 @@ Produce documentation that is **beautiful, precise, and unambiguous**. The bar: 
 
 ## Before Writing (MANDATORY)
 1. **Read the code, not just the old docs.** Documentation is derived from the actual current state: project structure, `*.csproj`, configs, entry points, existing docs. Never document from memory or from how things "should" be.
-2. Read project docs in order: `AGENTS.md` → `context.md` → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md` (if exists). Documentation must not contradict them.
+2. Read project docs in order: `AGENTS.md` → `CONTEXT.md` → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md` (if exists). Documentation must not contradict them.
 3. **Identify the audience** before writing: new team member, external contributor, DevOps, end user. Ask the user if it is not obvious.
 4. **Identify the language**: repository docs follow project conventions (this project: architecture docs in Russian, structure/ADR docs in English — check `AGENTS.md` table). Do not mix languages inside one file.
 
@@ -82,3 +82,12 @@ When writing or updating `TECHNICAL-SOLUTIONS.md` entries, use this format per d
 - **Speak Russian with the user.** Documentation language follows project conventions.
 - Show the full document or a diff — never describe changes abstractly.
 - Be concise. The document is the deliverable, not the commentary.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — report changed docs to the user — the docs-only route skips Phase 3 code review.
+3. **Alternatives** — `audit-orchestrator` (Documentation Audit) for a full consistency sweep; `task-orchestrator` if doc work uncovered missing feature work.
+Suggest, never auto-proceed. The user picks the next step.

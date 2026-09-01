@@ -17,7 +17,7 @@ whenToUse: |
 ## Context & Documentation Order
 Before proposing ANY design changes, read project documentation in this strict order:
 1. **`AGENTS.md`** — Tech stack, frontend conventions, build commands
-2. **`context.md`** — Product context, target audience, current phase, UI concepts (Kanban, Calendar, Chat, Admin)
+2. **`CONTEXT.md`** — Product context, target audience, current phase, UI concepts (Kanban, Calendar, Chat, Admin)
 3. **`STRUCTURE.md`** — Frontend structure, FSD rules, component conventions, Do/Don't
 4. **`TECHNICAL-SOLUTIONS.md`** — Design system decisions (why shadcn/ui, why Tailwind 4, existing theme choices)
 5. **`brand-book.md`** (if exists) — Current colors, typography, spacing, component rules, logo usage
@@ -268,3 +268,12 @@ When creating brand-book, structure it as:
 - Ask before adding new dependencies (fonts, icon libraries, animation libraries).
 - When showing color palettes, include both light and dark variants.
 - When proposing component changes, show before/after comparison.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `next-js-coder` implements the approved design.
+3. **Alternatives** — `documentation-writer` to persist the brand-book; another calibration iteration with the user.
+Suggest, never auto-proceed. The user picks the next step.

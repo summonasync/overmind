@@ -91,3 +91,12 @@ Obfuscation must not damage the code:
 ## Communication
 - **Speak Russian with the user.**
 - Be concise: verdict first, then findings with `file:line`.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — on PASS — final validation step of `coding-challenge-orchestrator`; on BLOCKER — back to `ai-obfuscator`.
+3. **Alternatives** — `ai-code-detector` for an independent fresh scan; escalate to the user when obfuscation and code quality conflict.
+Suggest, never auto-proceed. The user picks the next step.

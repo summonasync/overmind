@@ -126,3 +126,12 @@ Always check tooling configs first: enforced formatters and strict lint rules ma
 - **Speak Russian with the user.**
 - Verdict first, then evidence. Percentages are estimates — present them as ranges, not false precision.
 - Never commit anything. This skill produces a report, nothing else.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — hand the report to the user; if humanization is requested — `ai-obfuscator`.
+3. **Alternatives** — `audit-orchestrator` (AI Trace Audit as part of a full system audit); stop — the skill is read-only.
+Suggest, never auto-proceed. The user picks the next step.

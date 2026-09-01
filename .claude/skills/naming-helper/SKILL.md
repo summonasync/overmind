@@ -51,3 +51,12 @@ The user picks. Never auto-apply a name to anything.
 - The unhinged option must still be a real name — not gibberish. Funny AND usable.
 - If the user laughs at #5 and picks #2 — that is the system working as intended.
 - Speak Russian with the user. The names themselves follow the calibration language.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — apply the chosen name via the matching coder skill (`dotnet-coder` / `next-js-coder` / `maui-coder`).
+3. **Alternatives** — `documentation-writer` to record the naming decision; re-run calibration if no option landed.
+Suggest, never auto-proceed. The user picks the next step.

@@ -16,8 +16,8 @@ whenToUse: |
 
 ## Context & Documentation Order
 Before writing or editing ANY code, read project documentation in this strict order:
-1. `context.md` — Architecture decisions, app structure (Russian)
-2. `Backlog.md` — Current sprint tasks and execution order (Mixed EN/RU)
+1. `CONTEXT.md` — Architecture decisions, app structure (Russian)
+2. `BACKLOG.md` — Current sprint tasks and execution order (Mixed EN/RU)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
 
@@ -89,3 +89,12 @@ After completing a COMPLEX task (>3 files, new navigation routes, new platform c
 - Be concise. No boilerplate explanations.
 - When proposing file structure, use ASCII tree.
 - **After finishing:** report changed files and ask: "Хотите сделать коммит?" Do NOT commit silently.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `dotnet-code-reviewer` with MAUI rules (Phase 3 for Complex tasks).
+3. **Alternatives** — `dotnet-architect` for structural decisions; `task-orchestrator` for the next task.
+Suggest, never auto-proceed. The user picks the next step.

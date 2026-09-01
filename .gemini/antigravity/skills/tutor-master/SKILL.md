@@ -100,3 +100,12 @@ Dense reference for a mastered topic: tables, signatures, idioms, "X in PyTorch 
 - **Speak Russian with the user.** Code and identifiers are English-only.
 - At start of a learning plan: run the Prerequisites Check questions before finalizing.
 - Be concise, but teaching is the one place where completeness beats brevity — never cut a necessary step to save space.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — deliver the material to the user; run the knowledge check if requested.
+3. **Alternatives** — `documentation-writer` to persist the curriculum into project docs; build the next lesson in the study plan.
+Suggest, never auto-proceed. The user picks the next step.

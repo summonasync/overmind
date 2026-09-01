@@ -6,23 +6,23 @@ The graph suggests — the user decides. Skills NEVER auto-proceed to the next s
 ## Main Route (Complex feature)
 
 ```
-0.0 requirements-intake ──► 0.1 spec gate ──► 0.2 plan gate ──► tasks ──► 2 implement ──► 3 review ──► 4 fix? ──► 5 arch gate
+0.0 requirements-intake (OPTIONAL) ──► 0.1 spec gate ──► 0.2 plan gate ──► tasks ──► 2 implement ──► 3 review ──► 4 fix? ──► 5 arch gate
      (any-format docs            (USER              (USER            per       (coder per       (2-stage:        (loop back      (end of
       → requirements.md)          APPROVES)          APPROVES)        task       task file)       spec + code)     to 2)          phase only)
 ```
 
 | Step | Skill / Owner | Artifacts | Gate |
 |------|---------------|-----------|------|
-| 0.0 Intake | task-orchestrator (intake mode) | `BACKLOG/nnn-slug/requirements.md` | User confirms requirements are complete |
+| 0.0 Intake (OPTIONAL, trigger-based — only for messy raw inputs) | task-orchestrator (intake mode) | `BACKLOG/nnn-slug/requirements.md` | User confirms requirements are complete |
 | 0.1 Spec | `superpowers:brainstorming` via task-orchestrator | `BACKLOG/nnn-slug/spec.md` | **USER APPROVAL — frozen after** |
 | 0.2 Plan | `superpowers:writing-plans` via task-orchestrator | `BACKLOG/nnn-slug/plan.md` | **USER APPROVAL — frozen after** |
 | Tasks | task-orchestrator | `BACKLOG/nnn-slug/tasks/NN-*.md` + BACKLOG.md index row | — |
 
 `feature.md` is created when a feature enters the backlog, **before Phase 0**.
 | 2 Implement | `dotnet-coder` / `next-js-coder` / `maui-coder` (K2.7) | code + `<obstacles>`/`<log>` in task file | `nuget-licensing-guard` before any NuGet change |
-| 3 Review | `dotnet-code-reviewer` / `next-js-coder-reviewer` (K2.7); depth from task frontmatter `review:` — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `review-NNN-NN.md` | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
+| 3 Review | `dotnet-code-reviewer` / `next-js-code-reviewer` (K2.7); depth from task frontmatter `review:` — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `audits/review-NNN-NN.md` | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
 | 4 Fix loop | coder ← review comments | updated code | back to Phase 3 |
-| 5 Arch gate | `architect-review` Hard checklist (end of sprint phase / big refactor only) | `architect-review-YYYY-MM-DD.md` + ADR in `TECHNICAL-SOLUTIONS.md` | — |
+| 5 Arch gate | `architect-review` Hard checklist (end of sprint phase / big refactor only) | `audits/architect-review-YYYY-MM-DD.md` + ADR in `TECHNICAL-SOLUTIONS.md` | — |
 
 ## Alternative Routes
 
@@ -39,7 +39,7 @@ coder directly → done. No folder, BACKLOG.md one-liner only.
 `coding-challenge-orchestrator` — replaces this entire flow with its fixed pipeline.
 
 **System-wide audit (sprint retro, phase end):**
-`audit-orchestrator` — outside the feature flow; outputs `audit-YYYY-MM-DD.md`.
+`audit-orchestrator` — outside the feature flow; outputs `audits/audit-YYYY-MM-DD.md`.
 
 **Self-healing CI/CD (failing pipeline):**
 `pipeline-doctor` — log-reader (K2.7) → fix (K2.7) → trigger pipeline → watch → repeat, **max 3 iterations, then STOP and report**. Review of the final fix by a separate agent. Transport: `gh` CLI for cloud GitHub (token scope = security perimeter, never widen it for the agent); `glab`/REST for on-prem Git — transport is swappable, the loop is not. Tell the agent explicitly when the codebase is available locally, or it will read files through the API.

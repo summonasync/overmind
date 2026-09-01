@@ -13,7 +13,7 @@ whenToUse: |
 
 # Architect Review Skill
 
-Reviews STRUCTURE, not line-level code (that's `dotnet-code-reviewer` / `next-js-coder-reviewer`).
+Reviews STRUCTURE, not line-level code (that's `dotnet-code-reviewer` / `next-js-code-reviewer`).
 Question being answered: "Is the system still shaped the way CONTEXT.md / STRUCTURE.md say it should be?"
 
 ## Inputs (read in this order)
@@ -45,7 +45,7 @@ Question being answered: "Is the system still shaped the way CONTEXT.md / STRUCT
 - [ ] **Frontend (if present):** FSD layer graph (`app` → `pages` → `widgets` → `features` → `shared`) has no upward imports; query-key factories centralized; no BFF bypass.
 
 ## Output
-Artifact: `architect-review-YYYY-MM-DD.md` (artifact provenance rule) or a section in the review report when invoked inside Phase 3.
+Artifact: `audits/architect-review-YYYY-MM-DD.md` (artifact provenance rule) or a section in the review report when invoked inside Phase 3.
 For each finding:
 1. **Severity:** `BLOCKER` (broken boundary, reverse dependency) / `WARNING` (erosion, will bite later) / `SUGGESTION` (re-seam opportunity)
 2. **Location:** project/module/folder

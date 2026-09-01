@@ -58,3 +58,12 @@ BEFORE adding — never silently.
 3. If a commercial/dual license is detected — STOP, report to user with alternatives table, wait for decision.
 4. When an allowed-legacy package is found in an existing codebase — note the ceiling version
    (e.g., "AutoMapper frozen at ≤14.x") so future upgrades don't cross the license boundary.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — return the verdict to the calling coder skill (approve / pin / replace).
+3. **Alternatives** — propose an approved alternative from the rules table; escalate to the user when no compliant option exists.
+Suggest, never auto-proceed. The user picks the next step.

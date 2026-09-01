@@ -2,7 +2,7 @@
 name: audit-orchestrator
 description: |
   Conduct comprehensive system audits by analyzing project documentation,
-  identifying required audit types, and generating structured reports in docs/audit/{date}/.
+  identifying required audit types, and generating a structured report as audits/audit-YYYY-MM-DD.md.
   Use for periodic reviews, sprint retrospectives, phase-end validation, or security/compliance checks.
 type: prompt
 whenToUse: |
@@ -51,7 +51,7 @@ Based on documentation analysis, determine which audit types are relevant:
 ### Step 3: Scan Project Structure
 - List all `.csproj` files and their dependencies (check for circular refs)
 - List all projects in solution and their layer (Domain/Application/Infrastructure/API)
-- Identify files changed since last audit (if previous audit report exists in `docs/audit/`)
+- Identify files changed since last audit (previous audit reports are found by glob `audits/audit-*.md`)
 - Check for files without corresponding tests
 
 ---
@@ -138,7 +138,7 @@ Run against `documentation-writer` skill rules:
 - [ ] **Dependency materialization:** no prose cross-references between tasks/features ("done when X is ready") outside `<refs>` — every such reference must exist as a `<refs>` entry or a `[?]` BACKLOG row.
 - [ ] **Cloud spend guard:** no `gcloud`/`az`/`aws` mutations in shell history or scripts without a corresponding user-approved task — flag any autonomous infra change as BLOCKER.
 - [ ] **Superpowers containment:** no `docs/superpowers/` directory exists as a source of truth — if found, flag as WARNING: content must be migrated into `BACKLOG/nnn-slug/spec.md` / `plan.md` / `CONTEXT.md` / `TECHNICAL-SOLUTIONS.md` per AGENTS.md «Superpowers Integration».
-- [ ] **Artifact provenance:** every generated report/doc outside `BACKLOG/` carries a skill-prefix (`audit-*`, `review-*`, `obfuscation-*`, `intake-*`) per AGENTS.md provenance rule — anonymous artifacts are a WARNING.
+- [ ] **Artifact provenance:** every generated report/doc outside `BACKLOG/` lives in `audits/` and carries a skill-prefix (`audits/audit-*`, `audits/review-*`, `audits/obfuscation-*`, `audits/intake-*`) per AGENTS.md provenance rule — anonymous or misplaced artifacts are a WARNING.
 - [ ] **SKILLFLOW.md consistency:** routes and transitions described in `SKILLFLOW.md` still match reality (skills referenced there exist, gates listed there are actually enforced in task-orchestrator).
 
 ---
@@ -147,7 +147,7 @@ Run against `documentation-writer` skill rules:
 
 After completing all audit types, generate a structured report:
 
-**Path:** `docs/audit/YYYY-MM-DD/audit-report.md`
+**Path:** `audits/audit-YYYY-MM-DD.md` (skill-prefix provenance rule)
 
 **Structure:**
 ```markdown
@@ -186,9 +186,9 @@ After completing all audit types, generate a structured report:
 ```
 
 **Additional files (if findings are extensive):**
-- `docs/audit/YYYY-MM-DD/security.md` — detailed security findings
-- `docs/audit/YYYY-MM-DD/architecture.md` — architectural analysis with diagrams
-- `docs/audit/YYYY-MM-DD/performance.md` — query analysis, profiling notes
+- `audits/audit-YYYY-MM-DD-security.md` — detailed security findings
+- `audits/audit-YYYY-MM-DD-architecture.md` — architectural analysis with diagrams
+- `audits/audit-YYYY-MM-DD-performance.md` — query analysis, profiling notes
 
 ---
 
@@ -204,6 +204,15 @@ After completing all audit types, generate a structured report:
 - **Speak Russian.**
 - At start: "Аудит запущен. Анализирую документацию и определяю scope..."
 - During audit: "Обнаружены триггеры: [Security, Architecture]. Запускаю соответствующие проверки..."
-- At finish: "Аудит завершён. Отчёт: `docs/audit/YYYY-MM-DD/audit-report.md`. Критических проблем: [N]."
+- At finish: "Аудит завершён. Отчёт: `audits/audit-YYYY-MM-DD.md`. Критических проблем: [N]."
 - Never auto-fix findings. Only report and recommend next steps.
 - Never commit audit reports automatically. Ask user: "Сохранить отчёт и закоммитить?"
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — user triages findings; P0 items become tasks via `task-orchestrator`.
+3. **Alternatives** — `architect-review` (Hard) for structural findings; `documentation-writer` for doc-drift fixes.
+Suggest, never auto-proceed. The user picks the next step.

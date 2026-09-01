@@ -14,8 +14,8 @@ whenToUse: |
 
 ## Context & Documentation Order
 Before writing or editing code, read project documentation in this strict order:
-1. `context.md` — System design, frontend architecture, BFF rules, AI Framework details (Russian)
-2. `Backlog.md` — Current sprint tasks and execution order (Mixed EN/RU)
+1. `CONTEXT.md` — System design, frontend architecture, BFF rules, AI Framework details (Russian)
+2. `BACKLOG.md` — Current sprint tasks and execution order (Mixed EN/RU)
 3. `STRUCTURE.md` — Frontend structure, FSD rules, code style, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, frontend conventions, AI agent guidelines (English)
 
@@ -126,3 +126,12 @@ When generating or editing Next.js code:
 - Provide diffs or full file content when suggesting changes.
 - Be concise. No boilerplate explanations.
 - **After finishing:** report changed files and ask: "Хотите сделать коммит?" Do NOT commit silently.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `next-js-code-reviewer` (mandatory Phase 3 for Complex tasks).
+3. **Alternatives** — `next-js-architect` for boundary decisions; `task-orchestrator` for the next task.
+Suggest, never auto-proceed. The user picks the next step.

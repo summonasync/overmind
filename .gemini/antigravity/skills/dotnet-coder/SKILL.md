@@ -15,8 +15,8 @@ whenToUse: |
 
 ## Context & Documentation Order
 Before writing or editing ANY code, read project documentation in this strict order:
-1. `context.md` — Architecture decisions, service roles, AI Framework details (Russian)
-2. `Backlog.md` — Current sprint tasks and execution order (Mixed EN/RU)
+1. `CONTEXT.md` — Architecture decisions, service roles, AI Framework details (Russian)
+2. `BACKLOG.md` — Current sprint tasks and execution order (Mixed EN/RU)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
 5. `~/.gemini/antigravity/skills/dotnet-best-practices/SKILL.md` — codified BP-IDs; enforceable during implementation. When executing a `BACKLOG/` task file, load this together with the task file.
@@ -116,3 +116,12 @@ After completing a COMPLEX task, the agent MUST trigger review before declaring 
 - Be concise. No boilerplate explanations. No "let me explain what I did" — show the code.
 - When proposing file structure, use ASCII tree.
 - **After finishing:** report changed files and ask: "Хотите сделать коммит?" Do NOT commit silently.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `dotnet-code-reviewer` (mandatory Phase 3 for Complex tasks).
+3. **Alternatives** — `nuget-licensing-guard` before any pending NuGet change; `task-orchestrator` for the next task in the feature folder.
+Suggest, never auto-proceed. The user picks the next step.

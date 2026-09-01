@@ -14,8 +14,8 @@ whenToUse: |
 
 ## Context & Documentation Order
 Before reviewing code, read project documentation in this strict order:
-1. `context.md` — Architecture decisions, service boundaries, MassTransit topology (Russian)
-2. `Backlog.md` — Current sprint context (Mixed EN/RU)
+1. `CONTEXT.md` — Architecture decisions, service boundaries, MassTransit topology (Russian)
+2. `BACKLOG.md` — Current sprint context (Mixed EN/RU)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
 
@@ -94,3 +94,12 @@ For each issue found, provide:
 - **Speak Russian with the user.** Review summary and comments in Russian.
 - Be direct. Group by severity: Security BLOCKERS first, then regular Blockers, then Warnings, then Suggestions.
 - No generic praise. Focus on actionable fixes.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — BLOCKERs → fix loop via `dotnet-coder`; clean review → task done.
+3. **Alternatives** — `architect-review` (Light) when violations are structural; `nuget-licensing-guard` when dependencies changed.
+Suggest, never auto-proceed. The user picks the next step.

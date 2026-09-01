@@ -102,7 +102,7 @@ After Phase 2 completion, run reviews in this order:
 
 **ALWAYS run:**
 - `.NET code changed` → apply `dotnet-code-reviewer` checklist + `dotnet-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
-- `Next.js code changed` → apply `next-js-coder-reviewer` checklist
+- `Next.js code changed` → apply `next-js-code-reviewer` checklist
 - `MAUI code changed` → apply `dotnet-code-reviewer` checklist + `maui-coder` rules (MVVM, code-behind purity, platform isolation)
 
 **Review depth from the task file:** read the `review:` frontmatter field of the executed task (`light` default / `hard`).
@@ -112,7 +112,7 @@ After Phase 2 completion, run reviews in this order:
 **CONDITIONALLY run additional reviews:**
 - **Security-related changes?** (auth, new endpoints, config, secrets, PII handling) → run `dotnet-code-reviewer` Security section with elevated priority.
 - **Large refactoring / Phase completion?** (>10 files, architectural shift, monolith split) → run `architect-review` Hard checklist (global structure integrity, dependency direction, service boundaries, ADR coverage).
-- **Both stacks changed?** → run BOTH `dotnet-code-reviewer` and `next-js-coder-reviewer` sequentially.
+- **Both stacks changed?** → run BOTH `dotnet-code-reviewer` and `next-js-code-reviewer` sequentially.
 
 Review output must include:
 1. Severity-classified issues (BLOCKER / WARNING / SUGGESTION)
@@ -163,7 +163,7 @@ Task is COMPLEX if:
 |---------|-----------|----------|
 | Security | Auth, secrets, new endpoints, PII, config changes | `dotnet-code-reviewer` (Security section) |
 | Architecture | >10 files, phase completion, structural refactoring | `architect-review` or `dotnet-architect` |
-| Frontend | Next.js files changed | `next-js-coder-reviewer` |
+| Frontend | Next.js files changed | `next-js-code-reviewer` |
 | Backend | C# files changed | `dotnet-code-reviewer` |
 | MAUI | .NET MAUI files changed (XAML, view models, Platforms/) | `dotnet-code-reviewer` + `maui-coder` rules |
 | Docs | Documentation files created/changed | `documentation-writer` verification checklist |

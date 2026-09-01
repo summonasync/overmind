@@ -9,8 +9,8 @@ whenToUse: When initializing a .NET project, scanning .NET codebase structure, c
 
 ## Context & Documentation Order
 Before making ANY changes, read the project documentation in this strict order:
-1. `context.md` — System design, architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design (Russian)
-2. `Backlog.md` — Sprint backlog, tasks per phase, execution order (Mixed EN/RU)
+1. `CONTEXT.md` — System design, architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design (Russian)
+2. `BACKLOG.md` — Sprint backlog, tasks per phase, execution order (Mixed EN/RU)
 3. `STRUCTURE.md` — Project structure, code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, security, conventions (English)
 
@@ -80,4 +80,13 @@ Generate `AGENTS.md` including:
 - Key NuGet packages
 - Strict code style rules (no comments, English only, no God-Services, split files)
 - Frontend rules (Next.js proxy) if applicable
-- Documentation file order (context.md -> Backlog.md -> STRUCTURE.md -> AGENTS.md)
+- Documentation file order (CONTEXT.md -> BACKLOG.md -> STRUCTURE.md -> AGENTS.md)
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — `task-orchestrator` intake for the first feature, or `dotnet-coder` for direct implementation.
+3. **Alternatives** — `documentation-writer` to polish generated docs (README, AGENTS.md); `architect-review` as a structural baseline.
+Suggest, never auto-proceed. The user picks the next step.

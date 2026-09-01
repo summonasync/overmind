@@ -76,3 +76,12 @@ Severity: **[B]** BLOCKER, **[W]** WARNING, **[S]** SUGGESTION.
 - **Coder:** load with the task file; rules are constraints, not aspirations.
 - **Reviewer:** checklist = this file + task `<acceptance-criteria>` + spec-compliance. Cite as `BP-NN [B/W/S] — file:line — what's wrong — fix diff`.
 - New recurring rule discovered during work → propose adding it here (reflect loop), don't patch it silently into one review.
+
+---
+
+## Output Contract (MANDATORY)
+End with the fixed closing block, then STOP:
+1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
+2. **Next step** — return control to the calling skill (`dotnet-coder` / `dotnet-code-reviewer`).
+3. **Alternatives** — propose a new BP-ID to the user when a recurring rule is discovered; stop — reference skill, never runs standalone.
+Suggest, never auto-proceed. The user picks the next step.
