@@ -12,7 +12,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; gemini) echo "$HOME/.gemini";; antigravity) echo "$HOME/.gemini/antigravity";; esac }
 
 parse_manifest() {
     if have_python; then
@@ -62,7 +62,7 @@ for t in "${targets[@]:-}"; do
     [[ -e "$t" ]] && { rm -rf "$t"; echo "Removed $t"; }
     parent="$(dirname "$t")"
     case "$parent" in
-        "$HOME/.kimi-code"|"$HOME/.claude") ;;  # never touch home root
+        "$HOME/.kimi-code"|"$HOME/.claude"|"$HOME/.gemini"|"$HOME/.gemini/antigravity") ;;  # never touch home root
         *) [[ -d "$parent" ]] && [[ -z "$(ls -A "$parent")" ]] && { rm -rf "$parent"; echo "Removed empty dir $parent"; } ;;
     esac
 done

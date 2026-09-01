@@ -8,8 +8,10 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
 
 $homePaths = @{
-    kimi   = Join-Path $HOME '.kimi-code'
-    claude = Join-Path $HOME '.claude'
+    kimi        = Join-Path $HOME '.kimi-code'
+    claude      = Join-Path $HOME '.claude'
+    gemini      = Join-Path $HOME '.gemini'
+    antigravity = Join-Path $HOME '.gemini\antigravity'
 }
 
 $targets = @()

@@ -13,6 +13,12 @@
     { "source": ".claude/BACKLOG", "home": "claude", "type": "dir" },
     { "source": ".claude/CLAUDE.md", "home": "claude", "type": "file" },
     { "source": ".claude/SKILLFLOW.md", "home": "claude", "type": "file" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "claude", "type": "file" }
+    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "claude", "type": "file" },
+    { "source": ".gemini/GEMINI.md", "home": "gemini", "type": "file" },
+    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "gemini", "type": "file" },
+    { "source": ".gemini/antigravity/skills", "home": "antigravity", "type": "dir" },
+    { "source": ".gemini/antigravity/agents", "home": "antigravity", "type": "dir" },
+    { "source": ".gemini/antigravity/SKILLFLOW.md", "home": "antigravity", "type": "file" },
+    { "source": ".kimi-code/BACKLOG", "home": "antigravity", "type": "dir" }
   ]
 }

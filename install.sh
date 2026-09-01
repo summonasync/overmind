@@ -11,7 +11,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; gemini) echo "$HOME/.gemini";; antigravity) echo "$HOME/.gemini/antigravity";; esac }
 
 parse_manifest() {
     if have_python; then
@@ -34,7 +34,9 @@ entries="$(parse_manifest)" || { echo "Failed to parse manifest.json" >&2; exit 
 while read -r src home type; do
     hp="$(home_path "$home")"
     if [[ -z "${HOME_OK[$home]:-}" ]]; then
-        if [[ -d "$hp" ]]; then HOME_OK[$home]=1; else HOME_OK[$home]=0; echo "Home $hp not found, skipping its entries."; fi
+        if [[ -d "$hp" ]]; then HOME_OK[$home]=1
+        elif [[ "$home" == "antigravity" && -d "$(dirname "$hp")" ]]; then HOME_OK[$home]=1
+        else HOME_OK[$home]=0; echo "Home $hp not found, skipping its entries."; fi
     fi
     [[ "${HOME_OK[$home]}" == "0" ]] && continue
 
