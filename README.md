@@ -4,7 +4,7 @@
 
 Single source of truth for one AI agent crew running on three runtimes: **Kimi Code CLI**, **Claude Code**, and **Google Antigravity**. The repo holds all mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code, `.gemini/` (incl. `GEMINI.md`) serves Antigravity. Content (rules, workflows, skills, agents) is semantically identical across the three; only tool-specific details (model names, home paths, runtime features, enforcement mechanics) differ.
 
-The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`) and a naming maniac (`naming-helper`) — 20 agents, 22 skills, one workflow graph.
+The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`) and a naming maniac (`naming-helper`) — 21 agents, 23 skills, one workflow graph.
 
 ## Prerequisites
 
@@ -26,21 +26,21 @@ The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-
 ├── uninstall.sh           # remove deployed paths (Git Bash/Linux); --dry-run / --force
 ├── .kimi-code/
 │   ├── AGENTS.md          # Kimi-side crew contract (global tool memory)
-│   ├── agents/            # 20 agent definitions
-│   ├── skills/            # 22 skill directories
+│   ├── agents/            # 21 agent definitions
+│   ├── skills/            # 23 skill directories
 │   ├── SKILLFLOW.md       # workflow graph shared by all skills
 │   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to all three homes)
 │   └── config.toml        # Kimi runtime config (secondary-model pool) — Kimi only
 ├── .claude/
 │   ├── CLAUDE.md          # Claude-side mirror of AGENTS.md
-│   ├── agents/            # 20 agent definitions (Claude format)
-│   ├── skills/            # 22 skill directories
+│   ├── agents/            # 21 agent definitions (Claude format)
+│   ├── skills/            # 23 skill directories
 │   └── SKILLFLOW.md
 ├── .gemini/
 │   ├── GEMINI.md          # Antigravity-side mirror of AGENTS.md (deploys to ~/.gemini/)
 │   └── antigravity/
-│       ├── agents/        # 20 agent definitions (deploys to ~/.gemini/antigravity/)
-│       ├── skills/        # 22 skill directories (open SKILL.md standard)
+│       ├── agents/        # 21 agent definitions (deploys to ~/.gemini/antigravity/)
+│       ├── skills/        # 23 skill directories (open SKILL.md standard)
 │       └── SKILLFLOW.md
 └── BACKLOG/                 # feature tracking — lives in repo root ONLY (templates are inside each tool dir)
 ```

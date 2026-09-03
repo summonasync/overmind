@@ -32,6 +32,7 @@ Everything else — rules, workflow phases, review gates, delegation policy, con
 | `.kimi-code/agents/dotnet-coder.md` | `.claude/agents/dotnet-coder.md` | `.gemini/antigravity/agents/dotnet-coder.md` |
 | `.kimi-code/agents/dotnet-init.md` | `.claude/agents/dotnet-init.md` | `.gemini/antigravity/agents/dotnet-init.md` |
 | `.kimi-code/agents/frontend-designer.md` | `.claude/agents/frontend-designer.md` | `.gemini/antigravity/agents/frontend-designer.md` |
+| `.kimi-code/agents/git-commit-ai-detector.md` | `.claude/agents/git-commit-ai-detector.md` | `.gemini/antigravity/agents/git-commit-ai-detector.md` |
 | `.kimi-code/agents/maui-coder.md` | `.claude/agents/maui-coder.md` | `.gemini/antigravity/agents/maui-coder.md` |
 | `.kimi-code/agents/naming-helper.md` | `.claude/agents/naming-helper.md` | `.gemini/antigravity/agents/naming-helper.md` |
 | `.kimi-code/agents/next-js-architect.md` | `.claude/agents/next-js-architect.md` | `.gemini/antigravity/agents/next-js-architect.md` |
@@ -53,6 +54,7 @@ Everything else — rules, workflow phases, review gates, delegation policy, con
 | `.kimi-code/skills/dotnet-coder/` | `.claude/skills/dotnet-coder/` | `.gemini/antigravity/skills/dotnet-coder/` |
 | `.kimi-code/skills/dotnet-init/` | `.claude/skills/dotnet-init/` | `.gemini/antigravity/skills/dotnet-init/` |
 | `.kimi-code/skills/frontend-designer/` | `.claude/skills/frontend-designer/` | `.gemini/antigravity/skills/frontend-designer/` |
+| `.kimi-code/skills/git-commit-ai-detector/` | `.claude/skills/git-commit-ai-detector/` | `.gemini/antigravity/skills/git-commit-ai-detector/` |
 | `.kimi-code/skills/maui-coder/` | `.claude/skills/maui-coder/` | `.gemini/antigravity/skills/maui-coder/` |
 | `.kimi-code/skills/naming-helper/` | `.claude/skills/naming-helper/` | `.gemini/antigravity/skills/naming-helper/` |
 | `.kimi-code/skills/next-js-architect/` | `.claude/skills/next-js-architect/` | `.gemini/antigravity/skills/next-js-architect/` |
@@ -138,4 +140,4 @@ Apply strictly in this order (most specific first). After the table, a manual pa
    grep -rni 'gemini\|antigravity' .kimi-code/ .claude/   # must be empty
    ```
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 20 agent files + 22 skill dirs on each side (`diff <(ls .kimi-code/skills) <(ls .gemini/antigravity/skills)` etc.).
+4. Count parity intact: 21 agent files + 23 skill dirs on each side (`diff <(ls .kimi-code/skills) <(ls .gemini/antigravity/skills)` etc.).
