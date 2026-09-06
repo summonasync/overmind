@@ -3,4 +3,8 @@
     <ProjectReference Include="..\Overmind.Core\Overmind.Core.csproj" />
     <ProjectReference Include="..\Overmind.Infrastructure\Overmind.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
 </Project>

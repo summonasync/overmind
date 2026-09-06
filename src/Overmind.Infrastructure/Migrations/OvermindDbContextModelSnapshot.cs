@@ -117,6 +117,9 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
                     b.ToTable("Projects");
                 });
 

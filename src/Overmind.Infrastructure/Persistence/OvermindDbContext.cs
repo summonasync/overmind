@@ -32,6 +32,11 @@ public sealed class OvermindDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Project>(builder =>
+        {
+            builder.HasIndex(p => p.Name).IsUnique();
+        });
+
         modelBuilder.Entity<ContextEntry>(builder =>
         {
             builder.HasOne<Project>()

@@ -2,7 +2,7 @@
 feature: 001
 task: 03
 slug: core-api
-status: todo
+status: done
 review: light
 created: 2026-09-06
 ---
@@ -66,9 +66,14 @@ Tests (`tests/Overmind.Api.Tests/`): WebApplicationFactory with per-test temp SQ
 </refs>
 
 <obstacles>
-<!-- Filled by executors during work -->
+- Task 02 review finding confirmed and fixed: raw FTS5 queries with metacharacters (`"`, `*`, parens) threw SqliteException. `FtsSearchService` now sanitizes by quoting each whitespace-separated term (stripping embedded `"`); queries with no surviving terms return empty. Covered by `FtsSyncTests.Search_FtsMetacharacters_ReturnEmptyInsteadOfThrowing` + `Search_Metacharacters_ReturnEmptyInsteadOfError` (API).
+- Project.Name unique index was missing from task 02's migration — added here via migration `UniqueProjectNameIndex` (new EF migration, snapshot updated).
+- WebApplicationFactory gotcha: `ConfigureAppConfiguration` overrides are applied AFTER `Program` top-level code runs, so any config read at DI-registration time silently sees production values (tests initially shared the real `~/.overmind/overmind.db`). Fixed by reading `Overmind:DatabasePath` lazily inside the DbContext factory lambda. Same timing issue makes `Overmind:BindUrl` invisible to `Program`; tests that need real Kestrel build the WebApplication manually (see `PortFileTests`) instead of fighting the factory.
+- Port-file integration test runs a real Kestrel instance in-proc on an ephemeral reserved port; `PortFile.Write` is public so both `Program` and the test share the same code path.
+- curl on Git Bash mangles `\\` in `-d` payloads (sends invalid JSON → empty 400, looks like a server bug). Smoke tests must use `--data-binary @file` with correctly escaped JSON.
 </obstacles>
 
 <log>
 2026-09-06 — writing-plans — task created from approved spec.
+2026-09-06 — coder — implemented: Host Minimal APIs (projects/entries/search/health), DTOs + manual mappers in Api/Contracts + Api/Mapping, FluentValidation validators, ProblemDetails errors (400/404/409), Serilog console logging, Kestrel 127.0.0.1:4761 with port-0 fallback + `~/.overmind/host.port`, NullSemanticSearch stub (health reports vectorSearch=down), Project.Name unique index migration (UniqueProjectNameIndex), FTS query sanitization fix in FtsSearchService. Tests: 23 new integration tests in Overmind.Api.Tests (WebApplicationFactory per-test temp SQLite + real-Kestrel port-file test + port-selection unit tests), 2 new FTS tests in Infrastructure.Tests. Packages added (verified Apache-2.0, latest stable on nuget.org): FluentValidation 12.1.1, Serilog.AspNetCore 9.0.0. Verification: `dotnet build` 0 warnings; `dotnet test` 65/65 green (Core 30, Infrastructure 12, Api 23); manual `dotnet run` → `curl 127.0.0.1:4761/api/health` returned `{"status":"ok","vectorSearch":"down","version":"1.0.0+5535d68..."}`, host.port contained `4761`, smoke-tested project+entry create and FTS search over HTTP, process killed after. No commits made (per rules).
 </log>

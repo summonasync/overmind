@@ -20,6 +20,12 @@ public sealed class FtsSearchService
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
 
+        var matchQuery = SanitizeQuery(query);
+        if (matchQuery.Length == 0)
+        {
+            return [];
+        }
+
         await _dbContext.Database.OpenConnectionAsync(ct);
         try
         {
@@ -38,7 +44,7 @@ public sealed class FtsSearchService
                 LIMIT $limit
                 """;
 
-            command.Parameters.Add(new SqliteParameter("$query", query));
+            command.Parameters.Add(new SqliteParameter("$query", matchQuery));
             command.Parameters.Add(new SqliteParameter(
                 "$projectId", projectId.HasValue ? projectId.Value.ToString().ToUpperInvariant() : DBNull.Value));
             command.Parameters.Add(new SqliteParameter("$limit", limit));
@@ -65,5 +71,15 @@ public sealed class FtsSearchService
         {
             await _dbContext.Database.CloseConnectionAsync();
         }
+    }
+
+    private static string SanitizeQuery(string query)
+    {
+        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(term => term.Replace("\"", string.Empty, StringComparison.Ordinal))
+            .Where(term => term.Length > 0)
+            .Select(term => $"\"{term}\"");
+
+        return string.Join(' ', terms);
     }
 }

@@ -95,6 +95,29 @@ public class FtsSyncTests : IDisposable
         hits.Count.ShouldBe(2);
     }
 
+    [Fact]
+    public async Task Search_FtsMetacharacters_ReturnEmptyInsteadOfThrowing()
+    {
+        await SeedEntryAsync("meta", "ordinary searchable prose");
+
+        foreach (var query in new[] { "\"unbalanced", "((broken", "foo*", "a-b)c", "\"\"" })
+        {
+            var hits = await SearchAsync(null, query);
+            hits.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Search_MultiTerm_AllTermsMustMatch()
+    {
+        await SeedEntryAsync("combo", "delta echo foxtrot");
+        await SeedEntryAsync("single", "delta golf hotel");
+
+        var hits = await SearchAsync(null, "delta echo");
+        hits.Count.ShouldBe(1);
+        hits[0].Title.ShouldBe("combo");
+    }
+
     private async Task<Guid> SeedEntryAsync(string title, string content, Guid? projectId = null)
     {
         using var ctx = _db.CreateContext();
