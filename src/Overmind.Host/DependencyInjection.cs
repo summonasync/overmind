@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
+using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Search;
 using System.Text.Json;
@@ -25,10 +26,15 @@ public static class DependencyInjection
         services.AddScoped<FtsSearchService>();
         services.AddSingleton<ISemanticSearch, NullSemanticSearch>();
 
+        services.AddSingleton(PlatformDirectoryMap.Load());
+        services.AddScoped<IMaterializer, SkillMaterializer>();
+
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();
         services.AddSingleton<IValidator<CreateEntryRequest>, CreateEntryRequestValidator>();
         services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
+        services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();
+        services.AddSingleton<IValidator<UpdateKitRequest>, UpdateKitRequestValidator>();
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));

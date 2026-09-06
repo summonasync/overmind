@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
+using Overmind.Infrastructure.Materialization;
 
 namespace Overmind.Infrastructure.Persistence;
 
@@ -19,6 +20,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<SkillKit> SkillKits => Set<SkillKit>();
     public DbSet<SkillKitEntry> SkillKitEntries => Set<SkillKitEntry>();
     public DbSet<ProjectKit> ProjectKits => Set<ProjectKit>();
+    public DbSet<MaterializedFile> MaterializedFiles => Set<MaterializedFile>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -105,6 +107,21 @@ public sealed class OvermindDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.KitId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MaterializedFile>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(m => m.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne<SkillKit>()
+                .WithMany()
+                .HasForeignKey(m => m.KitId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(m => m.ProjectId);
         });
     }
 }

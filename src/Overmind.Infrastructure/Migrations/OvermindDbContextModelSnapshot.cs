@@ -220,6 +220,41 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("Tags");
                 });
 
+            modelBuilder.Entity("Overmind.Infrastructure.Materialization.MaterializedFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("KitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("MaterializedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Platform")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KitId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("MaterializedFiles");
+                });
+
             modelBuilder.Entity("Overmind.Core.ContextEntry", b =>
                 {
                     b.HasOne("Overmind.Core.Project", null)
@@ -298,6 +333,21 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("Entry");
 
                     b.Navigation("Kit");
+                });
+
+            modelBuilder.Entity("Overmind.Infrastructure.Materialization.MaterializedFile", b =>
+                {
+                    b.HasOne("Overmind.Core.SkillKit", null)
+                        .WithMany()
+                        .HasForeignKey("KitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Overmind.Core.ContextEntry", b =>

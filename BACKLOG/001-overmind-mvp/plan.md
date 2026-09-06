@@ -27,7 +27,7 @@ Rationale: the API is the single source of truth (spec R1.2), so it lands before
 - [x] 01-solution-scaffold — solution + 4 projects + test projects + central package management; verify: `dotnet build` green → tasks/01-solution-scaffold.md
 - [x] 02-domain-and-persistence — Core entities/interfaces + EF Core SQLite with FTS5; verify: `dotnet test` (domain + EF integration) → tasks/02-domain-and-persistence.md
 - [x] 03-core-api — Minimal APIs: projects/entries CRUD, FTS search, health; verify: WebApplicationFactory integration tests → tasks/03-core-api.md
-- [ ] 04-skill-kits-materialization — kit CRUD + project linking + materializer into native skill dirs + drift detection + bootstrap content; verify: unit tests with temp dirs → tasks/04-skill-kits-materialization.md
+- [x] 04-skill-kits-materialization — kit CRUD + project linking + materializer into native skill dirs + drift detection + bootstrap content; verify: unit tests with temp dirs → tasks/04-skill-kits-materialization.md
 - [ ] 05-embeddings-qdrant — IEmbeddingProvider (ONNX/Ollama/OpenAI-compatible) + Qdrant client + semantic search + degraded mode; verify: unit tests + degraded-mode integration test → tasks/05-embeddings-qdrant.md
 - [ ] 06-mcp-adapter — stdio JSON-RPC adapter: tools (CRUD/search) + `ctx://` resources + bootstrap prompt; verify: contract tests → tasks/06-mcp-adapter.md
 - [ ] 07-web-ui — Next.js UI (Projects/Entries/Kits/Search/Settings), served by Host, degraded banner; verify: `npm run lint && npx tsc --noEmit && npm run build` → tasks/07-web-ui.md

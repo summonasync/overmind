@@ -91,6 +91,20 @@ public static class ProjectsApi
             return HttpErrors.Conflict($"A project named '{name}' already exists.");
         }
 
+        var diskPathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!string.Equals(project.DiskPath, request.DiskPath.Trim(), diskPathComparison))
+        {
+            var hasActiveKits = await db.ProjectKits.AnyAsync(pk => pk.ProjectId == id && pk.IsActive, ct);
+            var hasMaterializedFiles = await db.MaterializedFiles.AnyAsync(m => m.ProjectId == id, ct);
+            if (hasActiveKits || hasMaterializedFiles)
+            {
+                return HttpErrors.Conflict(
+                    $"DiskPath of project '{id}' cannot be changed while kits are active or files are materialized; deactivate kits first.");
+            }
+        }
+
         var tracked = db.Entry(project);
         tracked.Property(p => p.Name).CurrentValue = name;
         tracked.Property(p => p.DiskPath).CurrentValue = request.DiskPath.Trim();
