@@ -93,7 +93,7 @@ public sealed class KitApiTests : IDisposable
         var problem = await activate.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
         problem!.Status.ShouldBe(400);
-        problem.Detail.ShouldContain("escapes");
+        problem!.Detail!.ShouldContain("escapes");
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class KitApiTests : IDisposable
         blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await blocked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
-        problem!.Detail.ShouldContain("deactivate kits first");
+        problem!.Detail!.ShouldContain("deactivate kits first");
 
         var deactivate = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/deactivate", null);
         deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -237,8 +237,8 @@ public sealed class KitApiTests : IDisposable
 
         var problem = await activateB.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
-        problem!.Detail.ShouldContain("pack-alpha");
-        problem.Detail.ShouldContain("Deactivate it first");
+        problem!.Detail!.ShouldContain("pack-alpha");
+        problem!.Detail!.ShouldContain("Deactivate it first");
 
         var reviewerFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
         var testerFile = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");

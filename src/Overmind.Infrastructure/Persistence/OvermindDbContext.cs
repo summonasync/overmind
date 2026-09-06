@@ -21,6 +21,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<SkillKitEntry> SkillKitEntries => Set<SkillKitEntry>();
     public DbSet<ProjectKit> ProjectKits => Set<ProjectKit>();
     public DbSet<MaterializedFile> MaterializedFiles => Set<MaterializedFile>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -34,6 +35,12 @@ public sealed class OvermindDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AppSetting>(builder =>
+        {
+            builder.HasKey(s => s.Key);
+            builder.Property(s => s.Key).HasMaxLength(200);
+        });
+
         modelBuilder.Entity<Project>(builder =>
         {
             builder.HasIndex(p => p.Name).IsUnique();

@@ -33,6 +33,7 @@ try
     app.MapEntriesApi();
     app.MapSearchApi();
     app.MapKitsApi();
+    app.MapSettingsApi();
     app.MapHealthApi();
 
     await using (var scope = app.Services.CreateAsyncScope())

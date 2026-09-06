@@ -8,6 +8,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databasePath;
 
+    private static readonly object ModelSeedLock = new();
+
+    static ApiFactory()
+    {
+        var modelsRoot = Path.Combine(Path.GetTempPath(), "overmind-api-test-models");
+        lock (ModelSeedLock)
+        {
+            var modelDirectory = Path.Combine(modelsRoot, "all-MiniLM-L6-v2");
+            Directory.CreateDirectory(modelDirectory);
+            File.WriteAllText(Path.Combine(modelDirectory, "model.onnx"), "fake model for tests");
+            File.WriteAllText(Path.Combine(modelDirectory, "vocab.txt"), "[PAD]\n[UNK]\n");
+        }
+
+        Environment.SetEnvironmentVariable("OVERMIND_MODELS_DIR", modelsRoot);
+    }
+
     public ApiFactory()
     {
         _databasePath = Path.Combine(Path.GetTempPath(), $"overmind-api-{Guid.NewGuid():N}.db");

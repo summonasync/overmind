@@ -3,9 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
+using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Search;
+using Overmind.Infrastructure.VectorSearch;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -24,7 +27,13 @@ public static class DependencyInjection
         });
 
         services.AddScoped<FtsSearchService>();
-        services.AddSingleton<ISemanticSearch, NullSemanticSearch>();
+
+        services.AddScoped<AppSettingsService>();
+        services.AddScoped<EmbeddingProviderFactory>();
+        services.AddScoped<QdrantSemanticSearch>();
+        services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());
+        services.AddScoped<EntryIndexingService>();
+        services.AddScoped<ReindexService>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddScoped<IMaterializer, SkillMaterializer>();

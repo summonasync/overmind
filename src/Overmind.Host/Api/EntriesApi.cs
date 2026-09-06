@@ -5,6 +5,7 @@ using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Search;
+using Overmind.Infrastructure.VectorSearch;
 
 namespace Overmind.Host.Api;
 
@@ -87,6 +88,7 @@ public static class EntriesApi
         CreateEntryRequest request,
         IValidator<CreateEntryRequest> validator,
         OvermindDbContext db,
+        EntryIndexingService indexing,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -122,6 +124,8 @@ public static class EntriesApi
         db.ContextEntries.Add(entry);
         await db.SaveChangesAsync(ct);
 
+        await indexing.IndexAsync(entry, ct);
+
         return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
     }
 
@@ -138,6 +142,7 @@ public static class EntriesApi
         UpdateEntryRequest request,
         IValidator<UpdateEntryRequest> validator,
         OvermindDbContext db,
+        EntryIndexingService indexing,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -189,10 +194,17 @@ public static class EntriesApi
         }
 
         await db.SaveChangesAsync(ct);
+
+        await indexing.IndexAsync(entry, ct);
+
         return Results.Ok(EntryMapper.ToResponse(entry));
     }
 
-    private static async Task<IResult> Delete(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> Delete(
+        Guid id,
+        OvermindDbContext db,
+        EntryIndexingService indexing,
+        CancellationToken ct)
     {
         var entry = await db.ContextEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -202,6 +214,9 @@ public static class EntriesApi
 
         db.ContextEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
+
+        await indexing.RemoveAsync(id, ct);
+
         return Results.NoContent();
     }
 

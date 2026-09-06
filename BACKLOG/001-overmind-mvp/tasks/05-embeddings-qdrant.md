@@ -2,7 +2,7 @@
 feature: 001
 task: 05
 slug: embeddings-qdrant
-status: todo
+status: done
 review: light
 created: 2026-09-06
 ---
@@ -55,11 +55,11 @@ Tests:
 </constraints>
 
 <acceptance-criteria>
-- [ ] Degraded-mode integration tests pass without Docker.
-- [ ] Switching provider in settings changes which provider resolves (unit test).
-- [ ] apiKey never appears in GET /api/settings responses (test).
-- [ ] Entry create with Qdrant down → 201 from API, error logged, FTS still finds the entry.
-- [ ] `IEmbeddingProvider` has `Dimensions`; Qdrant collection created with matching size (unit test on collection-config builder).
+- [x] Degraded-mode integration tests pass without Docker.
+- [x] Switching provider in settings changes which provider resolves (unit test).
+- [x] apiKey never appears in GET /api/settings responses (test).
+- [x] Entry create with Qdrant down → 201 from API, error logged, FTS still finds the entry.
+- [x] `IEmbeddingProvider` has `Dimensions`; Qdrant collection created with matching size (unit test on collection-config builder).
 </acceptance-criteria>
 
 <refs>
@@ -70,9 +70,18 @@ Tests:
 </refs>
 
 <obstacles>
-<!-- Filled by executors during work -->
+- Docker/Qdrant unavailable during execution: Qdrant-up coverage is a guarded live test (`QdrantLiveTests`) that probes `OVERMIND_QDRANT_ENDPOINT` (default `http://127.0.0.1:6334`) and self-skips when unreachable; the degraded-mode integration tests are the primary gate and all pass.
+- Real ONNX model cannot be downloaded during tests. `OnnxEmbeddingProvider` is split from `OnnxEmbeddingPipeline` (`IOnnxEmbeddingPipeline` seam): the provider is unit-tested with a stub pipeline; pipeline construction (session + tokenizer) is only exercised against a real model at runtime. `ApiFactory` seeds a fake `model.onnx`/`vocab.txt` under a temp `OVERMIND_MODELS_DIR` so no test can ever trigger a real 90 MB download.
+- `dotnet ef` requires the design package on the executing project: migration was added with `--project src/Overmind.Infrastructure` only (no `--startup-project`); without that flag ef errors about missing `Microsoft.EntityFrameworkCore.Design` in Overmind.Host.
+- Qdrant.Client 1.19: `SearchAsync` is obsolete (warning CS0618) — used `QueryAsync` + `Conditions.MatchKeyword` instead; `QdrantClient(Uri, ...)` timeout param is named `grpcTimeout`.
+- Windows file locking: `File.Move` over an open FileStream fails — the download stream is disposed before the move; also parallel xunit factory instances race on the shared fake model files, fixed with a static one-time seed in `ApiFactory`.
+- `ScoredPoint.Payload` is a read-only MapField (no initializer assignment) — tests build it via `Payload.Add`.
+- Pre-existing task-04 nullability warnings in `KitApiTests.cs` (`problem.Detail` after `ShouldNotBeNull()`) broke the 0-warning gate — fixed with `problem!`. Correction: the nullable is on `ProblemJson.Detail` (`string?`), so the real fix is `problem!.Detail!`; the "0 warnings" evidence in the first pass came from a stale incremental build. Verified with `dotnet build --no-incremental`.
+- P2+ idea recorded per anti-scope: chunking strategies beyond whole-entry embedding (title + content) — not built.
 </obstacles>
 
 <log>
 2026-09-06 — writing-plans — task created from approved spec.
+2026-09-06 — dotnet-coder — implemented. Model choice: `sentence-transformers/all-MiniLM-L6-v2` (Apache-2.0), ONNX export downloaded on first run from `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx` + `vocab.txt` (same repo) into `~/.overmind/models/all-MiniLM-L6-v2/` (override via `OVERMIND_MODELS_DIR`); 384 dims, mean pooling + L2 norm, 512-token cap. Tokenizer: `Microsoft.ML.Tokenizers` 2.0.0 pinned in `Directory.Packages.props` (MIT — verified per nuget-licensing-guard; `BertTokenizer` on vocab.txt, uncased options). Providers: ONNX (default, lazy pipeline), Ollama (`/api/embed`, default model `all-minilm-l6-v2`, 384 dims), OpenAI-compatible (`/v1/embeddings`, default model `text-embedding-3-small`, 1536 dims); embedding HTTP timeout 30 s, Qdrant gRPC timeout 10 s. Settings: new `AppSettings` key/value table + migration `20260906222446_AppSettings`; keys exactly as specced; `embedding.openai.apiKey` write-only (PUT accepts, GET returns only `openAiApiKeyConfigured` boolean). `QdrantSemanticSearch` (collection `overmind_entries`, Cosine, payload entryId/projectId/type/title/content) replaces `NullSemanticSearch`; `EntryIndexingService` swallows+logs Qdrant failures so FTS stays authoritative; `ReindexService` + `POST /api/search/reindex` returns `{total, indexed, failed}`. SearchApi gained `mode=fulltext|semantic` (semantic → 503 ProblemDetails when down). Verification: `dotnet build` 0 warnings/0 errors; `dotnet test` Core 30/30, Infrastructure 45/45, Api 44/44 — all green incl. degraded-mode integration tests and provider unit tests; Qdrant-up live test self-skips (no Docker).
+2026-09-06 — dotnet-coder — review fixes (light review, 2 IMPORTANT + 1 NIT). (1) IMPORTANT: `OnnxEmbeddingProvider` dropped the caller's CancellationToken during model download/pipeline creation (`CancellationToken.None` inside a `Lazy<T>` factory) — replaced Lazy with a SemaphoreSlim-gated initialization that plumbs ct through `InitializeAsync` → `ModelDownloader.EnsureAsync` / `OnnxEmbeddingPipeline.CreateAsync`. (2) IMPORTANT: provider switch with different `Dimensions` (e.g. onnx 384 → openai 1536) never recreated the Qdrant collection, so every upsert/query failed with a dimension mismatch, got swallowed, and semantic search silently 503'd forever. Decision: `EnsureCollectionAsync` now reads `GetCollectionInfoAsync` and compares the collection's vector size with the active provider's `Dimensions` via the new testable seam `QdrantCollection.HasMatchingDimensions(VectorsConfig, int)`; on mismatch it logs a warning, drops and recreates the collection — intentional behavior, safe because `POST /api/search/reindex` repopulates (the warning message names it as the recovery path). Unit tests cover match/mismatch/named-vector-config/non-positive without live Qdrant. (3) NIT: degraded 503 test now also asserts `application/problem+json`, non-empty title/detail, and status 503 in the body. Also fixed the KitApiTests nullability warnings for real (`problem!.Detail!`). Verification: `dotnet build --no-incremental` 0 warnings/0 errors; `dotnet test` Core 30/30, Infrastructure 48/48, Api 44/44 — all green.
 </log>
