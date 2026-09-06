@@ -1,31 +1,55 @@
 # Overmind
 
-One mind for your swarm of AI coding agents.
+> Один разум на весь рой. All your agents share one mind — finally on purpose.
 
-Overmind is a Windows/macOS desktop app that gives AI coding agents — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — a shared, persistent context store. Project notes, decisions, gates, guards, and skill-kits live in one local database instead of being re-explained to every agent in every session.
+## RU — Что это вообще
 
-Inspired by [OpenViking](https://github.com/volcengine/OpenViking)'s context-as-a-filesystem idea, but built to be download-and-run: no mandatory external services, no embedding keys required to get started.
+**Overmind** — десктопное приложение (Windows/macOS, .NET), которое даёт твоим AI-агентам — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — общий постоянный контекст. Заметки, архитектурные решения, гейты, гварды и скилл-киты живут в одной локальной базе, а не пересказываются каждому агенту в каждой сессии заново.
 
-## Status
+### История
 
-Pre-alpha. The repository currently contains the spec and backlog only — see `BACKLOG/001-overmind-mvp/`. There is no buildable application yet.
+Как-то раз один разработчик увидел [OpenViking](https://github.com/volcengine/OpenViking) — контекстную базу для агентов от Volcengine с файловой парадигмой `viking://`. Идея понравилась настолько, что захотелось свою. Не понравилась только настройка: внешние сервисы, ключи, конфиги — слишком много движений ради «запомни, что мы решили».
 
-## How it works
+Так родился план: та же идея, но **download-and-run**. Скачал — запустил — работает. Без обязательного Docker'а, без ключей, без квестов.
 
-- **Single .NET host process** — tray application hosting a localhost HTTP API and serving the web UI. No native windows; the browser is the UI.
-- **stdio MCP adapter** — a small console app that agents spawn through their standard MCP config. It proxies to the HTTP API and exposes context as MCP resources under a `ctx://` URI scheme (e.g. `ctx://projects/<id>/gates`).
-- **SQLite + FTS5** — all data and full-text search, always on, zero dependencies.
-- **Qdrant** — the only vector backend, running in local Docker. Optional: without it, search degrades to full-text and the UI says so. Embedding provider is selectable in settings: bundled local ONNX, Ollama, or an OpenAI-compatible endpoint.
-- **Skill-kits** — named, versioned sets of skills/gates/guards linked to projects. Activating a kit materializes it into the project's native skill directories (`.claude/skills/`, `.kimi-code/skills/`, …); switching kits re-materializes. The database is the source of truth; files on disk are a managed cache.
+### Имя
 
-## Roadmap
+Название выбиралось турниром на четыре раунда. В финале сражались `shared-braincell`, `the-agents-dungeon`, `mimirs-head`, `the-construct` и другие достойные. Победил **Overmind** — разум из StarCraft, который управляет роем зерглингов. Потому что ровно это и происходит: твои Клоды и Кими — зерглинги, а тут у них одна голова на всех.
 
-| Priority | Scope |
-|----------|-------|
-| v1 (MVP) | Multi-project context store, notes/decisions/gates/guards/skills, FTS + optional semantic search, tray app + web UI, stdio MCP adapter, in-project skill-kit materialization |
-| P1 | External-folder kit materialization + agent launcher (`claude --add-dir`, `kimi --skills-dir`) |
-| P2 | Runtime skill delivery over MCP (`get_skill` tool, `ctx://skills/` resources, bootstrap skill) |
-| P2/P3 | Agent initialization flows, project onboarding |
+### Фишка
+
+- **Один процесс** — трей-апп на .NET, который поднимает локальный HTTP API и отдаёт веб-UI. Браузер — это и есть окно приложения.
+- **Агенты подключаются по стандарту** — тонкий stdio MCP-адаптер, который любой MCP-клиент спавнит одной строкой в конфиге. Контекст адресуется своей URI-схемой: `ctx://projects/<id>/gates`.
+- **Скилл-киты** — поименованные наборы скиллов/гейтов/гвардов. Активировал кит на проект — приложение само материализует файлы в `.claude/skills/`, `.kimi-code/skills/` и т.д. База — источник правды, диск — управляемый кэш. Переключил кит — файлы пересобрались.
+- **Поиск всегда работает** — SQLite FTS5 из коробки, офлайн, ноль зависимостей. Хочешь семантику — подними Qdrant в Docker, выбери embedding-провайдера в настройках (локальный ONNX / Ollama / OpenAI-совместимый). Нет Docker'а — честный баннер «векторный поиск выключен», FTS продолжает пахать.
+
+### Статус
+
+Pre-alpha. Сейчас в репо живут спека, план и бэклог — см. `BACKLOG/001-overmind-mvp/`. Код появляется по мере выполнения плана.
+
+### Roadmap
+
+| Прио | Скоп |
+|------|------|
+| v1 (MVP) | Мульти-проектное хранилище контекста, заметки/решения/гейты/гварды/скиллы, FTS + опциональная семантика, трей + веб-UI, stdio MCP-адаптер, материализация китов в проект |
+| P1 | Материализация китов во внешнюю папку + лаунчер агентов (`claude --add-dir`, `kimi --skills-dir`) |
+| P2 | Рантайм-доставка скиллов через MCP (`get_skill`, `ctx://skills/`, bootstrap-скилл) |
+| P2/P3 | Флоу инициализации агентов, онбординг проектов |
+
+---
+
+## EN — Short version
+
+**Overmind** is a Windows/macOS desktop app (.NET) that gives AI coding agents — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — a shared, persistent context store. Project notes, decisions, gates, guards, and skill-kits live in one local database instead of being re-explained to every agent in every session.
+
+- Single tray app process hosting a localhost HTTP API and a web UI — the browser is the window.
+- Agents connect via a thin stdio MCP adapter; context is addressable through a `ctx://` URI scheme (`ctx://projects/<id>/gates`).
+- Skill-kits are managed in the DB and materialized into projects' native skill directories (`.claude/skills/`, `.kimi-code/skills/`, …). Disk is a managed cache, the DB is the source of truth.
+- Full-text search (SQLite FTS5) always works, offline, zero setup. Semantic search via local Qdrant (Docker) is optional — pick an embedding provider in settings (local ONNX / Ollama / OpenAI-compatible).
+
+Inspired by [OpenViking](https://github.com/volcengine/OpenViking)'s context-as-a-filesystem idea, rebuilt to be download-and-run.
+
+**Status:** pre-alpha — spec and backlog live in `BACKLOG/001-overmind-mvp/`, code is landing per plan.
 
 ## Repository layout
 
@@ -33,7 +57,9 @@ Pre-alpha. The repository currently contains the spec and backlog only — see `
 BACKLOG.md                  feature index
 BACKLOG/001-overmind-mvp/   MVP feature folder
   feature.md                what and why
-  spec.md                   brainstormed design decisions and requirements
+  spec.md                   approved design decisions and requirements
+  plan.md                   implementation plan
+  tasks/                    execution contracts per task
 ```
 
 ## License

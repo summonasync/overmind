@@ -1,7 +1,7 @@
 ---
 feature: 001
 slug: overmind-mvp
-status: draft
+status: approved
 version: 1
 spec: spec.md
 created: 2026-09-06
