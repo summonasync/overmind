@@ -2,7 +2,7 @@
 feature: 001
 task: 02
 slug: domain-and-persistence
-status: todo
+status: done
 review: light
 created: 2026-09-06
 ---
@@ -69,9 +69,17 @@ Tests:
 </refs>
 
 <obstacles>
-<!-- Filled by executors during work -->
+- `dotnet ef` was already installed globally (10.0.9); it prints a non-fatal "tools older than runtime 10.0.11" warning. No install performed.
+- `Microsoft.EntityFrameworkCore.Design` 10.0.11 added to `Directory.Packages.props` + `Overmind.Infrastructure.csproj` (`PrivateAssets="all"`). It is the design-time companion of the already-pinned EFCore.Sqlite and is required by `dotnet ef` scaffolding. Runtime dependency set unchanged.
+- FTS5 gotchas: plain `content=''` contentless tables do not support UPDATE/DELETE at all, so the migration creates `entry_fts` as `fts5(title, content, content='', contentless_delete=1)` (SQLite >= 3.43; Microsoft.Data.Sqlite 10 bundles a newer SQLite). Consequence: column values of a contentless table read as NULL, so `snippet()` returns NULL — `FtsSearchHit.Snippet` is coalesced to `string.Empty`. Ranking via `bm25()` works fine.
+- EF Core stores `Guid` keys as UPPERCASE TEXT in SQLite; hand-written SQL must pass `guid.ToString().ToUpperInvariant()` for comparisons (`FtsSearchService` does). EF's own parameters are unaffected.
+- EF Core change-tracking gotcha: an entity with a store-generated (ValueGeneratedOnAdd) non-default Guid key that is added to a collection of an already-tracked principal is treated as *existing* (state Modified), producing an UPDATE that affects 0 rows. Fix: `EntryVersion.Id` is configured `ValueGeneratedNever()` in `OvermindDbContext` (Guid is assigned by the factory, not the DB). Migration was re-scaffolded after this change.
+- Microsoft.Data.Sqlite connection pooling keeps a WAL file handle open after context dispose on Windows, blocking temp-file cleanup in tests; test connection strings use `Pooling=false`.
+- Review-gate follow-up: `Versions.Max()` in `UpdateContent` was unreliable across sessions (in-memory collection empty on fresh load → duplicate `Version = 1` → unique-index violation). Fixed with persisted `ContextEntry.CurrentVersion` counter (option a). Lesson: never derive persisted sequence numbers from unloaded navigation collections.
 </obstacles>
 
 <log>
 2026-09-06 — writing-plans — task created from approved spec.
+2026-09-06 — implementer — Domain model in Overmind.Core (entities + factories with invariants, EntryType/AgentPlatform enums, IEmbeddingProvider/ISemanticSearch/EntrySearchHit). Overmind.Infrastructure: OvermindDbContext (WAL via connection interceptor), InitialSchema migration with FTS5 virtual table entry_fts + 3 sync triggers (insert/update/delete, trigger-only sync), FtsSearchService (MATCH + bm25 + snippet, project filter). Tests: 29 Core invariant tests, 9 integration tests (real SQLite temp file: CRUD roundtrip, FTS insert/update/delete sync, version row on update, WAL mode, sqlite_master check for entry_fts + 3 triggers). dotnet build: 0 warnings; dotnet test: 38/38 green. See <obstacles> for EF Guid-tracking gotcha, FTS5 contentless limitations and the EFCore.Design package addition.
+2026-09-06 — implementer — Review-gate fix: version numbering moved from in-memory Versions.Max to persisted ContextEntry.CurrentVersion counter (domain invariant, incremented in UpdateContent). Fixes duplicate Version=1 on first update of an entry loaded without Include(Versions) in a fresh context (unique-index violation). Migration re-scaffolded cleanly (ContextEntries.CurrentVersion column); FTS5 DDL re-applied. Added multi-session integration test (3 separate contexts, versions 1..2 persisted) + Core test for counter start value. dotnet build: 0 warnings; dotnet test: 40/40 green (Core 30, Infrastructure 10).
 </log>

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\Overmind.Core\Overmind.Core.csproj" />
+    <ProjectReference Include="..\Overmind.Infrastructure\Overmind.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

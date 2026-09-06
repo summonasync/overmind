@@ -2,7 +2,7 @@
 feature: 001
 task: 01
 slug: solution-scaffold
-status: todo
+status: done
 review: light
 created: 2026-09-06
 ---
@@ -59,9 +59,15 @@ Each project gets exactly one trivial placeholder file only if the SDK requires 
 </refs>
 
 <obstacles>
-<!-- Filled by executors during work -->
+2026-09-06 — SDK check: .NET 10.0.400 installed, `net10.0` kept as specified (no TargetFramework adjustment needed).
+2026-09-06 — `dotnet new sln` in .NET 10 defaults to the new `.slnx` format; explicit `--format sln` was required to produce `Overmind.sln`.
+2026-09-06 — Console project (Overmind.Mcp) needs explicit `<OutputType>Exe</OutputType>` in its csproj, otherwise top-level statements fail with CS8805.
+2026-09-06 — Package version verification: nuget.org flat-container API requires lowercase package IDs (`shouldly`, not `Shouldly`).
+2026-09-06 — Latest stable versions pinned at execution time: EFCore.Sqlite 10.0.11, OnnxRuntime 1.29.0, Qdrant.Client 1.19.0, ModelContextProtocol 2.2.0 (stable, not the 2.0.0-rc.2 prerelease), Avalonia/Avalonia.Desktop 12.1.2, xunit 2.9.3, Shouldly 4.3.0 (5.x is preview), NSubstitute 6.2.0, Mvc.Testing 10.0.11. All licenses verified via nuspec on nuget.org: MIT / Apache-2.0 / BSD-3-Clause (OnnxRuntime ships a bundled LICENSE file — confirmed MIT text inside the nupkg).
+2026-09-06 — Two packages beyond the task's list were added to Directory.Packages.props out of necessity: Microsoft.NET.Test.Sdk 18.9.0 (MIT) and xunit.runner.visualstudio 3.1.5 (Apache-2.0). Without them `dotnet test` cannot discover/execute test projects at all, which would fail the acceptance criteria. xunit.runner.visualstudio pinned to latest 3.x (4.0.0 targets xUnit v3; we use xunit 2.9.3).
 </obstacles>
 
 <log>
 2026-09-06 — writing-plans — task created from approved spec.
+2026-09-06 — implementer — scaffolded Overmind.sln (8 projects: 4 src + 4 tests), Directory.Build.props (net10.0, LangVersion latest, Nullable+ImplicitUsings enable), Directory.Packages.props (central versions, 12 packages, all license-verified), .editorconfig (lf, file-scoped namespaces as error). Build: 0 warnings, 0 errors. Test: all 4 test projects discovered and executed (0 tests, as expected).
 </log>

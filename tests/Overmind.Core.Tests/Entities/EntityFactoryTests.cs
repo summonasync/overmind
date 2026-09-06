@@ -1,0 +1,147 @@
+using Overmind.Core;
+using Shouldly;
+using Xunit;
+
+namespace Overmind.Core.Tests.Entities;
+
+public class ProjectTests
+{
+    [Fact]
+    public void Create_SetsFieldsAndUtcTimestamp()
+    {
+        var before = DateTime.UtcNow;
+
+        var project = Project.Create("Overmind", "/disk/path", "context keeper");
+
+        project.Id.ShouldNotBe(Guid.Empty);
+        project.Name.ShouldBe("Overmind");
+        project.DiskPath.ShouldBe("/disk/path");
+        project.Description.ShouldBe("context keeper");
+        project.CreatedAt.ShouldBeGreaterThanOrEqualTo(before);
+        project.CreatedAt.Kind.ShouldBe(DateTimeKind.Utc);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Create_EmptyName_Throws(string name)
+    {
+        Should.Throw<ArgumentException>(() => Project.Create(name, "/p"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Create_EmptyDiskPath_Throws(string diskPath)
+    {
+        Should.Throw<ArgumentException>(() => Project.Create("n", diskPath));
+    }
+}
+
+public class SkillFileTests
+{
+    [Fact]
+    public void Create_SetsFields()
+    {
+        var file = SkillFile.Create(AgentPlatform.Codex, "reviewer/SKILL.md", "# Skill");
+
+        file.Id.ShouldNotBe(Guid.Empty);
+        file.Platform.ShouldBe(AgentPlatform.Codex);
+        file.RelativePath.ShouldBe("reviewer/SKILL.md");
+        file.Content.ShouldBe("# Skill");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void Create_EmptyRelativePath_Throws(string? relativePath)
+    {
+        Should.Throw<ArgumentException>(() => SkillFile.Create(AgentPlatform.Claude, relativePath!, "c"));
+    }
+}
+
+public class TagTests
+{
+    [Fact]
+    public void Create_TrimsName()
+    {
+        var tag = Tag.Create("  backend  ");
+
+        tag.Name.ShouldBe("backend");
+        tag.Id.ShouldNotBe(Guid.Empty);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Create_EmptyName_Throws(string name)
+    {
+        Should.Throw<ArgumentException>(() => Tag.Create(name));
+    }
+}
+
+public class SkillKitTests
+{
+    [Fact]
+    public void Create_SetsFields()
+    {
+        var kit = SkillKit.Create("review-pack", 1, "review skills");
+
+        kit.Id.ShouldNotBe(Guid.Empty);
+        kit.Name.ShouldBe("review-pack");
+        kit.Version.ShouldBe(1);
+        kit.Description.ShouldBe("review skills");
+    }
+
+    [Fact]
+    public void AddEntry_AddsJoinRow()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+        var entryId = Guid.NewGuid();
+
+        kit.AddEntry(entryId);
+
+        kit.SkillKitEntries.Count.ShouldBe(1);
+        kit.SkillKitEntries[0].KitId.ShouldBe(kit.Id);
+        kit.SkillKitEntries[0].EntryId.ShouldBe(entryId);
+    }
+
+    [Fact]
+    public void AddEntry_Duplicate_Throws()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+        var entryId = Guid.NewGuid();
+        kit.AddEntry(entryId);
+
+        Should.Throw<InvalidOperationException>(() => kit.AddEntry(entryId));
+    }
+}
+
+public class ProjectKitTests
+{
+    [Fact]
+    public void Create_DefaultsToActive()
+    {
+        var projectId = Guid.NewGuid();
+        var kitId = Guid.NewGuid();
+
+        var link = ProjectKit.Create(projectId, kitId);
+
+        link.ProjectId.ShouldBe(projectId);
+        link.KitId.ShouldBe(kitId);
+        link.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Deactivate_Activate_TogglesFlag()
+    {
+        var link = ProjectKit.Create(Guid.NewGuid(), Guid.NewGuid());
+
+        link.Deactivate();
+        link.IsActive.ShouldBeFalse();
+
+        link.Activate();
+        link.IsActive.ShouldBeTrue();
+    }
+}
