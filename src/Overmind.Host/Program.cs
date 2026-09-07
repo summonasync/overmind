@@ -28,8 +28,9 @@ try
             var uri = SingleInstance.TryGetRunningInstanceUri();
             if (uri is not null)
             {
-                Log.Information("Overmind is already running at {Uri}; opening it in the browser", uri);
-                SingleInstance.OpenInDefaultBrowser(uri);
+                var browserUri = BrowserUri.FromLoopback(uri);
+                Log.Information("Overmind is already running at {Uri}; opening it in the browser", browserUri);
+                SingleInstance.OpenInDefaultBrowser(browserUri);
             }
             else
             {
@@ -150,7 +151,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
         return;
     }
 
-    var openUri = new Uri(app.Urls.First());
+    var openUri = BrowserUri.FromLoopback(new Uri(app.Urls.First()));
     using var trayShutdown = new CancellationTokenSource();
     using var stoppingRegistration = app.Lifetime.ApplicationStopping.Register(trayShutdown.Cancel);
 
@@ -177,7 +178,11 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
         }
     })
     { Name = "Overmind Tray UI" };
-    uiThread.SetApartmentState(ApartmentState.STA);
+    if (OperatingSystem.IsWindows())
+    {
+        uiThread.SetApartmentState(ApartmentState.STA);
+    }
+
     uiThread.Start();
 
     await trayExited.Task;
