@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-background: #0a0a0f;
+  --color-surface: #14141c;
+  --color-surface-raised: #1a1a24;
+  --color-border: #262633;
+  --color-border-strong: #35354a;
+  --color-foreground: #e4e4e7;
+  --color-muted: #71717a;
+  --color-primary: #a855f7;
+  --color-primary-hover: #9333ea;
+  --color-primary-foreground: #ffffff;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #60a5fa;
+
+  --color-type-note: #60a5fa;
+  --color-type-decision: #f59e0b;
+  --color-type-gate: #22c55e;
+  --color-type-guard: #ef4444;
+  --color-type-skill: #a855f7;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 30%, transparent);
+  }
+}

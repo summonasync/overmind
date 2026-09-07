@@ -1,0 +1,53 @@
+"use client";
+
+import { useCallback, useState, type ReactNode } from "react";
+import background from "@/shared/assets/brand/background.png";
+import { InfoPanelProvider } from "@/widgets/app-shell/lib/info-panel-context";
+import { AppSidebar } from "@/widgets/app-shell/ui/app-sidebar";
+import { AppTopbar } from "@/widgets/app-shell/ui/app-topbar";
+import { MobileNav } from "@/widgets/app-shell/ui/mobile-nav";
+import { InfoPanel } from "@/widgets/app-shell/ui/info-panel";
+import { DegradedBanner } from "@/widgets/degraded-banner/ui/degraded-banner";
+
+const COLLAPSED_STORAGE_KEY = "overmind.info-panel.collapsed";
+
+interface AppShellProps {
+  children: ReactNode;
+}
+
+export function AppShell({ children }: AppShellProps) {
+  const [panelCollapsed, setPanelCollapsed] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1",
+  );
+
+  const togglePanel = useCallback(() => {
+    setPanelCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem(COLLAPSED_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }, []);
+
+  return (
+    <InfoPanelProvider>
+      <div className="min-h-screen bg-background text-foreground">
+        <img
+          src={background.src}
+          alt=""
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-[0.07]"
+        />
+        <AppSidebar />
+        <div className="relative z-10 flex min-h-screen flex-col lg:pl-60">
+          <AppTopbar />
+          <MobileNav />
+          <DegradedBanner />
+          <div className="flex flex-1">
+            <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
+            <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />
+          </div>
+        </div>
+      </div>
+    </InfoPanelProvider>
+  );
+}

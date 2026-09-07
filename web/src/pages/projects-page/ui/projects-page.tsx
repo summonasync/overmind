@@ -1,0 +1,113 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/shared/ui/button";
+import { Modal } from "@/shared/ui/modal";
+import { ErrorText } from "@/shared/ui/error-text";
+import { LoadingState } from "@/shared/ui/loading-state";
+import { PageHeader } from "@/shared/ui/page-header";
+import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
+import {
+  ProjectForm,
+  ProjectList,
+  useProjectList,
+  useProjectMutations,
+} from "@/features/projects";
+import type { ProjectFormValues, ProjectResponse } from "@/features/projects";
+import { ProjectsInfoPanel } from "@/pages/projects-page/ui/projects-info-panel";
+
+export function ProjectsPage() {
+  const { data: projects, loading, error } = useProjectList();
+  const { create, update, remove } = useProjectMutations();
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ProjectResponse | null>(null);
+  const [deleting, setDeleting] = useState<ProjectResponse | null>(null);
+
+  useInfoPanel(<ProjectsInfoPanel />);
+
+  const activeError =
+    (create.error as Error | null) ??
+    (update.error as Error | null) ??
+    (remove.error as Error | null) ??
+    error;
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = (values: ProjectFormValues) => {
+    if (editing) {
+      update.mutate(
+        { id: editing.id, values },
+        { onSuccess: () => setFormOpen(false) },
+      );
+    } else {
+      create.mutate(values, { onSuccess: () => setFormOpen(false) });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="Projects"
+        description="Organize coding-agent context, from codebases to documentation, in one unified space."
+        actions={<Button onClick={openCreate}>New project</Button>}
+      />
+
+      <ErrorText error={activeError} />
+
+      {loading ? (
+        <LoadingState label="Loading projects…" />
+      ) : (
+        <ProjectList
+          projects={projects}
+          onEdit={(project) => {
+            setEditing(project);
+            setFormOpen(true);
+          }}
+          onDelete={setDeleting}
+        />
+      )}
+
+      <Modal
+        title={editing ? "Edit project" : "New project"}
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+      >
+        <ProjectForm
+          initial={editing ?? undefined}
+          pending={create.isPending || update.isPending}
+          error={(create.error as Error | null) ?? (update.error as Error | null)}
+          onSubmit={handleSubmit}
+          onCancel={() => setFormOpen(false)}
+        />
+      </Modal>
+
+      <Modal title="Delete project" open={deleting !== null} onClose={() => setDeleting(null)}>
+        {deleting ? (
+          <div className="space-y-4">
+            <p className="text-sm text-foreground">
+              Delete project &quot;{deleting.name}&quot;? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDeleting(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={remove.isPending}
+                onClick={() =>
+                  remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+                }
+              >
+                {remove.isPending ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+    </div>
+  );
+}
