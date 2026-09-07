@@ -1,1 +1,50 @@
-Console.WriteLine("Overmind MCP adapter");
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Protocol;
+using Overmind.Mcp;
+
+var baseUrl = ApiBaseUrl.Resolve();
+Console.Error.WriteLine($"[overmind-mcp] overmind API base URL: {baseUrl}");
+
+var http = OvermindApiClient.CreateHttpClient(baseUrl);
+
+try
+{
+    await OvermindApiClient.CheckHealthAsync(http, CancellationToken.None);
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[overmind-mcp] FATAL: overmind API at {baseUrl} is unreachable: {ex.Message}");
+    Console.Error.WriteLine("[overmind-mcp] start the overmind host first or point OVERMIND_API_URL at a running instance.");
+    return 2;
+}
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.ClearProviders();
+
+builder.Services.AddSingleton(new OvermindApiClient(http));
+builder.Services.AddSingleton<OvermindTools>();
+builder.Services.AddSingleton<OvermindResources>();
+builder.Services.AddSingleton<SessionBootstrapPrompt>();
+
+var adapterVersion = typeof(ApiBaseUrl).Assembly
+                         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                     ?? "0.0.0";
+
+builder.Services
+    .AddMcpServer(options =>
+    {
+        options.ServerInfo = new Implementation { Name = "overmind", Title = "Overmind", Version = adapterVersion };
+        options.ServerInstructions =
+            "Overmind shared-context adapter. Read ctx://resources for project gates, guards, notes, decisions and skills. " +
+            "Use tools for project/entry CRUD and fulltext or semantic search.";
+    })
+    .WithStdioServerTransport()
+    .WithTools<OvermindTools>()
+    .WithResources<OvermindResources>()
+    .WithPrompts<SessionBootstrapPrompt>();
+
+await builder.Build().RunAsync();
+return 0;

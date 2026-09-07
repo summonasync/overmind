@@ -15,3 +15,10 @@ Architecture Decision Records. Newest first. Once Accepted, changing a decision 
 **Decision:** `PUT /api/projects/{id}` rejects `DiskPath` changes with 409 while any kit is active or any `MaterializedFile` rows exist; the user deactivates kits first.
 **Alternatives considered:** Persist absolute path snapshot per `MaterializedFile` and refuse deletes on mismatch — rejected for v1 as a heavier invariant (extra migration, snapshot semantics) where a state guard achieves the same safety.
 **Consequences:** DiskPath retarget requires an explicit deactivate step — visible, safe, and self-explanatory via the 409 message.
+
+## Host↔MCP contract is unversioned, additive-only — 2026-09-06
+**Status:** Accepted
+**Context:** The stdio MCP adapter deserializes Host API DTOs via tolerant `JsonElement` reads. Both ship from the same repo at the same version, but the bundled-installer feature (003) makes divergent deployments conceivable. Adapter writes are restricted to note/decision/gate/guard in v1 — skill entries carry files and are managed via UI until P2 runtime delivery.
+**Decision:** The Host API contract consumed by the adapter evolves additive-only: new fields allowed, renames/removals forbidden. No version negotiation in v1.
+**Alternatives considered:** Explicit contract versioning / shared contracts package — rejected for v1 as overhead in a single-repo, same-version ship.
+**Consequences:** Renames in Host DTOs silently break the adapter (known hazard, tolerated while single-repo); revisit when 003 introduces separate distribution.

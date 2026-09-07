@@ -1,0 +1,147 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+
+namespace Overmind.Mcp;
+
+public sealed class ApiNotFoundException : Exception
+{
+    public ApiNotFoundException(string message)
+        : base(message)
+    {
+    }
+}
+
+public sealed class SemanticSearchUnavailableException : Exception
+{
+    public SemanticSearchUnavailableException(string message)
+        : base(message)
+    {
+    }
+}
+
+public sealed class ApiUnreachableException : Exception
+{
+    public ApiUnreachableException(string message)
+        : base(message)
+    {
+    }
+}
+
+public sealed class ApiStatusException : Exception
+{
+    public ApiStatusException(int statusCode, string message)
+        : base(message)
+    {
+        StatusCode = statusCode;
+    }
+
+    public int StatusCode { get; }
+}
+
+public sealed class OvermindApiClient
+{
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly HttpClient _http;
+
+    public OvermindApiClient(HttpClient http)
+    {
+        _http = http;
+    }
+
+    public static HttpClient CreateHttpClient(string baseUrl) =>
+        new() { BaseAddress = new Uri(baseUrl), Timeout = Timeout };
+
+    public static async Task CheckHealthAsync(HttpClient http, CancellationToken ct)
+    {
+        var response = await http.GetAsync("/api/health", ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public Task<JsonElement> GetAsync(string pathAndQuery, CancellationToken ct) =>
+        SendAsync(() => _http.GetAsync(pathAndQuery, HttpCompletionOption.ResponseHeadersRead, ct), "GET " + pathAndQuery, ct);
+
+    public Task<JsonElement> PostAsync(string path, object body, CancellationToken ct) =>
+        SendAsync(() => _http.PostAsJsonAsync(path, body, JsonOptions, ct), "POST " + path, ct);
+
+    public Task<JsonElement> PutAsync(string path, object body, CancellationToken ct) =>
+        SendAsync(() => _http.PutAsJsonAsync(path, body, JsonOptions, ct), "PUT " + path, ct);
+
+    private static async Task<JsonElement> SendAsync(
+        Func<Task<HttpResponseMessage>> send,
+        string operation,
+        CancellationToken ct)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await send();
+        }
+        catch (Exception ex) when (ex is HttpRequestException || ex is OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            throw new ApiUnreachableException($"overmind API is unreachable ({operation}): {ex.Message}");
+        }
+
+        try
+        {
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                var detail = await ReadProblemDetailAsync(response, ct);
+                throw new ApiNotFoundException(detail ?? $"overmind API resource not found ({operation})");
+            }
+
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+            {
+                var detail = await ReadProblemDetailAsync(response, ct);
+                throw new SemanticSearchUnavailableException(
+                    $"vector search unavailable: {detail ?? "semantic search is down; use mode=fulltext"}");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await ReadProblemDetailAsync(response, ct);
+                throw new ApiStatusException(
+                    (int)response.StatusCode,
+                    $"overmind API returned {(int)response.StatusCode} ({operation}): {detail ?? response.ReasonPhrase}");
+            }
+
+            var payload = await response.Content.ReadAsStringAsync(ct);
+            if (payload.Length == 0)
+            {
+                return default;
+            }
+
+            using var document = JsonDocument.Parse(payload);
+            return document.RootElement.Clone();
+        }
+        finally
+        {
+            response.Dispose();
+        }
+    }
+
+    private static async Task<string?> ReadProblemDetailAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            var payload = await response.Content.ReadAsStringAsync(ct);
+            if (payload.Length == 0)
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            var detail = root.TryGetProperty("detail", out var d) ? d.GetString() : null;
+            var title = root.TryGetProperty("title", out var t) ? t.GetString() : null;
+            return detail ?? title;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+}
