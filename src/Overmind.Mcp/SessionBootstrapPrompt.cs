@@ -10,8 +10,8 @@ namespace Overmind.Mcp;
 public sealed class SessionBootstrapPrompt
 {
     private const string FallbackText =
-        "At session start, read ctx://projects to list available projects, then read " +
-        "ctx://projects/{id}/gates and /guards for the active project and follow them. " +
+        "At session start, read overmind://projects to list available projects, then read " +
+        "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
         "Set OVERMIND_PROJECT_ID to make the active project explicit.";
 
     private readonly OvermindApiClient _api;
@@ -48,7 +48,7 @@ public sealed class SessionBootstrapPrompt
 
         var text = string.IsNullOrWhiteSpace(activeProjectId)
             ? FallbackText
-            : $"At session start, read ctx://projects/{activeProjectId}/gates and /guards and follow them.";
+            : $"At session start, read overmind://projects/{activeProjectId}/gates and /guards and follow them.";
 
         return new GetPromptResult
         {

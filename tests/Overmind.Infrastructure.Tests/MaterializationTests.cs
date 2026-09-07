@@ -93,8 +93,8 @@ public sealed class MaterializationTests : IDisposable
         var bootstrap = await File.ReadAllTextAsync(
             Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md"));
 
-        bootstrap.ShouldContain($"ctx://projects/{projectId}/gates");
-        bootstrap.ShouldContain($"ctx://projects/{projectId}/guards");
+        bootstrap.ShouldContain($"overmind://projects/{projectId}/gates");
+        bootstrap.ShouldContain($"overmind://projects/{projectId}/guards");
         bootstrap.ShouldContain("All tests must pass before merge.");
         bootstrap.ShouldContain("Never force push to main.");
         bootstrap.ShouldContain("### Tests Green");

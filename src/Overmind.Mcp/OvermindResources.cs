@@ -18,7 +18,7 @@ public sealed class OvermindResources
         _api = api;
     }
 
-    [McpServerResource(UriTemplate = "ctx://projects", Name = "projects", Title = "Overmind projects", MimeType = "application/json")]
+    [McpServerResource(UriTemplate = "overmind://projects", Name = "projects", Title = "Overmind projects", MimeType = "application/json")]
     [Description("Lists all overmind projects.")]
     public async Task<string> ListProjects(CancellationToken ct)
     {
@@ -26,7 +26,7 @@ public sealed class OvermindResources
         return projects.ToString();
     }
 
-    [McpServerResource(UriTemplate = "ctx://projects/{id}", Name = "project", Title = "Project meta", MimeType = "application/json")]
+    [McpServerResource(UriTemplate = "overmind://projects/{id}", Name = "project", Title = "Project meta", MimeType = "application/json")]
     [Description("Metadata of a single overmind project.")]
     public async Task<string> GetProject(Guid id, CancellationToken ct)
     {
@@ -34,32 +34,32 @@ public sealed class OvermindResources
         return project.ToString();
     }
 
-    [McpServerResource(UriTemplate = "ctx://projects/{id}/gates", Name = "project-gates", Title = "Project gates", MimeType = "text/markdown")]
+    [McpServerResource(UriTemplate = "overmind://projects/{id}/gates", Name = "project-gates", Title = "Project gates", MimeType = "text/markdown")]
     [Description("All gate entries of a project, concatenated as markdown with title headers.")]
     public Task<string> GetGates(Guid id, CancellationToken ct) =>
         Guarded(() => GetEntriesMarkdown(id, "gate", ct));
 
-    [McpServerResource(UriTemplate = "ctx://projects/{id}/guards", Name = "project-guards", Title = "Project guards", MimeType = "text/markdown")]
+    [McpServerResource(UriTemplate = "overmind://projects/{id}/guards", Name = "project-guards", Title = "Project guards", MimeType = "text/markdown")]
     [Description("All guard entries of a project, concatenated as markdown with title headers.")]
     public Task<string> GetGuards(Guid id, CancellationToken ct) =>
         Guarded(() => GetEntriesMarkdown(id, "guard", ct));
 
-    [McpServerResource(UriTemplate = "ctx://projects/{id}/notes", Name = "project-notes", Title = "Project notes", MimeType = "text/markdown")]
+    [McpServerResource(UriTemplate = "overmind://projects/{id}/notes", Name = "project-notes", Title = "Project notes", MimeType = "text/markdown")]
     [Description("All note entries of a project, concatenated as markdown with title headers.")]
     public Task<string> GetNotes(Guid id, CancellationToken ct) =>
         Guarded(() => GetEntriesMarkdown(id, "note", ct));
 
-    [McpServerResource(UriTemplate = "ctx://projects/{id}/decisions", Name = "project-decisions", Title = "Project decisions", MimeType = "text/markdown")]
+    [McpServerResource(UriTemplate = "overmind://projects/{id}/decisions", Name = "project-decisions", Title = "Project decisions", MimeType = "text/markdown")]
     [Description("All decision entries of a project, concatenated as markdown with title headers.")]
     public Task<string> GetDecisions(Guid id, CancellationToken ct) =>
         Guarded(() => GetEntriesMarkdown(id, "decision", ct));
 
-    [McpServerResource(UriTemplate = "ctx://projects/{id}/skills", Name = "project-skills", Title = "Project skills", MimeType = "text/markdown")]
+    [McpServerResource(UriTemplate = "overmind://projects/{id}/skills", Name = "project-skills", Title = "Project skills", MimeType = "text/markdown")]
     [Description("All skill entries of a project, concatenated as markdown with title headers.")]
     public Task<string> GetSkills(Guid id, CancellationToken ct) =>
         Guarded(() => GetEntriesMarkdown(id, "skill", ct));
 
-    [McpServerResource(UriTemplate = "ctx://entries/{id}", Name = "entry", Title = "Context entry", MimeType = "text/markdown")]
+    [McpServerResource(UriTemplate = "overmind://entries/{id}", Name = "entry", Title = "Context entry", MimeType = "text/markdown")]
     [Description("A single context entry rendered as markdown with a title header.")]
     public async Task<string> GetEntry(Guid id, CancellationToken ct)
     {

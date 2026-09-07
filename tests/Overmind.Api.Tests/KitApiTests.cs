@@ -62,7 +62,7 @@ public sealed class KitApiTests : IDisposable
         File.Exists(bootstrap).ShouldBeTrue();
 
         var bootstrapText = await File.ReadAllTextAsync(bootstrap);
-        bootstrapText.ShouldContain($"ctx://projects/{project.Id}/gates");
+        bootstrapText.ShouldContain($"overmind://projects/{project.Id}/gates");
         bootstrapText.ShouldContain("All tests must pass before merge.");
 
         var drift = await _client.GetFromJsonAsync<List<DriftJson>>($"/api/projects/{project.Id}/drift", JsonOptions);

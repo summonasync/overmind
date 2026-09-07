@@ -57,20 +57,20 @@ public class HandshakeContractTests : McpSessionTestBase
             .Select(r => r!["uri"]!.GetValue<string>())
             .ToHashSet(StringComparer.Ordinal);
 
-        staticUris.ShouldContain("ctx://projects");
+        staticUris.ShouldContain("overmind://projects");
 
         var templatesResponse = await Driver.CallAsync("resources/templates/list", new JsonObject());
         var templateUris = templatesResponse["result"]!["resourceTemplates"]!.AsArray()
             .Select(t => t!["uriTemplate"]!.GetValue<string>())
             .ToHashSet(StringComparer.Ordinal);
 
-        templateUris.ShouldContain("ctx://projects/{id}");
-        templateUris.ShouldContain("ctx://projects/{id}/gates");
-        templateUris.ShouldContain("ctx://projects/{id}/guards");
-        templateUris.ShouldContain("ctx://projects/{id}/notes");
-        templateUris.ShouldContain("ctx://projects/{id}/decisions");
-        templateUris.ShouldContain("ctx://projects/{id}/skills");
-        templateUris.ShouldContain("ctx://entries/{id}");
+        templateUris.ShouldContain("overmind://projects/{id}");
+        templateUris.ShouldContain("overmind://projects/{id}/gates");
+        templateUris.ShouldContain("overmind://projects/{id}/guards");
+        templateUris.ShouldContain("overmind://projects/{id}/notes");
+        templateUris.ShouldContain("overmind://projects/{id}/decisions");
+        templateUris.ShouldContain("overmind://projects/{id}/skills");
+        templateUris.ShouldContain("overmind://entries/{id}");
     }
 
     [Fact]

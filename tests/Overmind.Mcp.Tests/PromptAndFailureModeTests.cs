@@ -20,7 +20,7 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         var text = PromptText(response);
-        text.ShouldContain("read ctx://projects to list available projects");
+        text.ShouldContain("read overmind://projects to list available projects");
         text.ShouldContain("OVERMIND_PROJECT_ID");
     }
 
@@ -34,7 +34,7 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         var text = PromptText(response);
-        text.ShouldContain($"read ctx://projects/{Canned.ProjectId}/gates and /guards and follow them");
+        text.ShouldContain($"read overmind://projects/{Canned.ProjectId}/gates and /guards and follow them");
     }
 
     private static string PromptText(JsonNode response)

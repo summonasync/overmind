@@ -38,7 +38,7 @@ builder.Services
     {
         options.ServerInfo = new Implementation { Name = "overmind", Title = "Overmind", Version = adapterVersion };
         options.ServerInstructions =
-            "Overmind shared-context adapter. Read ctx://resources for project gates, guards, notes, decisions and skills. " +
+            "Overmind shared-context adapter. Read overmind://resources for project gates, guards, notes, decisions and skills. " +
             "Use tools for project/entry CRUD and fulltext or semantic search.";
     })
     .WithStdioServerTransport()

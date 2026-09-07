@@ -11,7 +11,7 @@ public class ResourceContractTests : McpSessionTestBase
     [Fact]
     public async Task Projects_Resource_ReturnsProjectListJson()
     {
-        var response = await Driver.ReadResourceAsync("ctx://projects");
+        var response = await Driver.ReadResourceAsync("overmind://projects");
 
         var text = Canned.ResourceText(response);
         text.ShouldContain("alpha");
@@ -21,7 +21,7 @@ public class ResourceContractTests : McpSessionTestBase
     [Fact]
     public async Task Project_Resource_ReturnsProjectMetaJson()
     {
-        var response = await Driver.ReadResourceAsync($"ctx://projects/{Canned.ProjectId}");
+        var response = await Driver.ReadResourceAsync($"overmind://projects/{Canned.ProjectId}");
 
         var text = Canned.ResourceText(response);
         text.ShouldContain("\"alpha\"");
@@ -37,7 +37,7 @@ public class ResourceContractTests : McpSessionTestBase
     public async Task ProjectTypedResources_ReturnConcatenatedMarkdownWithTitleHeaders(
         string segment, string type, string title)
     {
-        var response = await Driver.ReadResourceAsync($"ctx://projects/{Canned.ProjectId}/{segment}");
+        var response = await Driver.ReadResourceAsync($"overmind://projects/{Canned.ProjectId}/{segment}");
 
         var text = Canned.ResourceText(response);
         text.ShouldContain($"# {title}");
@@ -50,7 +50,7 @@ public class ResourceContractTests : McpSessionTestBase
     [Fact]
     public async Task Gates_Resource_ConcatenatesAllStubbedEntries()
     {
-        var response = await Driver.ReadResourceAsync($"ctx://projects/{Canned.ProjectId}/gates");
+        var response = await Driver.ReadResourceAsync($"overmind://projects/{Canned.ProjectId}/gates");
 
         var text = Canned.ResourceText(response);
         text.ShouldContain("# Gate One");
@@ -62,7 +62,7 @@ public class ResourceContractTests : McpSessionTestBase
     [Fact]
     public async Task Entry_Resource_ReturnsMarkdownWithTitleAndContent()
     {
-        var response = await Driver.ReadResourceAsync($"ctx://entries/{Canned.EntryId}");
+        var response = await Driver.ReadResourceAsync($"overmind://entries/{Canned.EntryId}");
 
         var text = Canned.ResourceText(response);
         text.ShouldContain("# Entry One");
@@ -74,7 +74,7 @@ public class ResourceContractTests : McpSessionTestBase
     {
         Stub.Route("GET", $"/api/entries/{Canned.MissingEntryId}", 404, Canned.NotFoundJson);
 
-        var response = await Driver.ReadResourceAsync($"ctx://entries/{Canned.MissingEntryId}");
+        var response = await Driver.ReadResourceAsync($"overmind://entries/{Canned.MissingEntryId}");
 
         var error = response["error"];
         error.ShouldNotBeNull("expected a JSON-RPC error, got: " + response.ToJsonString());

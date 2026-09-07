@@ -227,8 +227,8 @@ public sealed class SkillMaterializer : IMaterializer
         var builder = new StringBuilder();
         builder.Append("# Overmind Bootstrap\n\n");
         builder.Append("This project is managed by Overmind. At the start of every session, read the project context through Overmind:\n\n");
-        builder.Append($"- Gates: ctx://projects/{projectId}/gates\n");
-        builder.Append($"- Guards: ctx://projects/{projectId}/guards\n");
+        builder.Append($"- Gates: overmind://projects/{projectId}/gates\n");
+        builder.Append($"- Guards: overmind://projects/{projectId}/guards\n");
 
         if (gates.Count > 0)
         {
