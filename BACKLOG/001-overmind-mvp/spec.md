@@ -17,7 +17,7 @@ created: 2026-09-06
 ## Transport & process topology
 - **Single .NET 10 host process**: tray application (Avalonia, tray-icon only, no native windows) + Kestrel HTTP API on localhost + serves the web UI (SPA) from the same origin.
 - **Thin stdio MCP adapter** (separate small console app): agents spawn it via their standard MCP config; it proxies JSON-RPC to the local HTTP API. Chosen over pure stdio (avoids multi-process DB contention, UI and agents share one backend) and over HTTP-only MCP (stdio remains the lowest-friction client integration).
-- **Custom `ctx://` URI scheme** lives inside MCP Resources (MCP natively supports arbitrary URI schemes in `resources/read`) — we get an OpenViking-style "protocol" without inventing a network transport. Example: `ctx://projects/<id>/gates`.
+- **Custom `overmind://` URI scheme** lives inside MCP Resources (MCP natively supports arbitrary URI schemes in `resources/read`) — we get an OpenViking-style "protocol" without inventing a network transport. Example: `overmind://projects/<id>/gates`. <changed 2026-09-07 — scheme renamed ctx:// → overmind://, see TECHNICAL-SOLUTIONS.md ADR>
 
 ## Storage & search
 - **SQLite (WAL) is the only metadata/document store.** Embedded, cross-platform, single-file backup. No external DB for core data.
@@ -39,10 +39,10 @@ created: 2026-09-06
 Agents load skills **only from the filesystem** — there is no "push skill over the wire" API on any platform. Source of truth is our DB; disk is a managed cache.
 - **v1 — materialize into project**: the app writes/cleans native skill directories inside the project folder (`.claude/skills/`, `.kimi-code/skills/`, …). Universal, works on all five platforms because these are their native discovery paths. Switching a kit in UI re-materializes files.
 - **P1 — external-folder materialization + launcher** (deferred; verified feasible but not guaranteed across platforms): central kit store under `~/.overmind/kits/<kit-id>/`, agent launched with flags — `claude --add-dir <kit>` (documented), `kimi --skills-dir <kit>` (documented); Codex/Gemini/Antigravity need a spike; fallback is v1 in-project materialization.
-- **P2 — runtime delivery via MCP**: `get_skill` tool, `ctx://skills/` resources, one universal bootstrap skill on disk teaching agents to pull skills on demand (the OpenViking pattern).
+- **P2 — runtime delivery via MCP**: `get_skill` tool, `overmind://skills/` resources, one universal bootstrap skill on disk teaching agents to pull skills on demand (the OpenViking pattern).
 
 ## Session bootstrap
-On agent start, bootstrap instruction tells the agent to read `ctx://projects/<id>/gates` and `guards` first. In v1 this instruction is part of materialized content; P2 makes it a first-class MCP flow.
+On agent start, bootstrap instruction tells the agent to read `overmind://projects/<id>/gates` and `guards` first. In v1 this instruction is part of materialized content; P2 makes it a first-class MCP flow.
 
 ## Testing
 xUnit + Shouldly + NSubstitute: unit tests for domain and skill engine; API integration tests via WebApplicationFactory; MCP adapter contract tests (JSON-RPC); FTS and degraded-mode behavior covered.
@@ -64,7 +64,7 @@ Refined during brainstorming; baseline outcomes live in feature.md.
 
 ### R2. stdio MCP adapter
 - R2.1 Console app, spawnable by any MCP client config; proxies tools/resources/prompts to the HTTP API.
-- R2.2 Exposes `ctx://` resources for project context (projects, notes/decisions, gates, guards, skills).
+- R2.2 Exposes `overmind://` resources for project context (projects, notes/decisions, gates, guards, skills). <changed 2026-09-07 — scheme renamed ctx:// → overmind://, see TECHNICAL-SOLUTIONS.md ADR>
 - R2.3 Exposes tools for context CRUD and search (FTS always; semantic when Qdrant is up).
 
 ### R3. Storage

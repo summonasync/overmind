@@ -10,11 +10,11 @@ created: 2026-09-06
 # 001/06 — stdio MCP adapter
 
 <goal>
-`Overmind.Mcp` is a console app that any MCP-compatible agent can spawn via standard MCP config. It serves tools, resources, and a bootstrap prompt over stdio (JSON-RPC), proxying to the Overmind HTTP API. Context is addressable via the `ctx://` URI scheme. Verified by contract tests that speak JSON-RPC to the process over real stdin/stdout.
+`Overmind.Mcp` is a console app that any MCP-compatible agent can spawn via standard MCP config. It serves tools, resources, and a bootstrap prompt over stdio (JSON-RPC), proxying to the Overmind HTTP API. Context is addressable via the `overmind://` URI scheme. Verified by contract tests that speak JSON-RPC to the process over real stdin/stdout.
 </goal>
 
 <context>
-Spec R2: agents connect through this adapter; it is the product's front door for agents. `ctx://projects/<id>/...` resources are how agents read gates/guards/notes; tools allow CRUD + search. The adapter is stateless and thin — all logic lives behind the HTTP API. MCP clients configure it like: `{"command": "overmind-mcp", "args": []}` (binary name TBD at publish; dev: `dotnet run --project src/Overmind.Mcp`).
+Spec R2: agents connect through this adapter; it is the product's front door for agents. `overmind://projects/<id>/...` resources are how agents read gates/guards/notes; tools allow CRUD + search. The adapter is stateless and thin — all logic lives behind the HTTP API. MCP clients configure it like: `{"command": "overmind-mcp", "args": []}` (binary name TBD at publish; dev: `dotnet run --project src/Overmind.Mcp`).
 </context>
 
 <scope>
@@ -27,18 +27,18 @@ Spec R2: agents connect through this adapter; it is the product's front door for
   - `read_entry(entryId)` → GET /api/entries/{id}.
   - `write_entry(projectId, type, title, content, tags?)` → POST /api/entries; `update_entry(entryId, content)` → PUT.
   - `search(query, projectId?, mode?)` → GET /api/search (mode semantic|fulltext, default fulltext).
-- Resources: `ctx://projects` (list), `ctx://projects/{id}` (project meta), `ctx://projects/{id}/gates`, `/guards`, `/notes`, `/decisions`, `/skills` (each → entry list of that type, markdown concatenated with title headers), `ctx://entries/{id}` (single entry).
-- Prompt: `session_bootstrap` — returns instruction text: "At session start, read ctx://projects/{active}/gates and /guards and follow them." (active project resolved via env `OVERMIND_PROJECT_ID` or the single existing project if exactly one).
+- Resources: `overmind://projects` (list), `overmind://projects/{id}` (project meta), `overmind://projects/{id}/gates`, `/guards`, `/notes`, `/decisions`, `/skills` (each → entry list of that type, markdown concatenated with title headers), `overmind://entries/{id}` (single entry).
+- Prompt: `session_bootstrap` — returns instruction text: "At session start, read overmind://projects/{active}/gates and /guards and follow them." (active project resolved via env `OVERMIND_PROJECT_ID` or the single existing project if exactly one).
 - Error mapping: API 404 → MCP resource-not-found; 503 (degraded semantic) → tool error with "vector search unavailable" message; network failure → tool error, never crash the process.
 
 Tests (`tests/Overmind.Mcp.Tests/`):
-- Contract tests spawning the adapter process with a stub HTTP server (loopback `HttpListener` returning canned API responses): initialize handshake, tools/list contains exactly the 6 tools above, resources/read for `ctx://projects/{id}/gates` returns stubbed markdown, write_entry produces the expected POST body, API 404 maps to the correct JSON-RPC error.
+- Contract tests spawning the adapter process with a stub HTTP server (loopback `HttpListener` returning canned API responses): initialize handshake, tools/list contains exactly the 6 tools above, resources/read for `overmind://projects/{id}/gates` returns stubbed markdown, write_entry produces the expected POST body, API 404 maps to the correct JSON-RPC error.
 - No real Overmind.Host or SQLite in these tests.
 </scope>
 
 <anti-scope>
 - No skill delivery tools (`get_skill`) — P2.
-- No resources/templates beyond the listed `ctx://` URIs.
+- No resources/templates beyond the listed `overmind://` URIs.
 - No streaming/SSE transport — stdio only.
 - No auth.
 - No changes to Host endpoints; if a needed endpoint is missing, stop and report (do not add API surface from this task).
@@ -52,7 +52,7 @@ Tests (`tests/Overmind.Mcp.Tests/`):
 </constraints>
 
 <acceptance-criteria>
-- [ ] Contract tests green: handshake, tools/list (exactly 6 tools), resources/read for all `ctx://` patterns, write/update/search proxying, error mapping (404/503/network).
+- [ ] Contract tests green: handshake, tools/list (exactly 6 tools), resources/read for all `overmind://` patterns, write/update/search proxying, error mapping (404/503/network).
 - [ ] stdout purity test: no non-JSON-RPC bytes on stdout during a full session.
 - [ ] Adapter exits code 2 with stderr message when API is unreachable.
 - [ ] README of the repo NOT updated (docs polish is a separate step); example MCP config JSON included in this task file's <log> once verified.
@@ -68,14 +68,14 @@ Tests (`tests/Overmind.Mcp.Tests/`):
 - ModelContextProtocol 2.2.0 SDK has no public server constructor: `McpServer` is DI-only, so the adapter needs the generic host. `Microsoft.Extensions.Hosting` 10.0.10 was added to Directory.Packages.props (first-party Microsoft, MIT — verified; same 10.0.x band the pinned SDK already pulls transitively as Hosting.Abstractions). Alternatives rejected: `FrameworkReference Microsoft.AspNetCore.App` would make a stdio adapter require the ASP.NET Core shared framework on agent machines; hand-rolling an IServiceProvider over SDK internals is fragile.
 - The SDK treats `McpProtocolException` thrown from a *tool* as a protocol-level JSON-RPC error (not a CallToolResult), so error mapping is two-layer: the HTTP client throws transport-agnostic domain exceptions (`ApiNotFoundException`, `SemanticSearchUnavailableException`, `ApiUnreachableException`, `ApiStatusException`); tools map them to `McpException` (spec-compliant `isError` tool results), resources map 404 to `McpProtocolException(ResourceNotFound)` (JSON-RPC -32002).
 - Host's `UpdateEntryRequest` requires `Title`, so `update_entry(entryId, content)` does GET (read current title) + PUT (title + new content, tags untouched) — two proxied calls, no API surface added.
-- `ctx://projects` (no template variable) registers as a static resource and appears in `resources/list`; the other 7 `ctx://` URIs are resource templates in `resources/templates/list`. Both lists asserted in contract tests.
+- `overmind://projects` (no template variable) registers as a static resource and appears in `resources/list`; the other 7 `overmind://` URIs are resource templates in `resources/templates/list`. Both lists asserted in contract tests.
 - Host serializes enums camelCase (`JsonStringEnumConverter` in Host DI), so the adapter validates entry types case-insensitively and sends camelCase names ("gate", ...).
 - Contract tests spawn the real adapter via `dotnet exec overmind-mcp.dll` (AssemblyName set to `overmind-mcp`) and speak newline-delimited JSON-RPC over real redirected stdin/stdout, with an `HttpListener` stub; no Overmind.Host/SQLite involved.
 </obstacles>
 
 <log>
 2026-09-06 — writing-plans — task created from approved spec.
-2026-09-06 — coder — implemented and verified. `src/Overmind.Mcp` is a stdio MCP adapter on ModelContextProtocol 2.2.0 (Apache-2.0 verified in nuspec) + Microsoft.Extensions.Hosting 10.0.10 (MIT verified; see obstacles). Files: Program.cs (base-URL resolve -> /api/health probe with exit code 2 on failure -> generic host with cleared loggers for stdout purity), ApiBaseUrl.cs (env OVERMIND_API_URL -> ~/.overmind/host.port -> http://127.0.0.1:4761), OvermindApiClient.cs (10s timeout, domain exceptions), OvermindTools.cs (exactly 6 tools), OvermindResources.cs (8 ctx:// URIs), SessionBootstrapPrompt.cs (session_bootstrap, active project via OVERMIND_PROJECT_ID or single-project fallback). Tests in tests/Overmind.Mcp.Tests: StubOvermindApi (HttpListener canned routes + request capture), McpProcessDriver (real process, NDJSON JSON-RPC, stdout capture for purity assertions), 27 contract tests across handshake/tools/resources/prompt/failure-mode.
+2026-09-06 — coder — implemented and verified. `src/Overmind.Mcp` is a stdio MCP adapter on ModelContextProtocol 2.2.0 (Apache-2.0 verified in nuspec) + Microsoft.Extensions.Hosting 10.0.10 (MIT verified; see obstacles). Files: Program.cs (base-URL resolve -> /api/health probe with exit code 2 on failure -> generic host with cleared loggers for stdout purity), ApiBaseUrl.cs (env OVERMIND_API_URL -> ~/.overmind/host.port -> http://127.0.0.1:4761), OvermindApiClient.cs (10s timeout, domain exceptions), OvermindTools.cs (exactly 6 tools), OvermindResources.cs (8 overmind:// URIs), SessionBootstrapPrompt.cs (session_bootstrap, active project via OVERMIND_PROJECT_ID or single-project fallback). Tests in tests/Overmind.Mcp.Tests: StubOvermindApi (HttpListener canned routes + request capture), McpProcessDriver (real process, NDJSON JSON-RPC, stdout capture for purity assertions), 27 contract tests across handshake/tools/resources/prompt/failure-mode.
 Verification evidence:
 - `dotnet build` (whole solution): Build succeeded, 0 Warning(s), 0 Error(s).
 - `dotnet test` (whole solution): Core 30/30, Infrastructure 48/48, Mcp 27/27, Api 44/44 — all green.
