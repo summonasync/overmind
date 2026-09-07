@@ -4,6 +4,9 @@
     <ProjectReference Include="..\Overmind.Infrastructure\Overmind.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>
