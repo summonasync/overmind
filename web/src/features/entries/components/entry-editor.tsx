@@ -46,7 +46,7 @@ export function EntryEditor({ initial, pending, error, onSubmit, onCancel }: Ent
   const isSkill = type === "skill";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="flex h-full flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr]">
         <Field label="Type" htmlFor="entry-type">
           <Select
@@ -83,7 +83,7 @@ export function EntryEditor({ initial, pending, error, onSubmit, onCancel }: Ent
         />
       </Field>
 
-      <div>
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="mb-1 flex items-center gap-1">
           <button
             type="button"
@@ -107,12 +107,13 @@ export function EntryEditor({ initial, pending, error, onSubmit, onCancel }: Ent
           </button>
         </div>
         {showPreview ? (
-          <div className="min-h-32 rounded-md border border-border bg-surface px-3 py-2">
+          <div className="min-h-32 flex-1 overflow-y-auto rounded-md border border-border bg-surface px-3 py-2">
             {content.trim() ? <Markdown content={content} /> : <p className="text-sm text-muted">Nothing to preview.</p>}
           </div>
         ) : (
           <Textarea
             rows={10}
+            className="min-h-0 flex-1 resize-none"
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder="Markdown supported: # headings, **bold**, *italic*, `code`, - lists, [links](https://…)"

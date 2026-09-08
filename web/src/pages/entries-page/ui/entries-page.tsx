@@ -89,6 +89,7 @@ function EntriesPageContent() {
         title={editing ? "Edit entry" : "New entry"}
         open={formOpen}
         onClose={() => setFormOpen(false)}
+        size="xl"
       >
         <EntryEditor
           initial={editing ?? undefined}
