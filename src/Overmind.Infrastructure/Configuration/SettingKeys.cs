@@ -7,4 +7,5 @@ public static class SettingKeys
     public const string EmbeddingOpenAiBaseUrl = "embedding.openai.baseUrl";
     public const string EmbeddingOpenAiApiKey = "embedding.openai.apiKey";
     public const string QdrantEndpoint = "qdrant.endpoint";
+    public const string TreeRoots = "treeRoots";
 }

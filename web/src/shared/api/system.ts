@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "@/shared/api/client";
+import { apiDelete, apiGet, apiPost } from "@/shared/api/client";
 import type {
   BrowseFolderResponse,
   ListDirectoryResponse,
@@ -11,6 +11,14 @@ export function browseFolder(): Promise<BrowseFolderResponse | undefined> {
 
 export function getTreeRoots(): Promise<TreeRootsResponse> {
   return apiGet<TreeRootsResponse>("/system/tree-roots");
+}
+
+export function addTreeRoot(path: string): Promise<TreeRootsResponse> {
+  return apiPost<TreeRootsResponse>("/system/tree-roots", { path });
+}
+
+export function removeTreeRoot(path: string): Promise<TreeRootsResponse> {
+  return apiDelete<TreeRootsResponse>(`/system/tree-roots?path=${encodeURIComponent(path)}`);
 }
 
 export function listDirectory(path: string): Promise<ListDirectoryResponse> {

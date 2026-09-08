@@ -15,34 +15,8 @@ public static class SystemApi
     {
         var group = routes.MapGroup("/api/system");
         group.MapPost("/browse-folder", BrowseFolder);
-        group.MapGet("/tree-roots", TreeRoots);
         group.MapGet("/list-directory", ListDirectory);
         return group;
-    }
-
-    private static IResult TreeRoots()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var roots = DriveInfo.GetDrives()
-                .Where(d => d.IsReady)
-                .Select(d => new TreeRootResponse(
-                    string.IsNullOrWhiteSpace(d.VolumeLabel) ? d.Name.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : d.VolumeLabel,
-                    d.RootDirectory.FullName))
-                .ToArray();
-            return Results.Ok(new TreeRootsResponse(roots));
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return Results.Ok(new TreeRootsResponse(new[]
-            {
-                new TreeRootResponse("Home", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
-                new TreeRootResponse("/", "/"),
-            }));
-        }
-
-        return Results.StatusCode(StatusCodes.Status501NotImplemented);
     }
 
     private static async Task<IResult> ListDirectory(string? path, OvermindDbContext db, CancellationToken ct)
@@ -124,7 +98,7 @@ public static class SystemApi
         return Results.Ok(new ListDirectoryResponse(normalizedRoot, truncated, ordered));
     }
 
-    private static string NormalizePath(string path)
+    internal static string NormalizePath(string path)
     {
         var full = Path.GetFullPath(path);
         var root = Path.GetPathRoot(full) ?? string.Empty;

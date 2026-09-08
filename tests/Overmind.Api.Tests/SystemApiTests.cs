@@ -33,16 +33,180 @@ public sealed class SystemApiTests : IDisposable
     }
 
     [Fact]
-    public async Task TreeRoots_ReturnsAtLeastOneRootedRoot()
+    public async Task TreeRoots_EmptyByDefault_ReturnsNoRoots()
     {
-        var response = await _client.GetAsync("/api/system/tree-roots");
+        var roots = await GetRootsAsync(_client);
+
+        roots.Roots.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task TreeRoots_Add_ReturnsRootWithDirectoryName()
+    {
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = _sandboxDir });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var roots = await response.Content.ReadFromJsonAsync<TreeRootsJson>(JsonOptions);
-
         roots.ShouldNotBeNull();
-        roots!.Roots.Length.ShouldBeGreaterThan(0);
-        roots.Roots.ShouldAllBe(r => Path.IsPathRooted(r.Path));
+        roots!.Roots.Length.ShouldBe(1);
+        roots.Roots[0].Path.ShouldBe(Normalize(_sandboxDir));
+        roots.Roots[0].Name.ShouldBe(new DirectoryInfo(_sandboxDir).Name);
+        roots.Roots[0].ContainsProjects.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TreeRoots_AddDuplicate_Returns409()
+    {
+        await AddRootAsync(_sandboxDir);
+
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = _sandboxDir });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task TreeRoots_AddNestedInsideExistingRoot_Returns409()
+    {
+        var nested = Path.Combine(_sandboxDir, "nested");
+        Directory.CreateDirectory(nested);
+        await AddRootAsync(_sandboxDir);
+
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = nested });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task TreeRoots_AddParentOfExistingRoot_AbsorbsNestedRoots()
+    {
+        var nested = Path.Combine(_sandboxDir, "nested");
+        Directory.CreateDirectory(nested);
+        await AddRootAsync(nested);
+
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = _sandboxDir });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var roots = await response.Content.ReadFromJsonAsync<TreeRootsJson>(JsonOptions);
+        roots!.Roots.Select(r => r.Path).ShouldBe([Normalize(_sandboxDir)]);
+    }
+
+    [Fact]
+    public async Task TreeRoots_AddRelativePath_Returns400()
+    {
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = "some/relative/path" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task TreeRoots_AddMissingPath_Returns404()
+    {
+        var missing = Path.Combine(_sandboxDir, "missing");
+
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = missing });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task TreeRoots_AddFilePath_Returns400()
+    {
+        var file = Path.Combine(_sandboxDir, "notes.txt");
+        await File.WriteAllTextAsync(file, "not a directory");
+
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = file });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task TreeRoots_Delete_RemovesRootAndReturnsRemainingRoots()
+    {
+        var otherDir = Path.Combine(
+            Path.GetTempPath(), $"overmind-system-api-other-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(otherDir);
+        try
+        {
+            await AddRootAsync(_sandboxDir);
+            await AddRootAsync(otherDir);
+
+            var response = await _client.DeleteAsync(
+                $"/api/system/tree-roots?path={Uri.EscapeDataString(_sandboxDir)}");
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var roots = await response.Content.ReadFromJsonAsync<TreeRootsJson>(JsonOptions);
+            roots.ShouldNotBeNull();
+            roots!.Roots.Select(r => r.Path).ShouldBe([Normalize(otherDir)]);
+        }
+        finally
+        {
+            Directory.Delete(otherDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TreeRoots_DeleteUnknownPath_Returns404()
+    {
+        var response = await _client.DeleteAsync(
+            $"/api/system/tree-roots?path={Uri.EscapeDataString(_sandboxDir)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task TreeRoots_DeleteBlockedByNestedProject_Returns409()
+    {
+        var projectDir = Path.Combine(_sandboxDir, "registered");
+        Directory.CreateDirectory(projectDir);
+        await CreateProjectAsync("root-guard", projectDir);
+        await AddRootAsync(_sandboxDir);
+
+        var response = await _client.DeleteAsync(
+            $"/api/system/tree-roots?path={Uri.EscapeDataString(_sandboxDir)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Title.ShouldBe("RootContainsProjects");
+
+        var roots = await GetRootsAsync(_client);
+        roots.Roots.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task TreeRoots_PersistAcrossHostRestarts()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"overmind-api-restart-{Guid.NewGuid():N}.db");
+        var rootDir = Path.Combine(_sandboxDir, "persisted");
+        Directory.CreateDirectory(rootDir);
+
+        try
+        {
+            using (var factory = new ApiFactory(databasePath, preserveDatabase: true))
+            using (var client = factory.CreateClient())
+            {
+                var response = await client.PostAsJsonAsync("/api/system/tree-roots", new { Path = rootDir });
+                response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            }
+
+            using (var factory = new ApiFactory(databasePath, preserveDatabase: true))
+            using (var client = factory.CreateClient())
+            {
+                var roots = await GetRootsAsync(client);
+                roots.Roots.Select(r => r.Path).ShouldBe([Normalize(rootDir)]);
+            }
+        }
+        finally
+        {
+            foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
+            {
+                var file = databasePath + suffix;
+                if (File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
     }
 
     [Fact]
@@ -153,6 +317,24 @@ public sealed class SystemApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    private async Task<TreeRootsJson> GetRootsAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/system/tree-roots");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var roots = await response.Content.ReadFromJsonAsync<TreeRootsJson>(JsonOptions);
+        roots.ShouldNotBeNull();
+        return roots!;
+    }
+
+    private async Task<TreeRootsJson> AddRootAsync(string path)
+    {
+        var response = await _client.PostAsJsonAsync("/api/system/tree-roots", new { Path = path });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var roots = await response.Content.ReadFromJsonAsync<TreeRootsJson>(JsonOptions);
+        roots.ShouldNotBeNull();
+        return roots!;
+    }
+
     private async Task<ListingJson> GetListingAsync(string path)
     {
         var response = await _client.GetAsync(
@@ -188,7 +370,9 @@ public sealed class SystemApiTests : IDisposable
 
     public sealed record TreeRootsJson(TreeRootJson[] Roots);
 
-    public sealed record TreeRootJson(string Name, string Path);
+    public sealed record TreeRootJson(string Name, string Path, bool ContainsProjects);
+
+    public sealed record ProblemJson(string? Title, string? Detail);
 
     public sealed record ListingJson(string Path, bool Truncated, EntryJson[] Entries);
 

@@ -19,6 +19,7 @@ export interface BrowseFolderResponse {
 export interface TreeRoot {
   name: string;
   path: string;
+  containsProjects: boolean;
 }
 
 export interface TreeRootsResponse {

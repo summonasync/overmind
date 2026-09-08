@@ -23,6 +23,11 @@ import kerrigan7 from "@/shared/assets/brand/kerrigan/kerrigan-7.webp";
 import { cn } from "@/shared/lib/cn";
 import { Modal } from "@/shared/ui/modal";
 import { ProjectForm, ProjectTree, useProjectMutations } from "@/features/projects";
+import {
+  getLastActiveProjectId,
+  isProjectsSectionOpen,
+  saveProjectsSectionOpen,
+} from "@/features/projects/lib/tree-session";
 import { SidebarQuote } from "@/widgets/app-shell/ui/sidebar-quote";
 
 const KERRIGAN_VARIANTS = [kerrigan1, kerrigan2, kerrigan3, kerrigan4, kerrigan5, kerrigan6, kerrigan7];
@@ -45,15 +50,27 @@ export function AppSidebar() {
   const pathname = usePathname() ?? "/";
   const [kerrigan, setKerrigan] = useState<string | null>(null);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [entriesHref, setEntriesHref] = useState("/entries");
   const [registerPath, setRegisterPath] = useState<string | null>(null);
   const { create } = useProjectMutations();
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setKerrigan(KERRIGAN_VARIANTS[Math.floor(Math.random() * KERRIGAN_VARIANTS.length)].src);
+      setProjectsOpen(isProjectsSectionOpen());
+      const lastProject = getLastActiveProjectId();
+      setEntriesHref(lastProject !== null ? `/entries?project=${lastProject}` : "/entries");
     });
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  const handleProjectsToggle = () => {
+    setProjectsOpen((value) => {
+      const next = !value;
+      saveProjectsSectionOpen(next);
+      return next;
+    });
+  };
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border/60 max-lg:hidden">
@@ -74,6 +91,7 @@ export function AppSidebar() {
       </div>
       <nav className="relative mt-8 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4" aria-label="Main navigation">
         {NAV_ITEMS.map((item) => {
+          const href = item.href === "/entries" ? entriesHref : item.href;
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
 
@@ -90,7 +108,7 @@ export function AppSidebar() {
                 >
                   <button
                     type="button"
-                    onClick={() => setProjectsOpen((value) => !value)}
+                    onClick={handleProjectsToggle}
                     aria-expanded={projectsOpen}
                     aria-label={projectsOpen ? "Collapse projects tree" : "Expand projects tree"}
                     className="shrink-0 rounded p-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -122,7 +140,7 @@ export function AppSidebar() {
           return (
             <a
               key={item.href}
-              href={item.href}
+              href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition-colors",
