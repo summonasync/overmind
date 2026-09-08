@@ -1,6 +1,6 @@
 # Global Agent Context
 
-> Repo layout: this crew lives in `.kimi-code/` (this file, agents, skills). BACKLOG/ stays in repo root (feature tracking). Triple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
+> Repo layout: this crew lives in `.kimi-code/` (this file, agents, skills). BACKLOG/ stays in repo root (feature tracking). Quadruple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
 
 ## Identity
 You are assisting a senior .NET developer who is learning LLM/AI and ML/DL.

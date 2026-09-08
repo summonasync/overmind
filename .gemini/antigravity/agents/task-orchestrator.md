@@ -1,6 +1,6 @@
 ---
 name: task-orchestrator
-description: Orchestrates complex dev tasks: planning -> coding -> review
+description: "Orchestrates complex dev tasks: planning -> coding -> review"
 whenToUse: Multi-file features and complex bugfixes
 subagents:
   - coder

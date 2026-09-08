@@ -1,0 +1,90 @@
+// Crew deterministic enforcement layer for Qwen Code.
+//
+// MERGE BY HAND into ~/.qwen/settings.json. install.ps1 / install.sh deploy this file
+// as a reference copy only — they never write your settings.json (config self-modification
+// is human-only, per QWEN.md «Deterministic Enforcement»).
+//
+// Qwen settings are JSONC, so these comments survive a copy-paste into settings.json.
+// Rule syntax: docs/configuration/settings.md (§permissions). Hooks: docs/features/hooks.md.
+// Decision priority: deny > ask > allow > approval-mode default. First matching rule wins.
+//
+// Verify after merging: /permissions in the interactive CLI, then `qwen --debug` on a probe
+// session. Path specifiers with no prefix mean "relative to current working directory";
+// Read/Edit/WebFetch deny rules are also enforced against equivalent shell commands
+// (`cat .env` is blocked by `Read(.env*)`), so there is no shell bypass to patch.
+{
+  "permissions": {
+    "deny": [
+      // destructive git — unconditional
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git checkout -- *)",
+
+      // never let an agent eat the repository itself
+      "Bash(rm -rf .git*)",
+
+      // secrets never reach the chat (Read is a meta-category: read_file, grep_search, glob, list_directory)
+      "Read(.env*)",
+      "Read(**/.env*)",
+      "Read(**/*secrets*)",
+      "Read(**/*.pfx)",
+      "Read(**/*.key)",
+
+      // config self-modification is human-only
+      "Edit(~/.qwen/settings.json)",
+      "Edit(~/.qwen/settings.jsonc)",
+      "Edit(~/.qwen/hooks/**)",
+      "Edit(~/.qwen/QWEN.md)",
+      "Edit(~/.qwen/agents/**)",
+      "Edit(~/.qwen/skills/**)"
+    ],
+    "ask": [
+      // commits and pushes only on explicit user request in THIS session
+      "Bash(git commit*)",
+      "Bash(git push*)",
+
+      // blanket rm -rf: a deny rule cannot express the crew's node_modules/bin/obj exception,
+      // so the general case is confirmation-gated instead of blocked
+      "Bash(rm -rf*)",
+
+      // dependency changes go through nuget-licensing-guard first
+      "Bash(npm install*)",
+      "Bash(npm i *)",
+      "Bash(dotnet add package*)",
+      "Bash(pnpm add*)",
+      "Bash(yarn add*)",
+
+      // cloud spend is never autonomous. Read-only subcommands (describe/list/get) are gated
+      // too — that asymmetry is deliberate: a wrong `aws` verb costs money, an extra prompt does not.
+      "Bash(gcloud *)",
+      "Bash(az *)",
+      "Bash(aws *)"
+    ]
+  },
+
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "edit|write_file|notebook_edit",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "crew-post-edit-verify",
+            "description": "dotnet build after *.cs edits; npm run lint + tsc --noEmit after frontend edits",
+            // Windows — keep as is.
+            // Linux / macOS / Git Bash — swap to:
+            //   "command": "$HOME/.qwen/hooks/post-edit-verify.sh",
+            //   "shell": "bash"
+            "command": "$HOME\\.qwen\\hooks\\post-edit-verify.ps1",
+            "shell": "powershell",
+            // dotnet build cold start routinely beats the 60 s hook default
+            "timeout": 300000,
+            "statusMessage": "crew: verifying build after edit"
+          }
+        ]
+      }
+    ]
+  }
+}

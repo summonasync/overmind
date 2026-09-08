@@ -1,6 +1,6 @@
 ---
 name: dotnet-code-reviewer
-description: Strict .NET code reviewer: Clean Architecture, style, security
+description: "Strict .NET code reviewer: Clean Architecture, style, security"
 whenToUse: Reviewing C# code or backend PRs
 tools:
   - Read

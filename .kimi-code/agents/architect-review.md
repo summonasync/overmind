@@ -1,7 +1,7 @@
 ---
 name: architect-review
 description: Structural integrity reviewer (light/hard modes, backend + frontend)
-whenToUse: Phase end, big refactor, or task files declaring `review: hard`
+whenToUse: "Phase end, big refactor, or task files declaring `review: hard`"
 tools:
   - Read
   - Grep

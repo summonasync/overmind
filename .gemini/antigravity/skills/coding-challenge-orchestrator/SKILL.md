@@ -62,7 +62,7 @@ For regular project tasks — use `task-orchestrator`. For system-wide audits �
   - lint / format checks **as configured in the challenge repo** (not our project defaults)
   - requirements checklist: every explicit requirement from Phase 0 mapped to where it's implemented
 - **AI-leakage sweep of the deliverable folder** (mandatory, hostile review):
-  - no `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.kimi-code/`, `.kimi/`, `.claude/`, `.gemini/`, `.cursor/`, `.ai/`, `.superpowers/`, agent configs, or skill references anywhere in `coding-challenges/<task-slug>/` — regardless of which runtime ran the challenge
+  - no `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `QWEN.md`, `.kimi-code/`, `.kimi/`, `.claude/`, `.gemini/`, `.qwen/`, `.cursor/`, `.ai/`, `.superpowers/`, agent configs, or skill references anywhere in `coding-challenges/<task-slug>/` — regardless of which runtime ran the challenge
   - no mentions of AI tooling in code comments, README, configs, or git history
   - no AI-perfect README (delegate README to `documentation-writer`, then obfuscate it too — AI-perfect READMEs are a common tell)
   - commit history (if any) looks human: message style, count, no co-author trailers

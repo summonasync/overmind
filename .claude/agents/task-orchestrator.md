@@ -1,6 +1,6 @@
 ---
 name: task-orchestrator
-description: Orchestrates complex dev tasks: planning -> coding -> review. Use when multi-file features and complex bugfixes
+description: "Orchestrates complex dev tasks: planning -> coding -> review. Use when multi-file features and complex bugfixes"
 model: opus
 ---
 

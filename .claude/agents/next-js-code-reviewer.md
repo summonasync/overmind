@@ -1,6 +1,6 @@
 ---
 name: next-js-code-reviewer
-description: Strict Next.js/TS reviewer: FSD, RSC, React Query, BFF compliance. Use when reviewing frontend code or PRs
+description: "Strict Next.js/TS reviewer: FSD, RSC, React Query, BFF compliance. Use when reviewing frontend code or PRs"
 model: sonnet
 tools:
   - Read

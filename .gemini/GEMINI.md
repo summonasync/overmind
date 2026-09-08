@@ -1,6 +1,6 @@
 # Global Agent Context (Google Antigravity)
 
-> Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). BACKLOG/ stays in repo root (feature tracking). Triple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
+> Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). BACKLOG/ stays in repo root (feature tracking). Quadruple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
 
 ## Identity
 You are assisting a senior .NET developer who is learning LLM/AI and ML/DL.

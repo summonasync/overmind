@@ -1,6 +1,6 @@
 ---
 name: dotnet-init
-description: .NET project bootstrapper: scans or initializes Clean Architecture solutions
+description: ".NET project bootstrapper: scans or initializes Clean Architecture solutions"
 whenToUse: Initializing or scanning .NET projects
 ---
 
