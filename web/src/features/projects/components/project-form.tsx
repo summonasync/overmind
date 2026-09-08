@@ -6,19 +6,20 @@ import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { ErrorText } from "@/shared/ui/error-text";
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects/types";
-import { browseFolder } from "@/features/system";
+import { browseFolder } from "@/shared/api/system";
 
 interface ProjectFormProps {
   initial?: ProjectResponse;
+  initialPath?: string;
   pending: boolean;
   error: Error | null;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
 }
 
-export function ProjectForm({ initial, pending, error, onSubmit, onCancel }: ProjectFormProps) {
+export function ProjectForm({ initial, initialPath, pending, error, onSubmit, onCancel }: ProjectFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [diskPath, setDiskPath] = useState(initial?.diskPath ?? "");
+  const [diskPath, setDiskPath] = useState(initial?.diskPath ?? initialPath ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [browsePending, setBrowsePending] = useState(false);
   const [browseError, setBrowseError] = useState<string | null>(null);

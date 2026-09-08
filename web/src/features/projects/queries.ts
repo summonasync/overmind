@@ -1,10 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getProject, listProjects } from "@/features/projects/api";
+import { getTreeRoots, listDirectory } from "@/shared/api/system";
 
 export const projectKeys = {
   all: ["projects"] as const,
   lists: () => [...projectKeys.all, "list"] as const,
   detail: (id: string) => [...projectKeys.all, "detail", id] as const,
+  tree: (path: string) => [...projectKeys.all, "tree", path] as const,
 };
 
 export const projectListQueryOptions = () =>
@@ -18,4 +20,19 @@ export const projectDetailQueryOptions = (id: string) =>
     queryKey: projectKeys.detail(id),
     queryFn: () => getProject(id),
     enabled: id.length > 0,
+  });
+
+export const treeRootsQueryOptions = () =>
+  queryOptions({
+    queryKey: projectKeys.tree("roots"),
+    queryFn: getTreeRoots,
+    staleTime: 60_000,
+  });
+
+export const directoryQueryOptions = (path: string | null) =>
+  queryOptions({
+    queryKey: projectKeys.tree(path ?? "none"),
+    queryFn: () => listDirectory(path as string),
+    enabled: path !== null,
+    staleTime: 60_000,
   });

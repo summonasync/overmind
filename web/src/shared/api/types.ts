@@ -15,3 +15,26 @@ export const AGENT_PLATFORMS: readonly AgentPlatform[] = [
 export interface BrowseFolderResponse {
   path: string;
 }
+
+export interface TreeRoot {
+  name: string;
+  path: string;
+}
+
+export interface TreeRootsResponse {
+  roots: TreeRoot[];
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  accessible: boolean;
+  projectId: string | null;
+  projectName: string | null;
+}
+
+export interface ListDirectoryResponse {
+  path: string;
+  truncated: boolean;
+  entries: DirectoryEntry[];
+}

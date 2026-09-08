@@ -17,7 +17,10 @@ export function useProjectList() {
 export function useProjectMutations() {
   const queryClient = useQueryClient();
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    queryClient.invalidateQueries({ queryKey: [...projectKeys.all, "tree"] });
+  };
 
   const create = useMutation({
     mutationFn: (values: ProjectFormValues) => createProject(values),

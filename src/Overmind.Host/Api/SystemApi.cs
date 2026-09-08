@@ -1,10 +1,13 @@
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using Overmind.Host.Api.Contracts;
+using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Host.Api;
 
 public static class SystemApi
 {
+    private const int MaxDirectoryEntries = 500;
     private static readonly SemaphoreSlim DialogLock = new(1, 1);
     private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(120);
     // MVP measure: spawning a shell dialog per request. The Avalonia tray (task 08) replaces this with a proper picker.
@@ -12,7 +15,121 @@ public static class SystemApi
     {
         var group = routes.MapGroup("/api/system");
         group.MapPost("/browse-folder", BrowseFolder);
+        group.MapGet("/tree-roots", TreeRoots);
+        group.MapGet("/list-directory", ListDirectory);
         return group;
+    }
+
+    private static IResult TreeRoots()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var roots = DriveInfo.GetDrives()
+                .Where(d => d.IsReady)
+                .Select(d => new TreeRootResponse(
+                    string.IsNullOrWhiteSpace(d.VolumeLabel) ? d.Name.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : d.VolumeLabel,
+                    d.RootDirectory.FullName))
+                .ToArray();
+            return Results.Ok(new TreeRootsResponse(roots));
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return Results.Ok(new TreeRootsResponse(new[]
+            {
+                new TreeRootResponse("Home", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+                new TreeRootResponse("/", "/"),
+            }));
+        }
+
+        return Results.StatusCode(StatusCodes.Status501NotImplemented);
+    }
+
+    private static async Task<IResult> ListDirectory(string? path, OvermindDbContext db, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return HttpErrors.BadRequest("Query parameter 'path' is required.");
+        }
+
+        if (!Path.IsPathRooted(path))
+        {
+            return HttpErrors.BadRequest($"'{path}' is not an absolute path.");
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return HttpErrors.BadRequest($"'{path}' is not a valid path: {ex.Message}");
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            return HttpErrors.NotFound($"'{fullPath}' does not exist or is not a directory.");
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var projects = await db.Projects.AsNoTracking().ToListAsync(ct);
+        var projectMap = projects.ToDictionary(
+            p => NormalizePath(p.DiskPath),
+            StringComparer.FromComparison(comparison));
+
+        var normalizedRoot = NormalizePath(fullPath);
+        var entries = new List<DirectoryEntryResponse>();
+        var truncated = false;
+        foreach (var directory in Directory.EnumerateDirectories(fullPath))
+        {
+            try
+            {
+                var attributes = File.GetAttributes(directory);
+                if ((attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                {
+                    continue;
+                }
+
+                var normalized = NormalizePath(directory);
+                projectMap.TryGetValue(normalized, out var project);
+                entries.Add(new DirectoryEntryResponse(
+                    Path.GetFileName(normalized),
+                    normalized,
+                    true,
+                    project?.Id,
+                    project?.Name));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                entries.Add(new DirectoryEntryResponse(
+                    Path.GetFileName(NormalizePath(directory)),
+                    NormalizePath(directory),
+                    false,
+                    null,
+                    null));
+            }
+
+            if (entries.Count >= MaxDirectoryEntries)
+            {
+                truncated = true;
+                break;
+            }
+        }
+
+        var ordered = entries
+            .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Results.Ok(new ListDirectoryResponse(normalizedRoot, truncated, ordered));
+    }
+
+    private static string NormalizePath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var trimmed = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return trimmed.Length <= root.Length ? root : trimmed;
     }
 
     private static async Task<IResult> BrowseFolder()

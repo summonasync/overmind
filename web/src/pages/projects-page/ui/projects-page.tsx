@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -8,6 +9,7 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
 import {
+  ProjectDetail,
   ProjectForm,
   ProjectList,
   useProjectList,
@@ -16,7 +18,10 @@ import {
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects";
 import { ProjectsInfoPanel } from "@/pages/projects-page/ui/projects-info-panel";
 
-export function ProjectsPage() {
+function ProjectsPageContent() {
+  const searchParams = useSearchParams();
+  const detailId = searchParams?.get("project") ?? "";
+
   const { data: projects, loading, error } = useProjectList();
   const { create, update, remove } = useProjectMutations();
 
@@ -25,6 +30,8 @@ export function ProjectsPage() {
   const [deleting, setDeleting] = useState<ProjectResponse | null>(null);
 
   useInfoPanel(<ProjectsInfoPanel />);
+
+  const detail = projects.find((item) => item.id === detailId) ?? null;
 
   const activeError =
     (create.error as Error | null) ??
@@ -35,6 +42,10 @@ export function ProjectsPage() {
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
+  };
+
+  const closeDetail = () => {
+    window.history.replaceState(null, "", "/");
   };
 
   const handleSubmit = (values: ProjectFormValues) => {
@@ -70,6 +81,14 @@ export function ProjectsPage() {
           onDelete={setDeleting}
         />
       )}
+
+      <Modal
+        title={detail ? detail.name : "Project"}
+        open={detail !== null}
+        onClose={closeDetail}
+      >
+        {detail ? <ProjectDetail project={detail} /> : null}
+      </Modal>
 
       <Modal
         title={editing ? "Edit project" : "New project"}
@@ -109,5 +128,13 @@ export function ProjectsPage() {
         ) : null}
       </Modal>
     </div>
+  );
+}
+
+export function ProjectsPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading…" />}>
+      <ProjectsPageContent />
+    </Suspense>
   );
 }

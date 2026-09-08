@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { FileText, Folder, Package, Search, Settings, type LucideIcon } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Folder,
+  Package,
+  Search,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import logoMark from "@/shared/assets/brand/logo-mark.png";
 import kerrigan1 from "@/shared/assets/brand/kerrigan/kerrigan-1.webp";
 import kerrigan2 from "@/shared/assets/brand/kerrigan/kerrigan-2.webp";
@@ -12,6 +21,8 @@ import kerrigan5 from "@/shared/assets/brand/kerrigan/kerrigan-5.webp";
 import kerrigan6 from "@/shared/assets/brand/kerrigan/kerrigan-6.webp";
 import kerrigan7 from "@/shared/assets/brand/kerrigan/kerrigan-7.webp";
 import { cn } from "@/shared/lib/cn";
+import { Modal } from "@/shared/ui/modal";
+import { ProjectForm, ProjectTree, useProjectMutations } from "@/features/projects";
 import { SidebarQuote } from "@/widgets/app-shell/ui/sidebar-quote";
 
 const KERRIGAN_VARIANTS = [kerrigan1, kerrigan2, kerrigan3, kerrigan4, kerrigan5, kerrigan6, kerrigan7];
@@ -33,6 +44,9 @@ const NAV_ITEMS: NavItem[] = [
 export function AppSidebar() {
   const pathname = usePathname() ?? "/";
   const [kerrigan, setKerrigan] = useState<string | null>(null);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [registerPath, setRegisterPath] = useState<string | null>(null);
+  const { create } = useProjectMutations();
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -58,10 +72,53 @@ export function AppSidebar() {
           <p className="text-[10px] uppercase tracking-widest text-muted">One context. Many minds.</p>
         </div>
       </div>
-      <nav className="relative mt-8 flex flex-col gap-1 px-3" aria-label="Main navigation">
+      <nav className="relative mt-8 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4" aria-label="Main navigation">
         {NAV_ITEMS.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
+
+          if (item.href === "/") {
+            return (
+              <div key={item.href}>
+                <div
+                  className={cn(
+                    "flex items-center gap-0.5 rounded-md border-l-2 pr-1 transition-colors",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setProjectsOpen((value) => !value)}
+                    aria-expanded={projectsOpen}
+                    aria-label={projectsOpen ? "Collapse projects tree" : "Expand projects tree"}
+                    className="shrink-0 rounded p-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    {projectsOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                  </button>
+                  <a
+                    href="/"
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center gap-1.5 rounded py-2 text-sm font-medium transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      active ? "text-primary" : "hover:text-foreground",
+                    )}
+                  >
+                    <Icon size={16} aria-hidden />
+                    {item.label}
+                  </a>
+                </div>
+                {projectsOpen ? (
+                  <div className="mt-1 max-h-[50vh] overflow-y-auto">
+                    <ProjectTree onRegister={setRegisterPath} />
+                  </div>
+                ) : null}
+              </div>
+            );
+          }
+
           return (
             <a
               key={item.href}
@@ -84,6 +141,22 @@ export function AppSidebar() {
       <div className="relative mt-auto px-4 pb-5">
         <SidebarQuote />
       </div>
+
+      <Modal
+        title="Register project"
+        open={registerPath !== null}
+        onClose={() => setRegisterPath(null)}
+      >
+        {registerPath !== null ? (
+          <ProjectForm
+            initialPath={registerPath}
+            pending={create.isPending}
+            error={(create.error as Error | null) ?? null}
+            onSubmit={(values) => create.mutate(values, { onSuccess: () => setRegisterPath(null) })}
+            onCancel={() => setRegisterPath(null)}
+          />
+        ) : null}
+      </Modal>
     </aside>
   );
 }
