@@ -1,8 +1,9 @@
 ---
 feature: 006
 slug: planning
-status: draft
+status: validated
 created: 2026-09-08
+validated: 2026-09-08 — user approved ("спека аппрувед"); frozen snapshot, changes require re-validation
 ---
 
 # Spec 006 — Planning (DRAFT, awaiting user validation)

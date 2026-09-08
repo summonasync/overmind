@@ -1,7 +1,7 @@
 ---
 feature: 006
 slug: planning
-status: draft
+status: ready
 version: 1
 created: 2026-09-08
 ---
