@@ -16,7 +16,7 @@ The development ceremony — feature → spec → plan → task → result — b
 - Full hierarchy per project: PlanningFeature → PlanningArtifact (Spec / Plan / Task / Result) with markdown+XML bodies and versioned content.
 - Task statuses as an enum (todo / in_progress / review / done / blocked); explicit numeric task order within a feature.
 - Spec/Plan lifecycle: draft → validated (frozen); editing a validated artifact requires a dated change note and resets it to draft.
-- Per-project `requireHumanValidation` gate: when on, only the UI (human) can validate spec/plan; agents get a clear STOP signal through MCP.
+- Validation gate, two-level: global default (off) + per-project override (unset = use global / on / off). When effective-on, only the UI (human) can validate spec/plan; agents get a clear STOP signal through MCP.
 - MCP: planning resources (feature board, full feature, current task) and tools (create feature, upsert artifact, set status, validate, append log).
 - Materialization per project: `off` (default) / `on` (repo `BACKLOG/` with drift guards) / `archive` (`~/.overmind/`, free rewrite), plus a global default strategy in Settings that projects inherit.
 - UI: full ceremony editor — feature board, spec/plan markdown editors with Approve, task board with status moves and log timeline, project workflow settings.

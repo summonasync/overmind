@@ -25,7 +25,7 @@ Agents run the full development ceremony inside Overmind: features, specs, plans
 
 - Flow: feature (draft) → spec (draft) → validate → plan → validate → tasks → statuses → result.
 - Editing a validated artifact is allowed but requires a dated change note in `<log>` and resets status to `draft` (re-validation). The model checks the note exists.
-- Per-project `requireHumanValidation` (default **on** for new projects): when on, `planning_validate` via MCP returns 409 — only the UI Approve button validates. When off, agents self-validate.
+- Validation gate is two-level: global `requireHumanValidationDefault: on | off` in Settings (default **off**) + per-project `requireHumanValidation: unset | on | off` (default `unset` = use global; `on`/`off` force and ignore the global). When the effective value is on, `planning_validate` via MCP returns 409 — only the UI Approve button validates. When off, agents self-validate.
 - MCP resources tell the agent when to stop: `current` returns an explicit "STOP: spec awaits human validation" state instead of a task when a gate is unmet.
 
 ### MCP surface (approved 2026-09-08)
@@ -49,7 +49,7 @@ Tools (write): `planning_create_feature`, `planning_upsert_artifact` (create or 
 - New **Planning** sidebar section. Feature board: status, task progress (n/m done), spec/plan validated chips.
 - Feature page: tabs Spec / Plan / Tasks / Result. Spec/Plan: markdown editor (xl modal + Write/Preview from Entries, XML-section highlight) with Approve button when the gate is on.
 - Tasks: light kanban by status; card opens the large body editor + `<log>` timeline; status moves via buttons (no drag in v1).
-- Project settings: `planningMaterialization` (inherit/off/on/archive) + `requireHumanValidation` toggles. Global default strategy on the Settings page.
+- Project settings: `planningMaterialization` (inherit/off/on/archive) + `requireHumanValidation` (unset/on/off). Global defaults for both on the Settings page.
 
 ### Migration (approved 2026-09-08)
 
