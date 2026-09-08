@@ -129,7 +129,7 @@ export function AppSidebar() {
                   </a>
                 </div>
                 {projectsOpen ? (
-                  <div className="mt-1 max-h-[50vh] overflow-y-auto">
+                  <div className="mt-1 max-h-[50vh] overflow-y-auto rounded-md bg-black/45 p-1 backdrop-blur-sm">
                     <ProjectTree onRegister={setRegisterPath} />
                   </div>
                 ) : null}
