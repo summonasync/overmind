@@ -52,8 +52,13 @@ public sealed class OvermindApiClient
         _http = http;
     }
 
+    // Loopback is the security boundary: a system proxy would carry Host traffic off-machine.
     public static HttpClient CreateHttpClient(string baseUrl) =>
-        new() { BaseAddress = new Uri(baseUrl), Timeout = Timeout };
+        new(new SocketsHttpHandler { UseProxy = false })
+        {
+            BaseAddress = new Uri(baseUrl),
+            Timeout = Timeout
+        };
 
     public static async Task CheckHealthAsync(HttpClient http, CancellationToken ct)
     {
