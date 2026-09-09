@@ -4,9 +4,10 @@ slug: planning
 status: validated
 created: 2026-09-08
 validated: 2026-09-08 — user approved ("спека аппрувед"); frozen snapshot, changes require re-validation
+amended: 2026-09-08 — (1) PlanningFeature gains Body, (2) PlanningArtifact gains Review, (3) agent write surface split to /api/agent/planning/*; all three approved by the user during plan drafting = re-validation
 ---
 
-# Spec 006 — Planning (DRAFT, awaiting user validation)
+# Spec 006 — Planning (VALIDATED 2026-09-08, amended 2026-09-08)
 
 ## Goal
 
@@ -16,8 +17,8 @@ Agents run the full development ceremony inside Overmind: features, specs, plans
 
 ### Data model (approved 2026-09-08)
 
-- `PlanningFeature { Id, ProjectId, Slug, Title, Status, Version, CreatedAt }` — status: `draft / ready / in_progress / done`; `Version` bumps on edits after `ready`.
-- `PlanningArtifact { Id, FeatureId, Kind, Status, Body, Order, FrozenAt?, UpdatedAt, Version }` — one table for `Spec / Plan / Task / Result`. `Body` is markdown with XML sections (`<goal>`, `<scope>`, `<anti-scope>`, `<constraints>`, `<acceptance-criteria>`, `<refs>`, `<obstacles>`, `<log>`) — the same grammar our agents already parse.
+- `PlanningFeature { Id, ProjectId, Slug, Title, Body, Status, Version, CreatedAt }` — status: `draft / ready / in_progress / done`; `Version` bumps on edits after `ready`. `Body` (amended 2026-09-08) is the markdown+XML feature document (`<goal>`, `<requirements>`, `<non-goals>`) — it is what `feature.md` materializes from and what the importer writes into.
+- `PlanningArtifact { Id, FeatureId, Kind, Status, Review, Body, Order, FrozenAt?, UpdatedAt, Version }` — one table for `Spec / Plan / Task / Result`. `Body` is markdown with XML sections (`<goal>`, `<scope>`, `<anti-scope>`, `<constraints>`, `<acceptance-criteria>`, `<refs>`, `<obstacles>`, `<log>`) — the same grammar our agents already parse. `Review` (amended 2026-09-08) is the task review level (`light / hard`, default `light`) carried in task frontmatter so import and re-materialization stay lossless.
 - Task status enum: `todo / in_progress / review / done / blocked`. Spec/Plan: `draft / validated` (+ `FrozenAt`). `Order` — explicit numeric order of tasks within a feature (replaces the NN filename prefix).
 - Body versioning reuses the Entries version-history mechanics.
 - Exactly two model-level invariants: status enums and the frozen flag. Everything else is markdown convention.
@@ -27,6 +28,7 @@ Agents run the full development ceremony inside Overmind: features, specs, plans
 - Flow: feature (draft) → spec (draft) → validate → plan → validate → tasks → statuses → result.
 - Editing a validated artifact is allowed but requires a dated change note in `<log>` and resets status to `draft` (re-validation). The model checks the note exists.
 - Validation gate is two-level: global `requireHumanValidationDefault: on | off` in Settings (default **off**) + per-project `requireHumanValidation: unset | on | off` (default `unset` = use global; `on`/`off` force and ignore the global). When the effective value is on, `planning_validate` via MCP returns 409 — only the UI Approve button validates. When off, agents self-validate.
+- Two HTTP surfaces, one code path (amended 2026-09-08): the human/UI door is `/api/planning/*`, the agent door is `/api/agent/planning/*`. The agent door is the only surface the MCP adapter calls and the only one that enforces the validation gate; both doors run the same handlers and the same Core domain methods, so R2 ("one service path") holds by construction rather than by convention.
 - MCP resources tell the agent when to stop: `current` returns an explicit "STOP: spec awaits human validation" state instead of a task when a gate is unmet.
 
 ### MCP surface (approved 2026-09-08)

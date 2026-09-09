@@ -1,0 +1,112 @@
+---
+feature: 006
+task: 05
+slug: planning-materialization
+status: todo
+review: hard
+created: 2026-09-08
+---
+
+# 006/05 — Planning materialization (off / on / archive)
+
+<goal>
+Planning artifacts can be written to disk per project: `on` writes a repo `BACKLOG/<slug>/` folder plus a managed block in the repo's `BACKLOG.md` with drift guards, `archive` writes the same markdown under the Overmind data directory with free rewrites, `off` deletes what was tracked. Drift is detectable and re-materialization is an explicit user action.
+</goal>
+
+<context>
+This writes into **real user repositories**, so the safety model matters more than the feature. The existing skill materializer is the template: `src/Overmind.Infrastructure/Materialization/SkillMaterializer.cs` (plan → transaction → write → track rows → rollback with best-effort cleanup), `PathGuard.cs` (`ResolveUnderRoot` traversal defense, `PathsEqual`, `PathComparer` — `internal` to Infrastructure, reuse it), `MaterializedFile.cs`, and `MaterializationException` (`Overwrite`, `Traversal`, `IoFailure`, `MissingProject`, …).
+
+Task 01 defined `IPlanningMaterializer` (`SyncAsync` / `DetectDriftAsync` / `ClearAsync`), `PlanningMaterializedFile`, `PlanningDriftItem`, `PlanningMaterializationReport`. Task 03 defined `PlanningPolicy.ResolveMaterializationAsync`.
+
+Archive root convention: Infrastructure must not hardcode `~/.overmind` (that duplication is already recorded debt). `Host/DependencyInjection` passes `OvermindPaths.DataDirectory` into the materializer constructor.
+
+Frontmatter/`<log>` grammar: bodies already carry their XML sections; materialization only adds frontmatter and headings around them.
+</context>
+
+<scope>
+**Shared primitives first (plan amendment A3).** Task 05's acceptance is that the written layout round-trips through the importer byte-for-byte, so hashing, slugifying and directory pruning must exist exactly once:
+- `src/Overmind.Infrastructure/Materialization/ContentHash.cs` (internal static) — normalize CRLF/CR → LF, UTF-8 no BOM, SHA-256 hex; one `Normalize(content)` + one `Sha256(content)` used by both materializers.
+- `src/Overmind.Infrastructure/Materialization/Slug.cs` (internal static) — the single slugify (lowercase letters/digits, runs of anything else → single dash, no leading/trailing dash, fallback when empty).
+- `src/Overmind.Infrastructure/Materialization/DirectoryPruner.cs` (internal static) — `PruneEmptyDirectories(filePath, root)` + `TryDelete(path)`.
+- Refactor `SkillMaterializer` onto these three, behavior-identically: its private `Slugify`, `PruneEmptyDirectories`, `TryDelete`, `Utf8NoBom` and the normalize+hash inside `FilePlan.Create` all move. `MaterializationTests` is the safety net — it must pass unchanged; if a test has to change, the behavior changed, which is not allowed here.
+- `src/Overmind.Infrastructure/Planning/BacklogNaming.cs` (internal static) — the single home of the `feature:`/`slug:` frontmatter split rule and of task file naming (`NN-<slug>.md`, `NN` = zero-padded order). Task 06's importer consumes this same type.
+
+**The materializer.** `src/Overmind.Infrastructure/Planning/PlanningMaterializer.cs` — `IPlanningMaterializer`, constructor `(OvermindDbContext db, PlanningPolicy policy, string dataDirectory)`:
+
+Layout, identical for `on` and `archive`:
+- `BACKLOG/<feature-slug>/feature.md` — frontmatter (`feature`, `slug`, `status`, `version`, `created`) + `# Feature <slug> — <title>` + `Body`.
+- `BACKLOG/<feature-slug>/spec.md`, `plan.md` — frontmatter (`feature`, `slug`, `status`, `created`, plus `validated: <yyyy-MM-dd>` when `FrozenAt` is set) + body.
+- `BACKLOG/<feature-slug>/tasks/NN-<task-slug>.md` — `NN` = `Order` zero-padded to 2; `<task-slug>` = slugified first `# ` heading of the body, fallback `task-NN`; frontmatter (`feature`, `task: <Order>`, `slug`, `status`, `review`, `created`) + body.
+- `result.md` when a Result artifact exists.
+- Frontmatter split rule: if the text before the first `-` of the feature slug is all digits → `feature: 006` + `slug: planning`; otherwise both fields get the full slug.
+- Only artifacts that exist are written; a feature with no spec writes no `spec.md`.
+
+Roots: `on` → `project.DiskPath`; `archive` → `<dataDirectory>/projects/<project-slug>/backlog` where `<project-slug>` is the slugified project name (fallback: project id). All paths go through `PathGuard.ResolveUnderRoot`.
+
+Managed block in `BACKLOG.md` (`src/Overmind.Infrastructure/Planning/ManagedBlock.cs`):
+- Markers `<!-- overmind:planning:start -->` / `<!-- overmind:planning:end -->`.
+- Block content: one line per feature — `- \`[x]\` <slug> → \`BACKLOG/<slug>/\` — <title>` with the status marker mapped from `PlanningFeatureStatus` (`Draft`/`Ready` → `[ ]`, `InProgress` → `[~]`, `Done` → `[x]`).
+- File exists with markers → replace only the text between them, byte-for-byte preserving everything outside. File exists without markers → append a blank line + the block. File missing → create it with `# BACKLOG\n\n` + the block.
+- The tracked `PlanningMaterializedFile` row for `BACKLOG.md` stores the SHA-256 of **the block content only**, so human edits outside the markers never register as drift.
+
+Write semantics:
+- Normalized content (CRLF/CR → LF), UTF-8 without BOM, SHA-256 over the normalized bytes — same as `SkillMaterializer`.
+- `on`: a target path that exists on disk but is not tracked for this project → `MaterializationException.Overwrite` (surfaces as 409). Tracked paths are rewritten freely. Writes plus row updates run in one DB transaction with best-effort cleanup of already-written files on failure.
+- `archive`: free rewrite, no overwrite guard (internal cache), rows still tracked.
+- `off`: `ClearAsync` deletes tracked files, prunes now-empty directories up to the root, removes the managed block from `BACKLOG.md` when it was written by us, and drops the rows.
+- `DetectDriftAsync`: `on` only (empty list otherwise) — `Missing` when a tracked file is gone, `Modified` when the on-disk hash differs (for `BACKLOG.md`, compare the extracted block hash).
+- `SyncAsync` resolves the strategy first and delegates: `Off` → `ClearAsync` behavior; strategy change from a previous one → clear the old root, then write the new.
+
+Host wiring:
+- Replace the `NullPlanningMaterializer` registration from task 02 with the real `PlanningMaterializer` (scoped), the data directory captured from `OvermindPaths.DataDirectory`, and delete the placeholder type. **Do not add `SyncAsync` calls to handlers**: since plan amendment A1 the services (`PlanningFeatureService`, `PlanningArtifactService`) already call `SyncAsync(projectId, force: false)` after every mutation and swallow-and-log `MaterializationException`, so a disk problem can never fail a DB write. This task only makes that call do real work — verify the wiring by test, do not restructure it.
+- Surfacing swallowed failures: the report's `Warnings` channel (task 01b) is how "synced, but refused to overwrite N foreign file(s)" reaches the caller; the explicit `materialize` endpoint returns it, the background sync logs it.
+- `POST /api/projects/{projectId:guid}/planning/materialize` with body `{ force: bool }` → explicit re-sync; `force: false` returns 409 on untracked foreign files, `force: true` overwrites them and refreshes the hashes. Response: `PlanningMaterializationReport` mapped to `{ projectId, strategy, files: [{ relativePath, sha256 }] }`.
+- `GET /api/projects/{projectId:guid}/planning/drift` → `[{ projectid, featureSlug, relativePath, kind }]` (camelCase).
+- `ProjectsApi.Update`: extend the DiskPath-immutability guard to also count `PlanningMaterializedFile` rows (same hazard as the existing kit guard — relative paths resolve under `DiskPath`).
+
+Tests:
+- `tests/Overmind.Infrastructure.Tests/PlanningMaterializerTests.cs` (temp dirs + temp DB): `on` writes the full layout with correct NN naming and frontmatter; foreign content outside the managed block survives byte-for-byte across re-syncs; block appended when markers are absent; block created with the file when `BACKLOG.md` is missing; `BACKLOG.md` drift is block-scoped (edit outside the block → no drift, edit inside → `Modified`); untracked existing file → `Overwrite`; tracked file deleted on disk → `Missing`; `archive` writes under the data directory and rewrites freely; `off` clears files, prunes empty dirs, removes the block and drops rows; strategy switch `on → archive` clears the repo copy; path traversal in a slug/heading is rejected.
+- `tests/Overmind.Api.Tests/PlanningMaterializationTests.cs`: `materialize` with and without `force`; `drift` shape; DiskPath change → 409 while planning files are tracked; a normal artifact write in `on` mode produces the updated file on disk.
+</scope>
+
+<anti-scope>
+- No git operations of any kind (no add/commit/status) — we only write files.
+- No importer (task 06); no MCP or web changes (drift UI is task 09).
+- No two-way sync: disk is a derived cache, edits on disk are never read back into the DB.
+- No materialization of Entries/kits changes; `SkillMaterializer` is untouched.
+</anti-scope>
+
+<constraints>
+- `dotnet build && dotnet test` fully green.
+- No new packages. English only. No comments unless non-obvious.
+- Every resolved path goes through `PathGuard.ResolveUnderRoot`.
+- `PlanningMaterializer` keeps exactly the three interface methods public; helpers are private or in `ManagedBlock`.
+- Never write outside the resolved root; never delete a file that has no tracked row.
+- No git commits — report the changed-file list.
+</constraints>
+
+<acceptance-criteria>
+- [ ] `on` mode layout matches the file-based convention the importer reads (feature/spec/plan/tasks/NN-slug.md).
+- [ ] Human edits outside the managed block in `BACKLOG.md` are preserved byte-for-byte and never reported as drift.
+- [ ] Untracked existing files block the write (409) unless `force` is passed.
+- [ ] `archive` writes under the Host-provided data directory; Infrastructure contains no `~/.overmind` literal.
+- [ ] `off` / strategy switch removes tracked files, prunes empty directories and drops rows.
+- [ ] DiskPath change is rejected with 409 while planning files are tracked.
+- [ ] A failed sync never rolls back or loses the DB write.
+</acceptance-criteria>
+
+<refs>
+- @../spec.md — "Materialization" (off/on/archive, drift guards, managed block)
+- @../plan.md — Task 05 + Risks (managed block, DiskPath retargeting)
+- src/Overmind.Infrastructure/Materialization/{SkillMaterializer,PathGuard,MaterializedFile}.cs
+- src/Overmind.Core/Abstractions/MaterializationException.cs, DriftItem.cs
+- TECHNICAL-SOLUTIONS.md — "Project DiskPath is immutable while a kit is active"
+- @./01-domain-persistence.md, @./03-planning-workflow.md
+</refs>
+
+<obstacles>
+</obstacles>
+
+<log>
+2026-09-08 — task created from the validated plan.
+</log>
