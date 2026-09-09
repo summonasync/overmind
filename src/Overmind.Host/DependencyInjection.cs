@@ -7,6 +7,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
 using Overmind.Infrastructure.VectorSearch;
 using System.Text.Json;
@@ -38,12 +39,22 @@ public static class DependencyInjection
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddScoped<IMaterializer, SkillMaterializer>();
 
+        services.AddScoped<PlanningFeatureService>();
+        services.AddScoped<PlanningArtifactService>();
+        services.AddScoped<IPlanningMaterializer, NullPlanningMaterializer>();
+
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();
         services.AddSingleton<IValidator<CreateEntryRequest>, CreateEntryRequestValidator>();
         services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();
         services.AddSingleton<IValidator<UpdateKitRequest>, UpdateKitRequestValidator>();
+        services.AddSingleton<IValidator<CreatePlanningFeatureRequest>, CreatePlanningFeatureRequestValidator>();
+        services.AddSingleton<IValidator<UpdatePlanningFeatureRequest>, UpdatePlanningFeatureRequestValidator>();
+        services.AddSingleton<IValidator<CreatePlanningArtifactRequest>, CreatePlanningArtifactRequestValidator>();
+        services.AddSingleton<IValidator<UpdatePlanningArtifactRequest>, UpdatePlanningArtifactRequestValidator>();
+        services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
+        services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));

@@ -128,6 +128,8 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
     app.MapHealthApi();
     app.MapSystemApi();
     app.MapTreeRootsApi();
+    app.MapPlanningFeaturesApi();
+    app.MapPlanningArtifactsApi();
 
     await using (var scope = app.Services.CreateAsyncScope())
     {

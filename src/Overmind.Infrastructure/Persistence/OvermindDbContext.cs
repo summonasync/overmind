@@ -22,6 +22,10 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<ProjectKit> ProjectKits => Set<ProjectKit>();
     public DbSet<MaterializedFile> MaterializedFiles => Set<MaterializedFile>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+    public DbSet<PlanningFeature> PlanningFeatures => Set<PlanningFeature>();
+    public DbSet<PlanningArtifact> PlanningArtifacts => Set<PlanningArtifact>();
+    public DbSet<PlanningArtifactVersion> PlanningArtifactVersions => Set<PlanningArtifactVersion>();
+    public DbSet<PlanningMaterializedFile> PlanningMaterializedFiles => Set<PlanningMaterializedFile>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -129,6 +133,55 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(m => m.ProjectId);
+        });
+
+        modelBuilder.Entity<PlanningFeature>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(f => f.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasMany(f => f.Artifacts)
+                .WithOne()
+                .HasForeignKey(a => a.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(f => new { f.ProjectId, f.Slug }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlanningArtifact>(builder =>
+        {
+            builder.HasMany(a => a.Versions)
+                .WithOne()
+                .HasForeignKey(v => v.ArtifactId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(a => new { a.FeatureId, a.Kind, a.Order }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlanningArtifactVersion>(builder =>
+        {
+            builder.Property(v => v.Id).ValueGeneratedNever();
+
+            builder.HasIndex(v => new { v.ArtifactId, v.Version }).IsUnique();
+        });
+
+        // PlanningMaterializedFile has multiple cascade paths (Project direct, Project -> PlanningFeature -> row,
+        // and a nullable FeatureId). SQLite accepts this; SQL Server would reject without Restrict.
+        modelBuilder.Entity<PlanningMaterializedFile>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(m => m.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne<PlanningFeature>()
+                .WithMany()
+                .HasForeignKey(m => m.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(m => new { m.ProjectId, m.RelativePath }).IsUnique();
         });
     }
 }

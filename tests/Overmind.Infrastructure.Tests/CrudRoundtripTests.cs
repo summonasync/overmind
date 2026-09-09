@@ -209,4 +209,296 @@ public class CrudRoundtripTests
         names.ShouldContain("trg_entry_fts_delete");
         names.Count.ShouldBe(4);
     }
+
+    [Fact]
+    public async Task Planning_FeatureArtifactsVersions_Roundtrip()
+    {
+        using var db = new TempDatabase();
+        Guid projectId, featureId;
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = Project.Create("planning-proj", "/p/planning");
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            projectId = project.Id;
+
+            var feature = PlanningFeature.Create(projectId, "001-auth", "Auth flow", "spec body");
+            ctx.PlanningFeatures.Add(feature);
+            await ctx.SaveChangesAsync();
+            featureId = feature.Id;
+
+            var spec = PlanningArtifact.Create(featureId, PlanningArtifactKind.Spec, "spec content");
+            spec.Validate();
+            ctx.PlanningArtifacts.Add(spec);
+
+            var task = PlanningArtifact.Create(featureId, PlanningArtifactKind.Task, "task content", order: 1);
+            ctx.PlanningArtifacts.Add(task);
+            await ctx.SaveChangesAsync();
+
+            spec.UpdateBody("updated spec", "refined after review");
+            await ctx.SaveChangesAsync();
+        }
+
+        using var verify = db.CreateContext();
+        var loadedFeature = await verify.PlanningFeatures
+            .Include(f => f.Artifacts)
+            .ThenInclude(a => a.Versions)
+            .SingleAsync(f => f.Id == featureId);
+
+        loadedFeature.Slug.ShouldBe("001-auth");
+        loadedFeature.ProjectId.ShouldBe(projectId);
+        loadedFeature.Artifacts.Count.ShouldBe(2);
+
+        var loadedSpec = loadedFeature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Spec);
+        loadedSpec.Versions.Count.ShouldBe(1);
+        loadedSpec.Versions[0].Body.ShouldBe("spec content");
+        loadedSpec.Version.ShouldBe(2);
+        loadedSpec.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        loadedSpec.Body.ShouldContain("refined after review");
+
+        var loadedTask = loadedFeature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        loadedTask.Status.ShouldBe(PlanningArtifactStatus.Todo);
+        loadedTask.Order.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Planning_CascadeDelete_FromProject()
+    {
+        using var db = new TempDatabase();
+        Guid projectId;
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = Project.Create("cascade-proj", "/p/cascade");
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            projectId = project.Id;
+
+            var feature = PlanningFeature.Create(projectId, "feat", "Feature", "body");
+            ctx.PlanningFeatures.Add(feature);
+            await ctx.SaveChangesAsync();
+
+            var artifact = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Spec, "spec");
+            ctx.PlanningArtifacts.Add(artifact);
+            await ctx.SaveChangesAsync();
+
+            artifact.Validate();
+            artifact.UpdateBody("new spec", "change reason");
+            await ctx.SaveChangesAsync();
+
+            var matFile = PlanningMaterializedFile.Create(projectId, feature.Id, "spec.md", "abc123");
+            ctx.PlanningMaterializedFiles.Add(matFile);
+            await ctx.SaveChangesAsync();
+        }
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = await ctx.Projects.SingleAsync(p => p.Id == projectId);
+            ctx.Projects.Remove(project);
+            await ctx.SaveChangesAsync();
+        }
+
+        using var verify = db.CreateContext();
+        (await verify.PlanningFeatures.CountAsync()).ShouldBe(0);
+        (await verify.PlanningArtifacts.CountAsync()).ShouldBe(0);
+        (await verify.PlanningArtifactVersions.CountAsync()).ShouldBe(0);
+        (await verify.PlanningMaterializedFiles.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Planning_CascadeDelete_FromFeature()
+    {
+        using var db = new TempDatabase();
+        Guid projectId, featureId;
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = Project.Create("feat-cascade", "/p/feat-cascade");
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            projectId = project.Id;
+
+            var feature = PlanningFeature.Create(projectId, "feat", "Feature", "body");
+            ctx.PlanningFeatures.Add(feature);
+            await ctx.SaveChangesAsync();
+            featureId = feature.Id;
+
+            var artifact = PlanningArtifact.Create(featureId, PlanningArtifactKind.Task, "task");
+            ctx.PlanningArtifacts.Add(artifact);
+
+            var matFile = PlanningMaterializedFile.Create(projectId, featureId, "task.md", "def456");
+            ctx.PlanningMaterializedFiles.Add(matFile);
+            await ctx.SaveChangesAsync();
+        }
+
+        using (var ctx = db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures.SingleAsync(f => f.Id == featureId);
+            ctx.PlanningFeatures.Remove(feature);
+            await ctx.SaveChangesAsync();
+        }
+
+        using var verify = db.CreateContext();
+        (await verify.PlanningArtifacts.CountAsync()).ShouldBe(0);
+        (await verify.PlanningMaterializedFiles.CountAsync()).ShouldBe(0);
+        (await verify.PlanningFeatures.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Planning_UniqueProjectSlug_Throws()
+    {
+        using var db = new TempDatabase();
+
+        using var ctx = db.CreateContext();
+        var project = Project.Create("unique-slug", "/p/unique");
+        ctx.Projects.Add(project);
+        await ctx.SaveChangesAsync();
+
+        ctx.PlanningFeatures.Add(PlanningFeature.Create(project.Id, "same-slug", "First", "body"));
+        await ctx.SaveChangesAsync();
+
+        ctx.PlanningFeatures.Add(PlanningFeature.Create(project.Id, "same-slug", "Second", "body"));
+
+        await Should.ThrowAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task Planning_UniqueFeatureKindOrder_Throws()
+    {
+        using var db = new TempDatabase();
+
+        using var ctx = db.CreateContext();
+        var project = Project.Create("unique-order", "/p/order");
+        ctx.Projects.Add(project);
+        await ctx.SaveChangesAsync();
+
+        var feature = PlanningFeature.Create(project.Id, "feat", "Feature", "body");
+        ctx.PlanningFeatures.Add(feature);
+        await ctx.SaveChangesAsync();
+
+        ctx.PlanningArtifacts.Add(PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "first", order: 0));
+        await ctx.SaveChangesAsync();
+
+        ctx.PlanningArtifacts.Add(PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "duplicate", order: 0));
+
+        await Should.ThrowAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task Planning_SetPlanningWorkflow_PersistsBothValues()
+    {
+        using var db = new TempDatabase();
+        Guid projectId;
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = Project.Create("workflow", "/p/workflow");
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            projectId = project.Id;
+
+            project.SetPlanningWorkflow(PlanningMaterialization.On, HumanValidationOverride.On);
+            await ctx.SaveChangesAsync();
+        }
+
+        using var verify = db.CreateContext();
+        var loaded = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        loaded.PlanningMaterialization.ShouldBe(PlanningMaterialization.On);
+        loaded.RequireHumanValidation.ShouldBe(HumanValidationOverride.On);
+    }
+
+    [Fact]
+    public async Task Planning_ProjectScopedMaterializedFile_RoundtripsAndSurvivesFeatureDelete()
+    {
+        using var db = new TempDatabase();
+        Guid projectId, featureId;
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = Project.Create("proj-scoped", "/p/proj-scoped");
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            projectId = project.Id;
+
+            var feature = PlanningFeature.Create(projectId, "feat", "Feature", "body");
+            ctx.PlanningFeatures.Add(feature);
+            await ctx.SaveChangesAsync();
+            featureId = feature.Id;
+
+            var backlogIndex = PlanningMaterializedFile.Create(projectId, null, "BACKLOG.md", "sha-backlog");
+            var featureFile = PlanningMaterializedFile.Create(projectId, featureId, "spec.md", "sha-spec");
+            ctx.PlanningMaterializedFiles.Add(backlogIndex);
+            ctx.PlanningMaterializedFiles.Add(featureFile);
+            await ctx.SaveChangesAsync();
+        }
+
+        using (var ctx = db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures.SingleAsync(f => f.Id == featureId);
+            ctx.PlanningFeatures.Remove(feature);
+            await ctx.SaveChangesAsync();
+        }
+
+        using var verify = db.CreateContext();
+        var remaining = await verify.PlanningMaterializedFiles.ToListAsync();
+        remaining.Count.ShouldBe(1);
+        remaining[0].RelativePath.ShouldBe("BACKLOG.md");
+        remaining[0].FeatureId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Planning_UniqueArtifactVersion_Throws()
+    {
+        using var db = new TempDatabase();
+        Guid artifactId;
+
+        using (var ctx = db.CreateContext())
+        {
+            var project = Project.Create("unique-ver", "/p/unique-ver");
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+
+            var feature = PlanningFeature.Create(project.Id, "feat", "Feature", "body");
+            ctx.PlanningFeatures.Add(feature);
+            await ctx.SaveChangesAsync();
+
+            var artifact = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "v1");
+            ctx.PlanningArtifacts.Add(artifact);
+            await ctx.SaveChangesAsync();
+
+            artifact.UpdateBody("v2");
+            await ctx.SaveChangesAsync();
+            artifactId = artifact.Id;
+        }
+
+        using var ctx2 = db.CreateContext();
+        var duplicateId = Guid.NewGuid();
+        var now = DateTime.UtcNow.ToString("o");
+
+        await Should.ThrowAsync<Microsoft.Data.Sqlite.SqliteException>(async () =>
+            await ctx2.Database.ExecuteSqlRawAsync(
+                "INSERT INTO PlanningArtifactVersions (Id, ArtifactId, Version, Body, CreatedAt) VALUES ({0}, {1}, 1, 'duplicate', {2})",
+                duplicateId, artifactId, now));
+    }
+
+    [Fact]
+    public async Task Planning_UniqueProjectRelativePath_Throws()
+    {
+        using var db = new TempDatabase();
+
+        using var ctx = db.CreateContext();
+        var project = Project.Create("unique-path", "/p/unique-path");
+        ctx.Projects.Add(project);
+        await ctx.SaveChangesAsync();
+
+        ctx.PlanningMaterializedFiles.Add(
+            PlanningMaterializedFile.Create(project.Id, null, "BACKLOG.md", "sha-first"));
+        await ctx.SaveChangesAsync();
+
+        ctx.PlanningMaterializedFiles.Add(
+            PlanningMaterializedFile.Create(project.Id, null, "BACKLOG.md", "sha-second"));
+
+        await Should.ThrowAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+    }
 }

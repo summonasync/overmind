@@ -109,6 +109,151 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("EntryVersions");
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FeatureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FrozenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Review")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeatureId", "Kind", "Order")
+                        .IsUnique();
+
+                    b.ToTable("PlanningArtifacts");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningArtifactVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ArtifactId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtifactId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("PlanningArtifactVersions");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningFeature", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("PlanningFeatures");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningMaterializedFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("FeatureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("MaterializedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeatureId");
+
+                    b.HasIndex("ProjectId", "RelativePath")
+                        .IsUnique();
+
+                    b.ToTable("PlanningMaterializedFiles");
+                });
+
             modelBuilder.Entity("Overmind.Core.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -129,6 +274,12 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("PlanningMaterialization")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RequireHumanValidation")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -307,6 +458,47 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningArtifact", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningFeature", null)
+                        .WithMany("Artifacts")
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningArtifactVersion", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningArtifact", null)
+                        .WithMany("Versions")
+                        .HasForeignKey("ArtifactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningFeature", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningMaterializedFile", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningFeature", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Overmind.Core.ProjectKit", b =>
                 {
                     b.HasOne("Overmind.Core.SkillKit", null)
@@ -372,6 +564,16 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("SkillFiles");
 
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningArtifact", b =>
+                {
+                    b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningFeature", b =>
+                {
+                    b.Navigation("Artifacts");
                 });
 
             modelBuilder.Entity("Overmind.Core.SkillKit", b =>
