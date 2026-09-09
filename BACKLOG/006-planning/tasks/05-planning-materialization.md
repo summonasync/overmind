@@ -105,8 +105,10 @@ Tests:
 </refs>
 
 <obstacles>
+- **Pre-decided before this task started** (audit `audits/audit-2026-09-10.md`, WARNING-4, user decision 2026-09-10): `PlanningFeatureService.DeleteAsync` calls `ClearAsync` through a private wrapper that swallows any exception and logs a warning, mirroring the existing `SyncAsync` wrapper. A disk failure therefore can never block removing the feature row — pinned by `PlanningServiceTests.ClearAsync_Throwing_FeatureDeleteStillSucceeds`. Consequences for the real materializer: do **not** design `ClearAsync` on the assumption that throwing aborts the delete (it does not), and surface files it could not remove via `PlanningMaterializationReport.Warnings` so the caller still learns about them. `IPlanningMaterializer` in Core is deliberately unchanged — the policy lives at the call site.
 </obstacles>
 
 <log>
 2026-09-08 — task created from the validated plan.
+2026-09-10 — `<obstacles>` pre-populated with the `ClearAsync` failure policy decided during the 2026-09-10 system audit, so this task implements against it instead of rediscovering it.
 </log>

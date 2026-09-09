@@ -93,8 +93,10 @@ Tests — `tests/Overmind.Api.Tests/AgentPlanningApiTests.cs`:
 </refs>
 
 <obstacles>
+- **Mechanism for the `HumanValidationRequired` title changed before this task started** (audit `audits/audit-2026-09-10.md`, WARNING-2, fixed 2026-09-10): `PlanningErrors.ResolveTitle` and its message-substring matching are **deleted**. `PlanningException` now carries `Code` (`PlanningFailureCode`, `src/Overmind.Core/Abstractions/PlanningFailureCode.cs`) alongside `Kind`, and `PlanningErrors.Map` emits `Code.ToString()` verbatim as the ProblemDetails `title` — `Kind` still selects the status. So the gated validate must be implemented as: add `PlanningFailureCode.HumanValidationRequired`, add a `PlanningException.HumanValidationRequired(kind, slug)` factory passing `PlanningFailureKind.RuleViolation` (→ 409) plus that code, and throw it from the gate branch. Do **not** hand-write a `title:` string in the handler and do **not** reintroduce message matching. The STOP text stays in the exception message, which becomes `detail`.
 </obstacles>
 
 <log>
 2026-09-08 — task created from the validated plan.
+2026-09-10 — `<obstacles>` pre-populated: the ProblemDetails `title` mechanism was reworked during the 2026-09-10 system audit, so the `HumanValidationRequired` title in `<scope>` is now produced by a new `PlanningFailureCode` member rather than by `PlanningErrors`.
 </log>
