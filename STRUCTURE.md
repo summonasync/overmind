@@ -10,7 +10,7 @@ How the repo is organized and the rules for writing code in it. System design li
 ├── audits/                   # skill-produced reports, named <skill>-*.md
 ├── src/
 │   ├── Overmind.Core/        # domain: Entities/, Enums/, Abstractions/ — zero dependencies
-│   ├── Overmind.Infrastructure/  # Persistence/, Search/, VectorSearch/, Embeddings/, Materialization/, Configuration/, Migrations/
+│   ├── Overmind.Infrastructure/  # Persistence/, Search/, VectorSearch/, Embeddings/, Materialization/, Planning/, Configuration/, Migrations/
 │   ├── Overmind.Host/        # composition root: Program.cs, DependencyInjection.cs, Api/, tray+lifecycle at root
 │   └── Overmind.Mcp/         # stdio MCP adapter, no project references
 ├── tests/                    # mirrors src: Overmind.Core.Tests, .Infrastructure.Tests, .Api.Tests (Host), .Mcp.Tests
@@ -23,13 +23,28 @@ Central package management: `Directory.Packages.props`; shared build props: `Dir
 
 1. **Dependency direction is one-way:** `Core ← Infrastructure ← Host`. `Overmind.Mcp` references nothing and proxies over HTTP. Never add a reverse or skip-level reference (e.g. Core → Infrastructure, Infrastructure → Host). Test projects reference only their target project.
 2. **Core stays pure.** Entities, enums, abstractions, domain DTOs. No `using Microsoft.*`, no EF annotations, no serialization attributes. Domain behavior goes on entities (factory methods, invariant guards) where practical.
-3. **Persistence entities live in `Core/Entities`.** (`MaterializedFile` currently sits in `Infrastructure/Materialization/` — recorded debt from the 2026-09-07 architect review, pending move or an explicit exception rule.)
-4. **API style: vertical-slice minimal APIs with EF Core in handlers** — one static class per bounded context under `Host/Api/`, `Map*Api()` extension registers the routes, handlers inject `OvermindDbContext` and services directly. Sanctioned for v1 by ADR; **extraction trigger:** a second write path for the same aggregate (e.g. P2 MCP tools) or a module growing past ~300 lines → extract application services.
+3. **Persistence entities live in `Core/Entities`.** (`MaterializedFile` currently sits in `Infrastructure/Materialization/` — recorded debt from the 2026-09-07 architect review, pending move or an explicit exception rule. Its planning twin `PlanningMaterializedFile` went to `Core/Entities` correctly, so the two are split across layers until the move happens.)
+4. **API style: vertical-slice minimal APIs with EF Core in handlers** — one static class per bounded context under `Host/Api/`, `Map*Api()` extension registers the routes, handlers inject `OvermindDbContext` and services directly. Sanctioned for v1 by ADR; **extraction trigger:** a second write path for the same aggregate (e.g. P2 MCP tools) or a module growing past ~300 lines → extract application services. **The trigger has fired for planning** (three writers by design: human door, agent door, CLI importer) — ceremony mutations live in `Infrastructure/Planning/` services and handlers stay thin; see "Planning ceremony" below. Every other context is still handler-direct.
 5. **Per-request wiring is explicit:** contracts in `Api/Contracts/`, FluentValidation validators in `Api/Validation/`, entity→DTO mapping in `Api/Mapping/`, error shaping via `HttpErrors` (ProblemDetails). All DI registration goes through `Host/DependencyInjection.cs` (`AddOvermind`).
 6. **Domain invariants with an ADR must hold regardless of entry point.** Known gap: "single active kit per project" is currently enforced only in `KitsApi.Activate` (recorded in the 2026-09-07 review) — any new write path must re-enforce it or move the guard into the domain first.
 7. **Disk is a managed cache.** The DB is the source of truth; materialized files on disk are derived state tracked by `MaterializedFile` rows + SHA-256 hashes. Never treat files on disk as authoritative; reconcile via drift detection.
 8. **Loopback is the security boundary.** Kestrel binds `127.0.0.1` only. Localhost-only endpoints (e.g. `system/browse-folder`) must never do anything a local user shouldn't be able to do.
 9. **Host↔MCP contract is additive-only** (ADR). Renames/removals in Host DTOs silently break the adapter's tolerant `JsonElement` reads — additive changes only, or update both sides in the same change.
+
+## Planning ceremony (feature 006, in flight)
+
+What exists **now** (tasks 01/01b/02: domain, persistence, human door). Settings, agent door, materialization, importer, MCP and web are still ahead — extend this shape, don't invent a parallel one. Task 10 folds this section into the permanent conventions above.
+
+- **Model** (`Core/Entities`): `PlanningFeature` (slug unique per project, `Body`, `Status`, `Version`), `PlanningArtifact` (`Kind` ∈ spec/plan/task/result, `Status`, `Review`, `Order`, `Body`, `FrozenAt`, `Version`), `PlanningArtifactVersion` (unique `(ArtifactId, Version)`), `PlanningMaterializedFile` (nullable `FeatureId`, unique `(ProjectId, RelativePath)`). `Project` carries `PlanningMaterialization` + `RequireHumanValidation` and `SetPlanningWorkflow`.
+- **One status enum, per-kind vocabulary:** `PlanningArtifact.AllowedStatuses(kind)` — spec/plan/result take `draft|validated`, tasks take `todo|in_progress|review|done|blocked`. Violations throw from the entity; no caller re-checks.
+- **Frozen semantics live in the entity:** editing a `validated` artifact without a change note throws; with one it appends a dated `<log>` line, snapshots the old body into `PlanningArtifactVersion`, resets to `draft`, clears `FrozenAt`. `AppendLog` never bumps `Version`.
+- **Version numbering (canonical convention):** a version row labelled N holds the body that was live at version N, and a fresh aggregate is version 1. `ContextEntry` is off by one against it — recorded debt in `BACKLOG.md`, not to be "fixed" inside a planning task.
+- **`<log>` grammar is owned by Core** (`PlanningLog.Append`/`Parse`) *only* because a domain invariant depends on it; every other markdown/frontmatter parse stays in Infrastructure. The API projects the parsed lines (`PlanningArtifactResponse.Log`) so no client re-implements the grammar.
+- **All planning writes go through the service seam:** `Infrastructure/Planning/PlanningFeatureService` (`CreateAsync`/`UpdateAsync`/`DeleteAsync`, +`ImportAsync` in task 06) and `PlanningArtifactService` (`UpsertAsync`/`SetStatusAsync`/`ValidateAsync`/`AppendLogAsync`/`DeleteAsync`). A service owns the whole unit: load → domain method → `SaveChangesAsync` → materializer sync → failure translation. Handlers hold no EF writes and no invariant checks.
+- **Disk can never fail a DB write:** `SyncAsync`/`ClearAsync` are invoked through swallow-and-log wrappers; un-writable or un-removable files surface via `PlanningMaterializationReport.Warnings`. `IPlanningMaterializer` is `NullPlanningMaterializer` until task 05.
+- **Failure vocabulary:** services throw `PlanningException` (`Core/Abstractions`) carrying `Kind` (→ status: `NotFound` 404, `Duplicate`/`RuleViolation` 409, `InvalidStatus` 400) and `Code` (`PlanningFailureCode`, whose `ToString()` **is** the ProblemDetails `title`). `Host/Api/PlanningErrors.Map` is the only translator. Never derive a title from message text; never let a raw `DbUpdateException` or domain exception reach a caller.
+- **Two doors, one handler set:** the human door is `/api/planning/*` + `/api/projects/{id}/planning/*` (`PlanningFeaturesApi`, `PlanningArtifactsApi`, handlers `internal static`); the agent door `/api/agent/planning/*` (task 04) maps onto the same delegates and adds only `current` and the gated `validate`. A new failure is a `PlanningFailureCode` member + a factory, never a hand-written `title:` string.
+- **Not wired yet — do not assume it works:** `Project.SetPlanningWorkflow` has no production caller, `ProjectResponse` exposes neither planning field, and `PlanningPolicy` does not exist. All three land in task 03.
 
 ## Backend code style
 
@@ -38,7 +53,7 @@ Central package management: `Directory.Packages.props`; shared build props: `Dir
 - **No comments by default** — comments exist only for non-obvious decisions. Never restate the code.
 - All user-facing messages, identifiers, and docs in English.
 - No `async void`. Cancellation tokens flow through async APIs.
-- No god-services: if a class accumulates >5 public methods, split it. Current ceiling is 3 (`SkillMaterializer`).
+- No god-services: if a class accumulates >5 public methods, split it. Current ceiling is 5 (`PlanningArtifactService`); `SkillMaterializer` and `PlanningFeatureService` are at 3.
 - FluentValidation for request validation; Shouldly + NSubstitute + xUnit for tests. Manual mapping or mappers — no AutoMapper.
 - EF Core migrations in `Overmind.Infrastructure/Migrations/`, generated, never hand-edited (the FTS5 trigger SQL in the initial migration is the documented exception).
 
@@ -60,7 +75,7 @@ features   → shared                             (domain slices: entries, kits,
 shared     → (nothing above)                    (api client, ui primitives, lib, assets)
 ```
 
-- **Features must not import other features.** Known violation: `features/projects` imports `browseFolder` from `features/system` (2026-09-07 review) — `features/system` is a single stateless call that belongs in `shared/api`; fix by moving it, not by adding more cross-feature edges.
+- **Features must not import other features.** (The 2026-09-07 violation — `features/projects` importing `browseFolder` from `features/system` — is fixed: the call lives in `shared/api/system.ts` and `features/system/` no longer exists. Stateless cross-cutting calls belong in `shared/api`, not behind a feature edge.)
 - **Public APIs:** every feature and page slice has an `index.ts` barrel; import from the slice root (`@/features/kits`), not from its internals. Widgets currently lack `index.ts` and are consumed via deep imports — recorded debt; when touching a widget, add its barrel and route imports through it.
 - **Data access:** every `fetch` goes through `shared/api/client.ts` to same-origin `/api/*`. No exceptions — no direct fetch/axios anywhere else.
 - **React Query pattern:** query-key factories + `queryOptions` live in `features/<domain>/queries.ts` (`entryKeys`, `kitKeys`, …). Hooks in `features/<domain>/lib/` return `{ data, isPending, error, refetch }`; mutations use `useMutation` calling the feature's `api.ts`, then `queryClient.invalidateQueries` with the factory keys. **No `useEffect` for data fetching** (browser APIs only).
@@ -91,6 +106,7 @@ shared     → (nothing above)                    (api client, ui primitives, li
 - Don't add project references that violate `Core ← Infrastructure ← Host` or make Mcp reference anything.
 - Don't put EF/serialization attributes or `using Microsoft.*` in Core.
 - Don't bypass `IMaterializer` to write into project skill directories.
+- Don't write planning rows outside the `Infrastructure/Planning` services, and don't translate a planning failure anywhere but `PlanningErrors.Map`.
 - Don't bind Kestrel beyond loopback, and don't remove or rename Host DTO fields consumed by the MCP adapter (additive-only contract).
 - Don't fetch outside `shared/api/client.ts`, don't use `useEffect` for data, don't import across or upward between FSD slices.
 - Don't add `next/link`/`useRouter` navigation while the static-export router is broken upstream.

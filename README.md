@@ -22,19 +22,24 @@
 - **Агенты подключаются по стандарту** — тонкий stdio MCP-адаптер, который любой MCP-клиент спавнит одной строкой в конфиге. Контекст адресуется своей URI-схемой: `overmind://projects/<id>/gates`.
 - **Скилл-киты** — поименованные наборы скиллов/гейтов/гвардов. Активировал кит на проект — приложение само материализует файлы в `.claude/skills/`, `.kimi-code/skills/` и т.д. База — источник правды, диск — управляемый кэш. Переключил кит — файлы пересобрались.
 - **Поиск всегда работает** — SQLite FTS5 из коробки, офлайн, ноль зависимостей. Хочешь семантику — подними Qdrant в Docker, выбери embedding-провайдера в настройках (локальный ONNX / Ollama / OpenAI-совместимый). Нет Docker'а — честный баннер «векторный поиск выключен», FTS продолжает пахать.
+- **Проекты как дерево папок** — в сайдбаре живое дерево диска: обычные папки приглушены, проекты кликабельны, регистрация проекта прямо на месте. Корни дерева задаёт пользователь, клик по проекту делает его активным — записи дальше открываются в его контексте.
 
 ### Статус
 
-Pre-alpha. Сейчас в репо живут спека, план и бэклог — см. `BACKLOG/001-overmind-mvp/`. Код появляется по мере выполнения плана.
+Альфа. MVP отгружен (`001-overmind-mvp`, 9 тасков: HTTP API, скилл-киты с материализацией, FTS + опциональная семантика, MCP-адаптер, веб-UI, трей-хост), сверху легли `004-projects-tree-view` и `005-tree-workspace`. В работе `006-planning` — церемония feature → spec → plan → task → result как сущность первого класса (готовы 3 из 11 тасков: домен, схема, human door API). Дальше по индексу `002-kit-library`, затем `003-bundled-installer`. Живой срез — в `BACKLOG.md`.
 
 ### Roadmap
 
-| Прио | Скоп |
-|------|------|
-| v1 (MVP) | Мульти-проектное хранилище контекста, заметки/решения/гейты/гварды/скиллы, FTS + опциональная семантика, трей + веб-UI, stdio MCP-адаптер, материализация китов в проект |
-| P1 | Материализация китов во внешнюю папку + лаунчер агентов (`claude --add-dir`, `kimi --skills-dir`) |
-| P2 | Рантайм-доставка скиллов через MCP (`get_skill`, `overmind://skills/`, bootstrap-скилл) |
-| P2/P3 | Флоу инициализации агентов, онбординг проектов |
+| Прио | Скоп | Статус |
+|------|------|--------|
+| v1 (MVP) | Мульти-проектное хранилище контекста, заметки/решения/гейты/гварды/скиллы, FTS + опциональная семантика, трей + веб-UI, stdio MCP-адаптер, материализация китов в проект | ✅ отгружен (`001`) |
+| Дерево проектов | Сайдбар-дерево реальных папок, регистрация на месте, пользовательские корни + активный проект | ✅ отгружен (`004`, `005`) |
+| Церемония планирования | feature → spec → plan → task → result в БД, agent door + MCP-поверхность, веб-редактор, материализация в репо (off/on/archive), импорт существующего `BACKLOG/` | 🔄 в работе (`006`, 3/11) |
+| Библиотека китов | Импорт китов из локальной папки или git-ссылки (включая приватные репо с сохранёнными креденшелами) | ⬜ в плане (`002`) |
+| Установщик | Инсталлятор win/mac с курируемыми китами в комплекте, едет на пайплайне импорта `002` | 🔒 заблокирован (`003`) |
+| P1 | Материализация китов во внешнюю папку + лаунчер агентов (`claude --add-dir`, `kimi --skills-dir`) | ⬜ отложен |
+| P2 | Рантайм-доставка скиллов через MCP (`get_skill`, `overmind://skills/`, bootstrap-скилл) | ⬜ отложен |
+| P2/P3 | Флоу инициализации агентов, онбординг проектов | ⬜ отложен |
 
 ---
 
@@ -46,10 +51,11 @@ Pre-alpha. Сейчас в репо живут спека, план и бэкл�
 - Agents connect via a thin stdio MCP adapter; context is addressable through a `overmind://` URI scheme (`overmind://projects/<id>/gates`).
 - Skill-kits are managed in the DB and materialized into projects' native skill directories (`.claude/skills/`, `.kimi-code/skills/`, …). Disk is a managed cache, the DB is the source of truth.
 - Full-text search (SQLite FTS5) always works, offline, zero setup. Semantic search via local Qdrant (Docker) is optional — pick an embedding provider in settings (local ONNX / Ollama / OpenAI-compatible).
+- Projects are browsed as a real disk folder tree in the sidebar, with user-defined roots and register-in-place; clicking a project makes it the active context.
 
 Inspired by [OpenViking](https://github.com/volcengine/OpenViking)'s context-as-a-filesystem idea, rebuilt to be download-and-run.
 
-**Status:** pre-alpha — spec and backlog live in `BACKLOG/001-overmind-mvp/`, code is landing per plan.
+**Status:** alpha — the MVP is shipped (`001-overmind-mvp`), plus the projects tree (`004`, `005`). In flight: `006-planning`, the feature → spec → plan → task → result ceremony as a first-class entity (3 of 11 tasks done). `BACKLOG.md` is the live index.
 
 ## Запуск
 
@@ -89,12 +95,23 @@ UI открывается на `http://overmind.localhost:<port>` — хостн
 ## Repository layout
 
 ```
-BACKLOG.md                  feature index
-BACKLOG/001-overmind-mvp/   MVP feature folder
-  feature.md                what and why
-  spec.md                   approved design decisions and requirements
-  plan.md                   implementation plan
-  tasks/                    execution contracts per task
+BACKLOG.md                    feature index: statuses, execution order, deferred hardening
+BACKLOG/nnn-slug/             one folder per feature
+  feature.md                  what and why
+  spec.md                     validated design decisions and requirements (frozen)
+  plan.md                     validated implementation plan (frozen)
+  tasks/NN-slug.md            execution contract per task
+CONTEXT.md                    system design: components, communication rules, AI framework
+STRUCTURE.md                  layout + architecture rules + code conventions (read before writing code)
+TECHNICAL-SOLUTIONS.md        ADRs: what was chosen over what, and why
+audits/                       skill-produced reports, named <skill>-*.md
+design/                       brand and sprite sources
+src/Overmind.Core/            domain: entities, enums, abstractions — zero dependencies
+src/Overmind.Infrastructure/  EF Core (SQLite + FTS5), materialization, embeddings, planning services
+src/Overmind.Host/            composition root: loopback Kestrel, minimal APIs, tray, SPA hosting
+src/Overmind.Mcp/             stdio MCP adapter — no project references, talks HTTP to the Host
+tests/                        mirrors src: Core / Infrastructure / Api / Mcp tests
+web/                          Next.js 16 static-export SPA (FSD), served by the Host
 ```
 
 ## License
