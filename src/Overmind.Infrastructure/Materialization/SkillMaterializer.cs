@@ -8,8 +8,6 @@ namespace Overmind.Infrastructure.Materialization;
 
 public sealed class SkillMaterializer : IMaterializer
 {
-    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-
     private readonly OvermindDbContext _db;
     private readonly PlatformDirectoryMap _platforms;
 
@@ -59,7 +57,7 @@ public sealed class SkillMaterializer : IMaterializer
             {
                 failedPath = plan.AbsolutePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(plan.AbsolutePath)!);
-                await File.WriteAllTextAsync(plan.AbsolutePath, plan.NormalizedContent, Utf8NoBom, ct);
+                await File.WriteAllTextAsync(plan.AbsolutePath, plan.NormalizedContent, ContentHash.Utf8NoBom, ct);
                 written.Add(plan.AbsolutePath);
 
                 var existingRow = tracked.FirstOrDefault(m =>
@@ -86,7 +84,7 @@ public sealed class SkillMaterializer : IMaterializer
             await tx.RollbackAsync(ct);
             foreach (var path in written)
             {
-                TryDelete(path);
+                DirectoryPruner.TryDelete(path);
             }
 
             throw MaterializationException.IoFailure(failedPath ?? "database", ex);
@@ -121,7 +119,7 @@ public sealed class SkillMaterializer : IMaterializer
                 if (File.Exists(absolute))
                 {
                     File.Delete(absolute);
-                    PruneEmptyDirectories(absolute, project.DiskPath);
+                    DirectoryPruner.PruneEmptyDirectories(absolute, project.DiskPath);
                 }
 
                 _db.MaterializedFiles.Remove(row);
@@ -196,7 +194,7 @@ public sealed class SkillMaterializer : IMaterializer
 
         foreach (var skill in skills)
         {
-            var slug = Slugify(skill.Title);
+            var slug = Slug.From(skill.Title, "skill");
             foreach (var file in skill.SkillFiles)
             {
                 PathGuard.ResolveUnderRoot(project.DiskPath, file.RelativePath);
@@ -251,62 +249,6 @@ public sealed class SkillMaterializer : IMaterializer
         return builder.ToString();
     }
 
-    private static string Slugify(string title)
-    {
-        var builder = new StringBuilder(title.Length);
-        foreach (var c in title.Trim().ToLowerInvariant())
-        {
-            if (char.IsLetterOrDigit(c))
-            {
-                builder.Append(c);
-            }
-            else if (char.IsWhiteSpace(c) && builder.Length > 0 && builder[^1] != '-')
-            {
-                builder.Append('-');
-            }
-        }
-
-        return builder.Length == 0 ? "skill" : builder.ToString();
-    }
-
-    private static void PruneEmptyDirectories(string filePath, string root)
-    {
-        var directory = Path.GetDirectoryName(filePath);
-        var fullRoot = Path.GetFullPath(root);
-
-        while (directory is not null &&
-               !PathGuard.PathsEqual(directory, fullRoot) &&
-               directory.StartsWith(
-                   fullRoot.EndsWith(Path.DirectorySeparatorChar) ? fullRoot : fullRoot + Path.DirectorySeparatorChar,
-                   OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-        {
-            if (Directory.EnumerateFileSystemEntries(directory).Any())
-            {
-                break;
-            }
-
-            Directory.Delete(directory);
-            directory = Path.GetDirectoryName(directory);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
-
     private sealed record FilePlan(
         AgentPlatform Platform,
         string RelativePath,
@@ -314,16 +256,11 @@ public sealed class SkillMaterializer : IMaterializer
         string Content,
         string Sha256)
     {
-        public string NormalizedContent => Content
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace("\r", "\n", StringComparison.Ordinal);
+        public string NormalizedContent => ContentHash.Normalize(Content);
 
         public static FilePlan Create(string root, AgentPlatform platform, string relativePath, string content)
         {
-            var normalized = content
-                .Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Replace("\r", "\n", StringComparison.Ordinal);
-            var sha256 = Convert.ToHexString(SHA256.HashData(Utf8NoBom.GetBytes(normalized)));
+            var sha256 = ContentHash.Sha256(content);
 
             return new FilePlan(platform, relativePath, PathGuard.ResolveUnderRoot(root, relativePath), content, sha256);
         }

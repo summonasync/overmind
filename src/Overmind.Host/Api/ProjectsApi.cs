@@ -98,7 +98,8 @@ public static class ProjectsApi
         {
             var hasActiveKits = await db.ProjectKits.AnyAsync(pk => pk.ProjectId == id && pk.IsActive, ct);
             var hasMaterializedFiles = await db.MaterializedFiles.AnyAsync(m => m.ProjectId == id, ct);
-            if (hasActiveKits || hasMaterializedFiles)
+            var hasPlanningFiles = await db.PlanningMaterializedFiles.AnyAsync(m => m.ProjectId == id, ct);
+            if (hasActiveKits || hasMaterializedFiles || hasPlanningFiles)
             {
                 return HttpErrors.Conflict(
                     $"DiskPath of project '{id}' cannot be changed while kits are active or files are materialized; deactivate kits first.");

@@ -2,7 +2,7 @@
 feature: 006
 task: 05
 slug: planning-materialization
-status: todo
+status: done
 review: hard
 created: 2026-09-08
 ---
@@ -86,13 +86,13 @@ Tests:
 </constraints>
 
 <acceptance-criteria>
-- [ ] `on` mode layout matches the file-based convention the importer reads (feature/spec/plan/tasks/NN-slug.md).
-- [ ] Human edits outside the managed block in `BACKLOG.md` are preserved byte-for-byte and never reported as drift.
-- [ ] Untracked existing files block the write (409) unless `force` is passed.
-- [ ] `archive` writes under the Host-provided data directory; Infrastructure contains no `~/.overmind` literal.
-- [ ] `off` / strategy switch removes tracked files, prunes empty directories and drops rows.
-- [ ] DiskPath change is rejected with 409 while planning files are tracked.
-- [ ] A failed sync never rolls back or loses the DB write.
+- [x] `on` mode layout matches the file-based convention the importer reads (feature/spec/plan/tasks/NN-slug.md).
+- [x] Human edits outside the managed block in `BACKLOG.md` are preserved byte-for-byte and never reported as drift.
+- [x] Untracked existing files block the write (409) unless `force` is passed.
+- [x] `archive` writes under the Host-provided data directory; Infrastructure contains no `~/.overmind` literal.
+- [x] `off` / strategy switch removes tracked files, prunes empty directories and drops rows.
+- [x] DiskPath change is rejected with 409 while planning files are tracked.
+- [x] A failed sync never rolls back or loses the DB write.
 </acceptance-criteria>
 
 <refs>
@@ -106,9 +106,16 @@ Tests:
 
 <obstacles>
 - **Pre-decided before this task started** (audit `audits/audit-2026-09-10.md`, WARNING-4, user decision 2026-09-10): `PlanningFeatureService.DeleteAsync` calls `ClearAsync` through a private wrapper that swallows any exception and logs a warning, mirroring the existing `SyncAsync` wrapper. A disk failure therefore can never block removing the feature row — pinned by `PlanningServiceTests.ClearAsync_Throwing_FeatureDeleteStillSucceeds`. Consequences for the real materializer: do **not** design `ClearAsync` on the assumption that throwing aborts the delete (it does not), and surface files it could not remove via `PlanningMaterializationReport.Warnings` so the caller still learns about them. `IPlanningMaterializer` in Core is deliberately unchanged — the policy lives at the call site.
+- **Hit during execution 2026-09-12 — `BACKLOG.md` is a documented exception to the untracked-overwrite guard.** The scope both demands "untracked existing file → Overwrite" and "file exists without markers → append the block"; a real repo almost always has a human `BACKLOG.md`. Resolution: the Overwrite guard applies to feature files (`BACKLOG/<slug>/**`), while `BACKLOG.md` always merges (append block when markers are absent, replace between markers when present). Foreign feature files still hard-block with 409, pinned by tests.
+- **Hit during execution 2026-09-12 — task frontmatter `task:` is written zero-padded (`task: 05`), not bare `<Order>`.** The scope text says `task: <Order>` but the dogfood corpus (`BACKLOG/006-planning/tasks/05-*.md`) uses `task: 05`; the importer (task 06) reads `Order` from the `NN` filename prefix, so the frontmatter field is cosmetic. Corpus convention wins; importer authors take note.
+- **Hit during execution 2026-09-12 — .NET `File.Delete` on Unix ignores the read-only file bit** (unlink only needs directory write permission). The undeletable-file warning test therefore locks the parent directory (`0555`) instead of the file; test is Linux-gated (`OperatingSystem.IsLinux()`).
+- **Hit during execution 2026-09-12 — EF Core identity-map staleness in tests.** Switching `PlanningMaterialization` from a second context leaves the first context's tracked `Project` stale, so a materializer bound to the old context resolves the old strategy. Production is safe (one scoped context per request; services and materializer share it), but tests must use a fresh context + materializer after a strategy switch.
+- **Closed by review 2026-09-13 (WARNING-1, Slug vs legacy `Slugify` on punctuation):** battle-database check done — `~/.overmind/overmind.db` holds zero kits (fresh DB after the move to Ubuntu), zero old/new slug diffs. The shared `Slug` maps punctuation runs to a dash where the old `Slugify` dropped them (e.g. `a,b` → `a-b` vs `ab`), which only affects on-disk skill catalog names. **If the old Windows database is ever restored, repeat the check before shipping:** for every skill `Title` in every kit, compare legacy `Slugify(title)` vs `Slug.From(title, "skill")`; any divergence means stale catalog directories on disk — the data itself is not lost, `DematerializeAsync` of the old kit (or a force rematerialize) rebuilds the tree.
 </obstacles>
 
 <log>
 2026-09-08 — task created from the validated plan.
 2026-09-10 — `<obstacles>` pre-populated with the `ClearAsync` failure policy decided during the 2026-09-10 system audit, so this task implements against it instead of rediscovering it.
+2026-09-12 — implemented. Shared primitives (`ContentHash`/`Slug`/`DirectoryPruner`) extracted; `SkillMaterializer` refactored onto them with `MaterializationTests` passing **unchanged** (11/11, zero edits to the test file). `PlanningMaterializer` + `ManagedBlock` + `BacklogNaming` done; DI wired with `OvermindPaths.DataDirectory`; `NullPlanningMaterializer` deleted; `POST .../planning/materialize` + `GET .../planning/drift` added; `ProjectsApi.Update` DiskPath guard counts `PlanningMaterializedFile` rows. No `SyncAsync` calls added to handlers (A1 wiring verified by test — the real materializer now runs inside the existing swallow-and-log wrappers). New tests: `PlanningMaterializerTests` 13, `PlanningMaterializationTests` 5. `dotnet build Overmind.sln` 0/0; `dotnet test Overmind.sln` 351/351 (base 333 + 18). No git commits per constraints.
+2026-09-13 — hard review PASS with 4 warnings; three fixed. WARNING-2: overwrite guard of the new root now runs BEFORE the old-root clear, and ownership requires that the old root no longer holds a copy (otherwise `archive→on` would silently rewrite a foreign repo file that merely shares a relative path with a stale row) — pinned by `StrategySwitch_ArchiveToOn_WithForeignRepoFile_BlocksBeforeTouchingArchive`. WARNING-3: rollback cleanup deletes only files created during the current run (`preExisting` set), never files that were on disk before it — pinned by `Sync_RollbackAfterForceAdoption_KeepsPreExistingFiles`. WARNING-4: `CONTEXT.md`/`STRUCTURE.md` no longer mention the deleted `NullPlanningMaterializer`. Review SUGGESTION done: `SlugTests` (12 cases) pins the path-safety invariant via a new `InternalsVisibleTo` for the test assembly; battle-DB check for WARNING-1 recorded in `<obstacles>`. `dotnet build Overmind.sln` 0/0; `dotnet test Overmind.sln` 365/365 (base 351 + 14).
 </log>

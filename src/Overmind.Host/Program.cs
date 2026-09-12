@@ -131,6 +131,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
     app.MapPlanningFeaturesApi();
     app.MapPlanningArtifactsApi();
     app.MapPlanningWorkflowApi();
+    app.MapPlanningMaterializationApi();
     app.MapAgentPlanningApi();
 
     await using (var scope = app.Services.CreateAsyncScope())

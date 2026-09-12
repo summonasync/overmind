@@ -77,3 +77,19 @@ public sealed record PlanningCurrentFeature(
     string Slug,
     string Title,
     PlanningFeatureStatus Status);
+
+public sealed record MaterializePlanningRequest(bool Force);
+
+public sealed record PlanningMaterializedFileResponse(string RelativePath, string Sha256);
+
+public sealed record PlanningMaterializationReportResponse(
+    Guid ProjectId,
+    PlanningMaterialization Strategy,
+    PlanningMaterializedFileResponse[] Files,
+    string[] Warnings);
+
+public sealed record PlanningDriftResponse(
+    Guid ProjectId,
+    string? FeatureSlug,
+    string RelativePath,
+    DriftKind Kind);

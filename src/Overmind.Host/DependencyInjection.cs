@@ -42,7 +42,10 @@ public static class DependencyInjection
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<PlanningPolicy>();
-        services.AddScoped<IPlanningMaterializer, NullPlanningMaterializer>();
+        services.AddScoped<IPlanningMaterializer>(provider => new PlanningMaterializer(
+            provider.GetRequiredService<OvermindDbContext>(),
+            provider.GetRequiredService<PlanningPolicy>(),
+            OvermindPaths.DataDirectory));
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();

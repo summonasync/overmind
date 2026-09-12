@@ -12,4 +12,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Materialization\platforms.json" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Overmind.Infrastructure.Tests" />
+  </ItemGroup>
 </Project>
