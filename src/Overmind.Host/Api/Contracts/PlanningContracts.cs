@@ -66,3 +66,14 @@ public sealed record PlanningWorkflowResponse(
 public sealed record UpdatePlanningWorkflowRequest(
     string? Materialization,
     string? RequireHumanValidation);
+
+public sealed record PlanningCurrentResponse(
+    string State,
+    PlanningCurrentFeature Feature,
+    PlanningArtifactResponse? Artifact,
+    string? Reason);
+
+public sealed record PlanningCurrentFeature(
+    string Slug,
+    string Title,
+    PlanningFeatureStatus Status);

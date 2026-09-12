@@ -2,7 +2,7 @@
 feature: 006
 task: 04
 slug: agent-planning-api
-status: todo
+status: done
 review: light
 created: 2026-09-08
 ---
@@ -78,11 +78,11 @@ Tests — `tests/Overmind.Api.Tests/AgentPlanningApiTests.cs`:
 </constraints>
 
 <acceptance-criteria>
-- [ ] Every agent route answers with the same DTO shape as its human-door twin.
-- [ ] Artifact upsert creates on first call and versions on subsequent calls, honoring the frozen rules.
-- [ ] Gated `validate` writes nothing and returns 409 `HumanValidationRequired` with an actionable STOP message.
-- [ ] `current` returns `task` / `stop` / `empty` per the resolution order, with the gate-off shortcut.
-- [ ] Blocked-task handling matches the rule (skip to a later actionable task, else report the blocked one).
+- [x] Every agent route answers with the same DTO shape as its human-door twin.
+- [x] Artifact upsert creates on first call and versions on subsequent calls, honoring the frozen rules.
+- [x] Gated `validate` writes nothing and returns 409 `HumanValidationRequired` with an actionable STOP message.
+- [x] `current` returns `task` / `stop` / `empty` per the resolution order, with the gate-off shortcut.
+- [x] Blocked-task handling matches the rule (skip to a later actionable task, else report the blocked one).
 </acceptance-criteria>
 
 <refs>
@@ -99,4 +99,34 @@ Tests — `tests/Overmind.Api.Tests/AgentPlanningApiTests.cs`:
 <log>
 2026-09-08 — task created from the validated plan.
 2026-09-10 — `<obstacles>` pre-populated: the ProblemDetails `title` mechanism was reworked during the 2026-09-10 system audit, so the `HumanValidationRequired` title in `<scope>` is now produced by a new `PlanningFailureCode` member rather than by `PlanningErrors`.
+
+2026-09-12 — executed. Changes by file:
+
+**src/Overmind.Core/Abstractions/PlanningFailureCode.cs** — appended `HumanValidationRequired` (after `CannotValidateTask`, no renumbering).
+
+**src/Overmind.Core/Abstractions/PlanningException.cs** — new factory `HumanValidationRequired(PlanningArtifactKind kind, string slug)`: `PlanningFailureKind.RuleViolation` (→ 409 via `PlanningErrors.Map`) + `PlanningFailureCode.HumanValidationRequired` (→ ProblemDetails `title` verbatim). The STOP text lives in the exception message, which becomes `detail` — no hand-written `title:` anywhere, no message matching, per the amended mechanism.
+
+**src/Overmind.Host/Api/Contracts/PlanningContracts.cs** — added `PlanningCurrentResponse(string State, PlanningCurrentFeature Feature, PlanningArtifactResponse? Artifact, string? Reason)` and `PlanningCurrentFeature(string Slug, string Title, PlanningFeatureStatus Status)`. Additive only.
+
+**src/Overmind.Host/Api/AgentPlanningApi.cs** — new `MapAgentPlanningApi` (133 lines). Six routes map the task-02 `internal static` shared handlers verbatim (`PlanningFeaturesApi.Board/CreateFeature/GetFeature`, `PlanningArtifactsApi.CreateArtifact/SetStatus/AppendLog`); only `validate` and `current` are agent-specific handlers. Gated `validate`: one EF projection loads artifact `Kind` + feature `Slug`/`ProjectId` (new use case, no copied query), 404s unknown ids, then `PlanningPolicy.ResolveValidationGateAsync` — gate on → `PlanningErrors.Map(PlanningException.HumanValidationRequired(...))` (409, nothing written), gate off → delegates to the shared `PlanningArtifactsApi.Validate`. `current`: 404 for unknown project/slug, then the 5-step resolution order with the gate-off shortcut and blocked-task rule, reusing `PlanningMapper.ToArtifactResponse` for the payload.
+
+**src/Overmind.Host/Program.cs** — added `app.MapAgentPlanningApi()`. No DI changes (`PlanningPolicy` registered by task 03, validators by task 02).
+
+**tests/Overmind.Api.Tests/AgentPlanningApiTests.cs** — new, 17 tests: upsert create→version (verified via human `GET .../versions`), frozen spec without/with `logNote` (409 `ChangeNoteRequired` / 200 draft), task upsert by explicit order (distinct creates, in-place update), gated validate 409 `HumanValidationRequired` with exact STOP detail + nothing written, project-`off`-beats-global-`on` validate → 200 `validated`, `current` for all five states plus gate-off skip and all-remaining-blocked, board/feature deep property-name parity vs the human door (plus value spot-checks).
+
+**Route table:**
+| Method | Path | Success | Error |
+|--------|------|---------|-------|
+| GET | /api/agent/projects/{projectId}/planning/features | 200 | 404 unknown project |
+| POST | /api/agent/projects/{projectId}/planning/features | 201 | 409 dup slug, 400 bad slug |
+| GET | /api/agent/projects/{projectId}/planning/features/{slug} | 200 | 404 unknown project/slug |
+| GET | /api/agent/projects/{projectId}/planning/features/{slug}/current | 200 | 404 unknown project/slug |
+| POST | /api/agent/projects/{projectId}/planning/features/{slug}/artifacts | 201/200 | 404 unknown feature, 409 ChangeNoteRequired |
+| POST | /api/agent/planning/artifacts/{id}/status | 200 | 400 invalid status, 409 ChangeNoteRequired |
+| POST | /api/agent/planning/artifacts/{id}/log | 200 | 404 |
+| POST | /api/agent/planning/artifacts/{id}/validate | 200 | 404, 409 HumanValidationRequired (gated), 409 CannotValidateTask (task) |
+
+**Verification:** `dotnet build Overmind.sln` → 0 warnings / 0 errors. `dotnet test Overmind.sln` → 333 passed, 0 failed (Core 85, Infrastructure 85, Mcp 34, Api 129); +17 over the 316 baseline.
+
+**Notes for task 07 (MCP adapter):** the agent door is the only surface the adapter should call; `current`'s `reason` field carries the STOP text verbatim, `artifact` is null for `stop`/`empty` states.
 </log>

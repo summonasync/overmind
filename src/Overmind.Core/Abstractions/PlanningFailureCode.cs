@@ -10,5 +10,6 @@ public enum PlanningFailureCode
     InvalidSlug,
     InvalidStatusForKind,
     ChangeNoteRequired,
-    CannotValidateTask
+    CannotValidateTask,
+    HumanValidationRequired
 }
