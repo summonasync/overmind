@@ -4,10 +4,14 @@ public sealed record SettingsResponse(
     string EmbeddingProvider,
     string OllamaBaseUrl,
     string OpenAiBaseUrl,
-    bool OpenAiApiKeyConfigured);
+    bool OpenAiApiKeyConfigured,
+    string PlanningMaterializationDefault,
+    string PlanningRequireHumanValidationDefault);
 
 public sealed record UpdateSettingsRequest(
     string? EmbeddingProvider,
     string? OllamaBaseUrl,
     string? OpenAiBaseUrl,
-    string? OpenAiApiKey);
+    string? OpenAiApiKey,
+    string? PlanningMaterializationDefault,
+    string? PlanningRequireHumanValidationDefault);

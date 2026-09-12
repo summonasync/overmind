@@ -104,4 +104,51 @@ public sealed class SettingsApiTests : IDisposable
         document.RootElement.GetProperty("embeddingProvider").GetString().ShouldBe("ollama");
         document.RootElement.GetProperty("openAiBaseUrl").GetString().ShouldBe("http://127.0.0.1:4321");
     }
+
+    [Fact]
+    public async Task Get_IncludesPlanningDefaults()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningMaterializationDefault").GetString().ShouldBe("off");
+        document.RootElement.GetProperty("planningRequireHumanValidationDefault").GetString().ShouldBe("off");
+    }
+
+    [Fact]
+    public async Task Put_PlanningDefaults_PersistAcrossSecondGet()
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new
+        {
+            PlanningMaterializationDefault = "ARCHIVE",
+            PlanningRequireHumanValidationDefault = "on",
+        });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("planningMaterializationDefault").GetString().ShouldBe("archive");
+        putDocument.RootElement.GetProperty("planningRequireHumanValidationDefault").GetString().ShouldBe("on");
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningMaterializationDefault").GetString().ShouldBe("archive");
+        document.RootElement.GetProperty("planningRequireHumanValidationDefault").GetString().ShouldBe("on");
+    }
+
+    [Fact]
+    public async Task Put_RejectsInvalidPlanningDefaults()
+    {
+        using var materialization = await _client.PutAsJsonAsync("/api/settings", new
+        {
+            PlanningMaterializationDefault = "inherit",
+        });
+        materialization.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        using var validation = await _client.PutAsJsonAsync("/api/settings", new
+        {
+            PlanningRequireHumanValidationDefault = "maybe",
+        });
+        validation.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }

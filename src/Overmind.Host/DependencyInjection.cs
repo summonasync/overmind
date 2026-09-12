@@ -41,6 +41,7 @@ public static class DependencyInjection
 
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningArtifactService>();
+        services.AddScoped<PlanningPolicy>();
         services.AddScoped<IPlanningMaterializer, NullPlanningMaterializer>();
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();

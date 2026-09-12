@@ -56,3 +56,13 @@ public sealed record PlanningArtifactResponse(
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 
 public sealed record PlanningArtifactVersionResponse(int Version, string Body, DateTime CreatedAt);
+
+public sealed record PlanningWorkflowResponse(
+    PlanningMaterialization Materialization,
+    HumanValidationOverride RequireHumanValidation,
+    PlanningMaterialization EffectiveMaterialization,
+    bool EffectiveRequireHumanValidation);
+
+public sealed record UpdatePlanningWorkflowRequest(
+    string? Materialization,
+    string? RequireHumanValidation);

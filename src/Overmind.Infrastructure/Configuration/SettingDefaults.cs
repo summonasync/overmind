@@ -7,5 +7,10 @@ public static class SettingDefaults
     public const string EmbeddingOpenAiBaseUrl = "https://api.openai.com";
     public const string QdrantEndpoint = "http://127.0.0.1:6334";
 
+    public const string PlanningMaterializationDefault = "off";
+    public const string PlanningRequireHumanValidationDefault = "off";
+
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];
+    public static readonly string[] PlanningMaterializationDefaults = ["off", "on", "archive"];
+    public static readonly string[] PlanningRequireHumanValidationDefaults = ["on", "off"];
 }

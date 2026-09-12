@@ -22,8 +22,14 @@ public static class SettingsApi
         var openAiBaseUrl = await settings.GetOrDefaultAsync(
             SettingKeys.EmbeddingOpenAiBaseUrl, SettingDefaults.EmbeddingOpenAiBaseUrl, ct);
         var apiKeyConfigured = await settings.HasAsync(SettingKeys.EmbeddingOpenAiApiKey, ct);
+        var planningMaterializationDefault = await settings.GetOrDefaultAsync(
+            SettingKeys.PlanningMaterializationDefault, SettingDefaults.PlanningMaterializationDefault, ct);
+        var planningRequireHumanValidationDefault = await settings.GetOrDefaultAsync(
+            SettingKeys.PlanningRequireHumanValidationDefault, SettingDefaults.PlanningRequireHumanValidationDefault, ct);
 
-        return Results.Ok(new SettingsResponse(provider, ollamaBaseUrl, openAiBaseUrl, apiKeyConfigured));
+        return Results.Ok(new SettingsResponse(
+            provider, ollamaBaseUrl, openAiBaseUrl, apiKeyConfigured,
+            planningMaterializationDefault, planningRequireHumanValidationDefault));
     }
 
     private static async Task<IResult> UpdateSettings(
@@ -49,6 +55,24 @@ public static class SettingsApi
             return InvalidSetting(nameof(request.OpenAiBaseUrl), "Must be a valid http(s) URL.");
         }
 
+        if (request.PlanningMaterializationDefault is not null &&
+            !SettingDefaults.PlanningMaterializationDefaults.Contains(
+                request.PlanningMaterializationDefault, StringComparer.OrdinalIgnoreCase))
+        {
+            return InvalidSetting(
+                nameof(request.PlanningMaterializationDefault),
+                $"Must be one of: {string.Join(", ", SettingDefaults.PlanningMaterializationDefaults)}.");
+        }
+
+        if (request.PlanningRequireHumanValidationDefault is not null &&
+            !SettingDefaults.PlanningRequireHumanValidationDefaults.Contains(
+                request.PlanningRequireHumanValidationDefault, StringComparer.OrdinalIgnoreCase))
+        {
+            return InvalidSetting(
+                nameof(request.PlanningRequireHumanValidationDefault),
+                $"Must be one of: {string.Join(", ", SettingDefaults.PlanningRequireHumanValidationDefaults)}.");
+        }
+
         if (request.EmbeddingProvider is not null)
         {
             await settings.SetAsync(
@@ -68,6 +92,20 @@ public static class SettingsApi
         if (!string.IsNullOrEmpty(request.OpenAiApiKey))
         {
             await settings.SetAsync(SettingKeys.EmbeddingOpenAiApiKey, request.OpenAiApiKey, ct);
+        }
+
+        if (request.PlanningMaterializationDefault is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.PlanningMaterializationDefault,
+                request.PlanningMaterializationDefault.ToLowerInvariant(), ct);
+        }
+
+        if (request.PlanningRequireHumanValidationDefault is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.PlanningRequireHumanValidationDefault,
+                request.PlanningRequireHumanValidationDefault.ToLowerInvariant(), ct);
         }
 
         return await GetSettings(settings, ct);
