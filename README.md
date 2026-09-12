@@ -4,7 +4,7 @@
 
 ## RU — Что это вообще
 
-**Overmind** — десктопное приложение (Windows/macOS, .NET), которое даёт твоим AI-агентам — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — общий постоянный контекст. Заметки, архитектурные решения, гейты, гварды и скилл-киты живут в одной локальной базе, а не пересказываются каждому агенту в каждой сессии заново.
+**Overmind** — десктопное приложение (Windows/macOS/Linux, .NET), которое даёт твоим AI-агентам — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — общий постоянный контекст. Заметки, архитектурные решения, гейты, гварды и скилл-киты живут в одной локальной базе, а не пересказываются каждому агенту в каждой сессии заново.
 
 ### История
 
@@ -45,7 +45,7 @@
 
 ## EN — Short version
 
-**Overmind** is a Windows/macOS desktop app (.NET) that gives AI coding agents — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — a shared, persistent context store. Project notes, decisions, gates, guards, and skill-kits live in one local database instead of being re-explained to every agent in every session.
+**Overmind** is a Windows/macOS/Linux desktop app (.NET) that gives AI coding agents — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — a shared, persistent context store. Project notes, decisions, gates, guards, and skill-kits live in one local database instead of being re-explained to every agent in every session.
 
 - Single tray app process hosting a localhost HTTP API and a web UI — the browser is the window.
 - Agents connect via a thin stdio MCP adapter; context is addressable through a `overmind://` URI scheme (`overmind://projects/<id>/gates`).
@@ -107,7 +107,7 @@ TECHNICAL-SOLUTIONS.md        ADRs: what was chosen over what, and why
 audits/                       skill-produced reports, named <skill>-*.md
 design/                       brand and sprite sources
 src/Overmind.Core/            domain: entities, enums, abstractions — zero dependencies
-src/Overmind.Infrastructure/  EF Core (SQLite + FTS5), materialization, embeddings, planning services
+src/Overmind.Infrastructure/  EF Core (SQLite + FTS5), vector search (Qdrant), embeddings, materialization, planning services
 src/Overmind.Host/            composition root: loopback Kestrel, minimal APIs, tray, SPA hosting
 src/Overmind.Mcp/             stdio MCP adapter — no project references, talks HTTP to the Host
 tests/                        mirrors src: Core / Infrastructure / Api / Mcp tests

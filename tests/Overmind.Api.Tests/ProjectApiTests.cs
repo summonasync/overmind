@@ -27,20 +27,20 @@ public sealed class ProjectApiTests : IDisposable
     [Fact]
     public async Task Project_Lifecycle_Works()
     {
-        var created = await CreateProjectAsync("alpha", "E:\\work\\alpha");
+        var created = await CreateProjectAsync("alpha", TestPaths.DiskPath("alpha"));
         created.Id.ShouldNotBe(Guid.Empty);
 
         var listed = await _client.GetFromJsonAsync<List<ProjectJson>>("/api/projects", JsonOptions);
         listed.ShouldNotBeNull();
         listed!.Count.ShouldBe(1);
         listed[0].Name.ShouldBe("alpha");
-        listed[0].DiskPath.ShouldBe("E:\\work\\alpha");
+        listed[0].DiskPath.ShouldBe(TestPaths.DiskPath("alpha"));
 
         var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{created.Id}", JsonOptions);
         fetched.ShouldNotBeNull();
         fetched!.Description.ShouldBe("first project");
 
-        var update = new { Name = "alpha-renamed", DiskPath = "E:\\work\\alpha2", Description = "renamed" };
+        var update = new { Name = "alpha-renamed", DiskPath = TestPaths.DiskPath("alpha2"), Description = "renamed" };
         var putResponse = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", update);
         putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -61,12 +61,12 @@ public sealed class ProjectApiTests : IDisposable
     [Fact]
     public async Task Create_DuplicateName_Returns409()
     {
-        await CreateProjectAsync("dup", "E:\\work\\dup");
+        await CreateProjectAsync("dup", TestPaths.DiskPath("dup"));
 
         var conflict = await _client.PostAsJsonAsync("/api/projects", new
         {
             Name = "dup",
-            DiskPath = "E:\\work\\other",
+            DiskPath = TestPaths.DiskPath("other"),
             Description = (string?)null,
         });
 
@@ -79,7 +79,7 @@ public sealed class ProjectApiTests : IDisposable
         var response = await _client.PostAsJsonAsync("/api/projects", new
         {
             Name = "",
-            DiskPath = "E:\\work\\x",
+            DiskPath = TestPaths.DiskPath("x"),
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -110,7 +110,7 @@ public sealed class ProjectApiTests : IDisposable
         var response = await _client.PutAsJsonAsync($"/api/projects/{Guid.NewGuid()}", new
         {
             Name = "ghost",
-            DiskPath = "E:\\work\\ghost",
+            DiskPath = TestPaths.DiskPath("ghost"),
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);

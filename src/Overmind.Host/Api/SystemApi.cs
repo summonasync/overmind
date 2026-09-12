@@ -10,7 +10,7 @@ public static class SystemApi
     private const int MaxDirectoryEntries = 500;
     private static readonly SemaphoreSlim DialogLock = new(1, 1);
     private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(120);
-    // MVP measure: spawning a shell dialog per request. The Avalonia tray (task 08) replaces this with a proper picker.
+    // MVP measure: spawning a shell dialog per request (powershell / osascript / zenity / kdialog per OS).
     public static RouteGroupBuilder MapSystemApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/system");
@@ -108,7 +108,15 @@ public static class SystemApi
 
     private static async Task<IResult> BrowseFolder()
     {
-        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        if (OperatingSystem.IsLinux() && FindLinuxPicker() is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status501NotImplemented,
+                title: "Folder picker unavailable",
+                detail: "Install zenity or kdialog to enable the folder picker on Linux.");
+        }
+
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux())
         {
             return Results.StatusCode(StatusCodes.Status501NotImplemented);
         }
@@ -179,6 +187,27 @@ public static class SystemApi
             };
         }
 
+        if (OperatingSystem.IsLinux())
+        {
+            var picker = FindLinuxPicker();
+            if (picker is null)
+            {
+                throw new InvalidOperationException("Neither zenity nor kdialog found on PATH.");
+            }
+
+            return new ProcessStartInfo
+            {
+                FileName = picker,
+                Arguments = picker == "zenity"
+                    ? "--file-selection --directory --title=\"Select project folder\""
+                    : "--getexistingdirectory",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+        }
+
         return new ProcessStartInfo
         {
             FileName = "osascript",
@@ -188,5 +217,22 @@ public static class SystemApi
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+    }
+
+    private static string? FindLinuxPicker()
+    {
+        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            foreach (var picker in new[] { "zenity", "kdialog" })
+            {
+                if (File.Exists(Path.Combine(directory, picker)))
+                {
+                    return picker;
+                }
+            }
+        }
+
+        return null;
     }
 }

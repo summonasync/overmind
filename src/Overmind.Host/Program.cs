@@ -171,6 +171,11 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
                 return Task.CompletedTask;
             }, trayShutdown.Token);
         }
+        catch (TaskCanceledException)
+        {
+            // Expected on Linux: disposing the tray icon throws from DBusTrayIconImpl.WatchAsync
+            // (avalonia#21979). Shutdown is already in progress, so this is benign.
+        }
         catch (Exception ex)
         {
             Log.Error(ex, "Tray UI loop crashed");

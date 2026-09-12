@@ -228,6 +228,12 @@ public sealed class SystemApiTests : IDisposable
     [Fact]
     public async Task ListDirectory_SkipsHiddenAndSystemDirectories()
     {
+        // FileAttributes.Hidden is an NTFS concept; setting it is a no-op on Linux.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         Directory.CreateDirectory(Path.Combine(_sandboxDir, "visible"));
         var hidden = Path.Combine(_sandboxDir, "hidden-dir");
         Directory.CreateDirectory(hidden);

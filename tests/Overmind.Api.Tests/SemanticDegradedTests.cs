@@ -139,7 +139,7 @@ public sealed class SemanticDegradedTests : IDisposable
         var response = await _client.PostAsJsonAsync("/api/projects", new
         {
             Name = name + Guid.NewGuid().ToString("N")[..6],
-            DiskPath = "E:\\work\\" + name,
+            DiskPath = TestPaths.DiskPath(name),
         });
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions))!.Id;

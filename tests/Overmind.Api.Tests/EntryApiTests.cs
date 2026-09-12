@@ -172,7 +172,7 @@ public sealed class EntryApiTests : IDisposable
         var response = _client.PostAsJsonAsync("/api/projects", new
         {
             Name = name,
-            DiskPath = "E:\\work\\" + name,
+            DiskPath = TestPaths.DiskPath(name),
         }).GetAwaiter().GetResult();
 
         response.EnsureSuccessStatusCode();

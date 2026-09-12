@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
 
 namespace Overmind.Host;
 
@@ -20,7 +21,10 @@ public static class TrayApplication
             .UsePlatformDetect()
             .SetupWithLifetime(lifetime);
 
-        using var registration = shutdownToken.Register(() => lifetime.Shutdown(0));
+        // Shutdown must run on the Avalonia UI thread; the token callback fires on a thread-pool
+        // thread and a direct Shutdown() call deadlocks the Linux tray loop.
+        using var registration = shutdownToken.Register(() =>
+            Dispatcher.UIThread.Post(() => lifetime.Shutdown(0)));
         lifetime.Start([]);
     }
 }
