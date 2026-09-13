@@ -35,8 +35,11 @@ export function SettingsPage() {
       <PageHeader title="Settings" description="Configure models, APIs, and indexing for your Overmind instance." />
 
       <section className="rounded-lg border border-border bg-surface p-5">
-        <h2 className="mb-1 text-base font-semibold text-foreground">Embedding Provider</h2>
-        <p className="mb-4 text-xs text-muted">Select the model provider used for text embeddings.</p>
+        <h2 className="mb-1 text-base font-semibold text-foreground">Embedding & Planning</h2>
+        <p className="mb-4 text-xs text-muted">
+          Embedding provider for semantic search and the planning workflow defaults every project
+          can fall back to.
+        </p>
         <SettingsForm
           settings={settings}
           pending={save.isPending}

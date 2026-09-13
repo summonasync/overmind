@@ -7,9 +7,16 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
-import type { SettingsFormValues, SettingsResponse } from "@/features/settings/types";
+import type {
+  PlanningMaterializationDefault,
+  PlanningValidationDefault,
+  SettingsFormValues,
+  SettingsResponse,
+} from "@/features/settings/types";
 
 const PROVIDERS = ["onnx", "ollama", "openai"] as const;
+const MATERIALIZATION_DEFAULTS = ["off", "on", "archive"] as const satisfies readonly PlanningMaterializationDefault[];
+const VALIDATION_DEFAULTS = ["on", "off"] as const satisfies readonly PlanningValidationDefault[];
 
 interface SettingsFormProps {
   settings: SettingsResponse;
@@ -23,6 +30,12 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(settings.ollamaBaseUrl);
   const [openAiBaseUrl, setOpenAiBaseUrl] = useState(settings.openAiBaseUrl);
   const [openAiApiKey, setOpenAiApiKey] = useState("");
+  const [planningMaterializationDefault, setPlanningMaterializationDefault] = useState(
+    settings.planningMaterializationDefault,
+  );
+  const [planningRequireHumanValidationDefault, setPlanningRequireHumanValidationDefault] = useState(
+    settings.planningRequireHumanValidationDefault,
+  );
   const [syncedSettings, setSyncedSettings] = useState(settings);
 
   if (syncedSettings !== settings) {
@@ -31,6 +44,8 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
     setOllamaBaseUrl(settings.ollamaBaseUrl);
     setOpenAiBaseUrl(settings.openAiBaseUrl);
     setOpenAiApiKey("");
+    setPlanningMaterializationDefault(settings.planningMaterializationDefault);
+    setPlanningRequireHumanValidationDefault(settings.planningRequireHumanValidationDefault);
   }
 
   const handleSubmit = (event: FormEvent) => {
@@ -40,6 +55,8 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
       ollamaBaseUrl: ollamaBaseUrl.trim(),
       openAiBaseUrl: openAiBaseUrl.trim(),
       openAiApiKey: openAiApiKey.trim(),
+      planningMaterializationDefault,
+      planningRequireHumanValidationDefault,
     });
   };
 
@@ -98,6 +115,47 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
           )}
         </>
       ) : null}
+
+      <div className="space-y-3 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
+        <p className="text-xs text-muted">
+          Projects on inherit or unset follow these defaults: materialization decides whether spec,
+          plan and task files are written into the project folder; human validation forces agents to
+          wait for an approval in this UI.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Materialization default" htmlFor="planning-materialization-default">
+            <Select
+              id="planning-materialization-default"
+              value={planningMaterializationDefault}
+              onChange={(event) => setPlanningMaterializationDefault(event.target.value as PlanningMaterializationDefault)}
+              className="w-full"
+            >
+              {MATERIALIZATION_DEFAULTS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Require human validation default" htmlFor="planning-validation-default">
+            <Select
+              id="planning-validation-default"
+              value={planningRequireHumanValidationDefault}
+              onChange={(event) =>
+                setPlanningRequireHumanValidationDefault(event.target.value as PlanningValidationDefault)
+              }
+              className="w-full"
+            >
+              {VALIDATION_DEFAULTS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </div>
 
       <ErrorText error={error} />
       <Button type="submit" disabled={pending}>

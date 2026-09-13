@@ -9,6 +9,7 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
 import {
+  DriftPanel,
   FeatureBoard,
   FeatureForm,
   FeatureWorkspace,
@@ -86,7 +87,12 @@ function PlanningPageContent() {
   }
 
   if (featureSlug) {
-    return <FeatureWorkspace projectId={projectId} slug={featureSlug} />;
+    return (
+      <div className="space-y-4">
+        <FeatureWorkspace projectId={projectId} slug={featureSlug} />
+        <DriftPanel projectId={projectId} />
+      </div>
+    );
   }
 
   return (

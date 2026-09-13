@@ -16,6 +16,7 @@ import {
   useProjectMutations,
 } from "@/features/projects";
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects";
+import { PlanningWorkflowSettings } from "@/features/planning";
 import { ProjectsInfoPanel } from "@/pages/projects-page/ui/projects-info-panel";
 
 function ProjectsPageContent() {
@@ -87,7 +88,15 @@ function ProjectsPageContent() {
         open={detail !== null}
         onClose={closeDetail}
       >
-        {detail ? <ProjectDetail project={detail} /> : null}
+        {detail ? (
+          <>
+            <ProjectDetail project={detail} />
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
+              <PlanningWorkflowSettings projectId={detail.id} />
+            </div>
+          </>
+        ) : null}
       </Modal>
 
       <Modal

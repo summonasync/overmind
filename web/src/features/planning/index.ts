@@ -1,6 +1,13 @@
+export { ArtifactEditor } from "./components/artifact-editor";
+export type { ArtifactEditorValues } from "./components/artifact-editor";
+export { ArtifactLog } from "./components/artifact-log";
+export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
 export { FeatureForm } from "./components/feature-form";
 export { FeatureWorkspace } from "./components/feature-workspace";
+export { PlanningWorkflowSettings } from "./components/workflow-settings";
+export { TaskBoard } from "./components/task-board";
+export { TaskEditor } from "./components/task-editor";
 export {
   useMaterializeMutation,
   usePlanningBoard,
@@ -18,7 +25,13 @@ export {
   planningKeys,
   workflowQueryOptions,
 } from "./queries";
-export { PLANNING_FEATURE_STATUSES } from "./types";
+export {
+  HUMAN_VALIDATION_OVERRIDES,
+  PLANNING_FEATURE_STATUSES,
+  PLANNING_MATERIALIZATIONS,
+  PLANNING_TABS,
+  TASK_STATUSES,
+} from "./types";
 export type {
   CreatePlanningArtifactValues,
   HumanValidationOverride,
@@ -28,6 +41,7 @@ export type {
   PlanningArtifactVersionResponse,
   PlanningCurrentFeature,
   PlanningCurrentResponse,
+  PlanningDocumentKind,
   PlanningDriftItem,
   PlanningDriftKind,
   PlanningFeatureBoardItem,
@@ -39,6 +53,7 @@ export type {
   PlanningMaterializationReport,
   PlanningMaterializedFile,
   PlanningReviewLevel,
+  PlanningTab,
   PlanningWorkflowResponse,
   UpdatePlanningArtifactValues,
   UpdatePlanningFeatureValues,

@@ -11,6 +11,8 @@ export function updateSettings(values: SettingsFormValues): Promise<SettingsResp
     ollamaBaseUrl: values.ollamaBaseUrl || null,
     openAiBaseUrl: values.openAiBaseUrl || null,
     openAiApiKey: values.openAiApiKey || null,
+    planningMaterializationDefault: values.planningMaterializationDefault,
+    planningRequireHumanValidationDefault: values.planningRequireHumanValidationDefault,
   });
 }
 

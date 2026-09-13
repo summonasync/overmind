@@ -2,7 +2,7 @@
 feature: 006
 task: 09
 slug: web-planning-workspace
-status: todo
+status: done
 review: light
 created: 2026-09-08
 ---
@@ -65,12 +65,12 @@ Verification: `npm run lint && npx tsc --noEmit && npm run build` clean; manual 
 </constraints>
 
 <acceptance-criteria>
-- [ ] Spec/Plan/Result can be edited and approved; editing a frozen artifact demands a change note and visibly resets it to draft.
-- [ ] Task board moves tasks across all five statuses with a mandatory log note, and the log timeline shows the entries.
+- [x] Spec/Plan/Result can be edited and approved; editing a frozen artifact demands a change note and visibly resets it to draft.
+- [x] Task board moves tasks across all five statuses with a mandatory log note, and the log timeline shows the entries.
 - [ ] Per-project workflow settings display stored **and** effective values and persist.
 - [ ] Global defaults are editable on the Settings page with help text.
-- [ ] Drift panel lists Missing/Modified items and Re-materialize (with confirm, `force: true`) clears them.
-- [ ] `features/projects` still imports nothing from `features/planning`.
+- [x] Drift panel lists Missing/Modified items and Re-materialize (with confirm, `force: true`) clears them.
+- [x] `features/projects` still imports nothing from `features/planning`.
 </acceptance-criteria>
 
 <refs>
@@ -83,8 +83,42 @@ Verification: `npm run lint && npx tsc --noEmit && npm run build` clean; manual 
 </refs>
 
 <obstacles>
+- **Backend contract gap (worked around client-side, no Host change):** the human-door mutation endpoints `POST /planning/artifacts/{id}/status`, `POST …/log` and `POST …/validate` return `Results.Ok()` — a 200 with an **empty body** (verified live: `Content-Length: 0`). Task 08's `api.ts` typed all three as `Promise<PlanningArtifactResponse>`, which would have thrown a JSON SyntaxError on every successful status move / log append / approval. Fix in web only: `shared/api/client.ts` now treats an empty response body as `undefined`, and the three functions are typed `Promise<void>` — the UI relies on React Query invalidation + refetch of the feature (which carries fresh artifacts, log projection included) and never needed the response body. If these endpoints ever return the updated artifact, the client keeps working unchanged.
+- Empty `logNote` on a status move is rejected as **400 ValidationProblem** (FluentValidation runs before the service), not the 409 `ChangeNoteRequired` the service throws for whitespace-only notes. The UI's mandatory-note modal blocks empty notes client-side first, so no UI path hits either error; recorded so nobody chases the 400 expecting 409.
+- `Results.Ok()` empty-body behavior also means the boot pass had to pin the frozen-edit 409 separately: `PUT /planning/artifacts/{id}` without `logNote` on a validated artifact returns `409` with `title: "ChangeNoteRequired"`, `detail: "A change note is required to modify a frozen artifact."` — `readError` in the shared client surfaces `detail` through `ErrorText` verbatim, as required.
+- `PlanningWorkflowSettings` deliberately reuses the `settings-form.tsx` derived-state-from-props sync pattern (flagged debt, task context says match it, not fix it).
 </obstacles>
 
 <log>
 2026-09-08 — task created from the validated plan.
+
+2026-09-13 — executed. Files created:
+
+- `web/src/features/planning/components/artifact-editor.tsx` — xl-modal editor for spec/plan/result: Write/Preview toggle per `entry-editor.tsx`, frozen banner "Validated <date> — editing resets it to draft", inline change-note input with hint, client-side block on empty note/body, Approve button (draft artifacts only, disabled while the body is dirty — "Save your changes before approving"), server errors through `ErrorText`.
+- `web/src/features/planning/components/artifact-log.tsx` — `<log>` timeline rendered purely from the `log` projection (`[{ date, text }]`, server-side `PlanningLog.Parse`), newest last; no client-side log parsing anywhere.
+- `web/src/features/planning/components/task-board.tsx` — five columns (todo, in progress, in review, done, blocked) with count headers; cards show heading (first `# ` line via `lib/task-heading.ts`), `#order`, review chip (`hard` → warning tone); per-card icon-button row moves to any other status (no drag-and-drop); every move opens a small modal with a mandatory log note (Confirm disabled on empty note).
+- `web/src/features/planning/components/task-editor.tsx` — xl modal for the task body (Write/Preview) + log timeline + "Append log note" input hitting the log endpoint; create mode is body-only (order auto-assigned server-side).
+- `web/src/features/planning/components/workflow-settings.tsx` — `PlanningWorkflowSettings({ projectId })`: materialization (inherit/off/on/archive) and human-validation (unset/on/off) selects, effective values as muted text with "— inherited from global default" when stored is inherit/unset, save via the workflow mutation, "Saved." confirmation.
+- `web/src/features/planning/components/drift-panel.tsx` — renders only when effective materialization is `on` (drift query stays disabled otherwise via the empty-id `enabled` guard); Missing/Modified chips + relative path; Refresh (`refetch`); Re-materialize behind a confirm modal explaining Overmind-managed files get overwritten, confirm sends `force: true`; empty state "Files match the database."; materialization warnings surfaced after a run.
+- `web/src/features/planning/lib/task-heading.ts` — first `# ` line extraction with `Task N` fallback.
+
+Files edited:
+
+- `web/src/features/planning/components/feature-workspace.tsx` — full rewrite of the read-only placeholder: header (title, slug, status `Select` wired to `updateFeature`, version badge, edit/delete), feature body, Spec/Plan/Tasks/Result tab bar with task count, tab state in the URL via `window.history.replaceState` (`&tab=tasks`, default spec, survives refresh/deep-link), artifact panels with status/frozen/review chips + change log, empty tabs → `EmptyState` with "Create <kind>" (order 0), Tasks tab → `TaskBoard` + "Add task", edit-feature and delete-feature modals (delete navigates back to the board URL), document/task editor modals re-resolving the artifact from the fresh feature query so post-mutation state (frozen chip, new log lines) flows in.
+- `web/src/features/planning/types.ts` — `PlanningTab`, `PlanningDocumentKind`, `PLANNING_TABS`, `TASK_STATUSES`, `PLANNING_MATERIALIZATIONS`, `HUMAN_VALIDATION_OVERRIDES`.
+- `web/src/features/planning/api.ts` — `setPlanningArtifactStatus`/`appendPlanningLog`/`validatePlanningArtifact` retyped `Promise<void>` (empty-body 200s, see obstacles).
+- `web/src/features/planning/lib/use-planning.ts` — `usePlanningDrift` also returns `refetch` for the drift Refresh action.
+- `web/src/features/planning/index.ts` — barrel: new components + types/consts.
+- `web/src/pages/planning-page/ui/planning-page.tsx` — workspace branch renders `DriftPanel` under `FeatureWorkspace` (self-gating on effective materialization).
+- `web/src/pages/projects-page/ui/projects-page.tsx` — project detail modal renders `PlanningWorkflowSettings` beside `ProjectDetail` (page-level composition; `features/projects` untouched).
+- `web/src/features/settings/{types.ts,api.ts,components/settings-form.tsx}` + `web/src/pages/settings-page/{ui/settings-page.tsx,ui/settings-help-panel.tsx}` — `planningMaterializationDefault` (off/on/archive) and `planningRequireHumanValidationDefault` (on/off) on the settings form with help text ("Projects on inherit or unset follow these defaults…"), section retitled "Embedding & Planning", help-panel entry added. `settings-form.tsx` derived-state pattern matched, not refactored.
+- `web/src/shared/api/client.ts` — empty response body now resolves to `undefined` (see obstacles; only the planning ceremony endpoints produce empty-body 200s today).
+
+Verification (from `web/`):
+
+- `npm run lint` → 0 errors, 6 warnings (the 5 known `no-img-element` + pre-existing `no-location-assign-relative-destination` in app-topbar; none added — one transient unused-import warning was fixed during the pass).
+- `npx tsc --noEmit` → clean.
+- `npm run build` → green static export, all routes emitted (`/planning`, `/settings` included).
+- Boot ceremony against a live Host on a temp DB (`Overmind__DatabasePath` → mktemp dir, `OVERMIND_WEB_ROOT=web/out`, `--no-tray`, port 4891; real `~/.overmind` untouched — the stale `host.port` my instance wrote was removed): `POST /api/projects` → project; `POST …/planning/features` → feature `draft` v1; spec upsert → `order: 0` v1; `POST …/validate` → **200, `Content-Length: 0`** (empty-body proof); frozen update without note → **409 `ChangeNoteRequired`**; frozen update with note → 200, `status: draft`, `frozenAt: null`, `v2`, log projection `[{date:"2026-09-13", text:"reworked scope after review"}]`; three task upserts → auto orders 0/1/2; status matrix todo→inProgress→review→done→review→blocked→todo all 200 with notes, final artifact log carries all six dated lines newest-last; empty `logNote` status move → 400 (validator, see obstacles); log append → 200 + projection; feature `PUT status: ready` → 200; workflow GET → `inherit/unset → effective off/false`, PUT `on` → effective `on`, PUT validation `on` → effective true; settings GET → `planningMaterializationDefault: off`, PUT `archive`/`on` → reflected; materialize `force:false` → 6 files (`BACKLOG/009-boot-ceremony/{feature,spec}.md`, `tasks/00-02-*.md`, `BACKLOG.md`), drift `[]`; hand-edit + delete a file → drift `[modified spec.md, missing tasks/02]`; materialize `force:true` → drift `[]`, hand edit overwritten. Pages served from `web/out`: `/` 200 (20.2 KB), `/planning` 200 (20.7 KB), `/settings` 200 (20.4 KB). Host stopped, temp dir removed after each pass.
+- Unticked criteria 3 and 4: their display halves (selects + muted effective text on the project modal, editable defaults + help text rendering on the Settings page) are browser-render-dependent — the data paths are proven live above (workflow GET/PUT roundtrip with effective values, settings PUT roundtrip), the visual pass stays with the user like in task 08.
 </log>

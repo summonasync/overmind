@@ -43,7 +43,8 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  const text = await response.text();
+  return text.length === 0 ? (undefined as T) : (JSON.parse(text) as T);
 }
 
 export function apiGet<T>(path: string): Promise<T> {

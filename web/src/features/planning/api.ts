@@ -93,19 +93,19 @@ export function setPlanningArtifactStatus(
   artifactId: string,
   status: PlanningArtifactStatus,
   logNote: string,
-): Promise<PlanningArtifactResponse> {
-  return apiPost<PlanningArtifactResponse>(`/planning/artifacts/${artifactId}/status`, {
+): Promise<void> {
+  return apiPost<void>(`/planning/artifacts/${artifactId}/status`, {
     status,
     logNote,
   });
 }
 
-export function appendPlanningLog(artifactId: string, note: string): Promise<PlanningArtifactResponse> {
-  return apiPost<PlanningArtifactResponse>(`/planning/artifacts/${artifactId}/log`, { note });
+export function appendPlanningLog(artifactId: string, note: string): Promise<void> {
+  return apiPost<void>(`/planning/artifacts/${artifactId}/log`, { note });
 }
 
-export function validatePlanningArtifact(artifactId: string): Promise<PlanningArtifactResponse> {
-  return apiPost<PlanningArtifactResponse>(`/planning/artifacts/${artifactId}/validate`);
+export function validatePlanningArtifact(artifactId: string): Promise<void> {
+  return apiPost<void>(`/planning/artifacts/${artifactId}/validate`);
 }
 
 export function getPlanningWorkflow(projectId: string): Promise<PlanningWorkflowResponse> {

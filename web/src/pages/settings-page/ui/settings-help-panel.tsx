@@ -20,6 +20,11 @@ export function SettingsHelpPanel() {
             OpenAI-compatible endpoints need a base URL and an API key. The key is stored locally
             on this machine.
           </li>
+          <li>
+            Planning defaults apply to projects that have not set their own workflow: materialization
+            <em> inherit</em> follows the global materialization default, and the validation gate
+            follows the global default while a project is <em>unset</em>.
+          </li>
         </ul>
       </section>
 

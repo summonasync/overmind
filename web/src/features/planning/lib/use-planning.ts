@@ -140,7 +140,12 @@ export function useWorkflowMutations(projectId: string) {
 
 export function usePlanningDrift(projectId: string) {
   const query = useQuery(driftQueryOptions(projectId));
-  return { data: query.data ?? [], loading: query.isPending, error: query.error };
+  return {
+    data: query.data ?? [],
+    loading: query.isPending,
+    error: query.error,
+    refetch: query.refetch,
+  };
 }
 
 export function useMaterializeMutation(projectId: string) {

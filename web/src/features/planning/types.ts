@@ -19,11 +19,38 @@ export type HumanValidationOverride = "unset" | "on" | "off";
 
 export type PlanningDriftKind = "missing" | "modified";
 
+export type PlanningTab = "spec" | "plan" | "tasks" | "result";
+
+export type PlanningDocumentKind = Exclude<PlanningArtifactKind, "task">;
+
 export const PLANNING_FEATURE_STATUSES: readonly PlanningFeatureStatus[] = [
   "draft",
   "ready",
   "inProgress",
   "done",
+];
+
+export const PLANNING_TABS: readonly PlanningTab[] = ["spec", "plan", "tasks", "result"];
+
+export const TASK_STATUSES: readonly PlanningArtifactStatus[] = [
+  "todo",
+  "inProgress",
+  "review",
+  "done",
+  "blocked",
+];
+
+export const PLANNING_MATERIALIZATIONS: readonly PlanningMaterialization[] = [
+  "inherit",
+  "off",
+  "on",
+  "archive",
+];
+
+export const HUMAN_VALIDATION_OVERRIDES: readonly HumanValidationOverride[] = [
+  "unset",
+  "on",
+  "off",
 ];
 
 export interface PlanningFeatureBoardItem {
