@@ -391,6 +391,101 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_ArchiveMode_ForeignRepoFileAtTrackedPath_IsKeptWithWarning()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.Archive);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var repoOriginal = Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(repoOriginal)!);
+        await File.WriteAllTextAsync(repoOriginal, "hand-written, never adopted");
+
+        var report = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        (await File.ReadAllTextAsync(repoOriginal)).ShouldBe("hand-written, never adopted");
+        report.Warnings.ShouldHaveSingleItem().ShouldContain(repoOriginal);
+        (await File.ReadAllTextAsync(Path.Combine(
+                _dataDir, "projects", "demo", "backlog", "BACKLOG", "006-demo", "feature.md")))
+            .ShouldContain("feature: 006");
+        (await ctx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task StrategySwitch_ArchiveToOff_RemovesArchiveIndexAndKeepsForeignRepoFiles()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.Archive);
+        await SeedDefaultFeatureAsync(projectId);
+
+        var repoIndex = Path.Combine(_projectDir, "BACKLOG.md");
+        const string humanIndex = "# Human backlog\n\n- [ ] my own item\n";
+        await File.WriteAllTextAsync(repoIndex, humanIndex);
+
+        var repoOriginal = Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(repoOriginal)!);
+        await File.WriteAllTextAsync(repoOriginal, "imported original, never adopted");
+
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        using (var switchCtx = _db.CreateContext())
+        {
+            var project = await switchCtx.Projects.FirstAsync(p => p.Id == projectId);
+            project.SetPlanningWorkflow(PlanningMaterialization.Off, HumanValidationOverride.Unset);
+            await switchCtx.SaveChangesAsync();
+        }
+
+        using var ctx2 = _db.CreateContext();
+        var report = await CreateMaterializer(ctx2).SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Strategy.ShouldBe(PlanningMaterialization.Off);
+        report.Files.Count.ShouldBe(5);
+        report.Warnings.ShouldHaveSingleItem().ShouldContain(repoOriginal);
+
+        (await File.ReadAllTextAsync(repoIndex)).ShouldBe(humanIndex);
+        (await File.ReadAllTextAsync(repoOriginal)).ShouldBe("imported original, never adopted");
+
+        var archiveRoot = Path.Combine(_dataDir, "projects", "demo", "backlog");
+        File.Exists(Path.Combine(archiveRoot, "BACKLOG.md")).ShouldBeFalse();
+        Directory.EnumerateFileSystemEntries(archiveRoot).ShouldBeEmpty();
+        (await ctx2.PlanningMaterializedFiles.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task StrategySwitch_ArchiveToOff_CleanRepo_ClearsEverything()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.Archive);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var archiveRoot = Path.Combine(_dataDir, "projects", "demo", "backlog");
+        File.Exists(Path.Combine(archiveRoot, "BACKLOG.md")).ShouldBeTrue();
+
+        using (var switchCtx = _db.CreateContext())
+        {
+            var project = await switchCtx.Projects.FirstAsync(p => p.Id == projectId);
+            project.SetPlanningWorkflow(PlanningMaterialization.Off, HumanValidationOverride.Unset);
+            await switchCtx.SaveChangesAsync();
+        }
+
+        using var ctx2 = _db.CreateContext();
+        var report = await CreateMaterializer(ctx2).SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Strategy.ShouldBe(PlanningMaterialization.Off);
+        report.Files.Count.ShouldBe(5);
+        report.Warnings.ShouldBeEmpty();
+        Directory.EnumerateFileSystemEntries(archiveRoot).ShouldBeEmpty();
+        File.Exists(Path.Combine(_projectDir, "BACKLOG.md")).ShouldBeFalse();
+        (await ctx2.PlanningMaterializedFiles.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Sync_RollbackAfterForceAdoption_KeepsPreExistingFiles()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);

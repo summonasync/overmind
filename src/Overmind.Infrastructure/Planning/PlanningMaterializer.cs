@@ -142,31 +142,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         foreach (var row in rows)
         {
-            var located = LocateTrackedFile(project, row.RelativePath);
-            if (located is not null)
-            {
-                var (absolute, fileRoot) = located.Value;
-                try
-                {
-                    if (PathGuard.PathsEqual(row.RelativePath, BacklogIndexRelativePath) &&
-                        PathGuard.PathsEqual(Path.GetFullPath(fileRoot), Path.GetFullPath(project.DiskPath)))
-                    {
-                        var content = await File.ReadAllTextAsync(absolute, ct);
-                        await File.WriteAllTextAsync(
-                            absolute, ManagedBlock.Remove(content), ContentHash.Utf8NoBom, ct);
-                    }
-                    else if (File.Exists(absolute))
-                    {
-                        File.Delete(absolute);
-                        DirectoryPruner.PruneEmptyDirectories(absolute, fileRoot);
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    warnings.Add($"Could not remove '{absolute}': {ex.Message}");
-                }
-            }
-
+            await RemoveTrackedCopyAsync(project.DiskPath, rootIsRepo: true, row, warnings, ct);
+            await RemoveTrackedCopyAsync(ArchiveRoot(project), rootIsRepo: false, row, warnings, ct);
             _db.PlanningMaterializedFiles.Remove(row);
             removed.Add(new PlanningMaterializedFileInfo(row.RelativePath, row.Sha256));
         }
@@ -190,29 +167,9 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         foreach (var row in rows)
         {
-            var absolute = PathGuard.ResolveUnderRoot(otherRoot, row.RelativePath);
-            if (!File.Exists(absolute) && !Directory.Exists(absolute))
+            var outcome = await RemoveTrackedCopyAsync(otherRoot, otherIsRepo, row, warnings, ct);
+            if (outcome is TrackedCopyRemoval.NotFound or TrackedCopyRemoval.Failed)
             {
-                continue;
-            }
-
-            try
-            {
-                if (PathGuard.PathsEqual(row.RelativePath, BacklogIndexRelativePath) && otherIsRepo)
-                {
-                    var content = await File.ReadAllTextAsync(absolute, ct);
-                    await File.WriteAllTextAsync(
-                        absolute, ManagedBlock.Remove(content), ContentHash.Utf8NoBom, ct);
-                }
-                else if (File.Exists(absolute))
-                {
-                    File.Delete(absolute);
-                    DirectoryPruner.PruneEmptyDirectories(absolute, otherRoot);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                warnings.Add($"Could not remove '{absolute}' from the previous materialization root: {ex.Message}");
                 continue;
             }
 
@@ -223,21 +180,69 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         return dropped;
     }
 
-    private (string Absolute, string Root)? LocateTrackedFile(Project project, string relativePath)
+    // Rows do not record which root they were written under, so a relative path alone proves
+    // nothing about ownership: a file is only ours when its hash matches the tracked row.
+    private static async Task<TrackedCopyRemoval> RemoveTrackedCopyAsync(
+        string root, bool rootIsRepo, PlanningMaterializedFile row, List<string> warnings, CancellationToken ct)
     {
-        var repoPath = PathGuard.ResolveUnderRoot(project.DiskPath, relativePath);
-        if (File.Exists(repoPath) || Directory.Exists(repoPath))
+        var absolute = PathGuard.ResolveUnderRoot(root, row.RelativePath);
+        if (!File.Exists(absolute) && !Directory.Exists(absolute))
         {
-            return (repoPath, project.DiskPath);
+            return TrackedCopyRemoval.NotFound;
         }
 
-        var archivePath = PathGuard.ResolveUnderRoot(ArchiveRoot(project), relativePath);
-        if (File.Exists(archivePath) || Directory.Exists(archivePath))
+        try
         {
-            return (archivePath, ArchiveRoot(project));
-        }
+            if (PathGuard.PathsEqual(row.RelativePath, BacklogIndexRelativePath))
+            {
+                var content = await File.ReadAllTextAsync(absolute, ct);
+                if (!ManagedBlock.TryExtract(content, out var block))
+                {
+                    return TrackedCopyRemoval.NotFound;
+                }
 
-        return null;
+                if (!string.Equals(ContentHash.Sha256(block), row.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    warnings.Add($"Kept foreign file at a tracked path: {absolute}");
+                    return TrackedCopyRemoval.KeptForeign;
+                }
+
+                if (rootIsRepo)
+                {
+                    await File.WriteAllTextAsync(
+                        absolute, ManagedBlock.Remove(content), ContentHash.Utf8NoBom, ct);
+                }
+                else
+                {
+                    File.Delete(absolute);
+                    DirectoryPruner.PruneEmptyDirectories(absolute, root);
+                }
+
+                return TrackedCopyRemoval.Removed;
+            }
+
+            if (File.Exists(absolute))
+            {
+                var content = await File.ReadAllTextAsync(absolute, ct);
+                if (!string.Equals(ContentHash.Sha256(content), row.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    warnings.Add($"Kept foreign file at a tracked path: {absolute}");
+                    return TrackedCopyRemoval.KeptForeign;
+                }
+
+                File.Delete(absolute);
+                DirectoryPruner.PruneEmptyDirectories(absolute, root);
+                return TrackedCopyRemoval.Removed;
+            }
+
+            // A directory squatting on the path: nothing to hash or delete, the row still goes.
+            return TrackedCopyRemoval.Removed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add($"Could not remove '{absolute}': {ex.Message}");
+            return TrackedCopyRemoval.Failed;
+        }
     }
 
     private static List<FilePlan> BuildPlans(string root, List<PlanningFeature> features)
@@ -466,6 +471,14 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         PlanningFeatureStatus.Done => "done",
         _ => throw new ArgumentOutOfRangeException(nameof(status)),
     };
+
+    private enum TrackedCopyRemoval
+    {
+        NotFound,
+        Removed,
+        KeptForeign,
+        Failed
+    }
 
     private sealed record FilePlan(
         Guid? FeatureId,
