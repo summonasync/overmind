@@ -1,0 +1,155 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  appendPlanningLog,
+  createPlanningArtifact,
+  createPlanningFeature,
+  deletePlanningArtifact,
+  deletePlanningFeature,
+  materializePlanning,
+  setPlanningArtifactStatus,
+  updatePlanningArtifact,
+  updatePlanningFeature,
+  updatePlanningWorkflow,
+  validatePlanningArtifact,
+} from "@/features/planning/api";
+import {
+  boardQueryOptions,
+  driftQueryOptions,
+  featureQueryOptions,
+  planningKeys,
+  workflowQueryOptions,
+} from "@/features/planning/queries";
+import type {
+  CreatePlanningArtifactValues,
+  PlanningArtifactStatus,
+  PlanningFeatureFormValues,
+  UpdatePlanningArtifactValues,
+  UpdatePlanningFeatureValues,
+  UpdatePlanningWorkflowValues,
+} from "@/features/planning/types";
+
+export function usePlanningBoard(projectId: string) {
+  const query = useQuery(boardQueryOptions(projectId));
+  return { data: query.data ?? [], loading: query.isPending, error: query.error };
+}
+
+export function usePlanningFeature(projectId: string, slug: string) {
+  const query = useQuery(featureQueryOptions(projectId, slug));
+  return { data: query.data ?? null, loading: query.isPending, error: query.error };
+}
+
+export function usePlanningMutations(projectId: string) {
+  const queryClient = useQueryClient();
+
+  const invalidate = (slug?: string) => {
+    queryClient.invalidateQueries({ queryKey: planningKeys.lists() });
+    if (slug !== undefined) {
+      queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, slug) });
+    }
+  };
+
+  const createFeature = useMutation({
+    mutationFn: (values: PlanningFeatureFormValues) => createPlanningFeature(projectId, values),
+    onSuccess: () => invalidate(),
+  });
+
+  const updateFeature = useMutation({
+    mutationFn: ({ slug, values }: { slug: string; values: UpdatePlanningFeatureValues }) =>
+      updatePlanningFeature(projectId, slug, values),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  const deleteFeature = useMutation({
+    mutationFn: (slug: string) => deletePlanningFeature(projectId, slug),
+    onSuccess: () => invalidate(),
+  });
+
+  const createArtifact = useMutation({
+    mutationFn: ({ slug, values }: { slug: string; values: CreatePlanningArtifactValues }) =>
+      createPlanningArtifact(projectId, slug, values),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  const updateArtifact = useMutation({
+    mutationFn: (input: {
+      artifactId: string;
+      slug: string;
+      values: UpdatePlanningArtifactValues;
+    }) => updatePlanningArtifact(input.artifactId, input.values),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  const deleteArtifact = useMutation({
+    mutationFn: (input: { artifactId: string; slug: string }) =>
+      deletePlanningArtifact(input.artifactId),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  const setArtifactStatus = useMutation({
+    mutationFn: (input: {
+      artifactId: string;
+      slug: string;
+      status: PlanningArtifactStatus;
+      logNote: string;
+    }) => setPlanningArtifactStatus(input.artifactId, input.status, input.logNote),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  const appendArtifactLog = useMutation({
+    mutationFn: (input: { artifactId: string; slug: string; note: string }) =>
+      appendPlanningLog(input.artifactId, input.note),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  const validateArtifact = useMutation({
+    mutationFn: (input: { artifactId: string; slug: string }) =>
+      validatePlanningArtifact(input.artifactId),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
+  return {
+    createFeature,
+    updateFeature,
+    deleteFeature,
+    createArtifact,
+    updateArtifact,
+    deleteArtifact,
+    setArtifactStatus,
+    appendArtifactLog,
+    validateArtifact,
+  };
+}
+
+export function usePlanningWorkflow(projectId: string) {
+  const query = useQuery(workflowQueryOptions(projectId));
+  return { data: query.data ?? null, loading: query.isPending, error: query.error };
+}
+
+export function useWorkflowMutations(projectId: string) {
+  const queryClient = useQueryClient();
+
+  const update = useMutation({
+    mutationFn: (values: UpdatePlanningWorkflowValues) => updatePlanningWorkflow(projectId, values),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.workflow(projectId) }),
+  });
+
+  return { update };
+}
+
+export function usePlanningDrift(projectId: string) {
+  const query = useQuery(driftQueryOptions(projectId));
+  return { data: query.data ?? [], loading: query.isPending, error: query.error };
+}
+
+export function useMaterializeMutation(projectId: string) {
+  const queryClient = useQueryClient();
+
+  const materialize = useMutation({
+    mutationFn: (force: boolean) => materializePlanning(projectId, force),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.drift(projectId) }),
+  });
+
+  return { materialize };
+}

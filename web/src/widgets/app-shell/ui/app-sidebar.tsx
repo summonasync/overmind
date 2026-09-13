@@ -7,6 +7,7 @@ import {
   ChevronRight,
   FileText,
   Folder,
+  ListChecks,
   Package,
   Search,
   Settings,
@@ -41,6 +42,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
   { href: "/entries", label: "Entries", icon: FileText },
+  { href: "/planning", label: "Planning", icon: ListChecks },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -50,7 +52,7 @@ export function AppSidebar() {
   const pathname = usePathname() ?? "/";
   const [kerrigan, setKerrigan] = useState<string | null>(null);
   const [projectsOpen, setProjectsOpen] = useState(false);
-  const [entriesHref, setEntriesHref] = useState("/entries");
+  const [projectHrefs, setProjectHrefs] = useState({ entries: "/entries", planning: "/planning" });
   const [registerPath, setRegisterPath] = useState<string | null>(null);
   const { create } = useProjectMutations();
 
@@ -59,7 +61,10 @@ export function AppSidebar() {
       setKerrigan(KERRIGAN_VARIANTS[Math.floor(Math.random() * KERRIGAN_VARIANTS.length)].src);
       setProjectsOpen(isProjectsSectionOpen());
       const lastProject = getLastActiveProjectId();
-      setEntriesHref(lastProject !== null ? `/entries?project=${lastProject}` : "/entries");
+      setProjectHrefs({
+        entries: lastProject !== null ? `/entries?project=${lastProject}` : "/entries",
+        planning: lastProject !== null ? `/planning?project=${lastProject}` : "/planning",
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -91,7 +96,12 @@ export function AppSidebar() {
       </div>
       <nav className="relative mt-8 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4" aria-label="Main navigation">
         {NAV_ITEMS.map((item) => {
-          const href = item.href === "/entries" ? entriesHref : item.href;
+          const href =
+            item.href === "/entries"
+              ? projectHrefs.entries
+              : item.href === "/planning"
+                ? projectHrefs.planning
+                : item.href;
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
 
