@@ -9,7 +9,7 @@ public static class PlanningErrors
         PlanningFailureKind.NotFound => HttpErrors.NotFound(ex.Message),
         PlanningFailureKind.Duplicate => HttpErrors.Conflict(ex.Message, title: ex.Code.ToString()),
         PlanningFailureKind.RuleViolation => HttpErrors.Conflict(ex.Message, title: ex.Code.ToString()),
-        PlanningFailureKind.InvalidStatus => Results.Problem(
+        PlanningFailureKind.InvalidStatus or PlanningFailureKind.InvalidInput => Results.Problem(
             statusCode: StatusCodes.Status400BadRequest, title: ex.Code.ToString(), detail: ex.Message),
         _ => Results.Problem(
             statusCode: StatusCodes.Status500InternalServerError, title: "Planning error", detail: ex.Message),

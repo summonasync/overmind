@@ -77,7 +77,7 @@ public sealed class PlanningServiceTests : IDisposable
 
         var ex = await Should.ThrowAsync<PlanningException>(
             () => service.CreateAsync(_projectId, "INVALID", "Title", "body"));
-        ex.Kind.ShouldBe(PlanningFailureKind.InvalidStatus);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
     }
 
     [Fact]

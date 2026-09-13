@@ -10,7 +10,7 @@ public static class SystemRootsApi
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public static RouteGroupBuilder MapTreeRootsApi(this IEndpointRouteBuilder routes)
+    public static RouteGroupBuilder MapSystemRootsApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/system");
         group.MapGet("/tree-roots", GetTreeRoots);

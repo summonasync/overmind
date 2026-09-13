@@ -31,10 +31,12 @@ public sealed class PlanningArtifactService
             throw PlanningException.MissingFeature(featureId.ToString());
         }
 
-        var resolvedOrder = ResolveOrder(kind, order, featureId);
+        var resolvedOrder = await ResolveOrderAsync(kind, order, featureId, ct);
 
         var existing = await _db.PlanningArtifacts
             .FirstOrDefaultAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
+
+        PlanningArtifact? created = null;
 
         if (existing is not null)
         {
@@ -54,9 +56,9 @@ public sealed class PlanningArtifactService
         }
         else
         {
-            var artifact = PlanningArtifact.Create(
+            created = PlanningArtifact.Create(
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light);
-            _db.PlanningArtifacts.Add(artifact);
+            _db.PlanningArtifacts.Add(created);
         }
 
         try
@@ -65,7 +67,24 @@ public sealed class PlanningArtifactService
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            throw PlanningException.DuplicateArtifact(kind, resolvedOrder);
+            if (created is null || order.HasValue || kind != PlanningArtifactKind.Task)
+            {
+                throw PlanningException.DuplicateArtifact(kind, resolvedOrder);
+            }
+
+            _db.PlanningArtifacts.Remove(created);
+            resolvedOrder = await ResolveOrderAsync(kind, null, featureId, ct);
+            _db.PlanningArtifacts.Add(
+                PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light));
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException retryEx) when (IsUniqueViolation(retryEx))
+            {
+                throw PlanningException.DuplicateArtifact(kind, resolvedOrder);
+            }
         }
 
         await SyncAsync(feature.ProjectId, ct);
@@ -163,7 +182,7 @@ public sealed class PlanningArtifactService
             .FirstAsync(ct);
     }
 
-    private int ResolveOrder(PlanningArtifactKind kind, int? order, Guid featureId)
+    private async Task<int> ResolveOrderAsync(PlanningArtifactKind kind, int? order, Guid featureId, CancellationToken ct)
     {
         if (kind != PlanningArtifactKind.Task)
         {
@@ -175,9 +194,9 @@ public sealed class PlanningArtifactService
             return order.Value;
         }
 
-        var maxOrder = _db.PlanningArtifacts
+        var maxOrder = await _db.PlanningArtifacts
             .Where(a => a.FeatureId == featureId && a.Kind == PlanningArtifactKind.Task)
-            .Max(a => (int?)a.Order);
+            .MaxAsync(a => (int?)a.Order, ct);
 
         return (maxOrder ?? -1) + 1;
     }

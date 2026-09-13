@@ -200,12 +200,6 @@ public sealed class PlanningArtifact
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void SetOrder(int order)
-    {
-        Order = order;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
     public void SetReview(PlanningReviewLevel review)
     {
         Review = review;

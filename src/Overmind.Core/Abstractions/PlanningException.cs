@@ -29,7 +29,7 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact, $"An artifact of kind '{kind}' with order {order} already exists.");
 
     public static PlanningException InvalidSlug(string slug) =>
-        new(PlanningFailureKind.InvalidStatus, PlanningFailureCode.InvalidSlug, $"Slug '{slug}' does not match the required pattern (lowercase alphanumeric with hyphens, max 64 chars).");
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidSlug, $"Slug '{slug}' does not match the required pattern (lowercase alphanumeric with hyphens, max 64 chars).");
 
     public static PlanningException ChangeNoteRequired() =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ChangeNoteRequired, "A change note is required to modify a frozen artifact.");

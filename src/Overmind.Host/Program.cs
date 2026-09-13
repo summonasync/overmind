@@ -127,7 +127,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
     app.MapSettingsApi();
     app.MapHealthApi();
     app.MapSystemApi();
-    app.MapTreeRootsApi();
+    app.MapSystemRootsApi();
     app.MapPlanningFeaturesApi();
     app.MapPlanningArtifactsApi();
     app.MapPlanningWorkflowApi();

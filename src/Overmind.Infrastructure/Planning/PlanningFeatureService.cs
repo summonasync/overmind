@@ -63,7 +63,6 @@ public sealed partial class PlanningFeatureService
         }
 
         var feature = await _db.PlanningFeatures
-            .Include(f => f.Artifacts)
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
 
         if (feature is null)
