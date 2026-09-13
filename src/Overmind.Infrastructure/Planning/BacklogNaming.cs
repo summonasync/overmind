@@ -14,4 +14,22 @@ internal static class BacklogNaming
     }
 
     public static string TaskFileName(int order, string taskSlug) => $"{order:D2}-{taskSlug}.md";
+
+    public static bool TryParseTaskOrder(string fileName, out int order)
+    {
+        order = 0;
+        if (!fileName.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var dash = fileName.IndexOf('-');
+        if (dash <= 0)
+        {
+            return false;
+        }
+
+        var digits = fileName[..dash];
+        return digits.Length > 0 && digits.All(char.IsAsciiDigit) && int.TryParse(digits, out order);
+    }
 }

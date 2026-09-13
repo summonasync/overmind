@@ -43,4 +43,8 @@ public sealed class PlanningException : Exception
     public static PlanningException HumanValidationRequired(PlanningArtifactKind kind, string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.HumanValidationRequired,
             $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.");
+
+    public static PlanningException ImportFailed(string source, Exception? inner = null) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ImportFailed,
+            $"Importing '{source}' failed: {inner?.Message ?? "unknown error"}", inner);
 }

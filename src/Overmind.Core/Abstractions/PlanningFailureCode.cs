@@ -11,5 +11,6 @@ public enum PlanningFailureCode
     InvalidStatusForKind,
     ChangeNoteRequired,
     CannotValidateTask,
-    HumanValidationRequired
+    HumanValidationRequired,
+    ImportFailed
 }

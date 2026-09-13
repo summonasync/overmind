@@ -44,13 +44,13 @@ try
 
         using (instance)
         {
-            await RunAsync(builder, noTray || isTesting);
+            await RunAsync(builder, noTray || isTesting, args);
         }
 
         return 0;
     }
 
-    await RunAsync(builder, noTray || isTesting);
+    await RunAsync(builder, noTray || isTesting, args);
     return 0;
 }
 catch (Exception ex)
@@ -63,7 +63,7 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
-static async Task RunAsync(WebApplicationBuilder builder, bool headless)
+static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[] args)
 {
     builder.Services.AddOvermind();
 
@@ -138,6 +138,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless)
     {
         var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
         await db.Database.MigrateAsync();
+        await BacklogImportCommand.TryRunAsync(scope.ServiceProvider, args, app.Lifetime.ApplicationStopping);
     }
 
     await app.StartAsync();

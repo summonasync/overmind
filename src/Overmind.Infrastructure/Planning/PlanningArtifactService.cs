@@ -65,7 +65,7 @@ public sealed class PlanningArtifactService
         {
             await _db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
         {
             if (created is null || order.HasValue || kind != PlanningArtifactKind.Task)
             {
@@ -81,13 +81,13 @@ public sealed class PlanningArtifactService
             {
                 await _db.SaveChangesAsync(ct);
             }
-            catch (DbUpdateException retryEx) when (IsUniqueViolation(retryEx))
+            catch (DbUpdateException retryEx) when (PlanningServiceGuard.IsUniqueViolation(retryEx))
             {
                 throw PlanningException.DuplicateArtifact(kind, resolvedOrder);
             }
         }
 
-        await SyncAsync(feature.ProjectId, ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
 
         return existing ?? await _db.PlanningArtifacts
             .FirstAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
@@ -117,7 +117,7 @@ public sealed class PlanningArtifactService
         }
 
         await _db.SaveChangesAsync(ct);
-        await SyncAsync(await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
     }
 
     public async Task ValidateAsync(Guid artifactId, CancellationToken ct = default)
@@ -134,7 +134,7 @@ public sealed class PlanningArtifactService
         }
 
         await _db.SaveChangesAsync(ct);
-        await SyncAsync(await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
     }
 
     public async Task AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default)
@@ -143,7 +143,7 @@ public sealed class PlanningArtifactService
         artifact.AppendLog(note);
 
         await _db.SaveChangesAsync(ct);
-        await SyncAsync(await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
     }
 
     public async Task DeleteAsync(Guid artifactId, CancellationToken ct = default)
@@ -160,7 +160,7 @@ public sealed class PlanningArtifactService
         var projectId = await GetProjectIdAsync(artifact.FeatureId, ct);
         _db.PlanningArtifacts.Remove(artifact);
         await _db.SaveChangesAsync(ct);
-        await SyncAsync(projectId, ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
     }
 
     private async Task<PlanningArtifact> LoadArtifactOrThrow(Guid artifactId, CancellationToken ct)
@@ -200,19 +200,4 @@ public sealed class PlanningArtifactService
 
         return (maxOrder ?? -1) + 1;
     }
-
-    private async Task SyncAsync(Guid projectId, CancellationToken ct)
-    {
-        try
-        {
-            await _materializer.SyncAsync(projectId, force: false, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Planning materialization sync failed for project {ProjectId}", projectId);
-        }
-    }
-
-    private static bool IsUniqueViolation(DbUpdateException ex) =>
-        ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true;
 }

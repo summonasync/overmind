@@ -2,7 +2,7 @@
 feature: 006
 task: 06
 slug: backlog-importer
-status: todo
+status: done
 review: light
 created: 2026-09-08
 amended: 2026-09-08 — plan A3/A4: no private slugify (consume `Slug`/`BacklogNaming` from task 05) and all writes go through `PlanningFeatureService.ImportAsync`; this task therefore depends on task 02 as well as 01b
@@ -73,11 +73,11 @@ Tests — `tests/Overmind.Infrastructure.Tests/BacklogImporterTests.cs` against 
 </constraints>
 
 <acceptance-criteria>
-- [ ] A BACKLOG folder imports into features + spec/plan/task artifacts with statuses, `FrozenAt`, review levels and task order from `NN-` prefixes.
-- [ ] `<log>` history is preserved inside artifact bodies.
-- [ ] Re-running the import changes nothing structurally (idempotent by slug / kind+order) and leaves a log note.
-- [ ] Missing or malformed files are reported in `Skipped`, never crash the import.
-- [ ] A failed or ambiguous import logs clearly and the Host still starts.
+- [x] A BACKLOG folder imports into features + spec/plan/task artifacts with statuses, `FrozenAt`, review levels and task order from `NN-` prefixes.
+- [x] `<log>` history is preserved inside artifact bodies.
+- [x] Re-running the import changes nothing structurally (idempotent by slug / kind+order) and leaves a log note.
+- [x] Missing or malformed files are reported in `Skipped`, never crash the import.
+- [x] A failed or ambiguous import logs clearly and the Host still starts.
 </acceptance-criteria>
 
 <refs>
@@ -89,8 +89,16 @@ Tests — `tests/Overmind.Infrastructure.Tests/BacklogImporterTests.cs` against 
 </refs>
 
 <obstacles>
+- **Hit during execution 2026-09-13 — status spelling drift between task 05's materializer and this task's contract.** The contract vocabulary is `in_progress`, but `PlanningMaterializer.FeatureStatus` writes `inProgress` and task statuses go through `ToString().ToLowerInvariant()`, which produces `inprogress`. A strict importer would degrade every in-progress feature/task coming back from a materialized tree to the default + a `Skipped` note. Resolution: tolerant mapping — `in_progress`, `inProgress` and `inprogress` all map to `InProgress` for both kinds; genuinely unknown values still default + note. Pinned by `Import_MaterializerStatusSpellings_Mapped`. The materializer itself is untouched (task 05 is done/reviewed); if its spelling is ever unified, the importer keeps working.
+- **Hit during execution 2026-09-13 — feature titles would compound across materialize→import cycles.** The materializer writes the H1 as `# Feature {nnn} — {Title}`, so a naive `FirstHeading`-as-title import stores `Feature 010 — Demo…` as the title and the next materialization writes `# Feature 010 — Feature 010 — Demo…`. Resolution: the importer strips the `Feature {featurePart} — ` prefix built from `BacklogNaming.SplitSlug(folderName)` — this is where the importer consumes `BacklogNaming` (A3); the whole repo corpus (001–006) follows the same heading shape, so stripping is corpus-correct too.
+- **Hit during execution 2026-09-13 — idempotent re-run vs the re-import log note are in tension.** Always calling `UpdateBody` with the note leaves a note on every run (contract letter) but bumps versions/snapshots forever on an unchanged tree (contract spirit: "changes nothing structurally"). Resolution: skip artifacts whose body, status and review are unchanged, and recognize bodies that differ only by a previous re-import note — `PlanningFeatureService.MatchesImportedBody` re-applies `PlanningLog.Append(incoming, note, recordedDate)` and compares, so the note is appended exactly once per real edit (third run stays at version 2, pinned by `Import_ReRunAfterEdit_UpdatesWithNoteAndStaysStable`).
+- **Hit during execution 2026-09-13 — EF nav fixup duplicated imported artifacts.** Adding a restored artifact to BOTH `DbSet<PlanningArtifact>` and the parent's `Artifacts` list put the same instance into the list twice (manual add + EF's Add-time relationship fixup), so any later `Include`/assert saw doubles (8 where 4 belonged). Resolution: only `_db.PlanningArtifacts.Add(restored)` — EF fixup populates the collection — plus an `imported` id set so the kept-check does not flag freshly created rows (fixup adds them to the collection before the orphan scan runs).
+- **Scope edge — `result.md` is deliberately not imported** (the task scope enumerates only feature/spec/plan/tasks); a materialized `result.md` lands in `Skipped` as ignored. Round-trip is still lossless in the materialize→import→materialize direction: the DB Result artifact is never deleted by import ("kept" applies only to the DB-not-on-disk direction), so re-materialization rewrites the file from the DB copy.
+- **Known infidelity — re-freezing an existing artifact stamps `FrozenAt = now`.** The entity offers no mutation that sets `FrozenAt` to an arbitrary date (`Validate()` stamps `UtcNow`; `Restore` is create-only). Fresh imports are exact (`Restore` carries the `validated:` date); only the update path where disk says `validated` but the DB copy is draft/body-changed re-freezes with the import timestamp — the ceremony-equivalent of a human clicking Approve.
+- **Deviation from "one public method"** — `BacklogImporter` also exposes `public static string? ResolveBacklogDirectory(string)`: `BacklogImportCommand` must resolve the repo root BEFORE importing (to match `--project`/`DiskPath` against it), and duplicating the root-resolution rule in Host would let the CLI and the importer drift. The instance API remains the single `ImportAsync`.
 </obstacles>
 
 <log>
 2026-09-08 — task created from the validated plan.
+2026-09-13 — implemented. `BacklogMarkdown` (frontmatter/date/H1 parsing), `BacklogImporter` + request/report/feature/artifact DTOs, `PlanningFeatureService.ImportAsync` (one transaction per feature, Restore on create, UpdateBody/SetStatus with the "re-imported from <path>" note on change, kept-artifact reporting, materialization sync after commit), `PlanningFailureCode.ImportFailed` + factory (additive, `PlanningErrors.Map` handles the Kind already). `BacklogNaming` gained `TryParseTaskOrder` so the `NN-` write/read rule lives in one type. Host: `BacklogImportCommand.TryRunAsync` wired in `Program.cs` after migrations (flag handling mirrors `--no-tray`; `--project` by guid or exact name; else single project whose `DiskPath` equals the repo root; every failure logs and boot continues), `BacklogImporter` registered in DI. S4 riding item landed: `IsUniqueViolation` + the `SyncAsync`/`ClearAsync` swallow-and-log wrappers extracted into `PlanningServiceGuard` (internal, `Infrastructure/Planning/`); `PlanningFeatureService` and `PlanningArtifactService` refactored onto it, behavior identical (`PlanningServiceTests` 24/24 unchanged, incl. both swallow-and-log pins). New tests: `BacklogImporterTests` 10 (full-folder mapping, verbatim `<log>`, feature-only folder, unknown statuses/levels, materializer spellings, template/featureless/stray skips, idempotent re-run, edit+re-import note stability, kept artifact, root resolution). CLI verified by live host boots against a temp DB: bad path → ERR log + `UI ready`; no project → candidates named + `UI ready`; registered project → `Imported planning from …: 1 features (1 new), 0 artifacts, 0 skipped`. `dotnet build Overmind.sln` 0 warnings / 0 errors; `dotnet test Overmind.sln --no-build` 375/375 (Core 85, Infrastructure 122 = 112+10, Api 134, Mcp 34; baseline 365). `dotnet format --verify-no-changes`: no findings in touched files (6 pre-existing in generated migrations + `McpProcessDriver`, untouched). No git commits per constraints.
 </log>

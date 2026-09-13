@@ -41,6 +41,7 @@ public static class DependencyInjection
 
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningArtifactService>();
+        services.AddScoped<BacklogImporter>();
         services.AddScoped<PlanningPolicy>();
         services.AddScoped<IPlanningMaterializer>(provider => new PlanningMaterializer(
             provider.GetRequiredService<OvermindDbContext>(),
