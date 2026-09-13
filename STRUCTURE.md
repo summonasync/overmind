@@ -33,7 +33,7 @@ Central package management: `Directory.Packages.props`; shared build props: `Dir
 
 ## Planning ceremony (feature 006, in flight)
 
-What exists **now** (tasks 01/01b/02: domain, persistence, human door). Settings, agent door, materialization, importer, MCP and web are still ahead — extend this shape, don't invent a parallel one. Task 10 folds this section into the permanent conventions above.
+What exists **now** (tasks 01/01b/02/03/04/05: domain, persistence, human door, workflow settings, agent door, real materializer). Importer, MCP and web are still ahead — extend this shape, don't invent a parallel one. Task 10 folds this section into the permanent conventions above.
 
 - **Model** (`Core/Entities`): `PlanningFeature` (slug unique per project, `Body`, `Status`, `Version`), `PlanningArtifact` (`Kind` ∈ spec/plan/task/result, `Status`, `Review`, `Order`, `Body`, `FrozenAt`, `Version`), `PlanningArtifactVersion` (unique `(ArtifactId, Version)`), `PlanningMaterializedFile` (nullable `FeatureId`, unique `(ProjectId, RelativePath)`). `Project` carries `PlanningMaterialization` + `RequireHumanValidation` and `SetPlanningWorkflow`.
 - **One status enum, per-kind vocabulary:** `PlanningArtifact.AllowedStatuses(kind)` — spec/plan/result take `draft|validated`, tasks take `todo|in_progress|review|done|blocked`. Violations throw from the entity; no caller re-checks.
@@ -44,7 +44,6 @@ What exists **now** (tasks 01/01b/02: domain, persistence, human door). Settings
 - **Disk can never fail a DB write:** `SyncAsync`/`ClearAsync` are invoked through swallow-and-log wrappers; un-writable or un-removable files surface via `PlanningMaterializationReport.Warnings`. `IPlanningMaterializer` is `PlanningMaterializer` (scoped; the archive data directory is injected from Host, Infrastructure holds no `~/.overmind` literal).
 - **Failure vocabulary:** services throw `PlanningException` (`Core/Abstractions`) carrying `Kind` (→ status: `NotFound` 404, `Duplicate`/`RuleViolation` 409, `InvalidStatus` 400) and `Code` (`PlanningFailureCode`, whose `ToString()` **is** the ProblemDetails `title`). `Host/Api/PlanningErrors.Map` is the only translator. Never derive a title from message text; never let a raw `DbUpdateException` or domain exception reach a caller.
 - **Two doors, one handler set:** the human door is `/api/planning/*` + `/api/projects/{id}/planning/*` (`PlanningFeaturesApi`, `PlanningArtifactsApi`, handlers `internal static`); the agent door `/api/agent/planning/*` (task 04) maps onto the same delegates and adds only `current` and the gated `validate`. A new failure is a `PlanningFailureCode` member + a factory, never a hand-written `title:` string.
-- **Not wired yet — do not assume it works:** `Project.SetPlanningWorkflow` has no production caller, `ProjectResponse` exposes neither planning field, and `PlanningPolicy` does not exist. All three land in task 03.
 
 ## Backend code style
 
