@@ -2,7 +2,7 @@
 feature: 006
 task: 07
 slug: mcp-planning-surface
-status: todo
+status: done
 review: light
 created: 2026-09-08
 ---
@@ -64,11 +64,11 @@ Tests — `tests/Overmind.Mcp.Tests`:
 </constraints>
 
 <acceptance-criteria>
-- [ ] Eight planning tools and three planning resources are listed and callable over stdio.
-- [ ] A gated validate returns an MCP error whose message starts with `STOP:` and writes nothing.
-- [ ] `current` renders task / stop / empty states distinctly, with the STOP text first.
-- [ ] Bootstrap prompt teaches the planning loop.
-- [ ] The adapter still references no other project and all calls go to `/api/agent/planning/*`.
+- [x] Eight planning tools and three planning resources are listed and callable over stdio.
+- [x] A gated validate returns an MCP error whose message starts with `STOP:` and writes nothing.
+- [x] `current` renders task / stop / empty states distinctly, with the STOP text first.
+- [x] Bootstrap prompt teaches the planning loop.
+- [x] The adapter still references no other project and all calls go to `/api/agent/planning/*`.
 </acceptance-criteria>
 
 <refs>
@@ -81,8 +81,35 @@ Tests — `tests/Overmind.Mcp.Tests`:
 </refs>
 
 <obstacles>
+- **SDK prefixes exception-based tool errors** (ModelContextProtocol 2.2.0): an `McpException` thrown from a tool method surfaces to the client as `An error occurred invoking 'planning_validate': <message>` — the STOP text was present but not first, failing the "message starts with STOP:" wire requirement. Fixed inside the adapter: `planning_validate` returns `CallToolResult { IsError = true, Content = [TextContentBlock(…)] }` with the gate's STOP detail verbatim, which the SDK passes through unprefixed. All other failures (404, non-gate 409s, invalid arguments) still use `McpException` and keep the informative prefixed rendering. No Host changes; task-04 route/DTO shapes were correct as-is.
+- **`OvermindApiClient` kept unchanged** (pinned by plan Task 07): the 409 ProblemDetails detail is extracted from the `ApiStatusException` message at the `"): "` boundary — a format owned by the same assembly, with safe degradation (non-STOP details keep the full prefixed message). The plan's alternative (a `Detail` property on the exception) would have been cleaner but required touching the client.
+- **Consequential test edit outside the scope list**: `HandshakeContractTests.ToolsList` pinned the exact tool set (six) — updated to fourteen plus the three planning resource templates, otherwise the suite breaks by construction when the surface grows.
 </obstacles>
 
 <log>
 2026-09-08 — task created from the validated plan.
+
+2026-09-13 — executed. Changes by file:
+
+**src/Overmind.Mcp/OvermindPlanningTools.cs** — new, eight tools: `planning_list_features` / `planning_read_feature` / `planning_current_task` (ReadOnly+Idempotent, GET agent routes), `planning_create_feature`, `planning_upsert_artifact` (kind/review normalized client-side against spec|plan|task|result and light|hard), `planning_set_status` (status normalized against the seven-value wire vocabulary, empty logNote rejected client-side with the artifact-log explanation), `planning_append_log`, `planning_validate`. `current` in state `stop` reorders the payload so `reason` (the STOP text) is the first property. Gate refusals on validate surface as `CallToolResult { IsError = true }` with the STOP detail verbatim (see obstacles).
+
+**src/Overmind.Mcp/OvermindPlanningResources.cs** — new, three markdown resources: board as `- <slug> [<status>] — <title> · tasks <done>/<total> · spec <status> · plan <status>` (null statuses render `none`), full feature as `# <title>` + body + `## Spec`/`## Plan`/`## Tasks` (`### <NN>. <heading>` from the task's first H1, `Status: … · Review: …` line, zero-padded order) + `## Result`; `current` renders `Current task: <slug> #<NN> [<status>]` + body, a first-line `STOP: …` (reason verbatim), or `NOTHING TO DO: …`. 404 → `ResourceNotFound` protocol error.
+
+**src/Overmind.Mcp/SessionBootstrapPrompt.cs** — both branches (active-project and FallbackText) teach the planning loop: read `…/planning/features`, take `…/features/<slug>/current`, obey any STOP line (gated specs/plans are approved by the user, never by the agent), report progress via `planning_set_status` + `planning_append_log`.
+
+**src/Overmind.Mcp/Program.cs** — registered `OvermindPlanningTools` / `OvermindPlanningResources` (DI + `WithTools`/`WithResources`).
+
+**tests/Overmind.Mcp.Tests/Canned.cs** — agent payloads: board (2 features, one without spec/plan), full feature (spec validated+frozen, plan draft, tasks 01 done / 02 inProgress hard), standalone task artifact, `current` in all three states, 409 `HumanValidationRequired` ProblemDetails with the exact STOP detail.
+
+**tests/Overmind.Mcp.Tests/McpSessionTestBase.cs** — `RegisterPlanningRoutes`: board/feature/current (generic task state + stop/empty slugs), create/upsert/status/log/validate POSTs; the three no-content routes return empty 200 bodies like the real Host.
+
+**tests/Overmind.Mcp.Tests/PlanningToolContractTests.cs** — new, 15 tests (16 cases; the unknown-kind rejection is a theory over two inputs): eight-name tools/list with description pins, per-tool path/method/body assertions, stop-state payload leads with `reason`, gated validate → error text starts with `STOP:` and exactly one agent request is made, ungated validate confirms, unknown kind/status/review and empty logNote rejected client-side without any HTTP call.
+
+**tests/Overmind.Mcp.Tests/PlanningResourceContractTests.cs** — new, 7 tests: three URI templates listed, board line shape, feature section ordering (Spec → Plan → Tasks → tasks by order, no Result section when absent), `current` task/stop/empty renderings, unknown feature → `-32002` ResourceNotFound.
+
+**tests/Overmind.Mcp.Tests/PromptAndFailureModeTests.cs** — extended with two bootstrap tests (single-project and fallback branches both mention the planning resources, STOP rule, `planning_set_status`/`planning_append_log`).
+
+**tests/Overmind.Mcp.Tests/HandshakeContractTests.cs** — tools pin 6 → 14 names; three planning resource templates added to the templates assertion (consequential, see obstacles).
+
+**Verification:** `dotnet build Overmind.sln` → 0 warnings / 0 errors. `dotnet test Overmind.sln --no-build` → 400 passed, 0 failed (Core 85, Infrastructure 122, Api 134, Mcp 59; baseline 375, +25 in Mcp). `dotnet format --verify-no-changes` → clean except 6 pre-existing IDE0161 in generated EF migrations (untouched). `grep ProjectReference src/Overmind.Mcp/Overmind.Mcp.csproj` → 0; every planning call in the adapter targets `/api/agent/planning/*` or `/api/agent/projects/{id}/planning/*`.
 </log>

@@ -82,11 +82,13 @@ App Router, React 19, TypeScript strict, Tailwind 4, React Query 5, FSD layering
 Transport: stdio JSON-RPC via the ModelContextProtocol SDK. Server name `overmind`; server instructions tell agents to read `overmind://` resources first.
 
 - **Tools** (`OvermindTools`): `list_projects`, `list_entries` (optional type filter), `read_entry`, `write_entry`, `update_entry` (content-only, title/tags preserved), `search` (`mode=fulltext|semantic`, semantic returns "vector search unavailable" when Qdrant is down). **Write scope is restricted to note/decision/gate/guard** — skills carry files and are managed via the UI until P2 runtime delivery; attempts to write a skill get an explanatory MCP error.
+- **Planning tools** (`OvermindPlanningTools`): `planning_list_features`, `planning_read_feature`, `planning_current_task` (read-only), `planning_create_feature`, `planning_upsert_artifact`, `planning_set_status` (empty log note rejected client-side — status moves are recorded in the artifact log), `planning_append_log`, `planning_validate` (gated: a 409 from the human-validation gate reaches the agent verbatim as an error starting with `STOP:`). All planning calls go to the agent door `/api/agent/planning/*` only.
 - **Resources** (`OvermindResources`), custom scheme `overmind://` (see ADR — renamed from `ctx://`):
   - `overmind://projects`, `overmind://projects/{id}` — JSON.
   - `overmind://projects/{id}/{gates|guards|notes|decisions|skills}` — concatenated markdown (`# Title` + body per entry).
   - `overmind://entries/{id}` — single entry as markdown.
-- **Prompts** (`SessionBootstrapPrompt`): session-bootstrap prompt teaching the agent to read gates/guards at session start.
+- **Planning resources** (`OvermindPlanningResources`): `overmind://projects/{id}/planning/features` (board as markdown), `…/features/{slug}` (full feature: body + `## Spec`/`## Plan`/`## Tasks`/`## Result`), `…/features/{slug}/current` (current task, or a first-line `STOP:` / `NOTHING TO DO:`).
+- **Prompts** (`SessionBootstrapPrompt`): session-bootstrap prompt teaching the agent to read gates/guards at session start and to run the planning loop (board → `current` → obey a STOP → report via `planning_set_status`/`planning_append_log`).
 - **Error mapping:** 404 → `ResourceNotFound` protocol error; unreachable API / 503 semantic-down / other statuses → `McpException` with a human-readable message.
 
 ## Skill-kits and materialization (v1 mechanics)
@@ -114,14 +116,14 @@ Source of truth is the DB; **disk is a managed cache**. Agents load skills only 
 - **001-overmind-mvp — shipped.** Tasks 01–08 + 075: scaffold → domain+persistence → core API → kits/materialization → embeddings/Qdrant → MCP adapter → web UI → tray host e2e; `ctx://`→`overmind://` rename. Hard architect review: `audits/architect-review-2026-09-07.md`.
 - **004-projects-tree-view — shipped.** Sidebar tree of real disk folders (localhost-only `SystemApi` browse/list endpoints), inactive non-project nodes, register-in-place sync flow.
 - **005-tree-workspace — shipped.** User-defined tree roots (`SystemRootsApi` add/remove with a project guard) + active-project context in the web UI (tree click → Entries of that project, session-persistent expansion).
-- **006-planning — in flight, 7 of 11 tasks done (01/01b/02–06).** Built so far: planning entities/enums/abstractions in Core, the `Planning` migration, `Infrastructure/Planning` services incl. the real `PlanningMaterializer` (off/on/archive + drift), the human door (`PlanningFeaturesApi`/`PlanningArtifactsApi`), workflow settings (`PlanningWorkflowApi` + `PlanningPolicy`), the agent door (`AgentPlanningApi`), the materialization endpoints (`PlanningMaterializationApi`), and the idempotent backlog importer (`--import-backlog` CLI). Remaining (tasks 07–10): MCP surface, web UI, closeout. Spec/plan and task contracts in `BACKLOG/006-planning/`.
+- **006-planning — in flight, 8 of 11 tasks done (01/01b/02–07).** Built so far: planning entities/enums/abstractions in Core, the `Planning` migration, `Infrastructure/Planning` services incl. the real `PlanningMaterializer` (off/on/archive + drift), the human door (`PlanningFeaturesApi`/`PlanningArtifactsApi`), workflow settings (`PlanningWorkflowApi` + `PlanningPolicy`), the agent door (`AgentPlanningApi`), the materialization endpoints (`PlanningMaterializationApi`), the idempotent backlog importer (`--import-backlog` CLI), and the MCP planning surface (8 tools + 3 markdown resources + bootstrap loop). Remaining (tasks 08–10): web UI, closeout. Spec/plan and task contracts in `BACKLOG/006-planning/`.
 - **002-kit-library — planned.** Import kits from a local folder or git repo (incl. private repos with stored credentials); imported kits are first-class.
 - **003-bundled-installer — blocked by 002.** Win/mac installer with curated pre-bundled kits riding the 002 import pipeline. Revisit the additive-only-contract ADR when separate distribution becomes real.
 - **Deferred:** P1 external-folder materialization + agent launcher (`claude --add-dir`, `kimi --skills-dir`, spike for the rest); P2 runtime skill/gate/guard delivery via MCP (`get_skill` tool, `overmind://skills/` resources, universal bootstrap skill); P2/P3 agent onboarding flows. Hardening nits from reviews live in `BACKLOG.md` Deferred.
 
 ## Testing strategy
 
-xUnit + Shouldly + NSubstitute; test projects mirror src and each references only its target. Current suite: 375 tests green (Core 85, Infrastructure 122, Api 134, Mcp 34).
+xUnit + Shouldly + NSubstitute; test projects mirror src and each references only its target. Current suite: 400 tests green (Core 85, Infrastructure 122, Api 134, Mcp 59).
 
 - `Overmind.Core.Tests` — entity factories, domain behavior.
 - `Overmind.Infrastructure.Tests` — EF roundtrips on temp SQLite DBs, FTS trigger sync, materialization into temp dirs, embedding providers, Qdrant config (live tests gated on availability).

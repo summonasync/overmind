@@ -12,6 +12,10 @@ public sealed class SessionBootstrapPrompt
     private const string FallbackText =
         "At session start, read overmind://projects to list available projects, then read " +
         "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
+        "Planning loop: read overmind://projects/{id}/planning/features for the board, take " +
+        "overmind://projects/{id}/planning/features/<slug>/current for your next task, obey any STOP line " +
+        "(a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
+        "and report progress with planning_set_status and planning_append_log. " +
         "Set OVERMIND_PROJECT_ID to make the active project explicit.";
 
     private readonly OvermindApiClient _api;
@@ -48,7 +52,11 @@ public sealed class SessionBootstrapPrompt
 
         var text = string.IsNullOrWhiteSpace(activeProjectId)
             ? FallbackText
-            : $"At session start, read overmind://projects/{activeProjectId}/gates and /guards and follow them.";
+            : $"At session start, read overmind://projects/{activeProjectId}/gates and /guards and follow them. " +
+              $"Planning loop: read overmind://projects/{activeProjectId}/planning/features for the board, " +
+              $"take overmind://projects/{activeProjectId}/planning/features/<slug>/current for your next task, " +
+              "obey any STOP line (a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
+              "and report progress with planning_set_status and planning_append_log.";
 
         return new GetPromptResult
         {

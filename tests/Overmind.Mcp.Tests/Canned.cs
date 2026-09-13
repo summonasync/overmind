@@ -9,6 +9,14 @@ public static class Canned
     public static readonly Guid SecondProjectId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     public static readonly Guid EntryId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     public static readonly Guid MissingEntryId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+    public static readonly Guid PlanningSpecArtifactId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+    public static readonly Guid PlanningPlanArtifactId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+    public static readonly Guid PlanningTaskOneId = Guid.Parse("88888888-8888-8888-8888-888888888888");
+    public static readonly Guid PlanningTaskTwoId = Guid.Parse("99999999-9999-9999-9999-999999999999");
+
+    public const string PlanningSlug = "demo-feature";
+    public const string PlanningStopSlug = "gate-locked";
+    public const string PlanningEmptySlug = "all-done";
 
     public const string HealthJson = """{"status":"ok","vectorSearch":"up","version":"test"}""";
 
@@ -70,6 +78,54 @@ public static class Canned
 
     public const string SemanticUnavailableJson =
         """{"title":"Semantic search unavailable","detail":"Semantic search is unavailable because the vector store is down. Use mode=fulltext.","status":503}""";
+
+    public const string PlanningBoardJson =
+        """
+        [
+          {"slug":"demo-feature","title":"Demo feature","status":"inProgress","version":4,"specStatus":"validated","planStatus":"draft","taskTotal":2,"taskDone":1,"updatedAt":"2026-09-10T08:00:00Z"},
+          {"slug":"draft-one","title":"Draft one","status":"draft","version":1,"specStatus":null,"planStatus":null,"taskTotal":0,"taskDone":0,"updatedAt":"2026-09-09T09:00:00Z"}
+        ]
+        """;
+
+    public const string PlanningFeatureJson =
+        """
+        {
+          "slug": "demo-feature",
+          "title": "Demo feature",
+          "body": "<goal>\nShip the demo.\n</goal>",
+          "status": "inProgress",
+          "version": 4,
+          "createdAt": "2026-09-08T10:00:00Z",
+          "updatedAt": "2026-09-10T08:00:00Z",
+          "artifacts": [
+            {"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","review":"light","order":0,"body":"# Demo spec\n\nShip the demo.","frozenAt":"2026-09-09T10:00:00Z","version":2,"createdAt":"2026-09-08T10:05:00Z","updatedAt":"2026-09-09T10:00:00Z","log":[{"date":"2026-09-09","text":"frozen by the user"}]},
+            {"id":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","review":"light","order":0,"body":"# Demo plan\n\nTwo tasks.","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:00:00Z","updatedAt":"2026-09-08T11:00:00Z","log":[]},
+            {"id":"88888888-8888-8888-8888-888888888888","kind":"task","status":"done","review":"light","order":1,"body":"# Build the domain\n\n<goal>Model it.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:05:00Z","updatedAt":"2026-09-09T12:00:00Z","log":[]},
+            {"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]}
+          ]
+        }
+        """;
+
+    public const string PlanningTaskTwoJson =
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]}""";
+
+    public const string PlanningCurrentTaskJson =
+        """
+        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]},"reason":null}
+        """;
+
+    public const string PlanningCurrentStopJson =
+        """
+        {"state":"stop","feature":{"slug":"gate-locked","title":"Gate locked","status":"ready"},"artifact":null,"reason":"STOP: spec awaits human validation — it cannot be approved through MCP."}
+        """;
+
+    public const string PlanningCurrentEmptyJson =
+        """
+        {"state":"empty","feature":{"slug":"all-done","title":"All done","status":"inProgress"},"artifact":null,"reason":"All tasks are done — write the result artifact."}
+        """;
+
+    public const string PlanningValidateGateJson =
+        """{"title":"HumanValidationRequired","detail":"STOP: the spec of feature 'demo-feature' awaits human validation — ask the user to approve it in the Overmind UI.","status":409}""";
 
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";
 

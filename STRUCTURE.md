@@ -33,7 +33,7 @@ Central package management: `Directory.Packages.props`; shared build props: `Dir
 
 ## Planning ceremony (feature 006, in flight)
 
-What exists **now** (tasks 01/01b/02/03/04/05/06: domain, persistence, human door, workflow settings, agent door, real materializer, backlog importer). MCP and web are still ahead — extend this shape, don't invent a parallel one. Task 10 folds this section into the permanent conventions above.
+What exists **now** (tasks 01/01b/02–07: domain, persistence, human door, workflow settings, agent door, real materializer, backlog importer, MCP surface). Web is still ahead — extend this shape, don't invent a parallel one. Task 10 folds this section into the permanent conventions above.
 
 - **Model** (`Core/Entities`): `PlanningFeature` (slug unique per project, `Body`, `Status`, `Version`), `PlanningArtifact` (`Kind` ∈ spec/plan/task/result, `Status`, `Review`, `Order`, `Body`, `FrozenAt`, `Version`), `PlanningArtifactVersion` (unique `(ArtifactId, Version)`), `PlanningMaterializedFile` (nullable `FeatureId`, unique `(ProjectId, RelativePath)`). `Project` carries `PlanningMaterialization` + `RequireHumanValidation` and `SetPlanningWorkflow`.
 - **One status enum, per-kind vocabulary:** `PlanningArtifact.AllowedStatuses(kind)` — spec/plan/result take `draft|validated`, tasks take `todo|in_progress|review|done|blocked`. Violations throw from the entity; no caller re-checks.

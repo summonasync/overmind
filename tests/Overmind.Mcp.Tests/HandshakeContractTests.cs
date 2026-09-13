@@ -37,7 +37,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheSixTools()
+    public async Task ToolsList_ExposesExactlyTheFourteenTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -46,7 +46,12 @@ public class HandshakeContractTests : McpSessionTestBase
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 
-        names.ShouldBe(["list_entries", "list_projects", "read_entry", "search", "update_entry", "write_entry"]);
+        names.ShouldBe([
+            "list_entries", "list_projects", "planning_append_log", "planning_create_feature",
+            "planning_current_task", "planning_list_features", "planning_read_feature",
+            "planning_set_status", "planning_upsert_artifact", "planning_validate",
+            "read_entry", "search", "update_entry", "write_entry"
+        ]);
     }
 
     [Fact]
@@ -70,6 +75,9 @@ public class HandshakeContractTests : McpSessionTestBase
         templateUris.ShouldContain("overmind://projects/{id}/notes");
         templateUris.ShouldContain("overmind://projects/{id}/decisions");
         templateUris.ShouldContain("overmind://projects/{id}/skills");
+        templateUris.ShouldContain("overmind://projects/{id}/planning/features");
+        templateUris.ShouldContain("overmind://projects/{id}/planning/features/{slug}");
+        templateUris.ShouldContain("overmind://projects/{id}/planning/features/{slug}/current");
         templateUris.ShouldContain("overmind://entries/{id}");
     }
 

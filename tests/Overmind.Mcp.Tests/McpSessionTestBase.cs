@@ -67,6 +67,32 @@ public abstract class McpSessionTestBase : IAsyncLifetime
         stub.RouteGet("/api/search", Canned.SearchJson);
     }
 
+    protected static void RegisterPlanningRoutes(StubOvermindApi stub)
+    {
+        stub.RouteGet($"/api/agent/projects/{Canned.ProjectId}/planning/features", Canned.PlanningBoardJson);
+        stub.Route("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/features", 201, Canned.PlanningFeatureJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
+            Canned.PlanningFeatureJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/current",
+            Canned.PlanningCurrentTaskJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningStopSlug}/current",
+            Canned.PlanningCurrentStopJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningEmptySlug}/current",
+            Canned.PlanningCurrentEmptyJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts",
+            201,
+            Canned.PlanningTaskTwoJson);
+        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "");
+        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, "");
+        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/validate", 200, "");
+    }
+
     protected static Dictionary<string, string> ParseQuery(string query)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

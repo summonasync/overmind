@@ -37,6 +37,36 @@ public class PromptContractTests : McpSessionTestBase
         text.ShouldContain($"read overmind://projects/{Canned.ProjectId}/gates and /guards and follow them");
     }
 
+    [Fact]
+    public async Task SessionBootstrap_WithSingleProject_TeachesThePlanningLoop()
+    {
+        Stub.RouteGet("/api/projects", $$"""
+            [{"id":"{{Canned.ProjectId}}","name":"alpha","diskPath":"E:\\work\\alpha","description":"","createdAt":"2026-09-01T10:00:00Z"}]
+            """);
+
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        var text = PromptText(response);
+        text.ShouldContain($"overmind://projects/{Canned.ProjectId}/planning/features");
+        text.ShouldContain("planning/features/<slug>/current");
+        text.ShouldContain("STOP");
+        text.ShouldContain("planning_set_status");
+        text.ShouldContain("planning_append_log");
+    }
+
+    [Fact]
+    public async Task SessionBootstrap_FallbackBranch_TeachesThePlanningLoop()
+    {
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        var text = PromptText(response);
+        text.ShouldContain("overmind://projects/{id}/planning/features");
+        text.ShouldContain("planning/features/<slug>/current");
+        text.ShouldContain("STOP");
+        text.ShouldContain("planning_set_status");
+        text.ShouldContain("planning_append_log");
+    }
+
     private static string PromptText(JsonNode response)
     {
         var result = response["result"];
