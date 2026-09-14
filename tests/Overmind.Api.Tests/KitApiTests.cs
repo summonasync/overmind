@@ -219,6 +219,18 @@ public sealed class KitApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_KitCarriesManualOriginDefaults()
+    {
+        var kit = await CreateKitAsync("origin", 1);
+
+        var fetched = await _client.GetFromJsonAsync<KitJson>($"/api/kits/{kit.Id}", JsonOptions);
+        fetched.ShouldNotBeNull();
+        fetched!.SourceKind.ShouldBe("manual");
+        fetched.SourcePath.ShouldBeNull();
+        fetched.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Activate_SecondKitWhileAnotherActive_Returns409ThenSwitchSucceeds()
     {
         var project = await CreateProjectAsync();
@@ -377,7 +389,15 @@ public sealed class KitApiTests : IDisposable
 
     public sealed record EntryJson(Guid Id, Guid ProjectId, string Type, string Title);
 
-    public sealed record KitJson(Guid Id, string Name, int Version, string Description, List<Guid> EntryIds);
+    public sealed record KitJson(
+        Guid Id,
+        string Name,
+        int Version,
+        string Description,
+        List<Guid> EntryIds,
+        string SourceKind,
+        string? SourcePath,
+        DateTime? ImportedAtUtc);
 
     public sealed record DriftJson(string Platform, string RelativePath, string Kind);
 

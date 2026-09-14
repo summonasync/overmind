@@ -6,5 +6,6 @@ public enum AgentPlatform
     KimiCode,
     Codex,
     Gemini,
-    Antigravity
+    Antigravity,
+    Qwen
 }

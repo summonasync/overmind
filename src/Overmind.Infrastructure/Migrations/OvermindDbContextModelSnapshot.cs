@@ -320,7 +320,7 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<Guid>("EntryId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Platform")
+                    b.Property<int?>("Platform")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("RelativePath")
@@ -344,8 +344,17 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ImportedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourcePath")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Version")
@@ -362,6 +371,9 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("EntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedContentHash")
                         .HasColumnType("TEXT");
 
                     b.HasKey("KitId", "EntryId");

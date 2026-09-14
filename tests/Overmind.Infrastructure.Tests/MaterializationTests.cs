@@ -355,6 +355,199 @@ public sealed class MaterializationTests : IDisposable
         File.Exists(Path.Combine(testerSlugDir, "tester")).ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task Materialize_AgnosticSkillExpandsToEveryPlatformMarkedSkillStaysExclusive()
+    {
+        var (projectId, kitId) = await SeedMixedKitAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        var report = await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+
+        var platformDirs = new[]
+        {
+            ".claude", ".kimi-code", ".codex", ".gemini", ".antigravity", ".qwen"
+        };
+
+        foreach (var dir in platformDirs)
+        {
+            File.Exists(Path.Combine(_projectDir, dir, "skills", "linter", "linter", "SKILL.md")).ShouldBeTrue();
+            File.Exists(Path.Combine(_projectDir, dir, "skills", "overmind-bootstrap", "SKILL.md")).ShouldBeTrue();
+        }
+
+        var claudeLinter = await File.ReadAllBytesAsync(
+            Path.Combine(_projectDir, ".claude", "skills", "linter", "linter", "SKILL.md"));
+        var qwenLinter = await File.ReadAllBytesAsync(
+            Path.Combine(_projectDir, ".qwen", "skills", "linter", "linter", "SKILL.md"));
+        qwenLinter.ShouldBe(claudeLinter);
+
+        File.Exists(Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md")).ShouldBeFalse();
+        File.Exists(Path.Combine(_projectDir, ".qwen", "skills", "reviewer", "reviewer", "SKILL.md")).ShouldBeFalse();
+
+        var expectedContent = "# Linter\nChecks style.\n";
+        (await File.ReadAllTextAsync(Path.Combine(_projectDir, ".gemini", "skills", "linter", "linter", "SKILL.md")))
+            .ShouldBe(expectedContent);
+
+        report.Files.Count.ShouldBe(13);
+
+        var rows = await ctx.MaterializedFiles.Where(m => m.ProjectId == projectId).ToListAsync();
+        rows.Count.ShouldBe(13);
+        rows.Count(r => r.Platform == AgentPlatform.Qwen).ShouldBe(2);
+        rows.Count(r => r.RelativePath == ".qwen/skills/linter/linter/SKILL.md").ShouldBe(1);
+        rows.ShouldContain(r =>
+            r.Platform == AgentPlatform.Qwen &&
+            r.RelativePath == ".qwen/skills/overmind-bootstrap/SKILL.md");
+        rows.ShouldContain(r =>
+            r.Platform == AgentPlatform.Claude &&
+            r.RelativePath == ".claude/skills/reviewer/reviewer/SKILL.md");
+        rows.ShouldAllBe(r => r.Sha256.Length == 64);
+    }
+
+    [Fact]
+    public async Task DetectDrift_ReportsEditsInExpandedAgnosticFiles()
+    {
+        var (projectId, kitId) = await SeedMixedKitAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+
+        var qwenLinter = Path.Combine(_projectDir, ".qwen", "skills", "linter", "linter", "SKILL.md");
+        var geminiLinter = Path.Combine(_projectDir, ".gemini", "skills", "linter", "linter", "SKILL.md");
+
+        await File.AppendAllTextAsync(qwenLinter, "local edit\n");
+        File.Delete(geminiLinter);
+
+        var items = await materializer.DetectDriftAsync(projectId, CancellationToken.None);
+
+        items.Count.ShouldBe(2);
+        items.ShouldContain(i =>
+            i.Kind == DriftKind.Modified &&
+            i.RelativePath == ".qwen/skills/linter/linter/SKILL.md" &&
+            i.Platform == AgentPlatform.Qwen &&
+            i.KitId == kitId);
+        items.ShouldContain(i =>
+            i.Kind == DriftKind.Missing &&
+            i.RelativePath == ".gemini/skills/linter/linter/SKILL.md" &&
+            i.Platform == AgentPlatform.Gemini);
+    }
+
+    [Fact]
+    public async Task Dematerialize_RemovesAllExpandedAgnosticFiles()
+    {
+        var (projectId, kitId) = await SeedMixedKitAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        var report = await materializer.DematerializeAsync(projectId, kitId, CancellationToken.None);
+
+        report.Files.Count.ShouldBe(13);
+        (await ctx.MaterializedFiles.CountAsync()).ShouldBe(0);
+
+        foreach (var dir in new[] { ".claude", ".kimi-code", ".codex", ".gemini", ".antigravity", ".qwen" })
+        {
+            Directory.Exists(Path.Combine(_projectDir, dir)).ShouldBeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task Materialize_WithUntrackedFileAtExpandedTargetPath_BlocksOverwrite()
+    {
+        var (projectId, kitId) = await SeedMixedKitAsync();
+
+        var target = Path.Combine(_projectDir, ".qwen", "skills", "linter", "linter", "SKILL.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        await File.WriteAllTextAsync(target, "user data");
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.OverwriteBlocked);
+        ex.OffendingPath.ShouldBe(target);
+
+        (await File.ReadAllTextAsync(target)).ShouldBe("user data");
+        File.Exists(Path.Combine(_projectDir, ".claude", "skills", "linter", "linter", "SKILL.md")).ShouldBeFalse();
+        (await ctx.MaterializedFiles.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Materialize_SkillMixingAgnosticAndExplicitFileSameRelativePath_ThrowsDuplicateTargetAndWritesNothing()
+    {
+        using var ctx = _db.CreateContext();
+
+        var project = Project.Create("demo", _projectDir);
+        ctx.Projects.Add(project);
+
+        var hybrid = ContextEntry.CreateSkill(
+            project.Id,
+            "hybrid",
+            "mixed origin",
+            new[]
+            {
+                SkillFile.Create(null, "hybrid/SKILL.md", "# Agnostic copy\n"),
+                SkillFile.Create(AgentPlatform.Claude, "hybrid/SKILL.md", "# Explicit copy\n"),
+            });
+
+        var kit = SkillKit.Create("hybrid-pack", 1, "mixed");
+        kit.AddEntry(hybrid.Id);
+
+        ctx.ContextEntries.Add(hybrid);
+        ctx.SkillKits.Add(kit);
+        await ctx.SaveChangesAsync();
+
+        var materializer = CreateMaterializer(ctx);
+        var target = Path.Combine(_projectDir, ".claude", "skills", "hybrid", "hybrid", "SKILL.md");
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.MaterializeAsync(project.Id, kit.Id, CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.InvalidTarget);
+        ex.OffendingPath.ShouldBe(target);
+        ex.Message.ShouldContain(target);
+
+        File.Exists(target).ShouldBeFalse();
+        Directory.Exists(Path.Combine(_projectDir, ".claude")).ShouldBeFalse();
+        (await ctx.MaterializedFiles.CountAsync()).ShouldBe(0);
+    }
+
+    private async Task<(Guid ProjectId, Guid KitId)> SeedMixedKitAsync()
+    {
+        using var ctx = _db.CreateContext();
+
+        var project = Project.Create("demo", _projectDir);
+        ctx.Projects.Add(project);
+
+        var linter = ContextEntry.CreateSkill(
+            project.Id,
+            "Linter",
+            "Checks style",
+            [SkillFile.Create(null, "linter/SKILL.md", "# Linter\nChecks style.\n")]);
+
+        var reviewer = ContextEntry.CreateSkill(
+            project.Id,
+            "Reviewer",
+            "Reviews code",
+            [SkillFile.Create(AgentPlatform.Claude, "reviewer/SKILL.md", "# Reviewer\n")]);
+
+        var gate = ContextEntry.Create(project.Id, EntryType.Gate, "Tests Green", "All tests must pass before merge.");
+
+        var kit = SkillKit.Create("mixed-pack", 1, "mixed");
+        kit.AddEntry(linter.Id);
+        kit.AddEntry(reviewer.Id);
+        kit.AddEntry(gate.Id);
+
+        ctx.ContextEntries.AddRange(linter, reviewer, gate);
+        ctx.SkillKits.Add(kit);
+        await ctx.SaveChangesAsync();
+
+        return (project.Id, kit.Id);
+    }
+
     private async Task<(Guid ProjectId, Guid KitId)> SeedDefaultKitAsync(string? maliciousTesterPath = null)
     {
         using var ctx = _db.CreateContext();

@@ -16,6 +16,8 @@ public sealed class PlatformDirectoryMap
 
     public string GetSkillsDir(AgentPlatform platform) => _skillsDirs[platform];
 
+    public IReadOnlyDictionary<AgentPlatform, string> SkillsDirs => _skillsDirs;
+
     public static PlatformDirectoryMap Load()
     {
         var assembly = typeof(PlatformDirectoryMap).Assembly;

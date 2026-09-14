@@ -11,7 +11,10 @@ public sealed record KitResponse(
     string Name,
     int Version,
     string Description,
-    IReadOnlyList<Guid> EntryIds);
+    IReadOnlyList<Guid> EntryIds,
+    KitSourceKind SourceKind,
+    string? SourcePath,
+    DateTime? ImportedAtUtc);
 
 public sealed record MaterializedFileResponse(AgentPlatform Platform, string RelativePath, string Sha256);
 

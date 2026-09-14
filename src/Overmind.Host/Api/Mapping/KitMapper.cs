@@ -12,7 +12,10 @@ public static class KitMapper
             kit.Name,
             kit.Version,
             kit.Description,
-            kit.SkillKitEntries.Select(e => e.EntryId).OrderBy(id => id).ToArray());
+            kit.SkillKitEntries.Select(e => e.EntryId).OrderBy(id => id).ToArray(),
+            kit.SourceKind,
+            kit.SourcePath,
+            kit.ImportedAtUtc);
     }
 
     public static MaterializationReportResponse ToResponse(MaterializationReport report)

@@ -116,6 +116,94 @@ public class SkillKitTests
 
         Should.Throw<InvalidOperationException>(() => kit.AddEntry(entryId));
     }
+
+    [Fact]
+    public void Create_DefaultsToManualSource()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Manual);
+        kit.SourcePath.ShouldBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public void MarkImported_SetsSourceAndStampsUtc()
+    {
+        var before = DateTime.UtcNow;
+        var kit = SkillKit.Create("k", 1, "d");
+
+        kit.MarkImported("  /kits/review-pack  ");
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Imported);
+        kit.SourcePath.ShouldBe("/kits/review-pack");
+        kit.ImportedAtUtc.ShouldNotBeNull();
+        kit.ImportedAtUtc!.Value.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Fact]
+    public void MarkImported_OnAlreadyImported_ReStampsPathAndDate()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+        kit.MarkImported("/kits/first");
+        var firstStamp = kit.ImportedAtUtc;
+
+        var before = DateTime.UtcNow;
+        kit.MarkImported("/kits/second");
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Imported);
+        kit.SourcePath.ShouldBe("/kits/second");
+        kit.ImportedAtUtc!.Value.ShouldBeGreaterThanOrEqualTo(firstStamp!.Value);
+        kit.ImportedAtUtc!.Value.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void MarkImported_EmptyPath_Throws(string? sourcePath)
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+
+        Should.Throw<ArgumentException>(() => kit.MarkImported(sourcePath!));
+    }
+
+    [Fact]
+    public void MarkImported_EmptyPath_LeavesSourceUntouched()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+
+        Should.Throw<ArgumentException>(() => kit.MarkImported(""));
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Manual);
+        kit.SourcePath.ShouldBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ClearSource_AfterImport_ResetsEverything()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+        kit.MarkImported("/kits/review-pack");
+
+        kit.ClearSource();
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Manual);
+        kit.SourcePath.ShouldBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ClearSource_OnManualKit_StaysManualWithNulls()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+
+        kit.ClearSource();
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Manual);
+        kit.SourcePath.ShouldBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
 }
 
 public class ProjectKitTests

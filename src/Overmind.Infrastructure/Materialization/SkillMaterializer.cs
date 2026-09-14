@@ -188,9 +188,9 @@ public sealed class SkillMaterializer : IMaterializer
         var skills = entries.Where(e => e.Type == EntryType.Skill).ToList();
         var gates = entries.Where(e => e.Type == EntryType.Gate).ToList();
         var guards = entries.Where(e => e.Type == EntryType.Guard).ToList();
-        var platforms = skills.SelectMany(e => e.SkillFiles).Select(f => f.Platform).Distinct().ToList();
 
         var plans = new List<FilePlan>();
+        var targeted = new List<AgentPlatform>();
 
         foreach (var skill in skills)
         {
@@ -198,12 +198,23 @@ public sealed class SkillMaterializer : IMaterializer
             foreach (var file in skill.SkillFiles)
             {
                 PathGuard.ResolveUnderRoot(project.DiskPath, file.RelativePath);
-                var relative = $"{_platforms.GetSkillsDir(file.Platform)}/{slug}/{file.RelativePath}";
-                plans.Add(FilePlan.Create(project.DiskPath, file.Platform, relative, file.Content));
+
+                if (file.Platform is { } platform)
+                {
+                    AddSkillPlan(project, plans, platform, slug, file);
+                    TrackPlatform(targeted, platform);
+                    continue;
+                }
+
+                foreach (var agnosticPlatform in _platforms.SkillsDirs.Keys)
+                {
+                    AddSkillPlan(project, plans, agnosticPlatform, slug, file);
+                    TrackPlatform(targeted, agnosticPlatform);
+                }
             }
         }
 
-        foreach (var platform in platforms)
+        foreach (var platform in targeted)
         {
             var relative = $"{_platforms.GetSkillsDir(platform)}/overmind-bootstrap/SKILL.md";
             plans.Add(FilePlan.Create(project.DiskPath, platform, relative, BuildBootstrap(project.Id, gates, guards)));
@@ -218,6 +229,20 @@ public sealed class SkillMaterializer : IMaterializer
         }
 
         return plans;
+    }
+
+    private void AddSkillPlan(Project project, List<FilePlan> plans, AgentPlatform platform, string slug, SkillFile file)
+    {
+        var relative = $"{_platforms.GetSkillsDir(platform)}/{slug}/{file.RelativePath}";
+        plans.Add(FilePlan.Create(project.DiskPath, platform, relative, file.Content));
+    }
+
+    private static void TrackPlatform(List<AgentPlatform> targeted, AgentPlatform platform)
+    {
+        if (!targeted.Contains(platform))
+        {
+            targeted.Add(platform);
+        }
     }
 
     private static string BuildBootstrap(Guid projectId, IReadOnlyList<ContextEntry> gates, IReadOnlyList<ContextEntry> guards)

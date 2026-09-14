@@ -3,5 +3,6 @@
   "kimiCode": { "skillsDir": ".kimi-code/skills" },
   "codex": { "skillsDir": ".codex/skills" },
   "gemini": { "skillsDir": ".gemini/skills" },
-  "antigravity": { "skillsDir": ".antigravity/skills" }
+  "antigravity": { "skillsDir": ".antigravity/skills" },
+  "qwen": { "skillsDir": ".qwen/skills" }
 }
