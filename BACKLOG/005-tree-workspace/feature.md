@@ -1,8 +1,8 @@
 ---
 feature: 005
 slug: tree-workspace
-status: ready
-version: 1
+status: done
+version: 2
 created: 2026-09-08
 ---
 

@@ -1,7 +1,7 @@
 ---
 feature: 002
 slug: kit-library
-status: draft
+status: done
 version: 2
 created: 2026-09-06
 ---

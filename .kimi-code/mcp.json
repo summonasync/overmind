@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "/home/johan-boolman/apps/overmind-0.1.0-linux-x64/mcp/overmind-mcp"
+    }
+  }
+}

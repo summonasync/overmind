@@ -1,7 +1,7 @@
 ---
 feature: 003
 slug: bundled-installer
-status: draft
+status: done
 version: 2
 created: 2026-09-06
 ---
