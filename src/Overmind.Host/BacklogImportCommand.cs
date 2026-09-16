@@ -45,6 +45,11 @@ internal static class BacklogImportCommand
                 report.FeaturesCreated,
                 report.ArtifactsCreated + report.ArtifactsUpdated,
                 report.Skipped.Count);
+
+            foreach (var skipped in report.Skipped)
+            {
+                Log.Information("{Skipped}", skipped);
+            }
         }
         catch (OperationCanceledException)
         {

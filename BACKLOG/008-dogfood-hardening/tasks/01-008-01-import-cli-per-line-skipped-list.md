@@ -2,7 +2,7 @@
 feature: 008
 task: 01
 slug: dogfood-hardening
-status: inprogress
+status: done
 review: light
 created: 2026-09-16
 ---
@@ -42,4 +42,7 @@ created: 2026-09-16
 
 <log>
 - 2026-09-16 — 008/01 started: coder subagent on BacklogImportCommand skipped-list output
+- 2026-09-16 — 2026-09-17 — coder — BacklogImportCommand prints report.Skipped per line after summary (+5); IVT seam for tests; 2 Host tests pin order/level/prefixes; obstacle: Serilog static Log.Logger races with WebApplicationFactory tests — serialized via DisableParallelization collection
+- 2026-09-16 — 2026-09-17 — light review (dotnet-code-reviewer) — PASS-WITH-NITS, 1 SUGGESTION: transitive Serilog reference in Api.Tests should get an explicit pin (recorded to BACKLOG hardening, not fixed mid-task); audits/dotnet-code-reviewer-2026-09-17-008-01-import-cli-per-line-skipped-list.md
+- 2026-09-16 — AC met: per-line skipped output verified live on this repo's BACKLOG (01b + _TEMPLATE lines visible); build 0/0, tests 528/528; review PASS-WITH-NITS, no blockers
 </log>

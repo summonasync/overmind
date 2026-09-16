@@ -4,6 +4,9 @@
     <ProjectReference Include="..\Overmind.Infrastructure\Overmind.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Overmind.Api.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="Assets\tray-icon.png" />
   </ItemGroup>
   <ItemGroup>
