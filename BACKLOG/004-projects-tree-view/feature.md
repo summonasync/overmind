@@ -8,6 +8,8 @@ created: 2026-09-08
 
 # Feature 004 — Projects tree view
 
+# Feature 004 — Projects tree view
+
 <goal>
 The Projects section of the web UI mirrors the real disk. The sidebar's Projects item expands into a lazy-loaded folder tree of the machine: folders that are not Overmind projects render as plain inactive nodes (expandable, not clickable), folders whose path matches a registered project's DiskPath are highlighted and clickable. Any folder can be registered as a project in place — this is the sync flow between "what's on disk" and "what Overmind manages".
 </goal>

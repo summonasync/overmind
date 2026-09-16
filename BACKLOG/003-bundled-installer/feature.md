@@ -4,8 +4,9 @@ slug: bundled-installer
 status: draft
 version: 2
 created: 2026-09-06
-updated: 2026-09-16 — brainstorm revalidation (user session): split 003a portable / 003b MSIX-pkg, git-refresh tombstoned
 ---
+
+# Feature 003 — Installer with pre-bundled kits
 
 # Feature 003 — Installer with pre-bundled kits
 

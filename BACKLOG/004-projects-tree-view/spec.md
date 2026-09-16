@@ -3,7 +3,7 @@ feature: 004
 slug: projects-tree-view
 status: validated
 created: 2026-09-08
-validated: 2026-09-08 — user approved with the draft's default answers to both open questions (tree in sidebar, flat list stays on the page; /?project=<id> auto-opens project detail)
+validated: 2026-09-08
 ---
 
 # Spec 004 — Projects tree view (DRAFT, awaiting user validation)

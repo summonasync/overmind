@@ -1,11 +1,9 @@
 ---
 feature: 002
 slug: kit-library
-status: approved        # draft | approved (approved = FROZEN)
-version: 1
-spec: spec.md          # ссылка на спеку, которой соответствует план
+status: validated
 created: 2026-09-14
-approved: 2026-09-14 — user approved ("план ок, поехали"); frozen snapshot, changes require re-validation
+validated: 2026-09-16
 ---
 
 # Plan 002 — Kit library (002a: folder import)

@@ -3,7 +3,7 @@ feature: 004
 slug: projects-tree-view
 status: validated
 created: 2026-09-08
-validated: 2026-09-08 — user approved the task breakdown (blanket "continue as you see fit" after spec validation)
+validated: 2026-09-08
 ---
 
 # Plan 004 — Projects tree view

@@ -1,10 +1,9 @@
 ---
 feature: 001
 slug: overmind-mvp
-status: approved
-version: 1
-spec: spec.md
+status: validated
 created: 2026-09-06
+validated: 2026-09-16
 ---
 
 # Plan 001 — Overmind MVP

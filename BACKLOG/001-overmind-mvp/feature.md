@@ -8,6 +8,8 @@ created: 2026-09-06
 
 # Feature 001 — Overmind MVP
 
+# Feature 001 — Overmind MVP
+
 <goal>
 Overmind is a win/mac desktop app (.NET) that gives AI coding agents (Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity) a shared, persistent context store — without OpenViking-level setup pain. One local app holds projects, notes/decisions, gates, guards, and skills as a single source of truth; agents connect over a local HTTP API via a thin stdio MCP adapter, and skill-kits are materialized into projects so agents pick them up natively.
 </goal>

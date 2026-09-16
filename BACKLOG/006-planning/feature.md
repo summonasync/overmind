@@ -8,6 +8,8 @@ created: 2026-09-08
 
 # Feature 006 — Planning: the ceremony as a first-class entity
 
+# Feature 006 — Planning: the ceremony as a first-class entity
+
 <goal>
 The development ceremony — feature → spec → plan → task → result — becomes a first-class citizen of Overmind. Agents create and drive planning artifacts through MCP; humans review, approve, and edit them in the UI. The database is the source of truth; markdown materialization to disk is a per-project choice (repo `BACKLOG/`, local archive in `~/.overmind/`, or none). This replaces the file-only BACKLOG/ workflow with a model that protects the two invariants that matter — status enums and frozen validated snapshots — while keeping all content as agent-native markdown with XML sections.
 </goal>

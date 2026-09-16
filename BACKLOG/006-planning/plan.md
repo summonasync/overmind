@@ -3,8 +3,7 @@ feature: 006
 slug: planning
 status: validated
 created: 2026-09-08
-validated: 2026-09-08 — user approved the 10-task breakdown ("план завалидирован, поехали"); frozen snapshot, changes require re-validation
-amended: 2026-09-08 — six amendments (A1–A6 below) after the hard review of task 01; A1 (application-service extraction) approved by the user explicitly, A2–A6 accepted by the orchestrator from the review findings. Original text below is kept intact; the Amendments section supersedes it where they conflict.
+validated: 2026-09-08
 ---
 
 # Plan 006 — Planning: the ceremony as a first-class entity

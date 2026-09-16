@@ -8,6 +8,8 @@ created: 2026-09-08
 
 # Feature 005 — Tree workspace: user roots + active project context
 
+# Feature 005 — Tree workspace: user roots + active project context
+
 <goal>
 The sidebar tree becomes the primary workspace. The user defines which disk roots the tree shows (instead of all drives) — roots are added via the folder picker, persisted, and removable with a confirmation. Clicking a project in the tree makes it the active project: the tree stays expanded, the project stays highlighted, and the Entries page becomes the entries view of the active project. Switching projects in the tree instantly switches the Entries context.
 </goal>

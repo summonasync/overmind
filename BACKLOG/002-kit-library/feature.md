@@ -8,6 +8,8 @@ created: 2026-09-06
 
 # Feature 002 — Kit library
 
+# Feature 002 — Kit library
+
 <goal>
 Users can grow their kit collection from outside the app: import kits from a local folder (multi-kit detection, cross-platform skill mapping) and later exchange kits as a single file. Imported kits become first-class kits: versioned, linkable to projects, materializable exactly like hand-made ones. Bundled kits (feature 003) ride this same import pipeline.
 </goal>

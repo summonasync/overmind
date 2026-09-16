@@ -3,8 +3,7 @@ feature: 006
 slug: planning
 status: validated
 created: 2026-09-08
-validated: 2026-09-08 — user approved ("спека аппрувед"); frozen snapshot, changes require re-validation
-amended: 2026-09-08 — (1) PlanningFeature gains Body, (2) PlanningArtifact gains Review, (3) agent write surface split to /api/agent/planning/*; all three approved by the user during plan drafting = re-validation
+validated: 2026-09-08
 ---
 
 # Spec 006 — Planning (VALIDATED 2026-09-08, amended 2026-09-08)

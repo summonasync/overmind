@@ -1,10 +1,9 @@
 ---
 feature: 003
 slug: bundled-installer
-status: approved        # draft | approved (approved = FROZEN)
-version: 1
+status: validated
 created: 2026-09-16
-approved: 2026-09-16 — user approved ("пиши план"); frozen snapshot, changes require re-validation
+validated: 2026-09-16
 ---
 
 # Spec 003 — Installer with pre-bundled kits (003a: portable distribution)
