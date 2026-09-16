@@ -739,4 +739,52 @@ public sealed class KitReimportTests : IDisposable
 
         ex.Kind.ShouldBe(KitImportFailureKind.KitNotFound);
     }
+
+    [Fact]
+    public async Task Reimport_BundledMode_PreservesBundledOrigin()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a"]);
+        var commit = await CreateImporter().CommitAsync(
+            _root, [new KitImportSelection("kit-a", "kit-a")], bundled: true);
+        var kitId = commit.Kits.ShouldHaveSingleItem().KitId!.Value;
+
+        var updatedYaml = SkillYaml("alpha", "Upstream rewrite.");
+        WriteFile(Path.Combine(_root, "kit-a", "alpha", "SKILL.md"), updatedYaml);
+
+        var report = await CreateImporter().ReimportAsync(kitId, bundled: true);
+
+        report.UpdatedCount.ShouldBe(1);
+        report.KeptLocalCount.ShouldBe(0);
+
+        using var verify = _db.CreateContext();
+        var reloaded = await LoadKitAsync(verify, kitId);
+        reloaded.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        reloaded.ImportedAtUtc.ShouldBeNull();
+        reloaded.SourcePath.ShouldBe(Path.GetFullPath(Path.Combine(_root, "kit-a")));
+        reloaded.SkillKitEntries.ShouldHaveSingleItem().Entry.Content.ShouldBe(updatedYaml);
+        reloaded.SkillKitEntries.ShouldHaveSingleItem().ImportedContentHash
+            .ShouldBe(ContentHash.Sha256(updatedYaml));
+    }
+
+    [Fact]
+    public async Task Reimport_ExternalCallOnBundledKit_ThrowsTypedFailureAndKeepsOrigin()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a"]);
+        var commit = await CreateImporter().CommitAsync(
+            _root, [new KitImportSelection("kit-a", "kit-a")], bundled: true);
+        var kitId = commit.Kits.ShouldHaveSingleItem().KitId!.Value;
+
+        var ex = await Should.ThrowAsync<KitImportException>(() => CreateImporter().ReimportAsync(kitId));
+
+        ex.Kind.ShouldBe(KitImportFailureKind.BundledReimportBlocked);
+        ex.Message.ShouldContain(kitId.ToString());
+        ex.Message.ShouldContain("bundled");
+
+        using var verify = _db.CreateContext();
+        var reloaded = await LoadKitAsync(verify, kitId);
+        reloaded.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        reloaded.ImportedAtUtc.ShouldBeNull();
+        reloaded.SourcePath.ShouldNotBeNull();
+        reloaded.SkillKitEntries.ShouldHaveSingleItem().Entry.Content.ShouldBe(SkillYaml("alpha"));
+    }
 }

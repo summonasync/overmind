@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Overmind.Core;
+using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
 
@@ -478,6 +481,46 @@ public sealed class KitImportApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Reimport_BundledKit_Returns409AndKeepsOrigin()
+    {
+        var kitId = await SeedBundledKitAsync("bundled-kit");
+
+        var response = await _client.PostAsync($"/api/kits/{kitId}/reimport", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Title.ShouldBe("BundledReimportBlocked");
+        problem!.Detail!.ShouldContain("bundled");
+
+        var kit = await _client.GetFromJsonAsync<KitJson>($"/api/kits/{kitId}", JsonOptions);
+        kit.ShouldNotBeNull();
+        kit!.SourceKind.ShouldBe("bundled");
+        kit.SourcePath.ShouldNotBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ClearSource_BundledKit_Returns409AndKeepsOrigin()
+    {
+        var kitId = await SeedBundledKitAsync("bundled-kit");
+
+        var response = await _client.PostAsync($"/api/kits/{kitId}/clear-source", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Title.ShouldBe("BundledSourceProtected");
+        problem!.Detail!.ShouldContain("bundled");
+
+        var kit = await _client.GetFromJsonAsync<KitJson>($"/api/kits/{kitId}", JsonOptions);
+        kit.ShouldNotBeNull();
+        kit!.SourceKind.ShouldBe("bundled");
+        kit.SourcePath.ShouldNotBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Delete_ProjectOwningKitLinkedEntries_Returns409ThenSucceedsAfterUnlink()
     {
         var project = await CreateProjectAsync();
@@ -551,6 +594,17 @@ public sealed class KitImportApiTests : IDisposable
         var kit = await response.Content.ReadFromJsonAsync<KitJson>(JsonOptions);
         kit.ShouldNotBeNull();
         return kit!;
+    }
+
+    private async Task<Guid> SeedBundledKitAsync(string name)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        var kit = SkillKit.Create(name, 1, string.Empty);
+        kit.MarkBundled(Path.Combine(_sandbox, name));
+        db.SkillKits.Add(kit);
+        await db.SaveChangesAsync();
+        return kit.Id;
     }
 
     private async Task<ProjectJson> CreateProjectAsync()

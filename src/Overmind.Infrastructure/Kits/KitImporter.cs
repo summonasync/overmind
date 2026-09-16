@@ -23,7 +23,8 @@ public sealed class KitImporter
     }
 
     public async Task<KitImportReport> CommitAsync(
-        string scanPath, IReadOnlyList<KitImportSelection> selections, CancellationToken ct = default)
+        string scanPath, IReadOnlyList<KitImportSelection> selections, bool bundled = false,
+        CancellationToken ct = default)
     {
         var scan = await _scanner.ScanAsync(scanPath, ct);
         var libraryProjectId = await EnsureLibraryProjectAsync(ct);
@@ -32,7 +33,7 @@ public sealed class KitImporter
         foreach (var selection in selections)
         {
             ct.ThrowIfCancellationRequested();
-            report.Kits.Add(await CommitKitAsync(scan, selection, libraryProjectId, ct));
+            report.Kits.Add(await CommitKitAsync(scan, selection, libraryProjectId, bundled, ct));
         }
 
         return report;
@@ -48,7 +49,8 @@ public sealed class KitImporter
         return kit;
     }
 
-    public async Task<KitReimportReport> ReimportAsync(Guid kitId, CancellationToken ct = default)
+    public async Task<KitReimportReport> ReimportAsync(
+        Guid kitId, bool bundled = false, CancellationToken ct = default)
     {
         var kit = await _db.SkillKits
             .Include(k => k.SkillKitEntries)
@@ -56,6 +58,11 @@ public sealed class KitImporter
             .ThenInclude(e => e.SkillFiles)
             .FirstOrDefaultAsync(k => k.Id == kitId, ct)
             ?? throw KitImportException.KitNotFound(kitId);
+
+        if (kit.SourceKind == KitSourceKind.Bundled && !bundled)
+        {
+            throw KitImportException.BundledReimportBlocked(kitId);
+        }
 
         var sourcePath = kit.SourcePath ?? throw KitImportException.NoSource(kitId);
         if (!Directory.Exists(sourcePath))
@@ -80,7 +87,15 @@ public sealed class KitImporter
             await DiffRuleFilesAsync(kit, importedLinks, source.Gates, EntryType.Gate, report, libraryProjectId, ct);
             await DiffRuleFilesAsync(kit, importedLinks, source.Guards, EntryType.Guard, report, libraryProjectId, ct);
 
-            kit.MarkImported(sourcePath);
+            if (bundled)
+            {
+                kit.MarkBundled(sourcePath);
+            }
+            else
+            {
+                kit.MarkImported(sourcePath);
+            }
+
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
@@ -94,7 +109,7 @@ public sealed class KitImporter
     }
 
     private async Task<KitImportKitResult> CommitKitAsync(
-        KitScanResult scan, KitImportSelection selection, Guid libraryProjectId, CancellationToken ct)
+        KitScanResult scan, KitImportSelection selection, Guid libraryProjectId, bool bundled, CancellationToken ct)
     {
         var name = selection.Name.Trim();
 
@@ -122,7 +137,14 @@ public sealed class KitImporter
             }
 
             var kit = SkillKit.Create(name, 1, string.Empty);
-            kit.MarkImported(candidate.Path);
+            if (bundled)
+            {
+                kit.MarkBundled(candidate.Path);
+            }
+            else
+            {
+                kit.MarkImported(candidate.Path);
+            }
 
             var skillEntries = new List<(ContextEntry Entry, string RelativePath)>();
             foreach (var skill in candidate.Skills)

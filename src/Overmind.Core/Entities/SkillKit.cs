@@ -39,7 +39,28 @@ public sealed class SkillKit
         ImportedAtUtc = DateTime.UtcNow;
     }
 
+    public void MarkBundled(string sourcePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+
+        SourceKind = KitSourceKind.Bundled;
+        SourcePath = sourcePath.Trim();
+        ImportedAtUtc = null;
+    }
+
     public void ClearSource()
+    {
+        if (SourceKind == KitSourceKind.Bundled)
+        {
+            throw KitImportException.BundledSourceProtected(Id);
+        }
+
+        SourceKind = KitSourceKind.Manual;
+        SourcePath = null;
+        ImportedAtUtc = null;
+    }
+
+    public void ForkToManual()
     {
         SourceKind = KitSourceKind.Manual;
         SourcePath = null;

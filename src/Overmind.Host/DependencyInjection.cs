@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
@@ -42,6 +43,13 @@ public static class DependencyInjection
 
         services.AddScoped<KitScanner>();
         services.AddScoped<KitImporter>();
+        services.AddScoped<BundledKitForkService>();
+        services.AddScoped<BundledSeedService>(provider => new BundledSeedService(
+            provider.GetRequiredService<OvermindDbContext>(),
+            provider.GetRequiredService<KitImporter>(),
+            provider.GetRequiredService<AppSettingsService>(),
+            provider.GetRequiredService<ILogger<BundledSeedService>>(),
+            OvermindPaths.BundledDirectory));
 
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningArtifactService>();

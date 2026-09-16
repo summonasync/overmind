@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Search;
 using Overmind.Infrastructure.VectorSearch;
@@ -143,6 +144,7 @@ public static class EntriesApi
         IValidator<UpdateEntryRequest> validator,
         OvermindDbContext db,
         EntryIndexingService indexing,
+        BundledKitForkService kitFork,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -169,6 +171,8 @@ public static class EntriesApi
                 detail: "Only entries of type 'Skill' can carry skill files.");
         }
 
+        var contentChanged = !string.Equals(entry.Content, request.Content, StringComparison.Ordinal);
+
         entry.UpdateContent(request.Content);
         db.Entry(entry).Property(e => e.Title).CurrentValue = request.Title.Trim();
 
@@ -191,6 +195,11 @@ public static class EntriesApi
                 db.Entry(file).Property(f => f.EntryId).CurrentValue = entry.Id;
                 db.SkillFiles.Add(file);
             }
+        }
+
+        if (contentChanged)
+        {
+            await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, ct);
         }
 
         await db.SaveChangesAsync(ct);

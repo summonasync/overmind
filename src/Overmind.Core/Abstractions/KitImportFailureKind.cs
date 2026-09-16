@@ -9,5 +9,7 @@ public enum KitImportFailureKind
     CandidateNotFound = 4,
     KitNotFound = 5,
     NoSource = 6,
-    SourceMissing = 7
+    SourceMissing = 7,
+    BundledSourceProtected = 8,
+    BundledReimportBlocked = 9
 }

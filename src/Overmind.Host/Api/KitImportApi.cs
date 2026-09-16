@@ -62,7 +62,7 @@ public static class KitImportApi
             var selections = request.Kits
                 .Select(k => new KitImportSelection(k.RelativePath, k.Name))
                 .ToArray();
-            var report = await importer.CommitAsync(request.Path, selections, ct);
+            var report = await importer.CommitAsync(request.Path, selections, bundled: false, ct);
             return Results.Ok(KitImportMapper.ToResponse(report));
         }
         catch (KitImportException ex)
@@ -75,7 +75,7 @@ public static class KitImportApi
     {
         try
         {
-            var report = await importer.ReimportAsync(id, ct);
+            var report = await importer.ReimportAsync(id, bundled: false, ct);
             return Results.Ok(KitImportMapper.ToResponse(report));
         }
         catch (KitImportException ex)

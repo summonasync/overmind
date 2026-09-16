@@ -181,6 +181,42 @@ public class SkillKitTests
     }
 
     [Fact]
+    public void MarkBundled_SetsKindAndPath_LeavesImportedAtNull()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+
+        kit.MarkBundled("  /bundled/review-pack  ");
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        kit.SourcePath.ShouldBe("/bundled/review-pack");
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public void MarkBundled_OnPreviouslyImportedKit_ClearsImportStamp()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+        kit.MarkImported("/kits/first");
+
+        kit.MarkBundled("/bundled/review-pack");
+
+        kit.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        kit.SourcePath.ShouldBe("/bundled/review-pack");
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void MarkBundled_EmptyPath_Throws(string? sourcePath)
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+
+        Should.Throw<ArgumentException>(() => kit.MarkBundled(sourcePath!));
+    }
+
+    [Fact]
     public void ClearSource_AfterImport_ResetsEverything()
     {
         var kit = SkillKit.Create("k", 1, "d");
@@ -202,6 +238,21 @@ public class SkillKitTests
 
         kit.SourceKind.ShouldBe(KitSourceKind.Manual);
         kit.SourcePath.ShouldBeNull();
+        kit.ImportedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ClearSource_OnBundledKit_ThrowsTypedFailureAndKeepsOrigin()
+    {
+        var kit = SkillKit.Create("k", 1, "d");
+        kit.MarkBundled("/bundled/review-pack");
+
+        var ex = Should.Throw<KitImportException>(() => kit.ClearSource());
+
+        ex.Kind.ShouldBe(KitImportFailureKind.BundledSourceProtected);
+        ex.Message.ShouldContain(kit.Id.ToString());
+        kit.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        kit.SourcePath.ShouldBe("/bundled/review-pack");
         kit.ImportedAtUtc.ShouldBeNull();
     }
 }

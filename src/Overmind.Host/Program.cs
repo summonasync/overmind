@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Overmind.Host;
 using Overmind.Host.Api;
+using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
 using Serilog;
 
@@ -139,6 +140,8 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     {
         var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
         await db.Database.MigrateAsync();
+        await scope.ServiceProvider.GetRequiredService<BundledSeedService>()
+            .RunAsync(app.Lifetime.ApplicationStopping);
         await BacklogImportCommand.TryRunAsync(scope.ServiceProvider, args, app.Lifetime.ApplicationStopping);
     }
 

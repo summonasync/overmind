@@ -306,6 +306,48 @@ public sealed class KitImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Commit_BundledMode_StampsBundledOriginWithoutImportStamp()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a"]);
+        WriteFile(
+            Path.Combine(_root, "kit-a", "gates", "review.md"),
+            "# Review Gate\n\nAlways review.\n");
+
+        var report = await CreateImporter().CommitAsync(_root,
+            [new KitImportSelection("kit-a", "kit-a")], bundled: true);
+
+        var result = report.Kits.ShouldHaveSingleItem();
+        result.Success.ShouldBeTrue();
+        var kit = await LoadKitAsync(result.KitId!.Value);
+        kit.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        kit.SourcePath.ShouldBe(Path.GetFullPath(Path.Combine(_root, "kit-a")));
+        kit.ImportedAtUtc.ShouldBeNull();
+
+        kit.SkillKitEntries.Count.ShouldBe(2);
+        foreach (var link in kit.SkillKitEntries)
+        {
+            link.ImportedContentHash.ShouldBe(ContentHash.Sha256(link.Entry.Content));
+        }
+    }
+
+    [Fact]
+    public async Task ClearSource_BundledKit_ThrowsTypedFailureAndKeepsOrigin()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a"]);
+        var report = await CreateImporter().CommitAsync(_root,
+            [new KitImportSelection("kit-a", "kit-a")], bundled: true);
+        var kitId = report.Kits[0].KitId!.Value;
+
+        var ex = await Should.ThrowAsync<KitImportException>(() => CreateImporter().ClearSourceAsync(kitId));
+
+        ex.Kind.ShouldBe(KitImportFailureKind.BundledSourceProtected);
+        var reloaded = await LoadKitAsync(kitId);
+        reloaded.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        reloaded.SourcePath.ShouldBe(Path.GetFullPath(Path.Combine(_root, "kit-a")));
+        reloaded.SkillKitEntries.ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task ClearSource_ConvertsToManual_KeepsEntries_AndIsIdempotent()
     {
         WriteSkill("alpha", parentDirs: ["kit-a"]);

@@ -34,4 +34,12 @@ public sealed class KitImportException : Exception
 
     public static KitImportException SourceMissing(string path) =>
         new(KitImportFailureKind.SourceMissing, $"Import source path '{path}' does not exist.");
+
+    public static KitImportException BundledSourceProtected(Guid kitId) =>
+        new(KitImportFailureKind.BundledSourceProtected,
+            $"Kit '{kitId}' is bundled; its source is protected and cannot be cleared.");
+
+    public static KitImportException BundledReimportBlocked(Guid kitId) =>
+        new(KitImportFailureKind.BundledReimportBlocked,
+            $"Kit '{kitId}' is bundled; refresh arrives through the bundled upgrade sync.");
 }

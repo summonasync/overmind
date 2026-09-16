@@ -8,4 +8,6 @@ public static class OvermindPaths
     public static string DatabasePath => Path.Combine(DataDirectory, "overmind.db");
 
     public static string PortFilePath => Path.Combine(DataDirectory, "host.port");
+
+    public static string BundledDirectory => Path.Combine(AppContext.BaseDirectory, "bundled");
 }

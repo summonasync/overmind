@@ -10,7 +10,9 @@ public static class KitImportErrors
         KitImportFailureKind.DuplicateName
             or KitImportFailureKind.ReImportRequired
             or KitImportFailureKind.NoSource
-            or KitImportFailureKind.SourceMissing => HttpErrors.Conflict(ex.Message, title: ex.Kind.ToString()),
+            or KitImportFailureKind.SourceMissing
+            or KitImportFailureKind.BundledSourceProtected
+            or KitImportFailureKind.BundledReimportBlocked => HttpErrors.Conflict(ex.Message, title: ex.Kind.ToString()),
         KitImportFailureKind.PathMissing
             or KitImportFailureKind.NotADirectory
             or KitImportFailureKind.CandidateNotFound => Results.Problem(

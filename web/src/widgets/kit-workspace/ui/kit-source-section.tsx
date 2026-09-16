@@ -25,6 +25,9 @@ export function KitSourceSection({ kit }: KitSourceSectionProps) {
           <KitOriginBadge kit={kit} />
           {kit.sourceKind === "bundled" ? "Ships with Overmind." : "Created manually — no import source."}
         </p>
+        {kit.sourceKind === "bundled" ? (
+          <p className="mt-1 text-xs text-muted">Edits fork this kit into your personal copy.</p>
+        ) : null}
       </section>
     );
   }
