@@ -103,9 +103,10 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
   }
 
   const boardHref = `/planning?project=${projectId}`;
+  const documentKind = documentModal ?? (tab === "tasks" ? null : tab);
   const documentArtifact =
-    documentModal !== null
-      ? feature.artifacts.find((artifact) => artifact.kind === documentModal)
+    documentKind !== null
+      ? feature.artifacts.find((artifact) => artifact.kind === documentKind)
       : undefined;
   const taskArtifact =
     taskModal !== null && taskModal !== "new"
