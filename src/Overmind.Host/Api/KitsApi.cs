@@ -52,7 +52,14 @@ public static class KitsApi
 
         var kit = SkillKit.Create(request.Name, request.Version, request.Description ?? string.Empty);
         db.SkillKits.Add(kit);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, "SkillKits.Name"))
+        {
+            return HttpErrors.Conflict($"Kit name '{kit.Name}' is already taken.", title: "DuplicateName");
+        }
 
         return Results.Created($"/api/kits/{kit.Id}", KitMapper.ToResponse(kit));
     }
@@ -84,12 +91,21 @@ public static class KitsApi
             return HttpErrors.NotFound($"Kit '{id}' was not found.");
         }
 
+        var name = request.Name.Trim();
         var tracked = db.Entry(kit);
-        tracked.Property(k => k.Name).CurrentValue = request.Name.Trim();
+        tracked.Property(k => k.Name).CurrentValue = name;
         tracked.Property(k => k.Version).CurrentValue = request.Version;
         tracked.Property(k => k.Description).CurrentValue = request.Description ?? string.Empty;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, "SkillKits.Name"))
+        {
+            return HttpErrors.Conflict($"Kit name '{name}' is already taken.", title: "DuplicateName");
+        }
+
         return Results.Ok(KitMapper.ToResponse(kit));
     }
 

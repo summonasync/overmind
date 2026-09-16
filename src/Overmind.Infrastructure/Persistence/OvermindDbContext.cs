@@ -90,6 +90,11 @@ public sealed class OvermindDbContext : DbContext
             builder.HasIndex(v => new { v.EntryId, v.Version }).IsUnique();
         });
 
+        modelBuilder.Entity<SkillKit>(builder =>
+        {
+            builder.HasIndex(k => k.Name).IsUnique();
+        });
+
         modelBuilder.Entity<SkillKitEntry>(builder =>
         {
             builder.HasKey(e => new { e.KitId, e.EntryId });

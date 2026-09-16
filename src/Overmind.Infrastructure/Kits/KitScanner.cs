@@ -140,6 +140,7 @@ public sealed class KitScanner
         {
             Name = name,
             Path = fullPath,
+            RelativePath = relPath,
             NameCollision = collision is not null,
             NameCollisionKitId = collision?.Id,
             ReImportMatchKitId = reImport?.Id

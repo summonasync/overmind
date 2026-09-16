@@ -4,6 +4,7 @@ import { Folder, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { isKitLibraryProject } from "@/features/projects/lib/kit-library";
 import type { ProjectResponse } from "@/features/projects/types";
 
 interface ProjectListProps {
@@ -33,6 +34,11 @@ export function ProjectList({ projects, onEdit, onDelete }: ProjectListProps) {
               >
                 {project.name}
               </a>
+              {isKitLibraryProject(project) ? (
+                <span title="System project that stores entries of imported kits.">
+                  <Badge tone="info">library</Badge>
+                </span>
+              ) : null}
               <Badge className="font-mono normal-case">{project.diskPath}</Badge>
             </div>
             {project.description ? (

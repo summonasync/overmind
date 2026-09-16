@@ -5,6 +5,7 @@ using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
+using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
@@ -39,6 +40,9 @@ public static class DependencyInjection
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddScoped<IMaterializer, SkillMaterializer>();
 
+        services.AddScoped<KitScanner>();
+        services.AddScoped<KitImporter>();
+
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<BacklogImporter>();
@@ -54,6 +58,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();
         services.AddSingleton<IValidator<UpdateKitRequest>, UpdateKitRequestValidator>();
+        services.AddSingleton<IValidator<KitScanRequest>, KitScanRequestValidator>();
+        services.AddSingleton<IValidator<KitImportRequest>, KitImportRequestValidator>();
         services.AddSingleton<IValidator<CreatePlanningFeatureRequest>, CreatePlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<UpdatePlanningFeatureRequest>, UpdatePlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<CreatePlanningArtifactRequest>, CreatePlanningArtifactRequestValidator>();

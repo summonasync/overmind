@@ -123,6 +123,14 @@ public static class ProjectsApi
             return HttpErrors.NotFound($"Project '{id}' was not found.");
         }
 
+        var kitLinkedEntries = await db.SkillKitEntries
+            .CountAsync(link => link.Entry.ProjectId == id, ct);
+        if (kitLinkedEntries > 0)
+        {
+            return HttpErrors.Conflict(
+                $"Project '{project.Name}' owns {kitLinkedEntries} entries that are linked into skill kits; remove those entries from their kits before deleting the project.");
+        }
+
         db.Projects.Remove(project);
         await db.SaveChangesAsync(ct);
         return Results.NoContent();

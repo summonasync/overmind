@@ -362,6 +362,9 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
                     b.ToTable("SkillKits");
                 });
 
@@ -374,6 +377,9 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ImportedContentHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RelativePath")
                         .HasColumnType("TEXT");
 
                     b.HasKey("KitId", "EntryId");

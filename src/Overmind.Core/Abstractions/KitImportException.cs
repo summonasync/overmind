@@ -23,8 +23,8 @@ public sealed class KitImportException : Exception
         new(KitImportFailureKind.ReImportRequired,
             $"Candidate '{name}' matches imported kit '{kitId}'; use re-import to update it.");
 
-    public static KitImportException CandidateNotFound(string candidateName) =>
-        new(KitImportFailureKind.CandidateNotFound, $"Scanned candidate '{candidateName}' was not found.");
+    public static KitImportException CandidateNotFound(string relativePath) =>
+        new(KitImportFailureKind.CandidateNotFound, $"Scanned candidate at '{relativePath}' was not found.");
 
     public static KitImportException KitNotFound(Guid kitId) =>
         new(KitImportFailureKind.KitNotFound, $"Kit '{kitId}' was not found.");

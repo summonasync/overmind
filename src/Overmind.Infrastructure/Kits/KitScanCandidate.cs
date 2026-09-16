@@ -6,6 +6,8 @@ public sealed class KitScanCandidate
 
     public required string Path { get; init; }
 
+    public required string RelativePath { get; init; }
+
     public bool NameCollision { get; init; }
 
     public Guid? NameCollisionKitId { get; init; }

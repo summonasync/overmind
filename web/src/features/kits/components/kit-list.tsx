@@ -5,6 +5,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { cn } from "@/shared/lib/cn";
+import { KitOriginBadge } from "@/features/kits/components/kit-origin-badge";
 import type { KitResponse } from "@/features/kits/types";
 
 interface KitListProps {
@@ -40,6 +41,7 @@ export function KitList({ kits, expandedKitId, onToggle, onEdit, onDelete }: Kit
                 <Package size={16} aria-hidden className="shrink-0 text-primary" />
                 <span className="truncate text-sm font-semibold text-foreground">{kit.name}</span>
                 <Badge tone="skill">v{kit.version}</Badge>
+                <KitOriginBadge kit={kit} />
                 <Badge>{kit.entryIds.length} entries</Badge>
               </button>
               <div className="flex shrink-0 gap-1">

@@ -420,6 +420,250 @@ public sealed class KitReimportTests : IDisposable
     }
 
     [Fact]
+    public async Task Reimport_SkillInSkillsSubfolder_UpstreamChange_UpdatesInPlace()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+        var entryId = (await LoadKitAsync(_context, kitId))
+            .SkillKitEntries.ShouldHaveSingleItem().EntryId;
+
+        var updatedYaml = SkillYaml("alpha", "Does a better thing.");
+        WriteFile(Path.Combine(_root, "kit-a", "skills", "alpha", "SKILL.md"), updatedYaml);
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.UpdatedCount.ShouldBe(1);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+        report.ConflictedCount.ShouldBe(0);
+        var updated = report.Entries.ShouldHaveSingleItem();
+        updated.Outcome.ShouldBe(KitReimportOutcome.Updated);
+        updated.RelativePath.ShouldBe("skills/alpha");
+        updated.EntryId.ShouldBe(entryId);
+
+        using var verify = _db.CreateContext();
+        var link = (await LoadKitAsync(verify, kitId)).SkillKitEntries.ShouldHaveSingleItem();
+        link.EntryId.ShouldBe(entryId);
+        link.RelativePath.ShouldBe("skills/alpha");
+        link.Entry.Content.ShouldBe(updatedYaml);
+        link.Entry.CurrentVersion.ShouldBe(1);
+        link.ImportedContentHash.ShouldBe(ContentHash.Sha256(updatedYaml));
+    }
+
+    [Fact]
+    public async Task Reimport_SkillInSkillsSubfolder_LocalEditOnly_KeepsLocal()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+
+        var kit = await LoadKitAsync(_context, kitId);
+        var link = kit.SkillKitEntries.ShouldHaveSingleItem();
+        var entryId = link.EntryId;
+        link.Entry.UpdateContent("local rewrite\n");
+        await _context.SaveChangesAsync();
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.KeptLocalCount.ShouldBe(1);
+        report.UpdatedCount.ShouldBe(0);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+        var kept = report.Entries.ShouldHaveSingleItem();
+        kept.Outcome.ShouldBe(KitReimportOutcome.KeptLocal);
+        kept.RelativePath.ShouldBe("skills/alpha");
+        kept.EntryId.ShouldBe(entryId);
+
+        using var verify = _db.CreateContext();
+        var reloaded = (await LoadKitAsync(verify, kitId)).SkillKitEntries.ShouldHaveSingleItem();
+        reloaded.EntryId.ShouldBe(entryId);
+        reloaded.Entry.Content.ShouldBe("local rewrite\n");
+        reloaded.Entry.CurrentVersion.ShouldBe(1);
+        reloaded.ImportedContentHash.ShouldBe(ContentHash.Sha256(SkillYaml("alpha")));
+    }
+
+    [Fact]
+    public async Task Reimport_SkillInSkillsSubfolder_BothChanged_ConflictedKeepsLocal()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+
+        var kit = await LoadKitAsync(_context, kitId);
+        var entryId = kit.SkillKitEntries.ShouldHaveSingleItem().EntryId;
+        kit.SkillKitEntries.ShouldHaveSingleItem().Entry.UpdateContent("local rewrite\n");
+        await _context.SaveChangesAsync();
+
+        WriteFile(
+            Path.Combine(_root, "kit-a", "skills", "alpha", "SKILL.md"),
+            SkillYaml("alpha", "Upstream rewrite."));
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.ConflictedCount.ShouldBe(1);
+        report.UpdatedCount.ShouldBe(0);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+        var conflict = report.Entries.ShouldHaveSingleItem();
+        conflict.Outcome.ShouldBe(KitReimportOutcome.Conflicted);
+        conflict.RelativePath.ShouldBe("skills/alpha");
+        conflict.EntryId.ShouldBe(entryId);
+
+        using var verify = _db.CreateContext();
+        var reloaded = (await LoadKitAsync(verify, kitId)).SkillKitEntries.ShouldHaveSingleItem();
+        reloaded.EntryId.ShouldBe(entryId);
+        reloaded.Entry.Content.ShouldBe("local rewrite\n");
+        reloaded.ImportedContentHash.ShouldBe(ContentHash.Sha256(SkillYaml("alpha")));
+    }
+
+    [Fact]
+    public async Task Reimport_SkillInSkillsSubfolder_NoChanges_KeptLocal()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.KeptLocalCount.ShouldBe(1);
+        report.UpdatedCount.ShouldBe(0);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+        var kept = report.Entries.ShouldHaveSingleItem();
+        kept.Outcome.ShouldBe(KitReimportOutcome.KeptLocal);
+        kept.RelativePath.ShouldBe("skills/alpha");
+    }
+
+    [Fact]
+    public async Task Reimport_SkillInSkillsSubfolder_FileDeleted_RemovesWithoutReadding()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a", "skills"]);
+        WriteSkill("beta", parentDirs: ["kit-a", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+
+        Directory.Delete(Path.Combine(_root, "kit-a", "skills", "alpha"), recursive: true);
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.RemovedCount.ShouldBe(1);
+        report.KeptLocalCount.ShouldBe(1);
+        report.AddedCount.ShouldBe(0);
+        var removed = report.Entries.Single(e => e.Outcome == KitReimportOutcome.Removed);
+        removed.Title.ShouldBe("alpha");
+        removed.RelativePath.ShouldBe("skills/alpha");
+
+        using var verify = _db.CreateContext();
+        var reloaded = await LoadKitAsync(verify, kitId);
+        reloaded.SkillKitEntries.ShouldHaveSingleItem().Entry.Title.ShouldBe("beta");
+    }
+
+    [Fact]
+    public async Task Reimport_SameTitleOnTwoPlatforms_MatchesPerVariant()
+    {
+        WriteSkill("deploy", parentDirs: ["kit-a", ".claude", "skills"]);
+        WriteSkill("deploy", parentDirs: ["kit-a", ".kimi-code", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+
+        var entryIdByPath = (await LoadKitAsync(_context, kitId)).SkillKitEntries
+            .ToDictionary(l => l.RelativePath!, l => l.EntryId);
+        entryIdByPath.Count.ShouldBe(2);
+
+        var updatedYaml = SkillYaml("deploy", "Kimi variant rewrite.");
+        WriteFile(
+            Path.Combine(_root, "kit-a", ".kimi-code", "skills", "deploy", "SKILL.md"),
+            updatedYaml);
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.UpdatedCount.ShouldBe(1);
+        report.KeptLocalCount.ShouldBe(1);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+
+        var updated = report.Entries.Single(e => e.Outcome == KitReimportOutcome.Updated);
+        updated.RelativePath.ShouldBe(".kimi-code/skills/deploy");
+        updated.EntryId.ShouldBe(entryIdByPath[".kimi-code/skills/deploy"]);
+
+        var kept = report.Entries.Single(e => e.Outcome == KitReimportOutcome.KeptLocal);
+        kept.RelativePath.ShouldBe(".claude/skills/deploy");
+        kept.EntryId.ShouldBe(entryIdByPath[".claude/skills/deploy"]);
+
+        using var verify = _db.CreateContext();
+        var reloaded = await LoadKitAsync(verify, kitId);
+        var byPlatform = reloaded.SkillKitEntries
+            .ToDictionary(l => l.Entry.SkillFiles.Single().Platform!.Value);
+        byPlatform[AgentPlatform.KimiCode].Entry.Content.ShouldBe(updatedYaml);
+        byPlatform[AgentPlatform.KimiCode].EntryId.ShouldBe(entryIdByPath[".kimi-code/skills/deploy"]);
+        byPlatform[AgentPlatform.Claude].Entry.Content.ShouldBe(SkillYaml("deploy"));
+    }
+
+    [Fact]
+    public async Task Reimport_RootCandidateKit_IgnoresSiblingCandidateContent()
+    {
+        WriteSkill("alpha");
+        WriteFile(
+            Path.Combine(_root, "gates", "review.md"),
+            "# Review Gate\n\nAlways review.\n");
+        WriteSkill("beta", parentDirs: ["kit-b"]);
+        WriteFile(
+            Path.Combine(_root, "kit-b", "gates", "ship.md"),
+            "# Ship Gate\n\nShip it.\n");
+
+        var commit = await CreateImporter().CommitAsync(
+            _root, [new KitImportSelection(string.Empty, "root-kit")]);
+        var kitId = commit.Kits.ShouldHaveSingleItem().KitId!.Value;
+
+        var alphaEntryId = (await LoadKitAsync(_context, kitId)).SkillKitEntries
+            .Single(l => l.Entry.Title == "alpha").EntryId;
+
+        var updatedYaml = SkillYaml("alpha", "Does a better thing.");
+        WriteFile(Path.Combine(_root, "alpha", "SKILL.md"), updatedYaml);
+        WriteFile(
+            Path.Combine(_root, "kit-b", "beta", "SKILL.md"),
+            SkillYaml("beta", "Sibling rewrite."));
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.UpdatedCount.ShouldBe(1);
+        report.KeptLocalCount.ShouldBe(1);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+        report.ConflictedCount.ShouldBe(0);
+        report.Entries.ShouldAllBe(e => e.Title != "beta" && e.Title != "Ship Gate");
+
+        var updated = report.Entries.Single(e => e.Outcome == KitReimportOutcome.Updated);
+        updated.Title.ShouldBe("alpha");
+        updated.RelativePath.ShouldBe("alpha");
+        updated.EntryId.ShouldBe(alphaEntryId);
+        updated.ImportedContentHash.ShouldBe(ContentHash.Sha256(updatedYaml));
+
+        using var verify = _db.CreateContext();
+        var reloaded = await LoadKitAsync(verify, kitId);
+        reloaded.SourcePath.ShouldBe(Path.GetFullPath(_root));
+        reloaded.SkillKitEntries.Count.ShouldBe(2);
+        reloaded.SkillKitEntries
+            .Select(l => l.Entry.Title)
+            .ShouldBe(["alpha", "Review Gate"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task Reimport_LinkWithoutRelativePath_FallsBackToReconstructedKey()
+    {
+        WriteSkill("alpha", parentDirs: ["kit-a"]);
+        WriteSkill("deploy", parentDirs: ["kit-a", ".claude", "skills"]);
+        var kitId = await ImportKitAsync("kit-a");
+
+        await _context.Database.ExecuteSqlAsync(
+            $"UPDATE \"SkillKitEntries\" SET \"RelativePath\" = NULL WHERE \"KitId\" = {kitId}");
+
+        var report = await CreateImporter().ReimportAsync(kitId);
+
+        report.KeptLocalCount.ShouldBe(2);
+        report.UpdatedCount.ShouldBe(0);
+        report.AddedCount.ShouldBe(0);
+        report.RemovedCount.ShouldBe(0);
+        report.Entries.Single(e => e.Title == "alpha").RelativePath.ShouldBe("alpha");
+        report.Entries.Single(e => e.Title == "deploy").RelativePath.ShouldBe(".claude/skills/deploy");
+    }
+
+    [Fact]
     public async Task Reimport_EmptyUpstreamSkill_RefusedAsConflictKeepsLocal()
     {
         WriteSkill("alpha", parentDirs: ["kit-a"]);

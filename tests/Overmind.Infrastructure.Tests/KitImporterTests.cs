@@ -140,6 +140,47 @@ public sealed class KitImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Commit_PersistsKitRelativePathsOnSkillLinks()
+    {
+        WriteSkill("boss", parentDirs: ["kit-a", "skills"]);
+        WriteSkill("deploy", parentDirs: ["kit-a", ".claude", "skills"]);
+        WriteSkill("alpha", parentDirs: ["kit-a"]);
+        WriteFile(
+            Path.Combine(_root, "kit-a", "gates", "review.md"),
+            "# Review Gate\n\nAlways review.\n");
+
+        var report = await CreateImporter().CommitAsync(_root, [new KitImportSelection("kit-a", "kit-a")]);
+
+        var kit = await LoadKitAsync(report.Kits[0].KitId!.Value);
+        kit.SkillKitEntries.Count.ShouldBe(4);
+        kit.SkillKitEntries.Single(l => l.Entry.Title == "boss").RelativePath.ShouldBe("skills/boss");
+        kit.SkillKitEntries.Single(l => l.Entry.Title == "deploy").RelativePath.ShouldBe(".claude/skills/deploy");
+        kit.SkillKitEntries.Single(l => l.Entry.Title == "alpha").RelativePath.ShouldBe("alpha");
+        kit.SkillKitEntries.Single(l => l.Entry.Type == EntryType.Gate).RelativePath.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Commit_SameTitleOnTwoPlatforms_CreatesDistinctEntries()
+    {
+        WriteSkill("deploy", parentDirs: ["kit-a", ".claude", "skills"]);
+        WriteSkill("deploy", parentDirs: ["kit-a", ".kimi-code", "skills"]);
+
+        var report = await CreateImporter().CommitAsync(_root, [new KitImportSelection("kit-a", "kit-a")]);
+
+        var kit = await LoadKitAsync(report.Kits[0].KitId!.Value);
+        var links = kit.SkillKitEntries
+            .OrderBy(l => l.RelativePath, StringComparer.Ordinal)
+            .ToList();
+        links.Count.ShouldBe(2);
+        links.ShouldAllBe(l => l.Entry.Title == "deploy");
+        links[0].RelativePath.ShouldBe(".claude/skills/deploy");
+        links[1].RelativePath.ShouldBe(".kimi-code/skills/deploy");
+        links[0].Entry.SkillFiles.ShouldHaveSingleItem().Platform.ShouldBe(AgentPlatform.Claude);
+        links[1].Entry.SkillFiles.ShouldHaveSingleItem().Platform.ShouldBe(AgentPlatform.KimiCode);
+        links[0].EntryId.ShouldNotBe(links[1].EntryId);
+    }
+
+    [Fact]
     public async Task Commit_EditedName_AppliesToCreatedKit()
     {
         WriteSkill("alpha", parentDirs: ["kit-a"]);

@@ -96,18 +96,23 @@ public sealed class KitImporter
     private async Task<KitImportKitResult> CommitKitAsync(
         KitScanResult scan, KitImportSelection selection, Guid libraryProjectId, CancellationToken ct)
     {
-        var name = string.IsNullOrWhiteSpace(selection.Name) ? selection.CandidateName : selection.Name.Trim();
+        var name = selection.Name.Trim();
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         try
         {
             var candidate = scan.Candidates.FirstOrDefault(c =>
-                string.Equals(c.Name, selection.CandidateName, StringComparison.Ordinal))
-                ?? throw KitImportException.CandidateNotFound(selection.CandidateName);
+                string.Equals(c.RelativePath, selection.RelativePath, StringComparison.Ordinal))
+                ?? throw KitImportException.CandidateNotFound(selection.RelativePath);
+
+            if (name.Length == 0)
+            {
+                name = candidate.Name;
+            }
 
             if (candidate.ReImportMatchKitId is { } reImportKitId)
             {
-                throw KitImportException.ReImportRequired(selection.CandidateName, reImportKitId);
+                throw KitImportException.ReImportRequired(selection.RelativePath, reImportKitId);
             }
 
             var takenNames = await _db.SkillKits.Select(k => k.Name).ToListAsync(ct);
@@ -119,19 +124,27 @@ public sealed class KitImporter
             var kit = SkillKit.Create(name, 1, string.Empty);
             kit.MarkImported(candidate.Path);
 
-            var entries = new List<ContextEntry>();
+            var skillEntries = new List<(ContextEntry Entry, string RelativePath)>();
             foreach (var skill in candidate.Skills)
             {
-                entries.Add(await BuildSkillEntryAsync(scan.ScannedPath, skill, libraryProjectId, ct));
+                skillEntries.Add((await BuildSkillEntryAsync(scan.ScannedPath, skill, libraryProjectId, ct),
+                    KitRelativeKey(candidate.RelativePath, skill.RelativePath)));
             }
 
-            entries.AddRange(await BuildRuleEntriesAsync(
+            var ruleEntries = new List<ContextEntry>();
+            ruleEntries.AddRange(await BuildRuleEntriesAsync(
                 scan.ScannedPath, candidate.Gates, EntryType.Gate, libraryProjectId, ct));
-            entries.AddRange(await BuildRuleEntriesAsync(
+            ruleEntries.AddRange(await BuildRuleEntriesAsync(
                 scan.ScannedPath, candidate.Guards, EntryType.Guard, libraryProjectId, ct));
 
             _db.SkillKits.Add(kit);
-            foreach (var entry in entries)
+            foreach (var (entry, relativePath) in skillEntries)
+            {
+                kit.AddEntry(entry.Id, ContentHash.Sha256(entry.Content), relativePath);
+                _db.ContextEntries.Add(entry);
+            }
+
+            foreach (var entry in ruleEntries)
             {
                 kit.AddEntry(entry.Id, ContentHash.Sha256(entry.Content));
                 _db.ContextEntries.Add(entry);
@@ -147,15 +160,26 @@ public sealed class KitImporter
             await tx.RollbackAsync(ct);
             return KitImportKitResult.Failed(name, ex.Kind, ex.Message);
         }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, "SkillKits.Name"))
+        {
+            await tx.RollbackAsync(ct);
+            DetachAdded();
+            return KitImportKitResult.Failed(name, KitImportFailureKind.DuplicateName,
+                $"Kit name '{name}' is already taken.");
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             await tx.RollbackAsync(ct);
-            foreach (var tracked in _db.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
-            {
-                tracked.State = EntityState.Detached;
-            }
-
+            DetachAdded();
             return KitImportKitResult.Failed(name, null, ex.Message);
+        }
+    }
+
+    private void DetachAdded()
+    {
+        foreach (var tracked in _db.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
+        {
+            tracked.State = EntityState.Detached;
         }
     }
 
@@ -212,11 +236,16 @@ public sealed class KitImporter
 
     private async Task<SourceIndex> BuildSourceIndexAsync(KitScanResult scan, CancellationToken ct)
     {
+        var rootCandidate = scan.Candidates.FirstOrDefault(c => c.RelativePath.Length == 0);
+        IReadOnlyList<KitScanCandidate> candidates = rootCandidate is null
+            ? scan.Candidates
+            : [rootCandidate];
+
         var skills = new Dictionary<string, SourceSkill>(StringComparer.OrdinalIgnoreCase);
         var gates = new List<SourceFile>();
         var guards = new List<SourceFile>();
 
-        foreach (var candidate in scan.Candidates)
+        foreach (var candidate in candidates)
         {
             foreach (var skill in candidate.Skills)
             {
@@ -258,7 +287,7 @@ public sealed class KitImporter
     {
         var entriesByKey = importedLinks
             .Where(l => l.Entry.Type == EntryType.Skill)
-            .GroupBy(l => SkillSourceKey(l.Entry), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(l => LinkSourceKey(l), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => new Queue<SkillKitEntry>(g.OrderBy(l => l.EntryId)), StringComparer.OrdinalIgnoreCase);
 
         foreach (var (key, source) in sourceSkills.OrderBy(p => p.Key, StringComparer.Ordinal))
@@ -340,7 +369,7 @@ public sealed class KitImporter
         var entry = ContextEntry.CreateSkill(libraryProjectId, source.Skill.Name, source.Content, files);
         var sourceHash = ContentHash.Sha256(source.Content);
 
-        kit.AddEntry(entry.Id, sourceHash);
+        kit.AddEntry(entry.Id, sourceHash, source.Key);
         _db.ContextEntries.Add(entry);
 
         report.Entries.Add(new KitReimportEntryResult
@@ -468,14 +497,6 @@ public sealed class KitImporter
     private async Task RemoveEntryAsync(SkillKit kit, SkillKitEntry link, KitReimportReport report, CancellationToken ct)
     {
         var entry = link.Entry;
-        report.Entries.Add(new KitReimportEntryResult
-        {
-            Outcome = KitReimportOutcome.Removed,
-            EntryType = entry.Type,
-            Title = entry.Title,
-            RelativePath = entry.Type == EntryType.Skill ? SkillSourceKey(entry) : null,
-            EntryId = entry.Id
-        });
 
         _db.SkillKitEntries.Remove(link);
 
@@ -484,6 +505,16 @@ public sealed class KitImporter
         {
             _db.ContextEntries.Remove(entry);
         }
+
+        report.Entries.Add(new KitReimportEntryResult
+        {
+            Outcome = KitReimportOutcome.Removed,
+            EntryType = entry.Type,
+            Title = entry.Title,
+            RelativePath = entry.Type == EntryType.Skill ? LinkSourceKey(link) : null,
+            EntryId = entry.Id,
+            EntryRowRetained = shared
+        });
     }
 
     private void ResyncSkillFiles(ContextEntry entry, List<SkillFile> files)
@@ -497,6 +528,11 @@ public sealed class KitImporter
         }
     }
 
+    private string LinkSourceKey(SkillKitEntry link) =>
+        link.RelativePath is { Length: > 0 } relativePath
+            ? NormalizeKey(relativePath)
+            : SkillSourceKey(link.Entry);
+
     private string SkillSourceKey(ContextEntry entry)
     {
         var platform = entry.SkillFiles.Select(f => f.Platform).FirstOrDefault(p => p.HasValue);
@@ -504,6 +540,15 @@ public sealed class KitImporter
             ? $"{_platformMap.GetSkillsDir(platform.Value)}/{entry.Title}"
             : entry.Title;
         return NormalizeKey(dir);
+    }
+
+    private static string KitRelativeKey(string candidateRelPath, string skillRelPath)
+    {
+        var prefix = candidateRelPath.Length == 0 ? string.Empty : candidateRelPath + Path.DirectorySeparatorChar;
+        var stripped = prefix.Length > 0 && skillRelPath.StartsWith(prefix, StringComparison.Ordinal)
+            ? skillRelPath[prefix.Length..]
+            : skillRelPath;
+        return NormalizeKey(stripped);
     }
 
     private static string NormalizeKey(string path) => path.Replace('\\', '/');
@@ -540,13 +585,10 @@ public sealed class KitImporter
 
     private async Task<Guid> EnsureLibraryProjectAsync(CancellationToken ct)
     {
-        var existingId = await _db.Projects
-            .Where(p => p.Name == LibraryProjectName)
-            .Select(p => p.Id)
-            .FirstOrDefaultAsync(ct);
-        if (existingId != Guid.Empty)
+        var existingId = await FindLibraryProjectIdAsync(ct);
+        if (existingId is { } libraryId)
         {
-            return existingId;
+            return libraryId;
         }
 
         var dataSource = _db.Database.GetDbConnection().DataSource;
@@ -565,18 +607,24 @@ public sealed class KitImporter
         catch (DbUpdateException)
         {
             _db.Entry(project).State = EntityState.Detached;
-            var racedId = await _db.Projects
-                .Where(p => p.Name == LibraryProjectName)
-                .Select(p => p.Id)
-                .FirstOrDefaultAsync(ct);
-            if (racedId != Guid.Empty)
+            var racedId = await FindLibraryProjectIdAsync(ct);
+            if (racedId is { } winnerId)
             {
-                return racedId;
+                return winnerId;
             }
 
             throw;
         }
 
         return project.Id;
+    }
+
+    private async Task<Guid?> FindLibraryProjectIdAsync(CancellationToken ct)
+    {
+        var normalizedName = LibraryProjectName.ToLowerInvariant();
+        return await _db.Projects
+            .Where(p => p.Name.ToLower() == normalizedName)
+            .Select(p => (Guid?)p.Id)
+            .FirstOrDefaultAsync(ct);
     }
 }

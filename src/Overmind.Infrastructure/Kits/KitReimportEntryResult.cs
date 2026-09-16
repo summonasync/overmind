@@ -15,4 +15,6 @@ public sealed class KitReimportEntryResult
     public Guid? EntryId { get; init; }
 
     public string? ImportedContentHash { get; init; }
+
+    public bool EntryRowRetained { get; init; }
 }

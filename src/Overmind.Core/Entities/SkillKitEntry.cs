@@ -8,6 +8,7 @@ public sealed class SkillKitEntry
 
     public Guid KitId { get; private set; }
     public Guid EntryId { get; private set; }
+    public string? RelativePath { get; private set; }
     public string? ImportedContentHash { get; private set; }
 
     public SkillKit Kit { get; private set; } = null!;
@@ -20,13 +21,15 @@ public sealed class SkillKitEntry
         ImportedContentHash = importedContentHash;
     }
 
-    internal static SkillKitEntry Create(Guid kitId, Guid entryId, string? importedContentHash = null)
+    internal static SkillKitEntry Create(
+        Guid kitId, Guid entryId, string? importedContentHash = null, string? relativePath = null)
     {
         return new SkillKitEntry
         {
             KitId = kitId,
             EntryId = entryId,
-            ImportedContentHash = importedContentHash
+            ImportedContentHash = importedContentHash,
+            RelativePath = relativePath
         };
     }
 }

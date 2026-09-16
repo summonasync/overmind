@@ -231,6 +231,49 @@ public sealed class KitApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_WithTakenName_Returns409DuplicateName()
+    {
+        await CreateKitAsync("twin", 1);
+
+        var duplicate = await _client.PostAsJsonAsync("/api/kits", new
+        {
+            Name = "twin",
+            Version = 2,
+            Description = (string?)null,
+        });
+
+        duplicate.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await duplicate.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Title.ShouldBe("DuplicateName");
+        problem!.Detail!.ShouldContain("'twin'");
+    }
+
+    [Fact]
+    public async Task Update_RenameToTakenName_Returns409AndKeepsKit()
+    {
+        var occupied = await CreateKitAsync("occupied", 1);
+        var free = await CreateKitAsync("free-name", 1);
+
+        var rename = await _client.PutAsJsonAsync($"/api/kits/{free.Id}", new
+        {
+            Name = "occupied",
+            Version = occupied.Version,
+            Description = "renamed",
+        });
+
+        rename.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await rename.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Title.ShouldBe("DuplicateName");
+        problem!.Detail!.ShouldContain("'occupied'");
+
+        var fetched = await _client.GetFromJsonAsync<KitJson>($"/api/kits/{free.Id}", JsonOptions);
+        fetched.ShouldNotBeNull();
+        fetched!.Name.ShouldBe("free-name");
+    }
+
+    [Fact]
     public async Task Activate_SecondKitWhileAnotherActive_Returns409ThenSwitchSucceeds()
     {
         var project = await CreateProjectAsync();

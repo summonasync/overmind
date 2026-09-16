@@ -1,25 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { FolderInput } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
+import { browseFolder } from "@/shared/api/system";
 import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
 import { KitDetailPanel } from "@/widgets/kit-workspace/ui/kit-detail-panel";
-import { KitForm, KitList, useKitList, useKitMutations } from "@/features/kits";
+import { KitForm, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
 import type { KitFormValues, KitResponse } from "@/features/kits";
 import { KitsInfoPanel } from "@/pages/kits-page/ui/kits-info-panel";
 
 export function KitsPage() {
   const { data: kits, loading, error } = useKitList();
   const mutations = useKitMutations();
+  const kitImport = useKitImport();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<KitResponse | null>(null);
   const [deleting, setDeleting] = useState<KitResponse | null>(null);
   const [expandedKitId, setExpandedKitId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   useInfoPanel(<KitsInfoPanel />);
 
@@ -28,6 +32,15 @@ export function KitsPage() {
     (mutations.update.error as Error | null) ??
     (mutations.remove.error as Error | null) ??
     error;
+
+  const handleImportFromFolder = async () => {
+    const selected = await browseFolder();
+    if (!selected) {
+      return;
+    }
+    setImportOpen(true);
+    kitImport.scan.mutate(selected.path);
+  };
 
   const handleSubmit = (values: KitFormValues) => {
     if (editing) {
@@ -44,7 +57,15 @@ export function KitsPage() {
       <PageHeader
         title="Kits"
         description="Reusable coding-agent kits to standardize behavior, context, and workflows across projects."
-        actions={<Button onClick={() => { setEditing(null); setFormOpen(true); }}>New kit</Button>}
+        actions={
+          <>
+            <Button variant="accent" onClick={handleImportFromFolder}>
+              <FolderInput size={14} aria-hidden />
+              Import from folder
+            </Button>
+            <Button onClick={() => { setEditing(null); setFormOpen(true); }}>New kit</Button>
+          </>
+        }
       />
 
       <ErrorText error={activeError} />
@@ -99,6 +120,11 @@ export function KitsPage() {
         ) : null}
       </Modal>
 
+      <KitImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        kitImport={kitImport}
+      />
     </div>
   );
 }

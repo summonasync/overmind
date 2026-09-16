@@ -46,13 +46,13 @@ public sealed class SkillKit
         ImportedAtUtc = null;
     }
 
-    public void AddEntry(Guid entryId, string? importedContentHash = null)
+    public void AddEntry(Guid entryId, string? importedContentHash = null, string? relativePath = null)
     {
         if (SkillKitEntries.Any(e => e.EntryId == entryId))
         {
             throw new InvalidOperationException("Entry is already part of this kit.");
         }
 
-        SkillKitEntries.Add(SkillKitEntry.Create(Id, entryId, importedContentHash));
+        SkillKitEntries.Add(SkillKitEntry.Create(Id, entryId, importedContentHash, relativePath));
     }
 }

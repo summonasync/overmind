@@ -1,3 +1,3 @@
 namespace Overmind.Infrastructure.Kits;
 
-public sealed record KitImportSelection(string CandidateName, string Name);
+public sealed record KitImportSelection(string RelativePath, string Name);

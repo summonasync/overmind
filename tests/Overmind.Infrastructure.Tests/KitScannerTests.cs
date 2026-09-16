@@ -91,6 +91,7 @@ public sealed class KitScannerTests : IDisposable
         var candidate = result.Candidates.ShouldHaveSingleItem();
         candidate.Name.ShouldBe(new DirectoryInfo(_root).Name);
         candidate.Path.ShouldBe(Path.GetFullPath(_root));
+        candidate.RelativePath.ShouldBe(string.Empty);
         candidate.NameCollision.ShouldBeFalse();
         candidate.ReImportMatchKitId.ShouldBeNull();
 
@@ -112,6 +113,7 @@ public sealed class KitScannerTests : IDisposable
 
         result.Candidates.Count.ShouldBe(2);
         result.Candidates.Select(c => c.Name).ShouldBe(["kit-a", "kit-b"]);
+        result.Candidates.Select(c => c.RelativePath).ShouldBe(["kit-a", "kit-b"]);
         result.Candidates[0].Skills.ShouldHaveSingleItem().Name.ShouldBe("alpha");
         result.Candidates[1].Skills.ShouldHaveSingleItem().Name.ShouldBe("beta");
     }

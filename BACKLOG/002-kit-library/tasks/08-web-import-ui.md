@@ -2,7 +2,7 @@
 feature: 002
 task: 08
 slug: web-import-ui
-status: todo
+status: done
 review: light
 created: 2026-09-14
 ---
@@ -45,10 +45,10 @@ Frontend house rules (see AGENTS.md): Next.js 16 static export, FSD layering und
 
 <acceptance-criteria>
 - [ ] Full flow works against the running Host: pick folder → preview with two candidates → rename one → import → both kits appear with origin badges
-- [ ] Re-import-flagged candidates are blocked in the dialog with the pointer to Re-import
-- [ ] Re-import on an imported kit shows the update report with a visibly distinct conflict entry
-- [ ] Clear source (with confirm) flips the badge to manual
-- [ ] lint + tsc + build green
+- [x] Re-import-flagged candidates are blocked in the dialog with the pointer to Re-import (disabled checkbox + name input, "Already imported — use Re-import on the kit instead."; verified statically)
+- [x] Re-import on an imported kit shows the update report with a visibly distinct conflict entry (conflicted rows get `border-danger/40 bg-danger/10` + danger outcome badge; other outcomes use plain raised rows)
+- [x] Clear source (with confirm) flips the badge to manual (confirm modal → `POST /kits/{id}/clear-source` → `kitKeys.all` invalidation re-renders list + detail)
+- [x] lint + tsc + build green (0 lint errors / 6 known `<img>` warnings, tsc clean, static export build succeeds)
 </acceptance-criteria>
 
 <refs>
@@ -58,7 +58,30 @@ Frontend house rules (see AGENTS.md): Next.js 16 static export, FSD layering und
 </refs>
 
 <obstacles>
+- Contract gap: `ProjectResponse` carries no `isLibrary`-style marker — the synthetic "Kit Library" project is only identifiable by its name (internal `LibraryProjectName` const in `KitImporter`, never surfaced in the contract). Chose minimal local behavior: name-based detection (`web/src/features/projects/lib/kit-library.ts`) + "Library" info badge in the projects list — visible, not hidden. The backend 409 delete guard (kit-linked entries) still protects it regardless of the badge. Proper fix is an API marker field; not patched here per anti-scope.
+- [resolved 2026-09-15] Contract quirk: `KitImportSelectionRequest.relativePath` is consumed by the backend as the candidate NAME (`new KitImportSelection(k.RelativePath, k.Name)` → importer matches `c.Name == CandidateName`, Ordinal). The UI therefore sends `candidate.name` in the `relativePath` field — correct for all candidates including the root candidate (whose relative path is `""`). Field is misnamed in the contract; left as-is per anti-scope. → RESOLVED by the 07-side contract fix: the backend now matches selections by the candidate's true relative path, scan candidates carry `relativePath`, and the UI sends `candidate.relativePath`; the name-echo workaround is no longer in effect (sending a name there fails with `candidateNotFound`).
+- Environment: fresh worktree had no `web/node_modules` and no `next-env.d.ts` (gitignored, Next-generated). `npm ci` (lockfile only, no new packages) + `npm run build` generated it; standalone `tsc --noEmit` before the first build fails on missing image module declarations for that reason alone.
 </obstacles>
 
 <log>
+2026-09-15 — implemented the full kit-import surface on the web:
+
+- `web/src/shared/api/types.ts`: added `"qwen"` to `AgentPlatform` + `AGENT_PLATFORMS` (002/05 carry-over). Grep confirmed no other hardcoded platform lists — `AGENT_PLATFORMS` is the single source, its only consumer is `skill-files-editor`.
+- `web/src/features/kits/types.ts`: extended `KitResponse` with `sourceKind`/`sourcePath`/`importedAtUtc`; added scan preview / import report / re-import report DTOs matching `KitImportContracts.cs` (camelCase enum strings).
+- `web/src/features/kits/api.ts`: `scanKitFolder`, `importKitFolder`, `reimportKit`, `clearKitSource` against the four task-07 endpoints.
+- `web/src/features/kits/lib/use-kit-import.ts`: mutations hook; scan/import/reimport/clearSource invalidate `kitKeys.all` (lists + details + drift) on success.
+- `web/src/features/kits/lib/import-labels.ts`: failure-kind / scan-issue / re-import-outcome label+tone maps, `formatImportedAt`.
+- Import dialog flow: `kit-import-dialog.tsx` (phase switch: scanning / scan error / wizard / report) + `kit-import-wizard.tsx` (pre-checked candidates, editable names with collision + local-duplicate highlighting, truncated banner, empty state, selection counter) + `kit-import-candidate-row.tsx` (checkbox, name input, skills with platform tags, gate/guard counts, per-issue warning rows) + `kit-import-report.tsx` (per-kit success/failure with failure-kind labels and error text). Kits page header gets "Import from folder" → `browseFolder()` → open dialog + fire scan.
+- Origin surface: `kit-origin-badge.tsx` (imported=info w/ path+date tooltip, bundled=skill, manual=neutral) in kit list rows; new `KitSourceSection` in the kit detail panel (source path + imported-at, Re-import button → `kit-reimport-report.tsx` modal with counts + per-entry outcomes, conflicted entries visually distinct; Clear source behind a confirm modal).
+- Kit Library badge decision: no API marker exists (see obstacles), so the projects list shows a "Library" info badge via name-based local detection — distinct, not hidden; delete remains guarded server-side by the 409.
+- Verification (`web/`): `npm run lint` → 0 errors / 6 known `<img>` warnings; `npx tsc --noEmit` → clean; `npm run build` → static export succeeds (9 routes).
+- First AC (full flow against running Host) left unticked: no browser available in this run — live verification happens in task 09 e2e.
+
+2026-09-15 — follow-up fixes after light review (`audits/review-002-08.md` IMPORTANT-1, IMPORTANT-2) + the 07-side contract change:
+
+- `web/src/features/kits/types.ts`: `KitScanCandidateResponse` gains required `relativePath` (backend now returns it; root candidate = `""`).
+- `kit-import-wizard.tsx`: import selections now send `relativePath: candidate.relativePath` (was `candidate.name` — the backend matches by relative path and pins the old shape with `Import_CandidateNameInsteadOfRelativePath_FailsCandidateNotFound`).
+- IMPORTANT-1: collision highlight is live — the wizard pulls current kit names via `useKitList()` and recomputes the existing-name collision on every keystroke (trimmed, case-insensitive, mirroring the backend's OrdinalIgnoreCase duplicate check); the scan-time `nameCollision` flag contributes only while the draft name is still the original candidate name. Row props split into `duplicateName` (local duplicates among selected) and `existingNameCollision`.
+- IMPORTANT-2: `formatImportedAt` is exported from the `@/features/kits` barrel; `kit-source-section.tsx` imports it via the barrel instead of deep-importing `lib/import-labels`.
+- Verification (`web/`): lint 0 errors / 6 known warnings; tsc clean; build ok.
 </log>

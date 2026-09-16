@@ -8,6 +8,7 @@ import { useAllEntries } from "@/widgets/kit-workspace/lib/use-all-entries";
 import { KitActivationSection } from "@/widgets/kit-workspace/ui/kit-activation-section";
 import { KitDriftSection } from "@/widgets/kit-workspace/ui/kit-drift-section";
 import { KitEntriesSection } from "@/widgets/kit-workspace/ui/kit-entries-section";
+import { KitSourceSection } from "@/widgets/kit-workspace/ui/kit-source-section";
 
 interface KitDetailPanelProps {
   kit: KitResponse;
@@ -24,6 +25,7 @@ export function KitDetailPanel({ kit }: KitDetailPanelProps) {
   return (
     <div className="space-y-4 rounded-b-lg border border-t-0 border-border bg-surface px-4 py-3">
       <ErrorText error={actionError} />
+      <KitSourceSection kit={kit} />
       <KitEntriesSection kit={kit} projects={projects} entryMap={entryMap} mutations={mutations} />
       <KitActivationSection kit={kit} projects={projects} mutations={mutations} />
       <KitDriftSection projects={projects} />

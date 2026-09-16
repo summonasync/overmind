@@ -2,12 +2,35 @@ import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type {
   DriftItemResponse,
   KitFormValues,
+  KitImportReportResponse,
+  KitImportSelectionRequest,
+  KitReimportReportResponse,
   KitResponse,
+  KitScanPreviewResponse,
   MaterializationReportResponse,
 } from "@/features/kits/types";
 
 export function listKits(): Promise<KitResponse[]> {
   return apiGet<KitResponse[]>("/kits");
+}
+
+export function scanKitFolder(path: string): Promise<KitScanPreviewResponse> {
+  return apiPost<KitScanPreviewResponse>("/kits/import/scan", { path });
+}
+
+export function importKitFolder(
+  path: string,
+  kits: KitImportSelectionRequest[],
+): Promise<KitImportReportResponse> {
+  return apiPost<KitImportReportResponse>("/kits/import", { path, kits });
+}
+
+export function reimportKit(id: string): Promise<KitReimportReportResponse> {
+  return apiPost<KitReimportReportResponse>(`/kits/${id}/reimport`);
+}
+
+export function clearKitSource(id: string): Promise<KitResponse> {
+  return apiPost<KitResponse>(`/kits/${id}/clear-source`);
 }
 
 export function createKit(values: KitFormValues): Promise<KitResponse> {
