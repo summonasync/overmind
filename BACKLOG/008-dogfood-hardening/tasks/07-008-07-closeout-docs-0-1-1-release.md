@@ -2,7 +2,7 @@
 feature: 008
 task: 07
 slug: dogfood-hardening
-status: todo
+status: inprogress
 review: hard
 created: 2026-09-16
 ---
@@ -48,4 +48,5 @@ created: 2026-09-16
 
 <log>
 - 2026-09-17 — 2026-09-17 — orchestrator — input from review 008/04: CONTEXT.md closeout must document the new loud report prefix "reassigned:" (rides the Skipped list; widens the skipped/ignored/unknown-status vocabulary)
+- 2026-09-17 — 008/07 started: docs pass delegated, pack + live upgrade dogfood by orchestrator
 </log>
