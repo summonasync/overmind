@@ -15,6 +15,7 @@ CLI-команда (кандидат: overmind-mcp install), которая ре
 <requirements>
 - idea stub: обсуждается, спека не начата
 - scope project/user, идемпотентность, обновление пути при апгрейде версии
+- install-layout: стабильный «current»-линк (~/apps/overmind -> overmind-<ver>-<rid>) как живое место инсталляции — mcp.json/автостарт/регистрации агентов ссылаются на него и переживают апгрейды (принято в догфуде 0.1.1, 2026-09-17)
 - мапа конфигов per-агент (JSON vs TOML, разные пути) — вероятно рядом с platforms.json
 </requirements>
 
