@@ -49,4 +49,5 @@ created: 2026-09-16
 <log>
 - 2026-09-17 — 2026-09-17 — orchestrator — input from review 008/04: CONTEXT.md closeout must document the new loud report prefix "reassigned:" (rides the Skipped list; widens the skipped/ignored/unknown-status vocabulary)
 - 2026-09-17 — 008/07 started: docs pass delegated, pack + live upgrade dogfood by orchestrator
+- 2026-09-17 — 2026-09-17 — hard architect review — PASS-WITH-NITS (audits/architect-review-2026-09-17-008-07.md); WARNING-1 (letter-suffix duplicate cycle on re-import) spawned task 08 in-feature, must land before the live re-import cells of this closeout
 </log>

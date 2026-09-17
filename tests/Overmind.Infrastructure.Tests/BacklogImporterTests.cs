@@ -648,6 +648,92 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_LetterSuffixedTask_ReImportAfterMaterializerWrotePlainNames_CreatesNoDuplicate()
+    {
+        _repo.Write("017-suffix-cycle/feature.md",
+            """
+            ---
+            feature: 017
+            slug: suffix-cycle
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 017 — Suffix cycle
+            """);
+        _repo.Write("017-suffix-cycle/tasks/01-first.md",
+            """
+            ---
+            feature: 017
+            task: 01
+            slug: suffix-cycle
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # First task
+            """);
+        _repo.Write("017-suffix-cycle/tasks/01b-extra.md",
+            """
+            ---
+            feature: 017
+            task: 01b
+            slug: suffix-cycle
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Extra task
+            """);
+
+        var first = await ImportAsync(_repo.Root);
+
+        first.ArtifactsCreated.ShouldBe(2);
+        first.Skipped.ShouldContain(
+            s => s.Contains("reassigned:") && s.Contains("01b-extra.md") && s.Contains("appended as order 2"));
+
+        _repo.Write("017-suffix-cycle/tasks/02-extra.md",
+            """
+            ---
+            feature: 017
+            task: 02
+            slug: suffix-cycle
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Extra task
+            """);
+
+        var second = await ImportAsync(_repo.Root);
+
+        second.FeaturesCreated.ShouldBe(0);
+        second.ArtifactsCreated.ShouldBe(0);
+        second.ArtifactsUpdated.ShouldBe(0);
+        second.Skipped.ShouldContain(s => s.Contains("matched:") && s.Contains("01b-extra.md"));
+        second.Skipped.ShouldNotContain(s => s.Contains("reassigned:"));
+
+        var feature = await LoadFeatureAsync("017-suffix-cycle");
+        var tasks = feature!.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).OrderBy(a => a.Order).ToList();
+        tasks.Count.ShouldBe(2);
+        tasks[0].Order.ShouldBe(1);
+        tasks[1].Order.ShouldBe(2);
+        tasks[1].Body.ShouldContain("Extra task");
+
+        var third = await ImportAsync(_repo.Root);
+
+        third.ArtifactsCreated.ShouldBe(0);
+        third.ArtifactsUpdated.ShouldBe(0);
+
+        feature = await LoadFeatureAsync("017-suffix-cycle");
+        feature!.Artifacts.Count(a => a.Kind == PlanningArtifactKind.Task).ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Import_SkipsTemplateAndFeaturelessFolders()
     {
         _repo.Write("_TEMPLATE/feature.md",

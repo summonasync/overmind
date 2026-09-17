@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
+using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.Planning;
@@ -154,11 +155,28 @@ public sealed partial class PlanningFeatureService
         var artifactsUpdated = 0;
         var kept = new List<string>();
         var imported = new HashSet<Guid>();
+        var taskContent = new Dictionary<string, PlanningArtifact>(StringComparer.Ordinal);
+        foreach (var task in feature.Artifacts
+                     .Where(a => a.Kind == PlanningArtifactKind.Task)
+                     .OrderBy(a => a.Order))
+        {
+            taskContent.TryAdd(ContentHash.Normalize(task.Body), task);
+        }
 
         foreach (var artifact in import.Artifacts)
         {
             var existing = feature.Artifacts.FirstOrDefault(a =>
                 a.Kind == artifact.Kind && (artifact.Kind != PlanningArtifactKind.Task || a.Order == artifact.Order));
+
+            if (existing is null
+                && artifact.Kind == PlanningArtifactKind.Task
+                && artifact.ReassignedFrom.HasValue
+                && taskContent.TryGetValue(ContentHash.Normalize(artifact.Body), out var identical))
+            {
+                existing = identical;
+                kept.Add(
+                    $"matched: {artifact.SourcePath} (identical content to task order {identical.Order}; no new artifact)");
+            }
 
             if (existing is null)
             {
@@ -166,6 +184,17 @@ public sealed partial class PlanningFeatureService
                     feature.Id, artifact.Kind, artifact.Status, artifact.Review, artifact.Body,
                     artifact.Order, artifact.FrozenAt, version: 1, artifact.CreatedAt, artifact.CreatedAt);
                 _db.PlanningArtifacts.Add(restored);
+                if (artifact.Kind == PlanningArtifactKind.Task)
+                {
+                    taskContent.TryAdd(ContentHash.Normalize(restored.Body), restored);
+                }
+
+                if (artifact.ReassignedFrom.HasValue)
+                {
+                    kept.Add(
+                        $"reassigned: {artifact.SourcePath} (order {artifact.ReassignedFrom.Value} taken; letter-suffixed task appended as order {artifact.Order})");
+                }
+
                 imported.Add(restored.Id);
                 artifactsCreated++;
                 continue;

@@ -156,19 +156,20 @@ public sealed class BacklogImporter
             var usedOrders = taskFiles.Where(t => t.Suffix == '\0').Select(t => t.Order).ToHashSet();
             foreach (var (path, order, suffix) in taskFiles)
             {
+                int? reassignedFrom = null;
                 var assigned = order;
                 if (suffix != '\0')
                 {
                     if (usedOrders.Contains(order))
                     {
                         assigned = usedOrders.Max() + 1;
-                        skipped.Add($"reassigned: {Rel(repoRoot, path)} (order {order} taken; letter-suffixed task appended as order {assigned})");
+                        reassignedFrom = order;
                     }
 
                     usedOrders.Add(assigned);
                 }
 
-                var task = await TryParseTaskAsync(path, assigned, repoRoot, skipped, ct);
+                var task = await TryParseTaskAsync(path, assigned, reassignedFrom, repoRoot, skipped, ct);
                 if (task is not null)
                 {
                     artifacts.Add(task);
@@ -232,7 +233,7 @@ public sealed class BacklogImporter
     }
 
     private static async Task<BacklogArtifactImport?> TryParseTaskAsync(
-        string path, int order, string repoRoot, List<string> skipped, CancellationToken ct)
+        string path, int order, int? reassignedFrom, string repoRoot, List<string> skipped, CancellationToken ct)
     {
         var relative = Rel(repoRoot, path);
         var content = await TryReadAsync(path, relative, skipped, ct);
@@ -256,7 +257,8 @@ public sealed class BacklogImporter
             body,
             null,
             ResolveCreatedAt(fields),
-            relative);
+            relative,
+            reassignedFrom);
     }
 
     private static async Task<string?> TryReadAsync(

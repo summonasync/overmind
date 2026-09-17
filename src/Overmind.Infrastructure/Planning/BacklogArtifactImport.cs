@@ -10,4 +10,5 @@ public sealed record BacklogArtifactImport(
     string Body,
     DateTime? FrozenAt,
     DateTime CreatedAt,
-    string SourcePath);
+    string SourcePath,
+    int? ReassignedFrom = null);
