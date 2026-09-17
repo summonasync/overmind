@@ -468,6 +468,186 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_LetterSuffixedTask_NoCollision_KeepsBaseOrder()
+    {
+        _repo.Write("014-suffix/feature.md",
+            """
+            ---
+            feature: 014
+            slug: suffix
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 014 — Suffix
+            """);
+        _repo.Write("014-suffix/tasks/01b-extra.md",
+            """
+            ---
+            feature: 014
+            task: 01b
+            slug: suffix
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Extra task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldBeEmpty();
+
+        var feature = await LoadFeatureAsync("014-suffix");
+        var task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        task.Order.ShouldBe(1);
+        task.Status.ShouldBe(PlanningArtifactStatus.Todo);
+    }
+
+    [Fact]
+    public async Task Import_LetterSuffixedTask_Collision_AppendsAtMaxPlusOneAndReports()
+    {
+        _repo.Write("015-suffix-collision/feature.md",
+            """
+            ---
+            feature: 015
+            slug: suffix-collision
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 015 — Suffix collision
+            """);
+        _repo.Write("015-suffix-collision/tasks/01-first.md",
+            """
+            ---
+            feature: 015
+            task: 01
+            slug: suffix-collision
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # First task
+            """);
+        _repo.Write("015-suffix-collision/tasks/02-second.md",
+            """
+            ---
+            feature: 015
+            task: 02
+            slug: suffix-collision
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Second task
+            """);
+        _repo.Write("015-suffix-collision/tasks/01b-extra.md",
+            """
+            ---
+            feature: 015
+            task: 01b
+            slug: suffix-collision
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Extra task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldContain(
+            s => s.Contains("reassigned:") && s.Contains("01b-extra.md") && s.Contains("appended as order 3"));
+
+        var feature = await LoadFeatureAsync("015-suffix-collision");
+        var tasks = feature!.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).OrderBy(a => a.Order).ToList();
+        tasks.Count.ShouldBe(3);
+        tasks[0].Order.ShouldBe(1);
+        tasks[1].Order.ShouldBe(2);
+        tasks[2].Order.ShouldBe(3);
+        tasks[2].Body.ShouldContain("Extra task");
+    }
+
+    [Fact]
+    public async Task Import_LetterSuffixedTasks_MultipleLetters_AscendByLetter()
+    {
+        _repo.Write("016-suffix-letters/feature.md",
+            """
+            ---
+            feature: 016
+            slug: suffix-letters
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 016 — Suffix letters
+            """);
+        _repo.Write("016-suffix-letters/tasks/01-first.md",
+            """
+            ---
+            feature: 016
+            task: 01
+            slug: suffix-letters
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # First task
+            """);
+        _repo.Write("016-suffix-letters/tasks/01b-extra.md",
+            """
+            ---
+            feature: 016
+            task: 01b
+            slug: suffix-letters
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Extra task
+            """);
+        _repo.Write("016-suffix-letters/tasks/01c-more.md",
+            """
+            ---
+            feature: 016
+            task: 01c
+            slug: suffix-letters
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # More task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        var reassignments = report.Skipped.Where(s => s.Contains("reassigned:")).ToList();
+        reassignments.Count.ShouldBe(2);
+        reassignments.ShouldContain(s => s.Contains("01b-extra.md") && s.Contains("appended as order 2"));
+        reassignments.ShouldContain(s => s.Contains("01c-more.md") && s.Contains("appended as order 3"));
+
+        var feature = await LoadFeatureAsync("016-suffix-letters");
+        var tasks = feature!.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).OrderBy(a => a.Order).ToList();
+        tasks.Count.ShouldBe(3);
+        tasks[0].Order.ShouldBe(1);
+        tasks[1].Order.ShouldBe(2);
+        tasks[2].Order.ShouldBe(3);
+        tasks[1].Body.ShouldContain("Extra task");
+        tasks[2].Body.ShouldContain("More task");
+    }
+
+    [Fact]
     public async Task Import_SkipsTemplateAndFeaturelessFolders()
     {
         _repo.Write("_TEMPLATE/feature.md",

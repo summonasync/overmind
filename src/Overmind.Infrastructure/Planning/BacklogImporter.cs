@@ -141,15 +141,34 @@ public sealed class BacklogImporter
         var tasksPath = Path.Combine(folder, "tasks");
         if (Directory.Exists(tasksPath))
         {
+            var taskFiles = new List<(string Path, int Order, char Suffix)>();
             foreach (var file in Directory.EnumerateFiles(tasksPath).OrderBy(p => p, StringComparer.Ordinal))
             {
-                if (!BacklogNaming.TryParseTaskOrder(Path.GetFileName(file), out var order))
+                if (!BacklogNaming.TryParseTaskOrder(Path.GetFileName(file), out var order, out var suffix))
                 {
                     skipped.Add($"skipped: {Rel(repoRoot, file)} (task filename has no NN- order prefix)");
                     continue;
                 }
 
-                var task = await TryParseTaskAsync(file, order, repoRoot, skipped, ct);
+                taskFiles.Add((file, order, suffix));
+            }
+
+            var usedOrders = taskFiles.Where(t => t.Suffix == '\0').Select(t => t.Order).ToHashSet();
+            foreach (var (path, order, suffix) in taskFiles)
+            {
+                var assigned = order;
+                if (suffix != '\0')
+                {
+                    if (usedOrders.Contains(order))
+                    {
+                        assigned = usedOrders.Max() + 1;
+                        skipped.Add($"reassigned: {Rel(repoRoot, path)} (order {order} taken; letter-suffixed task appended as order {assigned})");
+                    }
+
+                    usedOrders.Add(assigned);
+                }
+
+                var task = await TryParseTaskAsync(path, assigned, repoRoot, skipped, ct);
                 if (task is not null)
                 {
                     artifacts.Add(task);

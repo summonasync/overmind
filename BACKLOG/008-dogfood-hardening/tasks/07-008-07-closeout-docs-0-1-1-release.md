@@ -47,4 +47,5 @@ created: 2026-09-16
 </obstacles>
 
 <log>
+- 2026-09-17 — 2026-09-17 — orchestrator — input from review 008/04: CONTEXT.md closeout must document the new loud report prefix "reassigned:" (rides the Skipped list; widens the skipped/ignored/unknown-status vocabulary)
 </log>
