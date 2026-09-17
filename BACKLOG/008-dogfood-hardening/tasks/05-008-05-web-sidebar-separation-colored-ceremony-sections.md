@@ -2,7 +2,7 @@
 feature: 008
 task: 05
 slug: dogfood-hardening
-status: todo
+status: done
 review: light
 created: 2026-09-16
 ---
@@ -45,4 +45,8 @@ created: 2026-09-16
 </obstacles>
 
 <log>
+- 2026-09-17 — 008/05 started: next-js-coder subagent on sidebar separation + colored ceremony sections
+- 2026-09-17 — 2026-09-17 — next-js-coder — sidebar separated (bg-surface + border + shadow-2xl); ceremony sections color-coded once in shared markdown (18 sections, --color-ceremony-* tokens in globals.css, brand-book updated); comments stripped; lint/tsc/build clean
+- 2026-09-17 — 2026-09-17 — light review (next-js-code-reviewer) — PASS-WITH-NITS; warnings to hardening: comment strip is fence-unaware (mangles <!-- --> inside code fences), section-open heuristic colors the doc tail on unmatched opening tag (fine for machine-generated ceremony bodies)
+- 2026-09-17 — AC met: sidebar separated on all pages, sections colored per user palette via tokens, comments hidden, single shared implementation; lint 0 errors, tsc clean, static build ok; review PASS-WITH-NITS
 </log>

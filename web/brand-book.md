@@ -40,6 +40,16 @@ Entry type semantics:
 | Guard | `#ef4444` (red) |
 | Skill | `#a855f7` (primary violet) |
 
+Planning ceremony sections (markdown preview) are tinted through semantic aliases of the same token family — opening/closing tag names and section content share the section color:
+
+| Token | Source | Sections |
+|---|---|---|
+| `--color-ceremony-goal` | `--color-success` | goal, acceptance-criteria, tasks, verification |
+| `--color-ceremony-requirements` | `--color-warning` | requirements, obstacles, decisions |
+| `--color-ceremony-non-goals` | `--color-danger` | non-goals, anti-scope, risks |
+| `--color-ceremony-context` | `--color-info` | context, constraints, refs, open-questions, findings |
+| `--color-ceremony-scope` | `--color-primary` | scope, log, approach |
+
 Rules:
 - No hardcoded colors in components — always CSS variables / theme tokens.
 - Primary is reserved for the main CTA per view and active navigation. Everything else is ghost/secondary.
@@ -86,6 +96,7 @@ Rules: never inside tables/data lists, never more than one per viewport region. 
 ## 6. Layout
 
 - **App shell**: fixed left sidebar (~240px, collapsible to icons later) + topbar (~56px) + content area + optional right info panel (~280–320px, collapsible).
+- Sidebar is a solid `--surface` panel with a full-strength `--border` right separator and elevation shadow — it must read as a separate surface from the swarm backdrop.
 - **Topbar**: global search box (⌘K, FTS across projects/entries/kits), right side — system status ("System Healthy / degraded", zerling smug icon), status dot.
 - **Right info panel**: page-specific overview (counts, recent activity, search tips). Collapsible; pages work fully without it.
 - Density: data-dense. Tables with `text-sm`, row height ~40px, `surface` rows, `surface-raised` hover, `--border` row separators.

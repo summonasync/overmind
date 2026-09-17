@@ -24,6 +24,25 @@
   --color-type-gate: #22c55e;
   --color-type-guard: #ef4444;
   --color-type-skill: #a855f7;
+
+  --color-ceremony-goal: var(--color-success);
+  --color-ceremony-requirements: var(--color-warning);
+  --color-ceremony-non-goals: var(--color-danger);
+  --color-ceremony-context: var(--color-info);
+  --color-ceremony-scope: var(--color-primary);
+  --color-ceremony-anti-scope: var(--color-danger);
+  --color-ceremony-constraints: var(--color-info);
+  --color-ceremony-acceptance-criteria: var(--color-success);
+  --color-ceremony-refs: var(--color-info);
+  --color-ceremony-obstacles: var(--color-warning);
+  --color-ceremony-log: var(--color-primary);
+  --color-ceremony-decisions: var(--color-warning);
+  --color-ceremony-open-questions: var(--color-info);
+  --color-ceremony-approach: var(--color-primary);
+  --color-ceremony-tasks: var(--color-success);
+  --color-ceremony-risks: var(--color-danger);
+  --color-ceremony-verification: var(--color-success);
+  --color-ceremony-findings: var(--color-info);
 }
 
 @layer base {

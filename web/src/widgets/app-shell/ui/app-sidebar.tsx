@@ -78,7 +78,7 @@ export function AppSidebar() {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border/60 max-lg:hidden">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border bg-surface shadow-2xl max-lg:hidden">
       {kerrigan !== null && (
         <img
           src={kerrigan}
