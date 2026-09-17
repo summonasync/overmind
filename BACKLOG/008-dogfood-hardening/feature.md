@@ -8,10 +8,6 @@ created: 2026-09-16
 
 # Feature 008 — Dogfood hardening: importer gaps + web UX from 0.1.0
 
-# Feature 008 — Dogfood hardening: importer gaps + web UX from 0.1.0
-
-# Feature 008 — Dogfood hardening: importer gaps + web UX from 0.1.0
-
 <goal>
 Свести хвост находок первого живого догфуда 0.1.0: importer gaps, web-UX нитки и перф-ворнинг, всплывшие при флипе планировки этого репо в БД Overmind. Результат — релиз 0.1.1, где догфуд-контур (pack, install, seed, import, materialize, MCP-церемония) не имеет известных слепых пятен.
 </goal>

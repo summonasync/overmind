@@ -2,11 +2,9 @@
 feature: 001
 slug: overmind-mvp
 status: done
-version: 2
+version: 5
 created: 2026-09-06
 ---
-
-# Feature 001 — Overmind MVP
 
 # Feature 001 — Overmind MVP
 

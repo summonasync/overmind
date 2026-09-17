@@ -3,10 +3,10 @@ feature: 002
 slug: kit-library
 status: validated
 created: 2026-09-14
-validated: 2026-09-16
+validated: 2026-09-17
 ---
 
-# Plan 002 — Kit library (002a: folder import)
+# Plan 002 — Kit library
 
 <approach>
 Nine sequential tasks, backend-first, mirroring the 006 shape: spike → origin model → scanner → importer → materializer expansion → re-import → API → web UI → closeout. Each task ends green on its own verification command; the UI is coded against real contracts that already exist. No new NuGet or npm packages (scan/parse is hand-rolled; hashing reuses `ContentHash` from `Infrastructure/Materialization`, platform mapping reuses `PlatformDirectoryMap`/`platforms.json`).
@@ -53,3 +53,7 @@ Key design consequences from spec.md:
 LIFECYCLE: после status: approved файл ЗАМОРОЖЕН (как spec.md).
 Чекбоксы в <tasks> — единственное, что обновляется по ходу работы.
 -->
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/002-kit-library/plan.md
+</log>

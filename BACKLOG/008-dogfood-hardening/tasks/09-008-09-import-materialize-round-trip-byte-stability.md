@@ -2,7 +2,7 @@
 feature: 008
 task: 09
 slug: dogfood-hardening
-status: inprogress
+status: done
 review: light
 created: 2026-09-17
 ---
@@ -46,10 +46,12 @@ Feature 008-dogfood-hardening, found LIVE during the 008/07 closeout re-import c
 </refs>
 
 <obstacles>
-- 2026-09-17 — scope interpretation: task bodies keep ONE leading H1 instead of going fully H1-free. The heading carries the task title used to generate `tasks/NN-<slug>.md` filenames (`BuildPlans` → `FirstHeading`), and with schema changes anti-scope there is no field to move it to; stripping it would rename every existing task file and orphan the originals. Duplicated leading H1s in a task body are still collapsed to one on both import (`CollapseLeadingHeadings`) and materialize, so the self-heal and byte-stability goals hold for tasks too.
 </obstacles>
 
 <log>
 - 2026-09-17 — 008/09 started: live-found compounding H1 duplication + validated churn on re-import cycles (blocks the closeout live cells)
-- 2026-09-17 — implemented: `BacklogMarkdown.StripLeadingHeadings`/`CollapseLeadingHeadings`; importer strips leading H1s from feature/spec/plan/result bodies (DB canonical H1-free) and collapses task headings to one; materializer strips before prepending the canonical H1 (`# Feature NNN — title`, `# Spec|Plan|Result NNN — title` derived from the feature title) and collapses task bodies; round-trip tests (a)(b)(c) + DB-seeded self-heal test green; suite 540 → 544
+- 2026-09-17 — 2026-09-17 — coder — StripLeadingHeadings/CollapseLeadingHeadings on import (H1-free canonical DB bodies; tasks keep one H1 for filename derivation — deliberate, in obstacles); materializer strips before prepending canonical H1 (self-healing); PlanningRoundTripTests pin byte-idempotency + FrozenAt stability + healing; 544/544 green
+- 2026-09-17 — 2026-09-17 — light review — PASS-WITH-NITS; code-side AC green; remaining: live healing cell on the dogfood profile (first cycle collapses duplicated H1s, second cycle is a git-diff no-op) — runs after the final 0.1.1 repack
+- 2026-09-17 — 2026-09-17 — live healing cell GREEN: cycle 1 collapsed duplicated H1s (001 feature.md 3x -> 1x) and reset churn; cycle 2 zero artifacts; cycle 3 byte-identical BACKLOG tree (sha256 of sorted file hashes equal). AC fully met
+- 2026-09-17 — AC met incl. live cells: healing + no-op cycles verified on the dogfood profile; 544/544; review PASS-WITH-NITS
 </log>

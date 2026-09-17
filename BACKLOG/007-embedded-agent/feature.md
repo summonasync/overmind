@@ -8,8 +8,6 @@ created: 2026-09-14
 
 # Feature 007 — Embedded agent ("the banger")
 
-# Feature 007 — Embedded agent ("the banger")
-
 <goal>
 Overmind ships with its own built-in LLM agent that manages the app itself: the user authenticates it per-provider (platform token / login flow), the agent gets an MCP tool surface over Overmind's own API plus a bootstrap context (existing projects, kits, entries, planning state) — and the user drives the whole app through it, like through a coding agent. "Overmind manages Overmind."
 </goal>

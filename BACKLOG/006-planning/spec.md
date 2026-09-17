@@ -3,10 +3,10 @@ feature: 006
 slug: planning
 status: validated
 created: 2026-09-08
-validated: 2026-09-08
+validated: 2026-09-17
 ---
 
-# Spec 006 — Planning (VALIDATED 2026-09-08, amended 2026-09-08)
+# Spec 006 — Planning: the ceremony as a first-class entity
 
 ## Goal
 
@@ -76,3 +76,7 @@ Tools (write): `planning_create_feature`, `planning_upsert_artifact` (create or 
 ## Open questions
 
 None — all six brainstorm decisions locked (model C, full hierarchy C, DB-truth A with per-project toggle, gates C, full-editor UI B, importer A, materialization off/on/archive default off + global default).
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/006-planning/spec.md
+</log>

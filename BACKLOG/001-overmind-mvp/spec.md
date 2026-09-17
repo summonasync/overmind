@@ -3,7 +3,7 @@ feature: 001
 slug: overmind-mvp
 status: validated
 created: 2026-09-06
-validated: 2026-09-16
+validated: 2026-09-17
 ---
 
 # Spec 001 — Overmind MVP
@@ -104,3 +104,8 @@ LIFECYCLE: после status: approved файл ЗАМОРОЖЕН.
 Читатели: оркестратор, ревьюер. Исполняющий субагент spec НЕ читает —
 его контракт — tasks/NN-foo.md.
 -->
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/001-overmind-mvp/spec.md
+- 2026-09-17 — re-imported from BACKLOG/001-overmind-mvp/spec.md
+</log>

@@ -3,7 +3,7 @@ feature: 004
 slug: projects-tree-view
 status: validated
 created: 2026-09-08
-validated: 2026-09-08
+validated: 2026-09-17
 ---
 
 # Plan 004 — Projects tree view
@@ -42,3 +42,7 @@ Verification: `npm run lint && npx tsc --noEmit && npm run build` clean; manual 
 - Sidebar width 240px — deep paths need truncation with `title` tooltip; indent per depth, cap visual depth ~8 (deeper still works, just indented).
 - Drives with thousands of dirs (e.g. `C:\Windows`) — cap 500 + `truncated` flag keeps it sane; no recursion protects us.
 - React Query cache per path keeps re-expands instant; invalidation on register is prefix-wide by design.
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/004-projects-tree-view/plan.md
+</log>

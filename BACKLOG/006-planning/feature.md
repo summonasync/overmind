@@ -2,11 +2,9 @@
 feature: 006
 slug: planning
 status: done
-version: 2
+version: 5
 created: 2026-09-08
 ---
-
-# Feature 006 — Planning: the ceremony as a first-class entity
 
 # Feature 006 — Planning: the ceremony as a first-class entity
 

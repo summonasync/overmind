@@ -6,6 +6,8 @@ created: 2026-09-16
 validated: 2026-09-16
 ---
 
+# Plan 008 — Dogfood hardening: importer gaps + web UX from 0.1.0
+
 <approach>
 Три независимых пласта, порядок — от бэкенда к фронту к релизу: (1) importer/CLI-правки в Infrastructure + Host (IMP-1…IMP-5, все в одном bounded context, тесты Infrastructure + Host); (2) web-косметика (UI-3, UI-4 в shared markdown + app-shell); (3) PERF-1 одной строкой в EntriesApi; (4) closeout: docs, репак 0.1.1 с bundle-version 2, живой догфуд upgrade-sync. Каждый пласт — отдельная таска с своим build/test-гейтом, чтобы ревью шли мелко.
 </approach>

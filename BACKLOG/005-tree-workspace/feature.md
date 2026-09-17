@@ -2,11 +2,9 @@
 feature: 005
 slug: tree-workspace
 status: done
-version: 2
+version: 5
 created: 2026-09-08
 ---
-
-# Feature 005 — Tree workspace: user roots + active project context
 
 # Feature 005 — Tree workspace: user roots + active project context
 

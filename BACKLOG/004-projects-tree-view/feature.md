@@ -2,11 +2,9 @@
 feature: 004
 slug: projects-tree-view
 status: done
-version: 2
+version: 5
 created: 2026-09-08
 ---
-
-# Feature 004 — Projects tree view
 
 # Feature 004 — Projects tree view
 

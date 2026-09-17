@@ -2,11 +2,9 @@
 feature: 003
 slug: bundled-installer
 status: done
-version: 2
+version: 5
 created: 2026-09-06
 ---
-
-# Feature 003 — Installer with pre-bundled kits
 
 # Feature 003 — Installer with pre-bundled kits
 

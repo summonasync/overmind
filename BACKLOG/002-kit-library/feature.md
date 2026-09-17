@@ -2,11 +2,9 @@
 feature: 002
 slug: kit-library
 status: done
-version: 2
+version: 5
 created: 2026-09-06
 ---
-
-# Feature 002 — Kit library
 
 # Feature 002 — Kit library
 

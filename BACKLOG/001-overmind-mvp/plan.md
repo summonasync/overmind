@@ -3,7 +3,7 @@ feature: 001
 slug: overmind-mvp
 status: validated
 created: 2026-09-06
-validated: 2026-09-16
+validated: 2026-09-17
 ---
 
 # Plan 001 — Overmind MVP
@@ -54,3 +54,7 @@ After all tasks done:
 LIFECYCLE: после status: approved файл ЗАМОРОЖЕН (как spec.md).
 Чекбоксы в <tasks> — единственное, что обновляется по ходу работы.
 -->
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/001-overmind-mvp/plan.md
+</log>

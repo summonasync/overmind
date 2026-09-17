@@ -3,10 +3,10 @@ feature: 003
 slug: bundled-installer
 status: validated
 created: 2026-09-16
-validated: 2026-09-16
+validated: 2026-09-17
 ---
 
-# Plan 003 — Bundled kits (003a: portable distribution)
+# Plan 003 — Installer with pre-bundled kits
 
 <approach>
 Six sequential tasks, backend-first, mirroring the 002a shape: origin semantics → boot seed/sync → edit-fork → packaging → web polish → closeout. Every task ends green on its own verification command. The import pipeline, three-way diff, materializer and web origin badges already exist (002a shipped 2026-09-16) — this plan adds the "bundled" source kind behavior, the boot lifecycle, and the distribution packaging. No new NuGet or npm packages.
@@ -49,3 +49,7 @@ Scope note: this plan covers **003a only**. 003b (MSIX/pkg) gets its own plan wh
 LIFECYCLE: после status: approved файл ЗАМОРОЖЕН (как spec.md).
 Чекбоксы в <tasks> — единственное, что обновляется по ходу работы.
 -->
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/003-bundled-installer/plan.md
+</log>

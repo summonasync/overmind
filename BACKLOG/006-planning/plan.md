@@ -3,7 +3,7 @@ feature: 006
 slug: planning
 status: validated
 created: 2026-09-08
-validated: 2026-09-08
+validated: 2026-09-17
 ---
 
 # Plan 006 — Planning: the ceremony as a first-class entity
@@ -188,3 +188,7 @@ Verification: `npm run lint && npx tsc --noEmit && npm run build` clean; manual 
 - **Mixed status enum.** One enum with a per-kind allowed subset keeps a single `Status` column as specced; the subset map is the thing reviewers should check first.
 - **Static-export routing.** Query-param navigation only (`?project=&feature=`), no `next/link`, no dynamic segments — the upstream router is still broken.
 - **Importer fidelity.** `feature:`/`slug:` frontmatter splitting and `validated:` date parsing are the fragile spots; the repo's own BACKLOG (001–006) is the corpus, and losses (`requirements.md`) are declared, not discovered later.
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/006-planning/plan.md
+</log>

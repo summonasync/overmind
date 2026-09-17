@@ -3,7 +3,7 @@ feature: 002
 slug: kit-library
 status: validated
 created: 2026-09-14
-validated: 2026-09-16
+validated: 2026-09-17
 ---
 
 # Spec 002 — Kit library
@@ -71,3 +71,7 @@ LIFECYCLE: после status: approved файл ЗАМОРОЖЕН.
 Читатели: оркестратор, ревьюер. Исполняющий субагент spec НЕ читает —
 его контракт — tasks/NN-foo.md.
 -->
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/002-kit-library/spec.md
+</log>

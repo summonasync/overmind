@@ -3,10 +3,10 @@ feature: 004
 slug: projects-tree-view
 status: validated
 created: 2026-09-08
-validated: 2026-09-08
+validated: 2026-09-17
 ---
 
-# Spec 004 — Projects tree view (DRAFT, awaiting user validation)
+# Spec 004 — Projects tree view
 
 ## Goal
 
@@ -42,3 +42,7 @@ Sidebar Projects becomes a live window into the disk: a lazy folder tree where r
 
 1. Projects page itself: keep the current flat list as the main content (tree only in sidebar), or replace the page with the tree? **Draft assumes: keep the list, tree lives in the sidebar.**
 2. `/?project=<id>` on the Projects page: open the project detail modal automatically? **Draft assumes: yes.**
+
+<log>
+- 2026-09-17 — re-imported from BACKLOG/004-projects-tree-view/spec.md
+</log>
