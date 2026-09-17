@@ -6,6 +6,8 @@ created: 2026-09-06
 validated: 2026-09-17
 ---
 
+# Spec 001 — Overmind MVP
+
 <decisions>
 
 ## Product

@@ -6,6 +6,8 @@ created: 2026-09-08
 validated: 2026-09-17
 ---
 
+# Spec 006 — Planning: the ceremony as a first-class entity
+
 ## Goal
 
 Agents run the full development ceremony inside Overmind: features, specs, plans, tasks, and results live in the database as structured artifacts with markdown+XML bodies, creatable and drivable through MCP, editable and approvable in the UI. The database is the source of truth; markdown on disk is an optional, per-project materialized view.

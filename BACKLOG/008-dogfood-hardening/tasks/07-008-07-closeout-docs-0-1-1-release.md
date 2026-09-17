@@ -52,4 +52,6 @@ created: 2026-09-16
 - 2026-09-17 — 2026-09-17 — hard architect review — PASS-WITH-NITS (audits/architect-review-2026-09-17-008-07.md); WARNING-1 (letter-suffix duplicate cycle on re-import) spawned task 08 in-feature, must land before the live re-import cells of this closeout
 - 2026-09-17 — 2026-09-17 — live dogfood 0.1.1 GREEN: checksum, profile snapshot, swap, autostart re-registered; boot over live profile (no migrations needed); upgrade-sync bundle 1->2 (1 updated); health version stamp; MCP adapter 14 tools; re-import cells: per-line skipped list live, 01b imported then folded via matched:, byte-stable no-op on repeat
 - 2026-09-17 — 008 closeout complete: docs synced (CONTEXT/ADR/BACKLOG tombstones), 0.1.1 packed+installed, upgrade-sync and all fix cells green live, hard review PASS-WITH-NITS with WARNING-1 fixed via tasks 08/09 and verified
+- 2026-09-17 — 2026-09-17 — stability probe: ceremony-triggered sync must be byte-identical outside the touched artifact
+- 2026-09-17 — 2026-09-17 — stability confirmed: heal4/heal5 byte-identical, ceremony-sync probe clean (only the touched artifact changed); the heal-window flap was one-time normalization of legacy H1-carrying bodies
 </log>

@@ -6,6 +6,8 @@ created: 2026-09-16
 validated: 2026-09-17
 ---
 
+# Spec 003 — Installer with pre-bundled kits
+
 <decisions>
 Brainstorm 2026-09-16 (user answers). D1–D4 are user decisions; D5–D9 are agent proposals — veto at the spec gate.
 

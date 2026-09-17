@@ -6,6 +6,8 @@ created: 2026-09-14
 validated: 2026-09-17
 ---
 
+# Spec 002 — Kit library
+
 <decisions>
 Brainstorm 2026-09-14 (user answers) + follow-up design calls. D1–D6 are user decisions; D7–D12 are proposals from the brainstorm agent — veto at the spec gate.
 

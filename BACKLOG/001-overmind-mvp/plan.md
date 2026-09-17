@@ -6,6 +6,8 @@ created: 2026-09-06
 validated: 2026-09-17
 ---
 
+# Plan 001 — Overmind MVP
+
 <approach>
 Greenfield, four .NET projects + one Next.js app, built bottom-up so every layer is testable before the next exists:
 

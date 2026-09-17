@@ -6,6 +6,8 @@ created: 2026-09-08
 validated: 2026-09-17
 ---
 
+# Plan 004 — Projects tree view
+
 ## Shape
 
 Two sequential tasks: backend endpoints first (frontend codes against real contracts), then the sidebar tree + sync flow. No DB changes, no new packages.
