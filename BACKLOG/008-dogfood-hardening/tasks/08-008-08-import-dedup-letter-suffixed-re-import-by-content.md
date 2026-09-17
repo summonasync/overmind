@@ -2,7 +2,7 @@
 feature: 008
 task: 08
 slug: dogfood-hardening
-status: inprogress
+status: done
 review: light
 created: 2026-09-17
 ---
@@ -49,5 +49,7 @@ Feature 008-dogfood-hardening, follow-up to task 04 (IMP-5). Found by audits/arc
 
 <log>
 - 2026-09-17 — 008/08 started: coder subagent on letter-suffix re-import dedup (hard review WARNING-1)
-- 2026-09-17 — 008/08 done: content-match dedup in PlanningFeatureService.ImportAsync (ReassignedFrom flag on BacklogArtifactImport; reassigned/matched report lines emitted by the merge); two-cycle regression test green; 538 → 539 tests
+- 2026-09-17 — 2026-09-17 — coder fix loop — ContentKey/StripLogSections make the fold log-tolerant on both sides; fold branch is pure presence-dedup (no merge tail); ceremony-cycle regression test pins the reviewer's repro incl. DB body byte-identity; CONTEXT.md documents the matched: fold; 540/540 green
+- 2026-09-17 — 2026-09-17 — fix-loop verification (dotnet-code-reviewer) — final verdict PASS; residual nit recorded to BACKLOG hardening (create-branch indexes raw Normalize instead of ContentKey)
+- 2026-09-17 — AC met + review warnings closed at root: re-import after ceremony moves is a no-op for letter-suffixed tasks; 540/540; final verdict PASS
 </log>

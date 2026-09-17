@@ -160,7 +160,7 @@ public sealed partial class PlanningFeatureService
                      .Where(a => a.Kind == PlanningArtifactKind.Task)
                      .OrderBy(a => a.Order))
         {
-            taskContent.TryAdd(ContentHash.Normalize(task.Body), task);
+            taskContent.TryAdd(ContentKey(task.Body), task);
         }
 
         foreach (var artifact in import.Artifacts)
@@ -171,11 +171,12 @@ public sealed partial class PlanningFeatureService
             if (existing is null
                 && artifact.Kind == PlanningArtifactKind.Task
                 && artifact.ReassignedFrom.HasValue
-                && taskContent.TryGetValue(ContentHash.Normalize(artifact.Body), out var identical))
+                && taskContent.TryGetValue(ContentKey(artifact.Body), out var identical))
             {
-                existing = identical;
                 kept.Add(
                     $"matched: {artifact.SourcePath} (identical content to task order {identical.Order}; no new artifact)");
+                imported.Add(identical.Id);
+                continue;
             }
 
             if (existing is null)
@@ -251,6 +252,44 @@ public sealed partial class PlanningFeatureService
 
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
         return new BacklogFeatureImportResult(featureCreated, artifactsCreated, artifactsUpdated, kept);
+    }
+
+    private static string ContentKey(string body) =>
+        ContentHash.Normalize(StripLogSections(body).TrimEnd());
+
+    private static string StripLogSections(string body)
+    {
+        if (!body.Contains("<log>", StringComparison.Ordinal) || !body.Contains("</log>", StringComparison.Ordinal))
+        {
+            return body;
+        }
+
+        var lines = body.Split('\n');
+        var kept = new List<string>(lines.Length);
+        var skipping = false;
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed == "<log>")
+            {
+                skipping = true;
+                continue;
+            }
+
+            if (skipping)
+            {
+                if (trimmed == "</log>")
+                {
+                    skipping = false;
+                }
+
+                continue;
+            }
+
+            kept.Add(line);
+        }
+
+        return string.Join('\n', kept);
     }
 
     private static bool MatchesImportedBody(string existingBody, string incomingBody, string note)

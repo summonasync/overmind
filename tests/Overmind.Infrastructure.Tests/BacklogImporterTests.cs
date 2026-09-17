@@ -734,6 +734,84 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_LetterSuffixedTask_ReImportAfterCeremonyStatusMove_CreatesNoDuplicate()
+    {
+        _repo.Write("018-suffix-ceremony/feature.md",
+            """
+            ---
+            feature: 018
+            slug: suffix-ceremony
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 018 — Suffix ceremony
+            """);
+        _repo.Write("018-suffix-ceremony/tasks/01-first.md",
+            """
+            ---
+            feature: 018
+            task: 01
+            slug: suffix-ceremony
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # First task
+            """);
+        _repo.Write("018-suffix-ceremony/tasks/01b-extra.md",
+            """
+            ---
+            feature: 018
+            task: 01b
+            slug: suffix-ceremony
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Extra task
+            """);
+
+        var first = await ImportAsync(_repo.Root);
+
+        first.ArtifactsCreated.ShouldBe(2);
+
+        var feature = await LoadFeatureAsync("018-suffix-ceremony");
+        var appended = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
+        appended.SetStatus(PlanningArtifactStatus.InProgress, "started during ceremony");
+        await _context.SaveChangesAsync();
+
+        var bodyAfterCeremony = appended.Body;
+        _repo.Write("018-suffix-ceremony/tasks/02-extra.md",
+            "---\n" +
+            "feature: 018\n" +
+            "task: 02\n" +
+            "slug: suffix-ceremony\n" +
+            "status: inprogress\n" +
+            "review: light\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            bodyAfterCeremony);
+
+        var second = await ImportAsync(_repo.Root);
+
+        second.ArtifactsCreated.ShouldBe(0);
+        second.ArtifactsUpdated.ShouldBe(0);
+        second.Skipped.ShouldContain(s => s.Contains("matched:") && s.Contains("01b-extra.md"));
+        second.Skipped.ShouldNotContain(s => s.Contains("reassigned:"));
+
+        feature = await LoadFeatureAsync("018-suffix-ceremony");
+        var tasks = feature!.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).OrderBy(a => a.Order).ToList();
+        tasks.Count.ShouldBe(2);
+        tasks[1].Order.ShouldBe(2);
+        tasks[1].Status.ShouldBe(PlanningArtifactStatus.InProgress);
+        tasks[1].Body.ShouldBe(bodyAfterCeremony);
+    }
+
+    [Fact]
     public async Task Import_SkipsTemplateAndFeaturelessFolders()
     {
         _repo.Write("_TEMPLATE/feature.md",
