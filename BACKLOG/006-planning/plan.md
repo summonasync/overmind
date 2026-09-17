@@ -6,8 +6,6 @@ created: 2026-09-08
 validated: 2026-09-17
 ---
 
-# Plan 006 — Planning: the ceremony as a first-class entity
-
 ## Shape
 
 Ten sequential tasks, backend-first: domain → human API → settings → agent API → materialization → importer → MCP → web (read) → web (write) → closeout. Each task ends green on its own verification command; the UI is coded against real contracts that already exist. No new NuGet or npm packages anywhere (frontmatter parsing is hand-rolled, markdown rendering reuses `shared/lib/markdown`).

@@ -6,8 +6,6 @@ created: 2026-09-16
 validated: 2026-09-16
 ---
 
-# Spec 008 — Dogfood hardening: importer gaps + web UX from 0.1.0
-
 <decisions>
 - IMP-1: BacklogImportCommand печатает report.Skipped построчно (INF) после summary-строки. Модель отчёта не меняется.
 - IMP-2: парсинг frontmatter-значений срезает инлайн-комментарий (пробел + # и далее) и тримит: «approved        # draft | approved» → «approved»; значение без комментария не меняется.

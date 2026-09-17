@@ -1,7 +1,7 @@
 ---
 feature: 008
 slug: dogfood-hardening
-status: draft
+status: done
 version: 1
 created: 2026-09-16
 ---

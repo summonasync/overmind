@@ -6,8 +6,6 @@ created: 2026-09-08
 validated: 2026-09-17
 ---
 
-# Spec 004 — Projects tree view
-
 ## Goal
 
 Sidebar Projects becomes a live window into the disk: a lazy folder tree where registered projects pop out as highlighted, clickable nodes, and everything else is a muted inactive node that can be registered in place. The user sees the real folder structure of the PC and where their Overmind projects sit inside it.
