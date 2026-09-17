@@ -49,6 +49,7 @@ public static class EntriesApi
             var entries = await db.ContextEntries
                 .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
                 .Include(e => e.SkillFiles)
+                .AsSplitQuery()
                 .Where(e => hitIds.Contains(e.Id))
                 .ToListAsync(ct);
 
@@ -65,6 +66,7 @@ public static class EntriesApi
         var query = db.ContextEntries
             .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
             .Include(e => e.SkillFiles)
+            .AsSplitQuery()
             .Where(e => e.ProjectId == projectId);
 
         if (!string.IsNullOrWhiteSpace(type) &&

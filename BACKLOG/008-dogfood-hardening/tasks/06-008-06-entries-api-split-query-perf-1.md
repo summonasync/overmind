@@ -2,7 +2,7 @@
 feature: 008
 task: 06
 slug: dogfood-hardening
-status: todo
+status: done
 review: light
 created: 2026-09-16
 ---
@@ -41,4 +41,7 @@ created: 2026-09-16
 </obstacles>
 
 <log>
+- 2026-09-17 — 008/06 executed inline by orchestrator (one-line EF change)
+- 2026-09-17 — 2026-09-17 — orchestrator (inline) — AsSplitQuery on both ListByProject multi-collection queries (plain + search branch); build 0/0, 538/538; live check: fresh host on temp HOME, GET /entries and /entries?q= both 200, MultipleCollectionIncludeWarning count in log = 0
+- 2026-09-17 — AC met: warning absent from live host log on both /entries paths; tests green. One-liner change, self-verified live per AC; no review spawn (Simple task)
 </log>
