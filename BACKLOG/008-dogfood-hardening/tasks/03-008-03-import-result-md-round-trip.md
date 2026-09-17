@@ -2,7 +2,7 @@
 feature: 008
 task: 03
 slug: dogfood-hardening
-status: todo
+status: done
 review: light
 created: 2026-09-16
 ---
@@ -43,4 +43,8 @@ created: 2026-09-16
 </obstacles>
 
 <log>
+- 2026-09-17 — 008/03 started: coder subagent on result.md import round-trip
+- 2026-09-17 — 2026-09-17 — coder — result.md imports as kind=result order 0, shares the spec/plan document path (TryParseDocumentAsync/MapDocumentStatus renames); idempotent via Kind-match; +4 Infrastructure tests; 535/535 green
+- 2026-09-17 — 2026-09-17 — light review — PASS clean; result status vocabulary is {draft,validated} per Core AllowedStatuses, round-trip safe (materializer cannot emit other statuses); observation to hardening: validated-artifact body round-trip is not byte-stable (materializer omits the imported H1) — re-import after materialize reads as a body change
+- 2026-09-17 — AC met: result.md imports as kind=result order 0, re-import idempotent, no longer ignored; build 0/0, 535/535; review PASS
 </log>

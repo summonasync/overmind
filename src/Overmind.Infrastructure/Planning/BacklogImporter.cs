@@ -117,7 +117,7 @@ public sealed class BacklogImporter
 
         var artifacts = new List<BacklogArtifactImport>();
 
-        foreach (var name in new[] { "spec.md", "plan.md" })
+        foreach (var name in new[] { "spec.md", "plan.md", "result.md" })
         {
             var path = Path.Combine(folder, name);
             if (!File.Exists(path))
@@ -125,8 +125,13 @@ public sealed class BacklogImporter
                 continue;
             }
 
-            var kind = name == "spec.md" ? PlanningArtifactKind.Spec : PlanningArtifactKind.Plan;
-            var artifact = await TryParseSpecOrPlanAsync(path, kind, repoRoot, skipped, ct);
+            var kind = name switch
+            {
+                "spec.md" => PlanningArtifactKind.Spec,
+                "plan.md" => PlanningArtifactKind.Plan,
+                _ => PlanningArtifactKind.Result,
+            };
+            var artifact = await TryParseDocumentAsync(path, kind, repoRoot, skipped, ct);
             if (artifact is not null)
             {
                 artifacts.Add(artifact);
@@ -155,7 +160,7 @@ public sealed class BacklogImporter
         foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
         {
             var entryName = Path.GetFileName(entry);
-            if (entryName is not ("feature.md" or "spec.md" or "plan.md" or "tasks"))
+            if (entryName is not ("feature.md" or "spec.md" or "plan.md" or "result.md" or "tasks"))
             {
                 skipped.Add($"ignored: {Rel(repoRoot, entry)}");
             }
@@ -174,7 +179,7 @@ public sealed class BacklogImporter
             artifacts);
     }
 
-    private static async Task<BacklogArtifactImport?> TryParseSpecOrPlanAsync(
+    private static async Task<BacklogArtifactImport?> TryParseDocumentAsync(
         string path, PlanningArtifactKind kind, string repoRoot, List<string> skipped, CancellationToken ct)
     {
         var relative = Rel(repoRoot, path);
@@ -191,7 +196,7 @@ public sealed class BacklogImporter
             return null;
         }
 
-        var status = MapSpecOrPlanStatus(Token(fields, "status"), relative, skipped);
+        var status = MapDocumentStatus(Token(fields, "status"), relative, skipped);
         var frozenAt = status == PlanningArtifactStatus.Validated
             ? BacklogMarkdown.ParseDate(Raw(fields, "validated")) ?? BacklogMarkdown.ParseDate(Raw(fields, "created"))
             : null;
@@ -279,7 +284,7 @@ public sealed class BacklogImporter
         }
     }
 
-    private static PlanningArtifactStatus MapSpecOrPlanStatus(string? raw, string relative, List<string> skipped)
+    private static PlanningArtifactStatus MapDocumentStatus(string? raw, string relative, List<string> skipped)
     {
         switch (raw?.ToLowerInvariant())
         {

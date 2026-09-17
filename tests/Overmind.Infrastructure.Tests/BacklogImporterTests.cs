@@ -348,6 +348,126 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_ResultMd_MapsAsResultArtifactOrderZero()
+    {
+        WriteResultFeature();
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.FeaturesCreated.ShouldBe(1);
+        report.ArtifactsCreated.ShouldBe(1);
+        report.Skipped.ShouldNotContain(s => s.Contains("result.md"));
+
+        var feature = await LoadFeatureAsync("011-result");
+        feature.ShouldNotBeNull();
+        var result = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Result);
+        result.Order.ShouldBe(0);
+        result.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        result.FrozenAt.ShouldBe(new DateTime(2026, 9, 4));
+        result.Review.ShouldBe(PlanningReviewLevel.Light);
+        result.Body.ShouldContain("Ship summary.");
+    }
+
+    [Fact]
+    public async Task Import_ResultMd_ReRun_CreatesNoDuplicate()
+    {
+        WriteResultFeature();
+        await ImportAsync(_repo.Root);
+
+        var second = await ImportAsync(_repo.Root);
+
+        second.FeaturesCreated.ShouldBe(0);
+        second.FeaturesUpdated.ShouldBe(1);
+        second.ArtifactsCreated.ShouldBe(0);
+        second.ArtifactsUpdated.ShouldBe(0);
+        second.Skipped.ShouldNotContain(s => s.Contains("result.md"));
+
+        var feature = await LoadFeatureAsync("011-result");
+        var results = feature!.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Result).ToList();
+        results.Count.ShouldBe(1);
+        results.Single().Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Import_ResultMd_FolderWithOnlyFeatureAndResult_NothingIgnored()
+    {
+        _repo.Write("012-clean/feature.md",
+            """
+            ---
+            feature: 012
+            slug: clean
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 012 — Clean
+            """);
+        _repo.Write("012-clean/result.md",
+            """
+            ---
+            feature: 012
+            slug: clean
+            status: draft
+            created: 2026-09-01
+            ---
+
+            # Result 012 — Clean
+
+            Draft outcome.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldBeEmpty();
+
+        var feature = await LoadFeatureAsync("012-clean");
+        var result = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Result);
+        result.Order.ShouldBe(0);
+        result.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        result.FrozenAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Import_ResultMd_UnknownStatus_DefaultsToDraftAndReports()
+    {
+        _repo.Write("013-weird-result/feature.md",
+            """
+            ---
+            feature: 013
+            slug: weird-result
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 013 — Weird result
+            """);
+        _repo.Write("013-weird-result/result.md",
+            """
+            ---
+            feature: 013
+            slug: weird-result
+            status: done
+            created: 2026-09-01
+            ---
+
+            # Result 013 — Weird result
+
+            Outcome body.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldContain(s => s.Contains("unknown status 'done'"));
+
+        var feature = await LoadFeatureAsync("013-weird-result");
+        var result = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Result);
+        result.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        result.FrozenAt.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Import_SkipsTemplateAndFeaturelessFolders()
     {
         _repo.Write("_TEMPLATE/feature.md",
@@ -606,6 +726,36 @@ public sealed class BacklogImporterTests : IDisposable
             </goal>
             """);
         _repo.Write("010-demo/requirements.md", "# Requirements\n\nIgnored by the importer.\n");
+    }
+
+    private void WriteResultFeature()
+    {
+        _repo.Write("011-result/feature.md",
+            """
+            ---
+            feature: 011
+            slug: result
+            status: ready
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 011 — Result round-trip
+            """);
+        _repo.Write("011-result/result.md",
+            """
+            ---
+            feature: 011
+            slug: result
+            status: validated
+            created: 2026-09-01
+            validated: 2026-09-04 — reviewed against acceptance criteria
+            ---
+
+            # Result 011 — Result round-trip
+
+            Ship summary.
+            """);
     }
 
     private sealed class TempRepo : IDisposable
