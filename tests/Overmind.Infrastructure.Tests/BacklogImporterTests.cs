@@ -215,6 +215,139 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_SpecPlanInlineComments_AreStrippedBeforeMapping()
+    {
+        _repo.Write("070-comments/feature.md",
+            """
+            ---
+            feature: 070
+            slug: comments
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 070 — Comments
+            """);
+        _repo.Write("070-comments/spec.md",
+            """
+            ---
+            feature: 070
+            slug: comments
+            status: approved        # draft | approved (approved = FROZEN)
+            created: 2026-09-01
+            ---
+
+            # Spec 070 — Comments
+
+            Spec body.
+            """);
+        _repo.Write("070-comments/plan.md",
+            """
+            ---
+            feature: 070
+            slug: comments
+            status: draft        # draft | approved (approved = FROZEN)
+            created: 2026-09-01
+            ---
+
+            # Plan 070 — Comments
+
+            Plan body.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldBeEmpty();
+
+        var feature = await LoadFeatureAsync("070-comments");
+        feature.ShouldNotBeNull();
+        var spec = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Spec);
+        spec.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        spec.FrozenAt.ShouldBe(new DateTime(2026, 9, 1));
+        var plan = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Plan);
+        plan.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        plan.FrozenAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Import_SpecPlanWithoutStatus_DefaultToDraft()
+    {
+        _repo.Write("080-nostatus/feature.md",
+            """
+            ---
+            feature: 080
+            slug: nostatus
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 080 — No status
+            """);
+        _repo.Write("080-nostatus/spec.md",
+            """
+            ---
+            feature: 080
+            slug: nostatus
+            created: 2026-09-01
+            ---
+
+            # Spec 080 — No status
+
+            Spec body.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldBeEmpty();
+
+        var feature = await LoadFeatureAsync("080-nostatus");
+        feature.ShouldNotBeNull();
+        var spec = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Spec);
+        spec.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        spec.FrozenAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Import_StatusValueStartingWithHash_IsNotAComment()
+    {
+        _repo.Write("090-hash/feature.md",
+            """
+            ---
+            feature: 090
+            slug: hash
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 090 — Hash
+            """);
+        _repo.Write("090-hash/spec.md",
+            """
+            ---
+            feature: 090
+            slug: hash
+            status: # approved
+            created: 2026-09-01
+            ---
+
+            # Spec 090 — Hash
+
+            Spec body.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldContain(s => s.Contains("unknown status '#'"));
+
+        var feature = await LoadFeatureAsync("090-hash");
+        feature.ShouldNotBeNull();
+        feature.Artifacts.Single().Status.ShouldBe(PlanningArtifactStatus.Draft);
+    }
+
+    [Fact]
     public async Task Import_SkipsTemplateAndFeaturelessFolders()
     {
         _repo.Write("_TEMPLATE/feature.md",

@@ -2,7 +2,7 @@
 feature: 008
 task: 02
 slug: dogfood-hardening
-status: todo
+status: done
 review: light
 created: 2026-09-16
 ---
@@ -43,4 +43,8 @@ created: 2026-09-16
 </obstacles>
 
 <log>
+- 2026-09-16 — 008/02 started: coder subagent on importer frontmatter comment strip + approved→validated mapping
+- 2026-09-17 — 2026-09-17 — coder — Token() strips inline comments at first ' #' before the whitespace cut; MapSpecOrPlanStatus: approved -> Validated; +3 Infrastructure tests (strip, default-draft, hash-prefix); 531/531 green
+- 2026-09-17 — 2026-09-17 — light review — PASS-WITH-NITS; WARNING (pre-existing, recorded to BACKLOG hardening): PlanningArtifact.Restore throws on Validated+FrozenAt=null, so a spec/plan with approved/validated but no created/validated fields fails the whole feature import
+- 2026-09-17 — AC met: comment strip + approved->validated pinned by tests incl. edge cases; build 0/0, 531/531; review PASS-WITH-NITS, no blockers
 </log>

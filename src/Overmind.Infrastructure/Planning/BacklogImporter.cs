@@ -284,6 +284,7 @@ public sealed class BacklogImporter
         switch (raw?.ToLowerInvariant())
         {
             case "validated":
+            case "approved":
                 return PlanningArtifactStatus.Validated;
             case "draft":
             case null:
@@ -337,6 +338,12 @@ public sealed class BacklogImporter
         if (value is null)
         {
             return null;
+        }
+
+        var comment = value.IndexOf(" #", StringComparison.Ordinal);
+        if (comment >= 0)
+        {
+            value = value[..comment];
         }
 
         var cut = value.IndexOfAny([' ', '\t']);
