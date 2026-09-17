@@ -57,7 +57,7 @@ public sealed class PlanningMaterializerTests : IDisposable
         var specDoc = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md"));
         specDoc.ShouldContain("status: draft\n");
         specDoc.ShouldNotContain("validated:");
-        specDoc.ShouldEndWith("# Spec Heading\n\n<scope>\nSpec body.\n</scope>");
+        specDoc.ShouldEndWith("# Spec 006 — Demo Feature\n\n<scope>\nSpec body.\n</scope>");
 
         var taskOne = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md"));
         taskOne.ShouldContain("task: 01\n");
@@ -486,6 +486,57 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_DuplicatedLeadingHeadings_CollapseToExactlyOne()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        using var ctx = _db.CreateContext();
+        var feature = PlanningFeature.Create(
+            projectId,
+            "006-demo",
+            "Demo Feature",
+            "# Feature 006 — Demo Feature\n\n# Feature 006 — Demo Feature\n\n# Feature 006 — Demo Feature\n\n<goal>\nShip it.\n</goal>");
+        feature.SetStatus(PlanningFeatureStatus.Ready);
+        ctx.PlanningFeatures.Add(feature);
+
+        var spec = PlanningArtifact.Create(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec 006 — Demo Feature\n\n# Spec 006 — Demo Feature\n\n<scope>\nSpec body.\n</scope>");
+        var task = PlanningArtifact.Create(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "# First Task\n\n# First Task\n\n<goal>\nDo it.\n</goal>",
+            1);
+        ctx.PlanningArtifacts.AddRange(spec, task);
+        await ctx.SaveChangesAsync();
+
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var featureDoc = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md"));
+        CountHeadings(featureDoc).ShouldBe(1);
+        featureDoc.ShouldContain("# Feature 006 — Demo Feature\n\n<goal>");
+
+        var specDoc = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md"));
+        CountHeadings(specDoc).ShouldBe(1);
+        specDoc.ShouldContain("# Spec 006 — Demo Feature\n\n<scope>");
+
+        var taskDoc = await File.ReadAllTextAsync(
+            Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md"));
+        CountHeadings(taskDoc).ShouldBe(1);
+        taskDoc.ShouldContain("# First Task\n\n<goal>");
+
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md")))
+            .ShouldBe(featureDoc);
+        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md")))
+            .ShouldBe(specDoc);
+        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md")))
+            .ShouldBe(taskDoc);
+    }
+
+    [Fact]
     public async Task Sync_RollbackAfterForceAdoption_KeepsPreExistingFiles()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
@@ -564,6 +615,9 @@ public sealed class PlanningMaterializerTests : IDisposable
                 UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
+
+    private static int CountHeadings(string content) =>
+        content.Split('\n').Count(line => line.StartsWith("# ", StringComparison.Ordinal));
 
     private async Task<Guid> SeedProjectAsync(PlanningMaterialization strategy)
     {

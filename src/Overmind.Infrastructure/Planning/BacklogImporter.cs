@@ -192,7 +192,7 @@ public sealed class BacklogImporter
         return new BacklogFeatureImport(
             folderName,
             title,
-            featureBody,
+            BacklogMarkdown.StripLeadingHeadings(featureBody),
             MapFeatureStatus(Token(fields, "status"), Rel(repoRoot, featurePath), skipped),
             int.TryParse(Token(fields, "version"), out var version) && version > 0 ? version : 1,
             ResolveCreatedAt(fields),
@@ -210,6 +210,7 @@ public sealed class BacklogImporter
         }
 
         var (fields, body) = BacklogMarkdown.Parse(content);
+        body = BacklogMarkdown.StripLeadingHeadings(body);
         if (string.IsNullOrWhiteSpace(body))
         {
             skipped.Add($"skipped: {relative} (empty body)");
@@ -243,6 +244,7 @@ public sealed class BacklogImporter
         }
 
         var (fields, body) = BacklogMarkdown.Parse(content);
+        body = BacklogMarkdown.CollapseLeadingHeadings(body);
         if (string.IsNullOrWhiteSpace(body))
         {
             skipped.Add($"skipped: {relative} (empty body)");

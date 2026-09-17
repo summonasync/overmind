@@ -262,7 +262,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             {
                 var name = artifact.Kind.ToString().ToLowerInvariant();
                 plans.Add(FilePlan.Create(
-                    root, feature.Id, $"{directory}/{name}.md", ArtifactDocument(artifact, featurePart, slugPart)));
+                    root, feature.Id, $"{directory}/{name}.md",
+                    ArtifactDocument(artifact, featurePart, slugPart, feature.Title)));
             }
 
             foreach (var task in feature.Artifacts
@@ -426,11 +427,12 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"created: {feature.CreatedAt:yyyy-MM-dd}\n");
         builder.Append("---\n\n");
         builder.Append($"# Feature {featurePart} — {feature.Title}\n\n");
-        builder.Append(feature.Body);
+        builder.Append(BacklogMarkdown.StripLeadingHeadings(feature.Body));
         return builder.ToString();
     }
 
-    private static string ArtifactDocument(PlanningArtifact artifact, string featurePart, string slugPart)
+    private static string ArtifactDocument(
+        PlanningArtifact artifact, string featurePart, string slugPart, string featureTitle)
     {
         var builder = new StringBuilder();
         builder.Append("---\n");
@@ -444,7 +446,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         }
 
         builder.Append("---\n\n");
-        builder.Append(artifact.Body);
+        builder.Append($"# {artifact.Kind} {featurePart} — {featureTitle}\n\n");
+        builder.Append(BacklogMarkdown.StripLeadingHeadings(artifact.Body));
         return builder.ToString();
     }
 
@@ -459,7 +462,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"review: {task.Review.ToString().ToLowerInvariant()}\n");
         builder.Append($"created: {task.CreatedAt:yyyy-MM-dd}\n");
         builder.Append("---\n\n");
-        builder.Append(task.Body);
+        builder.Append(BacklogMarkdown.CollapseLeadingHeadings(task.Body));
         return builder.ToString();
     }
 
