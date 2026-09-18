@@ -2,7 +2,7 @@
 feature: 010
 task: 05
 slug: planning-board-filters
-status: inprogress
+status: done
 review: light
 created: 2026-09-18
 ---
@@ -55,4 +55,5 @@ Tasks 010/01-04 are done and reviewed. This is the ceremony closeout run by the 
 
 <log>
 - 2026-09-18 — Started: live dogfood + closeout
+- 2026-09-18 — Closeout done: 0.1.2 packed/installed/live, pin-via-MCP verified, invariant holds, materialize clean, result validated
 </log>
