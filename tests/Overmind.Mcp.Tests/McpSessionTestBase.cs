@@ -91,6 +91,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "");
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, "");
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/validate", 200, "");
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/current",
+            200,
+            Canned.PlanningFeatureJson);
     }
 
     protected static Dictionary<string, string> ParseQuery(string query)

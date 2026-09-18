@@ -153,6 +153,8 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(f => new { f.ProjectId, f.Slug }).IsUnique();
+
+            builder.Property(f => f.IsCurrent).HasDefaultValue(false);
         });
 
         modelBuilder.Entity<PlanningArtifact>(builder =>

@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheEightPlanningTools()
+    public async Task ToolsList_ContainsTheNinePlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -29,7 +29,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_upsert_artifact",
             "planning_set_status",
             "planning_append_log",
-            "planning_validate"
+            "planning_validate",
+            "planning_set_current"
         ];
         foreach (var name in expected)
         {
@@ -41,6 +42,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
         tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
+        tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
     }
 
     [Fact]
@@ -55,6 +57,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         request.Path.ShouldBe($"/api/agent/projects/{Canned.ProjectId}/planning/features");
 
         Canned.ToolResultText(response).ShouldContain("demo-feature");
+        Canned.ToolResultText(response).ShouldContain("\"isCurrent\":true");
     }
 
     [Fact]
@@ -168,6 +171,46 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["logNote"]!.GetValue<string>().ShouldBe("implementation finished, handing to review");
 
         Canned.ToolResultText(response).ShouldContain("review");
+    }
+
+    [Fact]
+    public async Task PlanningSetCurrent_PostsIsCurrentToAgentRoute()
+    {
+        var response = await Driver.CallToolAsync("planning_set_current", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["isCurrent"] = true
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/current", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current");
+        JsonNode.Parse(request.Body)!["isCurrent"]!.GetValue<bool>().ShouldBeTrue();
+
+        Canned.ToolResultText(response).ShouldContain("pinned as current");
+    }
+
+    [Fact]
+    public async Task PlanningSetCurrent_UnknownFeature_ApiErrorSurfacesAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current",
+            404,
+            Canned.PlanningFeatureNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_set_current", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["isCurrent"] = true
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Feature 'demo-feature' was not found");
+        Driver.HasExited.ShouldBeFalse();
     }
 
     [Fact]

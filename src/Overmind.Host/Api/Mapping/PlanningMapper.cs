@@ -21,7 +21,8 @@ public static class PlanningMapper
             plan?.Status,
             tasks.Count,
             tasks.Count(t => t.Status == PlanningArtifactStatus.Done),
-            feature.UpdatedAt);
+            feature.UpdatedAt,
+            feature.IsCurrent);
     }
 
     public static PlanningFeatureResponse ToFeatureResponse(PlanningFeature feature)

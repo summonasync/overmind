@@ -82,8 +82,8 @@ public static class Canned
     public const string PlanningBoardJson =
         """
         [
-          {"slug":"demo-feature","title":"Demo feature","status":"inProgress","version":4,"specStatus":"validated","planStatus":"draft","taskTotal":2,"taskDone":1,"updatedAt":"2026-09-10T08:00:00Z"},
-          {"slug":"draft-one","title":"Draft one","status":"draft","version":1,"specStatus":null,"planStatus":null,"taskTotal":0,"taskDone":0,"updatedAt":"2026-09-09T09:00:00Z"}
+          {"slug":"demo-feature","title":"Demo feature","status":"inProgress","version":4,"specStatus":"validated","planStatus":"draft","taskTotal":2,"taskDone":1,"updatedAt":"2026-09-10T08:00:00Z","isCurrent":true},
+          {"slug":"draft-one","title":"Draft one","status":"draft","version":1,"specStatus":null,"planStatus":null,"taskTotal":0,"taskDone":0,"updatedAt":"2026-09-09T09:00:00Z","isCurrent":false}
         ]
         """;
 
@@ -126,6 +126,9 @@ public static class Canned
 
     public const string PlanningValidateGateJson =
         """{"title":"HumanValidationRequired","detail":"STOP: the spec of feature 'demo-feature' awaits human validation — ask the user to approve it in the Overmind UI.","status":409}""";
+
+    public const string PlanningFeatureNotFoundJson =
+        """{"title":"Not Found","detail":"Feature 'demo-feature' was not found.","status":404}""";
 
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";
 

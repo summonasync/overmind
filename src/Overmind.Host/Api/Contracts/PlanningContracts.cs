@@ -11,11 +11,14 @@ public sealed record PlanningFeatureBoardItem(
     PlanningArtifactStatus? PlanStatus,
     int TaskTotal,
     int TaskDone,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    bool IsCurrent);
 
 public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body);
 
 public sealed record UpdatePlanningFeatureRequest(string? Title, string? Body, PlanningFeatureStatus? Status);
+
+public sealed record SetPlanningFeatureCurrentRequest(bool IsCurrent);
 
 public sealed record PlanningFeatureResponse(
     string Slug,

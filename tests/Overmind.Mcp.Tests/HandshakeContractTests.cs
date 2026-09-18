@@ -37,7 +37,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheFourteenTools()
+    public async Task ToolsList_ExposesExactlyTheFifteenTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -49,7 +49,7 @@ public class HandshakeContractTests : McpSessionTestBase
         names.ShouldBe([
             "list_entries", "list_projects", "planning_append_log", "planning_create_feature",
             "planning_current_task", "planning_list_features", "planning_read_feature",
-            "planning_set_status", "planning_upsert_artifact", "planning_validate",
+            "planning_set_current", "planning_set_status", "planning_upsert_artifact", "planning_validate",
             "read_entry", "search", "update_entry", "write_entry"
         ]);
     }

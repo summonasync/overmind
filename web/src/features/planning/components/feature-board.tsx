@@ -1,6 +1,7 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { cn } from "@/shared/lib/cn";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -14,6 +15,7 @@ interface FeatureBoardProps {
   onCreate: () => void;
   onEdit: (item: PlanningFeatureBoardItem) => void;
   onDelete: (item: PlanningFeatureBoardItem) => void;
+  onSetCurrent: (item: PlanningFeatureBoardItem, isCurrent: boolean) => void;
 }
 
 function artifactChip(label: string, status: PlanningArtifactStatus | null) {
@@ -27,7 +29,14 @@ function artifactChip(label: string, status: PlanningArtifactStatus | null) {
   );
 }
 
-export function FeatureBoard({ projectId, features, onCreate, onEdit, onDelete }: FeatureBoardProps) {
+export function FeatureBoard({
+  projectId,
+  features,
+  onCreate,
+  onEdit,
+  onDelete,
+  onSetCurrent,
+}: FeatureBoardProps) {
   if (features.length === 0) {
     return (
       <EmptyState
@@ -38,14 +47,19 @@ export function FeatureBoard({ projectId, features, onCreate, onEdit, onDelete }
     );
   }
 
+  const sortedFeatures = [...features].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+
   return (
     <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-      {features.map((item) => {
+      {sortedFeatures.map((item) => {
         const taskPercent = item.taskTotal > 0 ? Math.round((item.taskDone / item.taskTotal) * 100) : 0;
         return (
           <li
             key={item.slug}
-            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong"
+            className={cn(
+              "flex flex-col gap-3 rounded-lg border bg-surface p-4 transition-colors",
+              item.isCurrent ? "border-primary" : "border-border hover:border-border-strong",
+            )}
           >
             <div className="flex items-start justify-between gap-2">
               <a
@@ -57,7 +71,10 @@ export function FeatureBoard({ projectId, features, onCreate, onEdit, onDelete }
                 </span>
                 <span className="block truncate font-mono text-xs text-muted">{item.slug}</span>
               </a>
-              <Badge tone={featureStatusTone(item.status)}>{item.status}</Badge>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {item.isCurrent ? <Badge tone="info">current</Badge> : null}
+                <Badge tone={featureStatusTone(item.status)}>{item.status}</Badge>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
@@ -90,6 +107,15 @@ export function FeatureBoard({ projectId, features, onCreate, onEdit, onDelete }
             <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
               <span className="truncate text-xs text-muted">updated {formatRelativeTime(item.updatedAt)}</span>
               <div className="flex shrink-0 gap-1">
+                <Button
+                  variant="ghost"
+                  className="px-2 py-1 text-xs"
+                  aria-pressed={item.isCurrent}
+                  onClick={() => onSetCurrent(item, !item.isCurrent)}
+                >
+                  {item.isCurrent ? <PinOff size={12} aria-hidden /> : <Pin size={12} aria-hidden />}
+                  {item.isCurrent ? "Unpin" : "Pin"}
+                </Button>
                 <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onEdit(item)}>
                   <Pencil size={12} aria-hidden />
                   Edit

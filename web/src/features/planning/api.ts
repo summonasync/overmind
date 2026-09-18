@@ -50,6 +50,16 @@ export function deletePlanningFeature(projectId: string, slug: string): Promise<
   return apiDelete(`/projects/${projectId}/planning/features/${slug}`);
 }
 
+export function setPlanningFeatureCurrent(
+  projectId: string,
+  slug: string,
+  isCurrent: boolean,
+): Promise<PlanningFeatureResponse> {
+  return apiPost<PlanningFeatureResponse>(`/projects/${projectId}/planning/features/${slug}/current`, {
+    isCurrent,
+  });
+}
+
 export function getPlanningArtifact(artifactId: string): Promise<PlanningArtifactResponse> {
   return apiGet<PlanningArtifactResponse>(`/planning/artifacts/${artifactId}`);
 }

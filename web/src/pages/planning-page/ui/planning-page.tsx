@@ -9,10 +9,13 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
 import {
+  BoardFilterBar,
   DriftPanel,
   FeatureBoard,
   FeatureForm,
   FeatureWorkspace,
+  filterBoardItems,
+  useBoardFilters,
   usePlanningBoard,
   usePlanningFeature,
   usePlanningMutations,
@@ -20,6 +23,7 @@ import {
 import type { PlanningFeatureBoardItem, PlanningFeatureFormValues } from "@/features/planning";
 import { useProjectList } from "@/features/projects";
 import { PlanningInfoPanel } from "@/pages/planning-page/ui/planning-info-panel";
+import { EmptyState } from "@/shared/ui/empty-state";
 
 const PLANNING_DESCRIPTION =
   "Plan features as spec, plan, tasks and result. Track ceremony from draft to done.";
@@ -33,7 +37,8 @@ function PlanningPageContent() {
   const project = projects.find((item) => item.id === projectId) ?? null;
 
   const { data: features, loading, error } = usePlanningBoard(projectId);
-  const { createFeature, updateFeature, deleteFeature } = usePlanningMutations(projectId);
+  const boardFilters = useBoardFilters();
+  const { createFeature, updateFeature, deleteFeature, setFeatureCurrent } = usePlanningMutations(projectId);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlanningFeatureBoardItem | null>(null);
@@ -49,7 +54,12 @@ function PlanningPageContent() {
     (createFeature.error as Error | null) ??
     (updateFeature.error as Error | null) ??
     (deleteFeature.error as Error | null) ??
+    (setFeatureCurrent.error as Error | null) ??
     error;
+
+  const handleSetCurrent = (item: PlanningFeatureBoardItem, isCurrent: boolean) => {
+    setFeatureCurrent.mutate({ slug: item.slug, isCurrent });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -95,6 +105,8 @@ function PlanningPageContent() {
     );
   }
 
+  const visibleFeatures = filterBoardItems(features, boardFilters.filters);
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -118,13 +130,29 @@ function PlanningPageContent() {
       {loading ? (
         <LoadingState label="Loading features…" />
       ) : (
-        <FeatureBoard
-          projectId={projectId}
-          features={features}
-          onCreate={openCreate}
-          onEdit={openEdit}
-          onDelete={setDeleting}
-        />
+        <>
+          <BoardFilterBar />
+          {boardFilters.isActive && visibleFeatures.length === 0 ? (
+            <EmptyState
+              title="No features match the filters"
+              hint="Remove a filter or clear them all to see the whole board."
+              action={
+                <Button variant="secondary" onClick={boardFilters.clearFilters}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <FeatureBoard
+              projectId={projectId}
+              features={visibleFeatures}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onDelete={setDeleting}
+              onSetCurrent={handleSetCurrent}
+            />
+          )}
+        </>
       )}
 
       <Modal

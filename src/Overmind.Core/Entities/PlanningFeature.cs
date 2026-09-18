@@ -12,6 +12,7 @@ public sealed class PlanningFeature
     public string Title { get; private set; } = string.Empty;
     public string Body { get; private set; } = string.Empty;
     public PlanningFeatureStatus Status { get; private set; }
+    public bool IsCurrent { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -46,7 +47,8 @@ public sealed class PlanningFeature
         PlanningFeatureStatus status,
         int version,
         DateTime createdAt,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        bool isCurrent)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -59,6 +61,7 @@ public sealed class PlanningFeature
             Title = title.Trim(),
             Body = body,
             Status = status,
+            IsCurrent = isCurrent,
             Version = version,
             CreatedAt = createdAt,
             UpdatedAt = updatedAt
@@ -88,6 +91,12 @@ public sealed class PlanningFeature
     public void SetStatus(PlanningFeatureStatus status)
     {
         Status = status;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetCurrent(bool isCurrent)
+    {
+        IsCurrent = isCurrent;
         UpdatedAt = DateTime.UtcNow;
     }
 }

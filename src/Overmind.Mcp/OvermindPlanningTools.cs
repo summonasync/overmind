@@ -126,6 +126,20 @@ public sealed class OvermindPlanningTools
         return $"Artifact status moved to '{normalized}'.";
     }
 
+    [McpServerTool(Name = "planning_set_current", Destructive = false, Idempotent = true)]
+    [Description("Pins a feature as the current one on the planning board, or unpins it. Pinning one feature unpins any other — at most one feature is current per project.")]
+    public async Task<string> SetCurrent(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to pin or unpin, as shown on the board.")] string slug,
+        [Description("True to pin the feature as current; false to unpin it.")] bool isCurrent,
+        CancellationToken ct = default)
+    {
+        await Guarded(() => _api.SetPlanningFeatureCurrent(projectId, slug, isCurrent, ct));
+        return isCurrent
+            ? $"Feature '{slug}' pinned as current."
+            : $"Feature '{slug}' unpinned.";
+    }
+
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body. Use it to report progress between status moves.")]
     public async Task<string> AppendLog(

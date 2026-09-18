@@ -75,6 +75,13 @@ public sealed class OvermindApiClient
     public Task<JsonElement> PutAsync(string path, object body, CancellationToken ct) =>
         SendAsync(() => _http.PutAsJsonAsync(path, body, JsonOptions, ct), "PUT " + path, ct);
 
+    public Task<JsonElement> SetPlanningFeatureCurrent(
+        Guid projectId, string slug, bool isCurrent, CancellationToken ct) =>
+        PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/current",
+            new { isCurrent },
+            ct);
+
     private static async Task<JsonElement> SendAsync(
         Func<Task<HttpResponseMessage>> send,
         string operation,

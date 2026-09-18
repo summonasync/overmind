@@ -150,15 +150,61 @@ public class PlanningFeatureTests
             PlanningFeatureStatus.Ready,
             version: 3,
             createdAt: createdAt,
-            updatedAt: updatedAt);
+            updatedAt: updatedAt,
+            isCurrent: false);
 
         feature.ProjectId.ShouldBe(ProjectId);
         feature.Slug.ShouldBe("001-auth");
         feature.Title.ShouldBe("Auth flow");
         feature.Body.ShouldBe("imported body");
         feature.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        feature.IsCurrent.ShouldBeFalse();
         feature.Version.ShouldBe(3);
         feature.CreatedAt.ShouldBe(createdAt);
         feature.UpdatedAt.ShouldBe(updatedAt);
+    }
+
+    [Fact]
+    public void Restore_PinnedFeature_RoundTripsCurrentFlag()
+    {
+        var createdAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var feature = PlanningFeature.Restore(
+            ProjectId,
+            "001-auth",
+            "Auth flow",
+            "imported body",
+            PlanningFeatureStatus.InProgress,
+            version: 2,
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            isCurrent: true);
+
+        feature.IsCurrent.ShouldBeTrue();
+        feature.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+    }
+
+    [Fact]
+    public void SetCurrent_Pin_SetsFlagAndTouchesUpdatedAt()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        var before = feature.UpdatedAt;
+
+        feature.SetCurrent(true);
+
+        feature.IsCurrent.ShouldBeTrue();
+        feature.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Fact]
+    public void SetCurrent_Unpin_ClearsFlagAndLeavesStatusUntouched()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCurrent(true);
+
+        feature.SetCurrent(false);
+
+        feature.IsCurrent.ShouldBeFalse();
+        feature.Status.ShouldBe(PlanningFeatureStatus.Draft);
     }
 }

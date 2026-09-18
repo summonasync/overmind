@@ -17,6 +17,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.CreateFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", PlanningFeaturesApi.SetCurrent);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", PlanningArtifactsApi.SetStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);

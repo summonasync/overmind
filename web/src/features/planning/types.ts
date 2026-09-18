@@ -57,6 +57,7 @@ export interface PlanningFeatureBoardItem {
   slug: string;
   title: string;
   status: PlanningFeatureStatus;
+  isCurrent: boolean;
   version: number;
   specStatus: PlanningArtifactStatus | null;
   planStatus: PlanningArtifactStatus | null;

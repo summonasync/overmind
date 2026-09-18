@@ -19,6 +19,7 @@ public static class PlanningFeaturesApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", GetFeature);
         group.MapPut("/projects/{projectId:guid}/planning/features/{slug}", UpdateFeature);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}", DeleteFeature);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
 
         return group;
     }
@@ -129,6 +130,27 @@ public static class PlanningFeaturesApi
         }
 
         return Results.NoContent();
+    }
+
+    internal static async Task<IResult> SetCurrent(
+        Guid projectId,
+        string slug,
+        SetPlanningFeatureCurrentRequest request,
+        PlanningFeatureService service,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        try
+        {
+            await service.SetCurrentAsync(projectId, slug, request.IsCurrent, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
+        return Results.Ok(PlanningMapper.ToFeatureResponse(feature!));
     }
 
     private static async Task<PlanningFeature?> LoadFeatureWithArtifacts(

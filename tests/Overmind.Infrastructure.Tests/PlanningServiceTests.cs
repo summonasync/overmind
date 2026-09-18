@@ -154,6 +154,88 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SetCurrent_Pin_SetsFlag()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat-a", "Title A", "body");
+
+        var pinned = await service.SetCurrentAsync(_projectId, "feat-a", true, default);
+
+        pinned.IsCurrent.ShouldBeTrue();
+        pinned.Status.ShouldBe(PlanningFeatureStatus.Draft);
+
+        var persisted = await _context.PlanningFeatures
+            .FirstAsync(f => f.ProjectId == _projectId && f.Slug == "feat-a");
+        persisted.IsCurrent.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SetCurrent_PinSecondFeature_UnpinsFirst()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat-a", "Title A", "body");
+        await service.CreateAsync(_projectId, "feat-b", "Title B", "body");
+        await service.SetCurrentAsync(_projectId, "feat-a", true, default);
+
+        var pinned = await service.SetCurrentAsync(_projectId, "feat-b", true, default);
+
+        pinned.IsCurrent.ShouldBeTrue();
+
+        var states = await _context.PlanningFeatures
+            .Where(f => f.ProjectId == _projectId)
+            .ToDictionaryAsync(f => f.Slug, f => f.IsCurrent);
+        states["feat-a"].ShouldBeFalse();
+        states["feat-b"].ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SetCurrent_Unpin_ClearsFlag()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat-a", "Title A", "body");
+        await service.SetCurrentAsync(_projectId, "feat-a", true, default);
+
+        var unpinned = await service.SetCurrentAsync(_projectId, "feat-a", false, default);
+
+        unpinned.IsCurrent.ShouldBeFalse();
+
+        var persisted = await _context.PlanningFeatures
+            .FirstAsync(f => f.ProjectId == _projectId && f.Slug == "feat-a");
+        persisted.IsCurrent.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task SetCurrent_TwoProjects_KeepIndependentCurrents()
+    {
+        var otherProject = Project.Create($"test-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
+        _context.Projects.Add(otherProject);
+        await _context.SaveChangesAsync();
+
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat-a", "Title A", "body");
+        await service.CreateAsync(otherProject.Id, "feat-b", "Title B", "body");
+
+        await service.SetCurrentAsync(_projectId, "feat-a", true, default);
+        await service.SetCurrentAsync(otherProject.Id, "feat-b", true, default);
+
+        var states = await _context.PlanningFeatures
+            .Where(f => f.Slug == "feat-a" || f.Slug == "feat-b")
+            .ToDictionaryAsync(f => f.Slug, f => f.IsCurrent);
+        states["feat-a"].ShouldBeTrue();
+        states["feat-b"].ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SetCurrent_MissingFeature_ThrowsNotFound()
+    {
+        var service = CreateFeatureService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.SetCurrentAsync(_projectId, "nonexistent", true, default));
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
+    [Fact]
     public async Task UpsertArtifact_Create_Succeeds()
     {
         var featureService = CreateFeatureService();

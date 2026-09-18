@@ -1,7 +1,7 @@
 ---
 feature: 010
 slug: planning-board-filters
-status: draft
+status: inProgress
 version: 1
 created: 2026-09-16
 ---

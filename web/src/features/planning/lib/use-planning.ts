@@ -9,6 +9,7 @@ import {
   deletePlanningFeature,
   materializePlanning,
   setPlanningArtifactStatus,
+  setPlanningFeatureCurrent,
   updatePlanningArtifact,
   updatePlanningFeature,
   updatePlanningWorkflow,
@@ -66,6 +67,15 @@ export function usePlanningMutations(projectId: string) {
     onSuccess: () => invalidate(),
   });
 
+  const setFeatureCurrent = useMutation({
+    mutationFn: (input: { slug: string; isCurrent: boolean }) =>
+      setPlanningFeatureCurrent(projectId, input.slug, input.isCurrent),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
+      queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, variables.slug) });
+    },
+  });
+
   const createArtifact = useMutation({
     mutationFn: ({ slug, values }: { slug: string; values: CreatePlanningArtifactValues }) =>
       createPlanningArtifact(projectId, slug, values),
@@ -113,6 +123,7 @@ export function usePlanningMutations(projectId: string) {
     createFeature,
     updateFeature,
     deleteFeature,
+    setFeatureCurrent,
     createArtifact,
     updateArtifact,
     deleteArtifact,

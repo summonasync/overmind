@@ -1,6 +1,7 @@
 export { ArtifactEditor } from "./components/artifact-editor";
 export type { ArtifactEditorValues } from "./components/artifact-editor";
 export { ArtifactLog } from "./components/artifact-log";
+export { BoardFilterBar } from "./components/board-filter-bar";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
 export { FeatureForm } from "./components/feature-form";
@@ -25,6 +26,19 @@ export {
   planningKeys,
   workflowQueryOptions,
 } from "./queries";
+export {
+  BOARD_ARTIFACT_FILTERS,
+  EMPTY_BOARD_FILTERS,
+  filterBoardItems,
+  isBoardFilterActive,
+  parseBoardFilters,
+} from "./lib/board-filters";
+export type {
+  BoardFilterSearchParams,
+  PlanningBoardArtifactFilter,
+  PlanningBoardFilters,
+} from "./lib/board-filters";
+export { useBoardFilters } from "./lib/use-board-filters";
 export {
   HUMAN_VALIDATION_OVERRIDES,
   PLANNING_FEATURE_STATUSES,
