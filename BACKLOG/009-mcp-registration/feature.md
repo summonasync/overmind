@@ -1,8 +1,8 @@
 ---
 feature: 009
 slug: mcp-registration
-status: inProgress
-version: 1
+status: done
+version: 2
 created: 2026-09-16
 ---
 

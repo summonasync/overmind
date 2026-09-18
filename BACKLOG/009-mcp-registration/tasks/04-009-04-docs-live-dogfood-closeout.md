@@ -2,7 +2,7 @@
 feature: 009
 task: 04
 slug: mcp-registration
-status: inprogress
+status: done
 review: light
 created: 2026-09-18
 ---
@@ -58,4 +58,5 @@ Tasks 009/01-03 are done and reviewed. The executing agent orchestrates the clos
 
 <log>
 - 2026-09-18 — Started: docs + live dogfood closeout
+- 2026-09-18 — Closeout done: CONTEXT.md, 0.1.3 live, dry-run/install/re-run/remove all verified on real configs, stable-link bug found+fixed live; result validated
 </log>
