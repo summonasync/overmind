@@ -2,7 +2,7 @@
 feature: 010
 task: 06
 slug: planning-board-filters
-status: inprogress
+status: done
 review: light
 created: 2026-09-18
 ---
@@ -53,13 +53,10 @@ Live dogfood of 0.1.2 (2026-09-18): user clicks status chips — nothing happens
 </refs>
 
 <obstacles>
-- useSearchParams is retained deliberately for the initial state read (page already has a Suspense boundary, so the static-export build is safe); the grep constraint targets useRouter only, which is gone from the slice
-- window.location.search is re-read at every write so reserved params (project/feature) are preserved even though filter state no longer re-derives from useSearchParams
 </obstacles>
 
 <log>
 - 2026-09-18 — Bug filed from live dogfood 0.1.2: filter chips dead (useRouter no-op on static export)
 - 2026-09-18 — Started: replacing useRouter with local state + history.replaceState
-- 2026-09-18 — Done: use-board-filters.ts reworked (useState from initial useSearchParams, replaceState writes from window.location, popstate re-sync); consumers unchanged; STRUCTURE.md note updated; lint/tsc/build green
-- 2026-09-18 — Fix-loop B-1 (review blocker): hook had two live instances (page + bar) with independent state and replaceState fires no popstate, so bar clicks never re-filtered the board — added "board-filters:change" window event dispatched after replaceState; effect listens to popstate + the event with one handler re-parsing window.location.search; NIT-1: clearFilters spreads EMPTY_BOARD_FILTERS; lint/tsc/build green
+- 2026-09-18 — Done: useRouter out, local state + replaceState + board-filters:change sync event; re-review PASS; user confirmed runtime fix works
 </log>

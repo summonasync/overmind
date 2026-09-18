@@ -4,6 +4,26 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using Overmind.Mcp;
+using Overmind.Mcp.Registration;
+
+if (args.Length > 0 && args[0] == "install")
+{
+    if (!InstallOptionsParser.TryParse(args[1..], out var installOptions, out var installError))
+    {
+        Console.Error.WriteLine(installError);
+        Console.Error.WriteLine(InstallOptionsParser.UsageText);
+        return 2;
+    }
+
+    var install = new InstallCommand(
+        AgentPathEnvironment.Current(),
+        Directory.GetCurrentDirectory(),
+        Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0],
+        Console.Out,
+        Console.Error);
+
+    return await install.RunAsync(installOptions, CancellationToken.None);
+}
 
 var baseUrl = ApiBaseUrl.Resolve();
 Console.Error.WriteLine($"[overmind-mcp] overmind API base URL: {baseUrl}");
