@@ -34,6 +34,19 @@ public class StableInstallLinkResolverTests : IDisposable
     }
 
     [Fact]
+    public void StableLinkThroughDirectorySymlink_ReturnsLinkPath()
+    {
+        var versioned = CreateBinary(Path.Combine("apps", "overmind-0.1.3-linux-x64", "mcp", "overmind-mcp"));
+        var dirLink = Path.Combine(_home, "apps", "overmind");
+        Directory.Delete(dirLink, recursive: true);
+        Directory.CreateSymbolicLink(dirLink, Path.GetDirectoryName(Path.GetDirectoryName(versioned))!);
+
+        var result = StableInstallLinkResolver.ResolvePreferredBinaryPath(versioned, Env());
+
+        result.ShouldBe(Path.Combine(dirLink, "mcp", "overmind-mcp"));
+    }
+
+    [Fact]
     public void StableLinkResolvingToRunningBinary_ReturnsLinkPath()
     {
         var binary = CreateBinary(Path.Combine("dist", "overmind-1.2.3", "overmind-mcp"));
