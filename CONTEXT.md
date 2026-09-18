@@ -64,6 +64,20 @@ References Core + Infrastructure. ASP.NET Core (Kestrel) + Avalonia in one proce
 
 References **no other project** — a deliberate decoupling: the adapter is a thin HTTP→JSON-RPC proxy that deserializes Host DTOs via tolerant `JsonElement` reads. Contract is additive-only (see ADR). Console exe, assembly name `overmind-mcp`, built on the `ModelContextProtocol` C# SDK. Spawned by agents via their standard MCP config; exits with code 2 and a stderr hint if the Host API is unreachable at startup.
 
+**Self-registration: `overmind-mcp install`** (feature 009). Intercepted before the host health check, so it works with the Host down. File-based upsert (never agent CLIs): only the `overmind` key is written, unknown keys/tables survive, timestamped `.bak` before the first mutation, re-run converges to `unchanged`. Flags: `--all` (default = detected agents only), `--agents <csv>`, `--project` (git-root scope instead of user-global), `--remove`, `--dry-run`. Exit codes: 0 ok / 1 any failure / 2 usage. The registered command path prefers the stable install link `~/apps/overmind/mcp/overmind-mcp` when it resolves to the running binary, so registrations survive version upgrades.
+
+| Agent | User-global config | Project config | Format |
+|---|---|---|---|
+| kimi-code | `$KIMI_CODE_HOME/mcp.json` (fallback `~/.kimi-code/mcp.json`) | `<gitroot>/.mcp.json` | JSON `mcpServers` |
+| claude | `~/.claude.json` (top-level `mcpServers`) | `<gitroot>/.mcp.json` | JSON `mcpServers` |
+| codex | `$CODEX_HOME/config.toml` (fallback `~/.codex/config.toml`) | `<gitroot>/.codex/config.toml` | TOML `[mcp_servers.*]` (Tomlyn 0.20.x DOM line, BSD-2-Clause) |
+| gemini | `~/.gemini/settings.json` | `<gitroot>/.gemini/settings.json` | JSON `mcpServers` |
+| qwen | `~/.qwen/settings.json` | `<gitroot>/.qwen/settings.json` | JSON `mcpServers` |
+| antigravity | `~/.gemini/config/mcp_config.json` (distinct file under the shared `~/.gemini`) | `<gitroot>/.agents/mcp_config.json` | JSON `mcpServers` |
+
+Dev-loop caveat: running via `dotnet exec overmind-mcp.dll` makes `Environment.ProcessPath` the muxer, so a non-dry-run install from a dev loop would register the wrong path — install from the packaged binary (or the stable link) only.
+
+
 ### `web/` — Next.js 16 static-export SPA
 
 App Router, React 19, TypeScript strict, Tailwind 4, React Query 5, FSD layering. Built with `output: "export"` into `web/out/`, served by the Host from the same origin — there is **no Next.js server in production**, so all data access is client-side React Query over same-origin `/api` (see ADR "static-export SPA data access"). Brand/design reference: `web/brand-book.md`. Slices: entries, kits, projects, search, settings, health, planning (board + feature workspace).
