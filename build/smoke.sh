@@ -6,7 +6,7 @@
 #
 # Boots the Host with an isolated HOME and --no-tray, waits for ~/.overmind/host.port, then
 # asserts: health ok, bundled crew kit seeded via GET /api/kits, web UI served at /, seed log
-# line present. Shuts the host down with SIGTERM.
+# line present, plus a watch-guard cell bounding Host/adapter inotify usage. SIGTERM shutdown.
 
 set -euo pipefail
 
@@ -24,6 +24,8 @@ usage() {
 archive=$1
 [[ -f $archive ]] || die "archive not found: $archive"
 [[ $(basename "$archive") =~ ^overmind-[0-9.]+-linux-x64\.tar\.gz$ ]] || die "expected a overmind-<version>-linux-x64.tar.gz archive"
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 for tool in tar curl; do
     command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not on PATH"
@@ -80,4 +82,6 @@ kill -TERM "$host_pid"
 wait "$host_pid" || true
 host_pid=""
 
-echo "SMOKE OK: port=$port health=ok crew kit seeded (bundled) web UI served clean shutdown"
+"$script_dir/watch-guard.sh" "$root/mcp/overmind-mcp" "$root/host/Overmind.Host"
+
+echo "SMOKE OK: port=$port health=ok crew kit seeded (bundled) web UI served watch guard ok clean shutdown"

@@ -15,7 +15,11 @@ try
 {
     Directory.CreateDirectory(OvermindPaths.DataDirectory);
 
-    var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = AppContext.BaseDirectory,
+    });
     builder.Host.UseSerilog();
 
     var isTesting = builder.Environment.IsEnvironment("Testing");
@@ -82,9 +86,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     var app = builder.Build();
 
     var webRootOverride = Environment.GetEnvironmentVariable("OVERMIND_WEB_ROOT");
-    var webRoot = webRootOverride is { Length: > 0 }
-        ? webRootOverride
-        : Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "web", "out"));
+    var webRoot = webRootOverride is { Length: > 0 } ? webRootOverride : ResolveWebRoot();
 
     if (Directory.Exists(webRoot))
     {
@@ -211,6 +213,28 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
 
     await trayExited.Task;
     await app.StopAsync();
+}
+
+static string ResolveWebRoot()
+{
+    var packLayoutWebRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "web"));
+    if (Directory.Exists(packLayoutWebRoot))
+    {
+        return packLayoutWebRoot;
+    }
+
+    var directory = new DirectoryInfo(AppContext.BaseDirectory);
+    for (var level = 0; level < 8 && directory.Parent is not null; level++)
+    {
+        directory = directory.Parent;
+        var candidate = Path.Combine(directory.FullName, "web", "out");
+        if (Directory.Exists(candidate))
+        {
+            return candidate;
+        }
+    }
+
+    return packLayoutWebRoot;
 }
 
 public partial class Program;
