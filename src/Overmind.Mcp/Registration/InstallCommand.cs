@@ -8,6 +8,8 @@ public sealed class InstallCommand
     private readonly TextWriter _output;
     private readonly TextWriter _errorOutput;
     private readonly IReadOnlyDictionary<AgentConfigFormat, IConfigUpsertEngine> _engines;
+    private readonly OnboardBlockWriter _onboardWriter;
+    private readonly OnboardProjectResolver? _projectResolver;
 
     public InstallCommand(
         AgentPathEnvironment environment,
@@ -15,6 +17,17 @@ public sealed class InstallCommand
         string binaryPath,
         TextWriter output,
         TextWriter errorOutput)
+        : this(environment, workingDirectory, binaryPath, output, errorOutput, projectResolver: null)
+    {
+    }
+
+    public InstallCommand(
+        AgentPathEnvironment environment,
+        string workingDirectory,
+        string binaryPath,
+        TextWriter output,
+        TextWriter errorOutput,
+        OnboardProjectResolver? projectResolver)
     {
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
@@ -27,8 +40,10 @@ public sealed class InstallCommand
         _binaryPath = binaryPath;
         _output = output;
         _errorOutput = errorOutput;
+        _projectResolver = projectResolver;
 
         var backupTracker = new ConfigBackupTracker();
+        _onboardWriter = new OnboardBlockWriter(backupTracker);
         _engines = new Dictionary<AgentConfigFormat, IConfigUpsertEngine>
         {
             [AgentConfigFormat.Json] = new JsonConfigUpsertEngine(backupTracker),
@@ -52,6 +67,12 @@ public sealed class InstallCommand
             }
         }
 
+        string? onboardRoot = null;
+        if (options.Onboard)
+        {
+            onboardRoot = GitRootResolver.FindRoot(_workingDirectory) ?? _workingDirectory;
+        }
+
         if (options.DryRun)
         {
             await _output.WriteLineAsync("dry run: no config files are written.");
@@ -67,7 +88,8 @@ public sealed class InstallCommand
         var skipped = 0;
         var failed = 0;
 
-        foreach (var (agent, selected) in PlanSelection(options))
+        var selection = PlanSelection(options).ToList();
+        foreach (var (agent, selected) in selection)
         {
             cancellationToken.ThrowIfCancellationRequested();
             processed++;
@@ -110,9 +132,23 @@ public sealed class InstallCommand
             await _output.WriteLineAsync(FormatLine(agent.Name, configPath, result, options.DryRun));
         }
 
-        await _output.WriteLineAsync(
+        OnboardRunSummary? onboard = null;
+        if (options.Onboard)
+        {
+            onboard = await RunOnboardingAsync(selection, onboardRoot!, options, cancellationToken);
+        }
+
+        var summary =
             $"summary: {processed} processed, {added} added, {updated} updated, {unchanged} unchanged, " +
-            $"{removed} removed, {notPresent} not present, {skipped} skipped, {failed} failed");
+            $"{removed} removed, {notPresent} not present, {skipped} skipped, {failed} failed";
+        if (onboard is not null)
+        {
+            summary +=
+                $"; onboard: {onboard.Created} created, {onboard.Updated} updated, {onboard.Unchanged} unchanged, " +
+                $"{onboard.Failed} failed, {onboard.Conflicts} conflict warning(s)";
+        }
+
+        await _output.WriteLineAsync(summary);
 
         return failed == 0 ? 0 : 1;
     }
@@ -138,6 +174,69 @@ public sealed class InstallCommand
         catch (Exception ex)
         {
             return ConfigUpsertResult.Failure(ex.Message);
+        }
+    }
+
+    private async Task<OnboardRunSummary> RunOnboardingAsync(
+        IReadOnlyList<(AgentDefinition Agent, bool Selected)> selection,
+        string repoRoot,
+        InstallOptions options,
+        CancellationToken cancellationToken)
+    {
+        var resolver = _projectResolver ?? OnboardProjectResolver.FromEnvironment();
+        var projectInfo = await resolver.ResolveAsync(repoRoot, cancellationToken);
+        if (projectInfo is null)
+        {
+            await _errorOutput.WriteLineAsync(
+                "warning: overmind host is unreachable — the onboard block will use placeholders; " +
+                "re-run 'overmind-mcp install --onboard' once the host is running to embed the real project id.");
+        }
+
+        var block = OnboardBlockContent.Render(projectInfo);
+        var summary = new OnboardRunSummary();
+
+        foreach (var (agent, selected) in selection)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!selected)
+            {
+                continue;
+            }
+
+            var filePath = AgentInstructionFile.ResolvePath(agent, repoRoot);
+            try
+            {
+                var result = await _onboardWriter.WriteAsync(filePath, block, options.DryRun, cancellationToken);
+                await ReportConflictsAsync(agent.Name, result);
+                summary.Add(result.Outcome, result.Conflicts.Count);
+                await _output.WriteLineAsync(FormatOnboardLine(agent.Name, result, options.DryRun));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                summary.Failed++;
+                await _output.WriteLineAsync($"{agent.Name}: onboard failed — {filePath} ({ex.Message})");
+            }
+        }
+
+        return summary;
+    }
+
+    private async Task ReportConflictsAsync(string name, OnboardWriteResult result)
+    {
+        if (result.Conflicts.Count == 0)
+        {
+            return;
+        }
+
+        await _errorOutput.WriteLineAsync(
+            $"warning: {name}: {result.FilePath} prescribes file-based ceremony outside the managed block (left untouched):");
+        foreach (var conflict in result.Conflicts)
+        {
+            await _errorOutput.WriteLineAsync($"  line {conflict.LineNumber}: {conflict.Text}");
         }
     }
 
@@ -174,5 +273,43 @@ public sealed class InstallCommand
         return result.Error is null
             ? $"{name}: {verb} — {path}"
             : $"{name}: {verb} — {path} ({result.Error})";
+    }
+
+    private static string FormatOnboardLine(string name, OnboardWriteResult result, bool dryRun)
+    {
+        var verb = result.Outcome switch
+        {
+            OnboardWriteOutcome.Created => dryRun ? "would create onboard block" : "onboard block created",
+            OnboardWriteOutcome.Updated => dryRun ? "would update onboard block" : "onboard block updated",
+            _ => "onboard block unchanged",
+        };
+
+        return $"{name}: {verb} — {result.FilePath}";
+    }
+
+    private sealed class OnboardRunSummary
+    {
+        public int Created { get; private set; }
+        public int Updated { get; private set; }
+        public int Unchanged { get; private set; }
+        public int Failed { get; set; }
+        public int Conflicts { get; private set; }
+
+        public void Add(OnboardWriteOutcome outcome, int conflictCount)
+        {
+            Conflicts += conflictCount;
+            switch (outcome)
+            {
+                case OnboardWriteOutcome.Created:
+                    Created++;
+                    break;
+                case OnboardWriteOutcome.Updated:
+                    Updated++;
+                    break;
+                default:
+                    Unchanged++;
+                    break;
+            }
+        }
     }
 }

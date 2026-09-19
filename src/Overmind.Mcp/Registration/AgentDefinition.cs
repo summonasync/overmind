@@ -10,4 +10,5 @@ public sealed record AgentDefinition
     public required string ProjectRelativePath { get; init; }
     public required IReadOnlyList<string> ConfigDirCandidates { get; init; }
     public required IReadOnlyList<string> BinaryNames { get; init; }
+    public IReadOnlyList<string> AgentFileCandidates { get; init; } = [];
 }

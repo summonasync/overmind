@@ -35,6 +35,25 @@ public class InstallOptionsParserTests
     }
 
     [Fact]
+    public void OnboardFlag_Parsed()
+    {
+        var parsed = InstallOptionsParser.TryParse(["--onboard"], out var options, out _);
+
+        parsed.ShouldBeTrue();
+        options!.Onboard.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void OnboardWithRemove_Fails()
+    {
+        var parsed = InstallOptionsParser.TryParse(["--onboard", "--remove"], out _, out var error);
+
+        parsed.ShouldBeFalse();
+        error.ShouldNotBeNull().ShouldContain("--onboard");
+        error.ShouldContain("--remove");
+    }
+
+    [Fact]
     public void AgentsCsv_TrimmedDedupedPreservingOrder()
     {
         var parsed = InstallOptionsParser.TryParse(["--agents", " claude, kimi-code ,CLAUDE"], out var options, out _);
@@ -101,7 +120,7 @@ public class InstallOptionsParserTests
     [Fact]
     public void UsageText_MentionsEveryFlag()
     {
-        foreach (var flag in new[] { "--all", "--agents", "--project", "--remove", "--dry-run" })
+        foreach (var flag in new[] { "--all", "--agents", "--project", "--onboard", "--remove", "--dry-run" })
         {
             InstallOptionsParser.UsageText.ShouldContain(flag);
         }

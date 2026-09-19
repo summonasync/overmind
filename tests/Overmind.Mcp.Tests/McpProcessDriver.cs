@@ -37,7 +37,7 @@ public sealed class McpProcessDriver : IDisposable
         _stderrPump = Task.Run(() => PumpStderrAsync(process));
     }
 
-    public static McpProcessDriver Start(string? apiUrl)
+    public static McpProcessDriver Start(string? apiUrl, IReadOnlyDictionary<string, string>? environment = null)
     {
         var dllPath = typeof(Overmind.Mcp.OvermindApiClient).Assembly.Location;
 
@@ -56,6 +56,14 @@ public sealed class McpProcessDriver : IDisposable
         if (apiUrl is not null)
         {
             startInfo.EnvironmentVariables["OVERMIND_API_URL"] = apiUrl;
+        }
+
+        if (environment is not null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                startInfo.EnvironmentVariables[key] = value;
+            }
         }
 
         var process = Process.Start(startInfo)!;
@@ -165,7 +173,8 @@ public sealed class McpProcessDriver : IDisposable
         }
     }
 
-    private async Task PumpStdoutAsync(Process process)    {
+    private async Task PumpStdoutAsync(Process process)
+    {
         try
         {
             while (await process.StandardOutput.ReadLineAsync() is { } line)

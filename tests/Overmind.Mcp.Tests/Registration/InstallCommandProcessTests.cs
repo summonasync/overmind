@@ -47,6 +47,18 @@ public class InstallCommandProcessTests : IDisposable
         error.ShouldContain("usage: overmind-mcp install");
     }
 
+    [Fact]
+    public async Task InstallOnboardWithRemove_ExitsTwoWithUsageOnStderr()
+    {
+        var (exit, output, error) = await RunInstallAsync("install --onboard --remove");
+
+        exit.ShouldBe(2);
+        output.ShouldBeEmpty();
+        error.ShouldContain("--onboard");
+        error.ShouldContain("--remove");
+        error.ShouldContain("usage: overmind-mcp install");
+    }
+
     private async Task<(int Exit, string Out, string Err)> RunInstallAsync(string arguments)
     {
         var dllPath = typeof(Overmind.Mcp.Registration.InstallCommand).Assembly.Location;

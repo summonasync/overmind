@@ -14,6 +14,7 @@ public static class AgentRegistry
             ProjectRelativePath = ".mcp.json",
             ConfigDirCandidates = ["$KIMI_CODE_HOME", "~/.kimi-code"],
             BinaryNames = ["kimi"],
+            AgentFileCandidates = ["AGENTS.md"],
         },
         new AgentDefinition
         {
@@ -23,6 +24,7 @@ public static class AgentRegistry
             ProjectRelativePath = ".mcp.json",
             ConfigDirCandidates = ["~/.claude", "~/.claude.json"],
             BinaryNames = ["claude"],
+            AgentFileCandidates = ["CLAUDE.md"],
         },
         new AgentDefinition
         {
@@ -34,6 +36,7 @@ public static class AgentRegistry
             ProjectRelativePath = ".codex/config.toml",
             ConfigDirCandidates = ["$CODEX_HOME", "~/.codex"],
             BinaryNames = ["codex"],
+            AgentFileCandidates = ["AGENTS.md"],
         },
         new AgentDefinition
         {
@@ -43,6 +46,7 @@ public static class AgentRegistry
             ProjectRelativePath = ".gemini/settings.json",
             ConfigDirCandidates = ["~/.gemini"],
             BinaryNames = ["gemini"],
+            AgentFileCandidates = ["GEMINI.md"],
         },
         new AgentDefinition
         {
@@ -52,6 +56,7 @@ public static class AgentRegistry
             ProjectRelativePath = ".qwen/settings.json",
             ConfigDirCandidates = ["~/.qwen"],
             BinaryNames = ["qwen"],
+            AgentFileCandidates = ["QWEN.md"],
         },
         new AgentDefinition
         {
@@ -61,6 +66,7 @@ public static class AgentRegistry
             ProjectRelativePath = ".agents/mcp_config.json",
             ConfigDirCandidates = ["~/.gemini/config"],
             BinaryNames = ["antigravity"],
+            AgentFileCandidates = ["AGENTS.md"],
         },
     ];
 

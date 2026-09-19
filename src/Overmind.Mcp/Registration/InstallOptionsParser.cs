@@ -5,11 +5,12 @@ namespace Overmind.Mcp.Registration;
 public static class InstallOptionsParser
 {
     public const string UsageText = """
-        usage: overmind-mcp install [--all] [--agents <csv>] [--project] [--remove] [--dry-run]
+        usage: overmind-mcp install [--all] [--agents <csv>] [--project] [--onboard] [--remove] [--dry-run]
 
           --all           register at all six agents, ignoring detection
           --agents <csv>  comma-separated agent subset; wins over --all
           --project       project scope (git root from cwd) instead of user scope
+          --onboard       write the managed onboard block to the repo's agent instruction file
           --remove        remove the overmind registration instead of adding it
           --dry-run       print the plan, write nothing
 
@@ -25,6 +26,7 @@ public static class InstallOptionsParser
 
         var all = false;
         var project = false;
+        var onboard = false;
         var remove = false;
         var dryRun = false;
         List<string>? agents = null;
@@ -38,6 +40,9 @@ public static class InstallOptionsParser
                     break;
                 case "--project":
                     project = true;
+                    break;
+                case "--onboard":
+                    onboard = true;
                     break;
                 case "--remove":
                     remove = true;
@@ -65,11 +70,18 @@ public static class InstallOptionsParser
             }
         }
 
+        if (onboard && remove)
+        {
+            error = "flag --onboard is incompatible with --remove.";
+            return false;
+        }
+
         options = new InstallOptions
         {
             All = all,
             Agents = agents ?? [],
             Project = project,
+            Onboard = onboard,
             Remove = remove,
             DryRun = dryRun,
         };

@@ -130,6 +130,13 @@ public static class Canned
     public const string PlanningFeatureNotFoundJson =
         """{"title":"Not Found","detail":"Feature 'demo-feature' was not found.","status":404}""";
 
+    public const string OnboardQuickstartText = "Onboarding quickstart from the host — verbatim payload text.";
+
+    public const string OnboardJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";
 
     public static string ToolResultText(JsonNode response)

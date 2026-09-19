@@ -54,6 +54,20 @@ public class AgentRegistryTests
         agent.UserConfigEnvironmentFileName.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData("kimi-code", "AGENTS.md")]
+    [InlineData("claude", "CLAUDE.md")]
+    [InlineData("codex", "AGENTS.md")]
+    [InlineData("gemini", "GEMINI.md")]
+    [InlineData("qwen", "QWEN.md")]
+    [InlineData("antigravity", "AGENTS.md")]
+    public void Agent_HasAgentFileCandidates(string name, string fileName)
+    {
+        var agent = AgentRegistry.Find(name)!;
+
+        agent.AgentFileCandidates.ShouldBe([fileName]);
+    }
+
     [Fact]
     public void Find_IsCaseInsensitive()
     {

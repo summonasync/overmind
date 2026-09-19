@@ -95,10 +95,11 @@ App Router, React 19, TypeScript strict, Tailwind 4, React Query 5, FSD layering
 
 ## MCP server design (adapter surface)
 
-Transport: stdio JSON-RPC via the ModelContextProtocol SDK. Server name `overmind`; server instructions tell agents to read `overmind://` resources first.
+Transport: stdio JSON-RPC via the ModelContextProtocol SDK. Server name `overmind`; server instructions tell agents to call `overmind_onboard` first, then read `overmind://` resources.
 
 - **Tools** (`OvermindTools`): `list_projects`, `list_entries` (optional type filter), `read_entry`, `write_entry`, `update_entry` (content-only, title/tags preserved), `search` (`mode=fulltext|semantic`, semantic returns "vector search unavailable" when Qdrant is down). **Write scope is restricted to note/decision/gate/guard** — skills carry files and are managed via the UI until P2 runtime delivery; attempts to write a skill get an explanatory MCP error.
 - **Planning tools** (`OvermindPlanningTools`): `planning_list_features`, `planning_read_feature`, `planning_current_task` (read-only), `planning_create_feature`, `planning_upsert_artifact`, `planning_set_status` (empty log note rejected client-side — status moves are recorded in the artifact log), `planning_append_log`, `planning_validate` (gated: a 409 from the human-validation gate reaches the agent verbatim as an error starting with `STOP:`), `planning_set_current` (pins/unpins the board's current feature; pinning one unpins any other). All planning calls go to the agent door `/api/agent/planning/*` only. There is no planning tool to update or delete a feature body — an agent correcting a feature body mid-ceremony currently falls back to a raw HTTP `PUT` on the human door (recorded in BACKLOG hardening).
+- **Onboarding tool** (`OvermindOnboardingTools`): `overmind_onboard` (no args) — posts the adapter's cwd to `POST /api/onboard` (or the `OVERMIND_PROJECT_ID` guid override, for symlinked/worktree layouts where the resolved cwd differs from the registered project path) and returns the project id, board summary and the host's quickstart text verbatim; server instructions tell agents to call it first.
 - **Resources** (`OvermindResources`), custom scheme `overmind://` (see ADR — renamed from `ctx://`):
   - `overmind://projects`, `overmind://projects/{id}` — JSON.
   - `overmind://projects/{id}/{gates|guards|notes|decisions|skills}` — concatenated markdown (`# Title` + body per entry).

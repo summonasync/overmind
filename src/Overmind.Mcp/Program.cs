@@ -51,6 +51,7 @@ builder.Logging.ClearProviders();
 builder.Services.AddSingleton(new OvermindApiClient(http));
 builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindPlanningTools>();
+builder.Services.AddSingleton<OvermindOnboardingTools>();
 builder.Services.AddSingleton<OvermindResources>();
 builder.Services.AddSingleton<OvermindPlanningResources>();
 builder.Services.AddSingleton<SessionBootstrapPrompt>();
@@ -64,12 +65,14 @@ builder.Services
     {
         options.ServerInfo = new Implementation { Name = "overmind", Title = "Overmind", Version = adapterVersion };
         options.ServerInstructions =
-            "Overmind shared-context adapter. Read overmind://resources for project gates, guards, notes, decisions and skills. " +
+            "Overmind shared-context adapter. Call overmind_onboard first — it resolves your project and returns the onboarding quickstart. " +
+            "Read overmind://resources for project gates, guards, notes, decisions and skills. " +
             "Use tools for project/entry CRUD and fulltext or semantic search.";
     })
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()
     .WithTools<OvermindPlanningTools>()
+    .WithTools<OvermindOnboardingTools>()
     .WithResources<OvermindResources>()
     .WithResources<OvermindPlanningResources>()
     .WithPrompts<SessionBootstrapPrompt>();
