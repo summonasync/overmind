@@ -1,7 +1,7 @@
 ---
 feature: 013
 slug: mcp-agent-onboarding
-status: draft
+status: done
 version: 1
 created: 2026-09-19
 ---

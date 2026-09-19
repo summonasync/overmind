@@ -2,7 +2,7 @@
 feature: 013
 task: 04
 slug: mcp-agent-onboarding
-status: inprogress
+status: done
 review: light
 created: 2026-09-19
 ---
@@ -57,4 +57,5 @@ Feature 013 closeout. Tasks 01–03 must be done and reviewed first. Deployment 
 
 <log>
 - 2026-09-19 — Closeout started: pack 0.1.7, deploy, live dogfood checks.
+- 2026-09-19 — Closeout complete: 0.1.7 packed/deployed/healthy, all three live dogfood checks passed with evidence, smoke.sh + watch-guard green, fixture project cleaned up, planning materialized (0 warnings).
 </log>
