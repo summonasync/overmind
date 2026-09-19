@@ -11,7 +11,7 @@ How the repo is organized and the rules for writing code in it. System design li
 ├── src/
 │   ├── Overmind.Core/        # domain: Entities/, Enums/, Abstractions/ — zero dependencies
 │   ├── Overmind.Infrastructure/  # Persistence/, Search/, VectorSearch/, Embeddings/, Materialization/, Planning/, Configuration/, Migrations/
-│   ├── Overmind.Host/        # composition root: Program.cs, DependencyInjection.cs, Api/ (slices incl. Planning*Api.cs + AgentPlanningApi.cs), BacklogImportCommand.cs, tray+lifecycle at root
+│   ├── Overmind.Host/        # composition root: Program.cs, DependencyInjection.cs, Api/ (slices incl. Planning*Api.cs + AgentPlanningApi.cs), BacklogImportCli.cs (run-and-exit --import-backlog) + BacklogImportCommand.cs (boot-time import), tray+lifecycle at root
 │   └── Overmind.Mcp/         # stdio MCP adapter, no project references
 ├── tests/                    # mirrors src: Overmind.Core.Tests, .Infrastructure.Tests, .Api.Tests (Host), .Mcp.Tests
 └── web/                      # Next.js 16 static-export SPA (FSD)

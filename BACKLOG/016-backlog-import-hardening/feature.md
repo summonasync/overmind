@@ -1,7 +1,7 @@
 ---
 feature: 016
 slug: backlog-import-hardening
-status: draft
+status: done
 version: 1
 created: 2026-09-19
 ---
