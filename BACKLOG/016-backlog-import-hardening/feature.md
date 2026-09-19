@@ -20,6 +20,7 @@ A. MindlashStudio import findings (6):
 - A4. Duplicate NN- prefixes: silent last-wins (01-report.md + 01-wrapper-spike.md) — побеждает алфавитно-поздний, второй исчезает без skip-записи (оба были реальным контентом)
 - A5. created дефолтит в день импорта, если в источнике нет created-токена (у них был created_during) → 37 тасок с датой 2026-09-19
 - A6. Первый materialize требует force:true без наводки из import-отчёта (Overwrite exception на каждый untracked файл); import мог бы пре-сеедить PlanningMaterializedFile rows или отчёт должен говорить «run materialize --force»
+- A7. Drift false-missing после смены slug-генерации (user report + live evidence 2026-09-19, проект Overmind): drift показывает 12 «missing» для BACKLOG/008-dogfood-hardening/tasks, но файлы на диске ЕСТЬ — tracked-имена с кириллицей (`01-008-01-import-cli-построчный-skipped-лист.md`) против дисковых транслитерированных (`01-008-01-import-cli-per-line-skipped-list.md`): 008 починил слаг-генератор ПОСЛЕ того, как файлы были затреканы, tracked name ≠ disk name → missing + untracked-пары. Та же семья, что A3 (filename round-trip instability) — нужна миграция/reconcile tracked-имён или детект «тот же файл под новым именем» (по содержимому/hash)
 B. Import-CLI findings от агента Squeezr (3):
 - B1. Второй инстанс с --import-backlog перезаписывает host.port своим fallback-портом → новые MCP-сессии уходят не туда (host.port = дверь для адаптера, ApiBaseUrl)
 - B2. import-CLI после импорта boot'ится как полноценный Host вместо run-and-exit — для скриптов неудобно
