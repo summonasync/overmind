@@ -2,7 +2,7 @@
 feature: 013
 task: 03
 slug: mcp-agent-onboarding
-status: review
+status: done
 review: light
 created: 2026-09-19
 ---
@@ -62,4 +62,5 @@ Feature 013, door #3 (file-side). 009 built the install command + agent registry
 <log>
 - 2026-09-19 — Execution started — handed to dotnet-coder subagent (parallel with 01 fix-loop and 02 review).
 - 2026-09-19 — Coder done: --onboard flag, registry agent-file table, managed block writer, conflict scanner, host-down degradation; 17 new tests, suite 769/769 green. To review.
+- 2026-09-19 — Review PASS WITH NOTES (audits/review-013-03.md); dry-run server-side-effect guard fixed in-tree, suite 770/770. BOM corner + --all dedupe recorded as non-blocking. Done.
 </log>

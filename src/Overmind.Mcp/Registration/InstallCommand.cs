@@ -183,13 +183,22 @@ public sealed class InstallCommand
         InstallOptions options,
         CancellationToken cancellationToken)
     {
-        var resolver = _projectResolver ?? OnboardProjectResolver.FromEnvironment();
-        var projectInfo = await resolver.ResolveAsync(repoRoot, cancellationToken);
-        if (projectInfo is null)
+        OnboardProjectInfo? projectInfo = null;
+        if (options.DryRun)
         {
-            await _errorOutput.WriteLineAsync(
-                "warning: overmind host is unreachable — the onboard block will use placeholders; " +
-                "re-run 'overmind-mcp install --onboard' once the host is running to embed the real project id.");
+            await _output.WriteLineAsync(
+                "dry run: project id resolution is skipped — the onboard block preview uses placeholder text.");
+        }
+        else
+        {
+            var resolver = _projectResolver ?? OnboardProjectResolver.FromEnvironment();
+            projectInfo = await resolver.ResolveAsync(repoRoot, cancellationToken);
+            if (projectInfo is null)
+            {
+                await _errorOutput.WriteLineAsync(
+                    "warning: overmind host is unreachable — the onboard block will use placeholders; " +
+                    "re-run 'overmind-mcp install --onboard' once the host is running to embed the real project id.");
+            }
         }
 
         var block = OnboardBlockContent.Render(projectInfo);

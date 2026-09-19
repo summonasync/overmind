@@ -166,14 +166,35 @@ public class InstallCommandOnboardTests : IDisposable
         await using var stub = StubOvermindApi.Start();
         stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
 
-        var (exit, output, _) = await RunAsync(
+        var (exit, output, error) = await RunAsync(
             new InstallOptions { Agents = ["claude"], Onboard = true, DryRun = true },
             ResolverFor(stub));
 
         exit.ShouldBe(0);
+        error.ShouldBeEmpty();
         var agentFile = Path.Combine(_cwd, "CLAUDE.md");
         File.Exists(agentFile).ShouldBeFalse();
         Lines(output).ShouldContain($"claude: would create onboard block — {agentFile}");
+        Lines(output).ShouldContain(
+            "dry run: project id resolution is skipped — the onboard block preview uses placeholder text.");
+        stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
+    }
+
+    [Fact]
+    public async Task OnboardDryRun_ResolverThrowsIfCalled_ExitZeroNoError()
+    {
+        Directory.CreateDirectory(Path.Combine(_cwd, ".git"));
+        var throwingResolver = new OnboardProjectResolver(
+            new OvermindApiClient(new HttpClient(new ThrowingHandler())));
+
+        var (exit, output, error) = await RunAsync(
+            new InstallOptions { Agents = ["claude"], Onboard = true, DryRun = true },
+            throwingResolver);
+
+        exit.ShouldBe(0);
+        error.ShouldBeEmpty();
+        File.Exists(Path.Combine(_cwd, "CLAUDE.md")).ShouldBeFalse();
+        Lines(output).ShouldContain(line => line.Contains("would create onboard block", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -246,5 +267,13 @@ public class InstallCommandOnboardTests : IDisposable
         lines.ShouldContain(line => line.StartsWith("claude: onboard failed — ", StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains("onboard: 0 created, 0 updated, 0 unchanged, 1 failed,", StringComparison.Ordinal));
         lines.ShouldContain(line => line.StartsWith("claude: added — ", StringComparison.Ordinal));
+    }
+
+    private sealed class ThrowingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("onboard resolver must not be called in dry-run.");
     }
 }
