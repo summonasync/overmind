@@ -2,7 +2,7 @@
 feature: 015
 task: 02
 slug: inotify-watch-storm
-status: review
+status: done
 review: light
 created: 2026-09-19
 ---
@@ -63,4 +63,5 @@ Existing shape: build/ holds pack.sh, smoke.sh, run.sh, install.sh. build/smoke.
 - 2026-09-19 — Created from validated plan 015
 - 2026-09-19 — Started: watch guard smoke (coder dispatched)
 - 2026-09-19 — Coder done: watch-guard.sh wired into smoke.sh; patched host=28/adapter=1, fail-proof on 0.1.4 = 301/301; SMOKE OK; light review dispatched
+- 2026-09-19 — Light review PASS-WITH-NITS, audits/review-015-02.md; IMPORTANT (grep -c arithmetic) fixed in-tree, guard re-run green
 </log>
