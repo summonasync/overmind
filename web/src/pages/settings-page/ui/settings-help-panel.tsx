@@ -1,13 +1,10 @@
-import { Settings2, Wifi, BookOpen } from "lucide-react";
+import { BookOpen, Settings2, Wifi } from "lucide-react";
+import { InfoPanelSection } from "@/widgets/app-shell";
 
 export function SettingsHelpPanel() {
   return (
     <div className="space-y-6">
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Settings2 size={15} aria-hidden className="text-primary" />
-          Setup Help
-        </h2>
+      <InfoPanelSection title="Setup Help" icon={Settings2}>
         <ul className="space-y-3 text-xs leading-relaxed text-muted">
           <li>
             The embedding provider is used for semantic search and reindexing. Switching providers
@@ -26,29 +23,21 @@ export function SettingsHelpPanel() {
             follows the global default while a project is <em>unset</em>.
           </li>
         </ul>
-      </section>
+      </InfoPanelSection>
 
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Wifi size={15} aria-hidden className="text-primary" />
-          Local APIs
-        </h2>
+      <InfoPanelSection title="Local APIs" icon={Wifi}>
         <p className="text-xs leading-relaxed text-muted">
           Overmind talks to local services (Ollama, Qdrant) on your machine. If a provider is
           unreachable, the system status chip in the topbar shows Degraded and semantic search is
           disabled automatically.
         </p>
-      </section>
+      </InfoPanelSection>
 
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <BookOpen size={15} aria-hidden className="text-primary" />
-          Need Help?
-        </h2>
+      <InfoPanelSection title="Need Help?" icon={BookOpen}>
         <p className="text-xs leading-relaxed text-muted">
           Check the project documentation for setup guides and troubleshooting.
         </p>
-      </section>
+      </InfoPanelSection>
     </div>
   );
 }

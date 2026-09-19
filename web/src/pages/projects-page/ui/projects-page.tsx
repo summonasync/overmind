@@ -7,7 +7,7 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
-import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
+import { useInfoPanel } from "@/widgets/app-shell";
 import {
   ProjectDetail,
   ProjectForm,

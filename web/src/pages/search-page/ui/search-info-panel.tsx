@@ -1,6 +1,5 @@
-"use client";
-
 import { ArrowRight, Lightbulb } from "lucide-react";
+import { InfoPanelSection } from "@/widgets/app-shell";
 
 const TIPS = [
   "Use specific keywords (e.g. \"agent memory\").",
@@ -12,11 +11,7 @@ const TIPS = [
 export function SearchInfoPanel() {
   return (
     <div className="space-y-6">
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Lightbulb size={15} aria-hidden className="text-primary" />
-          Search Tips
-        </h2>
+      <InfoPanelSection title="Search Tips" icon={Lightbulb}>
         <ul className="space-y-1.5">
           {TIPS.map((tip) => (
             <li key={tip} className="flex items-start gap-1.5 text-xs leading-relaxed text-muted">
@@ -25,7 +20,7 @@ export function SearchInfoPanel() {
             </li>
           ))}
         </ul>
-      </section>
+      </InfoPanelSection>
     </div>
   );
 }

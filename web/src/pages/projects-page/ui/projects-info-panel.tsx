@@ -1,6 +1,7 @@
 "use client";
 
-import { Folder, Clock } from "lucide-react";
+import { Clock, Folder } from "lucide-react";
+import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
 import { useProjectList } from "@/features/projects";
 
 export function ProjectsInfoPanel() {
@@ -10,34 +11,23 @@ export function ProjectsInfoPanel() {
     return null;
   }
 
-  const recent = [...projects].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+  const recent = [...projects]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Folder size={15} aria-hidden className="text-primary" />
-          Project Overview
-        </h2>
+      <InfoPanelSection title="Project Overview" icon={Folder}>
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-border bg-surface p-3">
-            <p className="text-2xl font-semibold text-foreground">{projects.length}</p>
-            <p className="text-xs text-muted">Total Projects</p>
-          </div>
-          <div className="rounded-lg border border-border bg-surface p-3">
-            <p className="text-2xl font-semibold text-foreground">
-              {projects.filter((project) => project.description.trim().length > 0).length}
-            </p>
-            <p className="text-xs text-muted">With Description</p>
-          </div>
+          <InfoPanelStat value={projects.length} label="Total Projects" />
+          <InfoPanelStat
+            value={projects.filter((project) => project.description.trim().length > 0).length}
+            label="With Description"
+          />
         </div>
-      </section>
+      </InfoPanelSection>
 
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Clock size={15} aria-hidden className="text-primary" />
-          Recent Projects
-        </h2>
+      <InfoPanelSection title="Recent Projects" icon={Clock}>
         {recent.length === 0 ? (
           <p className="text-xs text-muted">No projects yet.</p>
         ) : (
@@ -55,7 +45,7 @@ export function ProjectsInfoPanel() {
             ))}
           </ul>
         )}
-      </section>
+      </InfoPanelSection>
     </div>
   );
 }

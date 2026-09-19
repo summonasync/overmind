@@ -75,7 +75,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
 
   const setTab = (next: PlanningTab) => {
     setTabState(next);
-    window.history.replaceState(null, "", `/planning?project=${projectId}&feature=${slug}&tab=${next}`);
+    window.history.replaceState(null, "", `/dashboard?project=${projectId}&feature=${slug}&tab=${next}`);
   };
 
   if (loading) {
@@ -90,10 +90,10 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
           description="Feature workspace"
           actions={
             <a
-              href={`/planning?project=${projectId}`}
+              href={`/dashboard?project=${projectId}`}
               className={cn("text-xs text-muted underline-offset-2 hover:text-foreground hover:underline", focusRing)}
             >
-              ← Planning board
+              ← Dashboard
             </a>
           }
         />
@@ -102,7 +102,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
     );
   }
 
-  const boardHref = `/planning?project=${projectId}`;
+  const boardHref = `/dashboard?project=${projectId}`;
   const documentKind = documentModal ?? (tab === "tasks" ? null : tab);
   const documentArtifact =
     documentKind !== null
@@ -129,7 +129,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
               href={boardHref}
               className={cn("text-xs text-muted underline-offset-2 hover:text-foreground hover:underline", focusRing)}
             >
-              ← Planning board
+              ← Dashboard
             </a>
             <Select
               aria-label="Feature status"

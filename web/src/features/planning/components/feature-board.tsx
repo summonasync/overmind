@@ -63,7 +63,7 @@ export function FeatureBoard({
           >
             <div className="flex items-start justify-between gap-2">
               <a
-                href={`/planning?project=${projectId}&feature=${item.slug}`}
+                href={`/dashboard?project=${projectId}&feature=${item.slug}`}
                 className="group min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary">

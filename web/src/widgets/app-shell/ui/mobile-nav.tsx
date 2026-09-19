@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { FileText, Folder, ListChecks, Package, Search, Settings, type LucideIcon } from "lucide-react";
+import { Folder, Package, Search, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
 
 interface NavItem {
@@ -12,8 +12,6 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
-  { href: "/entries", label: "Entries", icon: FileText },
-  { href: "/planning", label: "Planning", icon: ListChecks },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },
   { href: "/settings", label: "Settings", icon: Settings },

@@ -10,6 +10,8 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { EntryEditor, EntryFilters, EntryList, useEntryList, useEntryMutations } from "@/features/entries";
 import type { EntryFormValues, EntryListFilters, EntryResponse } from "@/features/entries";
 import { useProjectList } from "@/features/projects";
+import { useInfoPanel } from "@/widgets/app-shell";
+import { EntriesInfoPanel } from "@/pages/entries-page/ui/entries-info-panel";
 
 function EntriesPageContent() {
   const searchParams = useSearchParams();
@@ -21,6 +23,8 @@ function EntriesPageContent() {
   const [filters, setFilters] = useState<EntryListFilters>({ type: "", tag: "" });
   const { data: entries, loading, error } = useEntryList(projectId, filters);
   const { create, update, remove } = useEntryMutations(projectId);
+
+  useInfoPanel(projectId ? <EntriesInfoPanel entries={entries} loading={loading} /> : null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EntryResponse | null>(null);

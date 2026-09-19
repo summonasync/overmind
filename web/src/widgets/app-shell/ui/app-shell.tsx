@@ -7,6 +7,7 @@ import { AppSidebar } from "@/widgets/app-shell/ui/app-sidebar";
 import { AppTopbar } from "@/widgets/app-shell/ui/app-topbar";
 import { MobileNav } from "@/widgets/app-shell/ui/mobile-nav";
 import { InfoPanel } from "@/widgets/app-shell/ui/info-panel";
+import { ProjectTabs } from "@/widgets/app-shell/ui/project-tabs";
 import { DegradedBanner } from "@/widgets/degraded-banner/ui/degraded-banner";
 
 const COLLAPSED_STORAGE_KEY = "overmind.info-panel.collapsed";
@@ -42,6 +43,7 @@ export function AppShell({ children }: AppShellProps) {
           <AppTopbar />
           <MobileNav />
           <DegradedBanner />
+          <ProjectTabs />
           <div className="flex flex-1">
             <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
             <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />

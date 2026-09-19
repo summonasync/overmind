@@ -10,7 +10,7 @@ import { Input } from "@/shared/ui/input";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { Select } from "@/shared/ui/select";
-import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
+import { useInfoPanel } from "@/widgets/app-shell";
 import { useHealth } from "@/features/health";
 import { useProjectList } from "@/features/projects";
 import { useSearch } from "@/features/search";

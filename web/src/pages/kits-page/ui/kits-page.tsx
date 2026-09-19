@@ -8,7 +8,7 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { browseFolder } from "@/shared/api/system";
-import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
+import { useInfoPanel } from "@/widgets/app-shell";
 import { KitDetailPanel } from "@/widgets/kit-workspace/ui/kit-detail-panel";
 import { KitForm, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
 import type { KitFormValues, KitResponse } from "@/features/kits";

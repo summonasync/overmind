@@ -6,7 +6,7 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { Zerling } from "@/shared/ui/zerling";
 import { ReindexButton, SettingsForm, useSettings, useSettingsMutations } from "@/features/settings";
 import type { ReindexReport } from "@/features/settings";
-import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
+import { useInfoPanel } from "@/widgets/app-shell";
 import { useState } from "react";
 import { SettingsHelpPanel } from "@/pages/settings-page/ui/settings-help-panel";
 

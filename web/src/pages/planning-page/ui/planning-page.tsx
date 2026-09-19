@@ -7,7 +7,7 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
-import { useInfoPanel } from "@/widgets/app-shell/lib/info-panel-context";
+import { useInfoPanel } from "@/widgets/app-shell";
 import {
   BoardFilterBar,
   DriftPanel,
@@ -48,7 +48,7 @@ function PlanningPageContent() {
     editing?.slug ?? "",
   );
 
-  useInfoPanel(<PlanningInfoPanel projectId={projectId} />);
+  useInfoPanel(projectId ? <PlanningInfoPanel projectId={projectId} /> : null);
 
   const activeError =
     (createFeature.error as Error | null) ??
@@ -85,7 +85,7 @@ function PlanningPageContent() {
   if (!projectId) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Planning" description={PLANNING_DESCRIPTION} />
+        <PageHeader title="Dashboard" description={PLANNING_DESCRIPTION} />
         <p className="text-sm text-muted">
           Select a project first.{" "}
           <a href="/" className="text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
@@ -110,7 +110,7 @@ function PlanningPageContent() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={project ? `Planning — ${project.name}` : "Planning"}
+        title={project ? `Dashboard — ${project.name}` : "Dashboard"}
         description={PLANNING_DESCRIPTION}
         actions={
           <>
