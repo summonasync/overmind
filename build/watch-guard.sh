@@ -66,7 +66,7 @@ inotify_watches() {
     for fd in /proc/$pid/fd/*; do
         target=$(readlink "$fd" 2>/dev/null || true)
         [[ $target == anon_inode:inotify ]] || continue
-        count=$(grep -c '^inotify' "/proc/$pid/fdinfo/${fd##*/}" 2>/dev/null || echo 0)
+        count=$(grep -c '^inotify' "/proc/$pid/fdinfo/${fd##*/}" 2>/dev/null) || count=0
         total=$((total + count))
     done
     echo "$total"
