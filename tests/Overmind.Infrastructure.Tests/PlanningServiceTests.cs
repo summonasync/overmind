@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using Overmind.Core;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
@@ -42,7 +43,11 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     private PlanningFeatureService CreateFeatureService() =>
-        new(_context, _materializer, NullLogger<PlanningFeatureService>.Instance);
+        new(
+            _context,
+            _materializer,
+            new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+            NullLogger<PlanningFeatureService>.Instance);
 
     private PlanningArtifactService CreateArtifactService() =>
         new(_context, _materializer, NullLogger<PlanningArtifactService>.Instance);

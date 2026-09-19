@@ -15,6 +15,33 @@ internal static class BacklogNaming
 
     public static string TaskFileName(int order, string taskSlug) => $"{order:D2}-{taskSlug}.md";
 
+    public static string? StripTitlePrefix(string? heading, string kind, string number)
+    {
+        if (heading is null)
+        {
+            return null;
+        }
+
+        var emDashPrefix = $"{kind} {number} — ";
+        var colonPrefix = $"{kind} {number}: ";
+        var title = heading.Trim();
+        while (true)
+        {
+            if (title.StartsWith(emDashPrefix, StringComparison.Ordinal))
+            {
+                title = title[emDashPrefix.Length..].Trim();
+            }
+            else if (title.StartsWith(colonPrefix, StringComparison.Ordinal))
+            {
+                title = title[colonPrefix.Length..].Trim();
+            }
+            else
+            {
+                return title;
+            }
+        }
+    }
+
     public static bool TryParseTaskOrder(string fileName, out int order, out char suffix)
     {
         order = 0;

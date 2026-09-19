@@ -11,15 +11,18 @@ public sealed partial class PlanningFeatureService
 {
     private readonly OvermindDbContext _db;
     private readonly IPlanningMaterializer _materializer;
+    private readonly BacklogImportSeeder _seeder;
     private readonly ILogger<PlanningFeatureService> _logger;
 
     public PlanningFeatureService(
         OvermindDbContext db,
         IPlanningMaterializer materializer,
+        BacklogImportSeeder seeder,
         ILogger<PlanningFeatureService> logger)
     {
         _db = db;
         _materializer = materializer;
+        _seeder = seeder;
         _logger = logger;
     }
 
@@ -219,7 +222,8 @@ public sealed partial class PlanningFeatureService
             {
                 var restored = PlanningArtifact.Restore(
                     feature.Id, artifact.Kind, artifact.Status, artifact.Review, artifact.Body,
-                    artifact.Order, artifact.FrozenAt, version: 1, artifact.CreatedAt, artifact.CreatedAt);
+                    artifact.Order, artifact.FrozenAt, version: 1, artifact.CreatedAt, artifact.CreatedAt,
+                    preservedFrontmatter: PreservedFrontmatterJson.Serialize(artifact.Preserved));
                 _db.PlanningArtifacts.Add(restored);
                 if (artifact.Kind == PlanningArtifactKind.Task)
                 {
@@ -263,7 +267,15 @@ public sealed partial class PlanningFeatureService
                 }
             }
 
-            if (bodyChanged || reviewChanged || statusChanged)
+            var preservedJson = PreservedFrontmatterJson.Serialize(artifact.Preserved);
+            var preservedChanged = !string.Equals(
+                existing.PreservedFrontmatter, preservedJson, StringComparison.Ordinal);
+            if (preservedChanged)
+            {
+                existing.SetPreservedFrontmatter(preservedJson);
+            }
+
+            if (bodyChanged || reviewChanged || statusChanged || preservedChanged)
             {
                 artifactsUpdated++;
             }
@@ -276,6 +288,8 @@ public sealed partial class PlanningFeatureService
             kept.Add($"kept: {orphan.Kind.ToString().ToLowerInvariant()} {orphan.Order} not present on disk");
         }
 
+        var seed = await _seeder.SeedAsync(projectId, feature.Id, import.SourcePaths, ct);
+
         try
         {
             await _db.SaveChangesAsync(ct);
@@ -287,7 +301,8 @@ public sealed partial class PlanningFeatureService
         }
 
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
-        return new BacklogFeatureImportResult(featureCreated, artifactsCreated, artifactsUpdated, kept);
+        return new BacklogFeatureImportResult(
+            featureCreated, artifactsCreated, artifactsUpdated, kept, seed.Tracked, seed.Strategy);
     }
 
     private static string ContentKey(string body) =>

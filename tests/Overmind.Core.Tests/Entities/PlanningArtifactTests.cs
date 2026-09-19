@@ -256,6 +256,55 @@ public class PlanningArtifactTests
     }
 
     [Fact]
+    public void Restore_WithPreservedFrontmatter_SetsPreservedFrontmatter()
+    {
+        var artifact = PlanningArtifact.Restore(
+            Guid.NewGuid(),
+            PlanningArtifactKind.Task,
+            PlanningArtifactStatus.Todo,
+            PlanningReviewLevel.Light,
+            "body",
+            1,
+            null,
+            1,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            preservedFrontmatter: "{\"depends_on\":\"02-other\"}");
+
+        artifact.PreservedFrontmatter.ShouldBe("{\"depends_on\":\"02-other\"}");
+    }
+
+    [Fact]
+    public void Restore_WithoutPreservedFrontmatter_DefaultsToNull()
+    {
+        var artifact = PlanningArtifact.Restore(
+            Guid.NewGuid(),
+            PlanningArtifactKind.Task,
+            PlanningArtifactStatus.Todo,
+            PlanningReviewLevel.Light,
+            "body",
+            1,
+            null,
+            1,
+            DateTime.UtcNow,
+            DateTime.UtcNow);
+
+        artifact.PreservedFrontmatter.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetPreservedFrontmatter_ReplacesValueAndClearsWithNull()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+
+        artifact.SetPreservedFrontmatter("{\"risk\":\"low\"}");
+        artifact.PreservedFrontmatter.ShouldBe("{\"risk\":\"low\"}");
+
+        artifact.SetPreservedFrontmatter(null);
+        artifact.PreservedFrontmatter.ShouldBeNull();
+    }
+
+    [Fact]
     public void Restore_InvalidStatus_Throws()
     {
         Should.Throw<ArgumentOutOfRangeException>(() =>

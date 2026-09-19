@@ -4,11 +4,26 @@ namespace Overmind.Infrastructure.Planning;
 
 public sealed class BacklogImporter
 {
-    private readonly PlanningFeatureService _features;
+    private static readonly HashSet<string> StructuralKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "status",
+        "review",
+        "version",
+        "created",
+        "feature",
+        "task",
+        "slug",
+        "validated"
+    };
 
-    public BacklogImporter(PlanningFeatureService features)
+    private readonly PlanningFeatureService _features;
+    private readonly FrontmatterKeyRegistry _keys;
+    private readonly Dictionary<string, FrontmatterKeyRegistration> _keyCache = new(StringComparer.Ordinal);
+
+    public BacklogImporter(PlanningFeatureService features, FrontmatterKeyRegistry keys)
     {
         _features = features;
+        _keys = keys;
     }
 
     public static string? ResolveBacklogDirectory(string path)
@@ -47,11 +62,13 @@ public sealed class BacklogImporter
                 $"'{request.BacklogPath}' is neither a repository root containing a BACKLOG folder nor a BACKLOG folder itself.");
 
         var repoRoot = Path.GetFullPath(Path.GetDirectoryName(backlogDir)!);
-        var skipped = new List<string>();
+        var notes = new BacklogImportNotes();
         var featuresCreated = 0;
         var featuresUpdated = 0;
         var artifactsCreated = 0;
         var artifactsUpdated = 0;
+        var trackedFiles = 0;
+        PlanningMaterialization? strategy = null;
 
         foreach (var folder in Directory.EnumerateDirectories(backlogDir).OrderBy(p => p, StringComparer.Ordinal))
         {
@@ -59,19 +76,19 @@ public sealed class BacklogImporter
             var relative = Rel(repoRoot, folder);
             if (folderName == "_TEMPLATE")
             {
-                skipped.Add($"skipped: {relative} (_TEMPLATE)");
+                notes.Skipped.Add($"skipped: {relative} (_TEMPLATE)");
                 continue;
             }
 
             if (!File.Exists(Path.Combine(folder, "feature.md")))
             {
-                skipped.Add($"skipped: {relative} (no feature.md)");
+                notes.Skipped.Add($"skipped: {relative} (no feature.md)");
                 continue;
             }
 
             try
             {
-                var import = await ParseFeatureFolderAsync(folder, folderName, repoRoot, skipped, ct);
+                var import = await ParseFeatureFolderAsync(folder, folderName, repoRoot, notes, ct);
                 if (import is null)
                 {
                     continue;
@@ -89,7 +106,9 @@ public sealed class BacklogImporter
 
                 artifactsCreated += outcome.ArtifactsCreated;
                 artifactsUpdated += outcome.ArtifactsUpdated;
-                skipped.AddRange(outcome.Kept);
+                trackedFiles += outcome.TrackedFiles;
+                strategy = outcome.Materialization;
+                notes.Skipped.AddRange(outcome.Kept);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -99,23 +118,26 @@ public sealed class BacklogImporter
 
         foreach (var file in Directory.EnumerateFiles(backlogDir).OrderBy(p => p, StringComparer.Ordinal))
         {
-            skipped.Add($"ignored: {Rel(repoRoot, file)}");
+            notes.Skipped.Add($"ignored: {Rel(repoRoot, file)}");
         }
 
-        return new BacklogImportReport(featuresCreated, featuresUpdated, artifactsCreated, artifactsUpdated, skipped);
+        return new BacklogImportReport(
+            featuresCreated, featuresUpdated, artifactsCreated, artifactsUpdated,
+            notes.Skipped, notes.NewKeys, notes.Preserved, notes.CreatedFallbacks, ResolveNextStep(strategy, trackedFiles));
     }
 
-    private static async Task<BacklogFeatureImport?> ParseFeatureFolderAsync(
-        string folder, string folderName, string repoRoot, List<string> skipped, CancellationToken ct)
+    private async Task<BacklogFeatureImport?> ParseFeatureFolderAsync(
+        string folder, string folderName, string repoRoot, BacklogImportNotes notes, CancellationToken ct)
     {
         var featurePath = Path.Combine(folder, "feature.md");
-        var featureContent = await TryReadAsync(featurePath, Rel(repoRoot, featurePath), skipped, ct);
+        var featureContent = await TryReadAsync(featurePath, Rel(repoRoot, featurePath), notes, ct);
         if (featureContent is null)
         {
             return null;
         }
 
         var artifacts = new List<BacklogArtifactImport>();
+        var sourcePaths = new List<string> { featurePath };
 
         foreach (var name in new[] { "spec.md", "plan.md", "result.md" })
         {
@@ -131,10 +153,11 @@ public sealed class BacklogImporter
                 "plan.md" => PlanningArtifactKind.Plan,
                 _ => PlanningArtifactKind.Result,
             };
-            var artifact = await TryParseDocumentAsync(path, kind, repoRoot, skipped, ct);
+            var artifact = await TryParseDocumentAsync(path, kind, repoRoot, notes, ct);
             if (artifact is not null)
             {
                 artifacts.Add(artifact);
+                sourcePaths.Add(path);
             }
         }
 
@@ -146,15 +169,34 @@ public sealed class BacklogImporter
             {
                 if (!BacklogNaming.TryParseTaskOrder(Path.GetFileName(file), out var order, out var suffix))
                 {
-                    skipped.Add($"skipped: {Rel(repoRoot, file)} (task filename has no NN- order prefix)");
+                    notes.Skipped.Add($"skipped: {Rel(repoRoot, file)} (task filename has no NN- order prefix)");
                     continue;
                 }
 
                 taskFiles.Add((file, order, suffix));
             }
 
-            var usedOrders = taskFiles.Where(t => t.Suffix == '\0').Select(t => t.Order).ToHashSet();
+            var plainWinners = new Dictionary<int, string>();
+            var dedupedTaskFiles = new List<(string Path, int Order, char Suffix)>();
             foreach (var (path, order, suffix) in taskFiles)
+            {
+                if (suffix == '\0')
+                {
+                    if (plainWinners.TryGetValue(order, out var winner))
+                    {
+                        notes.Skipped.Add(
+                            $"skipped: {Rel(repoRoot, path)} (duplicate order {order:D2}; {winner} imported first)");
+                        continue;
+                    }
+
+                    plainWinners.Add(order, Path.GetFileName(path));
+                }
+
+                dedupedTaskFiles.Add((path, order, suffix));
+            }
+
+            var usedOrders = dedupedTaskFiles.Where(t => t.Suffix == '\0').Select(t => t.Order).ToHashSet();
+            foreach (var (path, order, suffix) in dedupedTaskFiles)
             {
                 int? reassignedFrom = null;
                 var assigned = order;
@@ -169,10 +211,11 @@ public sealed class BacklogImporter
                     usedOrders.Add(assigned);
                 }
 
-                var task = await TryParseTaskAsync(path, assigned, reassignedFrom, repoRoot, skipped, ct);
+                var task = await TryParseTaskAsync(path, assigned, reassignedFrom, repoRoot, notes, ct);
                 if (task is not null)
                 {
                     artifacts.Add(task);
+                    sourcePaths.Add(path);
                 }
             }
         }
@@ -182,28 +225,47 @@ public sealed class BacklogImporter
             var entryName = Path.GetFileName(entry);
             if (entryName is not ("feature.md" or "spec.md" or "plan.md" or "result.md" or "tasks"))
             {
-                skipped.Add($"ignored: {Rel(repoRoot, entry)}");
+                notes.Skipped.Add($"ignored: {Rel(repoRoot, entry)}");
             }
         }
 
         var (fields, featureBody) = BacklogMarkdown.Parse(featureContent);
+        var featureRelative = Rel(repoRoot, featurePath);
         var title = ResolveTitle(BacklogMarkdown.FirstHeading(featureBody), folderName);
+        await ExtractPreservedAsync(fields, featureRelative, notes, ct);
 
         return new BacklogFeatureImport(
             folderName,
             title,
             BacklogMarkdown.StripLeadingHeadings(featureBody),
-            MapFeatureStatus(Token(fields, "status"), Rel(repoRoot, featurePath), skipped),
+            MapFeatureStatus(Token(fields, "status"), featureRelative, notes.Skipped),
             int.TryParse(Token(fields, "version"), out var version) && version > 0 ? version : 1,
-            ResolveCreatedAt(fields),
-            artifacts);
+            ResolveCreatedAt(fields, featurePath, featureRelative, notes),
+            artifacts,
+            sourcePaths);
     }
 
-    private static async Task<BacklogArtifactImport?> TryParseDocumentAsync(
-        string path, PlanningArtifactKind kind, string repoRoot, List<string> skipped, CancellationToken ct)
+    private static string? ResolveNextStep(PlanningMaterialization? strategy, int trackedFiles)
+    {
+        if (strategy is null)
+        {
+            return null;
+        }
+
+        return strategy.Value switch
+        {
+            PlanningMaterialization.On when trackedFiles > 0 => $"{trackedFiles} files tracked, materialize is a no-op",
+            PlanningMaterialization.On => null,
+            var value => $"materialization is '{value.ToString().ToLowerInvariant()}'; " +
+                "set planning materialization to 'on' to write imported features to the repo",
+        };
+    }
+
+    private async Task<BacklogArtifactImport?> TryParseDocumentAsync(
+        string path, PlanningArtifactKind kind, string repoRoot, BacklogImportNotes notes, CancellationToken ct)
     {
         var relative = Rel(repoRoot, path);
-        var content = await TryReadAsync(path, relative, skipped, ct);
+        var content = await TryReadAsync(path, relative, notes, ct);
         if (content is null)
         {
             return null;
@@ -213,14 +275,15 @@ public sealed class BacklogImporter
         body = BacklogMarkdown.StripLeadingHeadings(body);
         if (string.IsNullOrWhiteSpace(body))
         {
-            skipped.Add($"skipped: {relative} (empty body)");
+            notes.Skipped.Add($"skipped: {relative} (empty body)");
             return null;
         }
 
-        var status = MapDocumentStatus(Token(fields, "status"), relative, skipped);
+        var status = MapDocumentStatus(Token(fields, "status"), relative, notes.Skipped);
         var frozenAt = status == PlanningArtifactStatus.Validated
             ? BacklogMarkdown.ParseDate(Raw(fields, "validated")) ?? BacklogMarkdown.ParseDate(Raw(fields, "created"))
             : null;
+        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct);
 
         return new BacklogArtifactImport(
             kind,
@@ -229,15 +292,16 @@ public sealed class BacklogImporter
             PlanningReviewLevel.Light,
             body,
             frozenAt?.ToDateTime(TimeOnly.MinValue),
-            ResolveCreatedAt(fields),
-            relative);
+            ResolveCreatedAt(fields, path, relative, notes),
+            relative,
+            Preserved: preserved);
     }
 
-    private static async Task<BacklogArtifactImport?> TryParseTaskAsync(
-        string path, int order, int? reassignedFrom, string repoRoot, List<string> skipped, CancellationToken ct)
+    private async Task<BacklogArtifactImport?> TryParseTaskAsync(
+        string path, int order, int? reassignedFrom, string repoRoot, BacklogImportNotes notes, CancellationToken ct)
     {
         var relative = Rel(repoRoot, path);
-        var content = await TryReadAsync(path, relative, skipped, ct);
+        var content = await TryReadAsync(path, relative, notes, ct);
         if (content is null)
         {
             return null;
@@ -247,24 +311,27 @@ public sealed class BacklogImporter
         body = BacklogMarkdown.CollapseLeadingHeadings(body);
         if (string.IsNullOrWhiteSpace(body))
         {
-            skipped.Add($"skipped: {relative} (empty body)");
+            notes.Skipped.Add($"skipped: {relative} (empty body)");
             return null;
         }
+
+        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct);
 
         return new BacklogArtifactImport(
             PlanningArtifactKind.Task,
             order,
-            MapTaskStatus(Token(fields, "status"), relative, skipped),
-            MapReview(Token(fields, "review"), relative, skipped),
+            MapTaskStatus(Token(fields, "status"), relative, notes.Skipped),
+            MapReview(Token(fields, "review"), relative, notes.Skipped),
             body,
             null,
-            ResolveCreatedAt(fields),
+            ResolveCreatedAt(fields, path, relative, notes),
             relative,
-            reassignedFrom);
+            reassignedFrom,
+            preserved);
     }
 
     private static async Task<string?> TryReadAsync(
-        string path, string relative, List<string> skipped, CancellationToken ct)
+        string path, string relative, BacklogImportNotes notes, CancellationToken ct)
     {
         try
         {
@@ -272,18 +339,56 @@ public sealed class BacklogImporter
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            skipped.Add($"skipped: {relative} (unreadable: {ex.Message})");
+            notes.Skipped.Add($"skipped: {relative} (unreadable: {ex.Message})");
             return null;
         }
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>?> ExtractPreservedAsync(
+        IReadOnlyDictionary<string, string> fields, string relative, BacklogImportNotes notes, CancellationToken ct)
+    {
+        Dictionary<string, string>? preserved = null;
+        foreach (var (key, value) in fields)
+        {
+            if (StructuralKeys.Contains(key))
+            {
+                continue;
+            }
+
+            preserved ??= new Dictionary<string, string>(StringComparer.Ordinal);
+            preserved[key] = value;
+
+            var registration = await ResolveKeyAsync(key, ct);
+            if (registration.IsNew)
+            {
+                notes.NewKey(key, registration.Color);
+            }
+        }
+
+        if (preserved is not null)
+        {
+            notes.PreservedKeys(relative, preserved.Keys);
+        }
+
+        return preserved;
+    }
+
+    private async Task<FrontmatterKeyRegistration> ResolveKeyAsync(string name, CancellationToken ct)
+    {
+        var normalized = name.Trim().ToLowerInvariant();
+        if (!_keyCache.TryGetValue(normalized, out var registration))
+        {
+            registration = await _keys.GetOrRegisterAsync(normalized, ct);
+            _keyCache[normalized] = registration;
+        }
+
+        return registration;
     }
 
     private static string ResolveTitle(string? heading, string folderName)
     {
         var (featurePart, _) = BacklogNaming.SplitSlug(folderName);
-        var prefix = $"Feature {featurePart} — ";
-        var title = heading is not null && heading.StartsWith(prefix, StringComparison.Ordinal)
-            ? heading[prefix.Length..].Trim()
-            : heading;
+        var title = BacklogNaming.StripTitlePrefix(heading, "Feature", featurePart);
         return string.IsNullOrWhiteSpace(title) ? folderName : title;
     }
 
@@ -381,8 +486,19 @@ public sealed class BacklogImporter
     private static string? Raw(IReadOnlyDictionary<string, string> fields, string key) =>
         fields.TryGetValue(key, out var value) ? value : null;
 
-    private static DateTime ResolveCreatedAt(IReadOnlyDictionary<string, string> fields) =>
-        BacklogMarkdown.ParseDate(Raw(fields, "created"))?.ToDateTime(TimeOnly.MinValue) ?? DateTime.UtcNow;
+    private static DateTime ResolveCreatedAt(
+        IReadOnlyDictionary<string, string> fields, string path, string relative, BacklogImportNotes notes)
+    {
+        var created = BacklogMarkdown.ParseDate(Raw(fields, "created"));
+        if (created.HasValue)
+        {
+            return created.Value.ToDateTime(TimeOnly.MinValue);
+        }
+
+        var modifiedAt = File.GetLastWriteTimeUtc(path);
+        notes.CreatedFallback(relative, modifiedAt);
+        return modifiedAt;
+    }
 
     private static string Rel(string root, string path) => Path.GetRelativePath(root, path);
 }

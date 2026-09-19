@@ -13,6 +13,11 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    if (BacklogImportCli.IsRequested(args))
+    {
+        return await BacklogImportCli.RunAsync(args, CancellationToken.None);
+    }
+
     Directory.CreateDirectory(OvermindPaths.DataDirectory);
 
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -145,6 +150,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapPlanningWorkflowApi();
     app.MapPlanningMaterializationApi();
     app.MapAgentPlanningApi();
+    app.MapFrontmatterKeysApi();
 
     await using (var scope = app.Services.CreateAsyncScope())
     {

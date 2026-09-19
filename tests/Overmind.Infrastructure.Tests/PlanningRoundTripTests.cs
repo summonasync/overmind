@@ -153,7 +153,13 @@ public sealed class PlanningRoundTripTests : IDisposable
     }
 
     private BacklogImporter CreateImporter(OvermindDbContext ctx) =>
-        new(new PlanningFeatureService(ctx, CreateMaterializer(ctx), NullLogger<PlanningFeatureService>.Instance));
+        new(
+            new PlanningFeatureService(
+                ctx,
+                CreateMaterializer(ctx),
+                new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
+                NullLogger<PlanningFeatureService>.Instance),
+            new FrontmatterKeyRegistry(ctx, NullLogger<FrontmatterKeyRegistry>.Instance));
 
     private PlanningMaterializer CreateMaterializer(OvermindDbContext ctx) =>
         new(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)), _dataDir);

@@ -36,6 +36,7 @@ public sealed class PlanningArtifact
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
+    public string? PreservedFrontmatter { get; private set; }
 
     public List<PlanningArtifactVersion> Versions { get; private set; } = [];
 
@@ -84,7 +85,8 @@ public sealed class PlanningArtifact
         DateTime? frozenAt,
         int version,
         DateTime createdAt,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        string? preservedFrontmatter = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
 
@@ -116,7 +118,8 @@ public sealed class PlanningArtifact
             FrozenAt = frozenAt,
             Version = version,
             CreatedAt = createdAt,
-            UpdatedAt = updatedAt
+            UpdatedAt = updatedAt,
+            PreservedFrontmatter = preservedFrontmatter
         };
     }
 
@@ -203,6 +206,12 @@ public sealed class PlanningArtifact
     public void SetReview(PlanningReviewLevel review)
     {
         Review = review;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetPreservedFrontmatter(string? preservedFrontmatter)
+    {
+        PreservedFrontmatter = preservedFrontmatter;
         UpdatedAt = DateTime.UtcNow;
     }
 }

@@ -5,4 +5,8 @@ public sealed record BacklogImportReport(
     int FeaturesUpdated,
     int ArtifactsCreated,
     int ArtifactsUpdated,
-    IReadOnlyList<string> Skipped);
+    IReadOnlyList<string> Skipped,
+    IReadOnlyList<BacklogImportNewKey> NewKeys,
+    IReadOnlyList<string> Preserved,
+    IReadOnlyList<string> CreatedFallbacks,
+    string? NextStep);

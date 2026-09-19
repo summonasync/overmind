@@ -38,17 +38,9 @@ internal static class BacklogImportCommand
             var importer = services.GetRequiredService<BacklogImporter>();
             var report = await importer.ImportAsync(new BacklogImportRequest(backlogPath, project.Id), ct);
 
-            Log.Information(
-                "Imported planning from {Path}: {Features} features ({NewFeatures} new), {Artifacts} artifacts, {Skipped} skipped",
-                backlogPath,
-                report.FeaturesCreated + report.FeaturesUpdated,
-                report.FeaturesCreated,
-                report.ArtifactsCreated + report.ArtifactsUpdated,
-                report.Skipped.Count);
-
-            foreach (var skipped in report.Skipped)
+            foreach (var line in BacklogImportReportText.Lines(report, backlogPath))
             {
-                Log.Information("{Skipped}", skipped);
+                Log.Information("{Line}", line);
             }
         }
         catch (OperationCanceledException)
@@ -64,6 +56,18 @@ internal static class BacklogImportCommand
     private static async Task<Project?> ResolveProjectAsync(
         OvermindDbContext db, string repoRoot, string? selector, CancellationToken ct)
     {
+        var (project, error) = await ResolveProjectResultAsync(db, repoRoot, selector, ct);
+        if (error is not null)
+        {
+            Log.Error("{ImportError}", error);
+        }
+
+        return project;
+    }
+
+    internal static async Task<(Project? Project, string? Error)> ResolveProjectResultAsync(
+        OvermindDbContext db, string repoRoot, string? selector, CancellationToken ct)
+    {
         if (selector is not null)
         {
             if (Guid.TryParse(selector, out var id))
@@ -71,25 +75,21 @@ internal static class BacklogImportCommand
                 var byId = await db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
                 if (byId is not null)
                 {
-                    return byId;
+                    return (byId, null);
                 }
 
-                Log.Error("--import-backlog: no registered project has id {ProjectId}", id);
-                return null;
+                return (null, $"--import-backlog: no registered project has id {id}");
             }
 
             var byName = await db.Projects.Where(p => p.Name == selector).ToListAsync(ct);
             if (byName.Count == 1)
             {
-                return byName[0];
+                return (byName[0], null);
             }
 
-            Log.Error(
-                "--import-backlog: project selector '{Selector}' matched {Count} projects ({Candidates})",
-                selector,
-                byName.Count,
-                string.Join(", ", byName.Select(p => p.Name)));
-            return null;
+            return (
+                null,
+                $"--import-backlog: project selector '{selector}' matched {byName.Count} projects ({string.Join(", ", byName.Select(p => p.Name))})");
         }
 
         var matches = (await db.Projects.ToListAsync(ct))
@@ -98,18 +98,15 @@ internal static class BacklogImportCommand
 
         if (matches.Count == 1)
         {
-            return matches[0];
+            return (matches[0], null);
         }
 
-        Log.Error(
-            "--import-backlog: expected exactly one project with disk path {RepoRoot}, found {Count} ({Candidates})",
-            repoRoot,
-            matches.Count,
-            string.Join(", ", matches.Select(p => p.Name)));
-        return null;
+        return (
+            null,
+            $"--import-backlog: expected exactly one project with disk path {repoRoot}, found {matches.Count} ({string.Join(", ", matches.Select(p => p.Name))})");
     }
 
-    private static string? FlagValue(string[] args, string flag)
+    internal static string? FlagValue(string[] args, string flag)
     {
         for (var i = 0; i < args.Length - 1; i++)
         {

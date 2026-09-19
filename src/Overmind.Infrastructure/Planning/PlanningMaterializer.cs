@@ -43,7 +43,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             .ToListAsync(ct);
 
         var warnings = new List<string>();
-        var plans = BuildPlans(root, features);
+        var plans = BuildPlans(root, features, rows);
         var otherRoot = OtherRoot(project, strategy);
 
         if (strategy == PlanningMaterialization.On)
@@ -245,7 +245,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         }
     }
 
-    private static List<FilePlan> BuildPlans(string root, List<PlanningFeature> features)
+    private static List<FilePlan> BuildPlans(
+        string root, List<PlanningFeature> features, List<PlanningMaterializedFile> rows)
     {
         var plans = new List<FilePlan>();
 
@@ -270,15 +271,17 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                          .Where(a => a.Kind == PlanningArtifactKind.Task)
                          .OrderBy(a => a.Order))
             {
-                var heading = FirstHeading(task.Body);
-                var taskSlug = heading is null
-                    ? $"task-{task.Order:D2}"
-                    : Slug.From(heading, $"task-{task.Order:D2}");
-                plans.Add(FilePlan.Create(
-                    root,
-                    feature.Id,
-                    $"{directory}/tasks/{BacklogNaming.TaskFileName(task.Order, taskSlug)}",
-                    TaskDocument(task, featurePart, slugPart)));
+                var relative = PinnedTaskPath(rows, feature.Id, directory, task.Order);
+                if (relative is null)
+                {
+                    var heading = FirstHeading(task.Body);
+                    var taskSlug = heading is null
+                        ? $"task-{task.Order:D2}"
+                        : Slug.From(heading, $"task-{task.Order:D2}");
+                    relative = $"{directory}/tasks/{BacklogNaming.TaskFileName(task.Order, taskSlug)}";
+                }
+
+                plans.Add(FilePlan.Create(root, feature.Id, relative, TaskDocument(task, featurePart, slugPart)));
             }
         }
 
@@ -291,6 +294,18 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         }
 
         return plans;
+    }
+
+    private static string? PinnedTaskPath(
+        List<PlanningMaterializedFile> rows, Guid featureId, string directory, int order)
+    {
+        var prefix = $"{directory}/tasks/{order:D2}-";
+        var row = rows.FirstOrDefault(r =>
+            r.FeatureId == featureId &&
+            r.RelativePath.StartsWith(prefix, StringComparison.Ordinal) &&
+            r.RelativePath.EndsWith(".md", StringComparison.Ordinal));
+
+        return row?.RelativePath;
     }
 
     private FilePlan BuildBacklogPlan(string root, List<PlanningFeature> features)
@@ -445,6 +460,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             builder.Append($"validated: {artifact.FrozenAt:yyyy-MM-dd}\n");
         }
 
+        AppendPreservedFrontmatter(builder, artifact.PreservedFrontmatter);
         builder.Append("---\n\n");
         builder.Append($"# {artifact.Kind} {featurePart} — {featureTitle}\n\n");
         builder.Append(BacklogMarkdown.StripLeadingHeadings(artifact.Body));
@@ -461,9 +477,24 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"status: {task.Status.ToString().ToLowerInvariant()}\n");
         builder.Append($"review: {task.Review.ToString().ToLowerInvariant()}\n");
         builder.Append($"created: {task.CreatedAt:yyyy-MM-dd}\n");
+        AppendPreservedFrontmatter(builder, task.PreservedFrontmatter);
         builder.Append("---\n\n");
         builder.Append(BacklogMarkdown.CollapseLeadingHeadings(task.Body));
         return builder.ToString();
+    }
+
+    private static void AppendPreservedFrontmatter(StringBuilder builder, string? preservedJson)
+    {
+        var preserved = PreservedFrontmatterJson.Deserialize(preservedJson);
+        if (preserved is null)
+        {
+            return;
+        }
+
+        foreach (var key in preserved.Keys.OrderBy(key => key, StringComparer.Ordinal))
+        {
+            builder.Append($"{key}: {preserved[key]}\n");
+        }
     }
 
     private static string FeatureStatus(PlanningFeatureStatus status) => status switch

@@ -9,4 +9,5 @@ public sealed record BacklogFeatureImport(
     PlanningFeatureStatus Status,
     int Version,
     DateTime CreatedAt,
-    IReadOnlyList<BacklogArtifactImport> Artifacts);
+    IReadOnlyList<BacklogArtifactImport> Artifacts,
+    IReadOnlyList<string> SourcePaths);

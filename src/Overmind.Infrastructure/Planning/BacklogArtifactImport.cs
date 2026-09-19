@@ -11,4 +11,5 @@ public sealed record BacklogArtifactImport(
     DateTime? FrozenAt,
     DateTime CreatedAt,
     string SourcePath,
-    int? ReassignedFrom = null);
+    int? ReassignedFrom = null,
+    IReadOnlyDictionary<string, string>? Preserved = null);

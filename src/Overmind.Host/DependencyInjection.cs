@@ -21,17 +21,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddOvermind(this IServiceCollection services)
     {
-        services.AddDbContext<OvermindDbContext>((provider, options) =>
-        {
-            var configuration = provider.GetRequiredService<IConfiguration>();
-            var databasePath = configuration["Overmind:DatabasePath"] ?? OvermindPaths.DatabasePath;
-            Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-            options.UseSqlite($"Data Source={databasePath};Pooling=false");
-        });
+        services.AddBacklogImportPipeline();
 
         services.AddScoped<FtsSearchService>();
 
-        services.AddScoped<AppSettingsService>();
         services.AddScoped<EmbeddingProviderFactory>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());
@@ -51,14 +44,7 @@ public static class DependencyInjection
             provider.GetRequiredService<ILogger<BundledSeedService>>(),
             OvermindPaths.BundledDirectory));
 
-        services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningArtifactService>();
-        services.AddScoped<BacklogImporter>();
-        services.AddScoped<PlanningPolicy>();
-        services.AddScoped<IPlanningMaterializer>(provider => new PlanningMaterializer(
-            provider.GetRequiredService<OvermindDbContext>(),
-            provider.GetRequiredService<PlanningPolicy>(),
-            OvermindPaths.DataDirectory));
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();
@@ -77,6 +63,30 @@ public static class DependencyInjection
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
+
+        return services;
+    }
+
+    public static IServiceCollection AddBacklogImportPipeline(this IServiceCollection services)
+    {
+        services.AddDbContext<OvermindDbContext>((provider, options) =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            var databasePath = configuration["Overmind:DatabasePath"] ?? OvermindPaths.DatabasePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+            options.UseSqlite($"Data Source={databasePath};Pooling=false");
+        });
+
+        services.AddScoped<AppSettingsService>();
+        services.AddScoped<PlanningPolicy>();
+        services.AddScoped<IPlanningMaterializer>(provider => new PlanningMaterializer(
+            provider.GetRequiredService<OvermindDbContext>(),
+            provider.GetRequiredService<PlanningPolicy>(),
+            OvermindPaths.DataDirectory));
+        services.AddScoped<PlanningFeatureService>();
+        services.AddScoped<FrontmatterKeyRegistry>();
+        services.AddScoped<BacklogImportSeeder>();
+        services.AddScoped<BacklogImporter>();
 
         return services;
     }

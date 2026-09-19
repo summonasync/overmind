@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Overmind.Core;
 using Overmind.Host;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Serilog;
@@ -53,7 +54,7 @@ public sealed class BacklogImportCommandTests : IDisposable
             new[]
             {
                 $"Imported planning from {_repo.Root}: 2 features (2 new), 2 artifacts, {report.Skipped.Count} skipped",
-            }.Concat(report.Skipped).ToArray());
+            }.Concat(report.Skipped).Append(report.NextStep!).ToArray());
     }
 
     [Fact]
@@ -82,7 +83,48 @@ public sealed class BacklogImportCommandTests : IDisposable
 
             events.ShouldAllBe(e => e.Level == LogEventLevel.Information);
             Rendered(events).ShouldBe(
-                [$"Imported planning from {repo.Root}: 1 features (1 new), 0 artifacts, 0 skipped"]);
+                new[]
+                {
+                    $"Imported planning from {repo.Root}: 1 features (1 new), 0 artifacts, 0 skipped",
+                    "materialization is 'off'; set planning materialization to 'on' to write imported features to the repo",
+                });
+        }
+        finally
+        {
+            DeleteDatabaseFiles(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task Import_LogsNewKeysPreservedAndCreatedFallbacks()
+    {
+        using var repo = new TempRepo();
+        var featurePath = repo.Write("010-keys/feature.md",
+            """
+            ---
+            feature: 010
+            slug: keys
+            status: ready
+            version: 1
+            qa-owner: alice
+            ---
+
+            # Feature 010 — Keys
+
+            Keys body.
+            """);
+        File.SetLastWriteTimeUtc(featurePath, new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc));
+        var (dbPath, _) = SeedDatabase(repo.Root);
+
+        try
+        {
+            var events = await RunCommandAsync(dbPath, repo.Root);
+
+            var color = FrontmatterKeyPalette.ColorFor("qa-owner");
+            Rendered(events).ShouldContain($"new key: qa-owner ({color})");
+            Rendered(events).ShouldContain("preserved: BACKLOG/010-keys/feature.md (qa-owner)");
+            Rendered(events).ShouldContain(
+                "created: BACKLOG/010-keys/feature.md (no created token; fell back to file mtime 2026-09-10)");
         }
         finally
         {
@@ -240,7 +282,12 @@ public sealed class BacklogImportCommandTests : IDisposable
             .AddDbContext<OvermindDbContext>(options => options.UseSqlite($"Data Source={dbPath};Pooling=false"))
             .AddSingleton<IPlanningMaterializer>(NoOpMaterializer.Instance)
             .AddSingleton<ILogger<PlanningFeatureService>>(NullLogger<PlanningFeatureService>.Instance)
+            .AddSingleton<ILogger<FrontmatterKeyRegistry>>(NullLogger<FrontmatterKeyRegistry>.Instance)
+            .AddScoped<AppSettingsService>()
+            .AddScoped<FrontmatterKeyRegistry>()
+            .AddScoped<PlanningPolicy>()
             .AddScoped<PlanningFeatureService>()
+            .AddScoped<BacklogImportSeeder>()
             .AddScoped<BacklogImporter>()
             .BuildServiceProvider();
 
@@ -290,11 +337,12 @@ public sealed class BacklogImportCommandTests : IDisposable
             Directory.CreateDirectory(BacklogDir);
         }
 
-        public void Write(string relativePath, string content)
+        public string Write(string relativePath, string content)
         {
             var path = Path.Combine(BacklogDir, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, content);
+            return path;
         }
 
         public void Dispose()

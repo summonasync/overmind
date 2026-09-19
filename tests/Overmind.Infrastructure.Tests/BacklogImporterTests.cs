@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
@@ -39,7 +40,13 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     private BacklogImporter CreateImporter() =>
-        new(new PlanningFeatureService(_context, _materializer, NullLogger<PlanningFeatureService>.Instance));
+        new(
+            new PlanningFeatureService(
+                _context,
+                _materializer,
+                new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+                NullLogger<PlanningFeatureService>.Instance),
+            new FrontmatterKeyRegistry(_context, NullLogger<FrontmatterKeyRegistry>.Instance));
 
     private Task<BacklogImportReport> ImportAsync(string path) =>
         CreateImporter().ImportAsync(new BacklogImportRequest(path, _projectId), CancellationToken.None);
@@ -942,7 +949,11 @@ public sealed class BacklogImporterTests : IDisposable
     [Fact]
     public async Task Import_ArtifactOnlyInDatabase_KeptAndReported()
     {
-        var featureService = new PlanningFeatureService(_context, _materializer, NullLogger<PlanningFeatureService>.Instance);
+        var featureService = new PlanningFeatureService(
+            _context,
+            _materializer,
+            new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+            NullLogger<PlanningFeatureService>.Instance);
         var artifactService = new PlanningArtifactService(_context, _materializer, NullLogger<PlanningArtifactService>.Instance);
         var created = await featureService.CreateAsync(_projectId, "010-demo", "Old title", "old body");
         await artifactService.UpsertAsync(
@@ -983,6 +994,402 @@ public sealed class BacklogImporterTests : IDisposable
         {
             Directory.Delete(emptyRoot);
         }
+    }
+
+    [Fact]
+    public async Task Import_FeatureHeadingColonSeparator_TitleStripped()
+    {
+        _repo.Write("020-colon/feature.md",
+            """
+            ---
+            feature: 020
+            slug: colon
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 020: Colon title
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.FeaturesCreated.ShouldBe(1);
+
+        var feature = await LoadFeatureAsync("020-colon");
+        feature.ShouldNotBeNull();
+        feature.Title.ShouldBe("Colon title");
+    }
+
+    [Fact]
+    public async Task Import_FeatureHeadingNestedPrefixes_TitleFullyStripped()
+    {
+        _repo.Write("022-nested/feature.md",
+            """
+            ---
+            feature: 022
+            slug: nested
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 022 — Feature 022: Nested title
+            """);
+
+        await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("022-nested");
+        feature.ShouldNotBeNull();
+        feature.Title.ShouldBe("Nested title");
+    }
+
+    [Fact]
+    public async Task Import_DuplicateTaskOrder_FirstAlphabeticalImportsLoserSkippedAndReported()
+    {
+        _repo.Write("019-dup/feature.md",
+            """
+            ---
+            feature: 019
+            slug: dup
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 019 — Dup
+            """);
+        _repo.Write("019-dup/tasks/01-a.md",
+            """
+            ---
+            feature: 019
+            task: 01
+            slug: dup
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Alpha task
+            """);
+        _repo.Write("019-dup/tasks/01-b.md",
+            """
+            ---
+            feature: 019
+            task: 01
+            slug: dup
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Beta task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.ArtifactsCreated.ShouldBe(1);
+        report.Skipped.ShouldContain(
+            s => s.Contains("01-b.md") && s.Contains("duplicate order 01") && s.Contains("01-a.md"));
+
+        var feature = await LoadFeatureAsync("019-dup");
+        feature.ShouldNotBeNull();
+        var tasks = feature.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).ToList();
+        tasks.Count.ShouldBe(1);
+        tasks.Single().Body.ShouldContain("Alpha task");
+    }
+
+    [Fact]
+    public async Task Import_MissingCreatedToken_FallsBackToFileMtimeAndReports()
+    {
+        _repo.Write("023-mtime/feature.md",
+            """
+            ---
+            feature: 023
+            slug: mtime
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 023 — Mtime
+            """);
+        _repo.Write("023-mtime/tasks/01-dated.md",
+            """
+            ---
+            feature: 023
+            task: 01
+            slug: mtime
+            status: todo
+            review: light
+            ---
+
+            # Dated task
+            """);
+
+        var modifiedAt = new DateTime(2026, 8, 15, 12, 30, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(Path.Combine(_repo.BacklogDir, "023-mtime/tasks/01-dated.md"), modifiedAt);
+
+        var report = await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("023-mtime");
+        feature.ShouldNotBeNull();
+        var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        task.CreatedAt.ShouldBe(modifiedAt);
+
+        var relative = Path.Combine("BACKLOG", "023-mtime", "tasks", "01-dated.md");
+        report.CreatedFallbacks.ShouldContain(
+            entry => entry.Contains(relative) && entry.Contains("file mtime"));
+        report.CreatedFallbacks.ShouldNotContain(entry => entry.Contains("feature.md"));
+    }
+
+    [Fact]
+    public async Task Import_ExplicitCreatedToken_DoesNotReportCreatedFallback()
+    {
+        WriteFullFeature();
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.CreatedFallbacks.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Import_UnknownFrontmatterKeys_PreservedOnArtifactAndListedPerFile()
+    {
+        _repo.Write("024-keys/feature.md",
+            """
+            ---
+            feature: 024
+            slug: keys
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 024 — Keys
+            """);
+        _repo.Write("024-keys/tasks/01-key.md",
+            """
+            ---
+            feature: 024
+            task: 01
+            slug: keys
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 02-other
+            risk_level: high
+            ---
+
+            # Key task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("024-keys");
+        feature.ShouldNotBeNull();
+        var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        task.PreservedFrontmatter.ShouldBe("{\"depends_on\":\"02-other\",\"risk_level\":\"high\"}");
+        var preserved = PreservedFrontmatterJson.Deserialize(task.PreservedFrontmatter)!;
+        preserved["depends_on"].ShouldBe("02-other");
+        preserved["risk_level"].ShouldBe("high");
+
+        var relative = Path.Combine("BACKLOG", "024-keys", "tasks", "01-key.md");
+        report.Preserved.ShouldContain(
+            entry => entry.Contains(relative)
+                && entry.Contains("depends_on")
+                && entry.Contains("risk_level"));
+        report.Skipped.ShouldNotContain(entry => entry.Contains("depends_on") || entry.Contains("risk_level"));
+    }
+
+    [Fact]
+    public async Task Import_UnknownFrontmatterKeys_RegisteredWithColorAndNewKeysInReport()
+    {
+        _repo.Write("025-reg/feature.md",
+            """
+            ---
+            feature: 025
+            slug: reg
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 025 — Reg
+            """);
+        _repo.Write("025-reg/tasks/01-reg.md",
+            """
+            ---
+            feature: 025
+            task: 01
+            slug: reg
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 02-other
+            risk_level: high
+            ---
+
+            # Reg task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        var seeded = await _context.FrontmatterKeys.SingleAsync(k => k.Name == "depends_on");
+        seeded.Color.ShouldBe("#fb923c");
+
+        var registered = await _context.FrontmatterKeys.SingleAsync(k => k.Name == "risk_level");
+        registered.Color.ShouldBe(FrontmatterKeyPalette.ColorFor("risk_level"));
+
+        report.NewKeys.ShouldContain(
+            key => key.Name == "risk_level" && key.Color == registered.Color);
+        report.NewKeys.ShouldNotContain(key => key.Name == "depends_on");
+    }
+
+    [Fact]
+    public async Task Import_StructuralKeysOnly_PreservedFrontmatterStaysNull()
+    {
+        WriteFullFeature();
+
+        await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("010-demo");
+        feature.ShouldNotBeNull();
+        feature.Artifacts.ShouldAllBe(a => a.PreservedFrontmatter == null);
+    }
+
+    [Fact]
+    public async Task Import_ReRunWithSameUnknownKeys_PreservedStableAndNoNewKeys()
+    {
+        WriteUnknownKeyFeature();
+        await ImportAsync(_repo.Root);
+
+        var second = await ImportAsync(_repo.Root);
+
+        second.ArtifactsUpdated.ShouldBe(0);
+        second.NewKeys.ShouldBeEmpty();
+
+        var feature = await LoadFeatureAsync("026-stable");
+        feature.ShouldNotBeNull();
+        var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        task.Version.ShouldBe(1);
+        task.PreservedFrontmatter.ShouldBe("{\"risk_level\":\"low\"}");
+    }
+
+    [Fact]
+    public async Task Import_ChangedUnknownKeyValue_UpdatesPreservedColumnWithoutBodyChange()
+    {
+        WriteUnknownKeyFeature();
+        await ImportAsync(_repo.Root);
+
+        _repo.Write("026-stable/tasks/01-stable.md",
+            """
+            ---
+            feature: 026
+            task: 01
+            slug: stable
+            status: todo
+            review: light
+            created: 2026-09-01
+            risk_level: high
+            ---
+
+            # Stable task
+            """);
+
+        var second = await ImportAsync(_repo.Root);
+
+        second.ArtifactsUpdated.ShouldBe(1);
+
+        var feature = await LoadFeatureAsync("026-stable");
+        feature.ShouldNotBeNull();
+        var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        task.Version.ShouldBe(1);
+        task.PreservedFrontmatter.ShouldBe("{\"risk_level\":\"high\"}");
+    }
+
+    [Fact]
+    public async Task Import_NoFrontmatterKeySilentlyDropped_ReportListsEveryUnknownKey()
+    {
+        _repo.Write("027-complete/feature.md",
+            """
+            ---
+            feature: 027
+            slug: complete
+            status: draft
+            version: 1
+            created: 2026-09-01
+            audience: internal
+            ---
+
+            # Feature 027 — Complete
+            """);
+        _repo.Write("027-complete/spec.md",
+            """
+            ---
+            feature: 027
+            slug: complete
+            status: draft
+            created: 2026-09-01
+            phase: 2
+            decision: Use SQLite
+            ---
+
+            # Spec 027 — Complete
+
+            Spec body.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("027-complete");
+        feature.ShouldNotBeNull();
+        var spec = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Spec);
+        var preserved = PreservedFrontmatterJson.Deserialize(spec.PreservedFrontmatter)!;
+        preserved["phase"].ShouldBe("2");
+        preserved["decision"].ShouldBe("Use SQLite");
+
+        var unknownKeys = new[] { "audience", "phase", "decision" };
+        foreach (var key in unknownKeys)
+        {
+            report.Preserved.ShouldContain(entry => entry.Contains(key));
+        }
+
+        var registered = await _context.FrontmatterKeys
+            .Where(k => unknownKeys.Contains(k.Name))
+            .Select(k => k.Name)
+            .ToListAsync();
+        registered.ShouldBe(unknownKeys, ignoreOrder: true);
+    }
+
+    private void WriteUnknownKeyFeature()
+    {
+        _repo.Write("026-stable/feature.md",
+            """
+            ---
+            feature: 026
+            slug: stable
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 026 — Stable
+            """);
+        _repo.Write("026-stable/tasks/01-stable.md",
+            """
+            ---
+            feature: 026
+            task: 01
+            slug: stable
+            status: todo
+            review: light
+            created: 2026-09-01
+            risk_level: low
+            ---
+
+            # Stable task
+            """);
     }
 
     private void WriteFullFeature()

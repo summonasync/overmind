@@ -616,6 +616,91 @@ public sealed class PlanningMaterializerTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Sync_TaskTitleRename_KeepsPinnedFilenameAndCleanDrift()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var task = await ctx.PlanningArtifacts.SingleAsync(a =>
+            a.Kind == PlanningArtifactKind.Task && a.Order == 1);
+        task.UpdateBody("# Renamed Task\n\n<goal>\nDo it.\n</goal>");
+        await ctx.SaveChangesAsync();
+
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var tasksDir = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks");
+        File.Exists(Path.Combine(tasksDir, "01-first-task.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(tasksDir, "01-renamed-task.md")).ShouldBeFalse();
+        Directory.GetFiles(tasksDir).Length.ShouldBe(2);
+        (await File.ReadAllTextAsync(Path.Combine(tasksDir, "01-first-task.md"))).ShouldContain("# Renamed Task");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_CyrillicTaskTitleRename_KeepsPinnedFilenameAndCleanDrift()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+
+        using var seedCtx = _db.CreateContext();
+        var feature = PlanningFeature.Create(projectId, "006-demo", "Demo Feature", "<goal>\nShip it.\n</goal>");
+        seedCtx.PlanningFeatures.Add(feature);
+        seedCtx.PlanningArtifacts.Add(PlanningArtifact.Create(
+            feature.Id, PlanningArtifactKind.Task, "# Первая задача\n\n<goal>\nDo it.\n</goal>", 1));
+        await seedCtx.SaveChangesAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var tasksDir = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks");
+        var pinnedPath = Path.Combine(tasksDir, "01-первая-задача.md");
+        File.Exists(pinnedPath).ShouldBeTrue();
+
+        var task = await ctx.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
+        task.UpdateBody("# Вторая задача\n\n<goal>\nDo it.\n</goal>");
+        await ctx.SaveChangesAsync();
+
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        File.Exists(pinnedPath).ShouldBeTrue();
+        File.Exists(Path.Combine(tasksDir, "01-вторая-задача.md")).ShouldBeFalse();
+        Directory.GetFiles(tasksDir).Length.ShouldBe(1);
+        (await File.ReadAllTextAsync(pinnedPath)).ShouldContain("# Вторая задача");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_PreservedFrontmatter_EmittedSortedOrdinalAfterStructuralKeys()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+
+        using var seedCtx = _db.CreateContext();
+        var feature = PlanningFeature.Create(projectId, "006-demo", "Demo Feature", "<goal>\nShip it.\n</goal>");
+        seedCtx.PlanningFeatures.Add(feature);
+        var task = PlanningArtifact.Create(
+            feature.Id, PlanningArtifactKind.Task, "# First Task\n\n<goal>\nDo it.\n</goal>", 1);
+        task.SetPreservedFrontmatter("{\"risk_level\":\"high\",\"depends_on\":\"02-other\"}");
+        seedCtx.PlanningArtifacts.Add(task);
+        await seedCtx.SaveChangesAsync();
+
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var doc = await File.ReadAllTextAsync(
+            Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md"));
+        doc.ShouldContain(
+            $"created: {DateTime.UtcNow:yyyy-MM-dd}\n" +
+            "depends_on: 02-other\n" +
+            "risk_level: high\n" +
+            "---\n\n" +
+            "# First Task");
+    }
+
     private static int CountHeadings(string content) =>
         content.Split('\n').Count(line => line.StartsWith("# ", StringComparison.Ordinal));
 

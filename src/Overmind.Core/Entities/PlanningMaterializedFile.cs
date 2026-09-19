@@ -40,4 +40,14 @@ public sealed class PlanningMaterializedFile
         Sha256 = sha256.Trim();
         MaterializedAt = DateTime.UtcNow;
     }
+
+    public void AssignFeature(Guid featureId)
+    {
+        if (FeatureId.HasValue)
+        {
+            return;
+        }
+
+        FeatureId = featureId;
+    }
 }

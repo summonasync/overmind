@@ -109,6 +109,34 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("EntryVersions");
                 });
 
+            modelBuilder.Entity("Overmind.Core.FrontmatterKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("FrontmatterKeys");
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningArtifact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -133,6 +161,9 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<int>("Order")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("PreservedFrontmatter")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Review")
                         .HasColumnType("INTEGER");
