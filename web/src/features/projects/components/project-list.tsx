@@ -29,7 +29,7 @@ export function ProjectList({ projects, onEdit, onDelete }: ProjectListProps) {
             <div className="flex items-center gap-2">
               <Folder size={16} aria-hidden className="shrink-0 text-primary" />
               <a
-                href={`/entries?project=${project.id}`}
+                href={`/dashboard?project=${project.id}`}
                 className="truncate text-sm font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 {project.name}

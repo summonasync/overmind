@@ -21,10 +21,10 @@ export function ProjectDetail({ project }: { project: ProjectResponse }) {
       </p>
       <div>
         <a
-          href={`/entries?project=${project.id}`}
+          href={`/dashboard?project=${project.id}`}
           className="text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
-          Open entries →
+          Open dashboard →
         </a>
       </div>
     </div>

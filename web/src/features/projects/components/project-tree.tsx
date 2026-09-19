@@ -63,7 +63,7 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
     );
   };
 
-  const treeActiveProjectId = pathname === "/entries" ? activeProjectId : null;
+  const treeActiveProjectId = pathname === "/entries" || pathname === "/dashboard" ? activeProjectId : null;
 
   const handleAddRoot = async () => {
     setAddError(null);
@@ -241,7 +241,7 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
     return (
       <div style={{ paddingLeft: depth * 12 }} className="flex items-center">
         <a
-          href={`/entries?project=${entry.projectId}`}
+          href={`/dashboard?project=${entry.projectId}`}
           title={entry.path}
           aria-current={active ? "page" : undefined}
           onClick={() => saveLastActiveProjectId(entry.projectId)}

@@ -111,9 +111,17 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
         });
 
         app.UseRouting();
+        var staticFileOptions = new StaticFileOptions { FileProvider = webFileProvider };
+        staticFileOptions.OnPrepareResponse = context =>
+        {
+            if (context.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Context.Response.Headers.CacheControl = "no-cache";
+            }
+        };
         app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = webFileProvider });
-        app.UseStaticFiles(new StaticFileOptions { FileProvider = webFileProvider });
-        app.MapFallbackToFile("index.html", new StaticFileOptions { FileProvider = webFileProvider });
+        app.UseStaticFiles(staticFileOptions);
+        app.MapFallbackToFile("index.html", staticFileOptions);
         Log.Information("Serving web UI from {WebRoot}", webRoot);
     }
     else
