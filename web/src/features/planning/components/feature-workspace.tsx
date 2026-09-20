@@ -121,60 +121,62 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={feature.title}
-        description={`${feature.slug} · updated ${formatRelativeTime(feature.updatedAt)}`}
-        actions={
-          <>
-            <a
-              href={boardHref}
-              className={cn("text-xs text-muted underline-offset-2 hover:text-foreground hover:underline", focusRing)}
-            >
-              ← Dashboard
-            </a>
-            <Select
-              aria-label="Feature status"
-              value={feature.status}
-              disabled={feature.status === "done"}
-              onChange={(event) =>
-                updateFeature.mutate({
-                  slug,
-                  values: { status: event.target.value as PlanningFeatureStatus },
-                })
-              }
-            >
-              {featureStatusOptions(feature.status).map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </Select>
-            <Badge>v{feature.version}</Badge>
-            <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setEditOpen(true)}>
-              <Pencil size={12} aria-hidden />
-              Edit
-            </Button>
-            <Button
-              variant="ghost"
-              className="px-2.5 py-1 text-xs text-danger hover:bg-danger/10 hover:text-danger"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 size={12} aria-hidden />
-              Delete
-            </Button>
-          </>
-        }
-      />
+      <header className="space-y-3">
+        <a
+          href={boardHref}
+          className={cn("text-xs text-muted underline-offset-2 hover:text-foreground hover:underline", focusRing)}
+        >
+          ← Dashboard
+        </a>
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">{feature.title}</h1>
+          <p className="mt-1 text-sm text-muted">
+            {feature.slug} · updated {formatRelativeTime(feature.updatedAt)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            aria-label="Feature status"
+            value={feature.status}
+            disabled={feature.status === "done"}
+            onChange={(event) =>
+              updateFeature.mutate({
+                slug,
+                values: { status: event.target.value as PlanningFeatureStatus },
+              })
+            }
+          >
+            {featureStatusOptions(feature.status).map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </Select>
+          <Badge>v{feature.version}</Badge>
+          <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setEditOpen(true)}>
+            <Pencil size={12} aria-hidden />
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            className="px-2.5 py-1 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 size={12} aria-hidden />
+            Delete
+          </Button>
+        </div>
+      </header>
 
       <ErrorText error={updateFeature.error as Error | null} />
+
+      <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
 
       {feature.body.trim().length > 0 ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <Markdown content={feature.body} />
         </div>
       ) : null}
-
-      <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
 
       <div className="flex flex-wrap items-end gap-1 border-b border-border" role="tablist" aria-label="Feature artifacts">
         {PLANNING_TABS.map((candidate) => {

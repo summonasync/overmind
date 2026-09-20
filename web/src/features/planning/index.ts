@@ -40,6 +40,9 @@ export type {
   PlanningBoardFilters,
 } from "./lib/board-filters";
 export { useBoardFilters } from "./lib/use-board-filters";
+export { extractOpenQuestions } from "./lib/open-questions";
+export { formatBacklogAge, formatRelativeTime } from "./lib/relative-time";
+export { artifactStatusTone, featureStatusTone } from "./lib/status-tone";
 export {
   HUMAN_VALIDATION_OVERRIDES,
   PLANNING_FEATURE_STATUSES,

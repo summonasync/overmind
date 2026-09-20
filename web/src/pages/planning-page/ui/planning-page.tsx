@@ -48,7 +48,9 @@ function PlanningPageContent() {
     editing?.slug ?? "",
   );
 
-  useInfoPanel(projectId ? <PlanningInfoPanel projectId={projectId} /> : null);
+  useInfoPanel(
+    projectId ? <PlanningInfoPanel projectId={projectId} featureSlug={featureSlug} /> : null,
+  );
 
   const activeError =
     (createFeature.error as Error | null) ??

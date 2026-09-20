@@ -3,13 +3,19 @@
 import { ListChecks } from "lucide-react";
 import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
 import { PLANNING_FEATURE_STATUSES, usePlanningBoard } from "@/features/planning";
+import { FeatureOverviewPanel } from "@/pages/planning-page/ui/feature-overview-panel";
 
 interface PlanningInfoPanelProps {
   projectId: string;
+  featureSlug: string;
 }
 
-export function PlanningInfoPanel({ projectId }: PlanningInfoPanelProps) {
+export function PlanningInfoPanel({ projectId, featureSlug }: PlanningInfoPanelProps) {
   const { data: features, loading } = usePlanningBoard(projectId);
+
+  if (featureSlug) {
+    return <FeatureOverviewPanel projectId={projectId} slug={featureSlug} />;
+  }
 
   if (loading) {
     return null;

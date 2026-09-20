@@ -23,3 +23,18 @@ export function formatRelativeTime(iso: string): string {
   }
   return new Date(timestamp).toLocaleDateString();
 }
+
+export function formatBacklogAge(iso: string): string {
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp)) {
+    return "";
+  }
+  const seconds = Math.max(0, (Date.now() - timestamp) / 1000);
+  if (seconds < HOUR) {
+    return `${Math.max(1, Math.round(seconds / MINUTE))}m`;
+  }
+  if (seconds < DAY) {
+    return `${Math.floor(seconds / HOUR)}h`;
+  }
+  return `${Math.floor(seconds / DAY)}d`;
+}
