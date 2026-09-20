@@ -1,0 +1,9 @@
+namespace Overmind.Core;
+
+public enum FeaturePriority
+{
+    P0 = 0,
+    P1 = 1,
+    P2 = 2,
+    P3 = 3
+}

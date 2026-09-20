@@ -21,6 +21,7 @@ public class PlanningFeatureTests
         feature.Title.ShouldBe("Auth flow");
         feature.Body.ShouldBe("body text");
         feature.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        feature.Priority.ShouldBe(FeaturePriority.P2);
         feature.Version.ShouldBe(1);
         feature.CreatedAt.ShouldBeGreaterThanOrEqualTo(before);
         feature.UpdatedAt.ShouldBe(feature.CreatedAt);
@@ -33,6 +34,27 @@ public class PlanningFeatureTests
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", null!);
 
         feature.Body.ShouldBe(string.Empty);
+    }
+
+    [Fact]
+    public void Create_ExplicitPriority_Stored()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body", FeaturePriority.P1);
+
+        feature.Priority.ShouldBe(FeaturePriority.P1);
+    }
+
+    [Fact]
+    public void SetPriority_ChangesPriorityTouchesUpdatedAtKeepsVersion()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        var before = feature.UpdatedAt;
+
+        feature.SetPriority(FeaturePriority.P0);
+
+        feature.Priority.ShouldBe(FeaturePriority.P0);
+        feature.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
+        feature.Version.ShouldBe(1);
     }
 
     [Theory]
@@ -159,6 +181,7 @@ public class PlanningFeatureTests
         feature.Body.ShouldBe("imported body");
         feature.Status.ShouldBe(PlanningFeatureStatus.Ready);
         feature.IsCurrent.ShouldBeFalse();
+        feature.Priority.ShouldBe(FeaturePriority.P2);
         feature.Version.ShouldBe(3);
         feature.CreatedAt.ShouldBe(createdAt);
         feature.UpdatedAt.ShouldBe(updatedAt);

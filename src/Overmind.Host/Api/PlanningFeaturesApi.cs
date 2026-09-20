@@ -56,9 +56,20 @@ public static class PlanningFeaturesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var priority = FeaturePriority.P2;
+        if (request.Priority is not null)
+        {
+            if (!TryParseEnum(request.Priority, out FeaturePriority parsed))
+            {
+                return InvalidValue(nameof(request.Priority), Enum.GetNames<FeaturePriority>());
+            }
+
+            priority = parsed;
+        }
+
         try
         {
-            await service.CreateAsync(projectId, request.Slug, request.Title, request.Body ?? string.Empty, ct);
+            await service.CreateAsync(projectId, request.Slug, request.Title, request.Body ?? string.Empty, priority, ct);
         }
         catch (PlanningException ex)
         {
@@ -104,9 +115,20 @@ public static class PlanningFeaturesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        FeaturePriority? priority = null;
+        if (request.Priority is not null)
+        {
+            if (!TryParseEnum(request.Priority, out FeaturePriority parsed))
+            {
+                return InvalidValue(nameof(request.Priority), Enum.GetNames<FeaturePriority>());
+            }
+
+            priority = parsed;
+        }
+
         try
         {
-            await service.UpdateAsync(projectId, slug, request.Title, request.Body, request.Status, ct);
+            await service.UpdateAsync(projectId, slug, request.Title, request.Body, request.Status, priority, ct);
         }
         catch (PlanningException ex)
         {
@@ -161,4 +183,15 @@ public static class PlanningFeaturesApi
             .ThenInclude(a => a.Versions)
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
     }
+
+    private static bool TryParseEnum<TEnum>(string value, out TEnum parsed) where TEnum : struct, Enum
+    {
+        return Enum.TryParse(value, ignoreCase: true, out parsed) && Enum.IsDefined(parsed);
+    }
+
+    private static IResult InvalidValue(string field, string[] allowed) =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            [field] = [$"Must be one of: {string.Join(", ", allowed.Select(n => n.ToLowerInvariant()))}."],
+        });
 }

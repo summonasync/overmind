@@ -6,6 +6,7 @@ public sealed record PlanningFeatureBoardItem(
     string Slug,
     string Title,
     PlanningFeatureStatus Status,
+    FeaturePriority Priority,
     int Version,
     PlanningArtifactStatus? SpecStatus,
     PlanningArtifactStatus? PlanStatus,
@@ -14,9 +15,10 @@ public sealed record PlanningFeatureBoardItem(
     DateTime UpdatedAt,
     bool IsCurrent);
 
-public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body);
+public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body, string? Priority = null);
 
-public sealed record UpdatePlanningFeatureRequest(string? Title, string? Body, PlanningFeatureStatus? Status);
+public sealed record UpdatePlanningFeatureRequest(
+    string? Title, string? Body, PlanningFeatureStatus? Status, string? Priority = null);
 
 public sealed record SetPlanningFeatureCurrentRequest(bool IsCurrent);
 
@@ -27,6 +29,7 @@ public sealed record PlanningFeatureResponse(
     string Title,
     string Body,
     PlanningFeatureStatus Status,
+    FeaturePriority Priority,
     int Version,
     DateTime CreatedAt,
     DateTime UpdatedAt,

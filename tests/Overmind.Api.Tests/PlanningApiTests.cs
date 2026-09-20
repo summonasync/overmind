@@ -113,6 +113,57 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateFeature_ExplicitPriority_ReturnedLowercaseOnTheWire()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Slug = "hot-path", Title = "Hot path", Body = "", Priority = "p1" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.ShouldContain("\"priority\":\"p1\"");
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature!.Priority.ShouldBe("p1");
+    }
+
+    [Fact]
+    public async Task CreateFeature_OmittedPriority_DefaultsToP2OnFeatureAndBoard()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "plain", "Plain");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/plain", JsonOptions);
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/projects/{project.Id}/planning/features", JsonOptions);
+
+        feature!.Priority.ShouldBe("p2");
+        board!.Single().Priority.ShouldBe("p2");
+    }
+
+    [Fact]
+    public async Task CreateFeature_UnknownPriority_Returns400NamingAllowedValues()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Slug = "bad-priority", Title = "Title", Body = "", Priority = "urgent" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Priority");
+        problem.Errors["Priority"][0].ShouldContain("p0, p1, p2, p3");
+
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/projects/{project.Id}/planning/features", JsonOptions);
+        board.ShouldNotBeNull();
+        board!.Length.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task GetFeature_UnknownSlug_Returns404()
     {
         var project = await CreateProjectAsync();
@@ -187,6 +238,45 @@ public sealed class PlanningApiTests : IDisposable
         var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
         feature.ShouldNotBeNull();
         feature!.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_PriorityChange_AppliedAndVisibleOnBoard()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Priority = "p0" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.ShouldContain("\"priority\":\"p0\"");
+
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/projects/{project.Id}/planning/features", JsonOptions);
+        board!.Single().Priority.ShouldBe("p0");
+    }
+
+    [Fact]
+    public async Task UpdateFeature_UnknownPriority_Returns400NamingAllowedValues()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Priority = "highest" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Priority");
+        problem.Errors["Priority"][0].ShouldContain("p0, p1, p2, p3");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Priority.ShouldBe("p2");
     }
 
     [Theory]
@@ -845,12 +935,12 @@ public sealed class PlanningApiTests : IDisposable
     public sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
 
     public sealed record BoardItemJson(
-        string Slug, string Title, string Status, int Version,
+        string Slug, string Title, string Status, string Priority, int Version,
         string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt,
         bool IsCurrent);
 
     public sealed record FeatureJson(
-        string Slug, string Title, string Body, string Status,
+        string Slug, string Title, string Body, string Status, string Priority,
         int Version, DateTime CreatedAt, DateTime UpdatedAt, ArtifactJson[] Artifacts);
 
     public sealed record ArtifactJson(
@@ -863,4 +953,6 @@ public sealed class PlanningApiTests : IDisposable
     public sealed record VersionJson(int Version, string Body, DateTime CreatedAt);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
+
+    public sealed record ValidationProblemJson(Dictionary<string, string[]> Errors);
 }

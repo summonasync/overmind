@@ -43,6 +43,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
         tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("brief");
+        tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("priority");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
@@ -62,6 +63,7 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         Canned.ToolResultText(response).ShouldContain("demo-feature");
         Canned.ToolResultText(response).ShouldContain("\"isCurrent\":true");
+        Canned.ToolResultText(response).ShouldContain("\"priority\":\"p1\"");
     }
 
     [Fact]
@@ -128,6 +130,58 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["body"]!.GetValue<string>().ShouldContain("Do the thing.");
 
         Canned.ToolResultText(response).ShouldContain("demo-feature");
+    }
+
+    [Fact]
+    public async Task PlanningCreateFeature_WithPriority_PostsItAndCarriesItBack()
+    {
+        var response = await Driver.CallToolAsync("planning_create_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = "hot-feature",
+            ["title"] = "Hot feature",
+            ["priority"] = "p1"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/planning/features", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["slug"]!.GetValue<string>().ShouldBe("hot-feature");
+        body["priority"]!.GetValue<string>().ShouldBe("p1");
+
+        Canned.ToolResultText(response).ShouldContain("\"priority\":\"p1\"");
+    }
+
+    [Fact]
+    public async Task PlanningCreateFeature_WithoutPriority_OmitsItFromThePostedJson()
+    {
+        await Driver.CallToolAsync("planning_create_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = "plain-feature",
+            ["title"] = "Plain feature"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/planning/features", StringComparison.Ordinal));
+        JsonNode.Parse(request.Body)!.AsObject().ContainsKey("priority").ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("urgent")]
+    [InlineData("p9")]
+    public async Task PlanningCreateFeature_UnknownPriority_RejectedWithoutHttpCall(string priority)
+    {
+        var response = await Driver.CallToolAsync("planning_create_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = "broken-feature",
+            ["title"] = "Broken feature",
+            ["priority"] = priority
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain($"Invalid feature priority '{priority}'");
+        text.ShouldContain("p0, p1, p2, p3");
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path.EndsWith("/planning/features", StringComparison.Ordinal));
     }
 
     [Fact]

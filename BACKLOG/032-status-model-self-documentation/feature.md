@@ -1,8 +1,8 @@
 ---
 feature: 032
 slug: status-model-self-documentation
-status: review
-version: 1
+status: done
+version: 2
 created: 2026-09-20
 ---
 

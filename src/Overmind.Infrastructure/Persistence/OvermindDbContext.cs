@@ -162,6 +162,7 @@ public sealed class OvermindDbContext : DbContext
             builder.HasIndex(f => new { f.ProjectId, f.Slug }).IsUnique();
 
             builder.Property(f => f.IsCurrent).HasDefaultValue(false);
+            builder.Property(f => f.Priority).HasDefaultValue(FeaturePriority.P2).HasSentinel(FeaturePriority.P2);
         });
 
         modelBuilder.Entity<PlanningArtifact>(builder =>

@@ -27,7 +27,8 @@ public sealed partial class PlanningFeatureService
     }
 
     public async Task<PlanningFeature> CreateAsync(
-        Guid projectId, string slug, string title, string body, CancellationToken ct = default)
+        Guid projectId, string slug, string title, string body,
+        FeaturePriority priority = FeaturePriority.P2, CancellationToken ct = default)
     {
         if (!IsValidSlug(slug))
         {
@@ -40,7 +41,7 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.MissingProject(projectId);
         }
 
-        var feature = PlanningFeature.Create(projectId, slug, title, body);
+        var feature = PlanningFeature.Create(projectId, slug, title, body, priority);
         _db.PlanningFeatures.Add(feature);
 
         try
@@ -58,7 +59,7 @@ public sealed partial class PlanningFeatureService
 
     public async Task<PlanningFeature> UpdateAsync(
         Guid projectId, string slug, string? title, string? body,
-        PlanningFeatureStatus? status, CancellationToken ct = default)
+        PlanningFeatureStatus? status, FeaturePriority? priority = null, CancellationToken ct = default)
     {
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);
         if (!projectExists)
@@ -84,6 +85,11 @@ public sealed partial class PlanningFeatureService
             }
 
             feature.SetStatus(status.Value);
+        }
+
+        if (priority is { } target && target != feature.Priority)
+        {
+            feature.SetPriority(target);
         }
 
         await _db.SaveChangesAsync(ct);

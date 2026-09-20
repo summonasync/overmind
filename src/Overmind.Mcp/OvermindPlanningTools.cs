@@ -37,6 +37,11 @@ public sealed class OvermindPlanningTools
         ["inProgress"] = "inProgress"
     };
 
+    private static readonly HashSet<string> FeaturePriorities = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "p0", "p1", "p2", "p3"
+    };
+
     private const string StatusNoteRequired =
         "logNote is required for status moves: every status change is recorded as a dated line in the artifact <log>.";
 
@@ -79,17 +84,32 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_create_feature", Destructive = false, Idempotent = false)]
-    [Description("Creates a new feature on the planning board. Follow with planning_upsert_artifact to write its spec.")]
+    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact to write its spec.")]
     public Task<JsonElement> CreateFeature(
         [Description("Id of the project to create the feature in.")] Guid projectId,
         [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars.")] string slug,
         [Description("Human-readable feature title.")] string title,
         [Description("Optional markdown body of the feature document (goal, requirements, non-goals).")] string? body = null,
-        CancellationToken ct = default) =>
-        Guarded(() => _api.PostAsync(
+        [Description("Optional priority: p0 (critical), p1 (high), p2 (normal — the default when omitted), p3 (low).")] string? priority = null,
+        CancellationToken ct = default)
+    {
+        var payload = new JsonObject
+        {
+            ["slug"] = slug,
+            ["title"] = title,
+            ["body"] = body
+        };
+
+        if (priority is not null)
+        {
+            payload["priority"] = NormalizePriority(priority);
+        }
+
+        return Guarded(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features",
-            new { slug, title, body },
+            payload,
             ct));
+    }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
     [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
@@ -290,6 +310,17 @@ public sealed class OvermindPlanningTools
         if (!ReviewLevels.Contains(trimmed))
         {
             throw new McpException($"Invalid review level '{review}'. Expected one of: light, hard.");
+        }
+
+        return trimmed.ToLowerInvariant();
+    }
+
+    private static string NormalizePriority(string priority)
+    {
+        var trimmed = priority.Trim();
+        if (!FeaturePriorities.Contains(trimmed))
+        {
+            throw new McpException($"Invalid feature priority '{priority}'. Expected one of: p0, p1, p2, p3.");
         }
 
         return trimmed.ToLowerInvariant();

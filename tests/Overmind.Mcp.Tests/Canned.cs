@@ -83,8 +83,8 @@ public static class Canned
     public const string PlanningBoardJson =
         """
         [
-          {"slug":"demo-feature","title":"Demo feature","status":"inProgress","version":4,"specStatus":"validated","planStatus":"draft","taskTotal":2,"taskDone":1,"updatedAt":"2026-09-10T08:00:00Z","isCurrent":true},
-          {"slug":"draft-one","title":"Draft one","status":"draft","version":1,"specStatus":null,"planStatus":null,"taskTotal":0,"taskDone":0,"updatedAt":"2026-09-09T09:00:00Z","isCurrent":false}
+          {"slug":"demo-feature","title":"Demo feature","status":"inProgress","priority":"p1","version":4,"specStatus":"validated","planStatus":"draft","taskTotal":2,"taskDone":1,"updatedAt":"2026-09-10T08:00:00Z","isCurrent":true},
+          {"slug":"draft-one","title":"Draft one","status":"draft","priority":"p2","version":1,"specStatus":null,"planStatus":null,"taskTotal":0,"taskDone":0,"updatedAt":"2026-09-09T09:00:00Z","isCurrent":false}
         ]
         """;
 
@@ -95,6 +95,7 @@ public static class Canned
           "title": "Demo feature",
           "body": "<goal>\nShip the demo.\n</goal>",
           "status": "inProgress",
+          "priority": "p1",
           "version": 4,
           "createdAt": "2026-09-08T10:00:00Z",
           "updatedAt": "2026-09-10T08:00:00Z",

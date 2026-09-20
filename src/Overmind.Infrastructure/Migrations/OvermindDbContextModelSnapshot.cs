@@ -278,6 +278,11 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(false);
 
+                    b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(2);
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT");
 

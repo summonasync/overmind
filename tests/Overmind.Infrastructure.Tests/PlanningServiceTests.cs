@@ -133,6 +133,47 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateFeature_ExplicitPriority_Persisted()
+    {
+        var service = CreateFeatureService();
+        var created = await service.CreateAsync(_projectId, "urgent", "Title", "body", FeaturePriority.P0);
+        await service.CreateAsync(_projectId, "normal", "Title", "body");
+
+        var features = await _context.PlanningFeatures
+            .Where(f => f.ProjectId == _projectId)
+            .ToDictionaryAsync(f => f.Slug, f => f.Priority);
+
+        created.Priority.ShouldBe(FeaturePriority.P0);
+        features["urgent"].ShouldBe(FeaturePriority.P0);
+        features["normal"].ShouldBe(FeaturePriority.P2);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_PriorityChange_AppliedAndPersisted()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var updated = await service.UpdateAsync(_projectId, "feat", null, null, null, FeaturePriority.P1);
+        var reloaded = await _context.PlanningFeatures
+            .SingleAsync(f => f.ProjectId == _projectId && f.Slug == "feat");
+
+        updated.Priority.ShouldBe(FeaturePriority.P1);
+        reloaded.Priority.ShouldBe(FeaturePriority.P1);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_NullPriority_LeavesItUntouched()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "body", FeaturePriority.P3);
+
+        var updated = await service.UpdateAsync(_projectId, "feat", null, null, null, null, default);
+
+        updated.Priority.ShouldBe(FeaturePriority.P3);
+    }
+
+    [Fact]
     public async Task DeleteFeature_ClearsMaterializationBeforeRowsRemoved()
     {
         var service = CreateFeatureService();

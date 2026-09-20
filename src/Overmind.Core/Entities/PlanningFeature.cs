@@ -12,6 +12,7 @@ public sealed class PlanningFeature
     public string Title { get; private set; } = string.Empty;
     public string Body { get; private set; } = string.Empty;
     public PlanningFeatureStatus Status { get; private set; }
+    public FeaturePriority Priority { get; private set; } = FeaturePriority.P2;
     public bool IsCurrent { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -19,7 +20,9 @@ public sealed class PlanningFeature
 
     public List<PlanningArtifact> Artifacts { get; private set; } = [];
 
-    public static PlanningFeature Create(Guid projectId, string slug, string title, string body)
+    public static PlanningFeature Create(
+        Guid projectId, string slug, string title, string body,
+        FeaturePriority priority = FeaturePriority.P2)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -33,6 +36,7 @@ public sealed class PlanningFeature
             Title = title.Trim(),
             Body = body ?? string.Empty,
             Status = PlanningFeatureStatus.Draft,
+            Priority = priority,
             Version = 1,
             CreatedAt = now,
             UpdatedAt = now
@@ -105,6 +109,12 @@ public sealed class PlanningFeature
     public void SetCurrent(bool isCurrent)
     {
         IsCurrent = isCurrent;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetPriority(FeaturePriority priority)
+    {
+        Priority = priority;
         UpdatedAt = DateTime.UtcNow;
     }
 }
