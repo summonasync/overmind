@@ -1,7 +1,7 @@
 ---
 feature: 034
 slug: feature-priorities
-status: draft
+status: inProgress
 version: 1
 created: 2026-09-20
 ---
