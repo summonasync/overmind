@@ -1,7 +1,7 @@
 ---
 feature: 022
 slug: feature-status-dropdown
-status: draft
+status: done
 version: 1
 created: 2026-09-19
 ---

@@ -1,13 +1,22 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
-import { Badge } from "@/shared/ui/badge";
+import { Badge, type BadgeTone } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { ErrorText } from "@/shared/ui/error-text";
+import { updatePlanningFeature } from "@/features/planning/api";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
-import type { PlanningArtifactStatus, PlanningFeatureBoardItem } from "@/features/planning/types";
+import { planningKeys } from "@/features/planning/queries";
+import {
+  PLANNING_FEATURE_STATUSES,
+  type PlanningArtifactStatus,
+  type PlanningFeatureBoardItem,
+  type PlanningFeatureStatus,
+} from "@/features/planning/types";
 
 interface FeatureBoardProps {
   projectId: string;
@@ -26,6 +35,74 @@ function artifactChip(label: string, status: PlanningArtifactStatus | null) {
     <Badge tone={status === "validated" ? "success" : "neutral"}>
       {label} {status}
     </Badge>
+  );
+}
+
+const STATUS_SELECT_TONES: Record<BadgeTone, string> = {
+  neutral: "border-border text-muted",
+  info: "border-info/40 text-info",
+  warning: "border-warning/40 text-warning",
+  success: "border-success/40 text-success",
+  danger: "border-danger/40 text-danger",
+  skill: "border-type-skill/40 text-type-skill",
+};
+
+interface FeatureStatusSelectProps {
+  projectId: string;
+  item: PlanningFeatureBoardItem;
+}
+
+function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
+  const queryClient = useQueryClient();
+  const boardKey = planningKeys.board(projectId);
+
+  const setStatus = useMutation({
+    mutationFn: (status: PlanningFeatureStatus) =>
+      updatePlanningFeature(projectId, item.slug, { status }),
+    onMutate: async (status) => {
+      await queryClient.cancelQueries({ queryKey: boardKey });
+      const snapshot = queryClient.getQueryData<PlanningFeatureBoardItem[]>(boardKey);
+      queryClient.setQueryData<PlanningFeatureBoardItem[]>(boardKey, (board) =>
+        board === undefined
+          ? board
+          : board.map((candidate) =>
+              candidate.slug === item.slug ? { ...candidate, status } : candidate,
+            ),
+      );
+      return { snapshot };
+    },
+    onError: (_error, _status, context) => {
+      if (context?.snapshot !== undefined) {
+        queryClient.setQueryData(boardKey, context.snapshot);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: boardKey });
+      queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, item.slug) });
+    },
+  });
+
+  return (
+    <span className="flex flex-col items-end gap-1">
+      <select
+        aria-label={`Feature status for ${item.title}`}
+        className={cn(
+          "rounded-md border bg-surface px-1.5 py-0.5 text-xs font-medium",
+          "hover:border-border-strong focus-visible:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          STATUS_SELECT_TONES[featureStatusTone(item.status)],
+        )}
+        value={item.status}
+        disabled={setStatus.isPending}
+        onChange={(event) => setStatus.mutate(event.target.value as PlanningFeatureStatus)}
+      >
+        {PLANNING_FEATURE_STATUSES.map((status) => (
+          <option key={status} value={status}>
+            {status}
+          </option>
+        ))}
+      </select>
+      <ErrorText error={setStatus.error} />
+    </span>
   );
 }
 
@@ -73,7 +150,7 @@ export function FeatureBoard({
               </a>
               <div className="flex shrink-0 items-center gap-1.5">
                 {item.isCurrent ? <Badge tone="info">current</Badge> : null}
-                <Badge tone={featureStatusTone(item.status)}>{item.status}</Badge>
+                <FeatureStatusSelect projectId={projectId} item={item} />
               </div>
             </div>
 
