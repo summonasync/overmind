@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -58,7 +59,7 @@ public sealed class OvermindTools
 
     [McpServerTool(Name = "write_entry", Destructive = false, Idempotent = false)]
     [Description("Creates a new entry (note, decision, gate or guard) in a project. Skills are managed via the Overmind UI.")]
-    public Task<JsonElement> WriteEntry(
+    public async Task<JsonElement> WriteEntry(
         [Description("Id of the project to write into.")] Guid projectId,
         [Description("Entry type: note, decision, gate or guard.")] string type,
         [Description("Entry title.")] string title,
@@ -75,7 +76,8 @@ public sealed class OvermindTools
             tags
         };
 
-        return Guarded(() => _api.PostAsync("/api/entries", body, ct));
+        var entry = await Guarded(() => _api.PostAsync("/api/entries", body, ct));
+        return CompactEntry(entry);
     }
 
     [McpServerTool(Name = "update_entry", Destructive = false, Idempotent = false)]
@@ -95,7 +97,8 @@ public sealed class OvermindTools
 
         var title = existing.GetProperty("title").GetString() ?? string.Empty;
 
-        return await Guarded(() => _api.PutAsync($"/api/entries/{entryId}", new { title, content }, ct));
+        var entry = await Guarded(() => _api.PutAsync($"/api/entries/{entryId}", new { title, content }, ct));
+        return CompactEntry(entry);
     }
 
     [McpServerTool(Name = "search", ReadOnly = true)]
@@ -129,6 +132,19 @@ public sealed class OvermindTools
         {
             throw new McpException(ex.Message);
         }
+    }
+
+    private static JsonElement CompactEntry(JsonElement entry)
+    {
+        var compact = new JsonObject
+        {
+            ["id"] = entry.GetProperty("id").GetString(),
+            ["type"] = entry.GetProperty("type").GetString(),
+            ["version"] = entry.GetProperty("currentVersion").GetInt32(),
+            ["updatedAt"] = entry.GetProperty("updatedAt").GetString(),
+            ["bodyChars"] = entry.GetProperty("content").GetString()?.Length ?? 0
+        };
+        return compact.Deserialize<JsonElement>();
     }
 
     private static string NormalizeType(string type)

@@ -78,7 +78,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features/");
         request.Path.ShouldBe($"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}");
 
-        Canned.ToolResultText(response).ShouldContain("Demo spec");
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Demo spec");
+        text.ShouldContain("Ship the demo.");
     }
 
     [Fact]
@@ -129,7 +131,14 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["title"]!.GetValue<string>().ShouldBe("New feature");
         body["body"]!.GetValue<string>().ShouldContain("Do the thing.");
 
-        Canned.ToolResultText(response).ShouldContain("demo-feature");
+        var text = Canned.ToolResultText(response);
+        var confirmation = JsonNode.Parse(text)!.AsObject();
+        confirmation["slug"]!.GetValue<string>().ShouldBe("demo-feature");
+        confirmation["status"]!.GetValue<string>().ShouldBe("inProgress");
+        confirmation["version"]!.GetValue<int>().ShouldBe(4);
+        confirmation["bodyChars"]!.GetValue<int>().ShouldBe(Canned.StoredLength(Canned.PlanningFeatureJson, "body"));
+        text.ShouldNotContain("Do the thing.");
+        text.ShouldNotContain("\"artifacts\"");
     }
 
     [Fact]
@@ -214,6 +223,42 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["kind", "body", "order", "review", "logNote", "brief"], ignoreOrder: true);
 
         response["result"]!["isError"].ShouldBeNull();
+
+        var text = Canned.ToolResultText(response);
+        var confirmation = JsonNode.Parse(text)!.AsObject();
+        confirmation["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        confirmation["kind"]!.GetValue<string>().ShouldBe("task");
+        confirmation["status"]!.GetValue<string>().ShouldBe("draft");
+        confirmation["version"]!.GetValue<int>().ShouldBe(1);
+        confirmation["bodyChars"]!.GetValue<int>().ShouldBe("# Third task\n\n<goal>More work.</goal>".Length);
+        text.ShouldNotContain("More work.");
+        text.ShouldNotContain("\"log\"");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_MultiKilobyteBody_ConfirmationCarriesBodyCharsNotTheBody()
+    {
+        var marker = "UNIQUE_ECHO_MARKER_b72d91";
+        var bigBody = "# Spec\n\n<goal>\n" + new string('x', 6000) + "\n" + marker + "\n</goal>";
+
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "spec",
+            ["body"] = bigBody
+        });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldNotContain(marker);
+        text.ShouldNotContain("xxxx");
+        text.Length.ShouldBeLessThan(500);
+
+        var confirmation = JsonNode.Parse(text)!.AsObject();
+        confirmation["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        confirmation["status"]!.GetValue<string>().ShouldBe("draft");
+        confirmation["version"]!.GetValue<int>().ShouldBe(1);
+        confirmation["bodyChars"]!.GetValue<int>().ShouldBe(bigBody.Length);
     }
 
     [Fact]
@@ -248,7 +293,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["status"]!.GetValue<string>().ShouldBe("review");
         body["logNote"]!.GetValue<string>().ShouldBe("implementation finished, handing to review");
 
-        Canned.ToolResultText(response).ShouldContain("review");
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        confirmation["status"]!.GetValue<string>().ShouldBe("review");
+        confirmation["lastLogLine"]!.GetValue<string>().ShouldBe("implementation finished, handing to review");
     }
 
     [Fact]

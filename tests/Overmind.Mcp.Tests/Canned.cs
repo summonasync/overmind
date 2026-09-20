@@ -147,6 +147,9 @@ public static class Canned
 
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";
 
+    public static int StoredLength(string json, string field) =>
+        JsonNode.Parse(json)![field]!.GetValue<string>().Length;
+
     public static string ToolResultText(JsonNode response)
     {
         var result = response["result"];

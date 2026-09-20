@@ -85,7 +85,7 @@ public sealed class OvermindPlanningTools
 
     [McpServerTool(Name = "planning_create_feature", Destructive = false, Idempotent = false)]
     [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact to write its spec.")]
-    public Task<JsonElement> CreateFeature(
+    public async Task<JsonElement> CreateFeature(
         [Description("Id of the project to create the feature in.")] Guid projectId,
         [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars.")] string slug,
         [Description("Human-readable feature title.")] string title,
@@ -105,15 +105,16 @@ public sealed class OvermindPlanningTools
             payload["priority"] = NormalizePriority(priority);
         }
 
-        return Guarded(() => _api.PostAsync(
+        var feature = await Guarded(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features",
             payload,
             ct));
+        return CompactFeature(feature);
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
     [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
-    public Task<JsonElement> UpsertArtifact(
+    public async Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
         [Description("Artifact kind: spec, plan, task or result.")] string kind,
@@ -138,15 +139,16 @@ public sealed class OvermindPlanningTools
             payload["brief"] = brief;
         }
 
-        return Guarded(() => _api.PostAsync(
+        var artifact = await Guarded(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
             payload,
             ct));
+        return CompactArtifact(artifact);
     }
 
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected.")]
-    public async Task<string> SetStatus(
+    public async Task<JsonElement> SetStatus(
         [Description("Id of the artifact to move.")] Guid artifactId,
         [Description("New status: draft, validated, todo, inProgress, review, done or blocked.")] string status,
         [Description("Required note recorded as a dated log line explaining the status move.")] string logNote,
@@ -162,7 +164,12 @@ public sealed class OvermindPlanningTools
             $"/api/agent/planning/artifacts/{artifactId}/status",
             new { status = normalized, logNote },
             ct));
-        return $"Artifact status moved to '{normalized}'.";
+        return new JsonObject
+        {
+            ["id"] = artifactId.ToString(),
+            ["status"] = normalized,
+            ["lastLogLine"] = logNote
+        }.Deserialize<JsonElement>();
     }
 
     [McpServerTool(Name = "planning_set_current", Destructive = false, Idempotent = true)]
@@ -291,6 +298,36 @@ public sealed class OvermindPlanningTools
         }
 
         return reordered.Deserialize<JsonElement>();
+    }
+
+    private static JsonElement CompactArtifact(JsonElement artifact)
+    {
+        var compact = new JsonObject
+        {
+            ["id"] = artifact.GetProperty("id").GetString(),
+            ["kind"] = artifact.GetProperty("kind").GetString(),
+            ["status"] = artifact.GetProperty("status").GetString(),
+            ["version"] = artifact.GetProperty("version").GetInt32(),
+            ["order"] = artifact.GetProperty("order").GetInt32(),
+            ["frozenAt"] = artifact.GetProperty("frozenAt").GetString(),
+            ["updatedAt"] = artifact.GetProperty("updatedAt").GetString(),
+            ["bodyChars"] = artifact.GetProperty("body").GetString()?.Length ?? 0
+        };
+        return compact.Deserialize<JsonElement>();
+    }
+
+    private static JsonElement CompactFeature(JsonElement feature)
+    {
+        var compact = new JsonObject
+        {
+            ["slug"] = feature.GetProperty("slug").GetString(),
+            ["status"] = feature.GetProperty("status").GetString(),
+            ["priority"] = feature.GetProperty("priority").GetString(),
+            ["version"] = feature.GetProperty("version").GetInt32(),
+            ["updatedAt"] = feature.GetProperty("updatedAt").GetString(),
+            ["bodyChars"] = feature.GetProperty("body").GetString()?.Length ?? 0
+        };
+        return compact.Deserialize<JsonElement>();
     }
 
     private static string NormalizeKind(string kind)

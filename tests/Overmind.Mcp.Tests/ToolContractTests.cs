@@ -69,7 +69,13 @@ public class ToolContractTests : McpSessionTestBase
         body["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["review", "ci"]);
 
         var text = Canned.ToolResultText(response);
-        text.ShouldContain("New gate");
+        var confirmation = JsonNode.Parse(text)!.AsObject();
+        confirmation["id"]!.GetValue<string>().ShouldBe(Canned.EntryId.ToString());
+        confirmation["type"]!.GetValue<string>().ShouldBe("gate");
+        confirmation["version"]!.GetValue<int>().ShouldBe(1);
+        confirmation["bodyChars"]!.GetValue<int>().ShouldBe("Gate content body.".Length);
+        text.ShouldNotContain("Gate content body.");
+        text.ShouldNotContain("New gate");
     }
 
     [Fact]
@@ -87,7 +93,13 @@ public class ToolContractTests : McpSessionTestBase
         body["content"]!.GetValue<string>().ShouldBe("Updated content body.");
 
         var text = Canned.ToolResultText(response);
-        text.ShouldContain("Entry One");
+        var confirmation = JsonNode.Parse(text)!.AsObject();
+        confirmation["id"]!.GetValue<string>().ShouldBe(Canned.EntryId.ToString());
+        confirmation["type"]!.GetValue<string>().ShouldBe("note");
+        confirmation["version"]!.GetValue<int>().ShouldBe(3);
+        confirmation["bodyChars"]!.GetValue<int>().ShouldBe(Canned.StoredLength(Canned.EntryJson, "content"));
+        text.ShouldNotContain("Updated content body.");
+        text.ShouldNotContain("Entry One");
     }
 
     [Fact]

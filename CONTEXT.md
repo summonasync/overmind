@@ -63,7 +63,7 @@ References Core + Infrastructure. ASP.NET Core (Kestrel) + Avalonia in one proce
 
 ### `src/Overmind.Mcp` — stdio MCP adapter (standalone)
 
-References **no other project** — a deliberate decoupling: the adapter is a thin HTTP→JSON-RPC proxy that deserializes Host DTOs via tolerant `JsonElement` reads. Contract is additive-only (see ADR). Console exe, assembly name `overmind-mcp`, built on the `ModelContextProtocol` C# SDK. Spawned by agents via their standard MCP config; exits with code 2 and a stderr hint if the Host API is unreachable at startup.
+References **no other project** — a deliberate decoupling: the adapter is a thin HTTP→JSON-RPC proxy that deserializes Host DTOs via tolerant `JsonElement` reads. Contract is additive-only (see ADR). Mutation tools never echo written bodies back: host responses are projected to compact confirmations (`id`/kind/`status`/`version`/`bodyChars`, plus the appended log line for `planning_set_status` — the host returns an empty 200 on status/log moves, so that confirmation is built from the accepted request); read tools return full payloads. Console exe, assembly name `overmind-mcp`, built on the `ModelContextProtocol` C# SDK. Spawned by agents via their standard MCP config; exits with code 2 and a stderr hint if the Host API is unreachable at startup.
 
 **Self-registration: `overmind-mcp install`** (feature 009). Intercepted before the host health check, so it works with the Host down. File-based upsert (never agent CLIs): only the `overmind` key is written, unknown keys/tables survive, timestamped `.bak` before the first mutation, re-run converges to `unchanged`. Flags: `--all` (default = detected agents only), `--agents <csv>`, `--project` (git-root scope instead of user-global), `--remove`, `--dry-run`. Exit codes: 0 ok / 1 any failure / 2 usage. The registered command path prefers the stable install link `~/apps/overmind/mcp/overmind-mcp` when it resolves to the running binary, so registrations survive version upgrades.
 
@@ -166,7 +166,7 @@ Features, specs, plans, tasks and results live in the database as versioned arti
 
 ## Testing strategy
 
-xUnit + Shouldly + NSubstitute; test projects mirror src and each references only its target. Current suite: 538 tests green (Core 100, Infrastructure 213, Api 166, Mcp 59).
+xUnit + Shouldly + NSubstitute; test projects mirror src and each references only its target. Current suite: 990 tests green (Core 108, Infrastructure 336, Api 308, Mcp 238).
 
 - `Overmind.Core.Tests` — entity factories, domain behavior.
 - `Overmind.Infrastructure.Tests` — EF roundtrips on temp SQLite DBs, FTS trigger sync, materialization into temp dirs, embedding providers, Qdrant config (live tests gated on availability).

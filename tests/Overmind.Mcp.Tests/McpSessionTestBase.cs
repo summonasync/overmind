@@ -61,6 +61,8 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             var body = JsonNode.Parse(req.Body)!;
             body["id"] = Canned.EntryId.ToString();
             body["currentVersion"] = 1;
+            body["createdAt"] = "2026-09-20T10:00:00Z";
+            body["updatedAt"] = "2026-09-20T10:00:00Z";
             return new StubOvermindApi.Response(201, body.ToJsonString());
         });
         stub.Route("PUT", $"/api/entries/{Canned.EntryId}", 200, Canned.EntryJson);
@@ -94,8 +96,26 @@ public abstract class McpSessionTestBase : IAsyncLifetime
         stub.Route(
             "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts",
-            201,
-            Canned.PlanningTaskTwoJson);
+            req =>
+            {
+                var submitted = JsonNode.Parse(req.Body)!;
+                var artifact = new JsonObject
+                {
+                    ["id"] = Canned.PlanningTaskTwoId.ToString(),
+                    ["kind"] = submitted["kind"]!.GetValue<string>(),
+                    ["status"] = "draft",
+                    ["review"] = submitted["review"]?.GetValue<string>() ?? "light",
+                    ["order"] = submitted["order"]?.GetValue<int>() ?? 0,
+                    ["body"] = submitted["body"]!.GetValue<string>(),
+                    ["brief"] = submitted["brief"]?.GetValue<string>(),
+                    ["frozenAt"] = null,
+                    ["version"] = 1,
+                    ["createdAt"] = "2026-09-20T10:00:00Z",
+                    ["updatedAt"] = "2026-09-20T10:00:00Z",
+                    ["log"] = new JsonArray()
+                };
+                return new StubOvermindApi.Response(201, artifact.ToJsonString());
+            });
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "");
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, "");
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/validate", 200, "");
