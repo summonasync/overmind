@@ -5,7 +5,6 @@ import { Search as SearchIcon } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { ErrorText } from "@/shared/ui/error-text";
 import { Input } from "@/shared/ui/input";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
@@ -13,7 +12,7 @@ import { Select } from "@/shared/ui/select";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { useHealth } from "@/features/health";
 import { useProjectList } from "@/features/projects";
-import { useSearch } from "@/features/search";
+import { SearchError, useSearch } from "@/features/search";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import type { SearchMode } from "@/features/search";
 import { SearchInfoPanel } from "@/pages/search-page/ui/search-info-panel";
@@ -80,15 +79,7 @@ export function SearchPage() {
         </p>
       ) : null}
 
-      {error ? (
-        vectorSearchDown && mode === "semantic" ? (
-          <p className="text-sm text-danger" role="alert">
-            Semantic search is unavailable right now — the vector store is down. Switch to full-text mode.
-          </p>
-        ) : (
-          <ErrorText error={new Error("Search failed")} />
-        )
-      ) : null}
+      {error ? <SearchError key={`${submitted}|${mode}|${projectId}`} error={error} /> : null}
 
       {loading ? <LoadingState label="Searching…" /> : null}
 

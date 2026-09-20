@@ -1,7 +1,7 @@
 ---
 feature: 027
 slug: search-dogfood
-status: inProgress
+status: done
 version: 1
 created: 2026-09-20
 ---
@@ -20,3 +20,7 @@ created: 2026-09-20
 - Каждый пункт прохода = либо закрытая находка (таска + фикс + ревью), либо осознанное «ок, так и надо» с записью в log.
 - Проход идёт ПОСЛЕ выката 025/02 (настройки модели + Test-кнопка + reindex) — тестить семантику до конфигурируемой модели бессмысленно.
 </правила прохода>
+
+<log>
+- 2026-09-20 — by user request in-session («поехали закроем 027», 2026-09-20) — first delegated close via the agent door (023/08): task 027/01 done (SearchError honest 503 detail + settings link, review PASS), result artifact validated. Founding incident closed end-to-end; systematic dogfood pass continues opportunistically.
+</log>
