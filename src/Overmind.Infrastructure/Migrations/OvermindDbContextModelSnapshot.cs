@@ -434,6 +434,10 @@ namespace Overmind.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Color")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");

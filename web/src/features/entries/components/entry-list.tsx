@@ -1,10 +1,17 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import type { CSSProperties } from "react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
+import { entryTagsQueryOptions } from "@/features/entries/queries";
 import type { EntryResponse } from "@/features/entries/types";
+
+function tagChipStyle(color: string): CSSProperties {
+  return { backgroundColor: `${color}1A`, color, borderColor: `${color}40` };
+}
 
 interface EntryListProps {
   entries: EntryResponse[];
@@ -13,6 +20,11 @@ interface EntryListProps {
 }
 
 export function EntryList({ entries, onEdit, onDelete }: EntryListProps) {
+  const { data: tags } = useQuery(entryTagsQueryOptions());
+  const colorByName = new Map<string, string | null>(
+    tags?.map((tag) => [tag.name, tag.color]),
+  );
+
   if (entries.length === 0) {
     return <EmptyState title="No entries" hint="Create an entry to capture context for this project." />;
   }
@@ -42,9 +54,14 @@ export function EntryList({ entries, onEdit, onDelete }: EntryListProps) {
             </div>
             {entry.tags.length > 0 ? (
               <div className="mt-1 flex flex-wrap gap-1">
-                {entry.tags.map((tag) => (
-                  <Badge key={tag}>{tag}</Badge>
-                ))}
+                {entry.tags.map((tag) => {
+                  const color = colorByName.get(tag);
+                  return (
+                    <Badge key={tag} style={color ? tagChipStyle(color) : undefined}>
+                      {tag}
+                    </Badge>
+                  );
+                })}
               </div>
             ) : null}
             <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted">

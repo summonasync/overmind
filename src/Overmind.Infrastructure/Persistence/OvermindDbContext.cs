@@ -69,6 +69,11 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<Tag>(builder =>
+        {
+            builder.Property(t => t.Color).HasMaxLength(16);
+        });
+
         modelBuilder.Entity<EntryTag>(builder =>
         {
             builder.HasKey(e => new { e.EntryId, e.TagId });

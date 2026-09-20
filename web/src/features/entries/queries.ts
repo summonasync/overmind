@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { listEntries, listEntryVersions } from "@/features/entries/api";
+import { listEntries, listEntryVersions, listTags } from "@/features/entries/api";
 import type { EntryListFilters } from "@/features/entries/types";
 
 export const entryKeys = {
@@ -7,6 +7,7 @@ export const entryKeys = {
   lists: () => [...entryKeys.all, "list"] as const,
   list: (projectId: string, filters: EntryListFilters) =>
     [...entryKeys.lists(), projectId, filters] as const,
+  tags: () => [...entryKeys.all, "tags"] as const,
   detail: (id: string) => [...entryKeys.all, "detail", id] as const,
   versions: (id: string) => [...entryKeys.detail(id), "versions"] as const,
 };
@@ -23,4 +24,10 @@ export const entryVersionsQueryOptions = (id: string) =>
     queryKey: entryKeys.versions(id),
     queryFn: () => listEntryVersions(id),
     enabled: id.length > 0,
+  });
+
+export const entryTagsQueryOptions = () =>
+  queryOptions({
+    queryKey: entryKeys.tags(),
+    queryFn: listTags,
   });

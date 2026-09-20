@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/shared/lib/cn";
 import type { EntryTone } from "@/shared/lib/entry-type";
 
@@ -8,6 +8,7 @@ interface BadgeProps {
   tone?: BadgeTone;
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }
 
 const toneClasses: Record<BadgeTone, string> = {
@@ -19,9 +20,10 @@ const toneClasses: Record<BadgeTone, string> = {
   skill: "bg-type-skill/10 text-type-skill",
 };
 
-export function Badge({ tone = "neutral", children, className }: BadgeProps) {
+export function Badge({ tone = "neutral", children, className, style }: BadgeProps) {
   return (
     <span
+      style={style}
       className={cn(
         "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium capitalize",
         toneClasses[tone],

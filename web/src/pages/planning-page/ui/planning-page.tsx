@@ -159,6 +159,7 @@ function PlanningPageContent() {
         title={editing ? "Edit feature" : "New feature"}
         open={formOpen}
         onClose={() => setFormOpen(false)}
+        size="xl"
       >
         {editing && editingFeature === null ? (
           editingError ? (

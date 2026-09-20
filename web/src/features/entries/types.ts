@@ -25,6 +25,12 @@ export interface EntryVersionResponse {
   createdAt: string;
 }
 
+export interface TagResponse {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 export interface EntryFormValues {
   type: EntryType;
   title: string;

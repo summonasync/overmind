@@ -152,6 +152,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapAgentPlanningApi();
     app.MapFrontmatterKeysApi();
     app.MapOnboardApi();
+    app.MapTagsApi();
 
     await using (var scope = app.Services.CreateAsyncScope())
     {

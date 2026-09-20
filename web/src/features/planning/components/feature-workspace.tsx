@@ -318,7 +318,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
         ) : null}
       </Modal>
 
-      <Modal title="Edit feature" open={editOpen} onClose={() => setEditOpen(false)}>
+      <Modal title="Edit feature" open={editOpen} onClose={() => setEditOpen(false)} size="xl">
         <FeatureForm
           initial={feature}
           pending={updateFeature.isPending}

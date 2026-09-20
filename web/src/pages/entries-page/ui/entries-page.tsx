@@ -7,7 +7,7 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
-import { EntryEditor, EntryFilters, EntryList, useEntryList, useEntryMutations } from "@/features/entries";
+import { EntryEditor, EntryFilters, EntryList, TagManager, useEntryList, useEntryMutations } from "@/features/entries";
 import type { EntryFormValues, EntryListFilters, EntryResponse } from "@/features/entries";
 import { useProjectList } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
@@ -76,7 +76,10 @@ function EntriesPageContent() {
         }
       />
 
-      <EntryFilters filters={filters} onChange={setFilters} />
+      <div className="flex flex-wrap items-center gap-2">
+        <EntryFilters filters={filters} onChange={setFilters} />
+        <TagManager />
+      </div>
       <ErrorText error={activeError} />
 
       {loading ? (

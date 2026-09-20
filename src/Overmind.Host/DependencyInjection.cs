@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();
+        services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));

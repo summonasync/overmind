@@ -5,6 +5,7 @@ import type {
   EntryListFilters,
   EntryResponse,
   EntryVersionResponse,
+  TagResponse,
 } from "@/features/entries/types";
 
 function buildListQuery(projectId: string, filters: EntryListFilters): string {
@@ -60,4 +61,12 @@ export function updateEntry(id: string, values: EntryFormValues): Promise<EntryR
 
 export function deleteEntry(id: string): Promise<void> {
   return apiDelete(`/entries/${id}`);
+}
+
+export function listTags(): Promise<TagResponse[]> {
+  return apiGet<TagResponse[]>("/tags");
+}
+
+export function updateTagColor(id: string, color: string): Promise<TagResponse> {
+  return apiPut<TagResponse>(`/tags/${id}`, { color });
 }

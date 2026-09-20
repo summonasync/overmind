@@ -8,6 +8,7 @@ public sealed class Tag
 
     public Guid Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
+    public string? Color { get; private set; }
 
     public List<EntryTag> EntryTags { get; private set; } = [];
 
@@ -20,5 +21,10 @@ public sealed class Tag
             Id = Guid.NewGuid(),
             Name = name.Trim()
         };
+    }
+
+    public void SetColor(string color)
+    {
+        Color = color.Length == 0 ? null : color;
     }
 }
