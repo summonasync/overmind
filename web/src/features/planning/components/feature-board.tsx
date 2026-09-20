@@ -3,14 +3,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
-import { Badge, type BadgeTone } from "@/shared/ui/badge";
+import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { updatePlanningFeature } from "@/features/planning/api";
+import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
-import { priorityTone } from "@/features/planning/lib/priority-tone";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
+import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
 import { planningKeys } from "@/features/planning/queries";
 import { FEATURE_PRIORITIES } from "@/features/planning/types";
@@ -39,16 +40,6 @@ function artifactChip(label: string, status: PlanningArtifactStatus | null) {
     </Badge>
   );
 }
-
-const STATUS_SELECT_TONES: Record<BadgeTone, string> = {
-  neutral: "border-border text-muted",
-  muted: "border-border/50 text-muted/70",
-  info: "border-info/40 text-info",
-  warning: "border-warning/40 text-warning",
-  success: "border-success/40 text-success",
-  danger: "border-danger/40 text-danger",
-  skill: "border-type-skill/40 text-type-skill",
-};
 
 interface FeatureStatusSelectProps {
   projectId: string;
@@ -92,7 +83,7 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
         className={cn(
           "rounded-md border bg-surface px-1.5 py-0.5 text-xs font-medium",
           "hover:border-border-strong focus-visible:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-          STATUS_SELECT_TONES[featureStatusTone(item.status)],
+          selectToneClasses[featureStatusTone(item.status)],
         )}
         value={item.status}
         disabled={setStatus.isPending || allowedTransitions(item.status).length === 0}
@@ -163,7 +154,13 @@ export function FeatureBoard({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
+              <FeaturePrioritySelect
+                projectId={projectId}
+                slug={item.slug}
+                title={item.title}
+                priority={item.priority}
+                size="sm"
+              />
               <Badge>v{item.version}</Badge>
               {artifactChip("spec", item.specStatus)}
               {artifactChip("plan", item.planStatus)}

@@ -6,6 +6,7 @@ export { CeremonyStepper } from "./components/ceremony-stepper";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
 export { FeatureForm } from "./components/feature-form";
+export { FeaturePrioritySelect } from "./components/feature-priority-select";
 export { FeatureWorkspace } from "./components/feature-workspace";
 export { PlanningWorkflowSettings } from "./components/workflow-settings";
 export { TaskBoard } from "./components/task-board";
