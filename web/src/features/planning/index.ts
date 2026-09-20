@@ -2,6 +2,7 @@ export { ArtifactEditor } from "./components/artifact-editor";
 export type { ArtifactEditorValues } from "./components/artifact-editor";
 export { ArtifactLog } from "./components/artifact-log";
 export { BoardFilterBar } from "./components/board-filter-bar";
+export { CeremonyStepper } from "./components/ceremony-stepper";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
 export { FeatureForm } from "./components/feature-form";

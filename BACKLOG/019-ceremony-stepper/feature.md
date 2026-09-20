@@ -1,7 +1,7 @@
 ---
 feature: 019
 slug: ceremony-stepper
-status: draft
+status: done
 version: 1
 created: 2026-09-19
 ---

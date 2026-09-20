@@ -15,6 +15,7 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { Select } from "@/shared/ui/select";
 import { ArtifactEditor } from "@/features/planning/components/artifact-editor";
 import { ArtifactLog } from "@/features/planning/components/artifact-log";
+import { CeremonyStepper } from "@/features/planning/components/ceremony-stepper";
 import { FeatureForm } from "@/features/planning/components/feature-form";
 import { TaskBoard } from "@/features/planning/components/task-board";
 import { TaskEditor } from "@/features/planning/components/task-editor";
@@ -172,6 +173,8 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
           <Markdown content={feature.body} />
         </div>
       ) : null}
+
+      <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
 
       <div className="flex flex-wrap items-end gap-1 border-b border-border" role="tablist" aria-label="Feature artifacts">
         {PLANNING_TABS.map((candidate) => {
