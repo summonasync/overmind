@@ -46,6 +46,14 @@ public sealed class UpdatePlanningArtifactRequestValidator : AbstractValidator<U
     }
 }
 
+public sealed class SetPlanningFeatureStatusRequestValidator : AbstractValidator<SetPlanningFeatureStatusRequest>
+{
+    public SetPlanningFeatureStatusRequestValidator()
+    {
+        RuleFor(x => x.LogNote).NotEmpty();
+    }
+}
+
 public sealed class SetPlanningArtifactStatusRequestValidator : AbstractValidator<SetPlanningArtifactStatusRequest>
 {
     public SetPlanningArtifactStatusRequestValidator()

@@ -47,6 +47,14 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidFeatureTransition,
             $"Feature '{slug}' cannot move from '{current}' to '{target}'; allowed targets: {string.Join(", ", PlanningFeatureTransitions.AllowedTargets(current).Select(s => s.ToString().ToLowerInvariant()))}.");
 
+    public static PlanningException FeatureLogNoteRequired() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.FeatureLogNoteRequired,
+            "A logNote is required to move a feature status; it records who asked for the move.");
+
+    public static PlanningException FeatureStatusNotAllowedForAgent(PlanningFeatureStatus target) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.FeatureStatusNotAllowedForAgent,
+            $"Agents may move a feature only to 'done' or 'inProgress'; '{target.ToString().ToLowerInvariant()}' is a manual move reserved for the human door in the Overmind UI.");
+
     public static PlanningException HumanValidationRequired(PlanningArtifactKind kind, string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.HumanValidationRequired,
             $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.");

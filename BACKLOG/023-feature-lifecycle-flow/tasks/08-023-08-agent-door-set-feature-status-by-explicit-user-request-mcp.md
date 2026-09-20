@@ -2,7 +2,7 @@
 feature: 023
 task: 08
 slug: feature-lifecycle-flow
-status: todo
+status: done
 review: light
 created: 2026-09-20
 brief: Agent door: planning_set_feature_status MCP tool — done-by-request with mandatory logNote, fired only on explicit in-session user request; race-hint on InvalidFeatureTransition.
@@ -50,4 +50,6 @@ User decision 2026-09-20 during 025 closeout: «нам нужен mcp чтобы
 
 <log>
 - 2026-09-20 — Carved on user request during 025 closeout human-door discussion.
+- 2026-09-20 — Starting execution per user request ("ну так давай сделаем 023/08"). Design settled per the task default: agent tool allows done (from any non-done status) + inProgress (review rollback) only; mandatory logNote; same PlanningFeatureService validation path as the human door; InvalidFeatureTransition carries current status.
+- 2026-09-20 — Done: MCP tool planning_set_feature_status + agent route POST /api/agent/projects/{id}/planning/features/{slug}/status — done (any non-done source) + inProgress (review rollback) only, logNote mandatory at 3 layers, same PlanningFeatureService/Transitions validation as the human door, teaching error for manual-only moves. Review PASS (audits/review-023-08.md; W-1 nullable warnings fixed, 4 INFO → microbatch 24-25). 942/942, build 0 warnings. Live dogfood on deployed 0.1.9: negative ready→400 FeatureStatusNotAllowedForAgent (teaching text), no-logNote→400, positive draft→done 200, logNote persisted as dated line in feature body AND materialized feature.md; scratch cleaned. Spec v3 tombstones the old non-goal.
 </log>

@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheNinePlanningTools()
+    public async Task ToolsList_ContainsTheTenPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -30,7 +30,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_set_status",
             "planning_append_log",
             "planning_validate",
-            "planning_set_current"
+            "planning_set_current",
+            "planning_set_feature_status"
         ];
         foreach (var name in expected)
         {
@@ -44,6 +45,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("brief");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
+        tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
+        tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
     }
 
     [Fact]
@@ -231,6 +234,94 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         var text = ToolErrorText(response);
         text.ShouldContain("Feature 'demo-feature' was not found");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningSetFeatureStatus_PostsStatusAndLogNoteToAgentRoute()
+    {
+        var response = await Driver.CallToolAsync("planning_set_feature_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["status"] = "done",
+            ["logNote"] = "by user request in-session"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/status", StringComparison.Ordinal) &&
+            r.Path.Contains("/planning/features/", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/status");
+        var body = JsonNode.Parse(request.Body)!;
+        body["status"]!.GetValue<string>().ShouldBe("done");
+        body["logNote"]!.GetValue<string>().ShouldBe("by user request in-session");
+
+        Canned.ToolResultText(response).ShouldContain("moved to 'done'");
+    }
+
+    [Fact]
+    public async Task PlanningSetFeatureStatus_EmptyLogNote_RejectedClientSide()
+    {
+        var response = await Driver.CallToolAsync("planning_set_feature_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["status"] = "done",
+            ["logNote"] = ""
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("logNote is required");
+        text.ShouldContain("feature");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/planning/features/" + Canned.PlanningSlug + "/status", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("ready")]
+    [InlineData("review")]
+    [InlineData("banana")]
+    public async Task PlanningSetFeatureStatus_NonAgentTarget_RejectedWithoutHttpCall(string status)
+    {
+        var response = await Driver.CallToolAsync("planning_set_feature_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["status"] = status,
+            ["logNote"] = "by user request in-session"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain($"Invalid feature status '{status}'");
+        text.ShouldContain("done");
+        text.ShouldContain("inProgress");
+        text.ShouldContain("human-door");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/planning/features/" + Canned.PlanningSlug + "/status", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningSetFeatureStatus_InvalidTransition_SurfacesTheCurrentStatus()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/status",
+            400,
+            """{"title":"InvalidFeatureTransition","detail":"Feature 'demo-feature' cannot move from 'done' to 'inProgress'; allowed targets: .","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_set_feature_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["status"] = "inProgress",
+            ["logNote"] = "by user request in-session"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("cannot move from 'done'");
+        text.ShouldContain("allowed targets");
         Driver.HasExited.ShouldBeFalse();
     }
 

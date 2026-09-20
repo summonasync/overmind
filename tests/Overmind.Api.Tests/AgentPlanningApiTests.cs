@@ -340,6 +340,136 @@ public sealed class AgentPlanningApiTests : IDisposable
         current.Reason.ShouldBe("The next task is blocked.");
     }
 
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("ready")]
+    [InlineData("inProgress")]
+    [InlineData("review")]
+    public async Task SetFeatureStatus_DoneFromNonDoneStatus_AppliesAndLogsProvenance(string start)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", start);
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "done", LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature!.Status.ShouldBe("done");
+        feature.Body.ShouldContain("by user request in-session");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_ReviewRollbackToInProgress_Applies()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "review");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "inProgress", LogNote = "review findings need fixes" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.ShouldContain("review findings need fixes");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_AlreadyAtTarget_ReturnsOkWithoutAnotherLogLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "inProgress");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "inProgress", LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.ShouldNotContain("by user request in-session");
+    }
+
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("ready")]
+    [InlineData("review")]
+    public async Task SetFeatureStatus_NonAgentTarget_Returns400Typed(string target)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = target, LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureStatusNotAllowedForAgent");
+        problem.Detail!.ShouldContain("done");
+        problem.Detail!.ShouldContain("inProgress");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_UnknownStatusValue_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "banana", LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_MissingLogNote_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "done", LogNote = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_TerminalDone_ReopenAttempt_Returns400CarryingCurrentStatus()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "done");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "inProgress", LogNote = "reopen by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidFeatureTransition");
+        problem.Detail!.ShouldContain("from 'done'");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_UnknownFeature_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "missing"),
+            new { Status = "done", LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     [Fact]
     public async Task BoardAndFeature_SameJsonShapeAsHumanDoor()
     {
@@ -366,6 +496,30 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     private static string AgentValidateUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}/validate";
+
+    private static string AgentFeatureStatusUrl(Guid projectId, string slug) =>
+        $"/api/agent/projects/{projectId}/planning/features/{slug}/status";
+
+    private async Task BringToStatusViaHumanDoorAsync(Guid projectId, string slug, string target)
+    {
+        string[] path = target switch
+        {
+            "draft" => [],
+            "ready" => ["ready"],
+            "inProgress" => ["inProgress"],
+            "review" => ["inProgress", "review"],
+            "done" => ["inProgress", "review", "done"],
+            _ => throw new ArgumentException($"unknown status '{target}'"),
+        };
+
+        foreach (var step in path)
+        {
+            var response = await _client.PutAsJsonAsync(
+                $"/api/projects/{projectId}/planning/features/{slug}",
+                new { Status = step });
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+    }
 
     private async Task<CurrentJson> GetCurrentAsync(Guid projectId, string slug)
     {

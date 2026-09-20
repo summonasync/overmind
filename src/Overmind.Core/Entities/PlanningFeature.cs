@@ -94,6 +94,14 @@ public sealed class PlanningFeature
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void SetStatus(PlanningFeatureStatus status, string logNote)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(logNote);
+
+        Body = PlanningLog.Append(Body, logNote);
+        SetStatus(status);
+    }
+
     public void SetCurrent(bool isCurrent)
     {
         IsCurrent = isCurrent;

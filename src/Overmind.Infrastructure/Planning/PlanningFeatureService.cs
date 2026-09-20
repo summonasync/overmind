@@ -91,6 +91,43 @@ public sealed partial class PlanningFeatureService
         return feature;
     }
 
+    public async Task<PlanningFeature> SetStatusAsync(
+        Guid projectId, string slug, PlanningFeatureStatus status, string logNote, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(logNote))
+        {
+            throw PlanningException.FeatureLogNoteRequired();
+        }
+
+        var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);
+        if (!projectExists)
+        {
+            throw PlanningException.MissingProject(projectId);
+        }
+
+        var feature = await _db.PlanningFeatures
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
+
+        if (feature is null)
+        {
+            throw PlanningException.MissingFeature(slug);
+        }
+
+        if (status != feature.Status)
+        {
+            if (!PlanningFeatureTransitions.IsAllowed(feature.Status, status))
+            {
+                throw PlanningException.InvalidFeatureTransition(slug, feature.Status, status);
+            }
+
+            feature.SetStatus(status, logNote);
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        return feature;
+    }
+
     public async Task DeleteAsync(Guid projectId, string slug, CancellationToken ct = default)
     {
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);

@@ -31,8 +31,17 @@ public sealed class OvermindPlanningTools
         ["blocked"] = "blocked"
     };
 
+    private static readonly Dictionary<string, string> AgentFeatureStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["done"] = "done",
+        ["inProgress"] = "inProgress"
+    };
+
     private const string StatusNoteRequired =
         "logNote is required for status moves: every status change is recorded as a dated line in the artifact <log>.";
+
+    private const string FeatureStatusNoteRequired =
+        "logNote is required for feature status moves: the note is recorded as a dated line in the feature log and carries the provenance (who asked for the move).";
 
     private readonly OvermindApiClient _api;
 
@@ -148,6 +157,28 @@ public sealed class OvermindPlanningTools
         return isCurrent
             ? $"Feature '{slug}' pinned as current."
             : $"Feature '{slug}' unpinned.";
+    }
+
+    [McpServerTool(Name = "planning_set_feature_status", Destructive = false, Idempotent = false)]
+    [Description("Moves a feature status on the planning board — only on the user's explicit request in the current session, never on the agent's own initiative. Allowed targets: done (close, from any non-done status) or inProgress (review rollback); every other manual move belongs to the human door in the Overmind UI. The logNote is mandatory, lands as a dated line in the feature log, and must carry the provenance, e.g. 'by user request in-session'.")]
+    public async Task<string> SetFeatureStatus(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to move, as shown on the board.")] string slug,
+        [Description("New status: done or inProgress — the only agent-door targets.")] string status,
+        [Description("Required note recorded as a dated log line; carries the provenance, e.g. 'by user request in-session'.")] string logNote,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(logNote))
+        {
+            throw new McpException(FeatureStatusNoteRequired);
+        }
+
+        var normalized = NormalizeFeatureStatus(status);
+        await Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/status",
+            new { status = normalized, logNote },
+            ct));
+        return $"Feature status moved to '{normalized}'.";
     }
 
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
@@ -270,6 +301,17 @@ public sealed class OvermindPlanningTools
         {
             throw new McpException(
                 $"Invalid artifact status '{status}'. Expected one of: draft, validated, todo, inProgress, review, done, blocked.");
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeFeatureStatus(string status)
+    {
+        if (!AgentFeatureStatuses.TryGetValue(status.Trim(), out var normalized))
+        {
+            throw new McpException(
+                $"Invalid feature status '{status}' for the agent door. Allowed targets: done (close, from any non-done status) or inProgress (review rollback); every other manual move is human-door only in the Overmind UI.");
         }
 
         return normalized;

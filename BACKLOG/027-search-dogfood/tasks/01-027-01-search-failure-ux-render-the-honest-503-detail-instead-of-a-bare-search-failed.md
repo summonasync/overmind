@@ -2,7 +2,7 @@
 feature: 027
 task: 01
 slug: search-dogfood
-status: done
+status: todo
 review: light
 created: 2026-09-20
 brief: Bug: semantic search failure surfaces in web as bare "search failed" — the honest 503 detail (provider/model/error + hint) never reaches the user; render it + link to Settings.
@@ -51,4 +51,5 @@ First live dogfood incident 2026-09-20: user's first semantic query in the web �
 <log>
 - 2026-09-20 — Carved from the first dogfood incident; API evidence captured live from the running host; before-state screenshot still to be taken during execution.
 - 2026-09-20 — Done: TransitionOnArtifactCreate — Review→inProgress demote on Task create only (non-task creates on review untouched, done never resurrects), both create branches + same SaveChanges; 3 tests (922/922). Review PASS 0 findings-blocking (audits/review-023-06.md, 3 INFO). Follow-up candidate noted (INFO-1): reopening a done task on a review feature does not demote — carve if multi-wave flows start reopening tasks after review.
+- 2026-09-20 — Status reverted to todo: the earlier "done" flip was an orchestrator error (wrong artifact id used when closing 023/06 — the TransitionOnArtifactCreate logNote on this artifact belongs to 023/06, not here). 027/01 (render the honest 503 detail in the web search error surface) has NOT been executed yet — the earlier logNote about 922/922 etc. is 023/06's evidence. Feature auto-promoted draft→inProgress on this task's creation (lifecycle working as designed).
 </log>

@@ -2,7 +2,7 @@
 feature: 023
 task: 06
 slug: feature-lifecycle-flow
-status: todo
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -46,4 +46,5 @@ Bug found live 2026-09-20 during the 024/025 session: feature 025 reached `revie
 </obstacles>
 
 <log>
+- 2026-09-20 — Done (re-recorded — an orchestrator id mix-up flipped the WRONG artifact on the first attempt): TransitionOnArtifactCreate — Review→inProgress demote on Task create only (non-task creates on review untouched, done never resurrects), both create branches + same SaveChanges; 3 tests, 922/922. Review PASS (audits/review-023-06.md, 3 INFO). Proven live in the 023/05 walk: task 3 created on a review feature → instant demote. INFO-1 follow-up candidate (reopen-demotion) noted in the feature result.
 </log>

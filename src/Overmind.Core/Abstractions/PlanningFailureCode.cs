@@ -12,6 +12,8 @@ public enum PlanningFailureCode
     InvalidFeatureTransition,
     BriefNotAllowedForKind,
     ChangeNoteRequired,
+    FeatureLogNoteRequired,
+    FeatureStatusNotAllowedForAgent,
     CannotValidateTask,
     HumanValidationRequired,
     ImportFailed

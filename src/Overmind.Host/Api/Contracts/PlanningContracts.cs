@@ -20,6 +20,8 @@ public sealed record UpdatePlanningFeatureRequest(string? Title, string? Body, P
 
 public sealed record SetPlanningFeatureCurrentRequest(bool IsCurrent);
 
+public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
+
 public sealed record PlanningFeatureResponse(
     string Slug,
     string Title,

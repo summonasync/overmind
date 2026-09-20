@@ -1,3 +1,4 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
@@ -18,6 +19,7 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", PlanningFeaturesApi.SetCurrent);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", PlanningArtifactsApi.SetStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
@@ -60,6 +62,42 @@ public static class AgentPlanningApi
         }
 
         return await PlanningArtifactsApi.Validate(id, artifactService, ct);
+    }
+
+    internal static async Task<IResult> SetFeatureStatus(
+        Guid projectId,
+        string slug,
+        SetPlanningFeatureStatusRequest request,
+        IValidator<SetPlanningFeatureStatusRequest> validator,
+        PlanningFeatureService service,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        if (request.Status is not (PlanningFeatureStatus.Done or PlanningFeatureStatus.InProgress))
+        {
+            return PlanningErrors.Map(PlanningException.FeatureStatusNotAllowedForAgent(request.Status));
+        }
+
+        try
+        {
+            await service.SetStatusAsync(projectId, slug, request.Status, request.LogNote, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        var feature = await db.PlanningFeatures
+            .Include(f => f.Artifacts)
+            .ThenInclude(a => a.Versions)
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
+        return Results.Ok(PlanningMapper.ToFeatureResponse(feature!));
     }
 
     internal static async Task<IResult> Current(

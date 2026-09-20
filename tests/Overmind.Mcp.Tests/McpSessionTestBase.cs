@@ -104,6 +104,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/current",
             200,
             Canned.PlanningFeatureJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/status",
+            200,
+            Canned.PlanningFeatureJson);
     }
 
     protected static Dictionary<string, string> ParseQuery(string query)
