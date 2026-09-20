@@ -1,7 +1,7 @@
 ---
 feature: 031
 slug: entry-update-nre
-status: inProgress
+status: done
 version: 1
 created: 2026-09-20
 ---
@@ -21,3 +21,7 @@ Reported by a MindlashStudio dogfood session 2026-09-20 (note b8a0c450) as "PUT 
 - GET-пarity: response mapping never NREs regardless of include depth (null-safe mapper or ThenInclude parity).
 - Regression test pinning: update-without-tags on tagged entry (the exact MCP adapter shape).
 </acceptance>
+
+<log>
+- 2026-09-20 — by user request in-session («ага», 2026-09-20) — delegated close via the agent door: task 031/01 done (ThenInclude parity + null-safe mapper + regression test, review PASS, 943/943), fix deployed and live-verified through the MCP adapter, result artifact validated.
+</log>
