@@ -21,6 +21,7 @@ public sealed record MaterializedFileResponse(AgentPlatform Platform, string Rel
 public sealed record MaterializationReportResponse(
     Guid ProjectId,
     Guid KitId,
-    IReadOnlyList<MaterializedFileResponse> Files);
+    IReadOnlyList<MaterializedFileResponse> Files,
+    IReadOnlyList<string> Warnings);
 
 public sealed record DriftItemResponse(AgentPlatform Platform, string RelativePath, DriftKind Kind);

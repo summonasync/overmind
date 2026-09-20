@@ -23,7 +23,8 @@ public static class KitMapper
         return new MaterializationReportResponse(
             report.ProjectId,
             report.KitId,
-            report.Files.Select(f => new MaterializedFileResponse(f.Platform, f.RelativePath, f.Sha256)).ToArray());
+            report.Files.Select(f => new MaterializedFileResponse(f.Platform, f.RelativePath, f.Sha256)).ToArray(),
+            report.Warnings.ToArray());
     }
 
     public static DriftItemResponse ToResponse(DriftItem item)

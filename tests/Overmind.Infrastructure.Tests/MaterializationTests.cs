@@ -37,7 +37,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        var report = await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        var report = await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         var claudeReviewer = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
         var kimiReviewer = Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md");
@@ -88,7 +88,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         var bootstrap = await File.ReadAllTextAsync(
             Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md"));
@@ -114,7 +114,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
         var report = await materializer.DematerializeAsync(projectId, kitId, CancellationToken.None);
 
         report.Files.Count.ShouldBe(5);
@@ -179,7 +179,7 @@ public sealed class MaterializationTests : IDisposable
         using var ctx2 = _db.CreateContext();
         var materializer = CreateMaterializer(ctx2);
 
-        await materializer.MaterializeAsync(projectId, kitAId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitAId, ct: CancellationToken.None);
 
         var reviewerFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
         var testerFile = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");
@@ -187,7 +187,7 @@ public sealed class MaterializationTests : IDisposable
         File.Exists(testerFile).ShouldBeFalse();
 
         await materializer.DematerializeAsync(projectId, kitAId, CancellationToken.None);
-        await materializer.MaterializeAsync(projectId, kitBId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitBId, ct: CancellationToken.None);
 
         File.Exists(reviewerFile).ShouldBeFalse();
         File.Exists(testerFile).ShouldBeTrue();
@@ -205,7 +205,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         var testerFile = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");
         var kimiReviewer = Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md");
@@ -239,7 +239,7 @@ public sealed class MaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.OverwriteBlocked);
         ex.Message.ShouldContain(target);
@@ -253,20 +253,90 @@ public sealed class MaterializationTests : IDisposable
     }
 
     [Fact]
+    public async Task Materialize_WithUntrackedFileAtTargetPath_ForceAdoptsFileAndWarns()
+    {
+        var (projectId, kitId) = await SeedDefaultKitAsync();
+
+        var target = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        await File.WriteAllTextAsync(target, "user data");
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+
+        var report = await materializer.MaterializeAsync(projectId, kitId, force: true, ct: CancellationToken.None);
+
+        report.Files.Count.ShouldBe(5);
+        report.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote untracked file: {target}");
+        (await File.ReadAllTextAsync(target)).ShouldBe("# Reviewer\nRun on every change.\n");
+        (await ctx.MaterializedFiles.Where(m => m.ProjectId == projectId).CountAsync()).ShouldBe(5);
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Materialize_ReMaterializingOwnFiles_Succeeds()
     {
         var (projectId, kitId) = await SeedDefaultKitAsync();
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
-        var again = await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
+        var again = await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         again.Files.Count.ShouldBe(5);
+        again.Warnings.ShouldBeEmpty();
         (await ctx.MaterializedFiles.Where(m => m.ProjectId == projectId).CountAsync()).ShouldBe(5);
 
         var testerFile = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");
         (await File.ReadAllTextAsync(testerFile)).ShouldBe("# Tester\nExec suite.\n");
+    }
+
+    [Fact]
+    public async Task Materialize_TrackedSkillFilesHandEdited_RefusesOnceListingEveryPath()
+    {
+        var (projectId, kitId) = await SeedDefaultKitAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
+
+        var reviewerFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
+        var testerFile = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");
+        await File.AppendAllTextAsync(reviewerFile, "\nhand note\n");
+        await File.AppendAllTextAsync(testerFile, "\nhand edit\n");
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.LocalEditsBlocked);
+        ex.Message.ShouldContain(reviewerFile);
+        ex.Message.ShouldContain(testerFile);
+        ex.Message.ShouldContain("re-run materialize with force");
+        (await File.ReadAllTextAsync(reviewerFile)).ShouldContain("hand note");
+        (await File.ReadAllTextAsync(testerFile)).ShouldContain("hand edit");
+
+        var drift = await materializer.DetectDriftAsync(projectId, CancellationToken.None);
+        drift.Count.ShouldBe(2);
+        drift.ShouldAllBe(d => d.Kind == DriftKind.Modified);
+    }
+
+    [Fact]
+    public async Task Materialize_TrackedSkillFileHandEdited_ForceOverwritesAndWarnsPerFile()
+    {
+        var (projectId, kitId) = await SeedDefaultKitAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
+
+        var reviewerFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
+        await File.AppendAllTextAsync(reviewerFile, "\nhand note\n");
+
+        var report = await materializer.MaterializeAsync(projectId, kitId, force: true, ct: CancellationToken.None);
+
+        report.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {reviewerFile}");
+        (await File.ReadAllTextAsync(reviewerFile)).ShouldBe("# Reviewer\nRun on every change.\n");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
     }
 
     [Fact]
@@ -278,7 +348,7 @@ public sealed class MaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.PathTraversal);
         ex.Message.ShouldContain("../../evil.md");
@@ -298,7 +368,7 @@ public sealed class MaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.PathTraversal);
         File.Exists(absolute).ShouldBeFalse();
@@ -316,7 +386,7 @@ public sealed class MaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.OverwriteBlocked);
         ex.Message.ShouldContain(directoryAtTarget);
@@ -341,7 +411,7 @@ public sealed class MaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.IoError);
         ex.OffendingPath.ShouldBe(testerFile);
@@ -362,7 +432,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        var report = await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        var report = await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         var platformDirs = new[]
         {
@@ -411,7 +481,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         var qwenLinter = Path.Combine(_projectDir, ".qwen", "skills", "linter", "linter", "SKILL.md");
         var geminiLinter = Path.Combine(_projectDir, ".gemini", "skills", "linter", "linter", "SKILL.md");
@@ -440,7 +510,7 @@ public sealed class MaterializationTests : IDisposable
 
         using var ctx = _db.CreateContext();
         var materializer = CreateMaterializer(ctx);
-        await materializer.MaterializeAsync(projectId, kitId, CancellationToken.None);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
         var report = await materializer.DematerializeAsync(projectId, kitId, CancellationToken.None);
 
         report.Files.Count.ShouldBe(13);
@@ -465,7 +535,7 @@ public sealed class MaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(projectId, kitId, CancellationToken.None));
+            () => materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.OverwriteBlocked);
         ex.OffendingPath.ShouldBe(target);
@@ -504,7 +574,7 @@ public sealed class MaterializationTests : IDisposable
         var target = Path.Combine(_projectDir, ".claude", "skills", "hybrid", "hybrid", "SKILL.md");
 
         var ex = await Should.ThrowAsync<MaterializationException>(
-            () => materializer.MaterializeAsync(project.Id, kit.Id, CancellationToken.None));
+            () => materializer.MaterializeAsync(project.Id, kit.Id, ct: CancellationToken.None));
 
         ex.Kind.ShouldBe(MaterializationFailureKind.InvalidTarget);
         ex.OffendingPath.ShouldBe(target);

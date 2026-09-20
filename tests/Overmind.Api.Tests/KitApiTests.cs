@@ -117,6 +117,35 @@ public sealed class KitApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Activate_WithUntrackedFile_Returns409ThenForceAdoptsAndWarns()
+    {
+        var project = await CreateProjectAsync();
+        var skill = await CreateSkillEntryAsync(project.Id);
+        var kit = await CreateKitAsync("adopted", 1);
+        await _client.PostAsync($"/api/kits/{kit.Id}/entries/{skill.Id}", null);
+
+        var target = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        await File.WriteAllTextAsync(target, "precious user file");
+
+        var blocked = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/activate", null);
+        blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var forced = await _client.PostAsync(
+            $"/api/projects/{project.Id}/kits/{kit.Id}/activate?force=true", null);
+        forced.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var report = await forced.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
+        report.ShouldNotBeNull();
+        report!.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote untracked file: {target}");
+        (await File.ReadAllTextAsync(target)).ShouldNotContain("precious user file");
+
+        var drift = await _client.GetFromJsonAsync<List<DriftJson>>($"/api/projects/{project.Id}/drift", JsonOptions);
+        drift.ShouldNotBeNull();
+        drift!.Count.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Drift_ReportsModifiedFileThroughApi()
     {
         var project = await CreateProjectAsync();
@@ -134,6 +163,43 @@ public sealed class KitApiTests : IDisposable
         drift!.Count.ShouldBe(1);
         drift[0].Kind.ShouldBe("modified");
         drift[0].RelativePath.ShouldBe(".claude/skills/reviewer/reviewer/SKILL.md");
+    }
+
+    [Fact]
+    public async Task Activate_TrackedSkillFileHandEdited_Returns409ThenForceRegeneratesAndWarns()
+    {
+        var project = await CreateProjectAsync();
+        var skill = await CreateSkillEntryAsync(project.Id);
+        var kit = await CreateKitAsync("drifted", 1);
+        await _client.PostAsync($"/api/kits/{kit.Id}/entries/{skill.Id}", null);
+
+        var activate = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/activate", null);
+        activate.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var claudeFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
+        await File.AppendAllTextAsync(claudeFile, "hand edit\n");
+
+        var blocked = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/activate", null);
+        blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var problem = await blocked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Status.ShouldBe(409);
+        problem!.Detail!.ShouldContain(claudeFile);
+        (await File.ReadAllTextAsync(claudeFile)).ShouldContain("hand edit");
+
+        var forced = await _client.PostAsync(
+            $"/api/projects/{project.Id}/kits/{kit.Id}/activate?force=true", null);
+        forced.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var report = await forced.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
+        report.ShouldNotBeNull();
+        report!.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {claudeFile}");
+        (await File.ReadAllTextAsync(claudeFile)).ShouldNotContain("hand edit");
+
+        var drift = await _client.GetFromJsonAsync<List<DriftJson>>($"/api/projects/{project.Id}/drift", JsonOptions);
+        drift.ShouldNotBeNull();
+        drift!.Count.ShouldBe(0);
     }
 
     [Fact]
@@ -443,6 +509,11 @@ public sealed class KitApiTests : IDisposable
         DateTime? ImportedAtUtc);
 
     public sealed record DriftJson(string Platform, string RelativePath, string Kind);
+
+    public sealed record MaterializationReportJson(
+        Guid ProjectId, Guid KitId, List<MaterializedFileJson> Files, List<string> Warnings);
+
+    public sealed record MaterializedFileJson(string Platform, string RelativePath, string Sha256);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

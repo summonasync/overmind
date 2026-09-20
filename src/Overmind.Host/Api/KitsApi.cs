@@ -181,6 +181,7 @@ public static class KitsApi
     private static async Task<IResult> Activate(
         Guid projectId,
         Guid kitId,
+        bool? force,
         OvermindDbContext db,
         IMaterializer materializer,
         CancellationToken ct)
@@ -211,7 +212,7 @@ public static class KitsApi
 
         try
         {
-            var report = await materializer.MaterializeAsync(projectId, kitId, ct);
+            var report = await materializer.MaterializeAsync(projectId, kitId, force == true, ct);
 
             var link = await db.ProjectKits
                 .FirstOrDefaultAsync(pk => pk.ProjectId == projectId && pk.KitId == kitId, ct);
@@ -297,7 +298,8 @@ public static class KitsApi
             MaterializationFailureKind.NotFound => HttpErrors.NotFound(ex.Message),
             MaterializationFailureKind.PathTraversal or MaterializationFailureKind.InvalidTarget =>
                 Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid materialization target", detail: ex.Message),
-            MaterializationFailureKind.OverwriteBlocked => HttpErrors.Conflict(ex.Message),
+            MaterializationFailureKind.OverwriteBlocked or MaterializationFailureKind.LocalEditsBlocked =>
+                HttpErrors.Conflict(ex.Message),
             _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Materialization failed", detail: ex.Message),
         };
     }

@@ -17,7 +17,8 @@ public sealed class SkillMaterializer : IMaterializer
         _platforms = platforms;
     }
 
-    public async Task<MaterializationReport> MaterializeAsync(Guid projectId, Guid kitId, CancellationToken ct)
+    public async Task<MaterializationReport> MaterializeAsync(
+        Guid projectId, Guid kitId, bool force = false, CancellationToken ct = default)
     {
         var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)
             ?? throw MaterializationException.MissingProject(projectId);
@@ -30,6 +31,8 @@ public sealed class SkillMaterializer : IMaterializer
             .Where(m => m.ProjectId == projectId)
             .ToListAsync(ct);
 
+        var warnings = new List<string>();
+
         foreach (var plan in plans)
         {
             if (!File.Exists(plan.AbsolutePath) && !Directory.Exists(plan.AbsolutePath))
@@ -41,11 +44,20 @@ public sealed class SkillMaterializer : IMaterializer
                 m.KitId == kitId &&
                 PathGuard.PathsEqual(PathGuard.ResolveUnderRoot(project.DiskPath, m.RelativePath), plan.AbsolutePath));
 
-            if (!owned)
+            if (owned)
+            {
+                continue;
+            }
+
+            if (!force)
             {
                 throw MaterializationException.Overwrite(plan.AbsolutePath);
             }
+
+            warnings.Add($"Overwrote untracked file: {plan.AbsolutePath}");
         }
+
+        await GuardLocalEditsAsync(plans, tracked, project.DiskPath, kitId, force, warnings, ct);
 
         var written = new List<string>();
         string? failedPath = null;
@@ -93,7 +105,51 @@ public sealed class SkillMaterializer : IMaterializer
         return new MaterializationReport(
             projectId,
             kitId,
-            plans.Select(p => new MaterializedFileInfo(p.Platform, p.RelativePath, p.Sha256)).ToArray());
+            plans.Select(p => new MaterializedFileInfo(p.Platform, p.RelativePath, p.Sha256)).ToArray(),
+            warnings);
+    }
+
+    // Kit files land in the user's project workspace only — there is no archive root, so there is
+    // no second copy to prove ownership against. Kit files carry no managed block, so the
+    // whole-file hash decides: a write loses hand edits only when the row proves the file is
+    // tracked, the disk hash drifted from the row, and the plan differs from what is on disk.
+    private static async Task GuardLocalEditsAsync(
+        List<FilePlan> plans, List<MaterializedFile> tracked, string diskPath, Guid kitId, bool force,
+        List<string> warnings, CancellationToken ct)
+    {
+        List<string>? locallyModified = null;
+
+        foreach (var plan in plans)
+        {
+            var row = tracked.FirstOrDefault(m =>
+                m.KitId == kitId &&
+                PathGuard.PathsEqual(PathGuard.ResolveUnderRoot(diskPath, m.RelativePath), plan.AbsolutePath));
+            if (row is null || !File.Exists(plan.AbsolutePath))
+            {
+                continue;
+            }
+
+            var bytes = await File.ReadAllBytesAsync(plan.AbsolutePath, ct);
+            var diskHash = Convert.ToHexString(SHA256.HashData(bytes));
+            if (string.Equals(diskHash, row.Sha256, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(diskHash, plan.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (force)
+            {
+                warnings.Add($"Overwrote locally modified file: {plan.AbsolutePath}");
+                continue;
+            }
+
+            (locallyModified ??= []).Add(plan.AbsolutePath);
+        }
+
+        if (locallyModified is not null)
+        {
+            throw MaterializationException.LocalEdits(locallyModified);
+        }
     }
 
     public async Task<MaterializationReport> DematerializeAsync(Guid projectId, Guid kitId, CancellationToken ct)
@@ -139,7 +195,8 @@ public sealed class SkillMaterializer : IMaterializer
         return new MaterializationReport(
             projectId,
             kitId,
-            removed.Select(r => new MaterializedFileInfo(r.Platform, r.RelativePath, r.Sha256)).ToArray());
+            removed.Select(r => new MaterializedFileInfo(r.Platform, r.RelativePath, r.Sha256)).ToArray(),
+            []);
     }
 
     public async Task<IReadOnlyList<DriftItem>> DetectDriftAsync(Guid projectId, CancellationToken ct)

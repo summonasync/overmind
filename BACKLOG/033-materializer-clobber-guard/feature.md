@@ -1,7 +1,7 @@
 ---
 feature: 033
 slug: materializer-clobber-guard
-status: inProgress
+status: review
 version: 1
 created: 2026-09-20
 ---
