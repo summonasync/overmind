@@ -93,6 +93,41 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Put_WithoutTags_OnTaggedEntry_KeepsTagsAndReturns200()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "mcp update target",
+            Content = "before",
+            Tags = new[] { "alpha", "beta" },
+            SkillFiles = (object[]?)null,
+        });
+
+        var putResponse = await _client.PutAsJsonAsync($"/api/entries/{created.Id}", new
+        {
+            Title = "mcp update target",
+            Content = "after",
+        });
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var updated = await putResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        updated.ShouldNotBeNull();
+        updated!.Content.ShouldBe("after");
+        updated.Tags.ShouldBe(["alpha", "beta"]);
+
+        var fetched = await _client.GetFromJsonAsync<EntryJson>($"/api/entries/{created.Id}", JsonOptions);
+        fetched.ShouldNotBeNull();
+        fetched!.Tags.ShouldBe(["alpha", "beta"]);
+
+        var versions = await _client.GetFromJsonAsync<List<VersionJson>>($"/api/entries/{created.Id}/versions", JsonOptions);
+        versions.ShouldNotBeNull();
+        versions!.Count.ShouldBe(1);
+        versions[0].Content.ShouldBe("before");
+    }
+
+    [Fact]
     public async Task SkillEntry_RoundTripsFilesInline()
     {
         var created = await CreateEntryAsync(new

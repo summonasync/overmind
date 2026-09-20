@@ -16,7 +16,11 @@ public static class EntryMapper
             entry.CurrentVersion,
             entry.CreatedAt,
             entry.UpdatedAt,
-            entry.EntryTags.Select(t => t.Tag.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray(),
+            entry.EntryTags
+                .Where(t => t.Tag is not null)
+                .Select(t => t.Tag.Name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray(),
             entry.SkillFiles
                 .Select(f => new SkillFileDto(f.Platform, f.RelativePath, f.Content))
                 .OrderBy(f => f.RelativePath, StringComparer.Ordinal)

@@ -156,7 +156,7 @@ public static class EntriesApi
         }
 
         var entry = await db.ContextEntries
-            .Include(e => e.EntryTags)
+            .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
             .Include(e => e.SkillFiles)
             .FirstOrDefaultAsync(e => e.Id == id, ct);
 
