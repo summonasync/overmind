@@ -498,6 +498,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"feature: {featurePart}\n");
         builder.Append($"slug: {slugPart}\n");
         builder.Append($"status: {FeatureStatus(feature.Status)}\n");
+        builder.Append($"priority: {PriorityText(feature.Priority)}\n");
         builder.Append($"version: {feature.Version}\n");
         builder.Append($"created: {feature.CreatedAt:yyyy-MM-dd}\n");
         builder.Append("---\n\n");
@@ -570,6 +571,15 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         PlanningFeatureStatus.Review => "review",
         PlanningFeatureStatus.Done => "done",
         _ => throw new ArgumentOutOfRangeException(nameof(status)),
+    };
+
+    private static string PriorityText(FeaturePriority priority) => priority switch
+    {
+        FeaturePriority.P0 => "p0",
+        FeaturePriority.P1 => "p1",
+        FeaturePriority.P2 => "p2",
+        FeaturePriority.P3 => "p3",
+        _ => throw new ArgumentOutOfRangeException(nameof(priority)),
     };
 
     private enum TrackedCopyRemoval

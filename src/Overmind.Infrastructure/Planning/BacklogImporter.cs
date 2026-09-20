@@ -14,7 +14,8 @@ public sealed class BacklogImporter
         "task",
         "slug",
         "validated",
-        "brief"
+        "brief",
+        "priority"
     };
 
     private readonly PlanningFeatureService _features;
@@ -240,6 +241,7 @@ public sealed class BacklogImporter
             title,
             BacklogMarkdown.StripLeadingHeadings(featureBody),
             MapFeatureStatus(Token(fields, "status"), featureRelative, notes.Skipped),
+            MapFeaturePriority(Token(fields, "priority"), featureRelative, notes.Skipped),
             int.TryParse(Token(fields, "version"), out var version) && version > 0 ? version : 1,
             ResolveCreatedAt(fields, featurePath, featureRelative, notes),
             artifacts,
@@ -413,6 +415,25 @@ public sealed class BacklogImporter
             default:
                 skipped.Add($"unknown status '{raw}' in {relative}, defaulted to draft");
                 return PlanningFeatureStatus.Draft;
+        }
+    }
+
+    private static FeaturePriority MapFeaturePriority(string? raw, string relative, List<string> skipped)
+    {
+        switch (raw?.ToLowerInvariant())
+        {
+            case "p0":
+                return FeaturePriority.P0;
+            case "p1":
+                return FeaturePriority.P1;
+            case "p3":
+                return FeaturePriority.P3;
+            case "p2":
+            case null:
+                return FeaturePriority.P2;
+            default:
+                skipped.Add($"unknown priority '{raw}' in {relative}, defaulted to p2");
+                return FeaturePriority.P2;
         }
     }
 

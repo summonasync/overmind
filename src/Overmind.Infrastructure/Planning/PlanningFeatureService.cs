@@ -219,7 +219,8 @@ public sealed partial class PlanningFeatureService
         {
             feature = PlanningFeature.Restore(
                 projectId, import.Slug, import.Title, import.Body,
-                import.Status, import.Version, import.CreatedAt, import.CreatedAt, isCurrent: false);
+                import.Status, import.Version, import.CreatedAt, import.CreatedAt, isCurrent: false,
+                priority: import.Priority);
             _db.PlanningFeatures.Add(feature);
             featureCreated = true;
         }
@@ -235,6 +236,11 @@ public sealed partial class PlanningFeatureService
             if (feature.Status != import.Status)
             {
                 feature.SetStatus(import.Status);
+            }
+
+            if (feature.Priority != import.Priority)
+            {
+                feature.SetPriority(import.Priority);
             }
         }
 

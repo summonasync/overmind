@@ -7,6 +7,7 @@ public sealed record BacklogFeatureImport(
     string Title,
     string Body,
     PlanningFeatureStatus Status,
+    FeaturePriority Priority,
     int Version,
     DateTime CreatedAt,
     IReadOnlyList<BacklogArtifactImport> Artifacts,

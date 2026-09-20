@@ -52,7 +52,8 @@ public sealed class PlanningFeature
         int version,
         DateTime createdAt,
         DateTime updatedAt,
-        bool isCurrent)
+        bool isCurrent,
+        FeaturePriority priority = FeaturePriority.P2)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -66,6 +67,7 @@ public sealed class PlanningFeature
             Body = body,
             Status = status,
             IsCurrent = isCurrent,
+            Priority = priority,
             Version = version,
             CreatedAt = createdAt,
             UpdatedAt = updatedAt

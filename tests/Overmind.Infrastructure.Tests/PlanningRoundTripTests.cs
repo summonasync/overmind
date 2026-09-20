@@ -164,6 +164,101 @@ public sealed class PlanningRoundTripTests : IDisposable
     }
 
     [Fact]
+    public async Task RoundTrip_Priority_SurvivesMaterializeWipeAndReImport()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePrioritizedFeature("priority: P1");
+
+        await ImportAsync(projectId);
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures.FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+            feature.Priority.ShouldBe(FeaturePriority.P1);
+        }
+
+        await SyncAsync(projectId, force: true);
+
+        var featurePath = Path.Combine(BacklogDir, "010-demo", "feature.md");
+        (await File.ReadAllTextAsync(featurePath)).ShouldContain("status: ready\npriority: p1\nversion: 3\n");
+
+        var first = await SnapshotAsync();
+
+        await SyncAsync(projectId);
+
+        (await SnapshotAsync()).ShouldBe(first);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures
+                .Include(f => f.Artifacts)
+                .FirstAsync(f => f.ProjectId == projectId);
+            ctx.PlanningFeatures.Remove(feature);
+            await ctx.SaveChangesAsync();
+        }
+
+        var reimport = await ImportAsync(projectId);
+
+        reimport.FeaturesCreated.ShouldBe(1);
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures.FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+            feature.Priority.ShouldBe(FeaturePriority.P1);
+        }
+
+        (await SnapshotAsync()).ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task Import_UnknownPriority_DowngradesToP2WithReportLine()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePrioritizedFeature("priority: urgent");
+
+        var report = await ImportAsync(projectId);
+
+        report.Skipped.ShouldContain(
+            s => s.Contains("unknown priority 'urgent'") && s.Contains("BACKLOG/010-demo/feature.md"));
+
+        using var ctx = _db.CreateContext();
+        var feature = await ctx.PlanningFeatures.FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+        feature.Priority.ShouldBe(FeaturePriority.P2);
+    }
+
+    [Fact]
+    public async Task Import_MissingPriorityKey_OnNewFeature_DefaultsToP2Silently()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePrioritizedFeature(null);
+
+        var report = await ImportAsync(projectId);
+
+        report.Skipped.ShouldNotContain(s => s.Contains("priority"));
+
+        using var ctx = _db.CreateContext();
+        var feature = await ctx.PlanningFeatures.FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+        feature.Priority.ShouldBe(FeaturePriority.P2);
+    }
+
+    [Fact]
+    public async Task ReImport_PriorityKeyRemovedFromDisk_ResetsBoardToP2LikeStatus()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePrioritizedFeature("priority: p1");
+        await ImportAsync(projectId);
+        await SyncAsync(projectId, force: true);
+
+        WritePrioritizedFeature(null);
+        var report = await ImportAsync(projectId);
+
+        report.FeaturesUpdated.ShouldBe(1);
+        report.Skipped.ShouldNotContain(s => s.Contains("priority"));
+
+        using var ctx = _db.CreateContext();
+        var feature = await ctx.PlanningFeatures.FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+        feature.Priority.ShouldBe(FeaturePriority.P2);
+    }
+
+    [Fact]
     public async Task ReImport_HandEditedBrief_OnDisk_IsApplied()
     {
         var projectId = await SeedProjectAsync();
@@ -323,6 +418,21 @@ public sealed class PlanningRoundTripTests : IDisposable
             Do the thing.
             </goal>
             """);
+    }
+
+    private void WritePrioritizedFeature(string? priorityLine)
+    {
+        WriteRaw("010-demo/feature.md",
+            "---\n" +
+            "feature: 010\n" +
+            "slug: demo\n" +
+            "status: ready\n" +
+            (priorityLine is null ? null : $"{priorityLine}\n") +
+            "version: 3\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 010 — Demo feature title\n\n" +
+            "<goal>\nBuild the demo.\n</goal>\n");
     }
 
     private void WriteFullFeature()

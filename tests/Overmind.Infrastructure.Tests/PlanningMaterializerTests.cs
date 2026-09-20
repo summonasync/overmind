@@ -49,6 +49,7 @@ public sealed class PlanningMaterializerTests : IDisposable
             "feature: 006\n" +
             "slug: demo\n" +
             "status: ready\n" +
+            "priority: p2\n" +
             "version: 1\n" +
             $"created: {DateTime.UtcNow:yyyy-MM-dd}\n" +
             "---\n\n" +
