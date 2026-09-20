@@ -507,6 +507,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         PlanningFeatureStatus.Draft => "draft",
         PlanningFeatureStatus.Ready => "ready",
         PlanningFeatureStatus.InProgress => "inProgress",
+        PlanningFeatureStatus.Review => "review",
         PlanningFeatureStatus.Done => "done",
         _ => throw new ArgumentOutOfRangeException(nameof(status)),
     };

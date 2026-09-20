@@ -2,7 +2,7 @@
 feature: 023
 task: 04
 slug: feature-lifecycle-flow
-status: todo
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -49,4 +49,7 @@ Feature 023, web half 2. Depends on task 03 (review is a valid filter status). F
 </obstacles>
 
 <log>
+- 2026-09-20 — Execution started — next-js-coder subagent (03 code in tree; review of 03 running in parallel).
+- 2026-09-20 — Coder done: hideDone default ON (EMPTY_BOARD_FILTERS), hidedone=0 deviation param, statuses-selection-wins semantics (hideDone applies only when statuses empty — recorded decision), filter object persisted to sessionStorage overmind.board.filters with restore-on-blank-URL via rAF idiom; coerceBoardFilters guards stale storage; Hide-done chip (aria-pressed); readJson/writeJson extracted to shared/lib/session-json.ts (FSD — features may not import features); dead fast-path removed. lint 0 / tsc 0 / build green. To review.
+- 2026-09-20 — Review PASS (audits/review-023-04.md): 0 blockers, 3 INFO (back-nav resets filters — URL-wins by design; stale storage shape restores defaults silently; hide-done chip can read ON while done visible under statuses-wins — polish candidate). Statuses-wins verified as the only sane composition; restore fires only on fully-blank URL (5-param check incl. hidedone); persistence across projects confirmed via the MPA full-page-load model; FSD extraction closes the documented precedent instead of adding one. Done.
 </log>

@@ -73,6 +73,7 @@ public sealed class PlanningArtifactService
             created = PlanningArtifact.Create(
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
             _db.PlanningArtifacts.Add(created);
+            PromoteOnArtifactCreate(feature);
         }
 
         try
@@ -90,6 +91,7 @@ public sealed class PlanningArtifactService
             resolvedOrder = await ResolveOrderAsync(kind, null, featureId, ct);
             _db.PlanningArtifacts.Add(
                 PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief));
+            PromoteOnArtifactCreate(feature);
 
             try
             {
@@ -116,6 +118,7 @@ public sealed class PlanningArtifactService
         }
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
 
         try
         {
@@ -130,8 +133,13 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
+        if (artifact.Kind == PlanningArtifactKind.Task && artifact.Status == PlanningArtifactStatus.Done)
+        {
+            await TryPromoteToReviewAsync(feature, ct);
+        }
+
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
     }
 
     public async Task ValidateAsync(Guid artifactId, CancellationToken ct = default)
@@ -194,6 +202,40 @@ public sealed class PlanningArtifactService
             .Where(f => f.Id == featureId)
             .Select(f => f.ProjectId)
             .FirstAsync(ct);
+    }
+
+    private static void PromoteOnArtifactCreate(PlanningFeature feature)
+    {
+        if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready)
+        {
+            feature.SetStatus(PlanningFeatureStatus.InProgress);
+        }
+    }
+
+    private async Task TryPromoteToReviewAsync(PlanningFeature feature, CancellationToken ct)
+    {
+        if (feature.Status is not (PlanningFeatureStatus.InProgress or PlanningFeatureStatus.Ready))
+        {
+            return;
+        }
+
+        var siblings = await _db.PlanningArtifacts
+            .Where(a => a.FeatureId == feature.Id)
+            .ToListAsync(ct);
+
+        var tasks = siblings.Where(a => a.Kind == PlanningArtifactKind.Task).ToList();
+        var hasSpec = siblings.Any(a => a.Kind == PlanningArtifactKind.Spec);
+        var hasPlan = siblings.Any(a => a.Kind == PlanningArtifactKind.Plan);
+
+        if (tasks.Count == 0 ||
+            !tasks.All(t => t.Status == PlanningArtifactStatus.Done) ||
+            !hasSpec ||
+            !hasPlan)
+        {
+            return;
+        }
+
+        feature.SetStatus(PlanningFeatureStatus.Review);
     }
 
     private async Task<int> ResolveOrderAsync(PlanningArtifactKind kind, int? order, Guid featureId, CancellationToken ct)

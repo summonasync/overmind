@@ -222,6 +222,32 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_ReviewFeatureStatus_MappedWithoutSkip()
+    {
+        _repo.Write("061-review/feature.md",
+            """
+            ---
+            feature: 061
+            slug: review
+            status: review
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 061 — Review
+
+            Body under review.
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        report.Skipped.ShouldBeEmpty();
+        var feature = await LoadFeatureAsync("061-review");
+        feature.ShouldNotBeNull();
+        feature.Status.ShouldBe(PlanningFeatureStatus.Review);
+    }
+
+    [Fact]
     public async Task Import_SpecPlanInlineComments_AreStrippedBeforeMapping()
     {
         _repo.Write("070-comments/feature.md",

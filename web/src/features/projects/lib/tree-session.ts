@@ -1,37 +1,8 @@
+import { readJson, writeJson } from "@/shared/lib/session-json";
+
 const EXPANDED_PATHS_KEY = "overmind.tree.expandedPaths";
 const PROJECTS_OPEN_KEY = "overmind.tree.projectsOpen";
 const LAST_PROJECT_KEY = "overmind.tree.lastProjectId";
-
-function sessionStore(): Storage | null {
-  return typeof window === "undefined" ? null : window.sessionStorage;
-}
-
-function readJson<T>(key: string, fallback: T): T {
-  const store = sessionStore();
-  if (store === null) {
-    return fallback;
-  }
-
-  const raw = store.getItem(key);
-  if (raw === null) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(key: string, value: unknown): void {
-  const store = sessionStore();
-  if (store === null) {
-    return;
-  }
-
-  store.setItem(key, JSON.stringify(value));
-}
 
 export function getExpandedPaths(): string[] {
   const paths = readJson<unknown>(EXPANDED_PATHS_KEY, []);

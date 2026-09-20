@@ -1,4 +1,4 @@
-export type PlanningFeatureStatus = "draft" | "ready" | "inProgress" | "done";
+export type PlanningFeatureStatus = "draft" | "ready" | "inProgress" | "review" | "done";
 
 export type PlanningArtifactKind = "spec" | "plan" | "task" | "result";
 
@@ -27,6 +27,7 @@ export const PLANNING_FEATURE_STATUSES: readonly PlanningFeatureStatus[] = [
   "draft",
   "ready",
   "inProgress",
+  "review",
   "done",
 ];
 

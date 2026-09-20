@@ -43,6 +43,10 @@ public sealed class PlanningException : Exception
     public static PlanningException BriefNotAllowedForKind(PlanningArtifactKind kind) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BriefNotAllowedForKind, $"A brief is only allowed on task artifacts; kind '{kind}' cannot carry one.");
 
+    public static PlanningException InvalidFeatureTransition(string slug, PlanningFeatureStatus current, PlanningFeatureStatus target) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidFeatureTransition,
+            $"Feature '{slug}' cannot move from '{current}' to '{target}'; allowed targets: {string.Join(", ", PlanningFeatureTransitions.AllowedTargets(current).Select(s => s.ToString().ToLowerInvariant()))}.");
+
     public static PlanningException HumanValidationRequired(PlanningArtifactKind kind, string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.HumanValidationRequired,
             $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.");

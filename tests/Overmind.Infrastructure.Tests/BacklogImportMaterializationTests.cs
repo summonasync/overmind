@@ -151,6 +151,42 @@ public sealed class BacklogImportMaterializationTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_ReviewFeatureStatus_RoundTripsThroughMaterializedFile()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        WriteRaw("011-review/feature.md",
+            """
+            ---
+            feature: 011
+            slug: review
+            status: review
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 011 — Review
+
+            Body under review.
+            """);
+
+        using var ctx = _db.CreateContext();
+        var first = await CreateImporter(ctx)
+            .ImportAsync(new BacklogImportRequest(_projectDir, projectId), CancellationToken.None);
+        first.FeaturesCreated.ShouldBe(1);
+        first.Skipped.ShouldBeEmpty();
+
+        var materialized = await File.ReadAllTextAsync(Path.Combine(_backlogDir, "011-review", "feature.md"));
+        materialized.ShouldContain("status: review");
+
+        var second = await CreateImporter(ctx)
+            .ImportAsync(new BacklogImportRequest(_projectDir, projectId), CancellationToken.None);
+        second.Skipped.ShouldBeEmpty();
+
+        var feature = await ctx.PlanningFeatures.SingleAsync(f => f.ProjectId == projectId && f.Slug == "011-review");
+        feature.Status.ShouldBe(PlanningFeatureStatus.Review);
+    }
+
+    [Fact]
     public async Task Import_PreservedFrontmatterKeys_RoundTripThroughMaterializedFile()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);

@@ -383,6 +383,125 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertArtifact_CreateSpec_OnDraftFeature_PromotesToInProgress()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "# Spec", null, null, null, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        persisted.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_CreatePlan_OnReadyFeature_PromotesToInProgress()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        await featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Ready, default);
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "# Plan", null, null, null, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        persisted.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_UpdateExisting_OnDraftFeature_DoesNotPromote()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "v1", null, null, null, default);
+        await featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Draft, default);
+
+        var updated = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "v2", null, null, null, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        updated.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_LastTaskDone_WithSpecAndPlan_PromotesToReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task1 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task2 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
+
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, "task 1 done", default);
+
+        var midFlight = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        midFlight.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+
+        await artifactService.SetStatusAsync(task2.Id, PlanningArtifactStatus.Done, "task 2 done", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        persisted.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_LastTaskDone_MissingPlan_StaysInProgress()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var task1 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task2 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
+
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, "task 1 done", default);
+        await artifactService.SetStatusAsync(task2.Id, PlanningArtifactStatus.Done, "task 2 done", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_LastTaskDone_OnDoneFeature_StaysDone()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task1 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task2 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
+
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, "task 1 done", default);
+        await featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Review, default);
+        var closed = await featureService.UpdateAsync(
+            _projectId, "feat", null, null, PlanningFeatureStatus.Done, default);
+
+        await artifactService.SetStatusAsync(task2.Id, PlanningArtifactStatus.Done, "late finish", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Done);
+        persisted.Version.ShouldBe(closed.Version);
+    }
+
+    [Fact]
     public async Task SyncAsync_Throwing_MutationStillSucceeds()
     {
         _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())

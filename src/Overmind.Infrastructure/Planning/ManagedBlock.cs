@@ -105,7 +105,7 @@ internal static class ManagedBlock
     private static string StatusMarker(PlanningFeatureStatus status) => status switch
     {
         PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready => "[ ]",
-        PlanningFeatureStatus.InProgress => "[~]",
+        PlanningFeatureStatus.InProgress or PlanningFeatureStatus.Review => "[~]",
         PlanningFeatureStatus.Done => "[x]",
         _ => "[ ]",
     };

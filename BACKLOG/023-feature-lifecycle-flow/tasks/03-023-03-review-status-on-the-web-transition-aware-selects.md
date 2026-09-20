@@ -2,7 +2,7 @@
 feature: 023
 task: 03
 slug: feature-lifecycle-flow
-status: todo
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -50,4 +50,7 @@ Feature 023, web half 1. Depends on tasks 01 (API emits review, 400s on illegal 
 </obstacles>
 
 <log>
+- 2026-09-20 — Execution started — next-js-coder subagent (backend 01+02 in tree; runs parallel with the 02 review).
+- 2026-09-20 — Coder done: types/PLANNING_FEATURE_STATUSES + status-tone gain review; feature-transitions.ts mirrors the backend matrix (verified file-by-file) with allowedTransitions + featureStatusOptions (dedup + display order); both selects transition-aware, done → disabled; the 022 rollback path surfaces InvalidFeatureTransition 400s via ApiError.message with zero client changes; filter chips picked up review automatically via PLANNING_FEATURE_STATUSES. lint 0 / tsc 0 / build green. To review.
+- 2026-09-20 — Review PASS (audits/review-023-03.md): 0 blockers, 3 INFO (workspace select lacks isPending disable — pre-existing 022 asymmetry; done-lock hardcoded in two components instead of deriving from empty allowedTransitions — microbatch; ready/review share the info tone — spec decision). Matrix diffed 1:1 with the backend file; Record compile-safety proven experimentally; done-lock shows exactly the current value; review propagated everywhere via the shared list (no status list missed); the 400→ApiError→ErrorText chain traced end-to-end. Done.
 </log>

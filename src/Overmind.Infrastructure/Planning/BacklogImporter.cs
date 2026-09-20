@@ -405,6 +405,8 @@ public sealed class BacklogImporter
             case "in_progress":
             case "inprogress":
                 return PlanningFeatureStatus.InProgress;
+            case "review":
+                return PlanningFeatureStatus.Review;
             case "draft":
             case null:
                 return PlanningFeatureStatus.Draft;

@@ -14,6 +14,7 @@ export interface PlanningBoardFilters {
   spec: PlanningBoardArtifactFilter;
   plan: PlanningBoardArtifactFilter;
   currentOnly: boolean;
+  hideDone: boolean;
 }
 
 export interface BoardFilterSearchParams {
@@ -32,6 +33,7 @@ export const EMPTY_BOARD_FILTERS: PlanningBoardFilters = {
   spec: "any",
   plan: "any",
   currentOnly: false,
+  hideDone: true,
 };
 
 const ARTIFACT_FILTER_VALUES = new Set<string>(BOARD_ARTIFACT_FILTERS);
@@ -47,6 +49,25 @@ export function parseBoardFilters(searchParams: BoardFilterSearchParams): Planni
     spec: parseArtifactFilter(searchParams.get("spec")),
     plan: parseArtifactFilter(searchParams.get("plan")),
     currentOnly: searchParams.get("current") === "1",
+    hideDone: searchParams.get("hidedone") !== "0",
+  };
+}
+
+export function coerceBoardFilters(value: unknown): PlanningBoardFilters | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    statuses: Array.isArray(record.statuses)
+      ? record.statuses.filter((status): status is PlanningFeatureStatus =>
+          (PLANNING_FEATURE_STATUSES as readonly string[]).includes(status as string),
+        )
+      : [],
+    spec: parseArtifactFilter(typeof record.spec === "string" ? record.spec : null),
+    plan: parseArtifactFilter(typeof record.plan === "string" ? record.plan : null),
+    currentOnly: record.currentOnly === true,
+    hideDone: record.hideDone !== false,
   };
 }
 
@@ -55,7 +76,8 @@ export function isBoardFilterActive(filters: PlanningBoardFilters): boolean {
     filters.statuses.length > 0 ||
     filters.spec !== "any" ||
     filters.plan !== "any" ||
-    filters.currentOnly
+    filters.currentOnly ||
+    !filters.hideDone
   );
 }
 
@@ -63,11 +85,10 @@ export function filterBoardItems(
   items: PlanningFeatureBoardItem[],
   filters: PlanningBoardFilters,
 ): PlanningFeatureBoardItem[] {
-  if (!isBoardFilterActive(filters)) {
-    return items;
-  }
+  const hideDone = filters.statuses.length === 0 && filters.hideDone;
   return items.filter(
     (item) =>
+      (!hideDone || item.status !== "done") &&
       (filters.statuses.length === 0 || filters.statuses.includes(item.status)) &&
       matchesArtifactFilter(item.specStatus, filters.spec) &&
       matchesArtifactFilter(item.planStatus, filters.plan) &&

@@ -5,6 +5,7 @@ const FEATURE_TONES: Record<PlanningFeatureStatus, BadgeTone> = {
   draft: "neutral",
   ready: "info",
   inProgress: "warning",
+  review: "info",
   done: "success",
 };
 

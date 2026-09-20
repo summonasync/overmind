@@ -78,6 +78,11 @@ public sealed partial class PlanningFeatureService
 
         if (status.HasValue && status.Value != feature.Status)
         {
+            if (!PlanningFeatureTransitions.IsAllowed(feature.Status, status.Value))
+            {
+                throw PlanningException.InvalidFeatureTransition(slug, feature.Status, status.Value);
+            }
+
             feature.SetStatus(status.Value);
         }
 

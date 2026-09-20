@@ -137,7 +137,7 @@ public sealed class PlanningMaterializationTests : IDisposable
         (await File.ReadAllTextAsync(featureFile)).ShouldContain("# Feature myfeat — My Feature");
 
         var index = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG.md"));
-        index.ShouldContain("- `[ ]` myfeat → `BACKLOG/myfeat/` — My Feature");
+        index.ShouldContain("- `[~]` myfeat → `BACKLOG/myfeat/` — My Feature");
     }
 
     private async Task<ProjectJson> CreateProjectWithMaterializationAsync(string strategy)

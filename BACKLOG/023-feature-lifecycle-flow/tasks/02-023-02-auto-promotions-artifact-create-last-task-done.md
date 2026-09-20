@@ -2,7 +2,7 @@
 feature: 023
 task: 02
 slug: feature-lifecycle-flow
-status: todo
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -52,4 +52,7 @@ Feature 023, backend half 2. Depends on task 01 (Review member + transitions). H
 </obstacles>
 
 <log>
+- 2026-09-20 — Execution started — dotnet-coder subagent (task 01 code in tree; review of 01 running in parallel).
+- 2026-09-20 — Coder done: PromoteOnArtifactCreate (Draft/Ready → InProgress, same SaveChanges, both create branches, idempotent retry) + TryPromoteToReview (task Done + all tasks Done + ≥1 + spec + plan + feature InProgress/Ready → Review, single SaveChanges, loads feature instead of the projection); importer verified NOT routing through the service (Restore/direct writes). +6 tests; one Api materialization expectation updated ([ ] → [~] — the auto-promotion's honest consequence). Suite 825 → 831. To review.
+- 2026-09-20 — Review PASS (audits/review-023-02.md): 0 blockers, 4 INFO notes (Ready→Review auto-path asymmetry — sanctioned; AsNoTracking-hazard on the siblings query — identity resolution is load-bearing, microbatch note; benign last-write-wins on parallel final-Done; no auto-demotion on task reopen — per spec). Create-only hook verified in both branches with a Version==2 proof the update path ran; single-SaveChanges incl. retry idempotency; importer non-routing confirmed by grep. Suite 831/831 re-run. Done.
 </log>

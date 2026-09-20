@@ -2,7 +2,7 @@
 feature: 023
 task: 05
 slug: feature-lifecycle-flow
-status: todo
+status: inprogress
 review: light
 created: 2026-09-20
 ---
@@ -49,4 +49,6 @@ Feature 023 closeout. Tasks 01–04 done and reviewed first. Orchestrator-driven
 </obstacles>
 
 <log>
+- 2026-09-20 — Closeout started — orchestrator runs the live lifecycle walk against an isolated dev host (scratch DB in a tmp cwd, port 4799 via Overmind__BindUrl; the production 0.1.7 host and its DB untouched).
+- 2026-09-20 — Live walk PASSED on an isolated dev host (scratch DB, port 4799 via Overmind__BindUrl; production 0.1.7 host and DB untouched, verified alive after): draft → manual ready (200) → spec create AUTO→inProgress → last task done AUTO→review → manual review→inProgress rollback (200) → task reopen+re-done AUTO→review again → manual done (200, final). Denied: draft→done PUT → 400. Bonus live proof: task brief on the wire ('walk the lifecycle' — feature 021 end-to-end in the new build). Scratch host killed by exact PID; scratch project+feature died with the tmp DB.
 </log>

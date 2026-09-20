@@ -8,14 +8,14 @@ import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { updatePlanningFeature } from "@/features/planning/api";
+import { featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
 import { planningKeys } from "@/features/planning/queries";
-import {
-  PLANNING_FEATURE_STATUSES,
-  type PlanningArtifactStatus,
-  type PlanningFeatureBoardItem,
-  type PlanningFeatureStatus,
+import type {
+  PlanningArtifactStatus,
+  PlanningFeatureBoardItem,
+  PlanningFeatureStatus,
 } from "@/features/planning/types";
 
 interface FeatureBoardProps {
@@ -92,10 +92,10 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
           STATUS_SELECT_TONES[featureStatusTone(item.status)],
         )}
         value={item.status}
-        disabled={setStatus.isPending}
+        disabled={setStatus.isPending || item.status === "done"}
         onChange={(event) => setStatus.mutate(event.target.value as PlanningFeatureStatus)}
       >
-        {PLANNING_FEATURE_STATUSES.map((status) => (
+        {featureStatusOptions(item.status).map((status) => (
           <option key={status} value={status}>
             {status}
           </option>

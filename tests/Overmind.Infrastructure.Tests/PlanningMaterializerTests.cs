@@ -97,6 +97,23 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
+    public async Task On_ReviewFeature_EmitsReviewStatusAndTildeMarker()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedFeatureAsync(projectId, "audit", "Audit", "body", PlanningFeatureStatus.Review);
+
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var featureDoc = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "audit", "feature.md"));
+        featureDoc.ShouldContain("status: review\n");
+        featureDoc.ShouldNotContain("status: inProgress");
+
+        var index = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG.md"));
+        index.ShouldContain("- `[~]` audit → `BACKLOG/audit/` — Audit");
+    }
+
+    [Fact]
     public async Task Resync_PreservesForeignContentOutsideBlock_ByteForByte()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);

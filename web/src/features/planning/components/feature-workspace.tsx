@@ -20,9 +20,9 @@ import { TaskBoard } from "@/features/planning/components/task-board";
 import { TaskEditor } from "@/features/planning/components/task-editor";
 import { usePlanningFeature, usePlanningMutations } from "@/features/planning/lib/use-planning";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
+import { featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
 import {
-  PLANNING_FEATURE_STATUSES,
   PLANNING_TABS,
   type PlanningArtifactResponse,
   type PlanningDocumentKind,
@@ -134,6 +134,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
             <Select
               aria-label="Feature status"
               value={feature.status}
+              disabled={feature.status === "done"}
               onChange={(event) =>
                 updateFeature.mutate({
                   slug,
@@ -141,7 +142,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
                 })
               }
             >
-              {PLANNING_FEATURE_STATUSES.map((status) => (
+              {featureStatusOptions(feature.status).map((status) => (
                 <option key={status} value={status}>
                   {status}
                 </option>

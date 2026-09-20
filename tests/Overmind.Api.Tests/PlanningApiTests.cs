@@ -189,6 +189,64 @@ public sealed class PlanningApiTests : IDisposable
         feature!.Version.ShouldBe(2);
     }
 
+    [Theory]
+    [InlineData("draft", "ready")]
+    [InlineData("draft", "inProgress")]
+    [InlineData("ready", "inProgress")]
+    [InlineData("ready", "draft")]
+    [InlineData("inProgress", "review")]
+    [InlineData("inProgress", "ready")]
+    [InlineData("inProgress", "draft")]
+    [InlineData("review", "done")]
+    [InlineData("review", "inProgress")]
+    public async Task UpdateFeature_AllowedTransition_Returns200AndApplies(string start, string target)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        await BringToStatusAsync(project.Id, "feat", start);
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Status = target });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature.ShouldNotBeNull();
+        feature!.Status.ShouldBe(target);
+    }
+
+    [Theory]
+    [InlineData("draft", "review")]
+    [InlineData("draft", "done")]
+    [InlineData("ready", "review")]
+    [InlineData("ready", "done")]
+    [InlineData("inProgress", "done")]
+    [InlineData("review", "ready")]
+    [InlineData("review", "draft")]
+    [InlineData("done", "draft")]
+    [InlineData("done", "ready")]
+    [InlineData("done", "inProgress")]
+    [InlineData("done", "review")]
+    public async Task UpdateFeature_ForbiddenTransition_Returns400TypedAndKeepsStatus(string start, string target)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        await BringToStatusAsync(project.Id, "feat", start);
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Status = target });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidFeatureTransition");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature.ShouldNotBeNull();
+        feature!.Status.ShouldBe(start);
+    }
+
     [Fact]
     public async Task ArtifactUpsert_Created_Returns201()
     {
@@ -749,6 +807,27 @@ public sealed class PlanningApiTests : IDisposable
         var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
         feature.ShouldNotBeNull();
         return feature!;
+    }
+
+    private async Task BringToStatusAsync(Guid projectId, string slug, string target)
+    {
+        string[] path = target switch
+        {
+            "draft" => [],
+            "ready" => ["ready"],
+            "inProgress" => ["inProgress"],
+            "review" => ["inProgress", "review"],
+            "done" => ["inProgress", "review", "done"],
+            _ => throw new ArgumentException($"unknown status '{target}'"),
+        };
+
+        foreach (var step in path)
+        {
+            var response = await _client.PutAsJsonAsync(
+                $"/api/projects/{projectId}/planning/features/{slug}",
+                new { Status = step });
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
     }
 
     private async Task<ArtifactJson> CreateTaskWithBrief(Guid projectId, string brief)

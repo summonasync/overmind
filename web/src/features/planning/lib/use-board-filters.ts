@@ -4,22 +4,45 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   EMPTY_BOARD_FILTERS,
+  coerceBoardFilters,
   isBoardFilterActive,
   parseBoardFilters,
 } from "@/features/planning/lib/board-filters";
 import type { PlanningBoardFilters } from "@/features/planning/lib/board-filters";
+import { readJson, writeJson } from "@/shared/lib/session-json";
 
 function readFiltersFromLocation(): PlanningBoardFilters {
   return parseBoardFilters(new URLSearchParams(window.location.search));
 }
 
 const FILTER_CHANGE_EVENT = "board-filters:change";
+const BOARD_FILTERS_STORAGE_KEY = "overmind.board.filters";
+const FILTER_PARAM_NAMES = ["status", "spec", "plan", "current", "hidedone"] as const;
 
 export function useBoardFilters() {
   const initialSearchParams = useSearchParams();
   const [filters, setFiltersState] = useState<PlanningBoardFilters>(() =>
     parseBoardFilters(initialSearchParams ?? new URLSearchParams()),
   );
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlCarriesFilters = FILTER_PARAM_NAMES.some(
+        (name) => urlParams.get(name) !== null,
+      );
+      if (urlCarriesFilters) {
+        return;
+      }
+      const stored = coerceBoardFilters(
+        readJson<unknown>(BOARD_FILTERS_STORAGE_KEY, null),
+      );
+      if (stored !== null) {
+        setFiltersState(stored);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const syncFromLocation = () => {
@@ -35,6 +58,7 @@ export function useBoardFilters() {
 
   const setFilters = useCallback((next: PlanningBoardFilters) => {
     setFiltersState(next);
+    writeJson(BOARD_FILTERS_STORAGE_KEY, next);
     const params = new URLSearchParams(window.location.search);
     if (next.statuses.length > 0) {
       params.set("status", next.statuses.join(","));
@@ -55,6 +79,11 @@ export function useBoardFilters() {
       params.set("current", "1");
     } else {
       params.delete("current");
+    }
+    if (!next.hideDone) {
+      params.set("hidedone", "0");
+    } else {
+      params.delete("hidedone");
     }
     const query = params.toString();
     const path = window.location.pathname;
