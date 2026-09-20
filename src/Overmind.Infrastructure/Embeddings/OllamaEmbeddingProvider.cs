@@ -12,6 +12,7 @@ public sealed class OllamaEmbeddingProvider : IEmbeddingProvider
     private readonly HttpClient _http;
     private readonly string _baseUrl;
     private readonly string _model;
+    private int? _discoveredDimensions;
 
     public OllamaEmbeddingProvider(HttpClient http, string baseUrl, string model = DefaultModel)
     {
@@ -24,7 +25,9 @@ public sealed class OllamaEmbeddingProvider : IEmbeddingProvider
 
     public string Name => ProviderName;
 
-    public int Dimensions => DefaultDimensions;
+    public string Model => _model;
+
+    public int Dimensions => _discoveredDimensions ?? DefaultDimensions;
 
     public async Task<float[]> EmbedAsync(string text, CancellationToken ct)
     {
@@ -41,7 +44,9 @@ public sealed class OllamaEmbeddingProvider : IEmbeddingProvider
             throw new InvalidOperationException("Ollama returned no embedding vectors.");
         }
 
-        return payload.Embeddings[0];
+        var vector = payload.Embeddings[0];
+        _discoveredDimensions ??= vector.Length;
+        return vector;
     }
 
     private sealed record OllamaEmbedResponse(float[][] Embeddings);

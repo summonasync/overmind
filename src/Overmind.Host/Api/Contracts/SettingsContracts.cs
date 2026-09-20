@@ -3,6 +3,7 @@ namespace Overmind.Host.Api.Contracts;
 public sealed record SettingsResponse(
     string EmbeddingProvider,
     string OllamaBaseUrl,
+    string OllamaModel,
     string OpenAiBaseUrl,
     bool OpenAiApiKeyConfigured,
     string PlanningMaterializationDefault,
@@ -11,6 +12,7 @@ public sealed record SettingsResponse(
 public sealed record UpdateSettingsRequest(
     string? EmbeddingProvider,
     string? OllamaBaseUrl,
+    string? OllamaModel,
     string? OpenAiBaseUrl,
     string? OpenAiApiKey,
     string? PlanningMaterializationDefault,

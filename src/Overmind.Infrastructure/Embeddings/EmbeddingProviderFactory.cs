@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Http;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.Embeddings;
@@ -29,24 +30,31 @@ public sealed class EmbeddingProviderFactory
             case OllamaEmbeddingProvider.ProviderName:
                 var ollamaBaseUrl = await settings.GetOrDefaultAsync(
                     SettingKeys.EmbeddingOllamaBaseUrl, SettingDefaults.EmbeddingOllamaBaseUrl, ct);
-                return new OllamaEmbeddingProvider(CreateEmbeddingHttpClient(), ollamaBaseUrl);
+                var ollamaModel = await settings.GetOrDefaultAsync(
+                    SettingKeys.EmbeddingOllamaModel, SettingDefaults.EmbeddingOllamaModel, ct);
+                return new OllamaEmbeddingProvider(
+                    CreateEmbeddingHttpClient(ollamaBaseUrl), ollamaBaseUrl, ollamaModel);
 
             case OpenAiCompatibleEmbeddingProvider.ProviderName:
                 var openAiBaseUrl = await settings.GetOrDefaultAsync(
                     SettingKeys.EmbeddingOpenAiBaseUrl, SettingDefaults.EmbeddingOpenAiBaseUrl, ct);
                 var apiKey = await settings.GetOrDefaultAsync(SettingKeys.EmbeddingOpenAiApiKey, string.Empty, ct);
-                return new OpenAiCompatibleEmbeddingProvider(CreateEmbeddingHttpClient(), openAiBaseUrl, apiKey);
+                return new OpenAiCompatibleEmbeddingProvider(
+                    CreateEmbeddingHttpClient(openAiBaseUrl), openAiBaseUrl, apiKey);
 
             default:
                 return CreateOnnxProvider();
         }
     }
 
+    internal static HttpMessageHandler CreateEmbeddingHandler(string baseUrl) =>
+        LoopbackHttp.CreateHandler(baseUrl);
+
     private IEmbeddingProvider CreateOnnxProvider()
     {
         var modelDirectory = OvermindModelPaths.ModelDirectory(OnnxModelSpec.AllMiniLmL6V2.Name);
         var downloader = new ModelDownloader(
-            CreateEmbeddingHttpClient(),
+            new HttpClient { Timeout = EmbeddingTimeout },
             _loggerFactory.CreateLogger<ModelDownloader>());
         var logger = _loggerFactory.CreateLogger<OnnxEmbeddingProvider>();
 
@@ -59,5 +67,6 @@ public sealed class EmbeddingProviderFactory
                 "Downloading {File}: {ReadBytes}/{TotalBytes} bytes", file, read, total));
     }
 
-    private static HttpClient CreateEmbeddingHttpClient() => new() { Timeout = EmbeddingTimeout };
+    private static HttpClient CreateEmbeddingHttpClient(string baseUrl) =>
+        new(CreateEmbeddingHandler(baseUrl)) { Timeout = EmbeddingTimeout };
 }

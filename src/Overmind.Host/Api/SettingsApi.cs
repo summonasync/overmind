@@ -19,6 +19,8 @@ public static class SettingsApi
             SettingKeys.EmbeddingProvider, SettingDefaults.EmbeddingProvider, ct);
         var ollamaBaseUrl = await settings.GetOrDefaultAsync(
             SettingKeys.EmbeddingOllamaBaseUrl, SettingDefaults.EmbeddingOllamaBaseUrl, ct);
+        var ollamaModel = await settings.GetOrDefaultAsync(
+            SettingKeys.EmbeddingOllamaModel, SettingDefaults.EmbeddingOllamaModel, ct);
         var openAiBaseUrl = await settings.GetOrDefaultAsync(
             SettingKeys.EmbeddingOpenAiBaseUrl, SettingDefaults.EmbeddingOpenAiBaseUrl, ct);
         var apiKeyConfigured = await settings.HasAsync(SettingKeys.EmbeddingOpenAiApiKey, ct);
@@ -28,7 +30,7 @@ public static class SettingsApi
             SettingKeys.PlanningRequireHumanValidationDefault, SettingDefaults.PlanningRequireHumanValidationDefault, ct);
 
         return Results.Ok(new SettingsResponse(
-            provider, ollamaBaseUrl, openAiBaseUrl, apiKeyConfigured,
+            provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, apiKeyConfigured,
             planningMaterializationDefault, planningRequireHumanValidationDefault));
     }
 
@@ -48,6 +50,15 @@ public static class SettingsApi
         if (request.OllamaBaseUrl is not null && !IsValidHttpUrl(request.OllamaBaseUrl))
         {
             return InvalidSetting(nameof(request.OllamaBaseUrl), "Must be a valid http(s) URL.");
+        }
+
+        if (request.OllamaModel is not null)
+        {
+            var trimmedModel = request.OllamaModel.Trim();
+            if (trimmedModel.Length == 0 || trimmedModel.Length > 100)
+            {
+                return InvalidSetting(nameof(request.OllamaModel), "Must be between 1 and 100 characters.");
+            }
         }
 
         if (request.OpenAiBaseUrl is not null && !IsValidHttpUrl(request.OpenAiBaseUrl))
@@ -82,6 +93,11 @@ public static class SettingsApi
         if (request.OllamaBaseUrl is not null)
         {
             await settings.SetAsync(SettingKeys.EmbeddingOllamaBaseUrl, request.OllamaBaseUrl.Trim(), ct);
+        }
+
+        if (request.OllamaModel is not null)
+        {
+            await settings.SetAsync(SettingKeys.EmbeddingOllamaModel, request.OllamaModel.Trim(), ct);
         }
 
         if (request.OpenAiBaseUrl is not null)

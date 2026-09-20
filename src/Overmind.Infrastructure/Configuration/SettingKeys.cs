@@ -4,6 +4,7 @@ public static class SettingKeys
 {
     public const string EmbeddingProvider = "embedding.provider";
     public const string EmbeddingOllamaBaseUrl = "embedding.ollama.baseUrl";
+    public const string EmbeddingOllamaModel = "embedding.ollama.model";
     public const string EmbeddingOpenAiBaseUrl = "embedding.openai.baseUrl";
     public const string EmbeddingOpenAiApiKey = "embedding.openai.apiKey";
     public const string QdrantEndpoint = "qdrant.endpoint";

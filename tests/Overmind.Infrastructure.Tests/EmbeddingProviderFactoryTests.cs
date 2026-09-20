@@ -1,3 +1,5 @@
+using System.Net.Http;
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
@@ -10,6 +12,52 @@ namespace Overmind.Infrastructure.Tests;
 public sealed class EmbeddingProviderFactoryTests : IDisposable
 {
     private readonly TempDatabase _temp = new();
+
+    [Fact]
+    public void CreateEmbeddingHandler_LoopbackBaseUrl_DisablesProxy()
+    {
+        var handler = EmbeddingProviderFactory.CreateEmbeddingHandler("http://127.0.0.1:11434");
+
+        var sockets = handler.ShouldBeOfType<SocketsHttpHandler>();
+        sockets.UseProxy.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void CreateEmbeddingHandler_RemoteBaseUrl_KeepsSystemProxy()
+    {
+        var handler = EmbeddingProviderFactory.CreateEmbeddingHandler("https://api.openai.com");
+
+        var defaultHandler = handler.ShouldBeOfType<HttpClientHandler>();
+        defaultHandler.UseProxy.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ResolveAsync_OllamaModelDefaults_WhenSettingMissing()
+    {
+        await using var context = _temp.CreateContext();
+        await new AppSettingsService(context).SetAsync(SettingKeys.EmbeddingProvider, "ollama", CancellationToken.None);
+        var factory = CreateFactory(context);
+
+        var provider = await factory.ResolveAsync(CancellationToken.None);
+
+        var ollama = provider.ShouldBeOfType<OllamaEmbeddingProvider>();
+        ollama.Model.ShouldBe(OllamaEmbeddingProvider.DefaultModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithOllamaModelSetting_PassesModelToProvider()
+    {
+        await using var context = _temp.CreateContext();
+        var settings = new AppSettingsService(context);
+        await settings.SetAsync(SettingKeys.EmbeddingProvider, "ollama", CancellationToken.None);
+        await settings.SetAsync(SettingKeys.EmbeddingOllamaModel, "nomic-embed-text", CancellationToken.None);
+        var factory = CreateFactory(context);
+
+        var provider = await factory.ResolveAsync(CancellationToken.None);
+
+        var ollama = provider.ShouldBeOfType<OllamaEmbeddingProvider>();
+        ollama.Model.ShouldBe("nomic-embed-text");
+    }
 
     [Fact]
     public async Task ResolveAsync_WithoutSettings_ReturnsOnnxProvider()

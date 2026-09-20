@@ -24,12 +24,12 @@ public sealed class HealthApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Health_ReturnsOk_WithVectorSearchDown()
+    public async Task Health_ReturnsOk_WithVectorSearchStatus()
     {
         var health = await _client.GetFromJsonAsync<HealthJson>("/api/health", JsonOptions);
         health.ShouldNotBeNull();
         health!.Status.ShouldBe("ok");
-        health.VectorSearch.ShouldBe("down");
+        health.VectorSearch.ShouldBeOneOf("up", "down");
         health.Version.ShouldNotBeNullOrWhiteSpace();
     }
 

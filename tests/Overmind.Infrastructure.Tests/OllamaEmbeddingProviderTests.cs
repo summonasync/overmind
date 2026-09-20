@@ -41,6 +41,57 @@ public sealed class OllamaEmbeddingProviderTests
             () => provider.EmbedAsync("x", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task EmbedAsync_SendsConfiguredModel()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"embeddings":[[0.5,0.5]]}""", Encoding.UTF8, "application/json"),
+        });
+        var provider = new Embeddings.OllamaEmbeddingProvider(
+            new HttpClient(handler), "http://127.0.0.1:11434", "nomic-embed-text");
+
+        await provider.EmbedAsync("hello", CancellationToken.None);
+
+        provider.Model.ShouldBe("nomic-embed-text");
+        handler.Body.ShouldContain("\"model\":\"nomic-embed-text\"");
+    }
+
+    [Fact]
+    public async Task EmbedAsync_DiscoversDimensions_FromFirstSuccessfulEmbed()
+    {
+        var vector = string.Join(",", Enumerable.Repeat("0.1", 768));
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($"{{\"embeddings\":[[{vector}]]}}", Encoding.UTF8, "application/json"),
+        });
+        var provider = new Embeddings.OllamaEmbeddingProvider(new HttpClient(handler), "http://127.0.0.1:11434");
+
+        provider.Dimensions.ShouldBe(Embeddings.OllamaEmbeddingProvider.DefaultDimensions);
+
+        var embedding = await provider.EmbedAsync("hello", CancellationToken.None);
+
+        embedding.Length.ShouldBe(768);
+        provider.Dimensions.ShouldBe(768);
+    }
+
+    [Fact]
+    public async Task EmbedAsync_Dimensions_StickToFirstDiscoveredVector()
+    {
+        var longJson = $"{{\"embeddings\":[[{string.Join(",", Enumerable.Repeat("0.1", 768))}]]}}";
+        var responses = new Queue<string>([longJson, "{\"embeddings\":[[0.1,0.2,0.3]]}"]);
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responses.Dequeue(), Encoding.UTF8, "application/json"),
+        });
+        var provider = new Embeddings.OllamaEmbeddingProvider(new HttpClient(handler), "http://127.0.0.1:11434");
+
+        await provider.EmbedAsync("first", CancellationToken.None);
+        await provider.EmbedAsync("second", CancellationToken.None);
+
+        provider.Dimensions.ShouldBe(768);
+    }
+
     internal sealed class RecordingHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;

@@ -9,7 +9,7 @@ namespace Overmind.Host.Api;
 
 public static class SearchApi
 {
-    private const string SemanticUnavailableDetail =
+    private const string VectorStoreDownDetail =
         "Semantic search is unavailable because the vector store is down. Use mode=fulltext.";
 
     public static RouteGroupBuilder MapSearchApi(this IEndpointRouteBuilder routes)
@@ -56,16 +56,28 @@ public static class SearchApi
         {
             if (!await semanticSearch.HealthAsync(ct))
             {
-                return SemanticUnavailable();
+                return SemanticUnavailable(VectorStoreDownDetail);
             }
 
             try
             {
                 hits = await semanticSearch.SearchAsync(projectId, q, effectiveLimit, ct);
             }
+            catch (EmbeddingFailedException ex)
+            {
+                return SemanticUnavailable(
+                    $"Semantic search is unavailable because {ex.Message} " +
+                    "Check the embedding settings or use mode=fulltext.");
+            }
+            catch (VectorDimensionMismatchException ex)
+            {
+                return SemanticUnavailable(
+                    $"Semantic search is unavailable because the vector collection was recreated: {ex.Message} " +
+                    "Run POST /api/search/reindex to repopulate it, or use mode=fulltext.");
+            }
             catch (Exception)
             {
-                return SemanticUnavailable();
+                return SemanticUnavailable(VectorStoreDownDetail);
             }
         }
         else
@@ -89,9 +101,9 @@ public static class SearchApi
         return Results.Ok(report);
     }
 
-    private static IResult SemanticUnavailable() =>
+    private static IResult SemanticUnavailable(string detail) =>
         Results.Problem(
             statusCode: StatusCodes.Status503ServiceUnavailable,
             title: "Semantic search unavailable",
-            detail: SemanticUnavailableDetail);
+            detail: detail);
 }

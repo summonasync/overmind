@@ -30,6 +30,8 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
 
     public string Name => ProviderName;
 
+    public string Model => OnnxModelSpec.AllMiniLmL6V2.Name;
+
     public int Dimensions => OutputDimensions;
 
     public async Task<float[]> EmbedAsync(string text, CancellationToken ct)

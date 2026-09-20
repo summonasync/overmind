@@ -1,7 +1,9 @@
+using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
+using Overmind.Infrastructure.Http;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 using static Qdrant.Client.Grpc.Conditions;
@@ -41,7 +43,7 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Qdrant health check failed; semantic search is down");
+            _logger.LogWarning(ex, "Qdrant health check failed: {Reason}", ex.Message);
             return false;
         }
     }
@@ -49,10 +51,14 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
     public async Task<IReadOnlyList<EntrySearchHit>> SearchAsync(Guid? projectId, string query, int limit, CancellationToken ct)
     {
         var provider = await _providerFactory.ResolveAsync(ct);
-        var client = await ClientAsync(ct);
-        await EnsureCollectionAsync(client, provider.Dimensions, ct);
+        var vector = await EmbedAsync(provider, query, ct);
 
-        var vector = await provider.EmbedAsync(query, ct);
+        var client = await ClientAsync(ct);
+        var sync = await EnsureCollectionAsync(client, vector.Length, ct);
+        if (sync.Recreated)
+        {
+            throw new VectorDimensionMismatchException((int?)sync.PreviousDimensions, vector.Length);
+        }
 
         using var cts = LinkedTimeout(ct);
         if (projectId.HasValue)
@@ -79,10 +85,11 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
     public async Task UpsertEntryAsync(ContextEntry entry, CancellationToken ct)
     {
         var provider = await _providerFactory.ResolveAsync(ct);
-        var client = await ClientAsync(ct);
-        await EnsureCollectionAsync(client, provider.Dimensions, ct);
+        var vector = await EmbedAsync(provider, $"{entry.Title}\n\n{entry.Content}", ct);
 
-        var vector = await provider.EmbedAsync($"{entry.Title}\n\n{entry.Content}", ct);
+        var client = await ClientAsync(ct);
+        await EnsureCollectionAsync(client, vector.Length, ct);
+
         var point = EntryPayload.ToPoint(entry, vector);
 
         using var cts = LinkedTimeout(ct);
@@ -96,7 +103,35 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         await client.DeleteAsync(QdrantCollection.Name, entryId, cancellationToken: cts.Token);
     }
 
-    private async Task EnsureCollectionAsync(QdrantClient client, int dimensions, CancellationToken ct)
+    internal static QdrantClient CreateClient(Uri endpoint) =>
+        LoopbackHttp.IsLoopback(endpoint)
+            ? new QdrantClient(
+                new QdrantGrpcClient(GrpcChannel.ForAddress(
+                    endpoint,
+                    new Grpc.Net.Client.GrpcChannelOptions
+                    {
+                        HttpHandler = LoopbackHttp.CreateProxyBypassHandler()
+                    })),
+                grpcTimeout: CallTimeout)
+            : new QdrantClient(endpoint, grpcTimeout: CallTimeout);
+
+    private static async Task<float[]> EmbedAsync(IEmbeddingProvider provider, string text, CancellationToken ct)
+    {
+        try
+        {
+            return await provider.EmbedAsync(text, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new EmbeddingFailedException(provider.Name, provider.Model, ex);
+        }
+    }
+
+    private async Task<CollectionSync> EnsureCollectionAsync(QdrantClient client, int dimensions, CancellationToken ct)
     {
         using var cts = LinkedTimeout(ct);
         if (!await client.CollectionExistsAsync(QdrantCollection.Name, cts.Token))
@@ -105,14 +140,14 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
                 QdrantCollection.Name,
                 QdrantCollection.CreateVectorParams(dimensions),
                 cancellationToken: cts.Token);
-            return;
+            return new CollectionSync(Recreated: false, PreviousDimensions: null);
         }
 
         using var infoCts = LinkedTimeout(ct);
         var info = await client.GetCollectionInfoAsync(QdrantCollection.Name, cancellationToken: infoCts.Token);
         if (QdrantCollection.HasMatchingDimensions(info.Config.Params.VectorsConfig, dimensions))
         {
-            return;
+            return new CollectionSync(Recreated: false, PreviousDimensions: null);
         }
 
         var actualSize = info.Config.Params.VectorsConfig.Params?.Size;
@@ -131,6 +166,8 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
             QdrantCollection.Name,
             QdrantCollection.CreateVectorParams(dimensions),
             cancellationToken: createCts.Token);
+
+        return new CollectionSync(Recreated: true, PreviousDimensions: actualSize);
     }
 
     private async Task<QdrantClient> ClientAsync(CancellationToken ct)
@@ -152,7 +189,7 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
             throw new InvalidOperationException($"Invalid Qdrant endpoint '{endpoint}'.");
         }
 
-        var client = new QdrantClient(uri, grpcTimeout: CallTimeout);
+        var client = CreateClient(uri);
         lock (_gate)
         {
             _client = client;
@@ -168,4 +205,6 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         cts.CancelAfter(CallTimeout);
         return cts;
     }
+
+    private sealed record CollectionSync(bool Recreated, ulong? PreviousDimensions);
 }

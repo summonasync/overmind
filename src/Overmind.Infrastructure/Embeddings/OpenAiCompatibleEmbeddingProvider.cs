@@ -28,6 +28,8 @@ public sealed class OpenAiCompatibleEmbeddingProvider : IEmbeddingProvider
 
     public string Name => ProviderName;
 
+    public string Model => _model;
+
     public int Dimensions => DefaultDimensions;
 
     public async Task<float[]> EmbedAsync(string text, CancellationToken ct)

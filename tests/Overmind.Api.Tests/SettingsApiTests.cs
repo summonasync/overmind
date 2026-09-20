@@ -67,6 +67,7 @@ public sealed class SettingsApiTests : IDisposable
         var document = JsonDocument.Parse(json);
         document.RootElement.GetProperty("embeddingProvider").GetString().ShouldBe("openai");
         document.RootElement.GetProperty("ollamaBaseUrl").GetString().ShouldBe("http://127.0.0.1:9999");
+        document.RootElement.GetProperty("ollamaModel").GetString().ShouldBe("all-minilm-l6-v2");
         document.RootElement.GetProperty("openAiBaseUrl").GetString().ShouldBe("http://127.0.0.1:9998/v1");
         document.RootElement.GetProperty("openAiApiKeyConfigured").GetBoolean().ShouldBeTrue();
     }
@@ -91,6 +92,59 @@ public sealed class SettingsApiTests : IDisposable
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Get_IncludesOllamaModelDefault()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("ollamaModel").GetString().ShouldBe("all-minilm-l6-v2");
+    }
+
+    [Fact]
+    public async Task Put_OllamaModel_RoundTrips_AndSurvivesPartialUpdates()
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new { OllamaModel = "  nomic-embed-text  " });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("ollamaModel").GetString().ShouldBe("nomic-embed-text");
+
+        await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("ollamaModel").GetString().ShouldBe("nomic-embed-text");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Put_RejectsEmptyOllamaModel(string model)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { OllamaModel = model });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_RejectsOllamaModelOver100Chars()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { OllamaModel = new string('m', 101) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_AcceptsHundredCharacterOllamaModel()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { OllamaModel = new string('m', 100) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("ollamaModel").GetString().ShouldBe(new string('m', 100));
     }
 
     [Fact]
