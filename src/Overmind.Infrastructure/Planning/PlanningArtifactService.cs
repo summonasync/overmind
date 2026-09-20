@@ -73,7 +73,7 @@ public sealed class PlanningArtifactService
             created = PlanningArtifact.Create(
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
             _db.PlanningArtifacts.Add(created);
-            PromoteOnArtifactCreate(feature);
+            TransitionOnArtifactCreate(feature, kind);
         }
 
         try
@@ -91,7 +91,7 @@ public sealed class PlanningArtifactService
             resolvedOrder = await ResolveOrderAsync(kind, null, featureId, ct);
             _db.PlanningArtifacts.Add(
                 PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief));
-            PromoteOnArtifactCreate(feature);
+            TransitionOnArtifactCreate(feature, kind);
 
             try
             {
@@ -204,9 +204,10 @@ public sealed class PlanningArtifactService
             .FirstAsync(ct);
     }
 
-    private static void PromoteOnArtifactCreate(PlanningFeature feature)
+    private static void TransitionOnArtifactCreate(PlanningFeature feature, PlanningArtifactKind kind)
     {
-        if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready)
+        if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready ||
+            (feature.Status is PlanningFeatureStatus.Review && kind is PlanningArtifactKind.Task))
         {
             feature.SetStatus(PlanningFeatureStatus.InProgress);
         }

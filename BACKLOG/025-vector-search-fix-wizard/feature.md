@@ -1,8 +1,8 @@
 ---
 feature: 025
 slug: vector-search-fix-wizard
-status: review
-version: 2
+status: done
+version: 3
 created: 2026-09-20
 ---
 

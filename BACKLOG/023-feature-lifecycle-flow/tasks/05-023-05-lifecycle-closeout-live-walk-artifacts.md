@@ -2,7 +2,7 @@
 feature: 023
 task: 05
 slug: feature-lifecycle-flow
-status: inprogress
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -51,4 +51,6 @@ Feature 023 closeout. Tasks 01–04 done and reviewed first. Orchestrator-driven
 <log>
 - 2026-09-20 — Closeout started — orchestrator runs the live lifecycle walk against an isolated dev host (scratch DB in a tmp cwd, port 4799 via Overmind__BindUrl; the production 0.1.7 host and its DB untouched).
 - 2026-09-20 — Live walk PASSED on an isolated dev host (scratch DB, port 4799 via Overmind__BindUrl; production 0.1.7 host and DB untouched, verified alive after): draft → manual ready (200) → spec create AUTO→inProgress → last task done AUTO→review → manual review→inProgress rollback (200) → task reopen+re-done AUTO→review again → manual done (200, final). Denied: draft→done PUT → 400. Bonus live proof: task brief on the wire ('walk the lifecycle' — feature 021 end-to-end in the new build). Scratch host killed by exact PID; scratch project+feature died with the tmp DB.
+- 2026-09-20 — Live walk PASSED end-to-end on the deployed 0.1.9 build (version 288e7b5, host 4761), scratch feature zz-lifecycle-walk, evidence per step: draft (create); draft→ready manual PUT 200; ready→inProgress AUTO on spec create via MCP; task1 done → stays inProgress; task2 done → AUTO review (spec+plan present); rollback review→inProgress manual PUT 200; task2 reopen+re-done → AUTO review again; task3 CREATED on review → AUTO demote to inProgress (023/06 fix proven live — the exact 025 incident scenario); inProgress→done one PUT 200 (escape hatch 023/07); done→inProgress → 400 InvalidFeatureTransition "allowed targets: ." (terminal); scratch deleted 204. All lifecycle paths exercised green.
+- 2026-09-20 — Done: live walk executed with full evidence (see log) on the deployed build — every auto-promotion, the manual rollback, the 023/06 demote path, the escape-hatch close, and the denied terminal transition. Contract satisfied; cleanup done.
 </log>
