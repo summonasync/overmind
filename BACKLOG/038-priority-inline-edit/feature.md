@@ -1,9 +1,9 @@
 ---
 feature: 038
 slug: priority-inline-edit
-status: inProgress
+status: review
 priority: p2
-version: 1
+version: 9
 created: 2026-09-20
 ---
 
