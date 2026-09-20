@@ -73,7 +73,7 @@ export function AppSidebar() {
           src={kerrigan}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-0 h-[68%] w-44 object-cover object-top opacity-80 [mask-image:linear-gradient(to_right,black_30%,transparent_98%)]"
+          className="pointer-events-none absolute bottom-0 left-0 h-[68%] w-44 object-cover object-top opacity-35 [mask-image:linear-gradient(to_right,white_30%,var(--color-surface)_98%)] [mask-mode:luminance]"
         />
       )}
       <div className="relative flex items-center gap-2.5 px-4 pt-5">
@@ -93,7 +93,7 @@ export function AppSidebar() {
               <div key={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-0.5 rounded-md border-l-2 pr-1 transition-colors",
+                    "flex items-center gap-1 rounded-md border-l-2 pr-3 transition-colors",
                     active
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
@@ -112,7 +112,7 @@ export function AppSidebar() {
                     href="/"
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex min-w-0 flex-1 items-center gap-1.5 rounded py-2 text-sm font-medium transition-colors",
+                      "flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-2 text-sm font-medium transition-colors",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                       active ? "text-primary" : "hover:text-foreground",
                     )}
@@ -122,7 +122,7 @@ export function AppSidebar() {
                   </a>
                 </div>
                 {projectsOpen ? (
-                  <div className="mt-1 max-h-[50vh] overflow-y-auto rounded-md bg-black/45 p-1 backdrop-blur-sm">
+                  <div className="mt-1 max-h-[50vh] overflow-y-auto p-1">
                     <ProjectTree onRegister={setRegisterPath} />
                   </div>
                 ) : null}
