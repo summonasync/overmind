@@ -2,7 +2,7 @@
 feature: 025
 task: 02
 slug: vector-search-fix-wizard
-status: todo
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -54,4 +54,8 @@ Feature 025, task 2 of 2. Depends on 01 (proxy bypass + model setting + honest 5
 </obstacles>
 
 <log>
+- 2026-09-20 — Starting execution: backend health/test endpoints + settings fields + web banner/form/nudge, then live e2e on the user's stack. User-directed session (push + finish 025 + then 023).
+- 2026-09-20 — Review fix-loops (both non-gating WARNINGs): W1 probe-embed TTL cache landed (VectorSearchHealthCache singleton, TTL 30s = web health polling interval; failures cached too; settings/test candidate path uncached; stale-after-PUT ≤1 TTL window accepted) — 919 tests (+2). Web W1 nudge save.reset() in flight via next-js-coder. Microbatch: W2 onnx fresh-install wording + web stale-verdicts + poll/cache interval check.
+- 2026-09-20 — Live e2e PASSED on the user's stack (fresh 0.1.9 pack from the working tree, deployed to ~/apps/overmind, host 4761): (1) structured /api/health — flat up preserved, qdrant leg green with endpoint, embedding leg honestly red pre-config (all-minilm 404, dims null); (2) POST /api/settings/test candidate nomic-embed-text → both legs green, dimensions 768 from the REAL probe (W2 closed live); (3) PUT settings saved model → reindexRecommended: true (flat response); (4) reindex 33/33 entries, 0 failed, 768-dim collection, 3m31s; (5) semantic hits real: EN paraphrase "escaping feature burial" → escape-hatch decision top hit (rank 0.617), RU query hit; health fully green (nomic-embed-text, dims 768); (6) wrong-model test → honest embedding-leg error naming the model; (7) 023/07 live check: scratch feature draft→done one PUT → 200, cleanup 204. Deploy note: pack.sh needed bash invocation (not executable bit); old host restored after a 15s false-start outage before the proper pack.
+- 2026-09-20 — Done: implementation (backend 917→919 tests incl. W2 regression pin + web wizard, gates green), light review PASS-WITH-NITS both halves (audits/review-025-02.md; both non-gating WARNINGs fixed in-loop: probe TTL cache 30s + nudge save.reset), live e2e passed on the user's stack with nomic-embed-text end-to-end (evidence in log). Remaining nits → microbatch queue (W2 fresh-install wording, stale test verdicts, poll/cache interval).
 </log>

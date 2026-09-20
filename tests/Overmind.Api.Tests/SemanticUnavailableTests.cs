@@ -96,6 +96,12 @@ public sealed class SemanticUnavailableTests
     {
         public Task<bool> HealthAsync(CancellationToken ct) => Task.FromResult(healthy);
 
+        public Task<VectorSearchHealthReport> HealthReportAsync(CancellationToken ct) => Task.FromResult(
+            new VectorSearchHealthReport(
+                healthy,
+                new QdrantHealthLeg(healthy, "http://127.0.0.1:6334", null),
+                new EmbeddingHealthLeg(healthy, "stub", "stub-model", null, null)));
+
         public Task<IReadOnlyList<EntrySearchHit>> SearchAsync(
             Guid? projectId, string query, int limit, CancellationToken ct) =>
             Task.FromResult(search());

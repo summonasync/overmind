@@ -40,3 +40,23 @@ export interface ListDirectoryResponse {
   truncated: boolean;
   entries: DirectoryEntry[];
 }
+
+export interface QdrantHealthLeg {
+  up: boolean;
+  endpoint: string;
+  error: string | null;
+}
+
+export interface EmbeddingHealthLeg {
+  up: boolean;
+  provider: string;
+  model: string;
+  dimensions: number | null;
+  error: string | null;
+}
+
+export interface VectorSearchHealth {
+  up: boolean;
+  qdrant: QdrantHealthLeg;
+  embedding: EmbeddingHealthLeg;
+}

@@ -19,24 +19,32 @@ public sealed class EmbeddingProviderFactory
         _loggerFactory = loggerFactory;
     }
 
-    public async Task<IEmbeddingProvider> ResolveAsync(CancellationToken ct)
+    public Task<IEmbeddingProvider> ResolveAsync(CancellationToken ct) =>
+        CreateAsync(null, null, null, null, ct);
+
+    public async Task<IEmbeddingProvider> CreateAsync(
+        string? providerName,
+        string? ollamaBaseUrl,
+        string? ollamaModel,
+        string? openAiBaseUrl,
+        CancellationToken ct)
     {
         var settings = new AppSettingsService(_dbContext);
-        var providerName = (await settings.GetOrDefaultAsync(
-            SettingKeys.EmbeddingProvider, SettingDefaults.EmbeddingProvider, ct)).ToLowerInvariant();
+        providerName ??= await settings.GetOrDefaultAsync(
+            SettingKeys.EmbeddingProvider, SettingDefaults.EmbeddingProvider, ct);
 
-        switch (providerName)
+        switch (providerName.ToLowerInvariant())
         {
             case OllamaEmbeddingProvider.ProviderName:
-                var ollamaBaseUrl = await settings.GetOrDefaultAsync(
+                ollamaBaseUrl ??= await settings.GetOrDefaultAsync(
                     SettingKeys.EmbeddingOllamaBaseUrl, SettingDefaults.EmbeddingOllamaBaseUrl, ct);
-                var ollamaModel = await settings.GetOrDefaultAsync(
+                ollamaModel ??= await settings.GetOrDefaultAsync(
                     SettingKeys.EmbeddingOllamaModel, SettingDefaults.EmbeddingOllamaModel, ct);
                 return new OllamaEmbeddingProvider(
                     CreateEmbeddingHttpClient(ollamaBaseUrl), ollamaBaseUrl, ollamaModel);
 
             case OpenAiCompatibleEmbeddingProvider.ProviderName:
-                var openAiBaseUrl = await settings.GetOrDefaultAsync(
+                openAiBaseUrl ??= await settings.GetOrDefaultAsync(
                     SettingKeys.EmbeddingOpenAiBaseUrl, SettingDefaults.EmbeddingOpenAiBaseUrl, ct);
                 var apiKey = await settings.GetOrDefaultAsync(SettingKeys.EmbeddingOpenAiApiKey, string.Empty, ct);
                 return new OpenAiCompatibleEmbeddingProvider(

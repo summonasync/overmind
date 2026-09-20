@@ -15,12 +15,12 @@ public static class HealthApi
 
     private static async Task<IResult> GetHealth(ISemanticSearch semanticSearch, CancellationToken ct)
     {
-        var vectorsUp = await semanticSearch.HealthAsync(ct);
+        var vectorSearch = await semanticSearch.HealthReportAsync(ct);
         var version = Assembly.GetExecutingAssembly()
                          .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                      ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
                      ?? "unknown";
 
-        return Results.Ok(new HealthResponse("ok", vectorsUp ? "up" : "down", version));
+        return Results.Ok(new HealthResponse("ok", vectorSearch, version));
     }
 }

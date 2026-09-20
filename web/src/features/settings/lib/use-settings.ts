@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { reindex, updateSettings } from "@/features/settings/api";
+import { reindex, testSettings, updateSettings } from "@/features/settings/api";
 import { settingsKeys, settingsQueryOptions } from "@/features/settings/queries";
-import type { SettingsFormValues } from "@/features/settings/types";
+import type { SettingsFormValues, TestSettingsValues } from "@/features/settings/types";
 
 export function useSettings() {
   const query = useQuery(settingsQueryOptions());
@@ -18,9 +18,13 @@ export function useSettingsMutations() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.current() }),
   });
 
+  const test = useMutation({
+    mutationFn: (values: TestSettingsValues) => testSettings(values),
+  });
+
   const rebuild = useMutation({
     mutationFn: () => reindex(),
   });
 
-  return { save, rebuild };
+  return { save, test, rebuild };
 }

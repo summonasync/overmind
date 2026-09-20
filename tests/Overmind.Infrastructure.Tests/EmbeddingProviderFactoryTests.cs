@@ -127,6 +127,50 @@ public sealed class EmbeddingProviderFactoryTests : IDisposable
         (await factory.ResolveAsync(CancellationToken.None)).ShouldBeOfType<OpenAiCompatibleEmbeddingProvider>();
     }
 
+    [Fact]
+    public async Task CreateAsync_CandidateValues_OverrideSavedSettings()
+    {
+        await using var context = _temp.CreateContext();
+        var settings = new AppSettingsService(context);
+        await settings.SetAsync(SettingKeys.EmbeddingProvider, "onnx", CancellationToken.None);
+        var factory = CreateFactory(context);
+
+        var provider = await factory.CreateAsync(
+            "ollama", "http://127.0.0.1:9999", "nomic-embed-text", null, CancellationToken.None);
+
+        var ollama = provider.ShouldBeOfType<OllamaEmbeddingProvider>();
+        ollama.Model.ShouldBe("nomic-embed-text");
+    }
+
+    [Fact]
+    public async Task CreateAsync_NullCandidates_FallBackToSavedSettings()
+    {
+        await using var context = _temp.CreateContext();
+        var settings = new AppSettingsService(context);
+        await settings.SetAsync(SettingKeys.EmbeddingProvider, "ollama", CancellationToken.None);
+        await settings.SetAsync(SettingKeys.EmbeddingOllamaModel, "nomic-embed-text", CancellationToken.None);
+        var factory = CreateFactory(context);
+
+        var provider = await factory.CreateAsync("ollama", null, null, null, CancellationToken.None);
+
+        var ollama = provider.ShouldBeOfType<OllamaEmbeddingProvider>();
+        ollama.Model.ShouldBe("nomic-embed-text");
+    }
+
+    [Fact]
+    public async Task CreateAsync_OpenAiCandidate_UsesSavedApiKey()
+    {
+        await using var context = _temp.CreateContext();
+        var settings = new AppSettingsService(context);
+        await settings.SetAsync(SettingKeys.EmbeddingOpenAiApiKey, "secret-key", CancellationToken.None);
+        var factory = CreateFactory(context);
+
+        var provider = await factory.CreateAsync(
+            "openai", null, null, "http://127.0.0.1:9998", CancellationToken.None);
+
+        provider.ShouldBeOfType<OpenAiCompatibleEmbeddingProvider>();
+    }
+
     private static EmbeddingProviderFactory CreateFactory(Persistence.OvermindDbContext context) =>
         new(context, NullLoggerFactory.Instance);
 

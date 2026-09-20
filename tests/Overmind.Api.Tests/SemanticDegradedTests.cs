@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Overmind.Core;
 using Shouldly;
 using Xunit;
 using Xunit.Abstractions;
@@ -38,7 +39,8 @@ public sealed class SemanticDegradedTests : IDisposable
 
         var health = await _client.GetFromJsonAsync<HealthJson>("/api/health", JsonOptions);
         health.ShouldNotBeNull();
-        health!.VectorSearch.ShouldBe("down");
+        health!.VectorSearch.Qdrant.Up.ShouldBeFalse();
+        health.VectorSearch.Up.ShouldBeFalse();
     }
 
     [Fact]
@@ -131,7 +133,7 @@ public sealed class SemanticDegradedTests : IDisposable
     private async Task<bool> IsVectorSearchUp()
     {
         var health = await _client.GetFromJsonAsync<HealthJson>("/api/health", JsonOptions);
-        return health?.VectorSearch == "up";
+        return health?.VectorSearch.Qdrant.Up == true;
     }
 
     private async Task<Guid> CreateProjectAsync(string name)
@@ -162,7 +164,7 @@ public sealed class SemanticDegradedTests : IDisposable
 
     public sealed record EntryJson(Guid Id);
 
-    public sealed record HealthJson(string Status, string VectorSearch, string Version);
+    public sealed record HealthJson(string Status, VectorSearchHealthReport VectorSearch, string Version);
 
     public sealed record HitJson(Guid EntryId, string Title, string Snippet, double Rank);
 

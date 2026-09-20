@@ -16,6 +16,7 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
 
     private readonly AppSettingsService _settings;
     private readonly EmbeddingProviderFactory _providerFactory;
+    private readonly VectorSearchHealthCache _healthCache;
     private readonly ILogger<QdrantSemanticSearch> _logger;
 
     private readonly object _gate = new();
@@ -25,10 +26,12 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
     public QdrantSemanticSearch(
         AppSettingsService settings,
         EmbeddingProviderFactory providerFactory,
+        VectorSearchHealthCache healthCache,
         ILogger<QdrantSemanticSearch> logger)
     {
         _settings = settings;
         _providerFactory = providerFactory;
+        _healthCache = healthCache;
         _logger = logger;
     }
 
@@ -46,6 +49,47 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
             _logger.LogWarning(ex, "Qdrant health check failed: {Reason}", ex.Message);
             return false;
         }
+    }
+
+    public async Task<VectorSearchHealthReport> HealthReportAsync(CancellationToken ct)
+    {
+        var cached = _healthCache.Read();
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var endpoint = await _settings.GetOrDefaultAsync(
+            SettingKeys.QdrantEndpoint, SettingDefaults.QdrantEndpoint, ct);
+
+        QdrantHealthLeg qdrant;
+        try
+        {
+            var client = await ClientAsync(ct);
+            qdrant = await SemanticSearchProbes.ProbeQdrantAsync(client, endpoint, ct);
+        }
+        catch (Exception ex)
+        {
+            qdrant = new QdrantHealthLeg(false, endpoint, ex.Message);
+        }
+
+        if (!qdrant.Up)
+        {
+            _logger.LogWarning("Qdrant health check failed for {Endpoint}: {Reason}", endpoint, qdrant.Error);
+        }
+
+        var provider = await _providerFactory.ResolveAsync(ct);
+        var embedding = await SemanticSearchProbes.ProbeEmbeddingAsync(provider, ct);
+        if (!embedding.Up)
+        {
+            _logger.LogWarning(
+                "Embedding health check failed for {Provider}/{Model}: {Reason}",
+                embedding.Provider, embedding.Model, embedding.Error);
+        }
+
+        var report = new VectorSearchHealthReport(qdrant.Up && embedding.Up, qdrant, embedding);
+        _healthCache.Store(report);
+        return report;
     }
 
     public async Task<IReadOnlyList<EntrySearchHit>> SearchAsync(Guid? projectId, string query, int limit, CancellationToken ct)

@@ -8,7 +8,7 @@ import { AppTopbar } from "@/widgets/app-shell/ui/app-topbar";
 import { MobileNav } from "@/widgets/app-shell/ui/mobile-nav";
 import { InfoPanel } from "@/widgets/app-shell/ui/info-panel";
 import { ProjectTabs } from "@/widgets/app-shell/ui/project-tabs";
-import { DegradedBanner } from "@/widgets/degraded-banner/ui/degraded-banner";
+import { DegradedBanner } from "@/widgets/degraded-banner";
 
 const COLLAPSED_STORAGE_KEY = "overmind.info-panel.collapsed";
 

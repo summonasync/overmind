@@ -27,8 +27,10 @@ public static class DependencyInjection
         services.AddScoped<FtsSearchService>();
 
         services.AddScoped<EmbeddingProviderFactory>();
+        services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());
+        services.AddScoped<VectorSearchTester>();
         services.AddScoped<EntryIndexingService>();
         services.AddScoped<ReindexService>();
 

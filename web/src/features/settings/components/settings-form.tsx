@@ -7,11 +7,14 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
+import { TestVerdicts } from "@/features/settings/components/test-verdicts";
+import type { VectorSearchHealth } from "@/shared/api/types";
 import type {
   PlanningMaterializationDefault,
   PlanningValidationDefault,
   SettingsFormValues,
   SettingsResponse,
+  TestSettingsValues,
 } from "@/features/settings/types";
 
 const PROVIDERS = ["onnx", "ollama", "openai"] as const;
@@ -23,13 +26,19 @@ interface SettingsFormProps {
   pending: boolean;
   error: Error | null;
   onSubmit: (values: SettingsFormValues) => void;
+  onTest: (values: TestSettingsValues) => void;
+  testPending: boolean;
+  testReport: VectorSearchHealth | null;
+  testError: Error | null;
 }
 
-export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFormProps) {
+export function SettingsForm({ settings, pending, error, onSubmit, onTest, testPending, testReport, testError }: SettingsFormProps) {
   const [embeddingProvider, setEmbeddingProvider] = useState(settings.embeddingProvider);
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(settings.ollamaBaseUrl);
+  const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel);
   const [openAiBaseUrl, setOpenAiBaseUrl] = useState(settings.openAiBaseUrl);
   const [openAiApiKey, setOpenAiApiKey] = useState("");
+  const [qdrantEndpoint, setQdrantEndpoint] = useState(settings.qdrantEndpoint);
   const [planningMaterializationDefault, setPlanningMaterializationDefault] = useState(
     settings.planningMaterializationDefault,
   );
@@ -42,8 +51,10 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
     setSyncedSettings(settings);
     setEmbeddingProvider(settings.embeddingProvider);
     setOllamaBaseUrl(settings.ollamaBaseUrl);
+    setOllamaModel(settings.ollamaModel);
     setOpenAiBaseUrl(settings.openAiBaseUrl);
     setOpenAiApiKey("");
+    setQdrantEndpoint(settings.qdrantEndpoint);
     setPlanningMaterializationDefault(settings.planningMaterializationDefault);
     setPlanningRequireHumanValidationDefault(settings.planningRequireHumanValidationDefault);
   }
@@ -53,10 +64,22 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
     onSubmit({
       embeddingProvider,
       ollamaBaseUrl: ollamaBaseUrl.trim(),
+      ollamaModel: ollamaModel.trim(),
       openAiBaseUrl: openAiBaseUrl.trim(),
       openAiApiKey: openAiApiKey.trim(),
+      qdrantEndpoint: qdrantEndpoint.trim(),
       planningMaterializationDefault,
       planningRequireHumanValidationDefault,
+    });
+  };
+
+  const handleTest = () => {
+    onTest({
+      provider: embeddingProvider,
+      ollamaBaseUrl: ollamaBaseUrl.trim(),
+      ollamaModel: ollamaModel.trim(),
+      openAiBaseUrl: openAiBaseUrl.trim(),
+      qdrantEndpoint: qdrantEndpoint.trim(),
     });
   };
 
@@ -78,14 +101,24 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
       </Field>
 
       {embeddingProvider === "ollama" ? (
-        <Field label="Ollama base URL" htmlFor="ollama-url">
-          <Input
-            id="ollama-url"
-            value={ollamaBaseUrl}
-            onChange={(event) => setOllamaBaseUrl(event.target.value)}
-            placeholder="http://127.0.0.1:11434"
-          />
-        </Field>
+        <>
+          <Field label="Ollama base URL" htmlFor="ollama-url">
+            <Input
+              id="ollama-url"
+              value={ollamaBaseUrl}
+              onChange={(event) => setOllamaBaseUrl(event.target.value)}
+              placeholder="http://127.0.0.1:11434"
+            />
+          </Field>
+          <Field label="Ollama embedding model" htmlFor="ollama-model">
+            <Input
+              id="ollama-model"
+              value={ollamaModel}
+              onChange={(event) => setOllamaModel(event.target.value)}
+              placeholder="nomic-embed-text"
+            />
+          </Field>
+        </>
       ) : null}
 
       {embeddingProvider === "openai" ? (
@@ -115,6 +148,23 @@ export function SettingsForm({ settings, pending, error, onSubmit }: SettingsFor
           )}
         </>
       ) : null}
+
+      <div className="space-y-3 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground">Vector search</h3>
+        <Field label="Qdrant endpoint" htmlFor="qdrant-endpoint">
+          <Input
+            id="qdrant-endpoint"
+            value={qdrantEndpoint}
+            onChange={(event) => setQdrantEndpoint(event.target.value)}
+            placeholder="http://127.0.0.1:6334"
+          />
+        </Field>
+        <Button type="button" variant="secondary" onClick={handleTest} disabled={testPending}>
+          {testPending ? "Testing…" : "Test connection"}
+        </Button>
+        {testReport ? <TestVerdicts report={testReport} /> : null}
+        <ErrorText error={testError} />
+      </div>
 
       <div className="space-y-3 border-t border-border pt-4">
         <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>

@@ -205,4 +205,90 @@ public sealed class SettingsApiTests : IDisposable
         });
         validation.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Get_IncludesQdrantEndpointDefault()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("qdrantEndpoint").GetString().ShouldBe("http://127.0.0.1:6334");
+    }
+
+    [Fact]
+    public async Task Put_QdrantEndpoint_RoundTrips_AndSurvivesPartialUpdates()
+    {
+        using var put = await _client.PutAsJsonAsync(
+            "/api/settings", new { QdrantEndpoint = "  http://127.0.0.1:6335  " });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("qdrantEndpoint").GetString().ShouldBe("http://127.0.0.1:6335");
+
+        await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("qdrantEndpoint").GetString().ShouldBe("http://127.0.0.1:6335");
+    }
+
+    [Theory]
+    [InlineData("not a url")]
+    [InlineData("ftp://127.0.0.1:6334")]
+    public async Task Put_RejectsInvalidQdrantEndpoint(string endpoint)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { QdrantEndpoint = endpoint });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_ReindexRecommended_True_WhenProviderChanges()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("reindexRecommended").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Put_ReindexRecommended_True_WhenOllamaModelChanges()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { OllamaModel = "nomic-embed-text" });
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("reindexRecommended").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Put_ReindexRecommended_True_WhenQdrantEndpointChanges()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { QdrantEndpoint = "http://127.0.0.1:6335" });
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("reindexRecommended").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Put_ReindexRecommended_False_WhenEmbeddingInputsUnchanged()
+    {
+        await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "OLLAMA" });
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("reindexRecommended").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Put_ReindexRecommended_False_WhenOnlyPlanningDefaultsChange()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { PlanningMaterializationDefault = "on" });
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("reindexRecommended").GetBoolean().ShouldBeFalse();
+    }
 }

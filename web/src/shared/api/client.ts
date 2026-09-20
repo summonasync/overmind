@@ -12,15 +12,32 @@ function resolveBaseUrl(): string {
   return typeof window === "undefined" ? "" : window.location.origin;
 }
 
+function validationMessages(body: Record<string, unknown>): string[] {
+  const errors = body.errors;
+  if (errors === null || typeof errors !== "object" || Array.isArray(errors)) {
+    return [];
+  }
+
+  return Object.entries(errors).flatMap(([field, values]) =>
+    Array.isArray(values)
+      ? values
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => (field ? `${field}: ${value}` : value))
+      : [],
+  );
+}
+
 async function readError(response: Response): Promise<ApiError> {
   const body: unknown = await response.json().catch(() => null);
-  if (
-    body !== null &&
-    typeof body === "object" &&
-    "detail" in body &&
-    typeof body.detail === "string"
-  ) {
-    return new ApiError(response.status, body.detail);
+  if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+    const record = body as Record<string, unknown>;
+    if (typeof record.detail === "string") {
+      return new ApiError(response.status, record.detail);
+    }
+    const messages = validationMessages(record);
+    if (messages.length > 0) {
+      return new ApiError(response.status, messages.join("; "));
+    }
   }
   return new ApiError(response.status, response.statusText || `Request failed (${response.status})`);
 }
