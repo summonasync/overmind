@@ -6,7 +6,8 @@ public enum MaterializationFailureKind
     PathTraversal,
     OverwriteBlocked,
     InvalidTarget,
-    IoError
+    IoError,
+    LocalEditsBlocked
 }
 
 public sealed class MaterializationException : Exception
@@ -43,6 +44,15 @@ public sealed class MaterializationException : Exception
             MaterializationFailureKind.OverwriteBlocked,
             $"Refusing to overwrite '{absolutePath}': the file exists on disk but is not tracked by Overmind.",
             absolutePath);
+
+    public static MaterializationException LocalEdits(IReadOnlyList<string> paths) =>
+        new(
+            MaterializationFailureKind.LocalEditsBlocked,
+            string.Join('\n',
+                new[] { "Refusing to overwrite locally modified tracked files:" }
+                    .Concat(paths.Select(path => $"- {path}"))
+                    .Append("Transcribe the edits to the board (planning_upsert_artifact / planning_append_log) or re-run materialize with force.")),
+            paths is [var only] ? only : null);
 
     public static MaterializationException DuplicateTarget(string absolutePath) =>
         new(

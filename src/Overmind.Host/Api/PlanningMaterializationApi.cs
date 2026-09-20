@@ -75,7 +75,8 @@ public static class PlanningMaterializationApi
                     statusCode: StatusCodes.Status400BadRequest,
                     title: "Invalid materialization target",
                     detail: ex.Message),
-            MaterializationFailureKind.OverwriteBlocked => HttpErrors.Conflict(ex.Message),
+            MaterializationFailureKind.OverwriteBlocked or MaterializationFailureKind.LocalEditsBlocked =>
+                HttpErrors.Conflict(ex.Message),
             _ => Results.Problem(
                 statusCode: StatusCodes.Status500InternalServerError,
                 title: "Materialization failed",

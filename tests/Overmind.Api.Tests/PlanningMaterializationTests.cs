@@ -81,6 +81,59 @@ public sealed class PlanningMaterializationTests : IDisposable
     }
 
     [Fact]
+    public async Task Materialize_TrackedFileHandEdited_Returns409ListingPathInDetail()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "# Task One", Order = 1 });
+
+        var taskFile = Path.Combine(_projectDir, "BACKLOG", "feat", "tasks", "01-task-one.md");
+        File.Exists(taskFile).ShouldBeTrue();
+        await File.AppendAllTextAsync(taskFile, "external edit\n");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Status.ShouldBe(409);
+        problem!.Detail.ShouldNotBeNull();
+        problem!.Detail!.ShouldContain(taskFile);
+        problem.Detail.ShouldContain("planning_upsert_artifact");
+        (await File.ReadAllTextAsync(taskFile)).ShouldContain("external edit");
+    }
+
+    [Fact]
+    public async Task Materialize_TrackedFileHandEdited_WithForce_RegeneratesFileAndWarns()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "# Task One", Order = 1 });
+
+        var taskFile = Path.Combine(_projectDir, "BACKLOG", "feat", "tasks", "01-task-one.md");
+        File.Exists(taskFile).ShouldBeTrue();
+        await File.AppendAllTextAsync(taskFile, "external edit\n");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/materialize", new { Force = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var report = await response.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
+        report.ShouldNotBeNull();
+        report!.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {taskFile}");
+
+        (await File.ReadAllTextAsync(taskFile)).ShouldNotContain("external edit");
+        var drift = await _client.GetFromJsonAsync<DriftItemJson[]>(
+            $"/api/projects/{project.Id}/planning/drift", JsonOptions);
+        drift.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Drift_ReturnsCamelCaseItems()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
@@ -178,4 +231,6 @@ public sealed class PlanningMaterializationTests : IDisposable
     public sealed record MaterializedFileJson(string RelativePath, string Sha256);
 
     public sealed record DriftItemJson(Guid ProjectId, string? FeatureSlug, string RelativePath, string Kind);
+
+    public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

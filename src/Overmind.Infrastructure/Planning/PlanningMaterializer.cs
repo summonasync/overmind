@@ -56,6 +56,11 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         plans.Add(BuildBacklogPlan(root, features));
 
+        if (strategy == PlanningMaterialization.On)
+        {
+            await GuardLocalEditsAsync(plans, rows, force, warnings, ct);
+        }
+
         await WritePlansAsync(projectId, plans, rows, ct);
 
         return new PlanningMaterializationReport(
@@ -349,6 +354,61 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
             warnings.Add($"Overwrote untracked file: {plan.AbsolutePath}");
         }
+    }
+
+    // Repo-root syncs only: archive copies live under app data and are rewritten freely. A write
+    // loses hand edits only when three hashes diverge — the row proves the file is tracked, the
+    // disk hash drifting from the row proves local edits since our last write, and the plan hash
+    // differing from the disk proves the rewrite would actually drop them.
+    private static async Task GuardLocalEditsAsync(
+        List<FilePlan> plans, List<PlanningMaterializedFile> rows, bool force,
+        List<string> warnings, CancellationToken ct)
+    {
+        List<string>? locallyModified = null;
+
+        foreach (var plan in plans)
+        {
+            var row = rows.FirstOrDefault(r => PathGuard.PathsEqual(r.RelativePath, plan.RelativePath));
+            if (row is null || !File.Exists(plan.AbsolutePath))
+            {
+                continue;
+            }
+
+            var diskHash = await HashTrackedDiskCopyAsync(plan, ct);
+            if (diskHash is null ||
+                string.Equals(diskHash, row.Sha256, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(diskHash, plan.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (force)
+            {
+                warnings.Add($"Overwrote locally modified file: {plan.AbsolutePath}");
+                continue;
+            }
+
+            (locallyModified ??= []).Add(plan.AbsolutePath);
+        }
+
+        if (locallyModified is not null)
+        {
+            throw MaterializationException.LocalEdits(locallyModified);
+        }
+    }
+
+    // Markers gone reads as null: the whole index is hand-written territory then and Merge only
+    // re-appends the block, so nothing on disk is lost and the guard stays out of it.
+    private static async Task<string?> HashTrackedDiskCopyAsync(FilePlan plan, CancellationToken ct)
+    {
+        if (PathGuard.PathsEqual(plan.RelativePath, BacklogIndexRelativePath))
+        {
+            var index = await File.ReadAllTextAsync(plan.AbsolutePath, ct);
+            return ManagedBlock.TryExtract(index, out var block) ? ContentHash.Sha256(block) : null;
+        }
+
+        var bytes = await File.ReadAllBytesAsync(plan.AbsolutePath, ct);
+        return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
     private async Task WritePlansAsync(

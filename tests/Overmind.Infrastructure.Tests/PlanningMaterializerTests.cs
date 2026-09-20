@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
@@ -247,6 +248,167 @@ public sealed class PlanningMaterializerTests : IDisposable
 
         report.Warnings.ShouldHaveSingleItem().ShouldContain(foreign);
         (await File.ReadAllTextAsync(foreign)).ShouldContain("feature: 006");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_TrackedFilesHandEdited_RefusesOnceListingEveryPath()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        var specPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md");
+        await File.AppendAllTextAsync(taskPath, "\nhand note\n");
+        await File.WriteAllTextAsync(specPath, (await File.ReadAllTextAsync(specPath)) + "\nhand edit\n");
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.LocalEditsBlocked);
+        ex.Message.ShouldContain(taskPath);
+        ex.Message.ShouldContain(specPath);
+        ex.Message.ShouldContain("planning_upsert_artifact");
+        (await File.ReadAllTextAsync(taskPath)).ShouldContain("hand note");
+        (await File.ReadAllTextAsync(specPath)).ShouldContain("hand edit");
+
+        var drift = await materializer.DetectDriftAsync(projectId, CancellationToken.None);
+        drift.Count.ShouldBe(2);
+        drift.ShouldAllBe(d => d.Kind == DriftKind.Modified);
+    }
+
+    [Fact]
+    public async Task Sync_TrackedFileHandEdited_ForceOverwritesAndWarnsPerFile()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        await File.AppendAllTextAsync(taskPath, "\nhand note\n");
+
+        var report = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
+
+        report.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {taskPath}");
+        var content = await File.ReadAllTextAsync(taskPath);
+        content.ShouldNotContain("hand note");
+        content.ShouldContain("# First Task");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task BoardMutation_WhileTrackedFileDrifted_SucceedsAndLeavesDiskStale()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        await File.AppendAllTextAsync(taskPath, "\nsub-agent note\n");
+
+        var task = await ctx.PlanningArtifacts.SingleAsync(a =>
+            a.Kind == PlanningArtifactKind.Task && a.Order == 1);
+        var artifactService = new PlanningArtifactService(
+            ctx, materializer, NullLogger<PlanningArtifactService>.Instance);
+        await artifactService.AppendLogAsync(task.Id, "board-side note", CancellationToken.None);
+
+        task.Body.ShouldContain("board-side note");
+        var disk = await File.ReadAllTextAsync(taskPath);
+        disk.ShouldContain("sub-agent note");
+        disk.ShouldNotContain("board-side note");
+        var drift = await materializer.DetectDriftAsync(projectId, CancellationToken.None);
+        drift.ShouldHaveSingleItem().RelativePath.ShouldBe("BACKLOG/006-demo/tasks/01-first-task.md");
+    }
+
+    [Fact]
+    public async Task Sync_BoardAbsorbedLocalEdit_WritesWithoutRefusalAndHealsRow()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        var edited = (await File.ReadAllTextAsync(taskPath))
+            .Replace("Do it.", "Do it now.", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(taskPath, edited);
+
+        var task = await ctx.PlanningArtifacts.SingleAsync(a =>
+            a.Kind == PlanningArtifactKind.Task && a.Order == 1);
+        task.UpdateBody("# First Task\n\n<goal>\nDo it now.\n</goal>");
+        await ctx.SaveChangesAsync();
+
+        var report = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Warnings.ShouldBeEmpty();
+        (await File.ReadAllTextAsync(taskPath)).ShouldContain("Do it now.");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_BacklogEditOutsideManagedBlock_NeverBlocks_InsideBlockEdit_Blocks()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var indexPath = Path.Combine(_projectDir, "BACKLOG.md");
+        await File.AppendAllTextAsync(indexPath, "\n## Human notes\n");
+
+        var outside = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+        outside.Warnings.ShouldBeEmpty();
+        (await File.ReadAllTextAsync(indexPath)).ShouldContain("## Human notes");
+
+        var edited = (await File.ReadAllTextAsync(indexPath))
+            .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(indexPath, edited);
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
+        ex.Kind.ShouldBe(MaterializationFailureKind.LocalEditsBlocked);
+        ex.Message.ShouldContain(indexPath);
+
+        var forced = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
+        forced.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {indexPath}");
+
+        var index = await File.ReadAllTextAsync(indexPath);
+        index.ShouldContain("`[ ]` 006-demo");
+        index.ShouldContain("## Human notes");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_TrackedFileDeletedLocally_IsRecreatedWithoutRefusal()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        File.Delete(taskPath);
+
+        var report = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Warnings.ShouldBeEmpty();
+        (await File.ReadAllTextAsync(taskPath)).ShouldContain("# First Task");
         (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
     }
 
