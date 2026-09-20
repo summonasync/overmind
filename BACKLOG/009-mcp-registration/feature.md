@@ -2,6 +2,7 @@
 feature: 009
 slug: mcp-registration
 status: done
+priority: p2
 version: 2
 created: 2026-09-16
 ---

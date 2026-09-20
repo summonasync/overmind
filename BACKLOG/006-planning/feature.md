@@ -2,6 +2,7 @@
 feature: 006
 slug: planning
 status: done
+priority: p2
 version: 5
 created: 2026-09-08
 ---

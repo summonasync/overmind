@@ -2,6 +2,7 @@
 feature: 021
 slug: task-brief
 status: done
+priority: p2
 version: 2
 created: 2026-09-19
 ---

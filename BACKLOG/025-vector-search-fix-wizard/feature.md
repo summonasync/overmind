@@ -2,6 +2,7 @@
 feature: 025
 slug: vector-search-fix-wizard
 status: done
+priority: p2
 version: 3
 created: 2026-09-20
 ---

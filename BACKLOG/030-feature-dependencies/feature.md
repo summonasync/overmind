@@ -2,6 +2,7 @@
 feature: 030
 slug: feature-dependencies
 status: draft
+priority: p1
 version: 1
 created: 2026-09-20
 ---

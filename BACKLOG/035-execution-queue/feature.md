@@ -2,6 +2,7 @@
 feature: 035
 slug: execution-queue
 status: draft
+priority: p2
 version: 1
 created: 2026-09-20
 ---

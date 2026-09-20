@@ -2,6 +2,7 @@
 feature: 028
 slug: cross-project-bug-intake
 status: draft
+priority: p1
 version: 1
 created: 2026-09-20
 ---

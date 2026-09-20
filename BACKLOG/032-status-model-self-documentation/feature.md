@@ -2,6 +2,7 @@
 feature: 032
 slug: status-model-self-documentation
 status: done
+priority: p2
 version: 2
 created: 2026-09-20
 ---

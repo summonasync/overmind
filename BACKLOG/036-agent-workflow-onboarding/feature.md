@@ -2,6 +2,7 @@
 feature: 036
 slug: agent-workflow-onboarding
 status: draft
+priority: p2
 version: 1
 created: 2026-09-20
 ---

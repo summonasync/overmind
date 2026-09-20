@@ -2,6 +2,7 @@
 feature: 004
 slug: projects-tree-view
 status: done
+priority: p2
 version: 5
 created: 2026-09-08
 ---

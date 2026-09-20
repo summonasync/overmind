@@ -2,6 +2,7 @@
 feature: 031
 slug: entry-update-nre
 status: done
+priority: p2
 version: 1
 created: 2026-09-20
 ---

@@ -2,6 +2,7 @@
 feature: 011
 slug: side-menu-rework
 status: done
+priority: p2
 version: 1
 created: 2026-09-18
 ---

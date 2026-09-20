@@ -2,6 +2,7 @@
 feature: 018
 slug: sidebar-beauty
 status: done
+priority: p2
 version: 1
 created: 2026-09-19
 ---

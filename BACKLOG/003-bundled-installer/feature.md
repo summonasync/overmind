@@ -2,6 +2,7 @@
 feature: 003
 slug: bundled-installer
 status: done
+priority: p2
 version: 5
 created: 2026-09-06
 ---

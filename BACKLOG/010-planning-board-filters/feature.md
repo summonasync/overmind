@@ -2,6 +2,7 @@
 feature: 010
 slug: planning-board-filters
 status: done
+priority: p2
 version: 2
 created: 2026-09-16
 ---

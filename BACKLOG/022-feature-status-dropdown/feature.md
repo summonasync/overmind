@@ -2,6 +2,7 @@
 feature: 022
 slug: feature-status-dropdown
 status: done
+priority: p2
 version: 1
 created: 2026-09-19
 ---

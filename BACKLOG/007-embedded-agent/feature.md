@@ -2,6 +2,7 @@
 feature: 007
 slug: embedded-agent
 status: draft
+priority: p2
 version: 1
 created: 2026-09-14
 ---
