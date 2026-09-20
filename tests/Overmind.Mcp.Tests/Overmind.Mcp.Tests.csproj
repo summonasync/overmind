@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Overmind.Core\Overmind.Core.csproj" />
+    <ProjectReference Include="..\..\src\Overmind.Host\Overmind.Host.csproj" />
     <ProjectReference Include="..\..\src\Overmind.Mcp\Overmind.Mcp.csproj" />
   </ItemGroup>
   <ItemGroup>

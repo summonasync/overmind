@@ -92,7 +92,7 @@ public sealed class OvermindPlanningTools
             ct));
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
     public Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -125,7 +125,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
-    [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. The logNote is mandatory — an unexplained status move is rejected.")]
+    [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected.")]
     public async Task<string> SetStatus(
         [Description("Id of the artifact to move.")] Guid artifactId,
         [Description("New status: draft, validated, todo, inProgress, review, done or blocked.")] string status,

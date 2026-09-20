@@ -12,5 +12,11 @@ public static class OnboardQuickstart
         5. When all tasks are done, write the result artifact.
 
         Escape hatch: set the OVERMIND_PROJECT_ID environment variable to skip cwd matching and pin a project id.
+
+        Feature lifecycle: draft → ready → inProgress → review → done.
+        Auto-transitions: artifact create → inProgress; all tasks done + spec + plan → review; task create on review → back to inProgress.
+        planning_set_feature_status reaches done from ANY non-done status; done is terminal.
+        Artifact statuses — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the documents' terminal; result has no done.
+        Before working, read notes/decisions/guards via overmind://resources and list_entries filters.
         """;
 }
