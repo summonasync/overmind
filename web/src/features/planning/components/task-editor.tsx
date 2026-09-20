@@ -31,7 +31,7 @@ interface TaskEditorProps {
 export function TaskEditor({ initial, pending, logPending, error, onSubmit, onAppendLog, onCancel }: TaskEditorProps) {
   const [body, setBody] = useState(initial?.body ?? "");
   const [brief, setBrief] = useState(initial?.brief ?? "");
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(Boolean(initial));
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState<Error | null>(null);
 
@@ -68,14 +68,16 @@ export function TaskEditor({ initial, pending, logPending, error, onSubmit, onAp
         </div>
       ) : null}
 
-      <Field label="Brief" htmlFor="task-brief">
-        <Input
-          id="task-brief"
-          value={brief}
-          onChange={(event) => setBrief(event.target.value)}
-          placeholder="One-liner shown on the board card — clear it to remove."
-        />
-      </Field>
+      {showPreview ? null : (
+        <Field label="Brief" htmlFor="task-brief">
+          <Input
+            id="task-brief"
+            value={brief}
+            onChange={(event) => setBrief(event.target.value)}
+            placeholder="One-liner shown on the board card — clear it to remove."
+          />
+        </Field>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <WritePreviewToggle showPreview={showPreview} onShowPreviewChange={setShowPreview} />
@@ -100,35 +102,39 @@ export function TaskEditor({ initial, pending, logPending, error, onSubmit, onAp
           <div className="max-h-44 overflow-y-auto">
             <ArtifactLog log={initial.log} />
           </div>
-          <div className="flex gap-2">
-            <Input
-              aria-label="Append log note"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Append a log note…"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  handleAppend();
-                }
-              }}
-            />
-            <Button variant="secondary" disabled={note.trim().length === 0 || logPending} onClick={handleAppend}>
-              {logPending ? "Adding…" : "Append"}
-            </Button>
-          </div>
+          {showPreview ? null : (
+            <div className="flex gap-2">
+              <Input
+                aria-label="Append log note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Append a log note…"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAppend();
+                  }
+                }}
+              />
+              <Button variant="secondary" disabled={note.trim().length === 0 || logPending} onClick={handleAppend}>
+                {logPending ? "Adding…" : "Append"}
+              </Button>
+            </div>
+          )}
         </div>
       ) : null}
 
       <ErrorText error={formError ?? error} />
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : initial ? "Save changes" : "Create task"}
-        </Button>
-      </div>
+      {showPreview ? null : (
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : initial ? "Save changes" : "Create task"}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

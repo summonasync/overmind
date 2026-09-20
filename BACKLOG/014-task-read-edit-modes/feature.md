@@ -1,7 +1,7 @@
 ---
 feature: 014
 slug: task-read-edit-modes
-status: draft
+status: done
 version: 1
 created: 2026-09-19
 ---

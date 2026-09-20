@@ -2,7 +2,7 @@
 feature: 014
 task: 01
 slug: task-read-edit-modes
-status: todo
+status: done
 review: light
 created: 2026-09-20
 ---
@@ -48,4 +48,7 @@ Feature 014, the only task. Rides 012's shared WritePreviewToggle and the xl mod
 </obstacles>
 
 <log>
+- 2026-09-20 — Execution started — next-js-coder subagent (clean tree after the 023 commit).
+- 2026-09-20 — Coder done: useState(Boolean(initial)) — existing task opens in Preview, create stays Write (conditional mount re-initializes per open, no persistence — per spec); Brief field and Save/Cancel bar hidden in Preview; close via the modal's own onClose; the log section stays visible in read (it is part of the readable contract — interpretation flagged for the reviewer); toggle component untouched. lint 0 / tsc 0 / build green. To review.
+- 2026-09-20 — Review BLOCKERS (audits/review-014-01.md) → fixed in-tree by the orchestrator: the append-note input + Append button (a write path reachable in read mode by click AND Enter) now hide in Preview behind the same {showPreview ? null : ...} wrap — the rendered log header + ArtifactLog stay (read-only ceremony content, reviewer-split interpretation upheld). tsc 0 / lint 0 errors / build green after the fix. 2 INFO notes (dead onCancel in Preview by design; error surface coherent in both modes). Done.
 </log>
