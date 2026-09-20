@@ -6,12 +6,12 @@ import { Select } from "@/shared/ui/select";
 import { cn } from "@/shared/lib/cn";
 import { BOARD_ARTIFACT_FILTERS } from "@/features/planning/lib/board-filters";
 import { useBoardFilters } from "@/features/planning/lib/use-board-filters";
-import { PLANNING_FEATURE_STATUSES } from "@/features/planning/types";
+import { FEATURE_PRIORITIES, PLANNING_FEATURE_STATUSES } from "@/features/planning/types";
 import type {
   PlanningBoardArtifactFilter,
   PlanningBoardFilters,
 } from "@/features/planning/lib/board-filters";
-import type { PlanningFeatureStatus } from "@/features/planning/types";
+import type { PlanningFeaturePriority, PlanningFeatureStatus } from "@/features/planning/types";
 
 const ARTIFACT_FILTER_LABELS: Record<PlanningBoardArtifactFilter, string> = {
   any: "any",
@@ -33,6 +33,13 @@ export function BoardFilterBar() {
       ? filters.statuses.filter((item) => item !== status)
       : [...filters.statuses, status];
     setFilters({ ...filters, statuses });
+  };
+
+  const togglePriority = (priority: PlanningFeaturePriority) => {
+    const priorities = filters.priorities.includes(priority)
+      ? filters.priorities.filter((item) => item !== priority)
+      : [...filters.priorities, priority];
+    setFilters({ ...filters, priorities });
   };
 
   const setArtifactFilter = (
@@ -60,6 +67,24 @@ export function BoardFilterBar() {
             )}
           >
             {status}
+          </button>
+        ))}
+      </div>
+
+      <div role="group" aria-label="Filter by priority" className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs font-medium text-muted">Priority</span>
+        {FEATURE_PRIORITIES.map((priority) => (
+          <button
+            key={priority}
+            type="button"
+            aria-pressed={filters.priorities.includes(priority)}
+            onClick={() => togglePriority(priority)}
+            className={cn(
+              chipBase,
+              filters.priorities.includes(priority) ? chipActive : chipInactive,
+            )}
+          >
+            {priority}
           </button>
         ))}
       </div>

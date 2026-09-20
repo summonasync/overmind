@@ -1,5 +1,7 @@
 export type PlanningFeatureStatus = "draft" | "ready" | "inProgress" | "review" | "done";
 
+export type PlanningFeaturePriority = "p0" | "p1" | "p2" | "p3";
+
 export type PlanningArtifactKind = "spec" | "plan" | "task" | "result";
 
 export type PlanningArtifactStatus =
@@ -31,6 +33,8 @@ export const PLANNING_FEATURE_STATUSES: readonly PlanningFeatureStatus[] = [
   "done",
 ];
 
+export const FEATURE_PRIORITIES: readonly PlanningFeaturePriority[] = ["p0", "p1", "p2", "p3"];
+
 export const PLANNING_TABS: readonly PlanningTab[] = ["spec", "plan", "tasks", "result"];
 
 export const TASK_STATUSES: readonly PlanningArtifactStatus[] = [
@@ -58,6 +62,7 @@ export interface PlanningFeatureBoardItem {
   slug: string;
   title: string;
   status: PlanningFeatureStatus;
+  priority: PlanningFeaturePriority;
   isCurrent: boolean;
   version: number;
   specStatus: PlanningArtifactStatus | null;
@@ -92,6 +97,7 @@ export interface PlanningFeatureResponse {
   title: string;
   body: string;
   status: PlanningFeatureStatus;
+  priority: PlanningFeaturePriority;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -147,12 +153,14 @@ export interface PlanningFeatureFormValues {
   slug: string;
   title: string;
   body: string;
+  priority: PlanningFeaturePriority;
 }
 
 export interface UpdatePlanningFeatureValues {
   title?: string;
   body?: string;
   status?: PlanningFeatureStatus;
+  priority?: PlanningFeaturePriority;
 }
 
 export interface CreatePlanningArtifactValues {

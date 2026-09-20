@@ -1,9 +1,11 @@
 import {
+  FEATURE_PRIORITIES,
   PLANNING_FEATURE_STATUSES,
 } from "@/features/planning/types";
 import type {
   PlanningArtifactStatus,
   PlanningFeatureBoardItem,
+  PlanningFeaturePriority,
   PlanningFeatureStatus,
 } from "@/features/planning/types";
 
@@ -11,6 +13,7 @@ export type PlanningBoardArtifactFilter = "any" | "validated" | "notValidated" |
 
 export interface PlanningBoardFilters {
   statuses: PlanningFeatureStatus[];
+  priorities: PlanningFeaturePriority[];
   spec: PlanningBoardArtifactFilter;
   plan: PlanningBoardArtifactFilter;
   currentOnly: boolean;
@@ -30,6 +33,7 @@ export const BOARD_ARTIFACT_FILTERS: readonly PlanningBoardArtifactFilter[] = [
 
 export const EMPTY_BOARD_FILTERS: PlanningBoardFilters = {
   statuses: [],
+  priorities: [],
   spec: "any",
   plan: "any",
   currentOnly: false,
@@ -44,8 +48,14 @@ export function parseBoardFilters(searchParams: BoardFilterSearchParams): Planni
     .filter((value): value is PlanningFeatureStatus =>
       (PLANNING_FEATURE_STATUSES as readonly string[]).includes(value),
     );
+  const priorities = (searchParams.get("priority") ?? "")
+    .split(",")
+    .filter((value): value is PlanningFeaturePriority =>
+      (FEATURE_PRIORITIES as readonly string[]).includes(value),
+    );
   return {
     statuses,
+    priorities,
     spec: parseArtifactFilter(searchParams.get("spec")),
     plan: parseArtifactFilter(searchParams.get("plan")),
     currentOnly: searchParams.get("current") === "1",
@@ -64,6 +74,11 @@ export function coerceBoardFilters(value: unknown): PlanningBoardFilters | null 
           (PLANNING_FEATURE_STATUSES as readonly string[]).includes(status as string),
         )
       : [],
+    priorities: Array.isArray(record.priorities)
+      ? record.priorities.filter((priority): priority is PlanningFeaturePriority =>
+          (FEATURE_PRIORITIES as readonly string[]).includes(priority as string),
+        )
+      : [],
     spec: parseArtifactFilter(typeof record.spec === "string" ? record.spec : null),
     plan: parseArtifactFilter(typeof record.plan === "string" ? record.plan : null),
     currentOnly: record.currentOnly === true,
@@ -74,6 +89,7 @@ export function coerceBoardFilters(value: unknown): PlanningBoardFilters | null 
 export function isBoardFilterActive(filters: PlanningBoardFilters): boolean {
   return (
     filters.statuses.length > 0 ||
+    filters.priorities.length > 0 ||
     filters.spec !== "any" ||
     filters.plan !== "any" ||
     filters.currentOnly ||
@@ -90,6 +106,7 @@ export function filterBoardItems(
     (item) =>
       (!hideDone || item.status !== "done") &&
       (filters.statuses.length === 0 || filters.statuses.includes(item.status)) &&
+      (filters.priorities.length === 0 || filters.priorities.includes(item.priority)) &&
       matchesArtifactFilter(item.specStatus, filters.spec) &&
       matchesArtifactFilter(item.planStatus, filters.plan) &&
       (!filters.currentOnly || item.isCurrent),

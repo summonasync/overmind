@@ -76,7 +76,7 @@ function PlanningPageContent() {
   const handleSubmit = (values: PlanningFeatureFormValues) => {
     if (editing) {
       updateFeature.mutate(
-        { slug: editing.slug, values: { title: values.title, body: values.body } },
+        { slug: editing.slug, values: { title: values.title, body: values.body, priority: values.priority } },
         { onSuccess: () => setFormOpen(false) },
       );
     } else {

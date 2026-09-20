@@ -9,9 +9,11 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { updatePlanningFeature } from "@/features/planning/api";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
+import { priorityTone } from "@/features/planning/lib/priority-tone";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
 import { planningKeys } from "@/features/planning/queries";
+import { FEATURE_PRIORITIES } from "@/features/planning/types";
 import type {
   PlanningArtifactStatus,
   PlanningFeatureBoardItem,
@@ -40,6 +42,7 @@ function artifactChip(label: string, status: PlanningArtifactStatus | null) {
 
 const STATUS_SELECT_TONES: Record<BadgeTone, string> = {
   neutral: "border-border text-muted",
+  muted: "border-border/50 text-muted/70",
   info: "border-info/40 text-info",
   warning: "border-warning/40 text-warning",
   success: "border-success/40 text-success",
@@ -124,7 +127,12 @@ export function FeatureBoard({
     );
   }
 
-  const sortedFeatures = [...features].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+  const sortedFeatures = [...features].sort(
+    (a, b) =>
+      FEATURE_PRIORITIES.indexOf(a.priority) - FEATURE_PRIORITIES.indexOf(b.priority) ||
+      b.updatedAt.localeCompare(a.updatedAt) ||
+      a.slug.localeCompare(b.slug),
+  );
 
   return (
     <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
@@ -155,6 +163,7 @@ export function FeatureBoard({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
+              <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
               <Badge>v{item.version}</Badge>
               {artifactChip("spec", item.specStatus)}
               {artifactChip("plan", item.planStatus)}

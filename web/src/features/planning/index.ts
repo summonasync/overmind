@@ -41,9 +41,11 @@ export type {
 } from "./lib/board-filters";
 export { useBoardFilters } from "./lib/use-board-filters";
 export { extractOpenQuestions } from "./lib/open-questions";
+export { priorityTone } from "./lib/priority-tone";
 export { formatBacklogAge, formatRelativeTime } from "./lib/relative-time";
 export { artifactStatusTone, featureStatusTone } from "./lib/status-tone";
 export {
+  FEATURE_PRIORITIES,
   HUMAN_VALIDATION_OVERRIDES,
   PLANNING_FEATURE_STATUSES,
   PLANNING_MATERIALIZATIONS,
@@ -64,6 +66,7 @@ export type {
   PlanningDriftKind,
   PlanningFeatureBoardItem,
   PlanningFeatureFormValues,
+  PlanningFeaturePriority,
   PlanningFeatureResponse,
   PlanningFeatureStatus,
   PlanningLogLine,

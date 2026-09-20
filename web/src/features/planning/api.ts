@@ -31,6 +31,7 @@ export function createPlanningFeature(
     slug: values.slug,
     title: values.title,
     body: values.body.trim().length > 0 ? values.body : null,
+    priority: values.priority,
   });
 }
 
@@ -43,6 +44,7 @@ export function updatePlanningFeature(
     title: values.title ?? null,
     body: values.body ?? null,
     status: values.status ?? null,
+    priority: values.priority ?? null,
   });
 }
 

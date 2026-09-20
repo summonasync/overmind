@@ -22,6 +22,7 @@ import { TaskEditor } from "@/features/planning/components/task-editor";
 import { usePlanningFeature, usePlanningMutations } from "@/features/planning/lib/use-planning";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
+import { priorityTone } from "@/features/planning/lib/priority-tone";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
 import {
   PLANNING_TABS,
@@ -152,6 +153,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
               </option>
             ))}
           </Select>
+          <Badge tone={priorityTone(feature.priority)}>{feature.priority}</Badge>
           <Badge>v{feature.version}</Badge>
           <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setEditOpen(true)}>
             <Pencil size={12} aria-hidden />
@@ -331,7 +333,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
           error={updateFeature.error as Error | null}
           onSubmit={(values) =>
             updateFeature.mutate(
-              { slug, values: { title: values.title, body: values.body } },
+              { slug, values: { title: values.title, body: values.body, priority: values.priority } },
               { onSuccess: () => setEditOpen(false) },
             )
           }

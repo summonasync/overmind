@@ -6,11 +6,24 @@ import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
+import { Select } from "@/shared/ui/select";
 import { Textarea } from "@/shared/ui/textarea";
 import { WritePreviewToggle } from "@/shared/ui/write-preview-toggle";
-import type { PlanningFeatureFormValues, PlanningFeatureResponse } from "@/features/planning/types";
+import { FEATURE_PRIORITIES } from "@/features/planning/types";
+import type {
+  PlanningFeatureFormValues,
+  PlanningFeaturePriority,
+  PlanningFeatureResponse,
+} from "@/features/planning/types";
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+const PRIORITY_LABELS: Record<PlanningFeaturePriority, string> = {
+  p0: "P0 — Critical",
+  p1: "P1 — High",
+  p2: "P2 — Normal",
+  p3: "P3 — Low",
+};
 
 interface FeatureFormProps {
   initial?: PlanningFeatureResponse;
@@ -24,6 +37,7 @@ export function FeatureForm({ initial, pending, error, onSubmit, onCancel }: Fea
   const [slug, setSlug] = useState(initial?.slug ?? "");
   const [title, setTitle] = useState(initial?.title ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
+  const [priority, setPriority] = useState<PlanningFeaturePriority>(initial?.priority ?? "p2");
   const [showPreview, setShowPreview] = useState(false);
   const [validationError, setValidationError] = useState<Error | null>(null);
 
@@ -42,7 +56,7 @@ export function FeatureForm({ initial, pending, error, onSubmit, onCancel }: Fea
     }
 
     setValidationError(null);
-    onSubmit({ slug: nextSlug, title: nextTitle, body });
+    onSubmit({ slug: nextSlug, title: nextTitle, body, priority });
   };
 
   return (
@@ -66,6 +80,19 @@ export function FeatureForm({ initial, pending, error, onSubmit, onCancel }: Fea
             maxLength={200}
             placeholder="Short feature name"
           />
+        </Field>
+        <Field label="Priority" htmlFor="feature-priority">
+          <Select
+            id="feature-priority"
+            value={priority}
+            onChange={(event) => setPriority(event.target.value as PlanningFeaturePriority)}
+          >
+            {FEATURE_PRIORITIES.map((candidate) => (
+              <option key={candidate} value={candidate}>
+                {PRIORITY_LABELS[candidate]}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
       <p className="text-xs text-muted">

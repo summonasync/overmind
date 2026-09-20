@@ -17,7 +17,7 @@ function readFiltersFromLocation(): PlanningBoardFilters {
 
 const FILTER_CHANGE_EVENT = "board-filters:change";
 const BOARD_FILTERS_STORAGE_KEY = "overmind.board.filters";
-const FILTER_PARAM_NAMES = ["status", "spec", "plan", "current", "hidedone"] as const;
+const FILTER_PARAM_NAMES = ["status", "priority", "spec", "plan", "current", "hidedone"] as const;
 
 export function useBoardFilters() {
   const initialSearchParams = useSearchParams();
@@ -64,6 +64,11 @@ export function useBoardFilters() {
       params.set("status", next.statuses.join(","));
     } else {
       params.delete("status");
+    }
+    if (next.priorities.length > 0) {
+      params.set("priority", next.priorities.join(","));
+    } else {
+      params.delete("priority");
     }
     if (next.spec !== "any") {
       params.set("spec", next.spec);
