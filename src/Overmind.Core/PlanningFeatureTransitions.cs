@@ -7,10 +7,12 @@ public static class PlanningFeatureTransitions
     private static readonly FrozenDictionary<PlanningFeatureStatus, PlanningFeatureStatus[]> Allowed =
         new Dictionary<PlanningFeatureStatus, PlanningFeatureStatus[]>
         {
-            [PlanningFeatureStatus.Draft] = [PlanningFeatureStatus.Ready, PlanningFeatureStatus.InProgress],
-            [PlanningFeatureStatus.Ready] = [PlanningFeatureStatus.InProgress, PlanningFeatureStatus.Draft],
+            [PlanningFeatureStatus.Draft] =
+                [PlanningFeatureStatus.Ready, PlanningFeatureStatus.InProgress, PlanningFeatureStatus.Done],
+            [PlanningFeatureStatus.Ready] =
+                [PlanningFeatureStatus.InProgress, PlanningFeatureStatus.Draft, PlanningFeatureStatus.Done],
             [PlanningFeatureStatus.InProgress] =
-                [PlanningFeatureStatus.Review, PlanningFeatureStatus.Ready, PlanningFeatureStatus.Draft],
+                [PlanningFeatureStatus.Review, PlanningFeatureStatus.Ready, PlanningFeatureStatus.Draft, PlanningFeatureStatus.Done],
             [PlanningFeatureStatus.Review] = [PlanningFeatureStatus.Done, PlanningFeatureStatus.InProgress],
             [PlanningFeatureStatus.Done] = [],
         }.ToFrozenDictionary();

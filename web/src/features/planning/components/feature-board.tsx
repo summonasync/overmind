@@ -8,7 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { updatePlanningFeature } from "@/features/planning/api";
-import { featureStatusOptions } from "@/features/planning/lib/feature-transitions";
+import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
 import { planningKeys } from "@/features/planning/queries";
@@ -92,7 +92,7 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
           STATUS_SELECT_TONES[featureStatusTone(item.status)],
         )}
         value={item.status}
-        disabled={setStatus.isPending || item.status === "done"}
+        disabled={setStatus.isPending || allowedTransitions(item.status).length === 0}
         onChange={(event) => setStatus.mutate(event.target.value as PlanningFeatureStatus)}
       >
         {featureStatusOptions(item.status).map((status) => (

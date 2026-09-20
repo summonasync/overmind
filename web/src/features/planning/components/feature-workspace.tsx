@@ -21,7 +21,7 @@ import { TaskBoard } from "@/features/planning/components/task-board";
 import { TaskEditor } from "@/features/planning/components/task-editor";
 import { usePlanningFeature, usePlanningMutations } from "@/features/planning/lib/use-planning";
 import { formatRelativeTime } from "@/features/planning/lib/relative-time";
-import { featureStatusOptions } from "@/features/planning/lib/feature-transitions";
+import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
 import {
   PLANNING_TABS,
@@ -138,7 +138,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
           <Select
             aria-label="Feature status"
             value={feature.status}
-            disabled={feature.status === "done"}
+            disabled={allowedTransitions(feature.status).length === 0}
             onChange={(event) =>
               updateFeature.mutate({
                 slug,

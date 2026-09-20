@@ -1,9 +1,9 @@
 import { PLANNING_FEATURE_STATUSES, type PlanningFeatureStatus } from "@/features/planning/types";
 
 const FEATURE_TRANSITIONS: Record<PlanningFeatureStatus, readonly PlanningFeatureStatus[]> = {
-  draft: ["ready", "inProgress"],
-  ready: ["inProgress", "draft"],
-  inProgress: ["review", "ready", "draft"],
+  draft: ["ready", "inProgress", "done"],
+  ready: ["inProgress", "draft", "done"],
+  inProgress: ["review", "ready", "draft", "done"],
   review: ["done", "inProgress"],
   done: [],
 };
