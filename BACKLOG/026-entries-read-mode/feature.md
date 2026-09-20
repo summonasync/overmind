@@ -2,7 +2,7 @@
 feature: 026
 slug: entries-read-mode
 status: draft
-version: 1
+version: 2
 created: 2026-09-20
 ---
 
