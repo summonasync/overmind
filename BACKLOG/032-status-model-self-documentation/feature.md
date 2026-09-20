@@ -1,7 +1,7 @@
 ---
 feature: 032
 slug: status-model-self-documentation
-status: draft
+status: inProgress
 version: 1
 created: 2026-09-20
 ---
