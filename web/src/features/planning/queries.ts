@@ -6,6 +6,7 @@ import {
   listPlanningBoard,
   listPlanningDrift,
 } from "@/features/planning/api";
+import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
 
 export const planningKeys = {
   all: ["planning"] as const,
@@ -23,6 +24,7 @@ export const boardQueryOptions = (projectId: string) =>
     queryKey: planningKeys.board(projectId),
     queryFn: () => listPlanningBoard(projectId),
     enabled: projectId.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 
 export const featureQueryOptions = (projectId: string, slug: string) =>
@@ -30,6 +32,7 @@ export const featureQueryOptions = (projectId: string, slug: string) =>
     queryKey: planningKeys.feature(projectId, slug),
     queryFn: () => getPlanningFeature(projectId, slug),
     enabled: projectId.length > 0 && slug.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 
 export const artifactVersionsQueryOptions = (artifactId: string) =>
@@ -51,4 +54,5 @@ export const driftQueryOptions = (projectId: string) =>
     queryKey: planningKeys.drift(projectId),
     queryFn: () => listPlanningDrift(projectId),
     enabled: projectId.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });

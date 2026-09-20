@@ -1,0 +1,1 @@
+export const LIVE_SYNC_INTERVAL_MS = 15_000;

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { listEntries, listEntryVersions, listTags } from "@/features/entries/api";
 import type { EntryListFilters } from "@/features/entries/types";
+import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
 
 export const entryKeys = {
   all: ["entries"] as const,
@@ -17,6 +18,7 @@ export const entryListQueryOptions = (projectId: string, filters: EntryListFilte
     queryKey: entryKeys.list(projectId, filters),
     queryFn: () => listEntries(projectId, filters),
     enabled: projectId.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 
 export const entryVersionsQueryOptions = (id: string) =>

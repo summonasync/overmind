@@ -1,7 +1,7 @@
 ---
 feature: 017
 slug: live-ui-sync
-status: draft
+status: done
 version: 1
 created: 2026-09-19
 ---
