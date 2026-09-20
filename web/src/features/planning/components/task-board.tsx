@@ -142,6 +142,11 @@ function TaskCard({ task, onOpen, onMove }: TaskCardProps) {
         <span className="block text-sm font-medium text-foreground">
           {taskHeading(task.body, task.order)}
         </span>
+        {task.brief?.trim() ? (
+          <span className="mt-1 block line-clamp-3 whitespace-pre-wrap text-xs text-muted">
+            {task.brief}
+          </span>
+        ) : null}
         <span className="mt-1.5 flex items-center gap-1.5">
           <Badge>#{task.order}</Badge>
           <Badge tone={task.review === "hard" ? "warning" : "neutral"}>{task.review}</Badge>

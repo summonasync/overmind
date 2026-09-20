@@ -29,6 +29,9 @@ public sealed class CreatePlanningArtifactRequestValidator : AbstractValidator<C
     {
         RuleFor(x => x.Body).NotEmpty();
         RuleFor(x => x.Order).GreaterThanOrEqualTo(0).When(x => x.Order.HasValue);
+        RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
+            .WithMessage("Brief must be a single line.")
+            .When(x => x.Brief is not null);
     }
 }
 
@@ -37,6 +40,9 @@ public sealed class UpdatePlanningArtifactRequestValidator : AbstractValidator<U
     public UpdatePlanningArtifactRequestValidator()
     {
         RuleFor(x => x.Body).NotEmpty();
+        RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
+            .WithMessage("Brief must be a single line.")
+            .When(x => x.Brief is not null);
     }
 }
 

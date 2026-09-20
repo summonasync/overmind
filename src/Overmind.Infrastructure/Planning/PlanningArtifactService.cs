@@ -23,8 +23,14 @@ public sealed class PlanningArtifactService
 
     public async Task<PlanningArtifact> UpsertAsync(
         Guid featureId, PlanningArtifactKind kind, string body, int? order,
-        PlanningReviewLevel? review, string? logNote, CancellationToken ct = default)
+        PlanningReviewLevel? review, string? logNote, CancellationToken ct = default,
+        string? brief = null)
     {
+        if (brief is not null && kind != PlanningArtifactKind.Task)
+        {
+            throw PlanningException.BriefNotAllowedForKind(kind);
+        }
+
         var feature = await _db.PlanningFeatures.FirstOrDefaultAsync(f => f.Id == featureId, ct);
         if (feature is null)
         {
@@ -40,24 +46,32 @@ public sealed class PlanningArtifactService
 
         if (existing is not null)
         {
-            try
+            if (existing.Body != body || !string.IsNullOrWhiteSpace(logNote))
             {
-                existing.UpdateBody(body, logNote);
-            }
-            catch (InvalidOperationException)
-            {
-                throw PlanningException.ChangeNoteRequired();
+                try
+                {
+                    existing.UpdateBody(body, logNote);
+                }
+                catch (InvalidOperationException)
+                {
+                    throw PlanningException.ChangeNoteRequired();
+                }
             }
 
             if (review.HasValue)
             {
                 existing.SetReview(review.Value);
             }
+
+            if (brief is not null)
+            {
+                existing.SetBrief(brief);
+            }
         }
         else
         {
             created = PlanningArtifact.Create(
-                featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light);
+                featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
             _db.PlanningArtifacts.Add(created);
         }
 
@@ -75,7 +89,7 @@ public sealed class PlanningArtifactService
             _db.PlanningArtifacts.Remove(created);
             resolvedOrder = await ResolveOrderAsync(kind, null, featureId, ct);
             _db.PlanningArtifacts.Add(
-                PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light));
+                PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief));
 
             try
             {

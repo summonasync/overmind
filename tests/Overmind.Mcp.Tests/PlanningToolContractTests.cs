@@ -41,6 +41,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_list_features"]!["description"]!.GetValue<string>().ShouldContain("board");
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
         tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("brief");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
     }
@@ -137,7 +138,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["body"] = "# Third task\n\n<goal>More work.</goal>",
             ["order"] = 3,
             ["review"] = "hard",
-            ["logNote"] = "adding a task"
+            ["logNote"] = "adding a task",
+            ["brief"] = "Wire the polling hook"
         });
 
         var request = Stub.Requests.Single(r =>
@@ -150,8 +152,27 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["order"]!.GetValue<int>().ShouldBe(3);
         body["review"]!.GetValue<string>().ShouldBe("hard");
         body["logNote"]!.GetValue<string>().ShouldBe("adding a task");
+        body["brief"]!.GetValue<string>().ShouldBe("Wire the polling hook");
+        body.AsObject().Select(p => p.Key).ToArray().ShouldBe(
+            ["kind", "body", "order", "review", "logNote", "brief"], ignoreOrder: true);
 
         response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_WithoutBrief_OmitsItFromThePostedJson()
+    {
+        await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "spec",
+            ["body"] = "# Spec"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts", StringComparison.Ordinal));
+        JsonNode.Parse(request.Body)!.AsObject().ContainsKey("brief").ShouldBeFalse();
     }
 
     [Fact]

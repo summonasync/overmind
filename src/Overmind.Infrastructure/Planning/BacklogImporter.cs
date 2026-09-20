@@ -13,7 +13,8 @@ public sealed class BacklogImporter
         "feature",
         "task",
         "slug",
-        "validated"
+        "validated",
+        "brief"
     };
 
     private readonly PlanningFeatureService _features;
@@ -327,7 +328,8 @@ public sealed class BacklogImporter
             ResolveCreatedAt(fields, path, relative, notes),
             relative,
             reassignedFrom,
-            preserved);
+            preserved,
+            Raw(fields, "brief"));
     }
 
     private static async Task<string?> TryReadAsync(

@@ -90,6 +90,105 @@ public sealed class PlanningRoundTripTests : IDisposable
     }
 
     [Fact]
+    public async Task RoundTrip_BriefedTask_SurvivesWipeAndReImportAsTypedField()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteBriefedFeature();
+
+        await ImportAsync(projectId);
+        using (var ctx = _db.CreateContext())
+        {
+            var task = await ctx.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
+            task.Brief.ShouldBe("Wire the polling hook");
+            task.PreservedFrontmatter.ShouldNotBeNull();
+            task.PreservedFrontmatter.ShouldNotContain("brief");
+            task.PreservedFrontmatter.ShouldContain("owner");
+        }
+
+        await SyncAsync(projectId, force: true);
+
+        var taskPath = Path.Combine(BacklogDir, "010-demo", "tasks", "01-brief-task.md");
+        var materialized = await File.ReadAllTextAsync(taskPath);
+        materialized.ShouldContain("created: 2026-09-01\nbrief: Wire the polling hook\nowner: bob\n");
+
+        var first = await SnapshotAsync();
+
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures
+                .Include(f => f.Artifacts)
+                .FirstAsync(f => f.ProjectId == projectId);
+            ctx.PlanningFeatures.Remove(feature);
+            await ctx.SaveChangesAsync();
+        }
+
+        var reimport = await ImportAsync(projectId);
+
+        reimport.FeaturesCreated.ShouldBe(1);
+        reimport.ArtifactsCreated.ShouldBe(1);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var task = await ctx.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
+            task.Brief.ShouldBe("Wire the polling hook");
+            task.PreservedFrontmatter.ShouldNotBeNull();
+            task.PreservedFrontmatter.ShouldNotContain("brief");
+        }
+
+        (await SnapshotAsync()).ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task RoundTrip_TaskFileWithoutBrief_ImportsNullAndFlagsNoDrift()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteFullFeature();
+
+        await ImportAsync(projectId);
+        await SyncAsync(projectId, force: true);
+
+        var taskPath = Path.Combine(BacklogDir, "010-demo", "tasks", "01-first-task.md");
+        (await File.ReadAllTextAsync(taskPath)).ShouldNotContain("brief:");
+
+        var reimport = await ImportAsync(projectId);
+
+        reimport.FeaturesCreated.ShouldBe(0);
+        reimport.ArtifactsCreated.ShouldBe(0);
+        reimport.ArtifactsUpdated.ShouldBe(0);
+
+        using var ctx = _db.CreateContext();
+        var feature = await ctx.PlanningFeatures
+            .Include(f => f.Artifacts)
+            .FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+        feature.Artifacts.ShouldAllBe(a => a.Brief == null);
+    }
+
+    [Fact]
+    public async Task ReImport_HandEditedBrief_OnDisk_IsApplied()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteBriefedFeature();
+
+        await ImportAsync(projectId);
+        await SyncAsync(projectId, force: true);
+
+        var taskPath = Path.Combine(BacklogDir, "010-demo", "tasks", "01-brief-task.md");
+        var edited = (await File.ReadAllTextAsync(taskPath))
+            .Replace("brief: Wire the polling hook", "brief: Edited on disk");
+        await File.WriteAllTextAsync(taskPath, edited);
+
+        var reimport = await ImportAsync(projectId);
+
+        reimport.ArtifactsUpdated.ShouldBe(1);
+
+        using var ctx = _db.CreateContext();
+        var task = await ctx.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
+        task.Brief.ShouldBe("Edited on disk");
+
+        (await File.ReadAllTextAsync(taskPath)).ShouldContain("brief: Edited on disk\n");
+    }
+
+    [Fact]
     public async Task Import_FeatureWithDuplicatedHeadings_HealsToSingleHeading()
     {
         var projectId = await SeedProjectAsync();
@@ -185,6 +284,45 @@ public sealed class PlanningRoundTripTests : IDisposable
         var path = Path.Combine(BacklogDir, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+    }
+
+    private void WriteBriefedFeature()
+    {
+        WriteRaw("010-demo/feature.md",
+            """
+            ---
+            feature: 010
+            slug: demo
+            status: ready
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 010 — Demo feature title
+
+            <goal>
+            Build the demo.
+            </goal>
+            """);
+        WriteRaw("010-demo/tasks/01-brief-task.md",
+            """
+            ---
+            feature: 010
+            task: 01
+            slug: demo
+            status: todo
+            review: light
+            created: 2026-09-01
+            brief: Wire the polling hook
+            owner: bob
+            ---
+
+            # Brief task
+
+            <goal>
+            Do the thing.
+            </goal>
+            """);
     }
 
     private void WriteFullFeature()

@@ -31,6 +31,7 @@ public sealed class PlanningArtifact
     public PlanningArtifactStatus Status { get; private set; }
     public PlanningReviewLevel Review { get; private set; }
     public string Body { get; private set; } = string.Empty;
+    public string? Brief { get; private set; }
     public int Order { get; private set; }
     public DateTime? FrozenAt { get; private set; }
     public int Version { get; private set; }
@@ -53,7 +54,8 @@ public sealed class PlanningArtifact
         PlanningArtifactKind kind,
         string body,
         int order = 0,
-        PlanningReviewLevel review = PlanningReviewLevel.Light)
+        PlanningReviewLevel review = PlanningReviewLevel.Light,
+        string? brief = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
 
@@ -68,6 +70,7 @@ public sealed class PlanningArtifact
                 : PlanningArtifactStatus.Draft,
             Review = review,
             Body = body,
+            Brief = brief == string.Empty ? null : brief,
             Order = order,
             Version = 1,
             CreatedAt = now,
@@ -86,7 +89,8 @@ public sealed class PlanningArtifact
         int version,
         DateTime createdAt,
         DateTime updatedAt,
-        string? preservedFrontmatter = null)
+        string? preservedFrontmatter = null,
+        string? brief = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
 
@@ -114,6 +118,7 @@ public sealed class PlanningArtifact
             Status = status,
             Review = review,
             Body = body,
+            Brief = brief == string.Empty ? null : brief,
             Order = order,
             FrozenAt = frozenAt,
             Version = version,
@@ -212,6 +217,12 @@ public sealed class PlanningArtifact
     public void SetPreservedFrontmatter(string? preservedFrontmatter)
     {
         PreservedFrontmatter = preservedFrontmatter;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetBrief(string? brief)
+    {
+        Brief = brief == string.Empty ? null : brief;
         UpdatedAt = DateTime.UtcNow;
     }
 }

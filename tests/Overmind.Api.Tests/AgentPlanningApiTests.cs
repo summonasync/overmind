@@ -108,6 +108,35 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Upsert_TaskWithBrief_RoundTripsThroughTheAgentDoor()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var task = await CreateAgentArtifactAsync(project.Id, "feat",
+            new { Kind = "task", Body = "task A", Brief = "Wire the polling hook" });
+
+        task.Brief.ShouldBe("Wire the polling hook");
+    }
+
+    [Theory]
+    [InlineData("spec")]
+    [InlineData("plan")]
+    [InlineData("result")]
+    public async Task Upsert_BriefOnNonTaskKind_Returns400(string kind)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentArtifactsUrl(project.Id, "feat"), new { Kind = kind, Body = "# Doc", Brief = "not allowed" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("BriefNotAllowedForKind");
+    }
+
+    [Fact]
     public async Task Validate_GateOn_Returns409HumanValidationRequired_WritesNothing()
     {
         var project = await CreateProjectAsync();
@@ -451,7 +480,7 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record ArtifactJson(
         Guid Id, string Kind, string Status, string Review,
         int Order, string Body, DateTime? FrozenAt, int Version,
-        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log);
+        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null);
 
     public sealed record LogLineJson(string? Date, string Text);
 

@@ -78,6 +78,7 @@ export interface PlanningArtifactResponse {
   review: PlanningReviewLevel;
   order: number;
   body: string;
+  brief?: string | null;
   frozenAt: string | null;
   version: number;
   createdAt: string;
@@ -159,11 +160,13 @@ export interface CreatePlanningArtifactValues {
   order?: number;
   review?: PlanningReviewLevel;
   logNote?: string;
+  brief?: string;
 }
 
 export interface UpdatePlanningArtifactValues {
   body: string;
   logNote?: string;
+  brief?: string;
 }
 
 export interface UpdatePlanningWorkflowValues {

@@ -1,8 +1,8 @@
 ---
 feature: 021
 slug: task-brief
-status: draft
-version: 1
+status: done
+version: 2
 created: 2026-09-19
 ---
 

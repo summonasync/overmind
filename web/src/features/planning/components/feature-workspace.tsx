@@ -295,15 +295,15 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
               (updateArtifact.error as Error | null) ??
               (appendArtifactLog.error as Error | null)
             }
-            onSubmit={(body) => {
+            onSubmit={({ body, brief }) => {
               if (taskArtifact) {
                 updateArtifact.mutate(
-                  { artifactId: taskArtifact.id, slug, values: { body } },
+                  { artifactId: taskArtifact.id, slug, values: { body, brief } },
                   { onSuccess: () => setTaskModal(null) },
                 );
               } else {
                 createArtifact.mutate(
-                  { slug, values: { kind: "task", body } },
+                  { slug, values: { kind: "task", body, brief } },
                   { onSuccess: () => setTaskModal(null) },
                 );
               }

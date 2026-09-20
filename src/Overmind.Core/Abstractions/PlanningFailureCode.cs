@@ -9,6 +9,7 @@ public enum PlanningFailureCode
     DuplicateArtifact,
     InvalidSlug,
     InvalidStatusForKind,
+    BriefNotAllowedForKind,
     ChangeNoteRequired,
     CannotValidateTask,
     HumanValidationRequired,

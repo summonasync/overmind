@@ -81,6 +81,7 @@ export function createPlanningArtifact(
       order: values.order ?? null,
       review: values.review ?? null,
       logNote: values.logNote ?? null,
+      brief: values.brief ?? null,
     },
   );
 }
@@ -92,6 +93,7 @@ export function updatePlanningArtifact(
   return apiPut<PlanningArtifactResponse>(`/planning/artifacts/${artifactId}`, {
     body: values.body,
     logNote: values.logNote ?? null,
+    brief: values.brief ?? null,
   });
 }
 

@@ -83,7 +83,7 @@ public sealed class OvermindPlanningTools
             ct));
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Editing a validated artifact requires a logNote.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
     public Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -92,18 +92,28 @@ public sealed class OvermindPlanningTools
         [Description("Order of a task artifact within the feature; document kinds ignore it.")] int? order = null,
         [Description("Optional review level of a task: light or hard.")] string? review = null,
         [Description("Change note recorded in the artifact log; required when editing a validated artifact.")] string? logNote = null,
-        CancellationToken ct = default) =>
-        Guarded(() => _api.PostAsync(
+        [Description("Optional one-line brief of a task artifact, max 500 chars; not allowed for other kinds.")] string? brief = null,
+        CancellationToken ct = default)
+    {
+        var payload = new JsonObject
+        {
+            ["kind"] = NormalizeKind(kind),
+            ["body"] = body,
+            ["order"] = order,
+            ["review"] = review is null ? null : NormalizeReview(review),
+            ["logNote"] = logNote
+        };
+
+        if (brief is not null)
+        {
+            payload["brief"] = brief;
+        }
+
+        return Guarded(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
-            new
-            {
-                kind = NormalizeKind(kind),
-                body,
-                order,
-                review = review is null ? null : NormalizeReview(review),
-                logNote
-            },
+            payload,
             ct));
+    }
 
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. The logNote is mandatory — an unexplained status move is rejected.")]

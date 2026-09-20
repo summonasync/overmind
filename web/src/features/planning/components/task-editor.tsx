@@ -6,24 +6,31 @@ import { cn } from "@/shared/lib/cn";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
+import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
 import { ArtifactLog } from "@/features/planning/components/artifact-log";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
 import type { PlanningArtifactResponse } from "@/features/planning/types";
 
+export interface TaskEditorValues {
+  body: string;
+  brief: string;
+}
+
 interface TaskEditorProps {
   initial?: PlanningArtifactResponse;
   pending: boolean;
   logPending: boolean;
   error: Error | null;
-  onSubmit: (body: string) => void;
+  onSubmit: (values: TaskEditorValues) => void;
   onAppendLog: (note: string) => void;
   onCancel: () => void;
 }
 
 export function TaskEditor({ initial, pending, logPending, error, onSubmit, onAppendLog, onCancel }: TaskEditorProps) {
   const [body, setBody] = useState(initial?.body ?? "");
+  const [brief, setBrief] = useState(initial?.brief ?? "");
   const [showPreview, setShowPreview] = useState(false);
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState<Error | null>(null);
@@ -34,8 +41,12 @@ export function TaskEditor({ initial, pending, logPending, error, onSubmit, onAp
       setFormError(new Error("Body cannot be empty."));
       return;
     }
+    if (brief.length > 500) {
+      setFormError(new Error("Brief must be at most 500 characters."));
+      return;
+    }
     setFormError(null);
-    onSubmit(body);
+    onSubmit({ body, brief: brief.trim() });
   };
 
   const handleAppend = () => {
@@ -56,6 +67,15 @@ export function TaskEditor({ initial, pending, logPending, error, onSubmit, onAp
           <span className="font-mono text-xs text-muted">v{initial.version}</span>
         </div>
       ) : null}
+
+      <Field label="Brief" htmlFor="task-brief">
+        <Input
+          id="task-brief"
+          value={brief}
+          onChange={(event) => setBrief(event.target.value)}
+          placeholder="One-liner shown on the board card — clear it to remove."
+        />
+      </Field>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="mb-1 flex items-center gap-1">

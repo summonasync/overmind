@@ -55,7 +55,8 @@ public static class PlanningArtifactsApi
         try
         {
             var artifact = await artifactService.UpsertAsync(
-                feature.Id, request.Kind, request.Body, request.Order, request.Review, request.LogNote, ct);
+                feature.Id, request.Kind, request.Body, request.Order, request.Review, request.LogNote, ct,
+                brief: request.Brief);
 
             var response = PlanningMapper.ToArtifactResponse(artifact);
             var isNew = artifact.Version == 1;
@@ -125,7 +126,7 @@ public static class PlanningArtifactsApi
         {
             await service.UpsertAsync(
                 artifact.FeatureId, artifact.Kind, request.Body, artifact.Order,
-                null, request.LogNote, ct);
+                null, request.LogNote, ct, brief: request.Brief);
         }
         catch (PlanningException ex)
         {

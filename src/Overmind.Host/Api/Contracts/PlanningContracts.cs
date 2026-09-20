@@ -35,9 +35,10 @@ public sealed record CreatePlanningArtifactRequest(
     string Body,
     int? Order,
     PlanningReviewLevel? Review,
-    string? LogNote);
+    string? LogNote,
+    string? Brief = null);
 
-public sealed record UpdatePlanningArtifactRequest(string Body, string? LogNote);
+public sealed record UpdatePlanningArtifactRequest(string Body, string? LogNote, string? Brief = null);
 
 public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Status, string LogNote);
 
@@ -50,6 +51,7 @@ public sealed record PlanningArtifactResponse(
     PlanningReviewLevel Review,
     int Order,
     string Body,
+    string? Brief,
     DateTime? FrozenAt,
     int Version,
     DateTime CreatedAt,

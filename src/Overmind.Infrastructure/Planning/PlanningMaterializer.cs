@@ -477,6 +477,11 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"status: {task.Status.ToString().ToLowerInvariant()}\n");
         builder.Append($"review: {task.Review.ToString().ToLowerInvariant()}\n");
         builder.Append($"created: {task.CreatedAt:yyyy-MM-dd}\n");
+        if (task.Brief is not null)
+        {
+            builder.Append($"brief: {task.Brief}\n");
+        }
+
         AppendPreservedFrontmatter(builder, task.PreservedFrontmatter);
         builder.Append("---\n\n");
         builder.Append(BacklogMarkdown.CollapseLeadingHeadings(task.Body));

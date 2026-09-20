@@ -223,7 +223,8 @@ public sealed partial class PlanningFeatureService
                 var restored = PlanningArtifact.Restore(
                     feature.Id, artifact.Kind, artifact.Status, artifact.Review, artifact.Body,
                     artifact.Order, artifact.FrozenAt, version: 1, artifact.CreatedAt, artifact.CreatedAt,
-                    preservedFrontmatter: PreservedFrontmatterJson.Serialize(artifact.Preserved));
+                    preservedFrontmatter: PreservedFrontmatterJson.Serialize(artifact.Preserved),
+                    brief: artifact.Brief);
                 _db.PlanningArtifacts.Add(restored);
                 if (artifact.Kind == PlanningArtifactKind.Task)
                 {
@@ -275,7 +276,13 @@ public sealed partial class PlanningFeatureService
                 existing.SetPreservedFrontmatter(preservedJson);
             }
 
-            if (bodyChanged || reviewChanged || statusChanged || preservedChanged)
+            var briefChanged = !string.Equals(existing.Brief, artifact.Brief, StringComparison.Ordinal);
+            if (briefChanged)
+            {
+                existing.SetBrief(artifact.Brief);
+            }
+
+            if (bodyChanged || reviewChanged || statusChanged || preservedChanged || briefChanged)
             {
                 artifactsUpdated++;
             }

@@ -51,6 +51,7 @@ public static class PlanningMapper
             artifact.Review,
             artifact.Order,
             artifact.Body,
+            artifact.Brief,
             artifact.FrozenAt,
             artifact.Version,
             artifact.CreatedAt,

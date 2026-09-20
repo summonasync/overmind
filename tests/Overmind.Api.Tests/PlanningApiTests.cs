@@ -295,6 +295,187 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateTask_WithBrief_StoredAndReturned()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task body", Brief = "Wire the polling hook" });
+
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        created!.Brief.ShouldBe("Wire the polling hook");
+
+        var fetched = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        fetched!.Brief.ShouldBe("Wire the polling hook");
+    }
+
+    [Fact]
+    public async Task CreateTask_WithEmptyBrief_StoresNull()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task body", Brief = "" });
+
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        created!.Brief.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task UpdateTask_BriefSet_Overwrites()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateTaskWithBrief(project.Id, "first brief");
+
+        var putResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}",
+            new { Body = "task body v2", Brief = "second brief" });
+
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await putResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        updated!.Brief.ShouldBe("second brief");
+    }
+
+    [Fact]
+    public async Task UpdateTask_BriefAbsent_LeavesItUntouched()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateTaskWithBrief(project.Id, "keep me");
+
+        var putResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}",
+            new { Body = "task body v2" });
+
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await putResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        updated!.Brief.ShouldBe("keep me");
+    }
+
+    [Fact]
+    public async Task UpdateTask_BriefEmptyString_ClearsIt()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateTaskWithBrief(project.Id, "going away");
+
+        var putResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}",
+            new { Body = "task body v2", Brief = "" });
+
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await putResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        updated!.Brief.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task UpdateTask_BriefOnlyChange_NoNewVersionRow()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateTaskWithBrief(project.Id, "first brief");
+
+        var putResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}",
+            new { Body = "task body", Brief = "second brief" });
+
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await putResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        updated!.Version.ShouldBe(1);
+        updated.Brief.ShouldBe("second brief");
+
+        var versions = await _client.GetFromJsonAsync<VersionJson[]>(
+            $"/api/planning/artifacts/{created.Id}/versions", JsonOptions);
+        versions.ShouldNotBeNull();
+        versions!.Length.ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("spec")]
+    [InlineData("plan")]
+    [InlineData("result")]
+    public async Task CreateArtifact_BriefOnNonTaskKind_Returns400(string kind)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = kind, Body = "# Doc", Brief = "not allowed" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("BriefNotAllowedForKind");
+    }
+
+    [Theory]
+    [InlineData(501)]
+    [InlineData(2000)]
+    public async Task CreateTask_BriefTooLong_Returns400(int length)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task body", Brief = new string('x', length) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("line one\nline two")]
+    [InlineData("line one\r\nline two")]
+    [InlineData("line one\rline two")]
+    public async Task CreateTask_BriefWithLineBreak_Returns400(string brief)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task body", Brief = brief });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateTask_BriefWithLineBreak_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateTaskWithBrief(project.Id, "first brief");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}",
+            new { Body = "task body v2", Brief = "line one\nstatus: validated" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateTask_BriefTooLong_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateTaskWithBrief(project.Id, "first brief");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}",
+            new { Body = "task body v2", Brief = new string('x', 501) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task ValidateTask_Returns409()
     {
         var project = await CreateProjectAsync();
@@ -570,6 +751,18 @@ public sealed class PlanningApiTests : IDisposable
         return feature!;
     }
 
+    private async Task<ArtifactJson> CreateTaskWithBrief(Guid projectId, string brief)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task body", Brief = brief });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var artifact = await response.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        artifact.ShouldNotBeNull();
+        return artifact!;
+    }
+
     public sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
 
     public sealed record BoardItemJson(
@@ -584,7 +777,7 @@ public sealed class PlanningApiTests : IDisposable
     public sealed record ArtifactJson(
         Guid Id, string Kind, string Status, string Review,
         int Order, string Body, DateTime? FrozenAt, int Version,
-        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log);
+        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null);
 
     public sealed record LogLineJson(string? Date, string Text);
 
