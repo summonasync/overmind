@@ -1,7 +1,7 @@
 ---
 feature: 037
 slug: mcp-echo-slimming
-status: draft
+status: inProgress
 priority: p2
 version: 1
 created: 2026-09-20
