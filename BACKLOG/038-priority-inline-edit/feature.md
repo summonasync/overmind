@@ -1,7 +1,7 @@
 ---
 feature: 038
 slug: priority-inline-edit
-status: review
+status: done
 priority: p2
 version: 9
 created: 2026-09-20
@@ -28,3 +28,7 @@ created: 2026-09-20
 ## Источник
 
 Запрос юзера в сессии 2026-09-20 (ночь, сразу после закрытия 034): «нам нужен в дашборде и на странице открытой фичи вариант менять приоритет как-то».
+
+<log>
+- 2026-09-20 — Delegated close by orchestrator: user said fix results in-session (032/033 already flipped by user in web). All tasks done+reviewed, result validated, live dogfood on prod (bundle 4/5).
+</log>

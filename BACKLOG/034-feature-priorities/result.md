@@ -36,4 +36,5 @@ Feature 034 done: priorities are first-class data on the board. FeaturePriority 
 </follow-ups>
 
 <log>
+- 2026-09-20 — Record final state before feature close: result validated (9f18f108), all 4 tasks done+reviewed, live dogfood on prod bundle 4.
 </log>
