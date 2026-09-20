@@ -65,6 +65,14 @@ public abstract class McpSessionTestBase : IAsyncLifetime
         });
         stub.Route("PUT", $"/api/entries/{Canned.EntryId}", 200, Canned.EntryJson);
         stub.RouteGet("/api/search", Canned.SearchJson);
+        RegisterNotificationRoutes(stub);
+    }
+
+    protected static void RegisterNotificationRoutes(StubOvermindApi stub)
+    {
+        stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
+        stub.Route("POST", "/api/agent/notifications", 201, Canned.NotificationJson);
+        stub.RouteGet("/api/agent/notifications/replies", Canned.RepliesJson);
     }
 
     protected static void RegisterPlanningRoutes(StubOvermindApi stub)

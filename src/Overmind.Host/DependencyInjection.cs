@@ -8,6 +8,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Materialization;
+using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
@@ -45,6 +46,7 @@ public static class DependencyInjection
             OvermindPaths.BundledDirectory));
 
         services.AddScoped<PlanningArtifactService>();
+        services.AddScoped<NotificationsService>();
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();
@@ -62,6 +64,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();
         services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
+        services.AddSingleton<IValidator<CreateNotificationRequest>, CreateNotificationRequestValidator>();
+        services.AddSingleton<IValidator<ReplyNotificationRequest>, ReplyNotificationRequestValidator>();
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));

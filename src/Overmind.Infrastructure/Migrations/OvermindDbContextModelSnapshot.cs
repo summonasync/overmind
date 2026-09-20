@@ -17,6 +17,52 @@ namespace Overmind.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
+            modelBuilder.Entity("Overmind.Core.AgentNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Agent")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FeatureSlug")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RepliedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReplyText")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tab")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "CreatedAt");
+
+                    b.ToTable("AgentNotifications");
+                });
+
             modelBuilder.Entity("Overmind.Core.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -480,6 +526,14 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("MaterializedFiles");
+                });
+
+            modelBuilder.Entity("Overmind.Core.AgentNotification", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Overmind.Core.ContextEntry", b =>

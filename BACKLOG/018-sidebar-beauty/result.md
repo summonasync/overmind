@@ -1,8 +1,9 @@
 ---
 feature: 018
 slug: sidebar-beauty
-status: draft
+status: validated
 created: 2026-09-20
+validated: 2026-09-20
 ---
 
 # Result 018 — Sidebar beauty rework (left menu design)

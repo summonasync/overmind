@@ -52,6 +52,7 @@ builder.Services.AddSingleton(new OvermindApiClient(http));
 builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindPlanningTools>();
 builder.Services.AddSingleton<OvermindOnboardingTools>();
+builder.Services.AddSingleton<OvermindNotificationTools>();
 builder.Services.AddSingleton<OvermindResources>();
 builder.Services.AddSingleton<OvermindPlanningResources>();
 builder.Services.AddSingleton<SessionBootstrapPrompt>();
@@ -73,6 +74,7 @@ builder.Services
     .WithTools<OvermindTools>()
     .WithTools<OvermindPlanningTools>()
     .WithTools<OvermindOnboardingTools>()
+    .WithTools<OvermindNotificationTools>()
     .WithResources<OvermindResources>()
     .WithResources<OvermindPlanningResources>()
     .WithPrompts<SessionBootstrapPrompt>();

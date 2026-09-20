@@ -13,6 +13,7 @@ public static class Canned
     public static readonly Guid PlanningPlanArtifactId = Guid.Parse("77777777-7777-7777-7777-777777777777");
     public static readonly Guid PlanningTaskOneId = Guid.Parse("88888888-8888-8888-8888-888888888888");
     public static readonly Guid PlanningTaskTwoId = Guid.Parse("99999999-9999-9999-9999-999999999999");
+    public static readonly Guid NotificationId = Guid.Parse("13131313-1313-1313-1313-131313131313");
 
     public const string PlanningSlug = "demo-feature";
     public const string PlanningStopSlug = "gate-locked";
@@ -131,6 +132,12 @@ public static class Canned
         """{"title":"Not Found","detail":"Feature 'demo-feature' was not found.","status":404}""";
 
     public const string OnboardQuickstartText = "Onboarding quickstart from the host — verbatim payload text.";
+
+    public const string NotificationJson =
+        """{"id":"13131313-1313-1313-1313-131313131313","projectId":"11111111-1111-1111-1111-111111111111","kind":"question","featureSlug":"demo-feature","tab":"spec","text":"Spec gate wants your call on the persistence model.","agent":"coder","createdAt":"2026-09-20T10:00:00Z","readAt":null,"replyText":null,"repliedAt":null}""";
+
+    public const string RepliesJson =
+        """{"items":[{"id":"13131313-1313-1313-1313-131313131313","projectId":"11111111-1111-1111-1111-111111111111","kind":"question","featureSlug":"demo-feature","tab":"spec","text":"Spec gate wants your call on the persistence model.","agent":"coder","createdAt":"2026-09-20T10:00:00Z","readAt":"2026-09-20T10:05:00Z","replyText":"Ship it as planned.","repliedAt":"2026-09-20T10:05:00Z"}]}""";
 
     public const string OnboardJson =
         """

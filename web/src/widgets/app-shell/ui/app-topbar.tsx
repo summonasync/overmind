@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import avatar from "@/shared/assets/brand/kerrigan-avatar.png";
 import { cn } from "@/shared/lib/cn";
+import { NotificationBell } from "@/widgets/app-shell/ui/notification-bell";
 import { StatusChip } from "@/widgets/app-shell/ui/status-chip";
 
 export function AppTopbar() {
@@ -49,6 +50,7 @@ export function AppTopbar() {
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-3">
         <StatusChip />
+        <NotificationBell />
         <div className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-3">
           <img src={avatar.src} alt="Kerrigan avatar" className="h-7 w-7 rounded-full border border-primary/40 object-cover" />
           <div className="leading-tight">

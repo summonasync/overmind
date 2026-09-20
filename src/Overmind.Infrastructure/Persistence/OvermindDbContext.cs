@@ -27,6 +27,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningArtifactVersion> PlanningArtifactVersions => Set<PlanningArtifactVersion>();
     public DbSet<PlanningMaterializedFile> PlanningMaterializedFiles => Set<PlanningMaterializedFile>();
     public DbSet<FrontmatterKey> FrontmatterKeys => Set<FrontmatterKey>();
+    public DbSet<AgentNotification> AgentNotifications => Set<AgentNotification>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -203,6 +204,18 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(k => k.Color).HasMaxLength(16);
 
             builder.HasIndex(k => k.Name).IsUnique();
+        });
+
+        modelBuilder.Entity<AgentNotification>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(n => n.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(n => n.Text).HasMaxLength(2000);
+
+            builder.HasIndex(n => new { n.ProjectId, n.CreatedAt });
         });
     }
 }
