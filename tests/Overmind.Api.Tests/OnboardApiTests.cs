@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Overmind.Host;
 using Shouldly;
 using Xunit;
 
@@ -215,6 +216,117 @@ public sealed class OnboardApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Onboard_Quickstart_CoversMaterializationAndValidationGate()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Quickstart.ShouldContain("Materialization: the BACKLOG/ tree under the project root is rewritten after every planning mutation");
+        onboard.Quickstart.ShouldContain("lastRun (null = never)");
+        onboard.Quickstart.ShouldContain("humanGate is on, planning_validate returns STOP");
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_OnStrategy_ResolvesWithTargetDirAndNullLastRun()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var diskPath = TestPaths.DiskPath(name);
+        var project = await CreateProjectAsync(name, diskPath);
+        await SetWorkflowAsync(project.Id, materialization: "on", validation: "on");
+
+        var onboard = await OnboardAsync(new { Cwd = diskPath });
+
+        onboard.Materialization.ShouldNotBeNull();
+        onboard.Materialization.Strategy.ShouldBe("on");
+        onboard.Materialization.TargetDir.ShouldBe(Path.Combine(diskPath, "BACKLOG"));
+        onboard.Materialization.Trigger.ShouldContain("after every planning mutation");
+        onboard.Materialization.LastRun.ShouldBeNull();
+        onboard.Validation.HumanGate.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_ArchiveStrategy_TargetDirIsArchiveRootNotRepoBacklog()
+    {
+        var name = $"onboard-archive-{Guid.NewGuid():N}";
+        var diskPath = TestPaths.DiskPath(name);
+        var project = await CreateProjectAsync(name, diskPath);
+        await SetWorkflowAsync(project.Id, materialization: "archive");
+
+        var onboard = await OnboardAsync(new { Cwd = diskPath });
+
+        onboard.Materialization.Strategy.ShouldBe("archive");
+        onboard.Materialization.TargetDir.ShouldBe(Path.Combine(OvermindPaths.DataDirectory, "projects", name, "backlog"));
+        onboard.Materialization.TargetDir.ShouldNotBe(Path.Combine(diskPath, "BACKLOG"));
+        onboard.Materialization.Trigger.ShouldContain("after every planning mutation");
+        onboard.Materialization.LastRun.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_OffStrategy_StillEmittedWithWillNotRunTrigger()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var diskPath = TestPaths.DiskPath(name);
+        var project = await CreateProjectAsync(name, diskPath);
+        await SetWorkflowAsync(project.Id, materialization: "off");
+
+        var onboard = await OnboardAsync(new { Cwd = diskPath });
+
+        onboard.Materialization.ShouldNotBeNull();
+        onboard.Materialization.Strategy.ShouldBe("off");
+        onboard.Materialization.TargetDir.ShouldBe(Path.Combine(diskPath, "BACKLOG"));
+        onboard.Materialization.Trigger.ShouldContain("will not run");
+        onboard.Materialization.LastRun.ShouldBeNull();
+        onboard.Validation.HumanGate.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_Inherit_ResolvesGlobalDefaultOff()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var diskPath = TestPaths.DiskPath(name);
+        await CreateProjectAsync(name, diskPath);
+
+        var onboard = await OnboardAsync(new { Cwd = diskPath });
+
+        onboard.Materialization.Strategy.ShouldBe("off");
+        onboard.Materialization.Trigger.ShouldContain("will not run");
+        onboard.Validation.HumanGate.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationLastRun_NullBeforePass_SetAfterMutationTriggeredPass()
+    {
+        var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-mat-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(sandbox);
+        try
+        {
+            var name = $"mat-{Guid.NewGuid():N}";
+            var project = await CreateProjectAsync(name, sandbox);
+            await SetWorkflowAsync(project.Id, materialization: "on");
+
+            var before = await OnboardAsync(new { Cwd = sandbox });
+            before.Materialization.LastRun.ShouldBeNull();
+
+            var create = await _client.PostAsJsonAsync(
+                $"/api/projects/{project.Id}/planning/features",
+                new { Slug = "feat", Title = "Feat", Body = string.Empty });
+            create.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+            File.Exists(Path.Combine(sandbox, "BACKLOG", "feat", "feature.md")).ShouldBeTrue();
+
+            var after = await OnboardAsync(new { Cwd = sandbox });
+            after.Materialization.LastRun.ShouldNotBeNull();
+            after.Materialization.Strategy.ShouldBe("on");
+        }
+        finally
+        {
+            Directory.Delete(sandbox, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Onboard_EmptyCwdWithoutProjectId_Returns400()
     {
         var response = await _client.PostAsJsonAsync("/api/onboard", new { Cwd = string.Empty });
@@ -273,12 +385,26 @@ public sealed class OnboardApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    private async Task SetWorkflowAsync(Guid projectId, string? materialization = null, string? validation = null)
+    {
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{projectId}/planning/workflow",
+            new { Materialization = materialization, RequireHumanValidation = validation });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     public sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
 
     public sealed record OnboardJson(
-        Guid ProjectId, string ProjectName, bool Created, OnboardBoardJson Board, string Quickstart);
+        Guid ProjectId, string ProjectName, bool Created, OnboardBoardJson Board,
+        OnboardMaterializationJson Materialization, OnboardValidationJson Validation, string Quickstart);
 
     public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus, string? CurrentSlug);
+
+    public sealed record OnboardMaterializationJson(string Strategy, string TargetDir, string Trigger, DateTime? LastRun);
+
+    public sealed record OnboardValidationJson(bool HumanGate);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

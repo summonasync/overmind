@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 
 namespace Overmind.Host.Api;
 
@@ -21,6 +22,7 @@ public static class OnboardApi
         OnboardRequest request,
         IValidator<OnboardRequest> validator,
         OvermindDbContext db,
+        PlanningPolicy policy,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -72,8 +74,39 @@ public static class OnboardApi
         }
 
         var board = await BuildBoardSummaryAsync(db, project.Id, ct);
-        return Results.Ok(new OnboardResponse(project.Id, project.Name, created, board, OnboardQuickstart.Text));
+        var strategy = await policy.ResolveMaterializationAsync(project.Id, ct);
+        var humanGate = await policy.ResolveValidationGateAsync(project.Id, ct);
+
+        return Results.Ok(new OnboardResponse(
+            project.Id,
+            project.Name,
+            created,
+            board,
+            new OnboardMaterializationBlock(
+                StrategyText(strategy),
+                TargetDir(project, strategy),
+                TriggerText(strategy),
+                project.LastMaterializedAt),
+            new OnboardValidationBlock(humanGate),
+            OnboardQuickstart.Text));
     }
+
+    private static string StrategyText(PlanningMaterialization strategy) => strategy switch
+    {
+        PlanningMaterialization.On => "on",
+        PlanningMaterialization.Archive => "archive",
+        _ => "off",
+    };
+
+    private static string TargetDir(Project project, PlanningMaterialization strategy) =>
+        strategy == PlanningMaterialization.Archive
+            ? PlanningArchive.Root(OvermindPaths.DataDirectory, project)
+            : Path.Combine(project.DiskPath, "BACKLOG");
+
+    private static string TriggerText(PlanningMaterialization strategy) =>
+        strategy == PlanningMaterialization.Off
+            ? "Materialization is off for this project — the materializer will not run."
+            : "Event-driven: runs automatically after every planning mutation.";
 
     private static async Task<OnboardBoardSummary> BuildBoardSummaryAsync(
         OvermindDbContext db, Guid projectId, CancellationToken ct)

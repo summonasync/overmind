@@ -884,6 +884,64 @@ public sealed class PlanningMaterializerTests : IDisposable
     private static int CountHeadings(string content) =>
         content.Split('\n').Count(line => line.StartsWith("# ", StringComparison.Ordinal));
 
+    [Fact]
+    public async Task Sync_Success_StampsLastMaterializedAt()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using (var seed = _db.CreateContext())
+        {
+            (await seed.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldBeNull();
+        }
+
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        using var verify = _db.CreateContext();
+        (await verify.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Sync_OffStrategy_DoesNotStamp()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.Off);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        using var verify = _db.CreateContext();
+        (await verify.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Sync_LocalEditsAbort_LeavesLastMaterializedAtUntouched()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        DateTime firstStamp;
+        using (var seeded = _db.CreateContext())
+        {
+            firstStamp = (await seeded.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt!.Value;
+        }
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        await File.AppendAllTextAsync(taskPath, "\nhand edit\n");
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
+        ex.Kind.ShouldBe(MaterializationFailureKind.LocalEditsBlocked);
+
+        using var verify = _db.CreateContext();
+        (await verify.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldBe(firstStamp);
+    }
+
     private async Task<Guid> SeedProjectAsync(PlanningMaterialization strategy)
     {
         using var ctx = _db.CreateContext();

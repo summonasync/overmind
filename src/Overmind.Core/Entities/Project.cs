@@ -13,6 +13,7 @@ public sealed class Project
     public PlanningMaterialization PlanningMaterialization { get; private set; }
     public HumanValidationOverride RequireHumanValidation { get; private set; }
     public DateTime CreatedAt { get; private set; }
+    public DateTime? LastMaterializedAt { get; private set; }
 
     public static Project Create(string name, string diskPath, string description = "")
     {
@@ -35,5 +36,10 @@ public sealed class Project
     {
         PlanningMaterialization = materialization;
         RequireHumanValidation = validation;
+    }
+
+    public void MarkMaterialized()
+    {
+        LastMaterializedAt = DateTime.UtcNow;
     }
 }

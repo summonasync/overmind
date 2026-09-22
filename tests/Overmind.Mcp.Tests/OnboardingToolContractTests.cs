@@ -27,6 +27,19 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ToolsList_OnboardDescription_MentionsMaterializationAndValidationBlocks()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("materialization block (strategy, targetDir, trigger, lastRun)");
+        description.ShouldContain("validation block (humanGate)");
+    }
+
+    [Fact]
     public async Task Onboard_PostsCwdAndReturnsFormattedSummary()
     {
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());

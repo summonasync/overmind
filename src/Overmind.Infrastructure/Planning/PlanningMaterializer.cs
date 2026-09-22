@@ -63,6 +63,9 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         await WritePlansAsync(projectId, plans, rows, ct);
 
+        project.MarkMaterialized();
+        await _db.SaveChangesAsync(ct);
+
         return new PlanningMaterializationReport(
             projectId,
             strategy,
@@ -148,7 +151,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         foreach (var row in rows)
         {
             await RemoveTrackedCopyAsync(project.DiskPath, rootIsRepo: true, row, warnings, ct);
-            await RemoveTrackedCopyAsync(ArchiveRoot(project), rootIsRepo: false, row, warnings, ct);
+            await RemoveTrackedCopyAsync(PlanningArchive.Root(_dataDirectory, project), rootIsRepo: false, row, warnings, ct);
             _db.PlanningMaterializedFiles.Remove(row);
             removed.Add(new PlanningMaterializedFileInfo(row.RelativePath, row.Sha256));
         }
@@ -466,13 +469,10 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
     }
 
     private string ResolveRoot(Project project, PlanningMaterialization strategy) =>
-        strategy == PlanningMaterialization.Archive ? ArchiveRoot(project) : project.DiskPath;
+        strategy == PlanningMaterialization.Archive ? PlanningArchive.Root(_dataDirectory, project) : project.DiskPath;
 
     private string OtherRoot(Project project, PlanningMaterialization strategy) =>
-        strategy == PlanningMaterialization.Archive ? project.DiskPath : ArchiveRoot(project);
-
-    private string ArchiveRoot(Project project) =>
-        Path.Combine(_dataDirectory, "projects", Slug.From(project.Name, project.Id.ToString("N")), "backlog");
+        strategy == PlanningMaterialization.Archive ? project.DiskPath : PlanningArchive.Root(_dataDirectory, project);
 
     private async Task<Project> LoadProjectAsync(Guid projectId, CancellationToken ct) =>
         await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)

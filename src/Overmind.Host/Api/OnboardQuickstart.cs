@@ -5,6 +5,8 @@ public static class OnboardQuickstart
     public const string Text = """
         Overmind onboarding quickstart — run the MCP tools in this order:
 
+        Materialization: the BACKLOG/ tree under the project root is rewritten after every planning mutation; the materialization block of this response carries the resolved strategy, targetDir and lastRun (null = never). When the validation block's humanGate is on, planning_validate returns STOP until the user approves the artifact in the Overmind UI.
+
         1. overmind_onboard — resolves your project from the reported cwd and returns the project id, board summary, and this quickstart.
         2. planning_list_features — pick the feature to work on; prefer the pinned current feature when one is set.
         3. planning_current_task — returns the single next task, or a stop/empty reason. Obey STOP lines; ask the user instead of working around them.

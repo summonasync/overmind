@@ -1,7 +1,7 @@
 ---
 feature: 042
 slug: onboard-observability
-status: draft
+status: review
 priority: p1
 version: 1
 created: 2026-09-22
