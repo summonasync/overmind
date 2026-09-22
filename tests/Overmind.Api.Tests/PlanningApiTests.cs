@@ -732,7 +732,7 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task AppendLog_BodyUpdated_VersionUnchanged()
+    public async Task AppendLog_BodyUpdated_VersionBumped()
     {
         var project = await CreateProjectAsync();
         await CreateFeature(project.Id, "feat", "Feature");
@@ -750,7 +750,7 @@ public sealed class PlanningApiTests : IDisposable
 
         var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
             $"/api/planning/artifacts/{created.Id}", JsonOptions);
-        getResponse!.Version.ShouldBe(created.Version);
+        getResponse!.Version.ShouldBe(created.Version + 1);
         getResponse.Body.ShouldContain("a log note");
     }
 

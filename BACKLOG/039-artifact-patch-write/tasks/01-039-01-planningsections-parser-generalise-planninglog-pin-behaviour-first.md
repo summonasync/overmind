@@ -2,7 +2,7 @@
 feature: 039
 task: 01
 slug: artifact-patch-write
-status: inprogress
+status: done
 review: light
 created: 2026-09-22
 brief: Pin PlanningLog behaviour with characterization tests, then extract PlanningSections (find/replace/list + AC parse) and rebase PlanningLog on it
@@ -62,4 +62,7 @@ Executor reads ONLY this file.
 
 <log>
 - 2026-09-22 — Execution starts: coder sub-agent takes the characterization-first parser contract (user mandate "стартуем 039", plan gate passed).
+- 2026-09-22 — Coded (dotnet-coder): PlanningSections.cs new (strict Replace, AC parse), PlanningLog rebased with public contract untouched; 7 characterization pins + 31 parser tests, 3 real fixtures; build 0W/0E, tests 1029/1029. One deliberate deviation: CRLF tolerance (\r? patterns) — Append on CRLF bodies now inserts inside the existing pair (pinned). Off to light review.
+- 2026-09-22 — Light review PASS-WITH-NITS (0 BLOCKER / 0 IMPORTANT / 4 NIT), gates re-verified independently: build 0W/0E, tests 1029/1029. Report: audits/review-039-01.md.
+- 2026-09-22 — Accepted with the 4 NITs on record; NIT-2 (OpenEnd arithmetic) carried into 039/02's task log for the executor. Parser is the stable base for the domain work.
 </log>

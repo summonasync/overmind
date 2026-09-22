@@ -2,7 +2,7 @@
 feature: 039
 task: 02
 slug: artifact-patch-write
-status: todo
+status: done
 review: light
 created: 2026-09-22
 brief: PlanningArtifact.PatchSection/TickAc + service PatchAsync: snapshots on every patch, frozen demotion, strict 400-grade diagnostics, AppendLog joins snapshots
@@ -55,3 +55,11 @@ Task 01 delivered `PlanningSections`. Today `PlanningArtifact.UpdateBody` (Plann
 
 <obstacles>
 </obstacles>
+
+<log>
+- 2026-09-22 — Carry-over from review 039/01 (NIT-2, audits/review-039-01.md): PlanningSections.OpenLength includes the trailing \r — when PatchSection replaces content, prefer an explicit OpenEnd helper (or equivalent) over hand-rolled step-back arithmetic so CRLF bodies stay byte-predictable.
+- 2026-09-22 — Execution starts: coder sub-agent takes the domain/service contract on top of the reviewed PlanningSections parser (task 039/01 done, PASS-WITH-NITS).
+- 2026-09-22 — Coded (dotnet-coder): PatchSection/TickAc on PlanningArtifact via shared ApplyBodyMutation (snapshot-before-mutate, Version++, frozen demotion identical to UpdateBody); AppendLog joined the snapshot discipline — BEHAVIOUR CHANGE pinned: append_log now bumps Version and writes a PlanningArtifactVersion row (old no-bump pins replaced in Core/Infra/Api tests). PatchAsync follows the SetStatusAsync shape and returns the mutated artifact for task 03's compact echo. PlanningException additions: PatchSectionNotFound (lists present sections), TickItemNotFoundByIndex/ByText (list visible items), TickTextAmbiguous (lists indices) plus two beyond the contract: TickItemNotCheckable (plain bullet refused loudly, D6) and InvalidPatchRequest (service dispatch: section XOR tick, content required for section). Pinned deviations: idempotent re-tick short-circuits BEFORE the frozen guard (spec D6 "must not punish the agent" — re-tick on a frozen artifact is a no-op, a real flip still requires logNote and demotes); text match is exact/ordinal/case-sensitive against the marker-stripped item text. NIT-2 carry-over satisfied by delegating to the tested PlanningSections.Replace — zero hand-rolled step-back arithmetic, task-01 files untouched; CRLF byte-predictability pinned by PatchSection_CrlfBody/TickAc_CrlfBody tests. TDD red (30 failing) then green. Build 0W/0E; tests 1068/1068 (Core 175 / Infra 346 / Mcp 238 / Api 309). Off to light review.
+- 2026-09-22 — Light review PASS-WITH-NITS (0 BLOCKER / 0 IMPORTANT / 2 NIT), gates re-verified: build 0W/0E, tests 1068/1068. Task-01 files confirmed untouched; snapshot ordering, frozen mirror, re-tick pin, diagnostics all verified. Report: audits/review-039-02.md.
+- 2026-09-22 — Accepted: 2 NITs routed — NIT-1 (SetStatus body-append without snapshot) → microbatch queue #36; NIT-2 (blank-field 500) → carried into 039/03 task log as a boundary-validation requirement. Domain layer is the stable base for the agent surface.
+</log>

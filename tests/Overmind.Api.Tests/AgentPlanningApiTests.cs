@@ -471,6 +471,237 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_ReplaceSection_ReturnsD7ProjectionAndRewritesTheBody()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n\n<scope>\nEverything.\n</scope>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "New goal." });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["artifactId", "kind", "section", "version", "bodyChars"]);
+
+        var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        patch!.ArtifactId.ShouldBe(spec.Id);
+        patch.Kind.ShouldBe("spec");
+        patch.Section.ShouldBe("goal");
+        patch.Version.ShouldBe(2);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("New goal.");
+        artifact.Body.ShouldNotContain("Old goal.");
+        artifact.Version.ShouldBe(2);
+        patch.BodyChars.ShouldBe(artifact.Body.Length);
+    }
+
+    [Fact]
+    public async Task Patch_TickAcByIndex_MarksTheItemAndProjectsTheAcSection()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] first thing\n- [ ] second thing\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "tick_ac", AcIndex = 1 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        patch!.ArtifactId.ShouldBe(task.Id);
+        patch.Kind.ShouldBe("task");
+        patch.Section.ShouldBe("acceptance-criteria");
+        patch.Version.ShouldBe(2);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("- [ ] first thing");
+        artifact.Body.ShouldContain("- [x] second thing");
+    }
+
+    [Fact]
+    public async Task Patch_TickAcByText_MarksTheExactMatch()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] wire the endpoint\n- [ ] write the docs\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "tick_ac", AcText = "write the docs" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("- [x] write the docs");
+        artifact.Body.ShouldContain("- [ ] wire the endpoint");
+    }
+
+    [Fact]
+    public async Task Patch_UnknownSection_Returns400ListingPresentSections()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n\n<scope>\nEverything.\n</scope>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "banana", Content = "nope" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("PatchSectionNotFound");
+        problem.Detail!.ShouldContain("Sections present");
+        problem.Detail!.ShouldContain("goal");
+        problem.Detail!.ShouldContain("scope");
+    }
+
+    [Fact]
+    public async Task Patch_LogSection_Returns400PointingAtAppendLog()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n\n<log>\n- 2026-09-01 — seeded\n</log>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "log", Content = "- 2026-09-22 — forged history" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("PatchLogSectionNotReplaceable");
+        problem.Detail!.ShouldContain("append-only");
+        problem.Detail!.ShouldContain("planning_append_log");
+        problem.Detail!.ShouldContain("planning_upsert_artifact");
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Version.ShouldBe(1);
+        artifact.Body.ShouldContain("- 2026-09-01 — seeded");
+        artifact.Body.ShouldNotContain("forged history");
+    }
+
+    [Fact]
+    public async Task Patch_TickAcOutOfRange_Returns400ListingVisibleItems()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] first thing\n- [ ] second thing\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "tick_ac", AcIndex = 7 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("TickItemNotFound");
+        problem.Detail!.ShouldContain("0: [ ] first thing");
+        problem.Detail!.ShouldContain("1: [ ] second thing");
+    }
+
+    [Fact]
+    public async Task Patch_AmbiguousTickText_Returns400SuggestingTheIndex()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] ship it\n- [ ] ship it\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "tick_ac", AcText = "ship it" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("TickTextAmbiguous");
+        problem.Detail!.ShouldContain("tick by index instead");
+    }
+
+    [Fact]
+    public async Task Patch_ItemWithoutCheckbox_Returns400NotCheckable()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- a plain line\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "tick_ac", AcIndex = 0 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("TickItemNotCheckable");
+        problem.Detail!.ShouldContain("cannot be ticked");
+    }
+
+    [Theory]
+    [InlineData("replace_section", "   ", "content", null, null)]
+    [InlineData("replace_section", "goal", "   ", null, null)]
+    [InlineData("replace_section", "goal", null, null, null)]
+    [InlineData("tick_ac", null, null, null, "")]
+    [InlineData("tick_ac", null, null, null, "   ")]
+    [InlineData("tick_ac", null, null, null, null)]
+    [InlineData("tick_ac", null, null, 0, "first thing")]
+    [InlineData("tick_ac", "goal", "content", null, null)]
+    [InlineData("banana", "goal", "content", null, null)]
+    [InlineData(null, "goal", "content", null, null)]
+    public async Task Patch_MalformedShape_Returns400InvalidPatchRequest_Never500(
+        string? op, string? section, string? content, int? acIndex, string? acText)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = op, Section = section, Content = content, AcIndex = acIndex, AcText = acText });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidPatchRequest");
+    }
+
+    [Fact]
     public async Task BoardAndFeature_SameJsonShapeAsHumanDoor()
     {
         var project = await CreateProjectAsync();
@@ -499,6 +730,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     private static string AgentFeatureStatusUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}/status";
+
+    private static string AgentPatchUrl(Guid artifactId) =>
+        $"/api/agent/planning/artifacts/{artifactId}/patch";
 
     private async Task BringToStatusViaHumanDoorAsync(Guid projectId, string slug, string target)
     {
@@ -644,6 +878,9 @@ public sealed class AgentPlanningApiTests : IDisposable
         string State, CurrentFeatureJson Feature, ArtifactJson? Artifact, string? Reason);
 
     public sealed record CurrentFeatureJson(string Slug, string Title, string Status);
+
+    public sealed record PatchResultJson(
+        Guid ArtifactId, string Kind, string Section, int Version, int BodyChars);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

@@ -62,4 +62,42 @@ public sealed class PlanningException : Exception
     public static PlanningException ImportFailed(string source, Exception? inner = null) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ImportFailed,
             $"Importing '{source}' failed: {inner?.Message ?? "unknown error"}", inner);
+
+    public static PlanningException PatchSectionNotFound(string section, IEnumerable<string> presentSections)
+    {
+        var present = string.Join(", ", presentSections.Distinct());
+        return new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchSectionNotFound,
+            $"Section '{section}' was not found in the artifact body. Sections present: {(present.Length == 0 ? "(none)" : present)}.");
+    }
+
+    public static PlanningException TickItemNotFoundByIndex(int index, IReadOnlyList<PlanningAcItem> visibleItems) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotFound,
+            visibleItems.Count == 0
+                ? $"The artifact body contains no acceptance-criteria items; there is no item {index} to tick."
+                : $"Acceptance-criteria item {index} was not found. Visible items: {FormatAcItems(visibleItems)}.");
+
+    public static PlanningException TickItemNotFoundByText(string text, IReadOnlyList<PlanningAcItem> visibleItems) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotFound,
+            visibleItems.Count == 0
+                ? $"The artifact body contains no acceptance-criteria items; nothing matches '{text}'."
+                : $"No acceptance-criteria item matches the exact text '{text}'. Visible items: {FormatAcItems(visibleItems)}.");
+
+    public static PlanningException TickTextAmbiguous(string text, IReadOnlyList<int> matchingIndices) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickTextAmbiguous,
+            $"The text '{text}' matches {matchingIndices.Count} acceptance-criteria items (indices {string.Join(", ", matchingIndices)}); tick by index instead.");
+
+    public static PlanningException TickItemNotCheckable(int index, string rawText) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotCheckable,
+            $"Acceptance-criteria item {index} has no checkbox marker and cannot be ticked: '{rawText}'.");
+
+    public static PlanningException InvalidPatchRequest() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidPatchRequest,
+            "A patch must carry either a section with its replacement content or an acceptance-criteria tick (index or exact text), but not both.");
+
+    public static PlanningException PatchLogSectionNotReplaceable() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchLogSectionNotReplaceable,
+            "The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or the artifact log endpoint; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.");
+
+    private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
+        string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
 }

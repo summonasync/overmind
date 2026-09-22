@@ -653,7 +653,7 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task AppendLogAsync_UpdatesBodyButNotVersion()
+    public async Task AppendLogAsync_SnapshotsBody_AndBumpsVersion()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -666,7 +666,216 @@ public sealed class PlanningServiceTests : IDisposable
         await artifactService.AppendLogAsync(artifact.Id, "a note", default);
 
         await _context.Entry(artifact).ReloadAsync();
-        artifact.Version.ShouldBe(versionBefore);
+        artifact.Version.ShouldBe(versionBefore + 1);
         artifact.Body.ShouldContain("a note");
+
+        var snapshot = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
+        snapshot.Version.ShouldBe(versionBefore);
+        snapshot.Body.ShouldBe("spec body");
+    }
+
+    [Fact]
+    public async Task PatchAsync_SectionPatch_PersistsSnapshot_AndSyncsMaterialization()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold goal\n</goal>\n", null, null, null, default);
+
+        _materializer.ClearReceivedCalls();
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(Section: "goal", Content: "patched goal"), default);
+
+        patched.Version.ShouldBe(2);
+        patched.Body.ShouldContain("patched goal");
+        patched.Body.ShouldNotContain("old goal");
+
+        await _context.Entry(artifact).ReloadAsync();
+        artifact.Body.ShouldContain("patched goal");
+
+        var snapshot = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
+        snapshot.Version.ShouldBe(1);
+        snapshot.Body.ShouldContain("<goal>\nold goal\n</goal>");
+
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task PatchAsync_TickPatch_FlipsItem_AndBumpsVersion()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "<acceptance-criteria>\n- [ ] write the parser\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+
+        patched.Version.ShouldBe(2);
+        patched.Body.ShouldContain("[x] write the parser");
+
+        var persisted = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
+        persisted.Body.ShouldContain("[ ] write the parser");
+    }
+
+    [Fact]
+    public async Task PatchAsync_UnknownSection_ThrowsPatchSectionNotFound()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id, new PlanningArtifactPatch(Section: "refs", Content: "x"), default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("goal");
+    }
+
+    [Fact]
+    public async Task PatchAsync_FrozenArtifact_PatchWithoutNote_ThrowsChangeNoteRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+        await artifactService.ValidateAsync(artifact.Id, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id, new PlanningArtifactPatch(Section: "goal", Content: "new"), default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.ChangeNoteRequired);
+    }
+
+    [Fact]
+    public async Task PatchAsync_FrozenArtifact_PatchWithNote_DemotesToDraft_AndSnapshotsFrozenBody()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+        await artifactService.ValidateAsync(artifact.Id, default);
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id,
+            new PlanningArtifactPatch(Section: "goal", Content: "new", LogNote: "reopened for rework"),
+            default);
+
+        patched.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        patched.Version.ShouldBe(2);
+
+        await _context.Entry(artifact).ReloadAsync();
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        artifact.Body.ShouldContain("reopened for rework");
+
+        var snapshot = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
+        snapshot.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task PatchAsync_IdempotentRetick_DoesNotBumpVersionOrSnapshot()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "<acceptance-criteria>\n- [x] already done\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+
+        patched.Version.ShouldBe(1);
+
+        var snapshots = await _context.PlanningArtifactVersions.CountAsync(v => v.ArtifactId == artifact.Id);
+        snapshots.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task PatchAsync_MissingArtifact_ThrowsMissingArtifact()
+    {
+        var artifactService = CreateArtifactService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                Guid.NewGuid(), new PlanningArtifactPatch(Section: "goal", Content: "x"), default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+        ex.Code.ShouldBe(PlanningFailureCode.MissingArtifact);
+    }
+
+    [Fact]
+    public async Task PatchAsync_SectionAndTickTogether_ThrowsInvalidPatchRequest()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id,
+                new PlanningArtifactPatch(Section: "goal", Content: "new", TickIndex: 0),
+                default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
+    }
+
+    [Fact]
+    public async Task PatchAsync_EmptyPatch_ThrowsInvalidPatchRequest()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(artifact.Id, new PlanningArtifactPatch(), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
+    }
+
+    [Fact]
+    public async Task PatchAsync_SectionWithoutContent_ThrowsInvalidPatchRequest()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id, new PlanningArtifactPatch(Section: "goal"), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
     }
 }

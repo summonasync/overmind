@@ -82,6 +82,35 @@ public class StatusModelContractTests : McpSessionTestBase
         description.ShouldContain("validation goes through planning_validate", Case.Insensitive);
     }
 
+    [Theory]
+    [InlineData("planning_append_log", "cheapest write: one dated line, body is not resent")]
+    [InlineData("planning_patch_artifact", "middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched")]
+    [InlineData("planning_upsert_artifact", "most expensive write: resends the full body")]
+    public async Task WriteToolDescriptions_StateTheirCostTierVerbatim(string toolName, string tierPhrase)
+    {
+        var description = await ToolDescription(toolName);
+
+        description.ShouldContain(tierPhrase);
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifactDescription_DocumentsTheIdempotentTick()
+    {
+        var description = await ToolDescription("planning_patch_artifact");
+
+        description.ShouldContain("no-op");
+        description.ShouldContain("retried tick is safe");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifactDescription_DocumentsTheAppendOnlyLog()
+    {
+        var description = await ToolDescription("planning_patch_artifact");
+
+        description.ShouldContain("append-only");
+        description.ShouldContain("planning_append_log");
+    }
+
     private static string[] AllowedStatusNames(PlanningArtifactKind kind) =>
         PlanningArtifact.AllowedStatuses(kind)
             .Select(status => status.ToString().ToLowerInvariant())

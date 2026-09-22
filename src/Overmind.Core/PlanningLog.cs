@@ -1,38 +1,24 @@
-using System.Text.RegularExpressions;
+using System.Text;
 
 namespace Overmind.Core;
 
-public static partial class PlanningLog
+public static class PlanningLog
 {
-    [GeneratedRegex(@"(?m)^[ \t]*<log>[ \t]*$", RegexOptions.None, 2000)]
-    private static partial Regex LogOpenPattern();
-
-    [GeneratedRegex(@"(?m)^[ \t]*</log>[ \t]*$", RegexOptions.None, 2000)]
-    private static partial Regex LogClosePattern();
-
     public static string Append(string body, string note, DateTime? now = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(note);
 
         var timestamp = (now ?? DateTime.UtcNow).ToString("yyyy-MM-dd");
-        var line = $"- {timestamp} \u2014 {note}";
+        var line = $"- {timestamp} — {note}";
 
-        var openMatches = LogOpenPattern().Matches(body);
-        var closeMatches = LogClosePattern().Matches(body);
-
-        var lastOpen = FindLastAnchoredPair(openMatches, closeMatches);
-
-        if (lastOpen is null)
+        if (!PlanningSections.TryFind("log", body, out var section))
         {
             var separator = body.Length > 0 && !body.EndsWith('\n') ? "\n\n" : (body.Length > 0 ? "\n" : "");
             return body + $"{separator}<log>\n{line}\n</log>\n";
         }
 
-        var (openIndex, openLength, closeIndex) = lastOpen.Value;
-        var before = body.AsSpan(0, closeIndex);
-        var after = body.AsSpan(closeIndex);
-
-        var result = new System.Text.StringBuilder(body.Length + line.Length + 4);
+        var before = body.AsSpan(0, section.CloseIndex);
+        var result = new StringBuilder(body.Length + line.Length + 4);
         result.Append(before);
 
         if (before.Length > 0 && before[^1] != '\n')
@@ -42,34 +28,21 @@ public static partial class PlanningLog
 
         result.Append(line);
         result.Append('\n');
-        result.Append(after);
+        result.Append(body.AsSpan(section.CloseIndex));
 
         return result.ToString();
     }
 
     public static IReadOnlyList<PlanningLogLine> Parse(string body)
     {
-        if (string.IsNullOrEmpty(body))
+        if (string.IsNullOrEmpty(body) || !PlanningSections.TryFind("log", body, out var section))
         {
             return [];
         }
 
-        var openMatches = LogOpenPattern().Matches(body);
-        var closeMatches = LogClosePattern().Matches(body);
-
-        var lastOpen = FindLastAnchoredPair(openMatches, closeMatches);
-
-        if (lastOpen is null)
-        {
-            return [];
-        }
-
-        var (openIndex, openLength, closeIndex) = lastOpen.Value;
-        var content = body.Substring(openIndex + openLength, closeIndex - openIndex - openLength);
-        var lines = content.Split('\n');
         var result = new List<PlanningLogLine>();
 
-        foreach (var rawLine in lines)
+        foreach (var rawLine in section.Content.Split('\n'))
         {
             var trimmed = rawLine.Trim();
             if (!trimmed.StartsWith("- "))
@@ -78,7 +51,7 @@ public static partial class PlanningLog
             }
 
             var textPart = trimmed[2..];
-            var separatorIdx = textPart.IndexOf(" \u2014 ", StringComparison.Ordinal);
+            var separatorIdx = textPart.IndexOf(" — ", StringComparison.Ordinal);
 
             if (separatorIdx > 0
                 && separatorIdx >= 10
@@ -96,25 +69,6 @@ public static partial class PlanningLog
         }
 
         return result;
-    }
-
-    private static (int OpenIndex, int OpenLength, int CloseIndex)? FindLastAnchoredPair(
-        MatchCollection openMatches, MatchCollection closeMatches)
-    {
-        for (var i = openMatches.Count - 1; i >= 0; i--)
-        {
-            var openMatch = openMatches[i];
-            for (var j = closeMatches.Count - 1; j >= 0; j--)
-            {
-                var closeMatch = closeMatches[j];
-                if (closeMatch.Index > openMatch.Index)
-                {
-                    return (openMatch.Index, openMatch.Length, closeMatch.Index);
-                }
-            }
-        }
-
-        return null;
     }
 }
 

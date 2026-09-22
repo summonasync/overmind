@@ -8,6 +8,36 @@ public class PlanningArtifactTests
 {
     private static readonly Guid FeatureId = Guid.NewGuid();
 
+    private const string PatchBody = """
+# Plan
+
+<goal>
+original goal text
+</goal>
+
+<scope>
+- keep this line
+</scope>
+
+<acceptance-criteria>
+- [ ] write the parser
+  - [ ] indented criterion with trailing note
+- [x] ship the docs
+- plain bullet
+</acceptance-criteria>
+
+<log>
+- 2026-09-01 — seeded
+</log>
+""";
+
+    private const string AmbiguousAcBody = """
+<acceptance-criteria>
+- [ ] deploy the service
+- [ ] deploy the service
+</acceptance-criteria>
+""";
+
     [Theory]
     [InlineData(PlanningArtifactKind.Spec, PlanningArtifactStatus.Draft)]
     [InlineData(PlanningArtifactKind.Plan, PlanningArtifactStatus.Draft)]
@@ -155,17 +185,17 @@ public class PlanningArtifactTests
     }
 
     [Fact]
-    public void AppendLog_DoesNotBumpVersion_CreatesNoVersionRow()
+    public void AppendLog_SnapshotsPreviousBody_AndBumpsVersion()
     {
-        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body");
-        var versionBefore = artifact.Version;
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "v1 body");
 
-        artifact.AppendLog("some note");
+        artifact.AppendLog("progress note");
 
-        artifact.Version.ShouldBe(versionBefore);
-        artifact.Versions.ShouldBeEmpty();
-        artifact.Body.ShouldContain("some note");
-        artifact.Body.ShouldContain("<log>");
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Version.ShouldBe(1);
+        artifact.Versions[0].Body.ShouldBe("v1 body");
+        artifact.Body.ShouldStartWith("v1 body");
+        artifact.Body.ShouldContain("progress note");
     }
 
     [Fact]
@@ -209,6 +239,385 @@ public class PlanningArtifactTests
         artifact.Versions[1].Body.ShouldBe("body-v2");
         artifact.Versions[2].Version.ShouldBe(3);
         artifact.Versions[2].Body.ShouldBe("body-v3");
+    }
+
+    [Fact]
+    public void PatchSection_ReplacesContent_SnapshotsPreviousBody_AndBumpsVersion()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+        var original = artifact.Body;
+
+        artifact.PatchSection("goal", "revised goal text");
+
+        artifact.Body.ShouldContain("revised goal text");
+        artifact.Body.ShouldNotContain("original goal text");
+        artifact.Body.ShouldContain("- keep this line");
+        artifact.Body.ShouldContain("[ ] write the parser");
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.Count.ShouldBe(1);
+        artifact.Versions[0].Version.ShouldBe(1);
+        artifact.Versions[0].Body.ShouldBe(original);
+    }
+
+    [Fact]
+    public void PatchSection_MissingSection_ThrowsWithPresentSectionNames()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("refs", "content"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("refs");
+        ex.Message.ShouldContain("goal");
+        ex.Message.ShouldContain("scope");
+        ex.Message.ShouldContain("acceptance-criteria");
+        ex.Message.ShouldContain("log");
+    }
+
+    [Theory]
+    [InlineData("log")]
+    [InlineData("Log")]
+    [InlineData("LOG")]
+    public void PatchSection_LogSection_ThrowsRedirectingToAppendLog_AndLeavesArtifactUntouched(string section)
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+        var original = artifact.Body;
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection(section, "rewritten history"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchLogSectionNotReplaceable);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("append-only");
+        ex.Message.ShouldContain("planning_append_log");
+        ex.Message.ShouldContain("planning_upsert_artifact");
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void PatchSection_LogSection_OnFrozenArtifact_ThrowsTheSameRedirect()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+        var frozenBody = artifact.Body;
+
+        var ex = Should.Throw<PlanningException>(() =>
+            artifact.PatchSection("log", "rewritten history", "note that must not matter"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchLogSectionNotReplaceable);
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Body.ShouldBe(frozenBody);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void PatchSection_FrozenWithoutNote_Throws_AndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+        var frozenBody = artifact.Body;
+
+        Should.Throw<InvalidOperationException>(() => artifact.PatchSection("goal", "no note here"));
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Body.ShouldBe(frozenBody);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void PatchSection_FrozenWithNote_DemotesToDraft_SnapshotsFrozenBody_AppendsLog()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+        var frozenBody = artifact.Body;
+
+        artifact.PatchSection("goal", "rework after review", "spec reopened by the human door");
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        artifact.FrozenAt.ShouldBeNull();
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(frozenBody);
+        artifact.Body.ShouldContain("rework after review");
+        artifact.Body.ShouldContain("spec reopened by the human door");
+    }
+
+    [Fact]
+    public void PatchSection_NotFrozen_WithNote_AppendsLogLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+
+        artifact.PatchSection("goal", "fresh goal", "mid-session correction");
+
+        artifact.Version.ShouldBe(2);
+        artifact.Body.ShouldContain("fresh goal");
+        artifact.Body.ShouldContain("mid-session correction");
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+    }
+
+    [Fact]
+    public void PatchSection_CrlfBody_ReplacesBytePredictably()
+    {
+        var body = "# Spec\r\n\r\n<goal>\r\noriginal\r\n</goal>\r\n\r\n<scope>\r\n- unchanged\r\n</scope>\r\n";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, body);
+
+        artifact.PatchSection("goal", "patched");
+
+        artifact.Body.ShouldBe("# Spec\r\n\r\n<goal>\r\npatched\r\n</goal>\r\n\r\n<scope>\r\n- unchanged\r\n</scope>\r\n");
+    }
+
+    [Fact]
+    public void PatchSection_EmptyContent_ClearsSection()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+
+        artifact.PatchSection("scope", string.Empty);
+
+        PlanningSections.Find("scope", artifact.Body)!.Content.ShouldBe(string.Empty);
+        artifact.Body.ShouldContain("<scope>\n</scope>");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void PatchSection_BlankSectionName_Throws(string section)
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+
+        Should.Throw<ArgumentException>(() => artifact.PatchSection(section, "content"));
+    }
+
+    [Fact]
+    public void TickAc_ByIndex_FlipsMarker_SnapshotsPreviousBody_AndBumpsVersion()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        var original = artifact.Body;
+
+        artifact.TickAc(0, null);
+
+        artifact.Body.ShouldContain("[x] write the parser");
+        artifact.Body.ShouldNotContain("[ ] write the parser");
+        artifact.Body.ShouldContain("[ ] indented criterion with trailing note");
+        artifact.Body.ShouldContain("[x] ship the docs");
+        artifact.Body.ShouldContain("- plain bullet");
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(original);
+    }
+
+    [Fact]
+    public void TickAc_ByIndex_AmongDuplicateTexts_FlipsOnlyTheTargetedLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, AmbiguousAcBody);
+
+        artifact.TickAc(0, null);
+
+        artifact.Body.ShouldContain("[x] deploy the service");
+        artifact.Body.ShouldContain("[ ] deploy the service");
+    }
+
+    [Fact]
+    public void TickAc_IndentedItem_PreservesIndentationAndSuffix()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        artifact.TickAc(1, null);
+
+        artifact.Body.ShouldContain("\n  - [x] indented criterion with trailing note\n");
+    }
+
+    [Fact]
+    public void TickAc_ByText_ExactMatch_TicksSingleItem()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        artifact.TickAc(null, "write the parser");
+
+        artifact.Body.ShouldContain("[x] write the parser");
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void TickAc_ByText_MatchesCaseSensitively()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(null, "Write the parser"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+    }
+
+    [Fact]
+    public void TickAc_AlreadyTicked_IsTrueNoOp()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        var original = artifact.Body;
+        var updatedAtBefore = artifact.UpdatedAt;
+
+        artifact.TickAc(2, null);
+
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+        artifact.UpdatedAt.ShouldBe(updatedAtBefore);
+    }
+
+    [Fact]
+    public void TickAc_ByText_AlreadyTicked_IsNoOp()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        artifact.TickAc(null, "ship the docs");
+
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void TickAc_AlreadyTicked_OnFrozenArtifactWithoutNote_IsNoOp()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+
+        artifact.TickAc(2, null);
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(-1)]
+    public void TickAc_IndexOutOfRange_ThrowsListingVisibleItems(int index)
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(index, null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+        ex.Message.ShouldContain(index.ToString());
+        ex.Message.ShouldContain("write the parser");
+        ex.Message.ShouldContain("plain bullet");
+        ex.Message.ShouldContain("2: [x] ship the docs");
+    }
+
+    [Fact]
+    public void TickAc_TextWithoutMatch_ThrowsListingVisibleItems()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(null, "nonexistent criterion"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+        ex.Message.ShouldContain("nonexistent criterion");
+        ex.Message.ShouldContain("1: [ ] indented criterion with trailing note");
+    }
+
+    [Fact]
+    public void TickAc_AmbiguousText_ThrowsListingMatchingIndices()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, AmbiguousAcBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(null, "deploy the service"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickTextAmbiguous);
+        ex.Message.ShouldContain("deploy the service");
+        ex.Message.ShouldContain("indices 0, 1");
+    }
+
+    [Fact]
+    public void TickAc_ItemWithoutCheckboxMarker_ThrowsNotCheckable()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(3, null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotCheckable);
+        ex.Message.ShouldContain("plain bullet");
+    }
+
+    [Fact]
+    public void TickAc_NoAcceptanceCriteriaSection_ThrowsSayingBodyHasNone()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nno AC here\n</goal>\n");
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(0, null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+        ex.Message.ShouldContain("no acceptance-criteria items");
+    }
+
+    [Fact]
+    public void TickAc_FrozenWithoutNote_Throws_AndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+
+        Should.Throw<InvalidOperationException>(() => artifact.TickAc(0, null));
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void TickAc_FrozenWithNote_DemotesToDraft_SnapshotsFrozenBody_AppendsLog()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+        var frozenBody = artifact.Body;
+
+        artifact.TickAc(0, null, "tick after reopening");
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        artifact.FrozenAt.ShouldBeNull();
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(frozenBody);
+        artifact.Body.ShouldContain("[x] write the parser");
+        artifact.Body.ShouldContain("tick after reopening");
+    }
+
+    [Fact]
+    public void TickAc_CrlfBody_FlipsBytePredictably()
+    {
+        var body = "# Task\r\n\r\n<acceptance-criteria>\r\n- [ ] first item\r\n- [x] done item\r\n</acceptance-criteria>\r\n";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, body);
+
+        artifact.TickAc(0, null);
+
+        artifact.Body.ShouldBe("# Task\r\n\r\n<acceptance-criteria>\r\n- [x] first item\r\n- [x] done item\r\n</acceptance-criteria>\r\n");
+    }
+
+    [Fact]
+    public void TickAc_IndexAndTextTogether_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        Should.Throw<ArgumentException>(() => artifact.TickAc(0, "write the parser"));
+    }
+
+    [Fact]
+    public void TickAc_NeitherIndexNorText_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        Should.Throw<ArgumentException>(() => artifact.TickAc(null, null));
+    }
+
+    [Fact]
+    public void TickAc_WithNote_OnDraftArtifact_AppendsLogLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
+
+        artifact.TickAc(0, null, "criterion met");
+
+        artifact.Version.ShouldBe(2);
+        artifact.Body.ShouldContain("criterion met");
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Todo);
     }
 
     [Theory]

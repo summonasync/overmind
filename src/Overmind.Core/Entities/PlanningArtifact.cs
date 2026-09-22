@@ -131,30 +131,82 @@ public sealed class PlanningArtifact
     public void UpdateBody(string body, string? logNote = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
+        RequireChangeNoteWhenFrozen(logNote);
+        ApplyBodyMutation(body, logNote);
+    }
 
-        if (IsFrozen && string.IsNullOrWhiteSpace(logNote))
+    public void PatchSection(string section, string content, string? logNote = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(section);
+
+        if (string.Equals(section, "log", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
-                "Cannot update a frozen artifact without a change note.");
+            throw PlanningException.PatchLogSectionNotReplaceable();
         }
 
-        var snapshot = PlanningArtifactVersion.Create(Id, Version, Body);
-        Versions.Add(snapshot);
-
-        Body = body;
-        Version++;
-        UpdatedAt = DateTime.UtcNow;
-
-        if (!string.IsNullOrWhiteSpace(logNote))
+        if (!PlanningSections.TryFind(section, Body, out _))
         {
-            Body = PlanningLog.Append(Body, logNote);
+            throw PlanningException.PatchSectionNotFound(section, PlanningSections.List(Body));
         }
 
-        if (IsFrozen)
+        RequireChangeNoteWhenFrozen(logNote);
+        ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote);
+    }
+
+    public void TickAc(int? index, string? text, string? logNote = null)
+    {
+        if (index is null && text is null)
         {
-            Status = PlanningArtifactStatus.Draft;
-            FrozenAt = null;
+            throw new ArgumentException("Specify the acceptance-criteria item by index or by text.");
         }
+
+        if (index is not null && text is not null)
+        {
+            throw new ArgumentException("Specify either index or text, not both.");
+        }
+
+        var items = PlanningSections.ParseAcceptanceCriteria(Body);
+        PlanningAcItem target;
+
+        if (index is { } i)
+        {
+            target = i >= 0 && i < items.Count
+                ? items[i]
+                : throw PlanningException.TickItemNotFoundByIndex(i, items);
+        }
+        else
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+            var matches = new List<int>();
+            for (var j = 0; j < items.Count; j++)
+            {
+                if (string.Equals(BareAcText(items[j]), text, StringComparison.Ordinal))
+                {
+                    matches.Add(j);
+                }
+            }
+
+            target = matches.Count switch
+            {
+                0 => throw PlanningException.TickItemNotFoundByText(text!, items),
+                1 => items[matches[0]],
+                _ => throw PlanningException.TickTextAmbiguous(text!, matches)
+            };
+        }
+
+        if (target.Checked is true)
+        {
+            return;
+        }
+
+        if (target.Checked is null)
+        {
+            throw PlanningException.TickItemNotCheckable(target.Index, target.RawText);
+        }
+
+        RequireChangeNoteWhenFrozen(logNote);
+        ApplyBodyMutation(FlipAcMarker(Body, target.Index), logNote);
     }
 
     public void SetStatus(PlanningArtifactStatus status, string? logNote = null)
@@ -204,7 +256,10 @@ public sealed class PlanningArtifact
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(note);
 
+        Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
+
         Body = PlanningLog.Append(Body, note);
+        Version++;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -224,5 +279,72 @@ public sealed class PlanningArtifact
     {
         Brief = brief == string.Empty ? null : brief;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    private void RequireChangeNoteWhenFrozen(string? logNote)
+    {
+        if (IsFrozen && string.IsNullOrWhiteSpace(logNote))
+        {
+            throw new InvalidOperationException(
+                "Cannot update a frozen artifact without a change note.");
+        }
+    }
+
+    private void ApplyBodyMutation(string newBody, string? logNote)
+    {
+        Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
+
+        Body = newBody;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(logNote))
+        {
+            Body = PlanningLog.Append(Body, logNote);
+        }
+
+        if (IsFrozen)
+        {
+            Status = PlanningArtifactStatus.Draft;
+            FrozenAt = null;
+        }
+    }
+
+    private string FlipAcMarker(string body, int itemIndex)
+    {
+        var section = PlanningSections.Find("acceptance-criteria", body)
+            ?? throw PlanningException.PatchSectionNotFound("acceptance-criteria", PlanningSections.List(body));
+
+        var lines = section.Content.Split('\n');
+        var seen = 0;
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!lines[i].Trim().StartsWith("- "))
+            {
+                continue;
+            }
+
+            if (seen == itemIndex)
+            {
+                var markerAt = lines[i].IndexOf("[ ]", StringComparison.Ordinal);
+                lines[i] = string.Concat(lines[i].AsSpan(0, markerAt), "[x]", lines[i].AsSpan(markerAt + 3));
+                break;
+            }
+
+            seen++;
+        }
+
+        return PlanningSections.Replace("acceptance-criteria", body, string.Join('\n', lines));
+    }
+
+    private static string BareAcText(PlanningAcItem item)
+    {
+        if (item.Checked is null)
+        {
+            return item.RawText;
+        }
+
+        return item.RawText.Length > 4 ? item.RawText[4..] : string.Empty;
     }
 }

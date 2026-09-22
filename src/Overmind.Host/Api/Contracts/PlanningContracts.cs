@@ -49,6 +49,21 @@ public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Sta
 
 public sealed record AppendPlanningLogRequest(string Note);
 
+public sealed record PatchPlanningArtifactRequest(
+    string? Op,
+    string? Section,
+    string? Content,
+    int? AcIndex,
+    string? AcText,
+    string? LogNote = null);
+
+public sealed record PlanningArtifactPatchResponse(
+    Guid ArtifactId,
+    PlanningArtifactKind Kind,
+    string Section,
+    int Version,
+    int BodyChars);
+
 public sealed record PlanningArtifactResponse(
     Guid Id,
     PlanningArtifactKind Kind,

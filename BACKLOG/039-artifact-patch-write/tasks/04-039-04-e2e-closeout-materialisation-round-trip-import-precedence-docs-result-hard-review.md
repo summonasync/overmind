@@ -2,7 +2,7 @@
 feature: 039
 task: 04
 slug: artifact-patch-write
-status: todo
+status: done
 review: hard
 created: 2026-09-22
 brief: E2E: patch → materialised file reflects it, clobber-guard intact, import round-trip keeps patched state; docs + result; hard review gate
@@ -53,3 +53,10 @@ Tasks 01–03 delivered parser, domain/service and surface. Spec D8 keeps materi
 
 <obstacles>
 </obstacles>
+
+<log>
+- 2026-09-22 — Execution starts: coder takes the e2e closeout — materialisation round-trip on an isolated host, import precedence, docs, result artifact. Hard review follows the coding pass.
+- 2026-09-22 — Hard review PASS-WITH-NITS (audits/architect-review-2026-09-22-039.md). IMPORTANT-1 closed in-tree by the fix round: PatchSection now rejects replace_section on <log> before any mutation (PlanningFailureCode.PatchLogSectionNotReplaceable, redirect message to planning_append_log), 7 new pins, 1109/1109. IMPORTANT-2 → microbatch #38. Feature assembled.
+- 2026-09-22 — Hard review PASS-WITH-NITS (0 CRITICAL): structure clean, D1-D9/R1-R7 CONFIRMED, all four plan risks closed by e2e evidence. IMPORTANT-1 (append-only log guard) fixed in-tree post-review; IMPORTANT-2 (patch-shape union factories) parked as microbatch #38.
+- 2026-09-22 — E2e closeout accepted: live-host evidence (patch→disk byte-precise, tick→file, version snapshots, clobber-guard intact, import round-trip no-rollback, disk-wins precedence), docs landed, result artifact on the board. All four tasks of 039 done.
+</log>

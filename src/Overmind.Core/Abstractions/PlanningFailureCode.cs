@@ -16,5 +16,11 @@ public enum PlanningFailureCode
     FeatureStatusNotAllowedForAgent,
     CannotValidateTask,
     HumanValidationRequired,
-    ImportFailed
+    ImportFailed,
+    PatchSectionNotFound,
+    TickItemNotFound,
+    TickTextAmbiguous,
+    TickItemNotCheckable,
+    InvalidPatchRequest,
+    PatchLogSectionNotReplaceable
 }

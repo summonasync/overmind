@@ -121,6 +121,24 @@ public abstract class McpSessionTestBase : IAsyncLifetime
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/validate", 200, "");
         stub.Route(
             "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            req =>
+            {
+                var submitted = JsonNode.Parse(req.Body)!;
+                var result = new JsonObject
+                {
+                    ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+                    ["kind"] = "task",
+                    ["section"] = submitted["section"]?.GetValue<string>() is { Length: > 0 } section
+                        ? section
+                        : "acceptance-criteria",
+                    ["version"] = 3,
+                    ["bodyChars"] = 412
+                };
+                return new StubOvermindApi.Response(200, result.ToJsonString());
+            });
+        stub.Route(
+            "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/current",
             200,
             Canned.PlanningFeatureJson);

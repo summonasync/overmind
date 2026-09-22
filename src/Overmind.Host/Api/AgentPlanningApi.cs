@@ -23,6 +23,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", PlanningArtifactsApi.SetStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
+        group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
 
         return group;
@@ -168,5 +169,60 @@ public static class AgentPlanningApi
         var reason = next.Status == PlanningArtifactStatus.Blocked ? "The next task is blocked." : null;
         return Results.Ok(new PlanningCurrentResponse(
             "task", currentFeature, PlanningMapper.ToArtifactResponse(next), reason));
+    }
+
+    internal static async Task<IResult> Patch(
+        Guid id,
+        PatchPlanningArtifactRequest request,
+        PlanningArtifactService service,
+        CancellationToken ct)
+    {
+        if (!CarriesPatchShape(request))
+        {
+            return PlanningErrors.Map(PlanningException.InvalidPatchRequest());
+        }
+
+        try
+        {
+            var artifact = await service.PatchAsync(
+                id,
+                new PlanningArtifactPatch(
+                    request.Section, request.Content, request.AcIndex, request.AcText, request.LogNote),
+                ct);
+
+            return Results.Ok(new PlanningArtifactPatchResponse(
+                artifact.Id,
+                artifact.Kind,
+                request.Op!.Trim() == "tick_ac" ? "acceptance-criteria" : request.Section!,
+                artifact.Version,
+                artifact.Body.Length));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    private static bool CarriesPatchShape(PatchPlanningArtifactRequest request)
+    {
+        var op = request.Op?.Trim();
+
+        if (op == "replace_section")
+        {
+            return !string.IsNullOrWhiteSpace(request.Section) &&
+                   !string.IsNullOrWhiteSpace(request.Content) &&
+                   request.AcIndex is null &&
+                   request.AcText is null;
+        }
+
+        if (op == "tick_ac")
+        {
+            return request.Section is null &&
+                   request.Content is null &&
+                   (request.AcIndex is not null) != (request.AcText is not null) &&
+                   (request.AcText is null || !string.IsNullOrWhiteSpace(request.AcText));
+        }
+
+        return false;
     }
 }

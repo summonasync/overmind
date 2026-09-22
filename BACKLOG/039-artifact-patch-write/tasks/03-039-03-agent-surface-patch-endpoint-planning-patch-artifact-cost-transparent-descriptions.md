@@ -2,7 +2,7 @@
 feature: 039
 task: 03
 slug: artifact-patch-write
-status: todo
+status: done
 review: light
 created: 2026-09-22
 brief: Agent /patch endpoint + planning_patch_artifact tool with slim D7 echo; cost-tier descriptions on all three write tools + bootstrap routing line, pinned by tests
@@ -54,3 +54,10 @@ Task 02 delivered `PatchAsync`. The agent API group lives under `/api/agent/plan
 
 <obstacles>
 </obstacles>
+
+<log>
+- 2026-09-22 — Carry-over from review 039/02 (NIT-2, audits/review-039-02.md): the PatchAsync dispatcher checks only null — blank Section (" ") / TickText ("") reach domain guards and surface as raw ArgumentException, which the Host maps to 500, not 400. Close it in this task: whitespace validation at the boundary (or catch ArgumentException → InvalidPatchRequest) so R1's 400 contract holds.
+- 2026-09-22 — Execution starts: coder sub-agent takes the agent-door surface contract (endpoint + MCP tool + cost-tier descriptions + bootstrap routing), including the NIT-2 boundary fix carried from review 039/02.
+- 2026-09-22 — Light review PASS-WITH-NITS (0 BLOCKER / 0 IMPORTANT / 2 NIT), gates re-verified: build 0W/0E, tests 1102/1102. NIT-2 closure proven (Never500 matrix + RejectedWithoutHttpCall); tasks 01/02 files confirmed untouched by line-ref audit. Report: audits/review-039-03.md.
+- 2026-09-22 — Accepted: NIT-1 (trim patch fields) → microbatch queue #37; NIT-2 (generic 400 text) accepted as-is — the MCP door, the primary one, gives specific fragments. Agent surface is complete; feature moves to the e2e closeout.
+</log>

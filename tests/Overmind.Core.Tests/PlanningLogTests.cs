@@ -6,6 +6,56 @@ namespace Overmind.Core.Tests;
 
 public class PlanningLogTests
 {
+    private const string Task038Body = """
+<goal>
+Priority changes inline in one click from the board card and the feature workspace header — no editor modal — with optimistic update, rollback on failure, and immediate board re-sort.
+</goal>
+
+<context>
+022 precedent (status select on board cards + workspace header with optimistic update and snapshot rollback) is the interaction vocabulary; 034 landed the priority types (PlanningFeaturePriority, FEATURE_PRIORITIES), priorityTone mapping, the composite board sort, and the editor select with the PUT path (api.ts sends priority: values.priority ?? null — null = untouched). Spec artifact 63d8282e has the decisions.
+Files: web/src/features/planning/components/feature-board.tsx (card metadata row — the priority chip added by 034), feature-workspace.tsx (header next to the status select), possibly a small shared priority-select component if both sites would duplicate markup, api.ts mutations if wiring needs it.
+</context>
+
+<scope>
+- Board card: replace the static priority chip with an interactive mini-select — chip-toned look (p0 danger / p1 warning / p2 neutral / p3 muted via priorityTone), options P0-P3, immediate PUT through the existing update mutation, optimistic cache update, rollback on failure (022 snapshot-rollback path), disabled while mutation pending.
+- Workspace header: priority select beside the status select, same behavior and sizing.
+- Shared component in features/planning if the two call sites would otherwise duplicate markup (export via index.ts).
+- Board must re-sort immediately on success (existing composite sort reacts to the cache update — verify, don't add).
+- Gates: cd web && npm run lint && npx tsc --noEmit && npm run build — all green.
+</scope>
+
+<anti-scope>
+- No backend changes, no API changes.
+- No agent-door priority UI, no DnD, no batch re-prioritization.
+- No changes to the editor form select (it stays).
+</anti-scope>
+
+<constraints>
+- FSD boundaries, React Query patterns, no useEffect fetching, no new packages.
+- Match the status-select's exact interaction details (rollback, pending-disable, a11y).
+- No git commits — report changed files.
+</constraints>
+
+<acceptance-criteria>
+- Card + workspace header both change priority in one interaction; board re-sorts immediately.
+- Failed PUT rolls the select back to the previous value.
+- Select disabled during flight; lint/tsc/build green.
+</acceptance-criteria>
+
+<refs>
+- Spec artifact 63d8282e (022-mirror decisions).
+- 034/03 web work (types, tones, sort, PUT semantics).
+</refs>
+
+<obstacles>
+</obstacles>
+
+<log>
+- 2026-09-20 — Spec gated (user approve 2026-09-20 night). Starting execution: next-js-coder (sonnet) on BACKLOG/038-priority-inline-edit/tasks/01-task-01.md.
+- 2026-09-20 — Review gate passed: PASS, 0 BLOCKER/WARNING (audits/review-038-01.md). Gates green (lint/tsc/build). 022-pattern fidelity verified point-by-point (dual snapshot, rollback guards, dual-key invalidation, pending-disable on both surfaces); tone-class extraction byte-identical for the status select; instant re-sort confirmed (no memoization on the sort path).
+</log>
+""";
+
     [Fact]
     public void Append_ExistingSection_InsertsBeforeClose()
     {
@@ -180,5 +230,76 @@ public class PlanningLogTests
         var lines = PlanningLog.Parse(body);
 
         lines.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Append_BodyWithoutTrailingNewline_PrependsBlankLineSeparator()
+    {
+        var result = PlanningLog.Append("Some content", "note", new DateTime(2026, 9, 8));
+
+        result.ShouldBe("Some content\n\n<log>\n- 2026-09-08 — note\n</log>\n");
+    }
+
+    [Fact]
+    public void Append_BodyWithTrailingNewline_AlsoYieldsBlankLineBeforeSection()
+    {
+        var result = PlanningLog.Append("Some content\n", "note", new DateTime(2026, 9, 8));
+
+        result.ShouldBe("Some content\n\n<log>\n- 2026-09-08 — note\n</log>\n");
+    }
+
+    [Fact]
+    public void Append_EmptyBody_ProducesBareSection()
+    {
+        var result = PlanningLog.Append("", "note", new DateTime(2026, 9, 8));
+
+        result.ShouldBe("<log>\n- 2026-09-08 — note\n</log>\n");
+    }
+
+    [Fact]
+    public void Append_ExistingSection_ExactOutputPinned()
+    {
+        var body = "# Spec\n\n<log>\n- 2026-01-01 — old\n</log>\n";
+
+        var result = PlanningLog.Append(body, "new", new DateTime(2026, 9, 8));
+
+        result.ShouldBe("# Spec\n\n<log>\n- 2026-01-01 — old\n- 2026-09-08 — new\n</log>\n");
+    }
+
+    [Fact]
+    public void Parse_MultipleSections_ReadsLastAnchoredPairOnly()
+    {
+        var body = "<log>\n- 2026-01-01 — first\n</log>\n\nmiddle\n\n<log>\n- 2026-06-01 — second\n</log>\n";
+
+        var lines = PlanningLog.Parse(body);
+
+        lines.Count.ShouldBe(1);
+        lines[0].Date.ShouldBe(new DateOnly(2026, 6, 1));
+        lines[0].Text.ShouldBe("second");
+    }
+
+    [Fact]
+    public void Append_RealTaskBody_AddsDatedEntryToLastLog()
+    {
+        PlanningLog.Parse(Task038Body).Count.ShouldBe(2);
+
+        var result = PlanningLog.Append(Task038Body, "039 regression pin", new DateTime(2026, 9, 22));
+
+        var lines = PlanningLog.Parse(result);
+        lines.Count.ShouldBe(3);
+        lines[2].Date.ShouldBe(new DateOnly(2026, 9, 22));
+        lines[2].Text.ShouldBe("039 regression pin");
+        result.ShouldEndWith("- 2026-09-22 — 039 regression pin\n</log>");
+    }
+
+    [Fact]
+    public void Append_CrlfLogSection_InsertsInsideExistingPairWithLfLine()
+    {
+        var body = "# Spec\r\n\r\n<log>\r\n- 2026-01-01 — old\r\n</log>\r\n";
+
+        var result = PlanningLog.Append(body, "note", new DateTime(2026, 9, 22));
+
+        result.ShouldContain("- 2026-01-01 — old\r\n- 2026-09-22 — note\n</log>\r\n");
+        PlanningLog.Parse(result).Count.ShouldBe(2);
     }
 }

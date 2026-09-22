@@ -55,6 +55,19 @@ public class PromptContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task SessionBootstrap_WithSingleProject_CarriesTheWriteCostRoutingLine()
+    {
+        Stub.RouteGet("/api/projects", $$"""
+            [{"id":"{{Canned.ProjectId}}","name":"alpha","diskPath":"E:\\work\\alpha","description":"","createdAt":"2026-09-01T10:00:00Z"}]
+            """);
+
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        PromptText(response).ShouldContain(
+            "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact.");
+    }
+
+    [Fact]
     public async Task SessionBootstrap_FallbackBranch_TeachesThePlanningLoop()
     {
         var response = await Driver.GetPromptAsync("session_bootstrap");
@@ -65,6 +78,15 @@ public class PromptContractTests : McpSessionTestBase
         text.ShouldContain("STOP");
         text.ShouldContain("planning_set_status");
         text.ShouldContain("planning_append_log");
+    }
+
+    [Fact]
+    public async Task SessionBootstrap_FallbackBranch_CarriesTheWriteCostRoutingLine()
+    {
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        PromptText(response).ShouldContain(
+            "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact.");
     }
 
     private static string PromptText(JsonNode response)

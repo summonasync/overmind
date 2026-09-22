@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheTenPlanningTools()
+    public async Task ToolsList_ContainsTheElevenPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -29,6 +29,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_upsert_artifact",
             "planning_set_status",
             "planning_append_log",
+            "planning_patch_artifact",
             "planning_validate",
             "planning_set_current",
             "planning_set_feature_status"
@@ -48,6 +49,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
     }
 
     [Fact]
@@ -441,6 +443,155 @@ public class PlanningToolContractTests : McpSessionTestBase
         JsonNode.Parse(request.Body)!["note"]!.GetValue<string>().ShouldBe("halfway through the wiring");
 
         Canned.ToolResultText(response).ShouldContain("appended");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_ReplacesSection_PostsOpSectionAndContent()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "goal",
+            ["content"] = "<goal>\nRewired for real.\n</goal>",
+            ["logNote"] = "rewiring the goal"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/patch");
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("replace_section");
+        body["section"]!.GetValue<string>().ShouldBe("goal");
+        body["content"]!.GetValue<string>().ShouldContain("Rewired for real.");
+        body["logNote"]!.GetValue<string>().ShouldBe("rewiring the goal");
+
+        response["result"]!["isError"].ShouldBeNull();
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("task artifact");
+        text.ShouldContain(Canned.PlanningTaskTwoId.ToString());
+        text.ShouldContain("section 'goal'");
+        text.ShouldContain("version 3");
+        text.ShouldContain("412 body chars");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_TicksByIndex_PostsTickOp()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["acIndex"] = 1
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("tick_ac");
+        body["acIndex"]!.GetValue<int>().ShouldBe(1);
+
+        Canned.ToolResultText(response).ShouldContain("section 'acceptance-criteria'");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_TicksByText_PostsTheExactText()
+    {
+        await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["acText"] = "Expose the endpoints."
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("tick_ac");
+        body["acText"]!.GetValue<string>().ShouldBe("Expose the endpoints.");
+        body["acIndex"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_EchoCarriesTheProjectionNotTheBody()
+    {
+        var marker = "UNIQUE_PATCH_MARKER_c31d77";
+        var content = "<goal>\n" + new string('y', 4000) + marker + "\n</goal>";
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "goal",
+            ["content"] = content
+        });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldNotContain(marker);
+        text.ShouldNotContain("yyyy");
+        text.Length.ShouldBeLessThan(200);
+        text.ShouldContain(Canned.PlanningTaskTwoId.ToString());
+        text.ShouldContain("version 3");
+        text.ShouldContain("412 body chars");
+    }
+
+    [Theory]
+    [InlineData(" ", "x", null, null, "non-blank section")]
+    [InlineData("goal", " ", null, null, "replacement content")]
+    [InlineData("goal", null, null, null, "replacement content")]
+    [InlineData(null, null, 1, "first", "not both")]
+    [InlineData(null, null, null, "", "non-blank acText")]
+    [InlineData(null, null, null, null, "not both and not neither")]
+    [InlineData("goal", "content", 1, null, "not both and not neither")]
+    public async Task PlanningPatchArtifact_MalformedShape_RejectedWithoutHttpCall(
+        string? section, string? content, int? acIndex, string? acText, string expectedFragment)
+    {
+        var arguments = new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        };
+        if (section is not null)
+        {
+            arguments["section"] = section;
+        }
+        if (content is not null)
+        {
+            arguments["content"] = content;
+        }
+        if (acIndex is not null)
+        {
+            arguments["acIndex"] = acIndex;
+        }
+        if (acText is not null)
+        {
+            arguments["acText"] = acText;
+        }
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", arguments);
+
+        var text = ToolErrorText(response);
+        text.ShouldContain(expectedFragment);
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_LogSection_SurfacesTheAppendLogRedirect()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/patch",
+            400,
+            """{"title":"PatchLogSectionNotReplaceable","detail":"The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or the artifact log endpoint; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "log",
+            ["content"] = "- 2026-09-22 — forged history"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("append-only");
+        text.ShouldContain("planning_append_log");
+        text.ShouldContain("planning_upsert_artifact");
+        Driver.HasExited.ShouldBeFalse();
     }
 
     [Fact]

@@ -1,7 +1,7 @@
 ---
 feature: 039
 slug: artifact-patch-write
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-09-22

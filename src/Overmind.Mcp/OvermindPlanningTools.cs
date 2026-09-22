@@ -48,6 +48,9 @@ public sealed class OvermindPlanningTools
     private const string FeatureStatusNoteRequired =
         "logNote is required for feature status moves: the note is recorded as a dated line in the feature log and carries the provenance (who asked for the move).";
 
+    private const string PatchShapeError =
+        "A patch carries either a section with its replacement content, or an acceptance-criteria tick (acIndex or exact acText) — not both and not neither.";
+
     private readonly OvermindApiClient _api;
 
     public OvermindPlanningTools(OvermindApiClient api)
@@ -113,7 +116,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -209,7 +212,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
-    [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body. Use it to report progress between status moves.")]
+    [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body — the cheapest write: one dated line, body is not resent. Use it to report progress between status moves.")]
     public async Task<string> AppendLog(
         [Description("Id of the artifact to append the note to.")] Guid artifactId,
         [Description("Note text recorded as a dated log line.")] string note,
@@ -220,6 +223,27 @@ public sealed class OvermindPlanningTools
             new { note },
             ct));
         return "Log line appended.";
+    }
+
+    [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched. Give section plus content to replace one section, or acIndex/acText to tick one acceptance-criteria item; never both. A missing section or item is a 400 that lists what is available. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Ticking an already-ticked item is a successful no-op, so a retried tick is safe; a replaced section is a real change every time. Editing a validated artifact requires a logNote.")]
+    public async Task<string> PatchArtifact(
+        [Description("Id of the artifact to patch.")] Guid artifactId,
+        [Description("Name of the XML section to replace, e.g. goal.")] string? section = null,
+        [Description("Full replacement content of the section.")] string? content = null,
+        [Description("Index of the acceptance-criteria item to tick, as listed by the 400 diagnostics.")] int? acIndex = null,
+        [Description("Exact text of the acceptance-criteria item to tick, without the checkbox marker.")] string? acText = null,
+        [Description("Change note recorded in the artifact log; required when the artifact is validated.")] string? logNote = null,
+        CancellationToken ct = default)
+    {
+        var op = PatchOpOf(section, content, acIndex, acText);
+        var patch = await Guarded(() => _api.PostAsync(
+            $"/api/agent/planning/artifacts/{artifactId}/patch",
+            new { op, section, content, acIndex, acText, logNote },
+            ct));
+        return $"{patch.GetProperty("kind").GetString()} artifact {patch.GetProperty("artifactId").GetString()} patched — " +
+            $"section '{patch.GetProperty("section").GetString()}', version {patch.GetProperty("version").GetInt32()}, " +
+            $"{patch.GetProperty("bodyChars").GetInt32()} body chars.";
     }
 
     [McpServerTool(Name = "planning_validate", Destructive = false, Idempotent = false)]
@@ -383,5 +407,38 @@ public sealed class OvermindPlanningTools
         }
 
         return normalized;
+    }
+
+    private static string PatchOpOf(string? section, string? content, int? acIndex, string? acText)
+    {
+        var wantsSection = section is not null || content is not null;
+        var wantsTick = acIndex is not null || acText is not null;
+
+        if (wantsSection == wantsTick)
+        {
+            throw new McpException(PatchShapeError);
+        }
+
+        if (wantsSection)
+        {
+            if (string.IsNullOrWhiteSpace(section) || string.IsNullOrWhiteSpace(content))
+            {
+                throw new McpException("Replacing a section needs a non-blank section and its full replacement content.");
+            }
+
+            return "replace_section";
+        }
+
+        if (acIndex is not null && acText is not null)
+        {
+            throw new McpException("Tick one acceptance-criteria item by acIndex or by exact acText, not both.");
+        }
+
+        if (acText is not null && string.IsNullOrWhiteSpace(acText))
+        {
+            throw new McpException("Ticking needs acIndex or the exact non-blank acText of the item.");
+        }
+
+        return "tick_ac";
     }
 }
