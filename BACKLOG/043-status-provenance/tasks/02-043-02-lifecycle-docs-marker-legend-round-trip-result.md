@@ -53,4 +53,5 @@ Task 01 stamped the lines; this task makes the rules they express discoverable B
 - 2026-09-22 — Execution starts: coder takes the docs/legend/round-trip contract (task 01 reviewed PASS-WITH-NITS, its two nits fixed in-tree by a parallel micro-round).
 - 2026-09-22 — Light review PASS (0 findings, audits/review-043-02.md): all three rules fact-checked against the code, marker legend matches the enum, round-trip asserts the second pass for the right reason, result artifact verified live.
 - 2026-09-22 — Accepted — provenance shipped end to end: sourced lines on every door, factual lifecycle documentation, marker round-trip. All tasks of 043 done; the p1 field-feedback batch is complete.
+- 2026-09-22 — 0.2.0 deployed to production — provenance markers live
 </log>
