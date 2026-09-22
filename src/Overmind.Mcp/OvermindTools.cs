@@ -22,6 +22,12 @@ public sealed class OvermindTools
     private const string SkillManagedElsewhere =
         "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. Supported types: note, decision, gate, guard.";
 
+    private const string ListEntriesDescription =
+        "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
+        "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
+        "Optional filters: type (note, decision, gate, guard, skill), tag and q (fulltext). " +
+        "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
+
     private readonly OvermindApiClient _api;
 
     public OvermindTools(OvermindApiClient api)
@@ -35,19 +41,50 @@ public sealed class OvermindTools
         Guarded(() => _api.GetAsync("/api/projects", ct));
 
     [McpServerTool(Name = "list_entries", ReadOnly = true, Idempotent = true)]
-    [Description("Lists entries of a project, optionally filtered by type (note, decision, gate, guard, skill).")]
+    [Description(ListEntriesDescription)]
     public async Task<JsonElement> ListEntries(
         Guid projectId,
         [Description("Optional entry type filter: note, decision, gate, guard or skill.")] string? type = null,
+        [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
+        [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
+        [Description("Set true to include full entry bodies; by default only metadata is returned.")] bool include_content = false,
         CancellationToken ct = default)
     {
-        var path = $"/api/projects/{projectId}/entries";
+        var filters = new List<string>();
         if (!string.IsNullOrWhiteSpace(type))
         {
-            path += $"?type={Uri.EscapeDataString(NormalizeType(type))}";
+            filters.Add($"type={Uri.EscapeDataString(NormalizeType(type))}");
         }
 
-        return await Guarded(() => _api.GetAsync(path, ct));
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            filters.Add($"tag={Uri.EscapeDataString(tag.Trim())}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            filters.Add($"q={Uri.EscapeDataString(q.Trim())}");
+        }
+
+        var path = $"/api/projects/{projectId}/entries";
+        if (filters.Count > 0)
+        {
+            path += "?" + string.Join('&', filters);
+        }
+
+        var payload = await Guarded(() => _api.GetAsync(path, ct));
+        if (include_content)
+        {
+            return payload;
+        }
+
+        var listing = new JsonArray();
+        foreach (var entry in payload.EnumerateArray())
+        {
+            listing.Add(EntryMetadata(entry));
+        }
+
+        return listing.Deserialize<JsonElement>();
     }
 
     [McpServerTool(Name = "read_entry", ReadOnly = true, Idempotent = true)]
@@ -145,6 +182,26 @@ public sealed class OvermindTools
             ["bodyChars"] = entry.GetProperty("content").GetString()?.Length ?? 0
         };
         return compact.Deserialize<JsonElement>();
+    }
+
+    private static JsonObject EntryMetadata(JsonElement entry)
+    {
+        var projection = new JsonObject
+        {
+            ["id"] = entry.GetProperty("id").GetString(),
+            ["type"] = entry.GetProperty("type").GetString(),
+            ["title"] = entry.GetProperty("title").GetString(),
+            ["tags"] = JsonNode.Parse(entry.GetProperty("tags").GetRawText())
+        };
+
+        if (entry.TryGetProperty("createdAt", out var createdAt))
+        {
+            projection["createdAt"] = createdAt.GetString();
+        }
+
+        projection["updatedAt"] = entry.GetProperty("updatedAt").GetString();
+        projection["contentLength"] = entry.GetProperty("content").GetString()?.Length ?? 0;
+        return projection;
     }
 
     private static string NormalizeType(string type)

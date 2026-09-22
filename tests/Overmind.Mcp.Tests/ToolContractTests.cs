@@ -36,6 +36,111 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ListEntries_Default_ProjectsMetadataAndDropsBodies()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "gate"
+        });
+
+        var text = Canned.ToolResultText(response);
+        var entries = JsonNode.Parse(text)!.AsArray();
+        entries.Count.ShouldBe(2);
+
+        var first = entries[0]!.AsObject();
+        first["id"]!.GetValue<string>().ShouldBe("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        first["type"]!.GetValue<string>().ShouldBe("gate");
+        first["title"]!.GetValue<string>().ShouldBe("Gate One");
+        first["tags"]!.AsArray().Count.ShouldBe(0);
+        first["createdAt"]!.GetValue<string>().ShouldBe("2026-09-01T10:00:00Z");
+        first["updatedAt"]!.GetValue<string>().ShouldBe("2026-09-01T10:00:00Z");
+        first["contentLength"]!.GetValue<int>().ShouldBe("Always run the full test suite.".Length);
+
+        var second = entries[1]!.AsObject();
+        second["title"]!.GetValue<string>().ShouldBe("Gate Two");
+        second["contentLength"]!.GetValue<int>().ShouldBe("Never skip review.".Length);
+
+        entries.ShouldAllBe(e => !e!.AsObject().ContainsKey("content"));
+        text.ShouldNotContain("Always run the full test suite.");
+        text.ShouldNotContain("Never skip review.");
+    }
+
+    [Fact]
+    public async Task ListEntries_Default_KeepsTagsInProjection()
+    {
+        Stub.RouteGet($"/api/projects/{Canned.ProjectId}/entries", """
+            [{"id":"12121212-1212-1212-1212-121212121212","projectId":"11111111-1111-1111-1111-111111111111","type":"note","title":"Tagged note","content":"Body with known length.","currentVersion":2,"createdAt":"2026-09-01T09:00:00Z","updatedAt":"2026-09-02T09:00:00Z","tags":["alpha","beta"],"skillFiles":[]}]
+            """);
+
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var entry = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray().Single()!.AsObject();
+        entry["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["alpha", "beta"]);
+        entry["contentLength"]!.GetValue<int>().ShouldBe("Body with known length.".Length);
+    }
+
+    [Fact]
+    public async Task ListEntries_IncludeContent_ReturnsFullBodies()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "gate",
+            ["include_content"] = true
+        });
+
+        var text = Canned.ToolResultText(response);
+        var first = JsonNode.Parse(text)!.AsArray()[0]!.AsObject();
+        first["content"]!.GetValue<string>().ShouldBe("Always run the full test suite.");
+        text.ShouldContain("Never skip review.");
+
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        request.Query.ShouldBe("type=gate");
+    }
+
+    [Fact]
+    public async Task ListEntries_TagTypeAndQ_ReachUpstreamQueryEscaped()
+    {
+        await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "note",
+            ["tag"] = "deploy",
+            ["q"] = "release checklist"
+        });
+
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        var query = ParseQuery(request.Query);
+        query["type"].ShouldBe("note");
+        query["tag"].ShouldBe("deploy");
+        query["q"].ShouldBe("release checklist");
+    }
+
+    [Fact]
+    public async Task ToolsList_ListEntries_DescriptionPinsMetadataDefault()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
+            "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
+            "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
+            "Optional filters: type (note, decision, gate, guard, skill), tag and q (fulltext). " +
+            "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
+
+        var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("tag");
+        properties.ShouldContainKey("q");
+        properties.ShouldContainKey("include_content");
+    }
+
+    [Fact]
     public async Task ReadEntry_ReturnsStubbedEntry()
     {
         var response = await Driver.CallToolAsync("read_entry", new JsonObject

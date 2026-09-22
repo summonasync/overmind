@@ -1,7 +1,7 @@
 ---
 feature: 041
 slug: entries-metadata-listing
-status: draft
+status: review
 priority: p1
 version: 1
 created: 2026-09-22
