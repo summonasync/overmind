@@ -68,6 +68,19 @@ public class PromptContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task SessionBootstrap_WithSingleProject_CarriesTheReadCostRoutingLine()
+    {
+        Stub.RouteGet("/api/projects", $$"""
+            [{"id":"{{Canned.ProjectId}}","name":"alpha","diskPath":"E:\\work\\alpha","description":"","createdAt":"2026-09-01T10:00:00Z"}]
+            """);
+
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        PromptText(response).ShouldContain(
+            "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.");
+    }
+
+    [Fact]
     public async Task SessionBootstrap_FallbackBranch_TeachesThePlanningLoop()
     {
         var response = await Driver.GetPromptAsync("session_bootstrap");
@@ -87,6 +100,15 @@ public class PromptContractTests : McpSessionTestBase
 
         PromptText(response).ShouldContain(
             "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact.");
+    }
+
+    [Fact]
+    public async Task SessionBootstrap_FallbackBranch_CarriesTheReadCostRoutingLine()
+    {
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        PromptText(response).ShouldContain(
+            "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.");
     }
 
     private static string PromptText(JsonNode response)

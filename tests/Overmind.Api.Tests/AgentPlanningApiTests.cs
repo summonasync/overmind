@@ -702,6 +702,105 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Read_ReturnsMetadataAndFullBodyByDefault()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n",
+            Order = 2,
+            Brief = "Wire the endpoints"
+        });
+
+        var response = await _client.GetAsync(AgentReadUrl(task.Id));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "kind", "status", "version", "order", "updatedAt", "brief", "body"]);
+
+        var read = JsonSerializer.Deserialize<ArtifactReadJson>(raw, JsonOptions);
+        read!.Id.ShouldBe(task.Id);
+        read.Kind.ShouldBe("task");
+        read.Status.ShouldBe("todo");
+        read.Version.ShouldBe(1);
+        read.Order.ShouldBe(2);
+        read.UpdatedAt.ShouldNotBe(default);
+        read.Brief.ShouldBe("Wire the endpoints");
+        read.Body.ShouldBe("# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n");
+        read.MissingSections.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("goal,obstacles")]
+    [InlineData("goal obstacles")]
+    [InlineData("goal\tobstacles")]
+    public async Task Read_Sections_NarrowsTheBodyToExactlyThoseSections(string sections)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nModel it.\n</goal>\n\n<obstacles>\nA hard one.\n</obstacles>\n\n<acceptance-criteria>\n- [ ] ship it\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.GetAsync(
+            $"{AgentReadUrl(task.Id)}?sections={Uri.EscapeDataString(sections)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "kind", "status", "version", "order", "updatedAt", "brief", "body", "missingSections"]);
+
+        var read = JsonSerializer.Deserialize<ArtifactReadJson>(raw, JsonOptions);
+        read!.Body.ShouldBe("<goal>\nModel it.\n</goal>\n<obstacles>\nA hard one.\n</obstacles>");
+        read.MissingSections.ShouldBe([]);
+    }
+
+    [Fact]
+    public async Task Read_SectionsWithAbsentNames_ReportsMissingSectionsSoftly()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nModel it.\n</goal>\n"
+        });
+
+        var mixed = await _client.GetAsync($"{AgentReadUrl(task.Id)}?sections=goal,banana");
+        mixed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var mixedRead = JsonSerializer.Deserialize<ArtifactReadJson>(
+            await mixed.Content.ReadAsStringAsync(), JsonOptions);
+        mixedRead!.Body.ShouldBe("<goal>\nModel it.\n</goal>");
+        mixedRead.MissingSections.ShouldBe(["banana"]);
+
+        var allMissing = await _client.GetAsync($"{AgentReadUrl(task.Id)}?sections=nope");
+        allMissing.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var allMissingRead = JsonSerializer.Deserialize<ArtifactReadJson>(
+            await allMissing.Content.ReadAsStringAsync(), JsonOptions);
+        allMissingRead!.Body.ShouldBe("");
+        allMissingRead.MissingSections.ShouldBe(["nope"]);
+    }
+
+    [Fact]
+    public async Task Read_UnknownArtifact_Returns404()
+    {
+        var project = await CreateProjectAsync();
+        var missing = Guid.NewGuid();
+
+        var response = await _client.GetAsync(AgentReadUrl(missing));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("Not Found");
+        problem.Detail.ShouldBe($"Artifact '{missing}' was not found.");
+    }
+
+    [Fact]
     public async Task BoardAndFeature_SameJsonShapeAsHumanDoor()
     {
         var project = await CreateProjectAsync();
@@ -733,6 +832,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     private static string AgentPatchUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}/patch";
+
+    private static string AgentReadUrl(Guid artifactId) =>
+        $"/api/agent/planning/artifacts/{artifactId}";
 
     private async Task BringToStatusViaHumanDoorAsync(Guid projectId, string slug, string target)
     {
@@ -881,6 +983,10 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     public sealed record PatchResultJson(
         Guid ArtifactId, string Kind, string Section, int Version, int BodyChars);
+
+    public sealed record ArtifactReadJson(
+        Guid Id, string Kind, string Status, int Version, int Order,
+        DateTime UpdatedAt, string? Brief, string Body, string[]? MissingSections = null);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

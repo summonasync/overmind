@@ -66,13 +66,29 @@ public sealed class OvermindPlanningTools
         Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines.")]
+    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document.")]
     public Task<JsonElement> ReadFeature(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
         CancellationToken ct) =>
         Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}", ct));
+
+    [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
+    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one.")]
+    public Task<JsonElement> ReadArtifact(
+        [Description("Id of the artifact to read, as handed out by planning_current_task.")] Guid artifactId,
+        [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections.")] string? sections = null,
+        CancellationToken ct = default)
+    {
+        var url = $"/api/agent/planning/artifacts/{artifactId}";
+        if (!string.IsNullOrWhiteSpace(sections))
+        {
+            url += $"?sections={Uri.EscapeDataString(sections)}";
+        }
+
+        return Guarded(() => _api.GetAsync(url, ct));
+    }
 
     [McpServerTool(Name = "planning_current_task", ReadOnly = true, Idempotent = true)]
     [Description("Planning ceremony, step 2: the current task of a feature, or a stop/empty state whose reason is the first thing in the payload. Obey a STOP line — ask the user, do not work around it.")]

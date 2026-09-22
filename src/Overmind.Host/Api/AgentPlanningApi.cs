@@ -1,3 +1,4 @@
+using System.Text;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
@@ -21,6 +22,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", PlanningFeaturesApi.SetCurrent);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
+        group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", PlanningArtifactsApi.SetStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
@@ -63,6 +65,65 @@ public static class AgentPlanningApi
         }
 
         return await PlanningArtifactsApi.Validate(id, artifactService, ct);
+    }
+
+    internal static async Task<IResult> GetArtifact(
+        Guid id, string? sections, OvermindDbContext db, CancellationToken ct)
+    {
+        var artifact = await db.PlanningArtifacts
+            .FirstOrDefaultAsync(a => a.Id == id, ct);
+
+        if (artifact is null)
+        {
+            return HttpErrors.NotFound($"Artifact '{id}' was not found.");
+        }
+
+        var requested = RequestedSections(sections);
+        if (requested.Count == 0)
+        {
+            return Results.Ok(new PlanningArtifactReadResponse(
+                artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
+                artifact.Order, artifact.UpdatedAt, artifact.Brief, artifact.Body));
+        }
+
+        var narrowed = new StringBuilder();
+        var missing = new List<string>();
+
+        foreach (var name in requested)
+        {
+            if (PlanningSections.Find(name, artifact.Body) is not { } section)
+            {
+                missing.Add(name);
+                continue;
+            }
+
+            if (narrowed.Length > 0)
+            {
+                narrowed.Append('\n');
+            }
+
+            narrowed.Append('<').Append(section.Name).Append(">\n")
+                .Append(section.Content)
+                .Append("\n</").Append(section.Name).Append('>');
+        }
+
+        return Results.Ok(new PlanningArtifactReadResponse(
+            artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
+            artifact.Order, artifact.UpdatedAt, artifact.Brief,
+            narrowed.ToString(), [.. missing]));
+    }
+
+    private static List<string> RequestedSections(string? sections)
+    {
+        if (string.IsNullOrWhiteSpace(sections))
+        {
+            return [];
+        }
+
+        return sections
+            .Split([',', ' ', '\t'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct()
+            .ToList();
     }
 
     internal static async Task<IResult> SetFeatureStatus(

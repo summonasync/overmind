@@ -116,6 +116,12 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                 };
                 return new StubOvermindApi.Response(201, artifact.ToJsonString());
             });
+        stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+",
+            req => ParseQuery(req.Query).ContainsKey("sections")
+                ? new StubOvermindApi.Response(200, Canned.PlanningArtifactSectionedJson)
+                : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "");
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, "");
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/validate", 200, "");

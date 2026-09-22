@@ -1,7 +1,7 @@
 ---
 feature: 040
 slug: artifact-partial-read
-status: draft
+status: review
 priority: p1
 version: 1
 created: 2026-09-22

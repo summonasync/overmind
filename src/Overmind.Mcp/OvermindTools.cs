@@ -28,6 +28,11 @@ public sealed class OvermindTools
         "Optional filters: type (note, decision, gate, guard, skill), tag and q (fulltext). " +
         "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
 
+    private const string SearchDescription =
+        "Searches entries by fulltext or semantic mode. Semantic mode fails with 'vector search unavailable' when the vector store is down. " +
+        "Each hit returns only id, title, type and a snippet — a short window of lines around the first query-term match; " +
+        "full bodies are not returned, read a full entry with read_entry.";
+
     private readonly OvermindApiClient _api;
 
     public OvermindTools(OvermindApiClient api)
@@ -139,8 +144,8 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "search", ReadOnly = true)]
-    [Description("Searches entries by fulltext or semantic mode. Semantic mode fails with 'vector search unavailable' when the vector store is down.")]
-    public Task<JsonElement> Search(
+    [Description(SearchDescription)]
+    public async Task<JsonElement> Search(
         [Description("Search query text.")] string query,
         [Description("Optional project id to restrict the search to.")] Guid? projectId = null,
         [Description("Search mode: fulltext (default) or semantic.")] string? mode = null,
@@ -156,7 +161,18 @@ public sealed class OvermindTools
         parameters.Add("limit=20");
         parameters.Add($"mode={Uri.EscapeDataString(effectiveMode)}");
 
-        return Guarded(() => _api.GetAsync("/api/search?" + string.Join('&', parameters), ct));
+        var payload = await Guarded(() => _api.GetAsync("/api/search?" + string.Join('&', parameters), ct));
+
+        var hits = new JsonArray();
+        if (payload.TryGetProperty("hits", out var found) && found.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var hit in found.EnumerateArray())
+            {
+                hits.Add(SearchHit(hit, query));
+            }
+        }
+
+        return hits.Deserialize<JsonElement>();
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
@@ -182,6 +198,18 @@ public sealed class OvermindTools
             ["bodyChars"] = entry.GetProperty("content").GetString()?.Length ?? 0
         };
         return compact.Deserialize<JsonElement>();
+    }
+
+    private static JsonObject SearchHit(JsonElement hit, string query)
+    {
+        var snippet = hit.TryGetProperty("snippet", out var raw) ? raw.GetString() : null;
+        return new JsonObject
+        {
+            ["id"] = hit.GetProperty("entryId").GetString(),
+            ["title"] = hit.TryGetProperty("title", out var title) ? title.GetString() : null,
+            ["type"] = hit.GetProperty("type").GetString(),
+            ["snippet"] = SearchSnippet.Window(snippet ?? string.Empty, query)
+        };
     }
 
     private static JsonObject EntryMetadata(JsonElement entry)

@@ -225,6 +225,96 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task Search_ProjectsHitsToMetadataAndSnippet()
+    {
+        var response = await Driver.CallToolAsync("search", new JsonObject
+        {
+            ["query"] = "hello",
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var hits = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray();
+        hits.Count.ShouldBe(1);
+
+        var hit = hits[0]!.AsObject();
+        hit["id"]!.GetValue<string>().ShouldBe(Canned.EntryId.ToString());
+        hit["title"]!.GetValue<string>().ShouldBe("Entry One");
+        hit["type"]!.GetValue<string>().ShouldBe("note");
+        hit["snippet"]!.GetValue<string>().ShouldBe("hello world snippet");
+        hit.ShouldNotContainKey("rank");
+
+        var request = FindRequest("GET", "/api/search");
+        var query = ParseQuery(request.Query);
+        query["projectId"].ShouldBe(Canned.ProjectId.ToString());
+        query["limit"].ShouldBe("20");
+    }
+
+    [Fact]
+    public async Task Search_Snippet_WindowsAroundWholeQueryMatch()
+    {
+        Stub.RouteGet("/api/search", """
+            {"query":"deploy pipeline","hits":[{"entryId":"33333333-3333-3333-3333-333333333333","title":"Entry One","type":"note","snippet":"alpha intro\nbeta line\ngamma line\ndelta line\nepsilon line\nzeta talks about <mark>deploy pipeline</mark> hooks\neta line\ntheta line\niota line","rank":0.9}]}
+            """);
+
+        var response = await Driver.CallToolAsync("search", new JsonObject
+        {
+            ["query"] = "deploy pipeline"
+        });
+
+        var hit = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray()[0]!.AsObject();
+        hit["snippet"]!.GetValue<string>().ShouldBe(
+            "...\ndelta line\nepsilon line\nzeta talks about deploy pipeline hooks\neta line\ntheta line\n...");
+        hit["snippet"]!.GetValue<string>().ShouldNotContain("<mark>");
+    }
+
+    [Fact]
+    public async Task Search_Snippet_FallsBackToFirstTermThatMatches()
+    {
+        Stub.RouteGet("/api/search", """
+            {"query":"retry backoff","hits":[{"entryId":"33333333-3333-3333-3333-333333333333","title":"Entry One","type":"note","snippet":"alpha mentions backoff only\nbeta plain\ngamma plain\ndelta mentions <mark>retry</mark> policy\nepsilon plain\nzeta plain\neta plain\ntheta plain","rank":0.8}]}
+            """);
+
+        var response = await Driver.CallToolAsync("search", new JsonObject
+        {
+            ["query"] = "retry backoff"
+        });
+
+        var hit = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray()[0]!.AsObject();
+        hit["snippet"]!.GetValue<string>().ShouldBe(
+            "...\nbeta plain\ngamma plain\ndelta mentions retry policy\nepsilon plain\nzeta plain\n...");
+    }
+
+    [Fact]
+    public async Task Search_Snippet_NoTermMatch_ClipsFromTop()
+    {
+        Stub.RouteGet("/api/search", """
+            {"query":"quantum","hits":[{"entryId":"33333333-3333-3333-3333-333333333333","title":"Entry One","type":"note","snippet":"line one\nline two\nline three\nline four\nline five\nline six\nline seven","rank":0.7}]}
+            """);
+
+        var response = await Driver.CallToolAsync("search", new JsonObject
+        {
+            ["query"] = "quantum"
+        });
+
+        var hit = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray()[0]!.AsObject();
+        hit["snippet"]!.GetValue<string>().ShouldBe("line one\nline two\nline three\nline four\nline five\n...");
+    }
+
+    [Fact]
+    public async Task ToolsList_Search_DescriptionPinsSnippetProjection()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["search"]!["description"]!.GetValue<string>().ShouldBe(
+            "Searches entries by fulltext or semantic mode. Semantic mode fails with 'vector search unavailable' when the vector store is down. " +
+            "Each hit returns only id, title, type and a snippet — a short window of lines around the first query-term match; " +
+            "full bodies are not returned, read a full entry with read_entry.");
+    }
+
+    [Fact]
     public async Task Search_SemanticUnavailable_MapsToToolError()
     {
         Stub.Route("GET", "/api/search", 503, Canned.SemanticUnavailableJson);

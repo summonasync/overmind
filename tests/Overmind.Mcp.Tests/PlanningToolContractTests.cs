@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheElevenPlanningTools()
+    public async Task ToolsList_ContainsTheTwelvePlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -24,6 +24,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         [
             "planning_list_features",
             "planning_read_feature",
+            "planning_read_artifact",
             "planning_current_task",
             "planning_create_feature",
             "planning_upsert_artifact",
@@ -83,6 +84,85 @@ public class PlanningToolContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldContain("Demo spec");
         text.ShouldContain("Ship the demo.");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_ProxiesAgentArtifactRoute()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}");
+        request.Query.ShouldBeEmpty();
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("# Wire the API");
+        text.ShouldContain("\"brief\":\"Wire the endpoints\"");
+        text.ShouldNotContain("missingSections");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_WithSections_PassesTheQueryAndMirrorsTheProjection()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["sections"] = "goal,obstacles"
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}");
+        ParseQuery(request.Query)["sections"].ShouldBe("goal,obstacles");
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Expose the endpoints.");
+        text.ShouldContain("\"missingSections\":[\"obstacles\"]");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_UnknownArtifact_SurfacesApiErrorAsToolError()
+    {
+        Stub.Route(
+            "GET",
+            $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}",
+            404,
+            Canned.PlanningArtifactNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Artifact '99999999-9999-9999-9999-999999999999' was not found");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_Description_PinsTheReadCostTiers()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_read_artifact"]!["description"]!.GetValue<string>().ShouldBe(
+            "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one.");
+    }
+
+    [Fact]
+    public async Task PlanningReadFeature_Description_PinsTheMostExpensiveReadTier()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldBe(
+            "Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document.");
     }
 
     [Fact]

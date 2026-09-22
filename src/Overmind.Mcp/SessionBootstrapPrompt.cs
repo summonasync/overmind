@@ -12,6 +12,9 @@ public sealed class SessionBootstrapPrompt
     private const string WriteCostRouting =
         "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact.";
 
+    private const string ReadCostRouting =
+        "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.";
+
     private const string FallbackText =
         "At session start, read overmind://projects to list available projects, then read " +
         "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
@@ -19,7 +22,7 @@ public sealed class SessionBootstrapPrompt
         "overmind://projects/{id}/planning/features/<slug>/current for your next task, obey any STOP line " +
         "(a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
         "and report progress with planning_set_status and planning_append_log. " +
-        WriteCostRouting +
+        WriteCostRouting + " " + ReadCostRouting +
         " Set OVERMIND_PROJECT_ID to make the active project explicit.";
 
     private readonly OvermindApiClient _api;
@@ -60,7 +63,7 @@ public sealed class SessionBootstrapPrompt
               $"Planning loop: read overmind://projects/{activeProjectId}/planning/features for the board, " +
               $"take overmind://projects/{activeProjectId}/planning/features/<slug>/current for your next task, " +
               "obey any STOP line (a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
-              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting}";
+              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting}";
 
         return new GetPromptResult
         {

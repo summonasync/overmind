@@ -111,6 +111,15 @@ public static class Canned
     public const string PlanningTaskTwoJson =
         """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]}""";
 
+    public const string PlanningArtifactReadJson =
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"}""";
+
+    public const string PlanningArtifactSectionedJson =
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"<goal>\nExpose the endpoints.\n</goal>","missingSections":["obstacles"]}""";
+
+    public const string PlanningArtifactNotFoundJson =
+        """{"title":"Not Found","detail":"Artifact '99999999-9999-9999-9999-999999999999' was not found.","status":404}""";
+
     public const string PlanningCurrentTaskJson =
         """
         {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]},"reason":null}

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
@@ -63,6 +64,17 @@ public sealed record PlanningArtifactPatchResponse(
     string Section,
     int Version,
     int BodyChars);
+
+public sealed record PlanningArtifactReadResponse(
+    Guid Id,
+    PlanningArtifactKind Kind,
+    PlanningArtifactStatus Status,
+    int Version,
+    int Order,
+    DateTime UpdatedAt,
+    string? Brief,
+    string Body,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? MissingSections = null);
 
 public sealed record PlanningArtifactResponse(
     Guid Id,
