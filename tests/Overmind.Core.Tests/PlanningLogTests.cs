@@ -302,4 +302,95 @@ Files: web/src/features/planning/components/feature-board.tsx (card metadata row
         result.ShouldContain("- 2026-01-01 — old\r\n- 2026-09-22 — note\n</log>\r\n");
         PlanningLog.Parse(result).Count.ShouldBe(2);
     }
+
+    [Theory]
+    [InlineData(PlanningLogSource.Agent, "agent")]
+    [InlineData(PlanningLogSource.Ui, "ui")]
+    [InlineData(PlanningLogSource.Auto, "auto")]
+    [InlineData(PlanningLogSource.Import, "import")]
+    public void Append_WithSource_EmitsMarkerAfterDate(PlanningLogSource source, string marker)
+    {
+        var result = PlanningLog.Append("", "note", new DateTime(2026, 9, 22), source);
+
+        result.ShouldBe($"<log>\n- 2026-09-22 [{marker}] — note\n</log>\n");
+    }
+
+    [Theory]
+    [InlineData(PlanningLogSource.Agent)]
+    [InlineData(PlanningLogSource.Ui)]
+    [InlineData(PlanningLogSource.Auto)]
+    [InlineData(PlanningLogSource.Import)]
+    public void Append_WithSource_RoundTripsThroughParse(PlanningLogSource source)
+    {
+        var result = PlanningLog.Append("body", "moved by hand", new DateTime(2026, 9, 22), source);
+
+        var lines = PlanningLog.Parse(result);
+
+        lines.ShouldHaveSingleItem();
+        lines[0].Date.ShouldBe(new DateOnly(2026, 9, 22));
+        lines[0].Text.ShouldBe("moved by hand");
+        lines[0].Source.ShouldBe(source);
+    }
+
+    [Fact]
+    public void Append_WithoutSource_StillProducesLegacyLine()
+    {
+        var result = PlanningLog.Append("", "note", new DateTime(2026, 9, 22));
+
+        result.ShouldBe("<log>\n- 2026-09-22 — note\n</log>\n");
+        PlanningLog.Parse(result)[0].Source.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Parse_LegacyBody_AllSourcesNull()
+    {
+        var body = "<log>\n- 2026-01-01 — old entry\n- 2026-06-01 — newer entry\n</log>\n";
+
+        var lines = PlanningLog.Parse(body);
+
+        lines.Count.ShouldBe(2);
+        lines.ShouldAllBe(l => l.Source == null);
+    }
+
+    [Fact]
+    public void Parse_MixedMarkerAndLegacyLines_ReadsBoth()
+    {
+        var body = "<log>\n- 2026-01-01 — legacy entry\n- 2026-06-01 [agent] — sourced entry\n</log>\n";
+
+        var lines = PlanningLog.Parse(body);
+
+        lines[0].Source.ShouldBeNull();
+        lines[0].Text.ShouldBe("legacy entry");
+        lines[1].Source.ShouldBe(PlanningLogSource.Agent);
+        lines[1].Text.ShouldBe("sourced entry");
+    }
+
+    [Theory]
+    [InlineData("[user]")]
+    [InlineData("[42]")]
+    [InlineData("[1]")]
+    [InlineData("[]")]
+    public void Parse_UnknownMarker_SourceIsNull(string marker)
+    {
+        var body = $"<log>\n- 2026-06-01 {marker} — entry\n</log>\n";
+
+        var lines = PlanningLog.Parse(body);
+
+        lines.ShouldHaveSingleItem();
+        lines[0].Source.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Append_SourceFromParsedLine_ReplaysIdenticalBody()
+    {
+        var original = PlanningLog.Append("body", "note", new DateTime(2026, 9, 22), PlanningLogSource.Import);
+
+        var replayed = PlanningLog.Append(
+            "body",
+            PlanningLog.Parse(original)[0].Text,
+            new DateTime(2026, 9, 22),
+            PlanningLog.Parse(original)[0].Source);
+
+        replayed.ShouldBe(original);
+    }
 }

@@ -4,12 +4,14 @@ namespace Overmind.Core;
 
 public static class PlanningLog
 {
-    public static string Append(string body, string note, DateTime? now = null)
+    public static string Append(string body, string note, DateTime? now = null, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(note);
 
         var timestamp = (now ?? DateTime.UtcNow).ToString("yyyy-MM-dd");
-        var line = $"- {timestamp} — {note}";
+        var line = source is { } src
+            ? $"- {timestamp} [{src.ToString().ToLowerInvariant()}] — {note}"
+            : $"- {timestamp} — {note}";
 
         if (!PlanningSections.TryFind("log", body, out var section))
         {
@@ -60,7 +62,7 @@ public static class PlanningLog
                 var text = separatorIdx + 3 < textPart.Length
                     ? textPart[(separatorIdx + 3)..]
                     : string.Empty;
-                result.Add(new PlanningLogLine(date, text));
+                result.Add(new PlanningLogLine(date, text, ParseSourceMarker(textPart, separatorIdx)));
             }
             else
             {
@@ -70,6 +72,26 @@ public static class PlanningLog
 
         return result;
     }
+
+    private static PlanningLogSource? ParseSourceMarker(string textPart, int separatorIdx)
+    {
+        var candidate = textPart.Substring(10, separatorIdx - 10).Trim();
+        if (candidate.Length <= 2 || candidate[0] != '[' || candidate[^1] != ']')
+        {
+            return null;
+        }
+
+        var marker = candidate[1..^1];
+        if (char.IsDigit(marker[0]))
+        {
+            return null;
+        }
+
+        return Enum.TryParse<PlanningLogSource>(marker, ignoreCase: true, out var source)
+               && Enum.IsDefined(source)
+            ? source
+            : null;
+    }
 }
 
-public sealed record PlanningLogLine(DateOnly? Date, string Text);
+public sealed record PlanningLogLine(DateOnly? Date, string Text, PlanningLogSource? Source = null);

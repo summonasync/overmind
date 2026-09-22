@@ -973,6 +973,178 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_FeatureStatusChangedOnDisk_WritesImportLine()
+    {
+        WriteFullFeature();
+        await ImportAsync(_repo.Root);
+
+        _repo.Write("010-demo/feature.md",
+            """
+            ---
+            feature: 010
+            slug: demo
+            status: in_progress
+            version: 3
+            created: 2026-09-01
+            ---
+
+            # Feature 010 — Demo feature title
+
+            <goal>
+            Build the demo.
+            </goal>
+            """);
+        await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("010-demo");
+        feature!.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        var line = PlanningLog.Parse(feature.Body).Single();
+        line.Source.ShouldBe(PlanningLogSource.Import);
+        line.Text.ShouldBe("status restored from imported file");
+    }
+
+    [Fact]
+    public async Task Import_ArtifactStatusChangedOnDisk_WritesImportLine()
+    {
+        WriteFullFeature();
+        await ImportAsync(_repo.Root);
+
+        _repo.Write("010-demo/tasks/01-first.md",
+            """
+            ---
+            feature: 010
+            task: 01
+            slug: demo
+            status: blocked
+            review: hard
+            created: 2026-09-01
+            ---
+
+            # Task one
+
+            <goal>
+            First task.
+            </goal>
+
+            <log>
+            2026-09-01 — created from the plan.
+            2026-09-02 — implemented and green.
+            </log>
+            """);
+        await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("010-demo");
+        var task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 1);
+        task.Status.ShouldBe(PlanningArtifactStatus.Blocked);
+        var line = PlanningLog.Parse(task.Body).Single();
+        line.Source.ShouldBe(PlanningLogSource.Import);
+        line.Text.ShouldBe("status restored from imported file");
+    }
+
+    [Fact]
+    public async Task Import_MixedLegacyAndSourcedLogLines_SurviveRoundTripWithoutCorruptionOrDuplication()
+    {
+        _repo.Write("028-markers/feature.md",
+            """
+            ---
+            feature: 028
+            slug: markers
+            status: done
+            version: 2
+            created: 2026-09-01
+            ---
+
+            # Feature 028 — Marker round-trip
+
+            <goal>
+            Survive the importer.
+            </goal>
+
+            <log>
+            - 2026-09-01 — created from the plan.
+            - 2026-09-02 [agent] — spec written and user-approved.
+            - 2026-09-03 [auto] — all tasks done + spec + plan → review.
+            - 2026-09-04 [ui] — status moved to 'done' via ui.
+            </log>
+            """);
+        _repo.Write("028-markers/tasks/01-marked.md",
+            """
+            ---
+            feature: 028
+            task: 01
+            slug: markers
+            status: done
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Marked task
+
+            <goal>
+            Do the work.
+            </goal>
+
+            <log>
+            - 2026-09-01 — created from the plan.
+            - 2026-09-02 [agent] — implemented and green.
+            - 2026-09-03 [import] — status restored from imported file.
+            </log>
+            """);
+
+        var first = await ImportAsync(_repo.Root);
+
+        first.FeaturesCreated.ShouldBe(1);
+        first.ArtifactsCreated.ShouldBe(1);
+        first.Skipped.ShouldBeEmpty();
+
+        var feature = await LoadFeatureAsync("028-markers");
+        feature.ShouldNotBeNull();
+        feature!.Status.ShouldBe(PlanningFeatureStatus.Done);
+
+        var featureLines = PlanningLog.Parse(feature.Body);
+        featureLines.Count.ShouldBe(4);
+        featureLines[0].Date.ShouldBe(new DateOnly(2026, 9, 1));
+        featureLines[0].Source.ShouldBeNull();
+        featureLines[0].Text.ShouldBe("created from the plan.");
+        featureLines[1].Source.ShouldBe(PlanningLogSource.Agent);
+        featureLines[1].Text.ShouldBe("spec written and user-approved.");
+        featureLines[2].Source.ShouldBe(PlanningLogSource.Auto);
+        featureLines[2].Text.ShouldBe("all tasks done + spec + plan → review.");
+        featureLines[3].Source.ShouldBe(PlanningLogSource.Ui);
+        featureLines[3].Text.ShouldBe("status moved to 'done' via ui.");
+
+        var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        task.Status.ShouldBe(PlanningArtifactStatus.Done);
+        var taskLines = PlanningLog.Parse(task.Body);
+        taskLines.Count.ShouldBe(3);
+        taskLines[0].Source.ShouldBeNull();
+        taskLines[1].Source.ShouldBe(PlanningLogSource.Agent);
+        taskLines[2].Source.ShouldBe(PlanningLogSource.Import);
+
+        var featureBodyAfterFirst = feature.Body;
+        var taskBodyAfterFirst = task.Body;
+
+        var second = await ImportAsync(_repo.Root);
+
+        second.FeaturesCreated.ShouldBe(0);
+        second.FeaturesUpdated.ShouldBe(1);
+        second.ArtifactsCreated.ShouldBe(0);
+        second.ArtifactsUpdated.ShouldBe(0);
+
+        feature = await LoadFeatureAsync("028-markers");
+        feature.ShouldNotBeNull();
+        feature!.Status.ShouldBe(PlanningFeatureStatus.Done);
+        feature.Version.ShouldBe(2);
+        feature.Body.ShouldBe(featureBodyAfterFirst);
+        feature.Body.ShouldNotContain("re-imported from ");
+
+        var reloadedTask = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+        reloadedTask.Version.ShouldBe(1);
+        reloadedTask.Body.ShouldBe(taskBodyAfterFirst);
+        reloadedTask.Body.ShouldNotContain("re-imported from ");
+    }
+
+    [Fact]
     public async Task Import_ArtifactOnlyInDatabase_KeptAndReported()
     {
         var featureService = new PlanningFeatureService(

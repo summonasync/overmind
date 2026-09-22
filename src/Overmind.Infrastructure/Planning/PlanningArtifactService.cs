@@ -110,7 +110,8 @@ public sealed class PlanningArtifactService
     }
 
     public async Task SetStatusAsync(
-        Guid artifactId, PlanningArtifactStatus status, string logNote, CancellationToken ct = default)
+        Guid artifactId, PlanningArtifactStatus status, PlanningLogSource source, string logNote,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(logNote))
         {
@@ -122,7 +123,7 @@ public sealed class PlanningArtifactService
 
         try
         {
-            artifact.SetStatus(status, logNote);
+            artifact.SetStatus(status, logNote, source);
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -247,7 +248,8 @@ public sealed class PlanningArtifactService
         if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready ||
             (feature.Status is PlanningFeatureStatus.Review && kind is PlanningArtifactKind.Task))
         {
-            feature.SetStatus(PlanningFeatureStatus.InProgress);
+            feature.SetStatus(
+                PlanningFeatureStatus.InProgress, "artifact created → inProgress", PlanningLogSource.Auto);
         }
     }
 
@@ -274,7 +276,8 @@ public sealed class PlanningArtifactService
             return;
         }
 
-        feature.SetStatus(PlanningFeatureStatus.Review);
+        feature.SetStatus(
+            PlanningFeatureStatus.Review, "all tasks done + spec + plan → review", PlanningLogSource.Auto);
     }
 
     private async Task<int> ResolveOrderAsync(PlanningArtifactKind kind, int? order, Guid featureId, CancellationToken ct)

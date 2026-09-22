@@ -210,6 +210,19 @@ original goal text
     }
 
     [Fact]
+    public void SetStatus_WithNoteAndSource_AppendsSourcedLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body");
+
+        artifact.SetStatus(PlanningArtifactStatus.Done, "shipped in 043", PlanningLogSource.Auto);
+
+        var lines = PlanningLog.Parse(artifact.Body);
+        lines.ShouldHaveSingleItem();
+        lines[0].Text.ShouldBe("shipped in 043");
+        lines[0].Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
     public void UpdateBody_NotFrozen_WithNote_AppendsNote()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "v1");

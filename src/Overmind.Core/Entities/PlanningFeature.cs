@@ -100,11 +100,11 @@ public sealed class PlanningFeature
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void SetStatus(PlanningFeatureStatus status, string logNote)
+    public void SetStatus(PlanningFeatureStatus status, string logNote, PlanningLogSource source)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(logNote);
 
-        Body = PlanningLog.Append(Body, logNote);
+        Body = PlanningLog.Append(Body, logNote, source: source);
         SetStatus(status);
     }
 

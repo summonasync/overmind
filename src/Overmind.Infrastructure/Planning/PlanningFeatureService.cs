@@ -84,7 +84,10 @@ public sealed partial class PlanningFeatureService
                 throw PlanningException.InvalidFeatureTransition(slug, feature.Status, status.Value);
             }
 
-            feature.SetStatus(status.Value);
+            feature.SetStatus(
+                status.Value,
+                $"status moved to '{StatusText(status.Value)}' via ui",
+                PlanningLogSource.Ui);
         }
 
         if (priority is { } target && target != feature.Priority)
@@ -126,7 +129,7 @@ public sealed partial class PlanningFeatureService
                 throw PlanningException.InvalidFeatureTransition(slug, feature.Status, status);
             }
 
-            feature.SetStatus(status, logNote);
+            feature.SetStatus(status, logNote, PlanningLogSource.Agent);
         }
 
         await _db.SaveChangesAsync(ct);
@@ -235,7 +238,8 @@ public sealed partial class PlanningFeatureService
 
             if (feature.Status != import.Status)
             {
-                feature.SetStatus(import.Status);
+                feature.SetStatus(
+                    import.Status, "status restored from imported file", PlanningLogSource.Import);
             }
 
             if (feature.Priority != import.Priority)
@@ -318,7 +322,8 @@ public sealed partial class PlanningFeatureService
                 }
                 else
                 {
-                    existing.SetStatus(artifact.Status, bodyChanged ? null : note);
+                    existing.SetStatus(
+                        artifact.Status, "status restored from imported file", PlanningLogSource.Import);
                 }
             }
 
@@ -418,7 +423,8 @@ public sealed partial class PlanningFeatureService
                 continue;
             }
 
-            var candidate = PlanningLog.Append(incomingBody, note, line.Date.Value.ToDateTime(TimeOnly.MinValue));
+            var candidate = PlanningLog.Append(
+                incomingBody, note, line.Date.Value.ToDateTime(TimeOnly.MinValue), line.Source);
             if (string.Equals(candidate, existingBody, StringComparison.Ordinal))
             {
                 return true;
@@ -433,4 +439,10 @@ public sealed partial class PlanningFeatureService
 
     private static bool IsValidSlug(string slug) =>
         slug.Length > 0 && slug.Length <= 64 && SlugPattern().IsMatch(slug);
+
+    private static string StatusText(PlanningFeatureStatus status)
+    {
+        var name = status.ToString();
+        return char.ToLowerInvariant(name[0]) + name[1..];
+    }
 }

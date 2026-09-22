@@ -66,6 +66,17 @@ public class StatusModelContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public void Quickstart_CoversLifecycleEdgeRulesAndMarkerLegend()
+    {
+        var text = OnboardQuickstart.Text;
+
+        text.ShouldContain("A done feature receiving a new artifact stays done — no transition fires.");
+        text.ShouldContain("Without a plan there is no auto-promotion to review, even when all tasks are done — spec AND plan are required.");
+        text.ShouldContain("Import restores statuses verbatim from the materialized files — an imported done feature was not auto-closed.");
+        text.ShouldContain("Log lines carry [agent]/[ui]/[auto]/[import] markers saying who moved a status.");
+    }
+
+    [Fact]
     public async Task PlanningSetStatusDescription_CarriesTheLogNoteMandatoryPhrase()
     {
         var description = await ToolDescription("planning_set_status");

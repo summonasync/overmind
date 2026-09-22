@@ -209,7 +209,7 @@ public sealed class PlanningArtifact
         ApplyBodyMutation(FlipAcMarker(Body, target.Index), logNote);
     }
 
-    public void SetStatus(PlanningArtifactStatus status, string? logNote = null)
+    public void SetStatus(PlanningArtifactStatus status, string? logNote = null, PlanningLogSource? source = null)
     {
         if (!AllowedStatuses(Kind).Contains(status))
         {
@@ -227,7 +227,7 @@ public sealed class PlanningArtifact
 
         if (!string.IsNullOrWhiteSpace(logNote))
         {
-            Body = PlanningLog.Append(Body, logNote);
+            Body = PlanningLog.Append(Body, logNote, source: source);
         }
 
         if (Status == PlanningArtifactStatus.Validated && status != PlanningArtifactStatus.Validated)

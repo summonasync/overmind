@@ -23,7 +23,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
-        group.MapPost("/planning/artifacts/{id:guid}/status", PlanningArtifactsApi.SetStatus);
+        group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
@@ -124,6 +124,31 @@ public static class AgentPlanningApi
             .Split([',', ' ', '\t'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Distinct()
             .ToList();
+    }
+
+    internal static async Task<IResult> SetArtifactStatus(
+        Guid id,
+        SetPlanningArtifactStatusRequest request,
+        IValidator<SetPlanningArtifactStatusRequest> validator,
+        PlanningArtifactService service,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        try
+        {
+            await service.SetStatusAsync(id, request.Status, PlanningLogSource.Agent, request.LogNote, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        return Results.Ok();
     }
 
     internal static async Task<IResult> SetFeatureStatus(

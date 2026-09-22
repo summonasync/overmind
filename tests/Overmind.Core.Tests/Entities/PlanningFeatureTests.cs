@@ -122,6 +122,20 @@ public class PlanningFeatureTests
     }
 
     [Fact]
+    public void SetStatus_WithNoteAndSource_AppendsSourcedLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        feature.SetStatus(PlanningFeatureStatus.Ready, "by user request in chat", PlanningLogSource.Agent);
+
+        feature.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.ShouldHaveSingleItem();
+        lines[0].Text.ShouldBe("by user request in chat");
+        lines[0].Source.ShouldBe(PlanningLogSource.Agent);
+    }
+
+    [Fact]
     public void Update_NullTitle_NullBody_ChangesNothingButTouchesUpdatedAt()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");

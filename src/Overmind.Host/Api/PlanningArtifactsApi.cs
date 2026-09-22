@@ -167,7 +167,7 @@ public static class PlanningArtifactsApi
 
         try
         {
-            await service.SetStatusAsync(id, request.Status, request.LogNote, ct);
+            await service.SetStatusAsync(id, request.Status, PlanningLogSource.Ui, request.LogNote, ct);
         }
         catch (PlanningException ex)
         {
