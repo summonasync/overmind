@@ -8,6 +8,8 @@ How the repo is organized and the rules for writing code in it. System design li
 ├── CONTEXT.md / STRUCTURE.md / TECHNICAL-SOLUTIONS.md / BACKLOG.md
 ├── BACKLOG/                  # feature folders (nnn-slug/): feature.md, spec.md, plan.md, tasks/
 ├── audits/                   # skill-produced reports, named <skill>-*.md
+├── FEATURELIST/              # field feedback from agents on other projects, materialized from Overmind notes;
+│                              #   raw input for BACKLOG.md, not a decision record (README.md is the index)
 ├── build/                    # packaging: pack.sh/install.sh/run.sh (portable, unix), install.ps1/run.cmd (portable, win),
 │                              #   dist-layout.env (shared crew-kit + folder-name contract), windows/ (Inno Setup channel:
 │                              #   overmind.iss, pack-win.ps1, make-icon.ps1 + overmind.ico, smoke-installer.ps1)
