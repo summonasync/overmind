@@ -6,6 +6,11 @@ using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
 using Serilog;
 
+if (OperatingSystem.IsWindows())
+{
+    ConsoleAttach.TryAttachParent();
+}
+
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console()
@@ -154,6 +159,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapOnboardApi();
     app.MapTagsApi();
     app.MapNotificationsApi();
+    app.MapShutdownApi();
 
     await using (var scope = app.Services.CreateAsyncScope())
     {
