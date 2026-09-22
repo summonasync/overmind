@@ -12,8 +12,6 @@ set -euo pipefail
 
 DEFAULT_CREW_KIT=/home/johan-boolman/.claude
 DEFAULT_RIDS=win-x64,linux-x64,osx-x64,osx-arm64
-KIT_NAME=crew
-CREW_ITEMS=(agents skills CLAUDE.md SKILLFLOW.md SOCIAL_DICTIONARY.md)
 
 usage() {
     sed -n '3,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -50,6 +48,20 @@ repo_root=$(cd "$script_dir/.." && pwd)
 dist_dir=$repo_root/dist
 stage_root=$dist_dir/stage
 
+layout_file=$script_dir/dist-layout.env
+[[ -f $layout_file ]] || die "layout contract not found: $layout_file"
+# shellcheck source=/dev/null
+source "$layout_file"
+KIT_NAME=$CREW_KIT_NAME
+read -ra CREW_ITEM_LIST <<<"$CREW_ITEMS"
+read -ra CREW_EXCLUDE_LIST <<<"${CREW_EXCLUDES:-}"
+
+for item in "${CREW_ITEM_LIST[@]}"; do
+    [[ -e $crew_kit/$item ]] || die "crew kit item not found: $crew_kit/$item"
+done
+skill_count=$(find "$crew_kit/skills" "$crew_kit/agents" -name SKILL.md 2>/dev/null | wc -l)
+[[ $skill_count -ge 1 ]] || die "no SKILL.md found under $crew_kit; refusing to ship an empty crew kit"
+
 for tool in dotnet npm sha256sum; do
     command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not on PATH"
 done
@@ -64,12 +76,6 @@ for rid in "${RID_LIST[@]}"; do
 done
 
 [[ -d $repo_root/web/node_modules ]] || die "web/node_modules is missing; run 'npm ci' in web/ first"
-
-for item in "${CREW_ITEMS[@]}"; do
-    [[ -e $crew_kit/$item ]] || die "crew kit item not found: $crew_kit/$item"
-done
-skill_count=$(find "$crew_kit/skills" "$crew_kit/agents" -name SKILL.md 2>/dev/null | wc -l)
-[[ $skill_count -ge 1 ]] || die "no SKILL.md found under $crew_kit; refusing to ship an empty crew kit"
 
 drop_stage() {
     [[ -d $stage_root ]] || return 0
@@ -91,8 +97,12 @@ stage_crew_kit() {
     local bundled_dir=$1
     mkdir -p "$bundled_dir/$KIT_NAME"
     local item
-    for item in "${CREW_ITEMS[@]}"; do
+    for item in "${CREW_ITEM_LIST[@]}"; do
         cp -R "$crew_kit/$item" "$bundled_dir/$KIT_NAME/"
+    done
+    local exclude
+    for exclude in "${CREW_EXCLUDE_LIST[@]}"; do
+        rm -rf "$bundled_dir/$KIT_NAME/$exclude"
     done
     printf '{"bundleVersion":%s,"kits":["%s"]}\n' "$bundle_version" "$KIT_NAME" >"$bundled_dir/manifest.json"
     find "$bundled_dir" -type d -exec chmod 755 {} +
@@ -106,17 +116,17 @@ for rid in "${RID_LIST[@]}"; do
     stage=$stage_root/$name
 
     echo "==> publishing host for $rid"
-    mkdir -p "$stage/host" "$stage/mcp" "$stage/web"
+    mkdir -p "$stage/$DIR_HOST" "$stage/$DIR_MCP" "$stage/$DIR_WEB"
     dotnet publish "$repo_root/src/Overmind.Host/Overmind.Host.csproj" \
-        -c Release -r "$rid" --self-contained -o "$stage/host" >/dev/null
+        -c Release -r "$rid" --self-contained -o "$stage/$DIR_HOST" >/dev/null
 
     echo "==> publishing mcp adapter for $rid"
     dotnet publish "$repo_root/src/Overmind.Mcp/Overmind.Mcp.csproj" \
-        -c Release -r "$rid" --self-contained -o "$stage/mcp" >/dev/null
+        -c Release -r "$rid" --self-contained -o "$stage/$DIR_MCP" >/dev/null
 
-    cp -R "$web_out/." "$stage/web/"
+    cp -R "$web_out/." "$stage/$DIR_WEB/"
 
-    stage_crew_kit "$stage/host/bundled"
+    stage_crew_kit "$stage/$DIR_HOST/$DIR_BUNDLED"
 
     if [[ $rid == win-* ]]; then
         cp "$script_dir/install.ps1" "$script_dir/run.cmd" "$stage/"

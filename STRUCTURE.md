@@ -8,6 +8,9 @@ How the repo is organized and the rules for writing code in it. System design li
 ├── CONTEXT.md / STRUCTURE.md / TECHNICAL-SOLUTIONS.md / BACKLOG.md
 ├── BACKLOG/                  # feature folders (nnn-slug/): feature.md, spec.md, plan.md, tasks/
 ├── audits/                   # skill-produced reports, named <skill>-*.md
+├── build/                    # packaging: pack.sh/install.sh/run.sh (portable, unix), install.ps1/run.cmd (portable, win),
+│                              #   dist-layout.env (shared crew-kit + folder-name contract), windows/ (Inno Setup channel:
+│                              #   overmind.iss, pack-win.ps1, make-icon.ps1 + overmind.ico, smoke-installer.ps1)
 ├── src/
 │   ├── Overmind.Core/        # domain: Entities/, Enums/, Abstractions/ — zero dependencies
 │   ├── Overmind.Infrastructure/  # Persistence/, Search/, VectorSearch/, Embeddings/, Materialization/, Planning/, Configuration/, Migrations/
