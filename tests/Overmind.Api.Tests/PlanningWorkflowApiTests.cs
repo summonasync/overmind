@@ -25,7 +25,7 @@ public sealed class PlanningWorkflowApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Get_Defaults_ReturnsInheritUnset_WithEffectiveOffFalse()
+    public async Task Get_Defaults_ReturnsInheritUnset_WithEffectiveOn()
     {
         var project = await CreateProjectAsync();
 
@@ -34,7 +34,7 @@ public sealed class PlanningWorkflowApiTests : IDisposable
         workflow.ShouldNotBeNull();
         workflow!.Materialization.ShouldBe("inherit");
         workflow.RequireHumanValidation.ShouldBe("unset");
-        workflow.EffectiveMaterialization.ShouldBe("off");
+        workflow.EffectiveMaterialization.ShouldBe("on");
         workflow.EffectiveRequireHumanValidation.ShouldBeFalse();
     }
 

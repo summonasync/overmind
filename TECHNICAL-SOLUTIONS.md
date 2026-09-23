@@ -149,3 +149,10 @@ Architecture Decision Records. Newest first. Once Accepted, changing a decision 
 **Decision:** The Host API contract consumed by the adapter evolves additive-only: new fields allowed, renames/removals forbidden. No version negotiation in v1.
 **Alternatives considered:** Explicit contract versioning / shared contracts package — rejected for v1 as overhead in a single-repo, same-version ship.
 **Consequences:** Renames in Host DTOs silently break the adapter (known hazard, tolerated while single-repo); revisit when 003 introduces separate distribution.
+
+## Planning materialization defaults to on — 2026-09-23
+**Status:** Accepted
+**Context:** Field report 2026-09-23 (FEATURELIST/overmind-features-2026-09-23.md, OM-2): DMT agents on a fresh install expected the BACKLOG/ read-only mirror promised by the onboard quickstart, but `planning.materializationDefault` resolved to "off" — nothing materialized, and nothing told the agents why. The same report's target model makes Overmind the single write point and BACKLOG/ the read-only mirror agents read with native tools.
+**Decision:** The global default for `planning.materializationDefault` is "on": fresh projects materialize their BACKLOG/ tree out of the box. Per-project overrides and the "archive"/"off" strategies remain. The onboard materialization block (strategy/targetDir/lastRun plus the failure state from 054/01) makes the resolved state visible before the first mutation; the clobber guard refuses to overwrite locally modified managed files.
+**Alternatives considered:** Keep "off" with a prominent enable path in onboard — rejected: repeats the DMT failure mode for every new consumer; the mirror is the core agent loop, not an opt-in. Default "on" only for MCP-created projects — rejected: two creation paths with divergent behavior is a support trap.
+**Consequences:** Installs that never stored the setting flip to "on" at upgrade — intended; projects wanting no mirror set "off"/"archive" explicitly (global setting or per-project override). Every fresh project writes a BACKLOG/ tree into its root on the first planning mutation, guarded by the clobber guard and drift detection.

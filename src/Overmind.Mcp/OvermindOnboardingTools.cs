@@ -106,8 +106,22 @@ public sealed class OvermindOnboardingTools
             ? run.GetString()
             : "never";
 
+        var failureSuffix = string.Empty;
+        if (block.TryGetProperty("error", out var error) &&
+            error.ValueKind == JsonValueKind.String &&
+            error.GetString() is { Length: > 0 } errorText)
+        {
+            var failedAt = block.TryGetProperty("failedAt", out var at) &&
+                           at.ValueKind == JsonValueKind.String
+                ? at.GetString()
+                : null;
+            failureSuffix = failedAt is { Length: > 0 }
+                ? $" (failed {failedAt}: {errorText})"
+                : $" (failed: {errorText})";
+        }
+
         output.AppendLine(
-            $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, lastRun={lastRun}");
+            $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, lastRun={lastRun}{failureSuffix}");
 
         if (block.TryGetProperty("trigger", out var trigger) &&
             trigger.ValueKind == JsonValueKind.String &&

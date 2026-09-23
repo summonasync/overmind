@@ -86,7 +86,7 @@ public sealed class BacklogImportCommandTests : IDisposable
                 new[]
                 {
                     $"Imported planning from {repo.Root}: 1 features (1 new), 0 artifacts, 0 skipped",
-                    "materialization is 'off'; set planning materialization to 'on' to write imported features to the repo",
+                    "1 files tracked, materialize is a no-op",
                 });
         }
         finally
@@ -324,6 +324,9 @@ public sealed class BacklogImportCommandTests : IDisposable
         public Task<PlanningMaterializationReport> ClearAsync(
             Guid projectId, Guid? featureId = null, CancellationToken ct = default) =>
             Task.FromResult(new PlanningMaterializationReport(projectId, PlanningMaterialization.Off, [], []));
+
+        public Task RecordSyncFailureAsync(Guid projectId, string error, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class TempRepo : IDisposable

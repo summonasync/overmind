@@ -361,6 +361,12 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LastMaterializationError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastMaterializationFailedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastMaterializedAt")
                         .HasColumnType("TEXT");
 

@@ -12,7 +12,9 @@ public sealed record OnboardMaterializationBlock(
     string Strategy,
     string TargetDir,
     string Trigger,
-    DateTime? LastRun);
+    DateTime? LastRun,
+    string? Error,
+    DateTime? FailedAt);
 
 public sealed record OnboardValidationBlock(bool HumanGate);
 

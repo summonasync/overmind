@@ -166,7 +166,7 @@ public sealed class SettingsApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        document.RootElement.GetProperty("planningMaterializationDefault").GetString().ShouldBe("off");
+        document.RootElement.GetProperty("planningMaterializationDefault").GetString().ShouldBe("on");
         document.RootElement.GetProperty("planningRequireHumanValidationDefault").GetString().ShouldBe("off");
     }
 

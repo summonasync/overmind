@@ -86,7 +86,9 @@ public static class OnboardApi
                 StrategyText(strategy),
                 TargetDir(project, strategy),
                 TriggerText(strategy),
-                project.LastMaterializedAt),
+                project.LastMaterializedAt,
+                project.LastMaterializationError,
+                project.LastMaterializationFailedAt),
             new OnboardValidationBlock(humanGate),
             OnboardQuickstart.Text));
     }
@@ -105,7 +107,7 @@ public static class OnboardApi
 
     private static string TriggerText(PlanningMaterialization strategy) =>
         strategy == PlanningMaterialization.Off
-            ? "Materialization is off for this project — the materializer will not run."
+            ? "Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override."
             : "Event-driven: runs automatically after every planning mutation.";
 
     private static async Task<OnboardBoardSummary> BuildBoardSummaryAsync(

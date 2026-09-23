@@ -73,6 +73,24 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             warnings);
     }
 
+    public async Task RecordSyncFailureAsync(Guid projectId, string error, CancellationToken ct = default)
+    {
+        // A failed sync can leave rolled-back row mutations staged in the change tracker; without
+        // a clear they would ride along and commit with this save. The tracker is shared with the
+        // calling service's scoped DbContext — callers must have saved their own state before the
+        // sync guard runs, or this clear discards it.
+        _db.ChangeTracker.Clear();
+
+        var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
+        if (project is null)
+        {
+            return;
+        }
+
+        project.MarkMaterializationFailed(error);
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task<IReadOnlyList<PlanningDriftItem>> DetectDriftAsync(Guid projectId, CancellationToken ct = default)
     {
         var project = await LoadProjectAsync(projectId, ct);

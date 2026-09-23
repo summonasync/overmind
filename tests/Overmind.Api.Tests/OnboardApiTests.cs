@@ -277,12 +277,13 @@ public sealed class OnboardApiTests : IDisposable
         onboard.Materialization.Strategy.ShouldBe("off");
         onboard.Materialization.TargetDir.ShouldBe(Path.Combine(diskPath, "BACKLOG"));
         onboard.Materialization.Trigger.ShouldContain("will not run");
+        onboard.Materialization.Trigger.ShouldContain("Enable it via the planning.materializationDefault setting");
         onboard.Materialization.LastRun.ShouldBeNull();
         onboard.Validation.HumanGate.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task Onboard_MaterializationBlock_Inherit_ResolvesGlobalDefaultOff()
+    public async Task Onboard_MaterializationBlock_Inherit_ResolvesGlobalDefaultOn()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
         var diskPath = TestPaths.DiskPath(name);
@@ -290,8 +291,8 @@ public sealed class OnboardApiTests : IDisposable
 
         var onboard = await OnboardAsync(new { Cwd = diskPath });
 
-        onboard.Materialization.Strategy.ShouldBe("off");
-        onboard.Materialization.Trigger.ShouldContain("will not run");
+        onboard.Materialization.Strategy.ShouldBe("on");
+        onboard.Materialization.Trigger.ShouldContain("automatically after every planning mutation");
         onboard.Validation.HumanGate.ShouldBeFalse();
     }
 
@@ -319,6 +320,44 @@ public sealed class OnboardApiTests : IDisposable
             var after = await OnboardAsync(new { Cwd = sandbox });
             after.Materialization.LastRun.ShouldNotBeNull();
             after.Materialization.Strategy.ShouldBe("on");
+        }
+        finally
+        {
+            Directory.Delete(sandbox, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_FailedSync_CarriesErrorAndClearsAfterRecovery()
+    {
+        var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-fail-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(sandbox);
+        try
+        {
+            var name = $"fail-{Guid.NewGuid():N}";
+            var project = await CreateProjectAsync(name, sandbox);
+            await SetWorkflowAsync(project.Id, materialization: "on");
+            await CreateFeatureAsync(project.Id, "feat", "Feat");
+
+            var featureDoc = Path.Combine(sandbox, "BACKLOG", "feat", "feature.md");
+            var pristine = await File.ReadAllTextAsync(featureDoc);
+            await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+
+            await CreateFeatureAsync(project.Id, "second", "Second");
+
+            var failed = await OnboardAsync(new { Cwd = sandbox });
+            failed.Materialization.Error.ShouldNotBeNull();
+            failed.Materialization.Error.ShouldContain("locally modified tracked files");
+            failed.Materialization.FailedAt.ShouldNotBeNull();
+            failed.Materialization.LastRun.ShouldNotBeNull();
+
+            await File.WriteAllTextAsync(featureDoc, pristine);
+
+            await CreateFeatureAsync(project.Id, "third", "Third");
+
+            var recovered = await OnboardAsync(new { Cwd = sandbox });
+            recovered.Materialization.Error.ShouldBeNull();
+            recovered.Materialization.FailedAt.ShouldBeNull();
         }
         finally
         {
@@ -402,7 +441,8 @@ public sealed class OnboardApiTests : IDisposable
 
     public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus, string? CurrentSlug);
 
-    public sealed record OnboardMaterializationJson(string Strategy, string TargetDir, string Trigger, DateTime? LastRun);
+    public sealed record OnboardMaterializationJson(
+        string Strategy, string TargetDir, string Trigger, DateTime? LastRun, string? Error, DateTime? FailedAt);
 
     public sealed record OnboardValidationJson(bool HumanGate);
 

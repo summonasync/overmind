@@ -2,6 +2,8 @@ namespace Overmind.Core;
 
 public sealed class Project
 {
+    private const int MaxMaterializationErrorLength = 512;
+
     private Project()
     {
     }
@@ -14,6 +16,8 @@ public sealed class Project
     public HumanValidationOverride RequireHumanValidation { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? LastMaterializedAt { get; private set; }
+    public string? LastMaterializationError { get; private set; }
+    public DateTime? LastMaterializationFailedAt { get; private set; }
 
     public static Project Create(string name, string diskPath, string description = "")
     {
@@ -41,5 +45,16 @@ public sealed class Project
     public void MarkMaterialized()
     {
         LastMaterializedAt = DateTime.UtcNow;
+        LastMaterializationError = null;
+        LastMaterializationFailedAt = null;
+    }
+
+    public void MarkMaterializationFailed(string error)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(error);
+        LastMaterializationError = error.Length <= MaxMaterializationErrorLength
+            ? error
+            : error[..MaxMaterializationErrorLength];
+        LastMaterializationFailedAt = DateTime.UtcNow;
     }
 }

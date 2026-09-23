@@ -156,7 +156,12 @@ public static class Canned
 
     public const string OnboardOffStrategyJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"off","targetDir":"/repo/BACKLOG","trigger":"Materialization is off for this project — the materializer will not run.","lastRun":null},"validation":{"humanGate":true},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"off","targetDir":"/repo/BACKLOG","trigger":"Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override.","lastRun":null},"validation":{"humanGate":true},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
+    public const string OnboardFailedMaterializationJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastRun":"2026-09-23T10:15:00Z","error":"Refusing to overwrite locally modified tracked files:\n- /repo/BACKLOG/006-demo/tasks/01-first-task.md","failedAt":"2026-09-23T18:00:00Z"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardCyrillicJson =

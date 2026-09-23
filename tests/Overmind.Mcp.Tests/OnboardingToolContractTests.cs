@@ -114,7 +114,22 @@ public class OnboardingToolContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldContain("Materialization: strategy=off, targetDir=/repo/BACKLOG, lastRun=never");
         text.ShouldContain("Materialization is off for this project — the materializer will not run.");
+        text.ShouldContain("Enable it via the planning.materializationDefault setting or the per-project override.");
         text.ShouldContain("Validation: humanGate=on");
+    }
+
+    [Fact]
+    public async Task Onboard_FailedMaterialization_ShowsErrorAndFailedAtOnLastRunLine()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardFailedMaterializationJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-23T10:15:00Z " +
+            "(failed 2026-09-23T18:00:00Z: Refusing to overwrite locally modified tracked files:");
+        text.ShouldContain("- /repo/BACKLOG/006-demo/tasks/01-first-task.md)");
     }
 
     [Fact]

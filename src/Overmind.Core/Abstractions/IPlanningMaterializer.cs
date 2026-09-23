@@ -7,4 +7,6 @@ public interface IPlanningMaterializer
     Task<IReadOnlyList<PlanningDriftItem>> DetectDriftAsync(Guid projectId, CancellationToken ct = default);
 
     Task<PlanningMaterializationReport> ClearAsync(Guid projectId, Guid? featureId = null, CancellationToken ct = default);
+
+    Task RecordSyncFailureAsync(Guid projectId, string error, CancellationToken ct = default);
 }

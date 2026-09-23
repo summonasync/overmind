@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Overmind.Core;
 using Overmind.Host;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
@@ -46,6 +47,8 @@ public sealed class BacklogImportCliTests : IDisposable
     public async Task Run_PrintsFullReportAndReturnsZero()
     {
         using var provider = BacklogImportCli.BuildProvider(_dbPath);
+        var settings = provider.GetRequiredService<AppSettingsService>();
+        await settings.SetAsync(SettingKeys.PlanningMaterializationDefault, "off", CancellationToken.None);
         var output = new StringWriter();
         var error = new StringWriter();
 

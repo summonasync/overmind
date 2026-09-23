@@ -78,7 +78,7 @@ public sealed class PlanningPolicyTests : IDisposable
     public async Task Materialization_ProjectInherit_FollowsGlobalDefault()
     {
         (await _policy.ResolveMaterializationAsync(_project.Id, default))
-            .ShouldBe(PlanningMaterialization.Off);
+            .ShouldBe(PlanningMaterialization.On);
 
         await _settings.SetAsync(SettingKeys.PlanningMaterializationDefault, "archive", default);
 
