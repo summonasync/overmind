@@ -1,7 +1,7 @@
 ---
 feature: 044
 slug: batch-planning-ops
-status: draft
+status: inProgress
 priority: p2
 version: 1
 created: 2026-09-22
@@ -29,3 +29,7 @@ created: 2026-09-22
 - FEATURELIST/08-migration-field-report.md — главный документ: 35+35 вызовов, «order-of-magnitude difference in round trips».
 - README FEATURELIST п.5.
 </refs>
+
+<log>
+- 2026-09-23 [auto] — artifact created → inProgress
+</log>

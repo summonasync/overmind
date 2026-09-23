@@ -31,3 +31,8 @@ created: 2026-09-22
 - FEATURELIST/07-field-evidence-strengths.md — вывод: материализация — фича, которая схлопнет гибрид «файлы+борда», «ровно поэтому её стоит добить».
 - 032-status-model-self-documentation — onboard уже несёт lifecycle; расширяем тот же ответ, тот же паттерн.
 </refs>
+
+<log>
+- 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-23 [auto] — all tasks done + spec + plan → review
+</log>

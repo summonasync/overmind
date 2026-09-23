@@ -1,7 +1,7 @@
 ---
 feature: 048
 slug: mcp-json-escaping-slimming
-status: draft
+status: inProgress
 priority: p2
 version: 1
 created: 2026-09-22
@@ -29,3 +29,7 @@ created: 2026-09-22
 - README FEATURELIST п.14.
 - 037-mcp-echo-slimming — сосед по той же цели: 037 срезал состав ответа, 048 — его кодировку.
 </refs>
+
+<log>
+- 2026-09-23 [auto] — artifact created → inProgress
+</log>

@@ -1,7 +1,7 @@
 ---
 feature: 053
 slug: artifact-search-index
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-22
@@ -34,3 +34,7 @@ Planning artifact bodies (spec/plan/task/result, the BACKLOG/ contracts) become 
 - Implementation seam: FtsSearchService / entry_fts trigger pattern; 040/02 projection (src/Overmind.Mcp/SearchSnippet.cs) ready to carry source fields.
 - User verdict 2026-09-22: artifacts are an important part; without them every lookup falls back to grepping files.
 </refs>
+
+<log>
+- 2026-09-23 [auto] — artifact created → inProgress
+</log>
