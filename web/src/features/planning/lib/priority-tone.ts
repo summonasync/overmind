@@ -4,7 +4,7 @@ import type { PlanningFeaturePriority } from "@/features/planning/types";
 const PRIORITY_TONES: Record<PlanningFeaturePriority, BadgeTone> = {
   p0: "danger",
   p1: "warning",
-  p2: "neutral",
+  p2: "success",
   p3: "muted",
 };
 

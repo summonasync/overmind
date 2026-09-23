@@ -6,6 +6,7 @@ export { CeremonyStepper } from "./components/ceremony-stepper";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
 export { FeatureForm } from "./components/feature-form";
+export { FeatureNumber } from "./components/feature-number";
 export { FeaturePrioritySelect } from "./components/feature-priority-select";
 export { FeatureWorkspace } from "./components/feature-workspace";
 export { PlanningWorkflowSettings } from "./components/workflow-settings";
@@ -43,6 +44,7 @@ export type {
 export { useBoardFilters } from "./lib/use-board-filters";
 export { extractOpenQuestions } from "./lib/open-questions";
 export { priorityTone } from "./lib/priority-tone";
+export { featureNumber } from "./lib/feature-number";
 export { formatBacklogAge, formatRelativeTime } from "./lib/relative-time";
 export { artifactStatusTone, featureStatusTone } from "./lib/status-tone";
 export {

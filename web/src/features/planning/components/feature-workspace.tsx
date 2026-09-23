@@ -231,6 +231,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
         ) : (
           <TaskBoard
             tasks={tasks}
+            featureSlug={slug}
             pending={setArtifactStatus.isPending}
             error={setArtifactStatus.error as Error | null}
             onOpen={setTaskModal}

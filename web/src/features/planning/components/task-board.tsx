@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Modal } from "@/shared/ui/modal";
 import { Textarea } from "@/shared/ui/textarea";
+import { FeatureNumber } from "@/features/planning/components/feature-number";
 import { taskHeading } from "@/features/planning/lib/task-heading";
 import type { PlanningArtifactResponse, PlanningArtifactStatus } from "@/features/planning/types";
 
@@ -45,13 +46,14 @@ interface TaskMoveInput {
 
 interface TaskBoardProps {
   tasks: PlanningArtifactResponse[];
+  featureSlug: string;
   pending: boolean;
   error: Error | null;
   onOpen: (artifact: PlanningArtifactResponse) => void;
   onMove: (input: TaskMoveInput) => void;
 }
 
-export function TaskBoard({ tasks, pending, error, onOpen, onMove }: TaskBoardProps) {
+export function TaskBoard({ tasks, featureSlug, pending, error, onOpen, onMove }: TaskBoardProps) {
   const [moving, setMoving] = useState<{ artifact: PlanningArtifactResponse; status: PlanningArtifactStatus } | null>(
     null,
   );
@@ -87,7 +89,7 @@ export function TaskBoard({ tasks, pending, error, onOpen, onMove }: TaskBoardPr
               ) : (
                 <ul className="space-y-2">
                   {columnTasks.map((task) => (
-                    <TaskCard key={task.id} task={task} onOpen={onOpen} onMove={openMove} />
+                    <TaskCard key={task.id} task={task} featureSlug={featureSlug} onOpen={onOpen} onMove={openMove} />
                   ))}
                 </ul>
               )}
@@ -100,7 +102,11 @@ export function TaskBoard({ tasks, pending, error, onOpen, onMove }: TaskBoardPr
         {moving ? (
           <div className="space-y-3">
             <p className="text-sm text-foreground">
-              Move <span className="font-medium">{taskHeading(moving.artifact.body, moving.artifact.order)}</span>{" "}
+              Move{" "}
+              <span className="font-medium">
+                <FeatureNumber slug={featureSlug} />
+                {taskHeading(moving.artifact.body, moving.artifact.order)}
+              </span>{" "}
               to <span className="font-medium">{columnLabel(moving.status)}</span>.
             </p>
             <Textarea
@@ -127,11 +133,12 @@ export function TaskBoard({ tasks, pending, error, onOpen, onMove }: TaskBoardPr
 
 interface TaskCardProps {
   task: PlanningArtifactResponse;
+  featureSlug: string;
   onOpen: (artifact: PlanningArtifactResponse) => void;
   onMove: (artifact: PlanningArtifactResponse, status: PlanningArtifactStatus) => void;
 }
 
-function TaskCard({ task, onOpen, onMove }: TaskCardProps) {
+function TaskCard({ task, featureSlug, onOpen, onMove }: TaskCardProps) {
   return (
     <li className="rounded-md border border-border bg-surface p-2.5">
       <button
@@ -140,6 +147,7 @@ function TaskCard({ task, onOpen, onMove }: TaskCardProps) {
         className="block w-full rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <span className="block text-sm font-medium text-foreground">
+          <FeatureNumber slug={featureSlug} />
           {taskHeading(task.body, task.order)}
         </span>
         {task.brief?.trim() ? (

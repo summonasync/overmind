@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CircleHelp, Info, Send, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { featureNumber } from "@/features/planning";
 import { useNotificationMutations } from "@/features/notifications";
 import type { NotificationItem, NotificationKind } from "@/features/notifications";
 import { Badge, type BadgeTone } from "@/shared/ui/badge";
@@ -49,6 +50,19 @@ function notificationHref(item: NotificationItem): string {
     params.set("tab", item.tab);
   }
   return `/dashboard?${params.toString()}`;
+}
+
+function featureSlugLabel(slug: string) {
+  const number = featureNumber(slug);
+  if (number === null) {
+    return slug;
+  }
+  return (
+    <>
+      <span className="font-mono font-semibold">{number}</span>
+      {slug.slice(number.length)}
+    </>
+  );
 }
 
 interface NotificationRowProps {
@@ -104,7 +118,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
             }}
             className="text-xs font-medium text-primary hover:underline"
           >
-            Open {item.featureSlug}
+            Open {featureSlugLabel(item.featureSlug)}
             {item.tab ? ` · ${item.tab}` : ""} →
           </a>
         ) : null}
