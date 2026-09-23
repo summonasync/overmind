@@ -93,4 +93,48 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         Driver.HasExited.ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task Onboard_RendersMaterializationAndValidationBlocks()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-23T10:15:00Z");
+        text.ShouldContain("Validation: humanGate=off");
+    }
+
+    [Fact]
+    public async Task Onboard_OffStrategy_ShowsTriggerExplanationAndNeverLastRun()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardOffStrategyJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Materialization: strategy=off, targetDir=/repo/BACKLOG, lastRun=never");
+        text.ShouldContain("Materialization is off for this project — the materializer will not run.");
+        text.ShouldContain("Validation: humanGate=on");
+    }
+
+    [Fact]
+    public async Task Onboard_CyrillicPayload_ReachesClientAsLiteralText()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardCyrillicJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("кириллический проект");
+        text.ShouldContain("<goal>");
+
+        var frame = Driver.StdoutLines.FirstOrDefault(l =>
+            l.Contains("кириллический") || l.Contains("\\u043A"));
+        frame.ShouldNotBeNull("onboard response frame missing from stdout");
+        frame!.ShouldContain("кириллический проект");
+        frame.ShouldContain("Быстрый старт");
+        frame.ShouldContain("<goal>");
+        frame.ShouldNotContain("\\u04");
+        frame.ShouldNotContain("\\u003C");
+    }
 }

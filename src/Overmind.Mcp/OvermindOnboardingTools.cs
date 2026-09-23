@@ -78,8 +78,64 @@ public sealed class OvermindOnboardingTools
             output.AppendLine($"Current feature: {current.GetString()}");
         }
 
+        AppendMaterialization(payload, output);
+        AppendValidation(payload, output);
+
         output.AppendLine();
         output.Append(payload.GetProperty("quickstart").GetString());
         return output.ToString();
+    }
+
+    private static void AppendMaterialization(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("materialization", out var block) ||
+            block.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (!block.TryGetProperty("strategy", out var strategy) ||
+            strategy.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        var targetDir = block.TryGetProperty("targetDir", out var dir) ? dir.GetString() : null;
+        var lastRun = block.TryGetProperty("lastRun", out var run) &&
+                      run.ValueKind == JsonValueKind.String
+            ? run.GetString()
+            : "never";
+
+        output.AppendLine(
+            $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, lastRun={lastRun}");
+
+        if (block.TryGetProperty("trigger", out var trigger) &&
+            trigger.ValueKind == JsonValueKind.String &&
+            trigger.GetString() is { Length: > 0 } triggerText)
+        {
+            output.AppendLine(triggerText);
+        }
+    }
+
+    private static void AppendValidation(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("validation", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("humanGate", out var gate))
+        {
+            return;
+        }
+
+        var state = gate.ValueKind switch
+        {
+            JsonValueKind.True => "on",
+            JsonValueKind.False => "off",
+            _ => null
+        };
+
+        if (state is not null)
+        {
+            output.AppendLine($"Validation: humanGate={state}");
+        }
     }
 }

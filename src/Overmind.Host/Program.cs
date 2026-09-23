@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Overmind.Host;
@@ -81,6 +82,11 @@ finally
 static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[] args)
 {
     builder.Services.AddOvermind();
+
+    // Default HTML-safe escaping bloats Cyrillic payloads ~4x (FEATURELIST/overmind-features-2026-09-23.md
+    // OM-1); every consumer here is a fetch client or the MCP adapter, never HTML embedding.
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping);
 
     var configuredBindUrl = builder.Configuration["Overmind:BindUrl"];
     if (configuredBindUrl is null)

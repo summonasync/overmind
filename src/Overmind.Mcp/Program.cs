@@ -1,7 +1,11 @@
 using System.Reflection;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using Overmind.Mcp;
 using Overmind.Mcp.Registration;
@@ -39,6 +43,33 @@ catch (Exception ex)
     Console.Error.WriteLine($"[overmind-mcp] FATAL: overmind API at {baseUrl} is unreachable: {ex.Message}");
     Console.Error.WriteLine("[overmind-mcp] start the overmind host first or point OVERMIND_API_URL at a running instance.");
     return 2;
+}
+
+// The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
+// source-generated JsonContext with its own options snapshot; the default HTML-safe encoder
+// bloats Cyrillic payloads ~4x (FEATURELIST/overmind-features-2026-09-23.md OM-1). The read-only
+// guard lives on the property setters only, so the encoder field is written directly on both
+// instances; if SDK internals shift, we degrade to escaped output instead of failing to start.
+try
+{
+    var encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
+    var encoderField = typeof(JsonSerializerOptions).GetField(
+        "_encoder", BindingFlags.NonPublic | BindingFlags.Instance);
+
+    encoderField?.SetValue(McpJsonUtilities.DefaultOptions, encoder);
+
+    var contextType = typeof(McpJsonUtilities).GetNestedType("JsonContext", BindingFlags.NonPublic);
+    var contextDefault = contextType?
+        .GetProperty("Default", BindingFlags.Public | BindingFlags.Static)?
+        .GetValue(null);
+    if (contextDefault is JsonSerializerContext context)
+    {
+        encoderField?.SetValue(context.Options, encoder);
+    }
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[overmind-mcp] WARN: relaxed JSON encoder not applied: {ex.Message}");
 }
 
 var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
