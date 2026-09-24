@@ -8,6 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { updatePlanningFeature } from "@/features/planning/api";
+import { FeatureNumberBadge } from "@/features/planning/components/feature-number-badge";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
@@ -142,8 +143,11 @@ export function FeatureBoard({
                 href={`/dashboard?project=${projectId}&feature=${item.slug}`}
                 className="group min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary">
-                  {item.title}
+                <span className="flex items-center gap-1.5">
+                  <FeatureNumberBadge slug={item.slug} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground group-hover:text-primary">
+                    {item.title}
+                  </span>
                 </span>
                 <span className="block truncate font-mono text-xs text-muted">{item.slug}</span>
               </a>
