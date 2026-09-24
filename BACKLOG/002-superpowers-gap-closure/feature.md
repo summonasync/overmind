@@ -1,7 +1,7 @@
 ---
 feature: 002
 slug: superpowers-gap-closure
-status: inProgress
+status: review
 priority: p0
 version: 1
 created: 2026-09-24
@@ -32,4 +32,5 @@ created: 2026-09-24
 <log>
 - 2026-09-24 [auto] — artifact created → inProgress
 - 2026-09-24 [auto] — artifact created → inProgress
+- 2026-09-24 [auto] — all tasks done + spec + plan → review
 </log>

@@ -64,7 +64,7 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 | Entry tombstones | 029 (draft) | Mark removals as `<removed YYYY-MM-DD — reason>` in bodies |
 | Entries materialization to disk | 051 (draft) | Entries live in DB only — read via MCP |
 | Agent briefing tool | 052 (draft) | Briefing = `overmind_onboard` + `planning_list_features` + `planning_current_task` + `list_entries` |
-| Worktree/branch ↔ feature binding | 063 (draft) | Naming convention: branch `feature/<slug>` |
+| Worktree/branch ↔ feature binding | 063 (draft) | Branch `feature/<slug>`; concurrent writers get separate worktrees — see Workspace isolation technique |
 
 If a needed capability is in the "missing" list — check the Overmind board first
 (`planning_list_features` on the Overmind project); if it shipped, update this matrix.
@@ -78,7 +78,9 @@ overmind_onboard → planning_list_features → planning_current_task
 ```
 
 Rules:
-- Prefer the pinned current feature (`planning_set_current`); ask before switching.
+- **Pin the feature you are working on** (`planning_set_current`) the moment it enters active
+  work — mandatory, not optional: the board's pinned current feature is how every runtime and
+  every session knows what is in flight. Prefer the pinned feature; ask before switching.
 - A **STOP line** from `planning_current_task` is authoritative — surface it to the user verbatim,
   never work around it.
 - Every status move carries a `logNote` explaining WHY. Unexplained moves are rejected by design.
@@ -152,6 +154,19 @@ exercised end-to-end. State plainly what could not be verified.
 **TDD scope** (was AGENTS.md superpowers rule 4). Strict red-green-refactor applies to
 domain/business logic and non-trivial algorithms only — NOT to EF migrations, DI wiring, config,
 DTOs, glue code. When in doubt, ask the user before choosing TDD on/off for a task.
+
+**Parallel dispatch** (replaces superpowers:dispatching-parallel-agents). Independent task
+artifacts may run as concurrent sub-agents: batch every spawn in ONE message, each briefed
+per the Sub-Agent Briefing Contract (projectId, featureSlug, artifactId). Two tasks go
+parallel ONLY when their file sets are disjoint — a shared file or a read-after-write
+dependency means sequential. Collect every result before the next ceremony move; a failed
+sub-agent does not cancel its siblings — the failure lands in that task's `<obstacles>`
+and the task is re-dispatched alone.
+
+**Workspace isolation** (replaces superpowers:using-git-worktrees). One feature = one branch
+`feature/<slug>`. Two concurrent writers never share a checkout — the second writer gets its
+own `git worktree` (plain shell where the runtime has no native tool). Never isolate on top
+of uncommitted work you do not own: dirty state is committed or handed back to the user first.
 
 ## Relationship to Other Skills
 

@@ -93,6 +93,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 - Coder MUST follow all rules from their skill file.
 - Coder MUST output list of changed files.
 - Coder receives ONLY its task artifact reference (projectId + featureSlug + artifactId) as primary input — reads it via `planning_read_artifact`, NEVER from disk when MCP is available (spec/plan stay with orchestrator and reviewer; the feature body is readable by all). Coder MUST patch discovered workarounds, quirks, and environment issues into the task artifact's `<obstacles>` section (`planning_patch_artifact`), append a one-line entry to `<log>` (`planning_append_log`), and move statuses (`planning_set_status` with logNote). Full contract: `overmind-ceremony`.
+- **Parallel execution** → independent task artifacts with disjoint file sets may be dispatched concurrently per `overmind-ceremony` (Parallel dispatch): one spawn batch, one briefing per coder, all results collected before the next ceremony move.
 - **Before adding/upgrading any third-party NuGet dependency** → consult `nuget-licensing-guard`.
 - **`.NET` coders load `dotnet-best-practices` with the task artifact** — BP-rules are constraints; reviewers cite violations by BP-ID.
 - **Decomposition style** → `overmind-ceremony` plan decomposition (small tasks, exact file paths, verification steps per task).
@@ -128,6 +129,7 @@ Review output must include:
 ### Phase 4: Fix Loop
 - **If Security BLOCKER found:** STOP pipeline immediately. Do NOT auto-fix. Present to user with `[SECURITY]` tag and require human approval. Security vulnerabilities (injection, hardcoded secrets, broken auth) must be reviewed by a human before any code changes.
 - **If regular BLOCKERS exist:** return to Phase 2 (coder) with review comments as input.
+- **Review comments are verified, not obeyed:** the coder reproduces every BLOCKER locally before fixing it. A comment that does not hold up is answered with evidence and bounced back to the reviewer — no blind fixes, no performative agreement.
 - **If only WARNINGS/SUGGESTIONS:** present them to user and ask if they want fixes now or later.
 
 ### Phase 5: Architecture Gate (End-of-Phase only)

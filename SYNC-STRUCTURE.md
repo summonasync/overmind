@@ -25,7 +25,7 @@ A single-line `description:` / `whenToUse:` value that contains `: ` (colon + sp
 - a block scalar splits the value over two lines, which line-oriented frontmatter parsers in other runtimes may mishandle
 - keep it one line so the diff stays one line per file
 
-Escaping: `"` → `\"`, and never write a bare `\` inside a double-quoted value (`C:\foo` becomes an escape sequence) — switch that value to a `>-` block scalar instead. Multi-line `description: |` block scalars (used by all 22 skills) are already valid and need no quotes.
+Escaping: `"` → `\"`, and never write a bare `\` inside a double-quoted value (`C:\foo` becomes an escape sequence) — switch that value to a `>-` block scalar instead. Multi-line `description: |` block scalars (used by all crew skills) are already valid and need no quotes.
 
 Applies to every side. As of this writing the affected set is 8 agents — `architect-review` (`review: hard` in backticks), `dotnet-architect`, `dotnet-code-reviewer`, `dotnet-init`, `frontend-designer`, `next-js-architect`, `next-js-code-reviewer`, `task-orchestrator` — quoted in the `description:` field on the Claude/Qwen sides and in `whenToUse:` for `architect-review` on the Kimi/Antigravity sides, where the description is not folded.
 
@@ -79,6 +79,7 @@ Applies to every side. As of this writing the affected set is 8 agents — `arch
 | `.kimi-code/skills/nuget-licensing-guard/` | `.claude/skills/nuget-licensing-guard/` | `.gemini/antigravity/skills/nuget-licensing-guard/` | `.qwen/skills/nuget-licensing-guard/` |
 | `.kimi-code/skills/overmind-ceremony/` | `.claude/skills/overmind-ceremony/` | `.gemini/antigravity/skills/overmind-ceremony/` | `.qwen/skills/overmind-ceremony/` |
 | `.kimi-code/skills/pipeline-doctor/` | `.claude/skills/pipeline-doctor/` | `.gemini/antigravity/skills/pipeline-doctor/` | `.qwen/skills/pipeline-doctor/` |
+| `.kimi-code/skills/squeezr-ops/` | `.claude/skills/squeezr-ops/` | `.gemini/antigravity/skills/squeezr-ops/` | `.qwen/skills/squeezr-ops/` |
 | `.kimi-code/skills/task-orchestrator/` | `.claude/skills/task-orchestrator/` | `.gemini/antigravity/skills/task-orchestrator/` | `.qwen/skills/task-orchestrator/` |
 | `.kimi-code/skills/tutor-master/` | `.claude/skills/tutor-master/` | `.gemini/antigravity/skills/tutor-master/` | `.qwen/skills/tutor-master/` |
 
@@ -181,20 +182,30 @@ Every manifest entry carries an explicit `mode` — the `install.sh`/`uninstall.
 
 `merge` exists because `~/.qwen/` hosts non-crew content (e.g. `bailian-*` skills installed by `bl skill init`) that a whole-directory mirror would delete. Known limitation: `merge` uninstall only removes children that still exist in the repo — a crew skill deleted from the repo leaves an orphan in the home until removed by hand.
 
+## Skill authoring rules
+
+Applies to creating or editing any skill in this repo. The verification half lives in the pre-commit checklist below — this is the authoring half.
+
+- The frontmatter `description` is a TRIGGER, not a summary: name the situations and the user phrasings that should fire the skill. If no real user sentence would match it, rewrite the description, not the docs.
+- One skill, one job. The moment a draft grows an "and also", split it — the crew prefers many small skills over God-skills.
+- Write for a cold reader: exact tool names, exact commands, exact file paths. "As appropriate" inside a skill body is a bug.
+- Anti-scope is as load-bearing as scope: state what the skill refuses and where it hands off.
+- A skill is done when it passes the pre-commit checklist below and, where practical, has been dogfooded — the feature that adds a skill exercises it at least once.
+
 ## Pre-commit checklist (run before committing any crew edit)
 
 1. All four sides of every touched quadruple updated in the same commit.
-2. No cross-runtime leakage. **Known benign exceptions:** `skills/coding-challenge-orchestrator/SKILL.md` names every runtime on purpose (its AI-leakage deny-list must stay identical on all four sides); `skills/overmind-ceremony/SKILL.md` carries the verbatim sentence "Antigravity runtime: overmind MCP is expected but not verified" on all four sides (a cross-runtime fact). Filter both out of every grep below.
+2. No cross-runtime leakage. **Known benign exceptions:** `skills/coding-challenge-orchestrator/SKILL.md` names every runtime on purpose (its AI-leakage deny-list must stay identical on all four sides); `skills/overmind-ceremony/SKILL.md` carries the verbatim sentence "Antigravity runtime: overmind MCP is expected but not verified" on all four sides (a cross-runtime fact); `skills/squeezr-ops/SKILL.md` is a product doc that names several runtimes on purpose (a Claude settings example in its hook section, qwen/kimi client notes) and is identical on all four sides. Filter all three out of every grep below.
    ```bash
-   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|config\.toml\|sonnet\|opus\|haiku\|\.claude\|qwen3\.' .gemini/ | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony   # must be empty
-   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|qwen3\.\|\.qwen' .claude/                                     | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony   # must be empty
-   grep -rni 'claude code\|sonnet\|opus\|haiku\|qwen3\.\|\.qwen' .kimi-code/                                 | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony   # must be empty
-   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|sonnet\|opus\|haiku\|\.claude\|\.gemini\|antigravity' .qwen/  | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony   # must be empty
-   grep -rni 'gemini\|antigravity\|qwen' .kimi-code/ .claude/                                                | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony   # must be empty
+   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|config\.toml\|sonnet\|opus\|haiku\|\.claude\|qwen3\.' .gemini/ | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
+   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|qwen3\.\|\.qwen' .claude/                                     | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
+   grep -rni 'claude code\|sonnet\|opus\|haiku\|qwen3\.\|\.qwen' .kimi-code/                                 | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
+   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|sonnet\|opus\|haiku\|\.claude\|\.gemini\|antigravity' .qwen/  | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
+   grep -rni 'gemini\|antigravity\|qwen' .kimi-code/ .claude/                                                | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 22 agent files + 24 skill dirs on each of the four sides.
+4. Count parity intact: 22 agent files + 25 skill dirs on each of the four sides.
    ```bash
    for d in .kimi-code .claude .gemini/antigravity .qwen; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```

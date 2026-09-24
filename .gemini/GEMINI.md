@@ -2,6 +2,18 @@
 
 > Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind. Quadruple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
 
+## Squeezr — Code Navigation
+
+Workspaces indexed by squeezr (local MCP code index) are navigated through its tools instead of whole-file reads:
+
+- Unfamiliar repo → `repo_map` first; exact symbol or signature → `symbol_lookup`; before editing a symbol → `find_references`; paraphrase or domain question → `code_search`; read a span → `expand_span`; freshness and coverage → `index_status`.
+- Exact string search, or a repo outside the index → plain grep/read is correct, not a violation.
+- A repo you need is missing from `index_status` → say so instead of silently grepping.
+- Cross-repo work: sibling repos join the same workspace via `squeezr add <path> --name <repo>`.
+- Setup and operations (install, services, indexing, MCP registration) → the `squeezr-ops` skill; runs only on explicit request.
+
+MCP tool names are identical on every runtime — never translate them.
+
 ## Identity
 You are assisting a senior .NET developer who is learning LLM/AI and ML/DL.
 You write production-ready C# code and explain AI/ML concepts when asked.
@@ -184,6 +196,7 @@ Any task marked as тестовое задание / coding challenge is orchest
 Its full rule set (workspace isolation, zero AI leakage, fixed pipeline, seniority-matched style, hostile validation, no auto-commits) lives in that skill — do NOT duplicate it here.
 
 ## Development Workflow (Mandatory)
+0. **Skill check first.** Before any task, match it against the crew skill list (documentation tables in this file + routes in `SKILLFLOW.md`); routing and process skills win over implementation skills. If a skill fits — use it, don't freelance past it.
 1. **Complexity Assessment** — Before coding, determine if task is Simple (<3 files, single layer) or Complex.
 2. **Simple tasks** — Coder can execute directly.
 3. **Complex tasks** — MUST follow: Coder → Reviewer → Fix (if BLOCKERS).
