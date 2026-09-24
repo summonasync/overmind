@@ -135,10 +135,12 @@ public sealed class BacklogImportMaterializationTests : IDisposable
 
         var seeder = new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)));
         var tasksDir = Path.Combine(_backlogDir, "030-dup", "tasks");
+        var alpha = Path.Combine(tasksDir, "01-a.md");
+        var beta = Path.Combine(tasksDir, "01-b.md");
         var result = await seeder.SeedAsync(
             projectId,
             feature.Id,
-            new[] { Path.Combine(tasksDir, "01-a.md"), Path.Combine(tasksDir, "01-b.md") },
+            new[] { new BacklogImportSourceFile(alpha, await ShaOfAsync(alpha)), new BacklogImportSourceFile(beta, await ShaOfAsync(beta)) },
             CancellationToken.None);
         await ctx.SaveChangesAsync();
 
@@ -148,6 +150,40 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             .Select(m => m.RelativePath)
             .ToListAsync();
         rows.ShouldBe(new[] { "BACKLOG/030-dup/tasks/01-a.md" });
+    }
+
+    [Fact]
+    public async Task Seed_ReSeedWithChangedContent_RefreshesShaWithoutDuplicates()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        WriteRaw("040-upsert/feature.md", "# Original\n");
+
+        using var ctx = _db.CreateContext();
+        var feature = PlanningFeature.Create(projectId, "040-upsert", "Upsert", "body");
+        ctx.PlanningFeatures.Add(feature);
+        await ctx.SaveChangesAsync();
+
+        var path = Path.Combine(_backlogDir, "040-upsert", "feature.md");
+        var seeder = new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)));
+
+        var first = await seeder.SeedAsync(
+            projectId, feature.Id, [new BacklogImportSourceFile(path, await ShaOfAsync(path))],
+            CancellationToken.None);
+        await ctx.SaveChangesAsync();
+        first.Tracked.ShouldBe(1);
+
+        await File.WriteAllTextAsync(path, "# Changed\n");
+        var second = await seeder.SeedAsync(
+            projectId, feature.Id, [new BacklogImportSourceFile(path, await ShaOfAsync(path))],
+            CancellationToken.None);
+        await ctx.SaveChangesAsync();
+        second.Tracked.ShouldBe(0);
+
+        var rows = await ctx.PlanningMaterializedFiles
+            .Where(m => m.ProjectId == projectId)
+            .ToListAsync();
+        rows.Count.ShouldBe(1);
+        rows.Single().Sha256.ShouldBe(await ShaOfAsync(path));
     }
 
     [Fact]
@@ -264,6 +300,92 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             .ShouldContain("status: ready");
     }
 
+    [Fact]
+    public async Task Import_OnProject_RowShasMatchFileBytesOnDisk()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        WriteDemoRepo();
+
+        using var ctx = _db.CreateContext();
+        var report = await CreateImporter(ctx)
+            .ImportAsync(new BacklogImportRequest(_projectDir, projectId), CancellationToken.None);
+
+        report.FeaturesCreated.ShouldBe(1);
+        var rows = await ctx.PlanningMaterializedFiles.Where(m => m.ProjectId == projectId).ToListAsync();
+        rows.Select(m => m.RelativePath).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(new[]
+        {
+            "BACKLOG.md",
+            "BACKLOG/010-demo/feature.md",
+            "BACKLOG/010-demo/spec.md",
+            "BACKLOG/010-demo/tasks/01-first.md",
+        });
+
+        foreach (var row in rows.Where(m => m.RelativePath != "BACKLOG.md"))
+        {
+            row.Sha256.ShouldBe(await ShaOfAsync(Path.Combine(_projectDir, row.RelativePath)));
+        }
+
+        (await CreateMaterializer(ctx).DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Import_ReImportAfterDiskEdit_RefreshesRowShaAndKeepsSyncClean()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        WriteDemoRepo();
+
+        using var ctx = _db.CreateContext();
+        var first = await CreateImporter(ctx)
+            .ImportAsync(new BacklogImportRequest(_projectDir, projectId), CancellationToken.None);
+        first.FeaturesCreated.ShouldBe(1);
+
+        var taskPath = Path.Combine(_backlogDir, "010-demo", "tasks", "01-first.md");
+        await File.WriteAllTextAsync(taskPath, await File.ReadAllTextAsync(taskPath) + "\nLate requirement.\n");
+
+        var second = await CreateImporter(ctx)
+            .ImportAsync(new BacklogImportRequest(_projectDir, projectId), CancellationToken.None);
+        second.ArtifactsUpdated.ShouldBe(1);
+
+        var row = await ctx.PlanningMaterializedFiles.SingleAsync(m =>
+            m.ProjectId == projectId && m.RelativePath == "BACKLOG/010-demo/tasks/01-first.md");
+        row.Sha256.ShouldBe(await ShaOfAsync(taskPath));
+        (await ctx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(4);
+
+        var materializer = CreateMaterializer(ctx);
+        var sync = await materializer.SyncAsync(projectId, force: false, CancellationToken.None);
+        sync.Warnings.ShouldBeEmpty();
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Import_ThenBoardMutation_MaterializesWithoutGuardRefusal()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        WriteDemoRepo();
+
+        using var ctx = _db.CreateContext();
+        await CreateImporter(ctx)
+            .ImportAsync(new BacklogImportRequest(_projectDir, projectId), CancellationToken.None);
+
+        var features = new PlanningFeatureService(
+            ctx,
+            CreateMaterializer(ctx),
+            new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
+            NullLogger<PlanningFeatureService>.Instance);
+        await features.UpdateAsync(projectId, "010-demo", title: "Demo feature retitled", body: null, status: null);
+        await features.CreateAsync(projectId, "020-second", "Second feature", "Fresh body");
+
+        (await File.ReadAllTextAsync(Path.Combine(_backlogDir, "010-demo", "feature.md")))
+            .ShouldContain("Demo feature retitled");
+        File.Exists(Path.Combine(_backlogDir, "020-second", "feature.md")).ShouldBeTrue();
+
+        var project = await ctx.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializationError.ShouldBeNull();
+        project.LastMaterializedAt.ShouldNotBeNull();
+
+        (await CreateMaterializer(ctx).DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
     private async Task<Guid> SeedProjectAsync(PlanningMaterialization strategy)
     {
         using var ctx = _db.CreateContext();
@@ -343,4 +465,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
     }
+
+    private static async Task<string> ShaOfAsync(string path) =>
+        Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path)));
 }

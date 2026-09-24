@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Materialization;
@@ -18,7 +17,7 @@ public sealed class BacklogImportSeeder
     }
 
     public async Task<BacklogImportSeedResult> SeedAsync(
-        Guid projectId, Guid featureId, IReadOnlyList<string> sourcePaths, CancellationToken ct = default)
+        Guid projectId, Guid featureId, IReadOnlyList<BacklogImportSourceFile> sources, CancellationToken ct = default)
     {
         var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
         if (project is null)
@@ -27,7 +26,7 @@ public sealed class BacklogImportSeeder
         }
 
         var strategy = await _policy.ResolveMaterializationAsync(projectId, ct);
-        if (strategy != PlanningMaterialization.On || sourcePaths.Count == 0)
+        if (strategy != PlanningMaterialization.On || sources.Count == 0)
         {
             return new BacklogImportSeedResult(0, strategy);
         }
@@ -38,9 +37,9 @@ public sealed class BacklogImportSeeder
 
         var tracked = 0;
         var usedTaskOrders = new HashSet<int>();
-        foreach (var sourcePath in sourcePaths.OrderBy(p => p, StringComparer.Ordinal))
+        foreach (var source in sources.OrderBy(s => s.AbsolutePath, StringComparer.Ordinal))
         {
-            var relative = TryMakeRelative(project.DiskPath, sourcePath);
+            var relative = TryMakeRelative(project.DiskPath, source.AbsolutePath);
             if (relative is null)
             {
                 continue;
@@ -58,21 +57,15 @@ public sealed class BacklogImportSeeder
             if (existing is not null)
             {
                 existing.AssignFeature(featureId);
+                if (!string.Equals(existing.Sha256, source.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing.Refresh(source.Sha256);
+                }
+
                 continue;
             }
 
-            byte[] bytes;
-            try
-            {
-                bytes = await File.ReadAllBytesAsync(sourcePath, ct);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            var row = PlanningMaterializedFile.Create(
-                projectId, featureId, relative, Convert.ToHexString(SHA256.HashData(bytes)));
+            var row = PlanningMaterializedFile.Create(projectId, featureId, relative, source.Sha256);
             _db.PlanningMaterializedFiles.Add(row);
             rows.Add(row);
             tracked++;

@@ -11,4 +11,4 @@ public sealed record BacklogFeatureImport(
     int Version,
     DateTime CreatedAt,
     IReadOnlyList<BacklogArtifactImport> Artifacts,
-    IReadOnlyList<string> SourcePaths);
+    IReadOnlyList<BacklogImportSourceFile> SourcePaths);

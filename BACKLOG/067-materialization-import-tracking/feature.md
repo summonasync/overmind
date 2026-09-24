@@ -1,7 +1,7 @@
 ---
 feature: 067
 slug: materialization-import-tracking
-status: draft
+status: inProgress
 priority: p0
 version: 1
 created: 2026-09-24
@@ -32,3 +32,7 @@ Materialization works on projects whose BACKLOG/ was IMPORTED, not born on the b
 - 033-materializer-clobber-guard (the guard being tripped); 054 (failure visibility + default on); PlanningMaterializedFiles tracking.
 - Field verdict: "while materialization falls over, the mode 'bodies in files, state in DB' remains a promise" — top of the four steps to "збс".
 </refs>
+
+<log>
+- 2026-09-24 [auto] — artifact created → inProgress
+</log>

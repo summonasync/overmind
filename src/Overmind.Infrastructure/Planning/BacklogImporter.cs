@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using Overmind.Core;
+using Overmind.Infrastructure.Materialization;
 
 namespace Overmind.Infrastructure.Planning;
 
@@ -132,14 +134,14 @@ public sealed class BacklogImporter
         string folder, string folderName, string repoRoot, BacklogImportNotes notes, CancellationToken ct)
     {
         var featurePath = Path.Combine(folder, "feature.md");
-        var featureContent = await TryReadAsync(featurePath, Rel(repoRoot, featurePath), notes, ct);
-        if (featureContent is null)
+        var featureRead = await TryReadAsync(featurePath, Rel(repoRoot, featurePath), notes, ct);
+        if (featureRead is null)
         {
             return null;
         }
 
         var artifacts = new List<BacklogArtifactImport>();
-        var sourcePaths = new List<string> { featurePath };
+        var sourcePaths = new List<BacklogImportSourceFile> { new(featurePath, featureRead.Sha256) };
 
         foreach (var name in new[] { "spec.md", "plan.md", "result.md" })
         {
@@ -159,7 +161,7 @@ public sealed class BacklogImporter
             if (artifact is not null)
             {
                 artifacts.Add(artifact);
-                sourcePaths.Add(path);
+                sourcePaths.Add(new BacklogImportSourceFile(path, artifact.SourceSha256));
             }
         }
 
@@ -217,7 +219,7 @@ public sealed class BacklogImporter
                 if (task is not null)
                 {
                     artifacts.Add(task);
-                    sourcePaths.Add(path);
+                    sourcePaths.Add(new BacklogImportSourceFile(path, task.SourceSha256));
                 }
             }
         }
@@ -231,7 +233,7 @@ public sealed class BacklogImporter
             }
         }
 
-        var (fields, featureBody) = BacklogMarkdown.Parse(featureContent);
+        var (fields, featureBody) = BacklogMarkdown.Parse(featureRead.Content);
         var featureRelative = Rel(repoRoot, featurePath);
         var title = ResolveTitle(BacklogMarkdown.FirstHeading(featureBody), folderName);
         await ExtractPreservedAsync(fields, featureRelative, notes, ct);
@@ -268,13 +270,13 @@ public sealed class BacklogImporter
         string path, PlanningArtifactKind kind, string repoRoot, BacklogImportNotes notes, CancellationToken ct)
     {
         var relative = Rel(repoRoot, path);
-        var content = await TryReadAsync(path, relative, notes, ct);
-        if (content is null)
+        var read = await TryReadAsync(path, relative, notes, ct);
+        if (read is null)
         {
             return null;
         }
 
-        var (fields, body) = BacklogMarkdown.Parse(content);
+        var (fields, body) = BacklogMarkdown.Parse(read.Content);
         body = BacklogMarkdown.StripLeadingHeadings(body);
         if (string.IsNullOrWhiteSpace(body))
         {
@@ -297,6 +299,7 @@ public sealed class BacklogImporter
             frozenAt?.ToDateTime(TimeOnly.MinValue),
             ResolveCreatedAt(fields, path, relative, notes),
             relative,
+            read.Sha256,
             Preserved: preserved);
     }
 
@@ -304,13 +307,13 @@ public sealed class BacklogImporter
         string path, int order, int? reassignedFrom, string repoRoot, BacklogImportNotes notes, CancellationToken ct)
     {
         var relative = Rel(repoRoot, path);
-        var content = await TryReadAsync(path, relative, notes, ct);
-        if (content is null)
+        var read = await TryReadAsync(path, relative, notes, ct);
+        if (read is null)
         {
             return null;
         }
 
-        var (fields, body) = BacklogMarkdown.Parse(content);
+        var (fields, body) = BacklogMarkdown.Parse(read.Content);
         body = BacklogMarkdown.CollapseLeadingHeadings(body);
         if (string.IsNullOrWhiteSpace(body))
         {
@@ -329,23 +332,30 @@ public sealed class BacklogImporter
             null,
             ResolveCreatedAt(fields, path, relative, notes),
             relative,
+            read.Sha256,
             reassignedFrom,
             preserved,
             Raw(fields, "brief"));
     }
 
-    private static async Task<string?> TryReadAsync(
+    private static async Task<SourceRead?> TryReadAsync(
         string path, string relative, BacklogImportNotes notes, CancellationToken ct)
     {
+        byte[] bytes;
         try
         {
-            return await File.ReadAllTextAsync(path, ct);
+            bytes = await File.ReadAllBytesAsync(path, ct);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             notes.Skipped.Add($"skipped: {relative} (unreadable: {ex.Message})");
             return null;
         }
+
+        using var reader = new StreamReader(
+            new MemoryStream(bytes), ContentHash.Utf8NoBom, detectEncodingFromByteOrderMarks: true);
+        var content = await reader.ReadToEndAsync(ct);
+        return new SourceRead(content, Convert.ToHexString(SHA256.HashData(bytes)));
     }
 
     private async Task<IReadOnlyDictionary<string, string>?> ExtractPreservedAsync(
@@ -526,4 +536,6 @@ public sealed class BacklogImporter
     }
 
     private static string Rel(string root, string path) => Path.GetRelativePath(root, path);
+
+    private sealed record SourceRead(string Content, string Sha256);
 }
