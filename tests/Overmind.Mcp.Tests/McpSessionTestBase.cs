@@ -86,6 +86,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/projects/{Canned.ProjectId}/planning/materialize",
             200,
             Canned.PlanningMaterializeReportJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/import",
+            200,
+            Canned.PlanningImportReportJson);
         stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
             Canned.PlanningFeatureJson);
@@ -95,6 +100,22 @@ public abstract class McpSessionTestBase : IAsyncLifetime
         stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningStopSlug}/current",
             Canned.PlanningCurrentStopJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningBlockedSlug}/current",
+            Canned.PlanningCurrentBlockedStopJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/dependencies",
+            Canned.PlanningDependenciesJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/dependencies",
+            200,
+            Canned.PlanningDependenciesJson);
+        stub.Route(
+            "DELETE",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/dependencies/[^/]+",
+            200,
+            Canned.PlanningDependenciesClearedJson);
         stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningEmptySlug}/current",
             Canned.PlanningCurrentEmptyJson);
@@ -120,6 +141,41 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                     ["log"] = new JsonArray()
                 };
                 return new StubOvermindApi.Response(201, artifact.ToJsonString());
+            });
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts/tasks",
+            req =>
+            {
+                var submitted = JsonNode.Parse(req.Body)!["tasks"]!.AsArray();
+                var artifacts = new JsonArray();
+                for (var i = 0; i < submitted.Count; i++)
+                {
+                    var item = submitted[i]!;
+                    artifacts.Add(new JsonObject
+                    {
+                        ["id"] = $"88888888-8888-8888-8888-{i:D12}",
+                        ["kind"] = "task",
+                        ["status"] = "todo",
+                        ["review"] = item["review"]?.GetValue<string>() ?? "light",
+                        ["order"] = item["order"]?.GetValue<int>() ?? i,
+                        ["body"] = item["body"]!.GetValue<string>(),
+                        ["brief"] = item["brief"]?.GetValue<string>(),
+                        ["frozenAt"] = null,
+                        ["version"] = 1,
+                        ["createdAt"] = "2026-09-24T10:00:00Z",
+                        ["updatedAt"] = "2026-09-24T10:00:00Z",
+                        ["log"] = new JsonArray()
+                    });
+                }
+
+                var result = new JsonObject
+                {
+                    ["created"] = submitted.Count,
+                    ["updated"] = 0,
+                    ["artifacts"] = artifacts
+                };
+                return new StubOvermindApi.Response(200, result.ToJsonString());
             });
         stub.Route(
             "GET",

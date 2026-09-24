@@ -28,13 +28,38 @@ internal static class PathGuard
             throw MaterializationException.Traversal(fullRoot, relativePath);
         }
 
+        return GuardContained(fullRoot, resolved);
+    }
+
+    public static string ResolveAbsoluteUnderRoot(string root, string absolutePath)
+    {
+        if (!Path.IsPathFullyQualified(absolutePath))
+        {
+            throw MaterializationException.NotAbsolute(root, absolutePath);
+        }
+
+        string resolved;
+        try
+        {
+            resolved = Path.GetFullPath(absolutePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            throw MaterializationException.OutsideRoot(root, absolutePath);
+        }
+
+        return GuardContained(Path.GetFullPath(root), resolved);
+    }
+
+    private static string GuardContained(string fullRoot, string resolved)
+    {
         var rootWithSeparator = fullRoot.EndsWith(Path.DirectorySeparatorChar)
             ? fullRoot
             : fullRoot + Path.DirectorySeparatorChar;
 
         if (!resolved.StartsWith(rootWithSeparator, PathComparison))
         {
-            throw MaterializationException.Traversal(fullRoot, relativePath);
+            throw MaterializationException.OutsideRoot(fullRoot, resolved);
         }
 
         return resolved;

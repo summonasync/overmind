@@ -19,16 +19,62 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.CreateFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", PlanningFeaturesApi.SetCurrent);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
+        group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add);
+        group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts/tasks", PlanningArtifactsApi.CreateTasks);
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
+        group.MapPost("/projects/{projectId:guid}/planning/import", ImportFeature);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
 
         return group;
+    }
+
+    internal static async Task<IResult> ImportFeature(
+        Guid projectId,
+        ImportPlanningFeatureRequest request,
+        IValidator<ImportPlanningFeatureRequest> validator,
+        BacklogImporter importer,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
+        if (project is null)
+        {
+            return HttpErrors.NotFound($"Project '{projectId}' was not found.");
+        }
+
+        try
+        {
+            var report = await importer.ImportFeatureAsync(projectId, project.DiskPath, request.Path.Trim(), ct);
+            return Results.Ok(new PlanningFeatureImportResponse(
+                report.Slug,
+                report.Title,
+                report.Status,
+                report.Created,
+                report.ArtifactsCreated,
+                report.ArtifactsUpdated,
+                [.. report.Notes],
+                report.TrackedFiles,
+                report.Materialization,
+                report.NextStep));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
     }
 
     internal static async Task<IResult> Validate(
@@ -178,6 +224,7 @@ public static class AgentPlanningApi
         SetPlanningFeatureStatusRequest request,
         IValidator<SetPlanningFeatureStatusRequest> validator,
         PlanningFeatureService service,
+        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -205,13 +252,44 @@ public static class AgentPlanningApi
             .Include(f => f.Artifacts)
             .ThenInclude(a => a.Versions)
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
-        return Results.Ok(PlanningMapper.ToFeatureResponse(feature!));
+        return Results.Ok(PlanningMapper.ToFeatureResponse(
+            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
+    }
+
+    internal static async Task<IResult> SetCurrent(
+        Guid projectId,
+        string slug,
+        SetPlanningFeatureCurrentRequest request,
+        PlanningFeatureService service,
+        FeatureDependencyService dependencies,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        if (request.IsCurrent)
+        {
+            try
+            {
+                var openBlockers = await dependencies.OpenBlockersAsync(projectId, slug, ct);
+                if (openBlockers.Count > 0)
+                {
+                    return PlanningErrors.Map(PlanningException.FeatureBlocked(
+                        slug, [.. openBlockers.Select(FormatBlocker)]));
+                }
+            }
+            catch (PlanningException ex)
+            {
+                return PlanningErrors.Map(ex);
+            }
+        }
+
+        return await PlanningFeaturesApi.SetCurrent(projectId, slug, request, service, dependencies, db, ct);
     }
 
     internal static async Task<IResult> Current(
         Guid projectId,
         string slug,
         PlanningPolicy policy,
+        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -230,6 +308,16 @@ public static class AgentPlanningApi
         }
 
         var currentFeature = new PlanningCurrentFeature(feature.Slug, feature.Title, feature.Status);
+
+        var openBlockers = await dependencies.OpenBlockersAsync(projectId, slug, ct);
+        if (openBlockers.Count > 0)
+        {
+            return Results.Ok(new PlanningCurrentResponse(
+                "stop", currentFeature, null,
+                $"STOP: feature '{feature.Slug}' is blocked by unclosed features: {BlockerList(openBlockers)}. " +
+                "Reads stay open; task issuance stops until every blocker closes (done or review)."));
+        }
+
         var gated = await policy.ResolveValidationGateAsync(projectId, ct);
 
         var spec = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
@@ -309,6 +397,12 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(ex);
         }
     }
+
+    private static string BlockerList(IReadOnlyList<FeatureDependencyEntry> openBlockers) =>
+        string.Join(", ", openBlockers.Select(FormatBlocker));
+
+    private static string FormatBlocker(FeatureDependencyEntry entry) =>
+        $"{entry.Slug} ({entry.Status.ToString().ToLowerInvariant()})";
 
     private static bool CarriesPatchShape(PatchPlanningArtifactRequest request)
     {

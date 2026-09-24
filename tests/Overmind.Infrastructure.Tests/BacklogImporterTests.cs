@@ -51,6 +51,9 @@ public sealed class BacklogImporterTests : IDisposable
     private Task<BacklogImportReport> ImportAsync(string path) =>
         CreateImporter().ImportAsync(new BacklogImportRequest(path, _projectId), CancellationToken.None);
 
+    private Task<BacklogFeatureImportReport> ImportFeatureAsync(string path) =>
+        CreateImporter().ImportFeatureAsync(_projectId, _repo.Root, path, CancellationToken.None);
+
     private async Task<PlanningFeature?> LoadFeatureAsync(string slug) =>
         await _context.PlanningFeatures
             .Include(f => f.Artifacts)
@@ -109,6 +112,101 @@ public sealed class BacklogImporterTests : IDisposable
         task.Body.ShouldContain("<log>");
         task.Body.ShouldContain("2026-09-01 — created from the plan.");
         task.Body.ShouldContain("2026-09-02 — implemented and green.");
+    }
+
+    [Fact]
+    public async Task ImportFeature_SingleFolder_RestoresFeatureAndArtifactsInOneCall()
+    {
+        WriteFullFeature();
+
+        var report = await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
+
+        report.Slug.ShouldBe("010-demo");
+        report.Title.ShouldBe("Demo feature title");
+        report.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        report.Created.ShouldBeTrue();
+        report.ArtifactsCreated.ShouldBe(4);
+        report.ArtifactsUpdated.ShouldBe(0);
+        report.TrackedFiles.ShouldBe(5);
+        report.Materialization.ShouldBe(PlanningMaterialization.On);
+        report.NextStep.ShouldBe("5 files tracked, materialize is a no-op");
+
+        var feature = await LoadFeatureAsync("010-demo");
+        feature.ShouldNotBeNull();
+        feature.Version.ShouldBe(3);
+        feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Spec).Status
+            .ShouldBe(PlanningArtifactStatus.Validated);
+        var tasks = feature.Artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).OrderBy(a => a.Order).ToList();
+        tasks[0].Status.ShouldBe(PlanningArtifactStatus.Done);
+        tasks[1].Status.ShouldBe(PlanningArtifactStatus.InProgress);
+    }
+
+    [Fact]
+    public async Task ImportFeature_ReimportAfterStatusDrift_RestoresStatusWithImportMarker()
+    {
+        WriteFullFeature();
+        await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
+
+        var feature = await LoadFeatureAsync("010-demo");
+        var task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
+        task.SetStatus(PlanningArtifactStatus.Blocked, "hit a wall mid-task", PlanningLogSource.Agent);
+        await _context.SaveChangesAsync();
+
+        var report = await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
+
+        report.Created.ShouldBeFalse();
+        report.ArtifactsCreated.ShouldBe(0);
+
+        feature = await LoadFeatureAsync("010-demo");
+        task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
+        task.Status.ShouldBe(PlanningArtifactStatus.InProgress);
+        task.Body.ShouldContain("[import] — status restored from imported file");
+    }
+
+    [Fact]
+    public async Task ImportFeature_PathOutsideProjectRoot_Rejected()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), $"overmind-outside-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(outside, "BACKLOG", "058-elsewhere"));
+        try
+        {
+            var folder = Path.Combine(outside, "BACKLOG", "058-elsewhere");
+
+            var ex = await Should.ThrowAsync<PlanningException>(() => ImportFeatureAsync(folder));
+
+            ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+            ex.Message.ShouldContain("resolves outside the project directory");
+            (await LoadFeatureAsync("058-elsewhere")).ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ImportFeature_RelativePath_Rejected()
+    {
+        WriteFullFeature();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => ImportFeatureAsync(Path.Combine("BACKLOG", "010-demo")));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("is not absolute");
+        (await LoadFeatureAsync("010-demo")).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ImportFeature_FolderWithoutFeatureMd_Rejected()
+    {
+        _repo.Write("099-bare/notes.md", "not a feature folder");
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "099-bare")));
+
+        ex.Message.ShouldContain("holds no feature.md");
+        (await LoadFeatureAsync("099-bare")).ShouldBeNull();
     }
 
     [Fact]

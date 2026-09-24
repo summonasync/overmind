@@ -72,6 +72,9 @@ public sealed class OvermindApiClient
     public Task<JsonElement> PostAsync(string path, object body, CancellationToken ct) =>
         SendAsync(() => _http.PostAsJsonAsync(path, body, JsonOptions, ct), "POST " + path, ct);
 
+    public Task<JsonElement> DeleteAsync(string path, CancellationToken ct) =>
+        SendAsync(() => _http.DeleteAsync(path, ct), "DELETE " + path, ct);
+
     public Task<JsonElement> PutAsync(string path, object body, CancellationToken ct) =>
         SendAsync(() => _http.PutAsJsonAsync(path, body, JsonOptions, ct), "PUT " + path, ct);
 

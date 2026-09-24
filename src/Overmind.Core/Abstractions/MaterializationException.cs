@@ -34,11 +34,23 @@ public sealed class MaterializationException : Exception
     public static MaterializationException MissingKit(Guid kitId) =>
         new(MaterializationFailureKind.NotFound, $"Kit '{kitId}' was not found.");
 
+    public static MaterializationException OutsideRoot(string root, string absolutePath) =>
+        new(
+            MaterializationFailureKind.PathTraversal,
+            $"Path '{absolutePath}' resolves outside the project directory '{root}'.",
+            absolutePath);
+
     public static MaterializationException Traversal(string root, string relativePath) =>
         new(
             MaterializationFailureKind.PathTraversal,
             $"Relative path '{relativePath}' escapes the project directory '{root}'.",
             relativePath);
+
+    public static MaterializationException NotAbsolute(string root, string path) =>
+        new(
+            MaterializationFailureKind.PathTraversal,
+            $"Path '{path}' is not absolute; give a folder under the project root '{root}'.",
+            path);
 
     public static MaterializationException Overwrite(string absolutePath) =>
         new(

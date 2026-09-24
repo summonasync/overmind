@@ -138,6 +138,144 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertTasks_FiveTasksInOneCall_CreatesFiveWithSingleTransitionLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentTasksUrl(project.Id, "feat"),
+            new
+            {
+                Tasks = Enumerable.Range(1, 5)
+                    .Select(i => new { Body = $"# Task {i}\n\n<goal>\nDo {i}.\n</goal>" })
+                    .ToArray()
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var batch = await response.Content.ReadFromJsonAsync<TaskBatchJson>(JsonOptions);
+        batch!.Created.ShouldBe(5);
+        batch.Updated.ShouldBe(0);
+        batch.Artifacts.Length.ShouldBe(5);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.Split('\n').Count(line => line.Contains("artifact created → inProgress")).ShouldBe(1);
+        feature.Artifacts.Where(a => a.Kind == "task").Select(a => a.Order).ToArray()
+            .ShouldBe([0, 1, 2, 3, 4]);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ValidationFailureAtIndex_Returns400NamingTheIndexAndWritesNothing()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentTasksUrl(project.Id, "feat"),
+            new
+            {
+                Tasks = new object[]
+                {
+                    new { Body = "# Task one" },
+                    new { Body = "" },
+                    new { Body = "# Task three", Order = -1 }
+                }
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.ShouldContain("tasks[1]", Case.Insensitive);
+        raw.ShouldContain("tasks[2]", Case.Insensitive);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Artifacts.Length.ShouldBe(0);
+        feature.Status.ShouldBe("draft");
+        feature.Body.ShouldNotContain("artifact created");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_NullItemInBatch_Returns400NamingTheIndexAndWritesNothing()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentTasksUrl(project.Id, "feat"),
+            new { Tasks = new object?[] { new { Body = "# Task one" }, null } });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.ShouldContain("tasks[1]", Case.Insensitive);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Artifacts.Length.ShouldBe(0);
+        feature.Status.ShouldBe("draft");
+        feature.Body.ShouldNotContain("artifact created");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_EmptyBatch_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(AgentTasksUrl(project.Id, "feat"), new { Tasks = Array.Empty<object>() });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ExistingOrder_UpdatesInPlaceAlongsideNewTasks()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var existing = await CreateAgentArtifactAsync(project.Id, "feat",
+            new { Kind = "task", Body = "# Task one v1", Order = 0 });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentTasksUrl(project.Id, "feat"),
+            new
+            {
+                Tasks = new object[]
+                {
+                    new { Body = "# Task one v2", Order = 0, LogNote = "rewritten from the plan" },
+                    new { Body = "# Task two", Brief = "Wire the polling hook" }
+                }
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var batch = await response.Content.ReadFromJsonAsync<TaskBatchJson>(JsonOptions);
+        batch!.Created.ShouldBe(1);
+        batch.Updated.ShouldBe(1);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        var tasks = feature!.Artifacts.Where(a => a.Kind == "task").OrderBy(a => a.Order).ToArray();
+        tasks.Length.ShouldBe(2);
+        tasks[0].Id.ShouldBe(existing.Id);
+        tasks[0].Version.ShouldBe(2);
+        tasks[0].Body.ShouldContain("Task one v2");
+        tasks[1].Order.ShouldBe(1);
+        tasks[1].Brief.ShouldBe("Wire the polling hook");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_UnknownFeature_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            AgentTasksUrl(project.Id, "missing"),
+            new { Tasks = new object[] { new { Body = "# Task" } } });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Validate_GateOn_Returns409HumanValidationRequired_WritesNothing()
     {
         var project = await CreateProjectAsync();
@@ -380,6 +518,134 @@ public sealed class AgentPlanningApiTests : IDisposable
         current.State.ShouldBe("task");
         current.Artifact!.Order.ShouldBe(2);
         current.Reason.ShouldBe("The next task is blocked.");
+    }
+
+    [Fact]
+    public async Task Current_BlockedFeature_ReturnsStopNamingOnlyUnclosedBlockers()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat-a", "Feature A");
+        await CreateAgentFeatureAsync(project.Id, "feat-b", "Feature B");
+        await CreateAgentFeatureAsync(project.Id, "feat-c", "Feature C");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-b");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-c");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat-c", "review");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat-a", new { Kind = "task", Body = "task 1", Order = 1 });
+
+        var current = await GetCurrentAsync(project.Id, "feat-a");
+
+        current.State.ShouldBe("stop");
+        current.Artifact.ShouldBeNull();
+        current.Reason.ShouldNotBeNull();
+        current.Reason!.ShouldStartWith("STOP:");
+        current.Reason.ShouldContain("is blocked by unclosed features: feat-b (draft)");
+        current.Reason.ShouldNotContain("feat-c");
+        current.Reason.ShouldContain("Reads stay open");
+        current.Feature.Slug.ShouldBe("feat-a");
+
+        var readable = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat-a", JsonOptions);
+        readable!.Artifacts.Single().Id.ShouldBe(task.Id);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/agent/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("task 1");
+    }
+
+    [Fact]
+    public async Task Current_BlockersAllClosed_BehavesExactlyAsUnblocked()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat-a", "Feature A");
+        await CreateAgentFeatureAsync(project.Id, "feat-b", "Feature B");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-b");
+        var first = await CreateAgentArtifactAsync(project.Id, "feat-a", new { Kind = "task", Body = "task 1", Order = 1 });
+        await CreateAgentArtifactAsync(project.Id, "feat-a", new { Kind = "task", Body = "task 2", Order = 2 });
+        await SetTaskStatusAsync(first.Id, "done");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat-b", "done");
+
+        var current = await GetCurrentAsync(project.Id, "feat-a");
+
+        current.State.ShouldBe("task");
+        current.Reason.ShouldBeNull();
+        current.Artifact.ShouldNotBeNull();
+        current.Artifact!.Order.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task SetCurrent_PinBlockedFeature_Returns409WithStopDiagnostics()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat-a", "Feature A");
+        await CreateAgentFeatureAsync(project.Id, "feat-b", "Feature B");
+        await CreateAgentFeatureAsync(project.Id, "feat-c", "Feature C");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-b");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-c");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat-c", "review");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/feat-a/current",
+            new { IsCurrent = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureBlocked");
+        problem.Detail!.ShouldStartWith("STOP:");
+        problem.Detail.ShouldContain("is blocked by unclosed features: feat-b (draft)");
+        problem.Detail.ShouldNotContain("feat-c");
+        problem.Detail.ShouldContain("Pinning is refused");
+
+        var board = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat-a", JsonOptions);
+        board!.Slug.ShouldBe("feat-a");
+    }
+
+    [Fact]
+    public async Task SetCurrent_UnpinOrLiftedBlocker_PinsThroughTheAgentDoor()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat-a", "Feature A");
+        await CreateAgentFeatureAsync(project.Id, "feat-b", "Feature B");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-b");
+
+        var unpin = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/feat-a/current",
+            new { IsCurrent = false });
+        unpin.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat-b", "review");
+
+        var pin = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/feat-a/current",
+            new { IsCurrent = true });
+        pin.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pinned = await pin.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        pinned!.Slug.ShouldBe("feat-a");
+    }
+
+    [Fact]
+    public async Task SetCurrent_HumanDoorPinOfBlockedFeature_IsNeverBlocked()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat-a", "Feature A");
+        await CreateAgentFeatureAsync(project.Id, "feat-b", "Feature B");
+        await AddDependencyAsync(project.Id, "feat-a", "feat-b");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat-a/current",
+            new { IsCurrent = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pinned = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        pinned!.Slug.ShouldBe("feat-a");
+    }
+
+    private async Task AddDependencyAsync(Guid projectId, string slug, string blockedBy)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{slug}/dependencies",
+            new { BlockedBy = blockedBy });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -949,8 +1215,119 @@ public sealed class AgentPlanningApiTests : IDisposable
         agentParsed.GetProperty("artifacts").GetArrayLength().ShouldBe(2);
     }
 
+    [Fact]
+    public async Task Import_FeatureFolder_CreatesFeatureWithStatusesVerbatim()
+    {
+        var (project, root) = await CreateProjectWithBacklogFolderAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            AgentImportUrl(project.Id), new { Path = Path.Combine(root, "BACKLOG", "058-demo") });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var report = await response.Content.ReadFromJsonAsync<FeatureImportJson>(JsonOptions);
+        report!.Slug.ShouldBe("058-demo");
+        report.Title.ShouldBe("Demo import");
+        report.Status.ShouldBe("inProgress");
+        report.Created.ShouldBeTrue();
+        report.ArtifactsCreated.ShouldBe(2);
+        report.ArtifactsUpdated.ShouldBe(0);
+        report.TrackedFiles.ShouldBe(3);
+        report.Materialization.ShouldBe("on");
+        report.Notes.ShouldNotBeNull();
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/058-demo", JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Version.ShouldBe(2);
+        var spec = feature.Artifacts.Single(a => a.Kind == "spec");
+        spec.Status.ShouldBe("validated");
+        spec.FrozenAt.ShouldNotBeNull();
+        var task = feature.Artifacts.Single(a => a.Kind == "task");
+        task.Status.ShouldBe("review");
+        task.Review.ShouldBe("hard");
+        task.Brief.ShouldBe("Wire the import endpoint");
+    }
+
+    [Fact]
+    public async Task Import_ReimportAfterDiskEdit_RestoresStatusWithImportMarker()
+    {
+        var (project, root) = await CreateProjectWithBacklogFolderAsync();
+        var featureFolder = Path.Combine(root, "BACKLOG", "058-demo");
+        var taskPath = Path.Combine(featureFolder, "tasks", "01-wire.md");
+
+        var first = await _client.PostAsJsonAsync(AgentImportUrl(project.Id), new { Path = featureFolder });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await File.WriteAllTextAsync(taskPath,
+            (await File.ReadAllTextAsync(taskPath)).Replace("status: review", "status: done"));
+
+        var second = await _client.PostAsJsonAsync(AgentImportUrl(project.Id), new { Path = featureFolder });
+
+        second.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var report = await second.Content.ReadFromJsonAsync<FeatureImportJson>(JsonOptions);
+        report!.Created.ShouldBeFalse();
+        report.ArtifactsCreated.ShouldBe(0);
+        report.ArtifactsUpdated.ShouldBe(1);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/058-demo", JsonOptions);
+        var task = feature!.Artifacts.Single(a => a.Kind == "task");
+        task.Status.ShouldBe("done");
+        task.Body.ShouldContain("[import] — status restored from imported file");
+    }
+
+    [Fact]
+    public async Task Import_PathOutsideProjectRoot_Returns400()
+    {
+        var (project, _) = await CreateProjectWithBacklogFolderAsync();
+        var outside = Path.Combine(Path.GetTempPath(), $"overmind-elsewhere-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var response = await _client.PostAsJsonAsync(AgentImportUrl(project.Id), new { Path = outside });
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+            problem!.Title.ShouldBe("ImportFailed");
+            problem.Detail!.ShouldContain("resolves outside the project directory");
+        }
+        finally
+        {
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Import_BlankPath_Returns400WithoutTouchingDisk(string? path)
+    {
+        var (project, _) = await CreateProjectWithBacklogFolderAsync();
+
+        var response = await _client.PostAsJsonAsync(AgentImportUrl(project.Id), new { Path = path });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Import_RelativePath_ReturnsValidationProblem()
+    {
+        var (project, _) = await CreateProjectWithBacklogFolderAsync();
+
+        var response = await _client.PostAsJsonAsync(AgentImportUrl(project.Id), new { Path = "BACKLOG/058-demo" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var messages = body.GetProperty("errors").EnumerateObject().SelectMany(e => e.Value.EnumerateArray());
+        messages.ShouldContain(m => m.GetString()!.Contains("absolute", StringComparison.Ordinal));
+    }
+
     private static string AgentArtifactsUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}/artifacts";
+
+    private static string AgentTasksUrl(Guid projectId, string slug) =>
+        $"/api/agent/projects/{projectId}/planning/features/{slug}/artifacts/tasks";
 
     private static string AgentValidateUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}/validate";
@@ -966,6 +1343,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     private static string AgentReadUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}";
+
+    private static string AgentImportUrl(Guid projectId) =>
+        $"/api/agent/projects/{projectId}/planning/import";
 
     private async Task BringToStatusViaHumanDoorAsync(Guid projectId, string slug, string target)
     {
@@ -1011,6 +1391,75 @@ public sealed class AgentPlanningApiTests : IDisposable
         var project = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
         project.ShouldNotBeNull();
         return project!;
+    }
+
+    private async Task<(ProjectJson Project, string Root)> CreateProjectWithBacklogFolderAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"overmind-import-api-{Guid.NewGuid():N}");
+        var backlog = Path.Combine(root, "BACKLOG", "058-demo");
+        Directory.CreateDirectory(Path.Combine(backlog, "tasks"));
+        await File.WriteAllTextAsync(Path.Combine(backlog, "feature.md"),
+            """
+            ---
+            feature: 058
+            slug: demo
+            status: in_progress
+            priority: p1
+            version: 2
+            created: 2026-09-20
+            ---
+
+            # Feature 058 — Demo import
+
+            <goal>
+            Import it whole.
+            </goal>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(backlog, "spec.md"),
+            """
+            ---
+            feature: 058
+            slug: demo
+            status: validated
+            created: 2026-09-20
+            validated: 2026-09-21
+            ---
+
+            # Spec 058 — Demo import
+
+            Spec body.
+            """);
+        await File.WriteAllTextAsync(Path.Combine(backlog, "tasks", "01-wire.md"),
+            """
+            ---
+            feature: 058
+            task: 01
+            slug: demo
+            status: review
+            review: hard
+            created: 2026-09-20
+            brief: Wire the import endpoint
+            ---
+
+            # Wire the import endpoint
+
+            <goal>
+            One call, whole folder.
+            </goal>
+            """);
+
+        var name = $"agent-import-{Guid.NewGuid():N}";
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = name,
+            DiskPath = root,
+            Description = (string?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var project = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        project.ShouldNotBeNull();
+        return (project!, root);
     }
 
     private async Task<FeatureJson> CreateAgentFeatureAsync(Guid projectId, string slug, string title)
@@ -1102,6 +1551,13 @@ public sealed class AgentPlanningApiTests : IDisposable
         Guid Id, string Kind, string Status, string Review,
         int Order, string Body, DateTime? FrozenAt, int Version,
         DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null);
+
+    public sealed record TaskBatchJson(int Created, int Updated, ArtifactJson[] Artifacts);
+
+    public sealed record FeatureImportJson(
+        string Slug, string Title, string Status, bool Created,
+        int ArtifactsCreated, int ArtifactsUpdated, string[] Notes,
+        int TrackedFiles, string Materialization, string? NextStep);
 
     public sealed record LogLineJson(string? Date, string Text);
 

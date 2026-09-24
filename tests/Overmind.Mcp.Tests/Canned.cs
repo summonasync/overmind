@@ -18,6 +18,7 @@ public static class Canned
     public const string PlanningSlug = "demo-feature";
     public const string PlanningStopSlug = "gate-locked";
     public const string PlanningEmptySlug = "all-done";
+    public const string PlanningBlockedSlug = "blocked-feature";
 
     public const string HealthJson = """{"status":"ok","vectorSearch":"up","version":"test"}""";
 
@@ -139,6 +140,24 @@ public static class Canned
         {"state":"stop","feature":{"slug":"gate-locked","title":"Gate locked","status":"ready"},"artifact":null,"reason":"STOP: spec awaits human validation — it cannot be approved through MCP."}
         """;
 
+    public const string PlanningCurrentBlockedStopJson =
+        """
+        {"state":"stop","feature":{"slug":"blocked-feature","title":"Blocked feature","status":"ready"},"artifact":null,"reason":"STOP: feature 'blocked-feature' is blocked by unclosed features: gate-locked (ready), draft-one (draft). Reads stay open; task issuance stops until every blocker closes (done or review)."}
+        """;
+
+    public const string PlanningSetCurrentBlockedJson =
+        """{"title":"FeatureBlocked","detail":"STOP: feature 'blocked-feature' is blocked by unclosed features: gate-locked (ready), draft-one (draft). Pinning is refused — work a blocker first or ask the user to clear the link.","status":409}""";
+
+    public const string PlanningDependenciesJson =
+        """
+        {"slug":"demo-feature","blockedBy":[{"slug":"gate-locked","status":"ready","closed":false},{"slug":"shipped-one","status":"done","closed":true}],"blocks":[{"slug":"waiting-on-demo","status":"draft","closed":false}]}
+        """;
+
+    public const string PlanningDependenciesClearedJson =
+        """
+        {"slug":"demo-feature","blockedBy":[{"slug":"shipped-one","status":"done","closed":true}],"blocks":[{"slug":"waiting-on-demo","status":"draft","closed":false}]}
+        """;
+
     public const string PlanningCurrentEmptyJson =
         """
         {"state":"empty","feature":{"slug":"all-done","title":"All done","status":"inProgress"},"artifact":null,"reason":"All tasks are done — write the result artifact."}
@@ -164,6 +183,14 @@ public static class Canned
         """
         {"title":"Materialization conflict","detail":"Every planned file was skipped; nothing was written:\n- BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind\nTranscribe the edits to the board (planning_upsert_artifact / planning_append_log) or re-run materialize with force.","status":409}
         """;
+
+    public const string PlanningImportReportJson =
+        """
+        {"slug":"058-demo","title":"Demo import","status":"inProgress","created":true,"artifactsCreated":2,"artifactsUpdated":0,"notes":["preserved: BACKLOG/058-demo/spec.md (owner)"],"trackedFiles":3,"materialization":"on","nextStep":"3 files tracked, materialize is a no-op"}
+        """;
+
+    public const string PlanningImportOutsideRootJson =
+        """{"title":"ImportFailed","detail":"Importing '/elsewhere/BACKLOG/058-demo' failed: Path '/elsewhere/BACKLOG/058-demo' resolves outside the project directory '/repo'.","status":400}""";
 
     public const string OnboardSkippedMaterializationJson =
         """

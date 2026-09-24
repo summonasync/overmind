@@ -1,7 +1,7 @@
 ---
 feature: 058
 slug: agent-side-import
-status: inProgress
+status: done
 priority: p2
 version: 1
 created: 2026-09-23
@@ -17,4 +17,5 @@ Requested: `planning_import_feature(projectId, path)` reading a feature folder i
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — by user request in-session — task done, review APPROVED after fix round (W1/W2), result artifact complete, suite re-run green
 </log>

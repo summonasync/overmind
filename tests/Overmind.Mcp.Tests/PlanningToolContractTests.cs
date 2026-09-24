@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheThirteenPlanningTools()
+    public async Task ToolsList_ContainsTheEighteenPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -28,13 +28,18 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_current_task",
             "planning_create_feature",
             "planning_upsert_artifact",
+            "planning_upsert_tasks",
             "planning_set_status",
             "planning_append_log",
             "planning_patch_artifact",
             "planning_validate",
             "planning_set_current",
             "planning_set_feature_status",
-            "planning_materialize"
+            "planning_list_feature_dependencies",
+            "planning_add_feature_dependency",
+            "planning_remove_feature_dependency",
+            "planning_materialize",
+            "planning_import_feature"
         ];
         foreach (var name in expected)
         {
@@ -44,15 +49,23 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         tools["planning_list_features"]!["description"]!.GetValue<string>().ShouldContain("board");
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
+        tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("brief");
         tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("priority");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
+        tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
+        tools["planning_list_feature_dependencies"]!["description"]!.GetValue<string>().ShouldContain("done or review");
+        tools["planning_add_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("cycle");
+        tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
         tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldContain("board mutation");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("all-or-nothing");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("one feature auto-transition evaluation");
+        tools["planning_import_feature"]!["description"]!.GetValue<string>().ShouldContain("never pass through the model");
     }
 
     [Fact]
@@ -366,6 +379,185 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningUpsertTasks_PostsTheWholeBatchToTheTasksRouteInOneCall()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["body"] = "# Task one\n\n<goal>Model it.</goal>",
+                    ["brief"] = "Model the domain"
+                },
+                new JsonObject
+                {
+                    ["body"] = "# Task two\n\n<goal>Wire it.</goal>",
+                    ["order"] = 5,
+                    ["review"] = "hard",
+                    ["logNote"] = "imported from the plan"
+                },
+                new JsonObject
+                {
+                    ["body"] = "# Task three\n\n<goal>Ship it.</goal>"
+                }
+            }
+        });
+
+        var batchRequests = Stub.Requests
+            .Where(r => r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal))
+            .ToArray();
+        batchRequests.Length.ShouldBe(1);
+        batchRequests[0].Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts/tasks");
+
+        var posted = JsonNode.Parse(batchRequests[0].Body)!["tasks"]!.AsArray();
+        posted.Count.ShouldBe(3);
+        posted[0]!["body"]!.GetValue<string>().ShouldContain("Model it.");
+        posted[0]!.AsObject().ContainsKey("order").ShouldBeFalse();
+        posted[1]!["order"]!.GetValue<int>().ShouldBe(5);
+        posted[1]!["review"]!.GetValue<string>().ShouldBe("hard");
+        posted[1]!["logNote"]!.GetValue<string>().ShouldBe("imported from the plan");
+        posted[2]!["brief"].ShouldBeNull();
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var text = Canned.ToolResultText(response);
+        var echo = JsonNode.Parse(text)!.AsObject();
+        echo["created"]!.GetValue<int>().ShouldBe(3);
+        echo["updated"]!.GetValue<int>().ShouldBe(0);
+        var tasks = echo["tasks"]!.AsArray();
+        tasks.Count.ShouldBe(3);
+        tasks[1]!["order"]!.GetValue<int>().ShouldBe(5);
+        tasks[1]!["status"]!.GetValue<string>().ShouldBe("todo");
+        tasks[1]!["version"]!.GetValue<int>().ShouldBe(1);
+        tasks[1]!["bodyChars"]!.GetValue<int>().ShouldBe("# Task two\n\n<goal>Wire it.</goal>".Length);
+        tasks[0]!["brief"]!.GetValue<string>().ShouldBe("Model the domain");
+        text.ShouldNotContain("Wire it.");
+        text.ShouldNotContain("\"log\"");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertTasks_ApiSurfacesPerItemIndexInDetail()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts/tasks",
+            400,
+            """{"title":"ChangeNoteRequired","detail":"tasks[1]: A logNote is required to modify a frozen artifact.","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject { ["body"] = "first" },
+                new JsonObject { ["body"] = "second" }
+            }
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("tasks[1]");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningUpsertTasks_BlankBodyAtItemOne_RejectedWithIndexWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject { ["body"] = "# Task one" },
+                new JsonObject { ["body"] = "   " }
+            }
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("tasks[1]");
+        text.ShouldContain("body is required");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("medium")]
+    [InlineData("")]
+    public async Task PlanningUpsertTasks_UnknownReviewAtItemZero_RejectedWithIndexWithoutHttpCall(string review)
+    {
+        var arguments = new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject { ["body"] = "# Task one", ["review"] = review },
+                new JsonObject { ["body"] = "# Task two" }
+            }
+        };
+
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", arguments);
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("tasks[0]");
+        text.ShouldContain("Invalid review level");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(1.5)]
+    [InlineData(1e30)]
+    public async Task PlanningUpsertTasks_NonIntegralOrderAtItemOne_RejectedWithIndexWithoutHttpCall(double order)
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject { ["body"] = "# Task one" },
+                new JsonObject { ["body"] = "# Task two", ["order"] = order }
+            }
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("tasks[1]");
+        text.ShouldContain("order must be an integer");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningUpsertTasks_EmptyOrMalformedArray_RejectedWithoutHttpCall()
+    {
+        var empty = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray()
+        });
+        ToolErrorText(empty).ShouldContain("at least one item");
+
+        var notItems = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray("just a string")
+        });
+        ToolErrorText(notItems).ShouldContain("tasks[0]");
+        ToolErrorText(notItems).ShouldContain("each item must be an object");
+
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task PlanningSetStatus_PostsStatusAndLogNote()
     {
         var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
@@ -465,6 +657,171 @@ public class PlanningToolContractTests : McpSessionTestBase
         var text = ToolErrorText(response);
         text.ShouldContain("Feature 'demo-feature' was not found");
         Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningSetCurrent_BlockedFeature_RefusedWithStopDiagnosticsNamingBlockers()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current",
+            409,
+            Canned.PlanningSetCurrentBlockedJson);
+
+        var response = await Driver.CallToolAsync("planning_set_current", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["isCurrent"] = true
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldStartWith("STOP:");
+        text.ShouldContain("is blocked by unclosed features");
+        text.ShouldContain("gate-locked (ready)");
+        text.ShouldContain("Pinning is refused");
+        text.ShouldNotContain("overmind API returned");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningCurrentTask_BlockedFeature_StopStateLeadsWithReasonNamingUnclosedBlockers()
+    {
+        var response = await Driver.CallToolAsync("planning_current_task", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningBlockedSlug
+        });
+
+        FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningBlockedSlug}/current");
+
+        var payload = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        var first = payload.First();
+        first.Key.ShouldBe("reason");
+        var reason = first.Value!.GetValue<string>();
+        reason.ShouldStartWith("STOP:");
+        reason.ShouldContain("is blocked by unclosed features");
+        reason.ShouldContain("gate-locked (ready)");
+        reason.ShouldContain("draft-one (draft)");
+        reason.ShouldContain("Reads stay open");
+        payload["state"]!.GetValue<string>().ShouldBe("stop");
+        payload["artifact"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningListFeatureDependencies_ProxiesAgentDependenciesRoute()
+    {
+        var response = await Driver.CallToolAsync("planning_list_feature_dependencies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        var request = FindRequest(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/dependencies");
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/dependencies");
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("\"slug\":\"demo-feature\"");
+        text.ShouldContain("\"slug\":\"gate-locked\"");
+        text.ShouldContain("\"closed\":false");
+        text.ShouldContain("\"blocks\"");
+    }
+
+    [Fact]
+    public async Task PlanningAddFeatureDependency_PostsBlockedBySlug()
+    {
+        var response = await Driver.CallToolAsync("planning_add_feature_dependency", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["blockedBySlug"] = "gate-locked"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/dependencies", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/dependencies");
+        var body = JsonNode.Parse(request.Body)!;
+        body["blockedBy"]!.GetValue<string>().ShouldBe("gate-locked");
+        body.AsObject().Count.ShouldBe(1);
+
+        Canned.ToolResultText(response).ShouldContain("\"slug\":\"gate-locked\"");
+    }
+
+    [Fact]
+    public async Task PlanningAddFeatureDependency_CycleSurfacesAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/dependencies",
+            409,
+            """{"title":"DependencyCycle","detail":"Adding 'gate-locked' as a blocker of 'demo-feature' would create a dependency cycle: demo-feature -> gate-locked -> demo-feature.","status":409}""");
+
+        var response = await Driver.CallToolAsync("planning_add_feature_dependency", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["blockedBySlug"] = "gate-locked"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("dependency cycle");
+        text.ShouldContain("demo-feature -> gate-locked -> demo-feature");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("")]
+    public async Task PlanningAddFeatureDependency_BlankBlocker_RejectedWithoutHttpCall(string blockedBy)
+    {
+        var response = await Driver.CallToolAsync("planning_add_feature_dependency", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["blockedBySlug"] = blockedBy
+        });
+
+        ToolErrorText(response).ShouldContain("blockedBySlug is required");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/dependencies", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningRemoveFeatureDependency_SendsDeleteWithTheBlockerInThePath()
+    {
+        var response = await Driver.CallToolAsync("planning_remove_feature_dependency", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["blockedBySlug"] = "gate-locked"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "DELETE");
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/dependencies/gate-locked");
+        request.Body.ShouldBeEmpty();
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("\"slug\":\"demo-feature\"");
+        text.ShouldNotContain("\"slug\":\"gate-locked\"");
+    }
+
+    [Fact]
+    public async Task PlanningRemoveFeatureDependency_BlankBlocker_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_remove_feature_dependency", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["blockedBySlug"] = " "
+        });
+
+        ToolErrorText(response).ShouldContain("blockedBySlug is required");
+        Stub.Requests.ShouldNotContain(r => r.Method == "DELETE");
     }
 
     [Fact]
@@ -885,6 +1242,73 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("BACKLOG/foreign/feature.md");
         text.ShouldContain("re-run materialize with force");
         Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningImportFeature_PostsThePathToTheImportRouteAndEchoesTheReport()
+    {
+        var folder = "/repo/BACKLOG/058-demo";
+
+        var response = await Driver.CallToolAsync("planning_import_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["path"] = folder
+        });
+
+        var request = FindRequest("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/import");
+        request.Path.ShouldBe($"/api/agent/projects/{Canned.ProjectId}/planning/import");
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body.Count.ShouldBe(1);
+        body["path"]!.GetValue<string>().ShouldBe(folder);
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["slug"]!.GetValue<string>().ShouldBe("058-demo");
+        echo["status"]!.GetValue<string>().ShouldBe("inProgress");
+        echo["created"]!.GetValue<bool>().ShouldBeTrue();
+        echo["artifactsCreated"]!.GetValue<int>().ShouldBe(2);
+        echo["artifactsUpdated"]!.GetValue<int>().ShouldBe(0);
+        echo["trackedFiles"]!.GetValue<int>().ShouldBe(3);
+        echo["materialization"]!.GetValue<string>().ShouldBe("on");
+        echo["notes"]!.AsArray().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task PlanningImportFeature_PathOutsideRoot_SurfacesTheRejectedDetailAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/import",
+            400,
+            Canned.PlanningImportOutsideRootJson);
+
+        var response = await Driver.CallToolAsync("planning_import_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["path"] = "/elsewhere/BACKLOG/058-demo"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Importing '/elsewhere/BACKLOG/058-demo' failed");
+        text.ShouldContain("resolves outside the project directory '/repo'");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task PlanningImportFeature_BlankPath_RejectedWithoutHttpCall(string? path)
+    {
+        var response = await Driver.CallToolAsync("planning_import_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["path"] = path
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("path is required");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/planning/import", StringComparison.Ordinal));
     }
 
     [Fact]

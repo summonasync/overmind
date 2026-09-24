@@ -20,6 +20,9 @@ public sealed class BacklogImporter
         "priority"
     };
 
+    private static readonly HashSet<string> FeatureStructuralKeys =
+        new(StructuralKeys, StringComparer.OrdinalIgnoreCase) { FrontmatterKeyRegistry.DependenciesKey };
+
     private readonly PlanningFeatureService _features;
     private readonly FrontmatterKeyRegistry _keys;
     private readonly Dictionary<string, FrontmatterKeyRegistration> _keyCache = new(StringComparer.Ordinal);
@@ -59,6 +62,83 @@ public sealed class BacklogImporter
             : null;
     }
 
+    public async Task<BacklogFeatureImportReport> ImportFeatureAsync(
+        Guid projectId, string projectRoot, string featurePath, CancellationToken ct = default)
+    {
+        var folder = ResolveFeatureFolder(projectRoot, featurePath);
+        var folderName = Path.GetFileName(
+            folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var repoRoot = Path.GetFullPath(projectRoot);
+        var relative = Rel(repoRoot, folder);
+        var notes = new BacklogImportNotes();
+
+        BacklogFeatureImport? import;
+        try
+        {
+            import = await ParseFeatureFolderAsync(folder, folderName, repoRoot, notes, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw PlanningException.ImportFailed(relative, ex);
+        }
+
+        if (import is null)
+        {
+            throw PlanningException.ImportFailed(relative, new IOException("feature.md could not be read"));
+        }
+
+        var outcome = await _features.ImportAsync(projectId, import, ct);
+
+        var lines = new List<string>();
+        lines.AddRange(notes.Skipped);
+        lines.AddRange(notes.NewKeys.Select(key => $"new key: {key.Name} ({key.Color})"));
+        lines.AddRange(notes.Preserved);
+        lines.AddRange(notes.CreatedFallbacks);
+        lines.AddRange(outcome.Kept);
+
+        return new BacklogFeatureImportReport(
+            import.Slug,
+            import.Title,
+            import.Status,
+            outcome.Created,
+            outcome.ArtifactsCreated,
+            outcome.ArtifactsUpdated,
+            lines,
+            outcome.TrackedFiles,
+            outcome.Materialization,
+            ResolveNextStep(outcome.Materialization, outcome.TrackedFiles));
+    }
+
+    private static string ResolveFeatureFolder(string projectRoot, string featurePath)
+    {
+        if (string.IsNullOrWhiteSpace(featurePath))
+        {
+            throw PlanningException.ImportFailed(featurePath ?? string.Empty, new ArgumentException("path is required"));
+        }
+
+        try
+        {
+            var folder = PathGuard.ResolveAbsoluteUnderRoot(projectRoot, featurePath);
+            if (!Directory.Exists(folder))
+            {
+                throw new DirectoryNotFoundException($"'{featurePath}' is not a directory");
+            }
+
+            if (!File.Exists(Path.Combine(folder, "feature.md")))
+            {
+                throw new FileNotFoundException(
+                    $"'{featurePath}' holds no feature.md — give the feature folder, e.g. <project root>/BACKLOG/058-agent-side-import");
+            }
+
+            return folder;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException
+            or IOException or MaterializationException)
+        {
+            throw PlanningException.ImportFailed(featurePath, ex);
+        }
+    }
+
     public async Task<BacklogImportReport> ImportAsync(BacklogImportRequest request, CancellationToken ct = default)
     {
         var backlogDir = ResolveBacklogDirectory(request.BacklogPath)
@@ -74,7 +154,8 @@ public sealed class BacklogImporter
         var trackedFiles = 0;
         PlanningMaterialization? strategy = null;
 
-        foreach (var folder in Directory.EnumerateDirectories(backlogDir).OrderBy(p => p, StringComparer.Ordinal))
+        foreach (var folder in await OrderFoldersByDependenciesAsync(
+                     Directory.EnumerateDirectories(backlogDir).OrderBy(p => p, StringComparer.Ordinal).ToArray(), ct))
         {
             var folderName = Path.GetFileName(folder);
             var relative = Rel(repoRoot, folder);
@@ -236,7 +317,7 @@ public sealed class BacklogImporter
         var (fields, featureBody) = BacklogMarkdown.Parse(featureRead.Content);
         var featureRelative = Rel(repoRoot, featurePath);
         var title = ResolveTitle(BacklogMarkdown.FirstHeading(featureBody), folderName);
-        await ExtractPreservedAsync(fields, featureRelative, notes, ct);
+        await ExtractPreservedAsync(fields, featureRelative, notes, ct, FeatureStructuralKeys);
 
         return new BacklogFeatureImport(
             folderName,
@@ -246,6 +327,7 @@ public sealed class BacklogImporter
             MapFeaturePriority(Token(fields, "priority"), featureRelative, notes.Skipped),
             int.TryParse(Token(fields, "version"), out var version) && version > 0 ? version : 1,
             ResolveCreatedAt(fields, featurePath, featureRelative, notes),
+            ParseBlockedBy(Raw(fields, FrontmatterKeyRegistry.DependenciesKey)),
             artifacts,
             sourcePaths);
     }
@@ -288,7 +370,7 @@ public sealed class BacklogImporter
         var frozenAt = status == PlanningArtifactStatus.Validated
             ? BacklogMarkdown.ParseDate(Raw(fields, "validated")) ?? BacklogMarkdown.ParseDate(Raw(fields, "created"))
             : null;
-        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct);
+        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct, StructuralKeys);
 
         return new BacklogArtifactImport(
             kind,
@@ -321,7 +403,7 @@ public sealed class BacklogImporter
             return null;
         }
 
-        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct);
+        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct, StructuralKeys);
 
         return new BacklogArtifactImport(
             PlanningArtifactKind.Task,
@@ -359,12 +441,13 @@ public sealed class BacklogImporter
     }
 
     private async Task<IReadOnlyDictionary<string, string>?> ExtractPreservedAsync(
-        IReadOnlyDictionary<string, string> fields, string relative, BacklogImportNotes notes, CancellationToken ct)
+        IReadOnlyDictionary<string, string> fields, string relative, BacklogImportNotes notes,
+        CancellationToken ct, IReadOnlySet<string> structuralKeys)
     {
         Dictionary<string, string>? preserved = null;
         foreach (var (key, value) in fields)
         {
-            if (StructuralKeys.Contains(key))
+            if (structuralKeys.Contains(key))
             {
                 continue;
             }
@@ -498,6 +581,81 @@ public sealed class BacklogImporter
                 skipped.Add($"unknown review level '{raw}' in {relative}, defaulted to light");
                 return PlanningReviewLevel.Light;
         }
+    }
+
+    private static async Task<List<string>> OrderFoldersByDependenciesAsync(string[] folders, CancellationToken ct)
+    {
+        var blockersByFolder = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var folder in folders)
+        {
+            if (await ReadDependenciesAsync(Path.Combine(folder, "feature.md"), ct) is { } blockers)
+            {
+                blockersByFolder[Path.GetFileName(folder)] = blockers;
+            }
+        }
+
+        // Blockers import before dependents; unknown blockers (already on the board or missing)
+        // constrain nothing, and a cycle falls back to folder order for what is left.
+        var ordered = new List<string>(folders.Length);
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        var remaining = folders.ToList();
+        while (remaining.Count > 0)
+        {
+            var index = remaining.FindIndex(folder =>
+                blockersByFolder.TryGetValue(Path.GetFileName(folder), out var blockers)
+                    ? blockers.All(b => !blockersByFolder.ContainsKey(b) || placed.Contains(b))
+                    : true);
+            if (index < 0)
+            {
+                index = 0;
+            }
+
+            var folder = remaining[index];
+            remaining.RemoveAt(index);
+            ordered.Add(folder);
+            placed.Add(Path.GetFileName(folder));
+        }
+
+        return ordered;
+    }
+
+    private static async Task<IReadOnlyList<string>?> ReadDependenciesAsync(string featurePath, CancellationToken ct)
+    {
+        byte[] bytes;
+        try
+        {
+            if (!File.Exists(featurePath))
+            {
+                return null;
+            }
+
+            bytes = await File.ReadAllBytesAsync(featurePath, ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        using var reader = new StreamReader(
+            new MemoryStream(bytes), ContentHash.Utf8NoBom, detectEncodingFromByteOrderMarks: true);
+        var (fields, _) = BacklogMarkdown.Parse(await reader.ReadToEndAsync(ct));
+        return ParseBlockedBy(Raw(fields, FrontmatterKeyRegistry.DependenciesKey));
+    }
+
+    private static IReadOnlyList<string> ParseBlockedBy(string? raw)
+    {
+        if (raw is null)
+        {
+            return [];
+        }
+
+        var comment = raw.IndexOf(" #", StringComparison.Ordinal);
+        if (comment >= 0)
+        {
+            raw = raw[..comment];
+        }
+
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private static string? Token(IReadOnlyDictionary<string, string> fields, string key)

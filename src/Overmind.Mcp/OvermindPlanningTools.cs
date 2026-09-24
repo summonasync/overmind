@@ -96,7 +96,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_current_task", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 2: the current task of a feature, or a stop/empty state whose reason is the first thing in the payload. Obey a STOP line — ask the user, do not work around it.")]
+    [Description("Planning ceremony, step 2: the current task of a feature, or a stop/empty state whose reason is the first thing in the payload. Obey a STOP line — ask the user, do not work around it. A feature with unclosed blockers returns a stop state naming them — reads stay open, task issuance does not.")]
     public async Task<JsonElement> CurrentTask(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to take the current task from.")] string slug,
@@ -170,6 +170,133 @@ public sealed class OvermindPlanningTools
         return CompactArtifact(artifact);
     }
 
+    [McpServerTool(Name = "planning_upsert_tasks", Destructive = false, Idempotent = false)]
+    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization sync and one feature auto-transition evaluation run after the batch, never per item — creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order (omitted → assigned after the current max), review light/hard, brief (task-only, one line, max 500 chars), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. An item whose order hits an existing task updates that task in place.")]
+    public async Task<JsonElement> UpsertTasks(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to create or update tasks in.")] string featureSlug,
+        [Description("Array of task items, each an object: body (required), order, review, logNote, brief.")] JsonElement tasks,
+        CancellationToken ct = default)
+    {
+        var payload = new JsonObject
+        {
+            ["tasks"] = BuildTaskItems(tasks)
+        };
+
+        var batch = await Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts/tasks",
+            payload,
+            ct));
+        return CompactTaskBatch(batch);
+    }
+
+    private static JsonArray BuildTaskItems(JsonElement tasks)
+    {
+        if (tasks.ValueKind != JsonValueKind.Array)
+        {
+            throw new McpException("tasks must be an array of task items.");
+        }
+
+        if (tasks.GetArrayLength() == 0)
+        {
+            throw new McpException("tasks must carry at least one item.");
+        }
+
+        var items = new JsonArray();
+        var index = 0;
+
+        foreach (var item in tasks.EnumerateArray())
+        {
+            try
+            {
+                items.Add(BuildTaskItem(item));
+            }
+            catch (McpException ex)
+            {
+                throw new McpException($"tasks[{index}]: {ex.Message}");
+            }
+
+            index++;
+        }
+
+        return items;
+    }
+
+    private static JsonObject BuildTaskItem(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            throw new McpException("each item must be an object with body, order, review, logNote, brief.");
+        }
+
+        if (!item.TryGetProperty("body", out var body) ||
+            body.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(body.GetString()))
+        {
+            throw new McpException("body is required and must be a non-blank string.");
+        }
+
+        var payload = new JsonObject { ["body"] = body.GetString() };
+
+        if (item.TryGetProperty("order", out var order) && order.ValueKind is JsonValueKind.Number)
+        {
+            if (!order.TryGetInt32(out var orderValue))
+            {
+                throw new McpException("order must be an integer.");
+            }
+
+            payload["order"] = orderValue;
+        }
+
+        if (item.TryGetProperty("review", out var review) && review.ValueKind == JsonValueKind.String)
+        {
+            payload["review"] = NormalizeReview(review.GetString()!);
+        }
+
+        if (item.TryGetProperty("logNote", out var logNote) && logNote.ValueKind == JsonValueKind.String)
+        {
+            payload["logNote"] = logNote.GetString();
+        }
+
+        if (item.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)
+        {
+            payload["brief"] = brief.GetString();
+        }
+
+        return payload;
+    }
+
+    private static JsonElement CompactTaskBatch(JsonElement batch)
+    {
+        var tasks = new JsonArray();
+        foreach (var artifact in batch.GetProperty("artifacts").EnumerateArray())
+        {
+            var compact = new JsonObject
+            {
+                ["id"] = artifact.GetProperty("id").GetString(),
+                ["order"] = artifact.GetProperty("order").GetInt32(),
+                ["status"] = artifact.GetProperty("status").GetString(),
+                ["version"] = artifact.GetProperty("version").GetInt32(),
+                ["bodyChars"] = artifact.GetProperty("body").GetString()?.Length ?? 0
+            };
+
+            if (artifact.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)
+            {
+                compact["brief"] = brief.GetString();
+            }
+
+            tasks.Add(compact);
+        }
+
+        var result = new JsonObject
+        {
+            ["created"] = batch.GetProperty("created").GetInt32(),
+            ["updated"] = batch.GetProperty("updated").GetInt32(),
+            ["tasks"] = tasks
+        };
+        return result.Deserialize<JsonElement>();
+    }
+
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected. Each move appends one line to the artifact's <log> section, shaped '- YYYY-MM-DD [agent] — <logNote>'. Transitions are free-form: any allowed status of the kind can be reached from any current status — there is no enforced sequence. A task closed done with unticked acceptance-criteria items still moves, and the response carries a non-blocking warning counting them.")]
     public async Task<JsonElement> SetStatus(
@@ -200,17 +327,38 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_set_current", Destructive = false, Idempotent = true)]
-    [Description("Pins a feature as the current one on the planning board, or unpins it. Pinning one feature unpins any other — at most one feature is current per project.")]
-    public async Task<string> SetCurrent(
+    [Description("Pins a feature as the current one on the planning board, or unpins it. Pinning one feature unpins any other — at most one feature is current per project. Pinning a feature with unclosed blockers is refused with a STOP error naming them; the human door in the Overmind UI is never blocked.")]
+    public async Task<CallToolResult> SetCurrent(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to pin or unpin, as shown on the board.")] string slug,
         [Description("True to pin the feature as current; false to unpin it.")] bool isCurrent,
         CancellationToken ct = default)
     {
-        await Guarded(() => _api.SetPlanningFeatureCurrent(projectId, slug, isCurrent, ct));
-        return isCurrent
-            ? $"Feature '{slug}' pinned as current."
-            : $"Feature '{slug}' unpinned.";
+        try
+        {
+            await Guarded(() => _api.SetPlanningFeatureCurrent(projectId, slug, isCurrent, ct));
+        }
+        catch (McpException ex) when (ex.Message.StartsWith("STOP:", StringComparison.Ordinal))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content = [new TextContentBlock { Text = ex.Message }]
+            };
+        }
+
+        return new CallToolResult
+        {
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = isCurrent
+                        ? $"Feature '{slug}' pinned as current."
+                        : $"Feature '{slug}' unpinned."
+                }
+            ]
+        };
     }
 
     [McpServerTool(Name = "planning_set_feature_status", Destructive = false, Idempotent = false)]
@@ -233,6 +381,53 @@ public sealed class OvermindPlanningTools
             new { status = normalized, logNote },
             ct));
         return $"Feature status moved to '{normalized}'.";
+    }
+
+    [McpServerTool(Name = "planning_list_feature_dependencies", ReadOnly = true, Idempotent = true)]
+    [Description("Lists the dependency graph of a feature: blockedBy (features this one waits for) and blocks (features waiting on this one), each entry carrying slug, status and closed — a dependency closes when its blocker reaches done or review. An unclosed blockedBy stops planning_current_task and planning_set_current.")]
+    public Task<JsonElement> ListFeatureDependencies(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature, as shown on the board.")] string slug,
+        CancellationToken ct = default) =>
+        Guarded(() => _api.GetAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/dependencies", ct));
+
+    [McpServerTool(Name = "planning_add_feature_dependency", Destructive = false, Idempotent = false)]
+    [Description("Adds a blocker to a feature: the feature stops issuing tasks through planning_current_task until the blocker closes (done or review). Rejects self-reference and any edge that completes a dependency cycle, naming the chain. Same-project only.")]
+    public Task<JsonElement> AddFeatureDependency(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature that gains the blocker.")] string slug,
+        [Description("Slug of the blocking feature, as shown on the board.")] string blockedBySlug,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(blockedBySlug))
+        {
+            throw new McpException("blockedBySlug is required: the feature slug of the blocker, as shown on the board.");
+        }
+
+        return Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/dependencies",
+            new { blockedBy = blockedBySlug.Trim() },
+            ct));
+    }
+
+    [McpServerTool(Name = "planning_remove_feature_dependency", Destructive = false, Idempotent = false)]
+    [Description("Removes one blocker from a feature; removing a link that is not there is a no-op. Lifting the last unclosed blocker unblocks the feature for planning_current_task and planning_set_current.")]
+    public Task<JsonElement> RemoveFeatureDependency(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature whose blocker is removed.")] string slug,
+        [Description("Slug of the blocker to remove.")] string blockedBySlug,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(blockedBySlug))
+        {
+            throw new McpException("blockedBySlug is required: the feature slug of the blocker to remove.");
+        }
+
+        return Guarded(() => _api.DeleteAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/dependencies" +
+            $"/{Uri.EscapeDataString(blockedBySlug.Trim())}",
+            ct));
     }
 
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
@@ -303,6 +498,24 @@ public sealed class OvermindPlanningTools
             ? "Artifact validated as migrated — provenance line added to the log."
             : "Artifact validated.";
         return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+    }
+
+    [McpServerTool(Name = "planning_import_feature", Destructive = false, Idempotent = false)]
+    [Description("Imports one materialized feature folder from disk in a single call — bodies never pass through the model. Give the absolute path of the folder that holds feature.md, under the project root (e.g. /repo/BACKLOG/058-agent-side-import); spec.md, plan.md, result.md and tasks/NN-*.md are picked up by convention, statuses are restored verbatim with [import] markers in the logs, and existing artifacts are re-imported as new versions. Relative paths and paths outside the project root are rejected. The response reports created vs updated per feature and artifact plus per-file notes.")]
+    public Task<JsonElement> ImportFeature(
+        [Description("Id of the project to import the feature into.")] Guid projectId,
+        [Description("Absolute path of the feature folder under the project root — the directory containing feature.md.")] string path,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new McpException("path is required: the feature folder to import, e.g. /repo/BACKLOG/058-agent-side-import.");
+        }
+
+        return Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/import",
+            new { path = path.Trim() },
+            ct));
     }
 
     [McpServerTool(Name = "planning_materialize", Destructive = false, Idempotent = false)]

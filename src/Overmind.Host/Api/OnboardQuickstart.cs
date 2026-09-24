@@ -21,6 +21,7 @@ public static class OnboardQuickstart
         A done feature receiving a new artifact stays done — no transition fires.
         Without a plan there is no auto-promotion to review, even when all tasks are done — spec AND plan are required.
         Import restores statuses verbatim from the materialized files — an imported done feature was not auto-closed.
+        planning_import_feature imports one materialized feature folder from disk in a single call — give its absolute path under the project root.
         Log lines carry [agent]/[ui]/[auto]/[import] markers saying who moved a status.
         Artifact statuses — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the documents' terminal; result has no done.
         Before working, read notes/decisions/guards via overmind://resources and list_entries filters.

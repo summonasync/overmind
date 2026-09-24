@@ -37,7 +37,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheTwentyTwoTools()
+    public async Task ToolsList_ExposesExactlyTheTwentySevenTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -48,11 +48,16 @@ public class HandshakeContractTests : McpSessionTestBase
 
         names.ShouldBe([
             "list_entries", "list_projects", "overmind_notify", "overmind_onboard",
-            "overmind_replies", "planning_append_log",
-            "planning_create_feature", "planning_current_task", "planning_list_features",
-            "planning_materialize", "planning_patch_artifact", "planning_read_artifact",
-            "planning_read_feature", "planning_set_current", "planning_set_feature_status",
-            "planning_set_status", "planning_upsert_artifact", "planning_validate",
+            "overmind_replies", "planning_add_feature_dependency",
+            "planning_append_log",
+            "planning_create_feature", "planning_current_task", "planning_import_feature",
+            "planning_list_feature_dependencies", "planning_list_features",
+            "planning_materialize", "planning_patch_artifact",
+            "planning_read_artifact", "planning_read_feature",
+            "planning_remove_feature_dependency",
+            "planning_set_current",
+            "planning_set_feature_status", "planning_set_status", "planning_upsert_artifact",
+            "planning_upsert_tasks", "planning_validate",
             "read_entry", "search", "update_entry", "write_entry"
         ]);
     }

@@ -10,5 +10,6 @@ public sealed record BacklogFeatureImport(
     FeaturePriority Priority,
     int Version,
     DateTime CreatedAt,
+    IReadOnlyList<string> BlockedBy,
     IReadOnlyList<BacklogArtifactImport> Artifacts,
     IReadOnlyList<BacklogImportSourceFile> SourcePaths);
