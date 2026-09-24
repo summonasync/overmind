@@ -74,6 +74,15 @@ public static class Canned
     public const string SearchJson =
         """{"query":"hello","hits":[{"entryId":"33333333-3333-3333-3333-333333333333","title":"Entry One","type":"note","snippet":"hello world snippet","rank":0.95}]}""";
 
+    public const string SearchUnionJson =
+        """
+        {"query":"marmot","hits":[
+          {"source":"entry","entryId":"33333333-3333-3333-3333-333333333333","title":"Entry One","type":"note","snippet":"entry body marmot mention","rank":-1.2},
+          {"source":"feature","featureSlug":"demo-feature","title":"Demo feature","snippet":"feature body marmot mention","rank":-0.9},
+          {"source":"artifact","artifactId":"88888888-8888-8888-8888-888888888888","featureSlug":"demo-feature","kind":"task","order":7,"label":"039 task","snippet":"task body marmot mention","rank":-0.7}
+        ]}
+        """;
+
     public const string NotFoundJson =
         """{"title":"Not Found","detail":"Entry '44444444-4444-4444-4444-444444444444' was not found.","status":404}""";
 

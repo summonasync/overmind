@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
+using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Search;
 using Overmind.Infrastructure.VectorSearch;
@@ -47,10 +48,11 @@ public static class SearchApi
         var effectiveLimit = Math.Clamp(limit ?? 20, 1, 100);
         var effectiveMode = mode ?? "fulltext";
 
-        IReadOnlyList<EntrySearchHit> hits;
+        IReadOnlyList<SearchHitResponse> responses;
         if (effectiveMode == "fulltext")
         {
-            hits = await ftsSearch.SearchAsync(projectId, q, effectiveLimit, ct);
+            var hits = await ftsSearch.SearchUnionAsync(projectId, q, effectiveLimit, ct);
+            responses = hits.Select(SearchHitMapping.ToResponse).ToArray();
         }
         else if (effectiveMode == "semantic")
         {
@@ -61,7 +63,10 @@ public static class SearchApi
 
             try
             {
-                hits = await semanticSearch.SearchAsync(projectId, q, effectiveLimit, ct);
+                var hits = await semanticSearch.SearchAsync(projectId, q, effectiveLimit, ct);
+                responses = hits
+                    .Select(h => new EntryHitResponse(h.EntryId, h.Title, h.Type, h.Snippet, h.Rank))
+                    .ToArray();
             }
             catch (EmbeddingFailedException ex)
             {
@@ -87,10 +92,6 @@ public static class SearchApi
                 ["mode"] = ["Mode must be 'fulltext' or 'semantic'."]
             });
         }
-
-        var responses = hits
-            .Select(h => new SearchHitResponse(h.EntryId, h.Title, h.Type, h.Snippet, h.Rank))
-            .ToArray();
 
         return Results.Ok(new SearchResponse(q, responses));
     }

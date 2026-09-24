@@ -237,6 +237,7 @@ public class ToolContractTests : McpSessionTestBase
         hits.Count.ShouldBe(1);
 
         var hit = hits[0]!.AsObject();
+        hit["source"]!.GetValue<string>().ShouldBe("entry");
         hit["id"]!.GetValue<string>().ShouldBe(Canned.EntryId.ToString());
         hit["title"]!.GetValue<string>().ShouldBe("Entry One");
         hit["type"]!.GetValue<string>().ShouldBe("note");
@@ -301,7 +302,49 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_Search_DescriptionPinsSnippetProjection()
+    public async Task Search_MixedSources_ProjectsPerSourceFieldsWithoutBodies()
+    {
+        Stub.RouteGet("/api/search", Canned.SearchUnionJson);
+
+        var response = await Driver.CallToolAsync("search", new JsonObject
+        {
+            ["query"] = "marmot"
+        });
+
+        var hits = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray();
+        hits.Count.ShouldBe(3);
+
+        var entry = hits[0]!.AsObject();
+        entry["source"]!.GetValue<string>().ShouldBe("entry");
+        entry["id"]!.GetValue<string>().ShouldBe(Canned.EntryId.ToString());
+        entry["title"]!.GetValue<string>().ShouldBe("Entry One");
+        entry["type"]!.GetValue<string>().ShouldBe("note");
+        entry["snippet"]!.GetValue<string>().ShouldContain("marmot");
+        entry.ShouldNotContainKey("rank");
+        entry.ShouldNotContainKey("featureSlug");
+
+        var feature = hits[1]!.AsObject();
+        feature["source"]!.GetValue<string>().ShouldBe("feature");
+        feature["featureSlug"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
+        feature["title"]!.GetValue<string>().ShouldBe("Demo feature");
+        feature["snippet"]!.GetValue<string>().ShouldContain("marmot");
+        feature.ShouldNotContainKey("id");
+        feature.ShouldNotContainKey("rank");
+
+        var artifact = hits[2]!.AsObject();
+        artifact["source"]!.GetValue<string>().ShouldBe("artifact");
+        artifact["artifactId"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskOneId.ToString());
+        artifact["featureSlug"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
+        artifact["kind"]!.GetValue<string>().ShouldBe("task");
+        artifact["order"]!.GetValue<int>().ShouldBe(7);
+        artifact["label"]!.GetValue<string>().ShouldBe("039 task");
+        artifact["snippet"]!.GetValue<string>().ShouldContain("marmot");
+        artifact.ShouldNotContainKey("title");
+        artifact.ShouldNotContainKey("rank");
+    }
+
+    [Fact]
+    public async Task ToolsList_Search_DescriptionPinsSourceAndSnippetProjection()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -309,9 +352,10 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["search"]!["description"]!.GetValue<string>().ShouldBe(
-            "Searches entries by fulltext or semantic mode. Semantic mode fails with 'vector search unavailable' when the vector store is down. " +
-            "Each hit returns only id, title, type and a snippet — a short window of lines around the first query-term match; " +
-            "full bodies are not returned, read a full entry with read_entry.");
+            "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
+            "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
+            "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
+            "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.");
     }
 
     [Fact]

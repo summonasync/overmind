@@ -29,9 +29,10 @@ public sealed class OvermindTools
         "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
 
     private const string SearchDescription =
-        "Searches entries by fulltext or semantic mode. Semantic mode fails with 'vector search unavailable' when the vector store is down. " +
-        "Each hit returns only id, title, type and a snippet — a short window of lines around the first query-term match; " +
-        "full bodies are not returned, read a full entry with read_entry.";
+        "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
+        "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
+        "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
+        "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.";
 
     private readonly OvermindApiClient _api;
 
@@ -202,15 +203,49 @@ public sealed class OvermindTools
 
     private static JsonObject SearchHit(JsonElement hit, string query)
     {
-        var snippet = hit.TryGetProperty("snippet", out var raw) ? raw.GetString() : null;
-        return new JsonObject
+        var source = hit.TryGetProperty("source", out var rawSource) ? rawSource.GetString() : null;
+        var snippet = SearchSnippet.Window(
+            hit.TryGetProperty("snippet", out var raw) ? raw.GetString() ?? string.Empty : string.Empty,
+            query);
+
+        return source switch
         {
+            "feature" => FeatureHit(hit, snippet),
+            "artifact" => ArtifactHit(hit, snippet),
+            _ => EntryHit(hit, snippet)
+        };
+    }
+
+    private static JsonObject EntryHit(JsonElement hit, string snippet) =>
+        new()
+        {
+            ["source"] = "entry",
             ["id"] = hit.GetProperty("entryId").GetString(),
             ["title"] = hit.TryGetProperty("title", out var title) ? title.GetString() : null,
             ["type"] = hit.GetProperty("type").GetString(),
-            ["snippet"] = SearchSnippet.Window(snippet ?? string.Empty, query)
+            ["snippet"] = snippet
         };
-    }
+
+    private static JsonObject FeatureHit(JsonElement hit, string snippet) =>
+        new()
+        {
+            ["source"] = "feature",
+            ["featureSlug"] = hit.GetProperty("featureSlug").GetString(),
+            ["title"] = hit.TryGetProperty("title", out var title) ? title.GetString() : null,
+            ["snippet"] = snippet
+        };
+
+    private static JsonObject ArtifactHit(JsonElement hit, string snippet) =>
+        new()
+        {
+            ["source"] = "artifact",
+            ["artifactId"] = hit.GetProperty("artifactId").GetString(),
+            ["featureSlug"] = hit.GetProperty("featureSlug").GetString(),
+            ["kind"] = hit.GetProperty("kind").GetString(),
+            ["order"] = hit.GetProperty("order").GetInt32(),
+            ["label"] = hit.GetProperty("label").GetString(),
+            ["snippet"] = snippet
+        };
 
     private static JsonObject EntryMetadata(JsonElement entry)
     {

@@ -1,7 +1,7 @@
 ---
 feature: 053
 slug: artifact-search-index
-status: inProgress
+status: done
 priority: p0
 version: 3
 created: 2026-09-22
@@ -37,4 +37,6 @@ Planning artifact bodies (spec/plan/task/result, the BACKLOG/ contracts) become 
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [auto] — all tasks done + spec + plan → review
+- 2026-09-24 [agent] — Closing per the board-clearing mandate: both tasks done (01 PASS zero findings, 02 PASS-WITH-NITS with the IMPORTANT fixed in-tree), the field acceptance pinned through the full HTTP path — a term inside a task body is found with snippet + featureSlug + artifactId. The grep-over-BACKLOG/ era ends; OM-6 closed at its root.
 </log>
