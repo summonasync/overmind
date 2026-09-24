@@ -2,7 +2,7 @@
 feature: 064
 slug: board-quick-search
 status: draft
-priority: p1
+priority: p0
 version: 1
 created: 2026-09-23
 ---

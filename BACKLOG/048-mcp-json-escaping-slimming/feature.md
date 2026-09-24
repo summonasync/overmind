@@ -1,9 +1,9 @@
 ---
 feature: 048
 slug: mcp-json-escaping-slimming
-status: inProgress
-priority: p2
-version: 1
+status: done
+priority: p0
+version: 2
 created: 2026-09-22
 ---
 
@@ -32,4 +32,5 @@ created: 2026-09-22
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing after the 0.3.0 deploy: the encoder fix is live on production (board listing 19891 bytes / 0 escapes / literal Cyrillic measured today), the last open AC is ticked with the measurement equivalence note. The 2026-09-23 field wave is now fully closed: 048, 054, 055, 056, 057, 059, 062 all done. Post-merge review NIT-1 (silent reflection null-lookup) parked as microbatch #48.
 </log>
