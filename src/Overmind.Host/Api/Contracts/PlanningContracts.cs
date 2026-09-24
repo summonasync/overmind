@@ -124,11 +124,14 @@ public sealed record MaterializePlanningRequest(bool Force);
 
 public sealed record PlanningMaterializedFileResponse(string RelativePath, string Sha256);
 
+public sealed record PlanningMaterializationSkipResponse(string RelativePath, string Reason);
+
 public sealed record PlanningMaterializationReportResponse(
     Guid ProjectId,
     PlanningMaterialization Strategy,
     PlanningMaterializedFileResponse[] Files,
-    string[] Warnings);
+    string[] Warnings,
+    PlanningMaterializationSkipResponse[] Skipped);
 
 public sealed record PlanningDriftResponse(
     Guid ProjectId,

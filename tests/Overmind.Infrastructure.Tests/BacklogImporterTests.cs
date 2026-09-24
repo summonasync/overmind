@@ -22,9 +22,9 @@ public sealed class BacklogImporterTests : IDisposable
     {
         _context = _db.CreateContext();
         _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], []));
+            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
-            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], []));
+            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
 
         var project = Project.Create($"import-{Guid.NewGuid():N}", _repo.Root, string.Empty);
         _context.Projects.Add(project);

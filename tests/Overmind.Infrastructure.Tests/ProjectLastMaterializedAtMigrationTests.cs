@@ -42,7 +42,7 @@ public sealed class ProjectLastMaterializedAtMigrationTests : IDisposable
             db.Projects.Add(project);
             db.SaveChanges();
 
-            project.MarkMaterialized();
+            project.MarkMaterialized([]);
             db.SaveChanges();
         }
 

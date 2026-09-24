@@ -25,10 +25,10 @@ public sealed class PlanningServiceTests : IDisposable
         _materializer = Substitute.For<IPlanningMaterializer>();
         _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
-                Guid.Empty, PlanningMaterialization.Off, [], []));
+                Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
-                Guid.Empty, PlanningMaterialization.Off, [], []));
+                Guid.Empty, PlanningMaterialization.Off, [], [], []));
 
         var project = Project.Create($"test-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
         _context.Projects.Add(project);

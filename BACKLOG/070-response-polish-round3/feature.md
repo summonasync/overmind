@@ -2,7 +2,7 @@
 feature: 070
 slug: response-polish-round3
 status: draft
-priority: p2
+priority: p1
 version: 1
 created: 2026-09-24
 ---

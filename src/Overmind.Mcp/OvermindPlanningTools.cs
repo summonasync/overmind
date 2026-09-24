@@ -54,6 +54,8 @@ public sealed class OvermindPlanningTools
     private const string MigratedNoteRequired =
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
 
+    private const int SkipHeadLimit = 5;
+
     private readonly OvermindApiClient _api;
 
     public OvermindPlanningTools(OvermindApiClient api)
@@ -303,6 +305,20 @@ public sealed class OvermindPlanningTools
         return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
     }
 
+    [McpServerTool(Name = "planning_materialize", Destructive = false, Idempotent = false)]
+    [Description("Triggers a materialization pass: rewrites the BACKLOG/ mirror from the board, writing every clean file and skipping guarded ones (untracked or locally-edited) with a reason — a rerun never silently overwrites disk content. A normal board mutation already triggers a pass automatically; call this after an import, a strategy switch, or when onboard reports skips or a stale lastRun. force overwrites guarded files with per-file warnings instead of skipping them; transcribe hand edits to the board before forcing.")]
+    public async Task<JsonElement> Materialize(
+        [Description("Id of the project to materialize.")] Guid projectId,
+        [Description("True to overwrite guarded files with per-file warnings instead of skipping them; transcribe hand edits to the board before forcing.")] bool force = false,
+        CancellationToken ct = default)
+    {
+        var report = await Guarded(() => _api.PostAsync(
+            $"/api/projects/{projectId}/planning/materialize",
+            new { force },
+            ct));
+        return CompactMaterialization(report, force);
+    }
+
     private static void CopyWarnings(JsonElement payload, JsonObject confirmation)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
@@ -401,6 +417,32 @@ public sealed class OvermindPlanningTools
             ["updatedAt"] = feature.GetProperty("updatedAt").GetString(),
             ["bodyChars"] = feature.GetProperty("body").GetString()?.Length ?? 0
         };
+        return compact.Deserialize<JsonElement>();
+    }
+
+    private static JsonElement CompactMaterialization(JsonElement report, bool force)
+    {
+        var skipped = report.GetProperty("skipped");
+        var compact = new JsonObject
+        {
+            ["projectId"] = report.GetProperty("projectId").GetString(),
+            ["strategy"] = report.GetProperty("strategy").GetString(),
+            ["written"] = report.GetProperty("files").GetArrayLength(),
+            ["skipped"] = skipped.GetArrayLength(),
+            ["force"] = force
+        };
+
+        if (skipped.GetArrayLength() > 0)
+        {
+            var head = new JsonArray();
+            foreach (var skip in skipped.EnumerateArray().Take(SkipHeadLimit))
+            {
+                head.Add($"{skip.GetProperty("relativePath").GetString()}: {skip.GetProperty("reason").GetString()}");
+            }
+
+            compact["skippedHead"] = head;
+        }
+
         return compact.Deserialize<JsonElement>();
     }
 

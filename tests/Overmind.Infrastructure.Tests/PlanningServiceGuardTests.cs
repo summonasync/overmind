@@ -80,7 +80,7 @@ public sealed class PlanningServiceGuardTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_RealFailureThroughGuard_PersistsErrorStateUntilNextSuccess()
+    public async Task Sync_AllSkippedThroughGuard_PersistsErrorStateUntilNextSuccess()
     {
         var projectId = await SeedProjectAsync();
         await SeedFeatureWithTaskAsync(projectId);
@@ -93,9 +93,19 @@ public sealed class PlanningServiceGuardTests : IDisposable
             firstStamp = (await ctx.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt!.Value;
         }
 
+        var featurePath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md");
         var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
-        var pristine = await File.ReadAllTextAsync(taskPath);
+        var indexPath = Path.Combine(_projectDir, "BACKLOG.md");
+        var pristine = new Dictionary<string, string>
+        {
+            [featurePath] = await File.ReadAllTextAsync(featurePath),
+            [taskPath] = await File.ReadAllTextAsync(taskPath),
+            [indexPath] = await File.ReadAllTextAsync(indexPath),
+        };
+        await File.AppendAllTextAsync(featurePath, "\nhand edit\n");
         await File.AppendAllTextAsync(taskPath, "\nhand edit\n");
+        await File.WriteAllTextAsync(indexPath, pristine[indexPath]
+            .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal));
 
         using (var ctx = _db.CreateContext())
         {
@@ -107,12 +117,15 @@ public sealed class PlanningServiceGuardTests : IDisposable
         {
             var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
             project.LastMaterializationError.ShouldNotBeNull();
-            project.LastMaterializationError!.ShouldContain("locally modified tracked files");
+            project.LastMaterializationError!.ShouldContain("nothing was written");
             project.LastMaterializationFailedAt.ShouldNotBeNull();
             project.LastMaterializedAt.ShouldBe(firstStamp);
         }
 
-        await File.WriteAllTextAsync(taskPath, pristine);
+        foreach (var (path, content) in pristine)
+        {
+            await File.WriteAllTextAsync(path, content);
+        }
 
         using (var ctx = _db.CreateContext())
         {
@@ -127,6 +140,37 @@ public sealed class PlanningServiceGuardTests : IDisposable
             project.LastMaterializationFailedAt.ShouldBeNull();
             project.LastMaterializedAt!.Value.ShouldBeGreaterThan(firstStamp);
         }
+    }
+
+    [Fact]
+    public async Task Sync_PartialSkipThroughGuard_RecordsNoFailureAndStamps()
+    {
+        var projectId = await SeedProjectAsync();
+        await SeedFeatureWithTaskAsync(projectId);
+
+        DateTime firstStamp;
+        using (var ctx = _db.CreateContext())
+        {
+            await PlanningServiceGuard.SyncMaterializationAsync(
+                CreateMaterializer(ctx), NullLogger.Instance, projectId, CancellationToken.None);
+            firstStamp = (await ctx.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt!.Value;
+        }
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        await File.AppendAllTextAsync(taskPath, "\nhand edit\n");
+
+        using (var ctx = _db.CreateContext())
+        {
+            await PlanningServiceGuard.SyncMaterializationAsync(
+                CreateMaterializer(ctx), NullLogger.Instance, projectId, CancellationToken.None);
+        }
+
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializationError.ShouldBeNull();
+        project.LastMaterializationFailedAt.ShouldBeNull();
+        project.LastMaterializedAt!.Value.ShouldBeGreaterThan(firstStamp);
+        (await File.ReadAllTextAsync(taskPath)).ShouldContain("hand edit");
     }
 
     private async Task<Guid> SeedProjectAsync()

@@ -367,6 +367,12 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime?>("LastMaterializationFailedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("LastMaterializationSkipCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastMaterializationSkipHead")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastMaterializedAt")
                         .HasColumnType("TEXT");
 

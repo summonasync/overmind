@@ -63,7 +63,8 @@ public static class PlanningMaterializationApi
             report.ProjectId,
             report.Strategy,
             report.Files.Select(f => new PlanningMaterializedFileResponse(f.RelativePath, f.Sha256)).ToArray(),
-            report.Warnings.ToArray());
+            report.Warnings.ToArray(),
+            report.Skipped.Select(s => new PlanningMaterializationSkipResponse(s.RelativePath, s.Reason)).ToArray());
 
     private static IResult MaterializationError(MaterializationException ex)
     {
@@ -75,7 +76,8 @@ public static class PlanningMaterializationApi
                     statusCode: StatusCodes.Status400BadRequest,
                     title: "Invalid materialization target",
                     detail: ex.Message),
-            MaterializationFailureKind.OverwriteBlocked or MaterializationFailureKind.LocalEditsBlocked =>
+            MaterializationFailureKind.OverwriteBlocked or MaterializationFailureKind.LocalEditsBlocked
+                or MaterializationFailureKind.AllSkipped =>
                 HttpErrors.Conflict(ex.Message),
             _ => Results.Problem(
                 statusCode: StatusCodes.Status500InternalServerError,

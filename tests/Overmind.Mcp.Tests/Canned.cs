@@ -141,6 +141,26 @@ public static class Canned
     public const string PlanningFeatureNotFoundJson =
         """{"title":"Not Found","detail":"Feature 'demo-feature' was not found.","status":404}""";
 
+    public const string PlanningMaterializeReportJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG/demo-feature/spec.md","sha256":"bb"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":["Overwrote untracked file: /repo/BACKLOG/stray.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"file exists on disk but is not tracked by Overmind"},{"relativePath":"BACKLOG/demo-feature/tasks/01-build.md","reason":"tracked file has local edits that are not on the board"}]}
+        """;
+
+    public const string PlanningMaterializeCleanReportJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":[],"skipped":[]}
+        """;
+
+    public const string PlanningMaterializeAllSkippedJson =
+        """
+        {"title":"Materialization conflict","detail":"Every planned file was skipped; nothing was written:\n- BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind\nTranscribe the edits to the board (planning_upsert_artifact / planning_append_log) or re-run materialize with force.","status":409}
+        """;
+
+    public const string OnboardSkippedMaterializationJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastRun":"2026-09-24T09:00:00Z","error":null,"failedAt":null,"skippedCount":2,"skipped":["BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind","BACKLOG/demo-feature/tasks/01-build.md: tracked file has local edits that are not on the board"]},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
     public const string OnboardQuickstartText = "Onboarding quickstart from the host — verbatim payload text.";
 
     public const string NotificationJson =

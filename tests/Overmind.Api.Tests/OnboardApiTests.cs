@@ -341,23 +341,73 @@ public sealed class OnboardApiTests : IDisposable
 
             var featureDoc = Path.Combine(sandbox, "BACKLOG", "feat", "feature.md");
             var pristine = await File.ReadAllTextAsync(featureDoc);
+            var indexPath = Path.Combine(sandbox, "BACKLOG.md");
+            var pristineIndex = await File.ReadAllTextAsync(indexPath);
             await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+            await File.WriteAllTextAsync(indexPath, pristineIndex
+                .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal));
+
+            var squatter = Path.Combine(sandbox, "BACKLOG", "second", "feature.md");
+            Directory.CreateDirectory(Path.GetDirectoryName(squatter)!);
+            await File.WriteAllTextAsync(squatter, "foreign squatter");
 
             await CreateFeatureAsync(project.Id, "second", "Second");
 
             var failed = await OnboardAsync(new { Cwd = sandbox });
             failed.Materialization.Error.ShouldNotBeNull();
-            failed.Materialization.Error.ShouldContain("locally modified tracked files");
+            failed.Materialization.Error.ShouldContain("nothing was written");
             failed.Materialization.FailedAt.ShouldNotBeNull();
             failed.Materialization.LastRun.ShouldNotBeNull();
 
             await File.WriteAllTextAsync(featureDoc, pristine);
+            await File.WriteAllTextAsync(indexPath, pristineIndex);
 
             await CreateFeatureAsync(project.Id, "third", "Third");
 
             var recovered = await OnboardAsync(new { Cwd = sandbox });
             recovered.Materialization.Error.ShouldBeNull();
             recovered.Materialization.FailedAt.ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(sandbox, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_PartialSkip_ShowsCountAndHeadThenClearsOnCleanPass()
+    {
+        var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-skip-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(sandbox);
+        try
+        {
+            var name = $"skip-{Guid.NewGuid():N}";
+            var project = await CreateProjectAsync(name, sandbox);
+            await SetWorkflowAsync(project.Id, materialization: "on");
+            await CreateFeatureAsync(project.Id, "feat", "Feat");
+
+            var featureDoc = Path.Combine(sandbox, "BACKLOG", "feat", "feature.md");
+            var pristine = await File.ReadAllTextAsync(featureDoc);
+            await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+
+            await CreateFeatureAsync(project.Id, "second", "Second");
+
+            var partial = await OnboardAsync(new { Cwd = sandbox });
+            partial.Materialization.LastRun.ShouldNotBeNull();
+            partial.Materialization.Error.ShouldBeNull();
+            partial.Materialization.SkippedCount.ShouldBe(1);
+            partial.Materialization.Skipped.ShouldNotBeNull();
+            partial.Materialization.Skipped!.ShouldHaveSingleItem().ShouldBe(
+                "BACKLOG/feat/feature.md: tracked file has local edits that are not on the board");
+            File.Exists(Path.Combine(sandbox, "BACKLOG", "second", "feature.md")).ShouldBeTrue();
+
+            await File.WriteAllTextAsync(featureDoc, pristine);
+
+            await CreateFeatureAsync(project.Id, "third", "Third");
+
+            var clean = await OnboardAsync(new { Cwd = sandbox });
+            clean.Materialization.SkippedCount.ShouldBeNull();
+            clean.Materialization.Skipped.ShouldBeNull();
         }
         finally
         {
@@ -442,7 +492,8 @@ public sealed class OnboardApiTests : IDisposable
     public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus, string? CurrentSlug);
 
     public sealed record OnboardMaterializationJson(
-        string Strategy, string TargetDir, string Trigger, DateTime? LastRun, string? Error, DateTime? FailedAt);
+        string Strategy, string TargetDir, string Trigger, DateTime? LastRun, string? Error, DateTime? FailedAt,
+        int? SkippedCount, IReadOnlyList<string>? Skipped);
 
     public sealed record OnboardValidationJson(bool HumanGate);
 

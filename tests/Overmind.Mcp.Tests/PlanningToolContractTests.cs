@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheTwelvePlanningTools()
+    public async Task ToolsList_ContainsTheThirteenPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -33,7 +33,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_patch_artifact",
             "planning_validate",
             "planning_set_current",
-            "planning_set_feature_status"
+            "planning_set_feature_status",
+            "planning_materialize"
         ];
         foreach (var name in expected)
         {
@@ -51,6 +52,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
+        tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldContain("board mutation");
     }
 
     [Fact]
@@ -786,6 +788,115 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("logNote is required");
         text.ShouldContain("asMigrated");
         Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path.EndsWith("/validate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_PostsToTheMaterializeRouteAndEchoesWrittenAndSkippedCounts()
+    {
+        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var request = FindRequest("POST", $"/api/projects/{Canned.ProjectId}/planning/materialize");
+        request.Path.ShouldBe($"/api/projects/{Canned.ProjectId}/planning/materialize");
+        JsonNode.Parse(request.Body)!["force"]!.GetValue<bool>().ShouldBeFalse();
+
+        var text = Canned.ToolResultText(response);
+        var echo = JsonNode.Parse(text)!.AsObject();
+        echo["projectId"]!.GetValue<string>().ShouldBe(Canned.ProjectId.ToString());
+        echo["strategy"]!.GetValue<string>().ShouldBe("on");
+        echo["written"]!.GetValue<int>().ShouldBe(3);
+        echo["skipped"]!.GetValue<int>().ShouldBe(2);
+        echo["force"]!.GetValue<bool>().ShouldBeFalse();
+        text.ShouldNotContain("sha256");
+        text.ShouldNotContain("Overwrote untracked file");
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_WithForce_PostsItAndCarriesItInTheEcho()
+    {
+        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["force"] = true
+        });
+
+        var request = FindRequest("POST", $"/api/projects/{Canned.ProjectId}/planning/materialize");
+        JsonNode.Parse(request.Body)!["force"]!.GetValue<bool>().ShouldBeTrue();
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["force"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_SkipsPresent_EchoCarriesPathAndReasonLines()
+    {
+        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        var head = echo["skippedHead"]!.AsArray();
+        head.Count.ShouldBe(2);
+        head[0]!.GetValue<string>().ShouldBe(
+            "BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind");
+        head[1]!.GetValue<string>().ShouldBe(
+            "BACKLOG/demo-feature/tasks/01-build.md: tracked file has local edits that are not on the board");
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_CleanPass_OmitsTheSkippedHead()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/projects/{Canned.ProjectId}/planning/materialize",
+            200,
+            Canned.PlanningMaterializeCleanReportJson);
+
+        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["written"]!.GetValue<int>().ShouldBe(2);
+        echo["skipped"]!.GetValue<int>().ShouldBe(0);
+        echo.ContainsKey("skippedHead").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_AllSkipped_SurfacesTheConflictDetailAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/projects/{Canned.ProjectId}/planning/materialize",
+            409,
+            Canned.PlanningMaterializeAllSkippedJson);
+
+        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Every planned file was skipped; nothing was written");
+        text.ShouldContain("BACKLOG/foreign/feature.md");
+        text.ShouldContain("re-run materialize with force");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_Description_PinsTheRerunContract()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldBe(
+            "Triggers a materialization pass: rewrites the BACKLOG/ mirror from the board, writing every clean file and skipping guarded ones (untracked or locally-edited) with a reason — a rerun never silently overwrites disk content. A normal board mutation already triggers a pass automatically; call this after an import, a strategy switch, or when onboard reports skips or a stale lastRun. force overwrites guarded files with per-file warnings instead of skipping them; transcribe hand edits to the board before forcing.");
     }
 
     [Theory]

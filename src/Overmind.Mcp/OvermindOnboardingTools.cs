@@ -19,7 +19,7 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastRun) and a validation block (humanGate). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastRun, and the skipped-file count with the head of skipped paths and reasons when the last pass skipped any) and a validation block (humanGate). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
     public async Task<string> Onboard(CancellationToken ct)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));
@@ -123,11 +123,37 @@ public sealed class OvermindOnboardingTools
         output.AppendLine(
             $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, lastRun={lastRun}{failureSuffix}");
 
+        AppendSkipped(block, output);
+
         if (block.TryGetProperty("trigger", out var trigger) &&
             trigger.ValueKind == JsonValueKind.String &&
             trigger.GetString() is { Length: > 0 } triggerText)
         {
             output.AppendLine(triggerText);
+        }
+    }
+
+    private static void AppendSkipped(JsonElement block, StringBuilder output)
+    {
+        if (!block.TryGetProperty("skippedCount", out var count) ||
+            count.ValueKind != JsonValueKind.Number)
+        {
+            return;
+        }
+
+        output.AppendLine($"Skipped on the last pass: {count.GetInt32()} file(s)");
+        if (!block.TryGetProperty("skipped", out var head) ||
+            head.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var entry in head.EnumerateArray())
+        {
+            if (entry.ValueKind == JsonValueKind.String)
+            {
+                output.AppendLine($"- {entry.GetString()}");
+            }
         }
     }
 

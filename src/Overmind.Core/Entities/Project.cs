@@ -3,6 +3,7 @@ namespace Overmind.Core;
 public sealed class Project
 {
     private const int MaxMaterializationErrorLength = 512;
+    private const int MaxMaterializationSkipHead = 5;
 
     private Project()
     {
@@ -18,6 +19,8 @@ public sealed class Project
     public DateTime? LastMaterializedAt { get; private set; }
     public string? LastMaterializationError { get; private set; }
     public DateTime? LastMaterializationFailedAt { get; private set; }
+    public int? LastMaterializationSkipCount { get; private set; }
+    public string? LastMaterializationSkipHead { get; private set; }
 
     public static Project Create(string name, string diskPath, string description = "")
     {
@@ -42,11 +45,17 @@ public sealed class Project
         RequireHumanValidation = validation;
     }
 
-    public void MarkMaterialized()
+    public void MarkMaterialized(IReadOnlyList<PlanningMaterializationSkip> skips)
     {
         LastMaterializedAt = DateTime.UtcNow;
         LastMaterializationError = null;
         LastMaterializationFailedAt = null;
+        LastMaterializationSkipCount = skips.Count == 0 ? null : skips.Count;
+        LastMaterializationSkipHead = skips.Count == 0
+            ? null
+            : string.Join('\n', skips
+                .Take(MaxMaterializationSkipHead)
+                .Select(skip => $"{skip.RelativePath}: {skip.Reason}"));
     }
 
     public void MarkMaterializationFailed(string error)

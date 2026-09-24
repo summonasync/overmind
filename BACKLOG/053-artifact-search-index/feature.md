@@ -3,7 +3,7 @@ feature: 053
 slug: artifact-search-index
 status: inProgress
 priority: p0
-version: 2
+version: 3
 created: 2026-09-22
 ---
 

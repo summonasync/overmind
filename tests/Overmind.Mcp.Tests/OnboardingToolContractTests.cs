@@ -36,7 +36,8 @@ public class OnboardingToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("materialization block (strategy, targetDir, trigger, lastRun)");
+        description.ShouldContain("materialization block (strategy, targetDir, trigger, lastRun");
+        description.ShouldContain("skipped-file count");
         description.ShouldContain("validation block (humanGate)");
     }
 
@@ -131,6 +132,21 @@ public class OnboardingToolContractTests : McpSessionTestBase
             "Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-23T10:15:00Z " +
             "(failed 2026-09-23T18:00:00Z: Refusing to overwrite locally modified tracked files:");
         text.ShouldContain("- /repo/BACKLOG/006-demo/tasks/01-first-task.md)");
+    }
+
+    [Fact]
+    public async Task Onboard_SkippedMaterialization_ShowsCountAndHeadWithReasons()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardSkippedMaterializationJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-24T09:00:00Z");
+        text.ShouldContain("Skipped on the last pass: 2 file(s)");
+        text.ShouldContain("- BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind");
+        text.ShouldContain("- BACKLOG/demo-feature/tasks/01-build.md: tracked file has local edits that are not on the board");
+        text.ShouldNotContain("failed");
     }
 
     [Fact]

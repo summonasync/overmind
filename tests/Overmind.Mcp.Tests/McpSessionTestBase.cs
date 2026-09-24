@@ -81,6 +81,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
     {
         stub.RouteGet($"/api/agent/projects/{Canned.ProjectId}/planning/features", Canned.PlanningBoardJson);
         stub.Route("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/features", 201, Canned.PlanningFeatureJson);
+        stub.Route(
+            "POST",
+            $"/api/projects/{Canned.ProjectId}/planning/materialize",
+            200,
+            Canned.PlanningMaterializeReportJson);
         stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
             Canned.PlanningFeatureJson);

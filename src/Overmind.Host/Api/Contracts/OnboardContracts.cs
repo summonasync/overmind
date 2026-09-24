@@ -14,7 +14,9 @@ public sealed record OnboardMaterializationBlock(
     string Trigger,
     DateTime? LastRun,
     string? Error,
-    DateTime? FailedAt);
+    DateTime? FailedAt,
+    int? SkippedCount,
+    IReadOnlyList<string>? Skipped);
 
 public sealed record OnboardValidationBlock(bool HumanGate);
 

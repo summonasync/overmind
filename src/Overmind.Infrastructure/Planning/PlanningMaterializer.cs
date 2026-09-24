@@ -43,12 +43,13 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             .ToListAsync(ct);
 
         var warnings = new List<string>();
+        var skips = new List<PlanningMaterializationSkip>();
         var plans = BuildPlans(root, features, rows);
         var otherRoot = OtherRoot(project, strategy);
 
         if (strategy == PlanningMaterialization.On)
         {
-            GuardOverwrites(plans, rows, otherRoot, force, warnings);
+            GuardOverwrites(plans, rows, otherRoot, force, warnings, skips);
         }
 
         var dropped = await ClearOtherRootAsync(project, rows, strategy, otherRoot, warnings, ct);
@@ -58,19 +59,24 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         if (strategy == PlanningMaterialization.On)
         {
-            await GuardLocalEditsAsync(plans, rows, force, warnings, ct);
+            await GuardLocalEditsAsync(plans, rows, force, warnings, skips, ct);
+            if (plans.Count == 0)
+            {
+                throw MaterializationException.AllSkipped(skips);
+            }
         }
 
         await WritePlansAsync(projectId, plans, rows, ct);
 
-        project.MarkMaterialized();
+        project.MarkMaterialized(skips);
         await _db.SaveChangesAsync(ct);
 
         return new PlanningMaterializationReport(
             projectId,
             strategy,
             plans.Select(p => new PlanningMaterializedFileInfo(p.RelativePath, p.Sha256)).ToArray(),
-            warnings);
+            warnings,
+            skips);
     }
 
     public async Task RecordSyncFailureAsync(Guid projectId, string error, CancellationToken ct = default)
@@ -176,7 +182,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         await _db.SaveChangesAsync(ct);
 
-        return new PlanningMaterializationReport(project.Id, strategy, removed, warnings);
+        return new PlanningMaterializationReport(project.Id, strategy, removed, warnings, []);
     }
 
     private async Task<HashSet<Guid>> ClearOtherRootAsync(
@@ -349,10 +355,11 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
     private static void GuardOverwrites(
         List<FilePlan> plans, List<PlanningMaterializedFile> rows, string otherRoot, bool force,
-        List<string> warnings)
+        List<string> warnings, List<PlanningMaterializationSkip> skips)
     {
-        foreach (var plan in plans)
+        for (var i = plans.Count - 1; i >= 0; i--)
         {
+            var plan = plans[i];
             if (!File.Exists(plan.AbsolutePath) && !Directory.Exists(plan.AbsolutePath))
             {
                 continue;
@@ -368,27 +375,30 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 continue;
             }
 
-            if (!force)
+            if (force)
             {
-                throw MaterializationException.Overwrite(plan.AbsolutePath);
+                warnings.Add($"Overwrote untracked file: {plan.AbsolutePath}");
+                continue;
             }
 
-            warnings.Add($"Overwrote untracked file: {plan.AbsolutePath}");
+            skips.Add(new PlanningMaterializationSkip(
+                plan.RelativePath, "file exists on disk but is not tracked by Overmind"));
+            plans.RemoveAt(i);
         }
     }
 
     // Repo-root syncs only: archive copies live under app data and are rewritten freely. A write
     // loses hand edits only when three hashes diverge — the row proves the file is tracked, the
     // disk hash drifting from the row proves local edits since our last write, and the plan hash
-    // differing from the disk proves the rewrite would actually drop them.
+    // differing from the disk proves the rewrite would actually drop them. Guarded files drop out
+    // of the pass instead of aborting it; a pass where nothing survives is rejected by the caller.
     private static async Task GuardLocalEditsAsync(
         List<FilePlan> plans, List<PlanningMaterializedFile> rows, bool force,
-        List<string> warnings, CancellationToken ct)
+        List<string> warnings, List<PlanningMaterializationSkip> skips, CancellationToken ct)
     {
-        List<string>? locallyModified = null;
-
-        foreach (var plan in plans)
+        for (var i = plans.Count - 1; i >= 0; i--)
         {
+            var plan = plans[i];
             var row = rows.FirstOrDefault(r => PathGuard.PathsEqual(r.RelativePath, plan.RelativePath));
             if (row is null || !File.Exists(plan.AbsolutePath))
             {
@@ -409,12 +419,9 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 continue;
             }
 
-            (locallyModified ??= []).Add(plan.AbsolutePath);
-        }
-
-        if (locallyModified is not null)
-        {
-            throw MaterializationException.LocalEdits(locallyModified);
+            skips.Add(new PlanningMaterializationSkip(
+                plan.RelativePath, "tracked file has local edits that are not on the board"));
+            plans.RemoveAt(i);
         }
     }
 

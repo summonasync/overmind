@@ -7,7 +7,8 @@ public enum MaterializationFailureKind
     OverwriteBlocked,
     InvalidTarget,
     IoError,
-    LocalEditsBlocked
+    LocalEditsBlocked,
+    AllSkipped
 }
 
 public sealed class MaterializationException : Exception
@@ -53,6 +54,15 @@ public sealed class MaterializationException : Exception
                     .Concat(paths.Select(path => $"- {path}"))
                     .Append("Transcribe the edits to the board (planning_upsert_artifact / planning_append_log) or re-run materialize with force.")),
             paths is [var only] ? only : null);
+
+    public static MaterializationException AllSkipped(IReadOnlyList<PlanningMaterializationSkip> skips) =>
+        new(
+            MaterializationFailureKind.AllSkipped,
+            string.Join('\n',
+                new[] { "Every planned file was skipped; nothing was written:" }
+                    .Concat(skips.Select(skip => $"- {skip.RelativePath}: {skip.Reason}"))
+                    .Append("Transcribe the edits to the board (planning_upsert_artifact / planning_append_log) or re-run materialize with force.")),
+            skips is [var onlySkip] ? onlySkip.RelativePath : null);
 
     public static MaterializationException DuplicateTarget(string absolutePath) =>
         new(

@@ -1,7 +1,7 @@
 ---
 feature: 067
 slug: materialization-import-tracking
-status: inProgress
+status: done
 priority: p0
 version: 1
 created: 2026-09-24
@@ -35,4 +35,6 @@ Materialization works on projects whose BACKLOG/ was IMPORTED, not born on the b
 
 <log>
 - 2026-09-24 [auto] — artifact created → inProgress
+- 2026-09-24 [auto] — all tasks done + spec + plan → review
+- 2026-09-24 [agent] — Closing per the board-clearing mandate (user: "разгребаем борду по приоритетам"): all three tasks done, each with light review PASS-WITH-NITS (audits/review-067-01/02/03.md), the OM-10 field acceptance pinned end to end, result artifact on the board. The p0 materialization×import blocker of round 3 is closed.
 </log>

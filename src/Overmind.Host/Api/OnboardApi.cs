@@ -88,7 +88,9 @@ public static class OnboardApi
                 TriggerText(strategy),
                 project.LastMaterializedAt,
                 project.LastMaterializationError,
-                project.LastMaterializationFailedAt),
+                project.LastMaterializationFailedAt,
+                project.LastMaterializationSkipCount,
+                SkipHeadLines(project.LastMaterializationSkipHead)),
             new OnboardValidationBlock(humanGate),
             OnboardQuickstart.Text));
     }
@@ -109,6 +111,11 @@ public static class OnboardApi
         strategy == PlanningMaterialization.Off
             ? "Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override."
             : "Event-driven: runs automatically after every planning mutation.";
+
+    private static IReadOnlyList<string>? SkipHeadLines(string? skipHead) =>
+        skipHead is null
+            ? null
+            : skipHead.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
     private static async Task<OnboardBoardSummary> BuildBoardSummaryAsync(
         OvermindDbContext db, Guid projectId, CancellationToken ct)

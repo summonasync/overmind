@@ -35,7 +35,7 @@ public sealed class PlanningMaterializationTests : IDisposable
     }
 
     [Fact]
-    public async Task Materialize_WithoutForce_Returns409OnForeignFile()
+    public async Task Materialize_WithoutForce_SkipsForeignFileWritesTheRest()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
 
@@ -48,8 +48,50 @@ public sealed class PlanningMaterializationTests : IDisposable
         var response = await _client.PostAsJsonAsync(
             $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await File.ReadAllTextAsync(foreign)).ShouldBe("user content");
+
+        var report = await response.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
+        report.ShouldNotBeNull();
+        var skip = report!.Skipped.ShouldHaveSingleItem();
+        skip.RelativePath.ShouldBe("BACKLOG/invader/feature.md");
+        skip.Reason.ShouldContain("not tracked by Overmind");
+        report.Files.ShouldNotContain(f => f.RelativePath == "BACKLOG/invader/feature.md");
+        report.Files.ShouldContain(f => f.RelativePath == "BACKLOG.md");
+    }
+
+    [Fact]
+    public async Task Materialize_EverythingGuarded_Returns409ListingSkipsInDetail()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+
+        var foreign = Path.Combine(_projectDir, "BACKLOG", "invader", "feature.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(foreign)!);
+        await File.WriteAllTextAsync(foreign, "user content");
+
+        await CreateFeatureAsync(project.Id, "invader", "Invader");
+
+        var indexPath = Path.Combine(_projectDir, "BACKLOG.md");
+        await File.WriteAllTextAsync(indexPath, (await File.ReadAllTextAsync(indexPath))
+            .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal));
+        var foreignBytes = await File.ReadAllBytesAsync(foreign);
+        var indexBytes = await File.ReadAllBytesAsync(indexPath);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Status.ShouldBe(409);
+        problem!.Detail.ShouldNotBeNull();
+        problem!.Detail!.ShouldContain("nothing was written");
+        problem.Detail.ShouldContain("BACKLOG/invader/feature.md");
+        problem.Detail.ShouldContain("BACKLOG.md");
+        problem.Detail.ShouldContain("planning_upsert_artifact");
+
+        (await File.ReadAllBytesAsync(foreign)).ShouldBe(foreignBytes);
+        (await File.ReadAllBytesAsync(indexPath)).ShouldBe(indexBytes);
     }
 
     [Fact]
@@ -81,7 +123,7 @@ public sealed class PlanningMaterializationTests : IDisposable
     }
 
     [Fact]
-    public async Task Materialize_TrackedFileHandEdited_Returns409ListingPathInDetail()
+    public async Task Materialize_TrackedFileHandEdited_SkipsItAndReturnsReasonInReport()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
         await CreateFeatureAsync(project.Id, "feat", "Feature");
@@ -96,13 +138,13 @@ public sealed class PlanningMaterializationTests : IDisposable
         var response = await _client.PostAsJsonAsync(
             $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem.ShouldNotBeNull();
-        problem!.Status.ShouldBe(409);
-        problem!.Detail.ShouldNotBeNull();
-        problem!.Detail!.ShouldContain(taskFile);
-        problem.Detail.ShouldContain("planning_upsert_artifact");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var report = await response.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
+        report.ShouldNotBeNull();
+        var skip = report!.Skipped.ShouldHaveSingleItem();
+        skip.RelativePath.ShouldBe("BACKLOG/feat/tasks/01-task-one.md");
+        skip.Reason.ShouldContain("local edits");
+        report.Files.ShouldContain(f => f.RelativePath == "BACKLOG/feat/feature.md");
         (await File.ReadAllTextAsync(taskFile)).ShouldContain("external edit");
     }
 
@@ -226,9 +268,12 @@ public sealed class PlanningMaterializationTests : IDisposable
     public sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
 
     public sealed record MaterializationReportJson(
-        Guid ProjectId, string Strategy, MaterializedFileJson[] Files, string[] Warnings);
+        Guid ProjectId, string Strategy, MaterializedFileJson[] Files, string[] Warnings,
+        MaterializationSkipJson[] Skipped);
 
     public sealed record MaterializedFileJson(string RelativePath, string Sha256);
+
+    public sealed record MaterializationSkipJson(string RelativePath, string Reason);
 
     public sealed record DriftItemJson(Guid ProjectId, string? FeatureSlug, string RelativePath, string Kind);
 
