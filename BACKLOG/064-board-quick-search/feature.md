@@ -1,7 +1,7 @@
 ---
 feature: 064
 slug: board-quick-search
-status: draft
+status: inProgress
 priority: p0
 version: 1
 created: 2026-09-23
@@ -19,3 +19,7 @@ Requirements:
 - Matches against feature number, slug, title (and body text if already client-side — implementer's judgment on cost).
 
 Note: Enter/Esc/Shift+Esc semantics come from the user verbatim — treat them as acceptance, not suggestion.
+
+<log>
+- 2026-09-24 [auto] — artifact created → inProgress
+</log>

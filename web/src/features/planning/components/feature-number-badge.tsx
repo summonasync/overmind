@@ -10,7 +10,7 @@ export function FeatureNumberBadge({ slug }: FeatureNumberBadgeProps) {
     return null;
   }
   return (
-    <span className="inline-flex shrink-0 items-center rounded-md border border-primary/40 px-1.5 py-0.5 font-mono text-base font-semibold leading-none text-primary">
+    <span className="inline-flex shrink-0 items-center rounded-md border border-primary/40 px-2.5 py-0.5 font-mono text-base font-semibold leading-none text-primary">
       {tag}
     </span>
   );
