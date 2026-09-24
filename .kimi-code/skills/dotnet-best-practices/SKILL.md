@@ -51,7 +51,7 @@ Severity: **[B]** BLOCKER, **[W]** WARNING, **[S]** SUGGESTION.
 
 ## Testing
 - **BP-60 [W]** xUnit + Shouldly + NSubstitute (see AGENTS.md stack). Naming: `Method_Scenario_Expectation` or project convention — but consistent within the test project.
-- **BP-61 [W]** TDD per AGENTS.md «Superpowers Integration» rule 4: domain/business logic gets red-green-refactor; migrations/DI/config/DTOs are exempt.
+- **BP-61 [W]** TDD per `overmind-ceremony` TDD scope: domain/business logic gets red-green-refactor; migrations/DI/config/DTOs are exempt.
 - **BP-62 [W]** Tests are independent: no shared mutable state, no order dependence, no hitting real DB/network in unit tests.
 - **BP-63 [S]** One logical assertion per test; multiple Shouldly checks on one outcome are fine, multiple scenarios are not.
 

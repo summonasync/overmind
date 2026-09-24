@@ -10,7 +10,7 @@ whenToUse: When initializing a .NET project, scanning .NET codebase structure, c
 ## Context & Documentation Order
 Before making ANY changes, read the project documentation in this strict order:
 1. `CONTEXT.md` — System design, architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design (Russian)
-2. `BACKLOG.md` — Sprint backlog, tasks per phase, execution order (Mixed EN/RU)
+2. Overmind board — features and task state via `planning_list_features` (ceremony rules: `overmind-ceremony`)
 3. `STRUCTURE.md` — Project structure, code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, security, conventions (English)
 
@@ -80,7 +80,7 @@ Generate `AGENTS.md` including:
 - Key NuGet packages
 - Strict code style rules (no comments, English only, no God-Services, split files)
 - Frontend rules (Next.js proxy) if applicable
-- Documentation file order (CONTEXT.md -> BACKLOG.md -> STRUCTURE.md -> AGENTS.md)
+- Documentation file order (CONTEXT.md -> Overmind board -> STRUCTURE.md -> AGENTS.md)
 
 ---
 

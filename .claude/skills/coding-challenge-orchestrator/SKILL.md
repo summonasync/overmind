@@ -31,7 +31,7 @@ For regular project tasks — use `task-orchestrator`. For system-wide audits �
 ### Phase 0: Task Intake
 1. Read the task statement verbatim. Extract: explicit requirements, implicit expectations (framework versions, project layout the reviewer expects), submission format, deadline.
 2. **Set up the isolated workspace:** all challenge work lives in `coding-challenges/<task-slug>/`. This folder is the deliverable root. Nothing outside it is touched; nothing from the outer project (docs, configs, agent files) is copied into it.
-3. Read project docs per standard order (`AGENTS.md` → `CONTEXT.md` → `BACKLOG.md` → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md`) **only if the challenge lives inside an existing repo**. For a standalone challenge — the task statement overrides project conventions. The "Coding Challenge Rules" section of `AGENTS.md` ALWAYS applies.
+3. Read project docs per standard order (`AGENTS.md` → `CONTEXT.md` → Overmind board → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md`) **only if the challenge lives inside an existing repo**. For a standalone challenge — the task statement overrides project conventions. The "Coding Challenge Rules" section of `AGENTS.md` ALWAYS applies.
 4. Confirm scope with the user: "Задача: [X]. Требования: [список]. Формат сдачи: [Y]. Workspace: `coding-challenges/<slug>/`. Скоуп зафиксирован, приступаю."
 
 ### Phase 1: Implementation

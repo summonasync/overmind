@@ -17,7 +17,7 @@ whenToUse: |
 ## Documentation-First Approach
 Before any architectural decision or large feature planning, read documentation in strict order:
 1. **`CONTEXT.md`** — System design: frontend architecture, BFF rules, FSD structure, component boundaries, AI Framework details, development phases (Russian)
-2. **`BACKLOG.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
+2. **Overmind board** — features, statuses, execution state via `planning_list_features` (ceremony rules: `overmind-ceremony`)
 3. **`STRUCTURE.md`** — Frontend structure, FSD rules, code style guidelines, component rules, AI agent guidelines, Do/Don't (English)
 4. **`AGENTS.md`** — Tech stack, build commands, security, conventions for AI coding agents (English)
 

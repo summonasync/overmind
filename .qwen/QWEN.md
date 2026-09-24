@@ -1,6 +1,6 @@
 # Global Agent Context (Qwen Code)
 
-> Repo layout: this crew lives in `.qwen/` (this file, agents, skills, hooks). BACKLOG/ stays in repo root (feature tracking). Quadruple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
+> Repo layout: this crew lives in `.qwen/` (this file, agents, skills, hooks). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind. Quadruple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
 
 ## Identity
 You are assisting a senior .NET developer who is learning LLM/AI and ML/DL.
@@ -107,8 +107,8 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 | File | Purpose | Language | When to Read |
 |------|---------|----------|-------------|
 | `CONTEXT.md` | System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design | English | First — for all architectural context |
-| `BACKLOG.md` | Task board INDEX: ordered feature list with statuses (`[ ]`/`[~]`/`[x]`/`[?]`), deferred items, execution order. CONTENT never lives here — one line per feature folder (`[~] 001-auth-refresh → BACKLOG/001-auth-refresh/`), plus one-liners for Simple tasks | Mixed (EN headers, RU descriptions) | Before starting work — to understand what's done, what's planned, and which feature folder to load |
-| `BACKLOG/nnn-slug/` | Atomic feature folder: `feature.md` (durable what/why, created when the feature enters the backlog, before work), `spec.md` (spec gate output, brainstorm result, frozen after user approval), `plan.md` (how, frozen after user approval), `requirements.md` (optional intake normalization for messy raw inputs), `tasks/NN-foo.md` (execution contract per task: XML sections `<goal>`, `<scope>`, `<anti-scope>`, `<constraints>`, `<acceptance-criteria>`, `<refs>`, `<obstacles>`, `<log>`). spec/plan are mandatory for Complex tasks and optional for others; the folder is not. Templates: `BACKLOG/_TEMPLATE/`. Simple tasks stay one-liners in BACKLOG.md | English (feature/plan may be Mixed) | Orchestrator/reviewer read feature.md + spec.md + plan.md; executing sub-agent reads ONLY its `tasks/NN-foo.md` — in full, before starting |
+| Overmind board (MCP) | THE source of truth for all planning state: features, spec/plan/task/result artifacts, statuses, entries. Access via `mcp__overmind__*` tools (`overmind_onboard` first). Rules of engagement: `overmind-ceremony` skill | — | Before starting work — what's done, what's planned, which task is current |
+| `BACKLOG/nnn-slug/` (materialized) | Read-only mirror of board artifacts, rewritten by Overmind after every planning mutation. NEVER hand-edit — all writes go through MCP tools | English | Humans and MCP-less tools read here; agents with MCP read via `planning_read_artifact` |
 | `STRUCTURE.md` | Project structure, code style guidelines, architecture rules, AI agent guidelines, Do/Don't | English | Before writing code — for conventions and patterns |
 | `TECHNICAL-SOLUTIONS.md` | Architecture Decision Records (ADRs): chosen technical solutions, trade-offs, reasons why X was chosen over Y | English | Before proposing alternative approaches or challenging existing patterns — to understand historical context |
 | `AGENTS.md` | Project-level: tech stack, build commands, security, conventions for AI coding agents. Qwen Code reads a project `AGENTS.md` natively alongside `QWEN.md` — keep one source, never duplicate the crew contract into it | English | For build/run commands and agent-specific rules |
@@ -120,7 +120,7 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 | `SOCIAL_DICTIONARY.md` | Social vocabulary: addressing terms, slang, dev slang, gachi core, roast rules, stop-words, tone rules | Russian | Before composing any user-facing message — for tone, slang and emotional markup |
 | `SKILLFLOW.md` | Workflow graph: phases, valid transitions, alternative routes (full cycle, quick-fix path, docs-only path). Shared by ALL skills — every skill reads it to suggest its «next step» per the output contract | English | When finishing any skill step (to pick the next step) and before starting a new workflow |
 
-**Naming rule:** these filenames are exact and case-sensitive — always ALL CAPS (`CONTEXT.md`, not `context.md`; `BACKLOG/`, not `tasks/`). Inside feature folders, files are lowercase: `feature.md`, `spec.md`, `plan.md`, `requirements.md`, `tasks/NN-foo.md`.
+**Naming rule:** these filenames are exact and case-sensitive — always ALL CAPS (`CONTEXT.md`, not `context.md`; `BACKLOG/`, not `tasks/`). Board artifact XML sections are lowercase: `<goal>`, `<scope>`, `<anti-scope>`, `<constraints>`, `<acceptance-criteria>`, `<refs>`, `<obstacles>`, `<log>`.
 
 **Skill output contract (MANDATORY for every skill/agent):** every skill ends with a fixed closing block, then STOPS:
 1. **Done** — one-paragraph summary of what was produced + artifact paths.
@@ -128,7 +128,7 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 3. **Alternatives** — 2–3 other valid follow-ups.
 Mandatory workflow gates (e.g. review after Complex) proceed without asking; all other next steps are suggestions — the user picks.
 
-**Artifact provenance rule (skill-prefix naming):** ANY file generated by a skill outside `BACKLOG/` MUST live in `audits/` and start with the producing skill's name in lowercase: `audits/audit-YYYY-MM-DD.md` (audit-orchestrator), `audits/review-NNN-01.md` (code reviewers), `audits/obfuscation-*.md` (ai-obfuscator), `audits/intake-*.md` (requirements intake). Source of every artifact must be visible from `ls audits/` alone — no anonymous reports.
+**Artifact provenance rule (skill-prefix naming):** ANY file generated by a skill outside the Overmind-managed `BACKLOG/` tree MUST live in `audits/` and start with the producing skill's name in lowercase: `audits/audit-YYYY-MM-DD.md` (audit-orchestrator), `audits/review-NNN-01.md` (code reviewers), `audits/obfuscation-*.md` (ai-obfuscator), `audits/intake-*.md` (requirements intake). Source of every artifact must be visible from `ls audits/` alone — no anonymous reports.
 
 **Rule for agents:** Before proposing an alternative approach (e.g., "let's use Redux instead of Zustand", "let's switch from Minimal APIs to Controllers"), read `TECHNICAL-SOLUTIONS.md`. If the topic is covered there — follow the documented decision. If you believe the decision is outdated — propose updating `TECHNICAL-SOLUTIONS.md` with new rationale, do not silently override.
 
@@ -139,6 +139,7 @@ Mandatory workflow gates (e.g. review after Complex) proceed without asking; all
 - **Default choice**: `qwen3.7-plus` for coding/execution sub-agents (coder, fixer) and review/analysis sub-agents (reviewer, researcher); `qwen3.8-max` for orchestration, audit, AI-code detection (`ai-code-detector`), AI-trace obfuscation (`ai-obfuscator` — ALWAYS `qwen3.8-max`, never the model that wrote the code), and obfuscation review (`ai-obfuscation-reviewer`).
 - If a sub-agent model is unavailable or fails to spawn — STOP and report to the user. Do NOT silently substitute another model.
 - Sub-agents inherit this file's rules: communication style, code conventions, workflow and no-auto-commits apply to them too.
+- Sub-agents receive their task as an Overmind artifact reference (projectId/featureSlug/artifactId) and work it through `mcp__overmind__*` tools — reads via `planning_read_artifact`, logs/obstacles/AC-ticks via `planning_append_log` / `planning_patch_artifact`, statuses via `planning_set_status`. Full contract: `overmind-ceremony` skill.
 
 **Enforcement (config, not just prompt):** sub-agent model choice is enforced by the `model` field in each `.qwen/agents/*.md` frontmatter (`qwen3.7-plus` for coder/reviewer agents, `qwen3.8-max` for orchestration/audit/obfuscation) — not by prompt text alone. Both IDs resolve through `modelProviders.openai` in `~/.qwen/settings.json` (ModelStudio Token Plan). If that lineup changes, update the frontmatter pins and this section in the same commit.
 
@@ -163,24 +164,14 @@ Rules that must hold EVERY time are enforced by `permissions` and `hooks` in `~/
 
 **Onboarding mode:** for users new to this system, keep `permissions.allow` empty and stay in `default` approval mode — the agent must request each command explicitly. Restore incrementally as trust is earned; `yolo` is never an onboarding setting.
 
-## Superpowers Integration (plugin = technique library, NOT process owner)
-If the `superpowers` plugin (or an equivalent skill pack) is installed, its skills are used as TECHNIQUES inside this system's phases — they never own the process, the documents, or the git history. This file and `task-orchestrator` win every conflict. If it is not installed, follow SKILLFLOW.md transitions directly.
+## Overmind Integration (planning ceremonies live on the board, NOT in files)
+The Overmind MCP server owns ALL planning state: features, spec/plan/task/result artifacts, statuses, entries. The full ceremony contract (probe, lifecycle, gates, capability matrix, sub-agent briefing) lives in the `overmind-ceremony` skill — read it before ANY board interaction. This file and `task-orchestrator` define the pipeline; `overmind-ceremony` defines the mechanics.
 
-1. **Hierarchy.** `task-orchestrator` owns the pipeline (spec → plan → tasks → review gates). Superpowers skills plug into phases as sub-techniques:
-   - Spec questioning → `superpowers:brainstorming` (Socratic engine, one question at a time)
-   - Plan decomposition → `superpowers:writing-plans` (small tasks with verification steps)
-   - Execution → `superpowers:test-driven-development` (scope limited by rule 4)
-   - Debugging → `superpowers:systematic-debugging` (NO fix without root cause — always applies)
-   - Before claiming "done" → `superpowers:verification-before-completion` (always applies)
-   - `superpowers:brainstorming` has a hard gate that intercepts any "build/add/change" request — route it: Complex tasks go through `task-orchestrator` intake; brainstorming is used only for the questioning phase, not as a parallel pipeline.
-2. **Commit steps DISABLED.** Superpowers skills contain built-in commit steps (spec commit, TDD cycle commit, branch finishing). They are OFF. "No auto-commits" (Development Workflow, rule 6) overrides ANY skill instruction. Replace every commit step with: stop and report the changed-file list.
-3. **Document mapping (no parallel doc system).** `docs/superpowers/` is FORBIDDEN as a source of truth — never create it, never read specs from it. Map outputs onto this system instead:
-   - Brainstorm design output → `BACKLOG/nnn-slug/spec.md` (validated and approved by the user, then frozen)
-   - Plan decomposition → `BACKLOG/nnn-slug/plan.md` (validated by the user, then frozen), then broken into `BACKLOG/nnn-slug/tasks/NN-foo.md` files
-   - Architectural decisions surfaced during brainstorming → ADR entry in `TECHNICAL-SOLUTIONS.md`
-   - Cross-cutting context that outlives the feature → `CONTEXT.md`
-4. **TDD scope.** Strict red-green-refactor applies to domain/business logic and non-trivial algorithms. It does NOT apply to EF migrations, DI wiring, config, DTOs, or glue code. When in doubt — ask the user before choosing TDD on/off for a task.
-5. **Agent spawns from superpowers skills** (e.g. subagent-driven-development) inherit the Sub-Agent Rules above: `qwen3.7-plus`/`qwen3.8-max` only per role mapping, STOP-and-report on unavailability.
+1. **Hard requirement.** No overmind MCP in the session → STOP and ask the user to configure it. Never fall back to hand-written backlog files. First call of any ceremony is always `overmind_onboard` (projectId, materialization status, humanGate).
+2. **Source of truth.** Board (DB) = truth. `BACKLOG/` on disk = read-only materialized mirror, rewritten by Overmind after every mutation. NEVER hand-edit materialized files — all writes via `planning_*` tools. There is no `BACKLOG.md` index anymore.
+3. **Frozen artifacts.** `validated` spec/plan change only via `planning_patch_artifact` with a `logNote`, or full re-validation with the user. Status moves always carry a `logNote`.
+4. **Techniques are inline.** Socratic spec questioning, plan decomposition, root-cause-first debugging, verification-before-completion, TDD scope — all live in `overmind-ceremony` as crew-owned rules. No external technique plugins are part of this kit.
+5. **Agent spawns** inherit the Sub-Agent Rules above: `qwen3.7-plus`/`qwen3.8-max` only per role mapping, STOP-and-report on unavailability — plus the artifact contract from `overmind-ceremony`.
 
 ## AI Coding Traces (applies to ALL agents)
 Write code like a human engineer, not like a language model. Full catalog of signatures and humanization techniques lives in the `ai-obfuscator` skill — these are the standing rules for everyday work:
@@ -203,7 +194,7 @@ Its full rule set (workspace isolation, zero AI leakage, fixed pipeline, seniori
 4. **Review Trigger** — After complex task completion, agent MUST run matching reviewer skill before considering task done.
 5. **No task is "done" until review passes or user explicitly overrides.**
 6. **No auto-commits.** Agents must NOT run `git commit` or `git push` unless user explicitly asks.
-7. **Feature folders.** Complex work lives in `BACKLOG/nnn-slug/`: `feature.md` (created when the feature enters the backlog, before work) → OPTIONAL `requirements.md` (intake normalization for messy raw inputs only; user confirms completeness = intake gate) → `spec.md` → user validation gate → `plan.md` → user validation gate → `tasks/NN-foo.md` per task (templates: `BACKLOG/_TEMPLATE/`). `spec.md`/`plan.md` are READ-ONLY snapshots once approved — changes require re-validation with the user, never silent edits. `feature.md` changes after `status: ready` also require user approval (bump `version:`), but are not a gate artifact. BACKLOG.md is the index only (folder links + statuses + order) — content is never duplicated there. The executing sub-agent gets ONLY its task file as input; `<acceptance-criteria>` plus spec-compliance is the review gate; any agent that hits a workaround/quirk MUST append it to the task file's `<obstacles>` section.
-8. **Tombstoning (context-clash defense).** When a requirement, feature, or decision is REMOVED from any doc (feature.md, CONTEXT.md, BACKLOG.md), it is never silently deleted — mark it `<removed YYYY-MM-DD — reason>` (or `[-] removed` in BACKLOG). Agents resurrect deleted things from conversation/context history unless they see an explicit tombstone. A visible "this is dead" beats an absent trace.
-9. **Explicit dependencies, not prose.** Any forward/backward reference between tasks or features ("this logic is done when X is ready") MUST be materialized as a `<refs>` entry and/or a BACKLOG row with `[?]` blocked status — never left as free text. Agents silently ignore prose cross-references; structured dependencies they follow.
-10. **Bug reports = task files.** QA findings are written directly as `BACKLOG/nnn-slug/tasks/NN-foo.md` files (goal = expected behavior, scope = what's broken, acceptance = how to verify the fix) — a bug report is a ready-made execution contract, not a chat message.
+7. **Features live on the Overmind board.** Complex work = a board feature: `planning_create_feature` (durable what/why in the body) → OPTIONAL requirements intake → spec artifact → user validation gate (`planning_validate`) → plan artifact → user validation gate → task artifacts per task. Validated spec/plan are FROZEN — changes via `planning_patch_artifact` with `logNote` or re-validation, never silent edits. The executing sub-agent gets ONLY its task artifact as input; `<acceptance-criteria>` plus spec-compliance is the review gate; any agent that hits a workaround/quirk MUST patch it into the task artifact's `<obstacles>` section. Mechanics: `overmind-ceremony` skill.
+8. **Tombstoning (context-clash defense).** When a requirement, feature, or decision is REMOVED from any doc or artifact body (CONTEXT.md, feature body, spec/plan), it is never silently deleted — mark it `<removed YYYY-MM-DD — reason>`. Agents resurrect deleted things from conversation/context history unless they see an explicit tombstone. A visible "this is dead" beats an absent trace.
+9. **Explicit dependencies, not prose.** Any forward/backward reference between tasks or features ("this logic is done when X is ready") MUST be materialized as a `<refs>` entry in the artifact body — never left as free text. Agents silently ignore prose cross-references; structured dependencies they follow.
+10. **Bug reports = task artifacts.** QA findings are written directly as task artifacts on the board (goal = expected behavior, scope = what's broken, acceptance = how to verify the fix) — a bug report is a ready-made execution contract, not a chat message.

@@ -21,7 +21,7 @@ whenToUse: |
 - AGENTS.md / SKILLFLOW.md give project context — skip codebase exploration for the fix itself.
 
 ## The Loop (max 3 iterations — HARD CAP)
-1. **Diagnose.** Spawn a log-reader sub-agent (strong execution model): fetch the failing job logs via `gh run view --log` (or glab equivalent). Output: root cause hypothesis + affected files. Apply `superpowers:systematic-debugging` — no fixes without root cause.
+1. **Diagnose.** Spawn a log-reader sub-agent (strong execution model): fetch the failing job logs via `gh run view --log` (or glab equivalent). Output: root cause hypothesis + affected files. Apply root-cause-first debugging (`overmind-ceremony` techniques) — no fixes without root cause.
 2. **Fix.** Coder sub-agent (strong execution model) applies the minimal fix locally. No scope creep: only what the failing stage needs.
 3. **Trigger & watch.** Push the fix branch / trigger the pipeline (`gh workflow run` or push). Watch until completion (`gh run watch`).
 4. **If green** → go to Review. **If red** → logs back to step 1. **After 3 failed iterations → STOP**: report root-cause hypotheses tried, current error, and why it's likely outside the repo (secrets, quotas, infra) — human takes over.

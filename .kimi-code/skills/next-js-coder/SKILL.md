@@ -15,7 +15,7 @@ whenToUse: |
 ## Context & Documentation Order
 Before writing or editing code, read project documentation in this strict order:
 1. `CONTEXT.md` — System design, frontend architecture, BFF rules, AI Framework details (Russian)
-2. `BACKLOG.md` — Current sprint tasks and execution order (Mixed EN/RU)
+2. Overmind board — current feature/task state via `overmind_onboard` + `planning_list_features` (ceremony rules: `overmind-ceremony`)
 3. `STRUCTURE.md` — Frontend structure, FSD rules, code style, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, frontend conventions, AI agent guidelines (English)
 

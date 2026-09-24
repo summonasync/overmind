@@ -15,7 +15,7 @@ whenToUse: |
 ## Context & Documentation Order
 Before reviewing code, read project documentation in this strict order:
 1. `CONTEXT.md` — Architecture decisions, service boundaries, MassTransit topology (Russian)
-2. `BACKLOG.md` — Current sprint context (Mixed EN/RU)
+2. Overmind board — current feature/task context via `planning_list_features` (see `overmind-ceremony`)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
 

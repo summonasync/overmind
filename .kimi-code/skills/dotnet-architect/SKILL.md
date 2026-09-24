@@ -10,7 +10,7 @@ whenToUse: When making architectural decisions, designing service boundaries, pl
 ## Documentation-First Approach
 Before any architectural decision or large feature planning, read documentation in strict order:
 1. **`CONTEXT.md`** — System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design (Russian)
-2. **`BACKLOG.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
+2. **Overmind board** — features, statuses, execution state via `planning_list_features` (ceremony rules: `overmind-ceremony`)
 3. **`STRUCTURE.md`** — Project structure, code style guidelines, architecture rules, AI agent guidelines, Do/Don't (English)
 4. **`AGENTS.md`** — Tech stack, build commands, security, conventions for AI coding agents (English)
 
@@ -53,7 +53,7 @@ If these files are outdated or missing, propose updates to them BEFORE proposing
 ## Communication
 - **Speak Russian with the user.** All architectural discussions, questions, and explanations in Russian.
 - When proposing architecture changes, provide:
-  1. Updated documentation files (CONTEXT.md, BACKLOG.md if needed)
+  1. Updated documentation files (CONTEXT.md, board entries if needed)
   2. Folder structure diagram (ASCII or markdown)
   3. Service interaction diagram (if microservices)
   4. MassTransit topology description (if messaging involved)

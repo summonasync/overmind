@@ -34,11 +34,9 @@
 
       // config self-modification is human-only
       "Edit(~/.qwen/settings.json)",
-      "Edit(~/.qwen/settings.jsonc)",
+      "Edit(~/.qwen/settings-snippet.jsonc)",
       "Edit(~/.qwen/hooks/**)",
-      "Edit(~/.qwen/QWEN.md)",
-      "Edit(~/.qwen/agents/**)",
-      "Edit(~/.qwen/skills/**)"
+      "Edit(~/.qwen/QWEN.md)"
     ],
     "ask": [
       // commits and pushes only on explicit user request in THIS session
