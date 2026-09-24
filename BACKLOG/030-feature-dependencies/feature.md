@@ -1,7 +1,7 @@
 ---
 feature: 030
 slug: feature-dependencies
-status: draft
+status: done
 priority: p0
 version: 1
 created: 2026-09-20
@@ -36,3 +36,10 @@ Mindlash-фидбек (2026-09-20): зависимости жили тексто
 <status>
 Draft; поднята в очереди юзер-запросом 2026-09-24 (enforcement + отдельный UI/MCP-редактор). Спека после 067-069/071.
 </status>
+
+<log>
+- 2026-09-24 [ui] — status moved to 'ready' via ui
+- 2026-09-24 [auto] — artifact created → inProgress
+- 2026-09-24 [auto] — all tasks done + spec + plan → review
+- 2026-09-24 [agent] — by user request in-session — post-session validation confirmed: 6/6 tasks + reviews (task 4 hard APPROVED WITH WARNINGS), result artifact complete, full suite re-run green (Core 203, Infra 427, Api 382, Mcp 318), web lint/tsc/build clean
+</log>

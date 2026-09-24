@@ -28,6 +28,13 @@ public sealed class PlanningException : Exception
     public static PlanningException DuplicateArtifact(PlanningArtifactKind kind, int order) =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact, $"An artifact of kind '{kind}' with order {order} already exists.");
 
+    public static PlanningException TaskBatchItem(int index, PlanningException inner) =>
+        new(inner.Kind, inner.Code, $"tasks[{index}]: {inner.Message}", inner);
+
+    public static PlanningException TaskBatchConcurrentWrite() =>
+        new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact,
+            "A concurrent writer claimed a task order while the batch was saving; the whole batch was rolled back — retry the call.");
+
     public static PlanningException InvalidSlug(string slug) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidSlug, $"Slug '{slug}' does not match the required pattern (lowercase alphanumeric with hyphens, max 64 chars).");
 
@@ -101,6 +108,15 @@ public sealed class PlanningException : Exception
     public static PlanningException PatchLogSectionNotReplaceable() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchLogSectionNotReplaceable,
             "The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or the artifact log endpoint; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.");
+
+    public static PlanningException DependencyCycle(string slug, string blockedBySlug, IReadOnlyList<string> chain) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DependencyCycle,
+            $"Adding '{blockedBySlug}' as a blocker of '{slug}' would create a dependency cycle: {string.Join(" -> ", chain)}.");
+
+    public static PlanningException FeatureBlocked(string slug, IReadOnlyList<string> openBlockers) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureBlocked,
+            $"STOP: feature '{slug}' is blocked by unclosed features: {string.Join(", ", openBlockers)}. " +
+            "Pinning is refused — work a blocker first or ask the user to clear the link.");
 
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));

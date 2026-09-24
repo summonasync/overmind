@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -588,6 +589,195 @@ public sealed class PlanningServiceTests : IDisposable
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         persisted.Status.ShouldBe(PlanningFeatureStatus.Done);
         persisted.Version.ShouldBe(closed.Version);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_FiveTasksInOneCall_OneTransitionLineAndOneMaterializationSync()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        _materializer.ClearReceivedCalls();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            Enumerable.Range(1, 5).Select(i => new PlanningTaskUpsert($"task {i}")).ToArray(),
+            default);
+
+        batch.Created.ShouldBe(5);
+        batch.Updated.ShouldBe(0);
+        batch.Artifacts.Count.ShouldBe(5);
+        batch.Artifacts.Select(a => a.Order).ToArray().ShouldBe([0, 1, 2, 3, 4]);
+        batch.Artifacts.ShouldAllBe(a => a.Status == PlanningArtifactStatus.Todo);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        PlanningLog.Parse(persisted.Body)
+            .Count(l => l.Text == "artifact created → inProgress")
+            .ShouldBe(1);
+
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpsertTasks_CreateFromReview_SingleReopenLineNotOnePerTask()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var first = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        await artifactService.SetStatusAsync(
+            first.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
+
+        var inReview = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        inReview.Status.ShouldBe(PlanningFeatureStatus.Review);
+
+        await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task 2"), new PlanningTaskUpsert("task 3")],
+            default);
+
+        var reopened = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        reopened.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        PlanningLog.Parse(reopened.Body)
+            .Count(l => l.Text == "task created while in review — reopened for the new work")
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_MixedCreateAndUpdate_CountsAndUpdatesInPlace()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1 v1", 0, null, null, default);
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("task 1 v2", Order: 0, LogNote: "rewritten from the plan"),
+                new PlanningTaskUpsert("task 2", Review: PlanningReviewLevel.Hard, Brief: "Wire the hook")
+            ],
+            default);
+
+        batch.Created.ShouldBe(1);
+        batch.Updated.ShouldBe(1);
+
+        var updated = batch.Artifacts[0];
+        updated.Version.ShouldBe(2);
+        updated.Body.ShouldContain("task 1 v2");
+        PlanningLog.Parse(updated.Body).Single().Text.ShouldBe("rewritten from the plan");
+
+        var created = batch.Artifacts[1];
+        created.Order.ShouldBe(1);
+        created.Review.ShouldBe(PlanningReviewLevel.Hard);
+        created.Brief.ShouldBe("Wire the hook");
+
+        var persistedTasks = await _context.PlanningArtifacts
+            .Where(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Task)
+            .ToListAsync();
+        persistedTasks.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_DuplicateExplicitOrderWithinBatch_MergesIntoOneArtifact()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("first take", Order: 0), new PlanningTaskUpsert("second take", Order: 0, LogNote: "merged")],
+            default);
+
+        batch.Created.ShouldBe(1);
+        batch.Updated.ShouldBe(1);
+        var count = await _context.PlanningArtifacts
+            .CountAsync(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Task);
+        count.ShouldBe(1);
+        batch.Artifacts[0].Body.ShouldContain("second take");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_MissingFeature_ThrowsNotFound()
+    {
+        var artifactService = CreateArtifactService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.UpsertTasksAsync(Guid.NewGuid(), [new PlanningTaskUpsert("task")], default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ConcurrentWriterClaimsAnOrder_RollsBackWholeBatchWithRetryHint()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var armed = false;
+        using var racing = _db.CreateContext();
+        var interceptor = new CompetingWriterInterceptor(
+            () => armed,
+            () =>
+            {
+                racing.PlanningArtifacts.Add(PlanningArtifact.Create(
+                    feature.Id, PlanningArtifactKind.Task, "claimed by the racing writer", 0,
+                    PlanningReviewLevel.Light, null));
+                racing.SaveChanges();
+            });
+        using var context = _db.CreateContext(interceptor);
+        var artifactService = new PlanningArtifactService(
+            context, _materializer, NullLogger<PlanningArtifactService>.Instance);
+
+        _materializer.ClearReceivedCalls();
+        armed = true;
+        var ex = await Should.ThrowAsync<PlanningException>(() => artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task A", Order: 0), new PlanningTaskUpsert("task B", Order: 1)],
+            default));
+        armed = false;
+
+        ex.Kind.ShouldBe(PlanningFailureKind.Duplicate);
+        ex.Message.ShouldContain("retry the call");
+
+        using var verified = _db.CreateContext();
+        var persisted = await verified.PlanningArtifacts
+            .Where(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Task)
+            .ToListAsync();
+        persisted.Count.ShouldBe(1);
+        persisted[0].Order.ShouldBe(0);
+        persisted[0].Body.ShouldContain("claimed by the racing writer");
+
+        var persistedFeature = await verified.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persistedFeature.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        PlanningLog.Parse(persistedFeature.Body)
+            .ShouldNotContain(l => l.Text == "artifact created → inProgress");
+
+        await _materializer.DidNotReceive().SyncAsync(
+            Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    private sealed class CompetingWriterInterceptor(Func<bool> armed, Action compete) : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (armed())
+            {
+                compete();
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
     }
 
     [Fact]

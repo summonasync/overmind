@@ -215,6 +215,7 @@ public sealed partial class PlanningFeatureService
 
         var feature = await _db.PlanningFeatures
             .Include(f => f.Artifacts)
+            .Include(f => f.BlockedBy)
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == import.Slug, ct);
 
         bool featureCreated;
@@ -354,6 +355,8 @@ public sealed partial class PlanningFeatureService
             kept.Add($"kept: {orphan.Kind.ToString().ToLowerInvariant()} {orphan.Order} not present on disk");
         }
 
+        kept.AddRange(await RestoreDependenciesAsync(feature, import.BlockedBy, ct));
+
         var seed = await _seeder.SeedAsync(projectId, feature.Id, import.SourcePaths, ct);
 
         try
@@ -369,6 +372,49 @@ public sealed partial class PlanningFeatureService
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
         return new BacklogFeatureImportResult(
             featureCreated, artifactsCreated, artifactsUpdated, kept, seed.Tracked, seed.Strategy);
+    }
+
+    // Import is additive: links present on the board but gone from the file survive (like
+    // artifacts not on disk), and re-importing the same file links nothing twice.
+    private async Task<IReadOnlyList<string>> RestoreDependenciesAsync(
+        PlanningFeature feature, IReadOnlyList<string> blockerSlugs, CancellationToken ct)
+    {
+        if (blockerSlugs.Count == 0)
+        {
+            return [];
+        }
+
+        var notes = new List<string>();
+        var wanted = blockerSlugs.Distinct(StringComparer.Ordinal).ToList();
+        var blockers = await _db.PlanningFeatures
+            .AsNoTracking()
+            .Where(f => f.ProjectId == feature.ProjectId && wanted.Contains(f.Slug))
+            .ToDictionaryAsync(f => f.Slug, f => f, StringComparer.Ordinal, ct);
+
+        foreach (var slug in wanted)
+        {
+            if (string.Equals(slug, feature.Slug, StringComparison.Ordinal))
+            {
+                notes.Add($"unlinked: {feature.Slug} depends on {slug} — a feature cannot block itself");
+                continue;
+            }
+
+            if (!blockers.TryGetValue(slug, out var blocker))
+            {
+                notes.Add($"unlinked: {feature.Slug} depends on {slug} — feature not on the board");
+                continue;
+            }
+
+            if (feature.BlockedBy.Any(d => d.BlockedByFeatureId == blocker.Id))
+            {
+                continue;
+            }
+
+            feature.AddBlockedBy(blocker);
+            notes.Add($"linked: {feature.Slug} depends on {blocker.Slug} (restored from imported file)");
+        }
+
+        return notes;
     }
 
     private static string ContentKey(string body) =>

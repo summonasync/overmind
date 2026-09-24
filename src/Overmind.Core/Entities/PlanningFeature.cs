@@ -19,6 +19,7 @@ public sealed class PlanningFeature
     public DateTime UpdatedAt { get; private set; }
 
     public List<PlanningArtifact> Artifacts { get; private set; } = [];
+    public List<PlanningFeatureDependency> BlockedBy { get; private set; } = [];
 
     public static PlanningFeature Create(
         Guid projectId, string slug, string title, string body,
@@ -118,5 +119,48 @@ public sealed class PlanningFeature
     {
         Priority = priority;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AddBlockedBy(PlanningFeature blocker)
+    {
+        ArgumentNullException.ThrowIfNull(blocker);
+
+        if (blocker.Id == Id)
+        {
+            throw new ArgumentException("A feature cannot be blocked by itself.");
+        }
+
+        if (blocker.ProjectId != ProjectId)
+        {
+            throw new ArgumentException(
+                $"Feature '{blocker.Slug}' belongs to another project; dependencies stay within one project.");
+        }
+
+        if (BlockedBy.Any(d => d.BlockedByFeatureId == blocker.Id))
+        {
+            return;
+        }
+
+        BlockedBy.Add(PlanningFeatureDependency.Create(Id, blocker.Id));
+    }
+
+    public void RemoveBlockedBy(PlanningFeature blocker)
+    {
+        ArgumentNullException.ThrowIfNull(blocker);
+
+        var link = BlockedBy.FirstOrDefault(d => d.BlockedByFeatureId == blocker.Id);
+        if (link is not null)
+        {
+            BlockedBy.Remove(link);
+        }
+    }
+
+    public IReadOnlyList<PlanningFeature> GetBlocks(IEnumerable<PlanningFeature> projectFeatures)
+    {
+        ArgumentNullException.ThrowIfNull(projectFeatures);
+
+        return projectFeatures
+            .Where(f => f.BlockedBy.Any(d => d.BlockedByFeatureId == Id))
+            .ToList();
     }
 }

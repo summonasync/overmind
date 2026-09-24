@@ -14,7 +14,8 @@ public sealed record PlanningFeatureBoardItem(
     int TaskTotal,
     int TaskDone,
     DateTime UpdatedAt,
-    bool IsCurrent);
+    bool IsCurrent,
+    bool IsBlocked);
 
 public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body, string? Priority = null);
 
@@ -34,7 +35,22 @@ public sealed record PlanningFeatureResponse(
     int Version,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    PlanningArtifactResponse[] Artifacts);
+    PlanningArtifactResponse[] Artifacts,
+    bool IsBlocked,
+    PlanningFeatureDependencyEntryResponse[] BlockedBy,
+    PlanningFeatureDependencyEntryResponse[] Blocks);
+
+public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
+
+public sealed record PlanningFeatureDependencyEntryResponse(
+    string Slug,
+    PlanningFeatureStatus Status,
+    bool Closed);
+
+public sealed record PlanningFeatureDependenciesResponse(
+    string Slug,
+    PlanningFeatureDependencyEntryResponse[] BlockedBy,
+    PlanningFeatureDependencyEntryResponse[] Blocks);
 
 public sealed record CreatePlanningArtifactRequest(
     PlanningArtifactKind Kind,
@@ -45,6 +61,20 @@ public sealed record CreatePlanningArtifactRequest(
     string? Brief = null);
 
 public sealed record UpdatePlanningArtifactRequest(string Body, string? LogNote, string? Brief = null);
+
+public sealed record PlanningTaskUpsertRequest(
+    string Body,
+    int? Order = null,
+    PlanningReviewLevel? Review = null,
+    string? LogNote = null,
+    string? Brief = null);
+
+public sealed record CreatePlanningTasksRequest(PlanningTaskUpsertRequest[] Tasks);
+
+public sealed record CreatePlanningTasksResponse(
+    int Created,
+    int Updated,
+    PlanningArtifactResponse[] Artifacts);
 
 public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Status, string LogNote);
 
@@ -121,6 +151,20 @@ public sealed record PlanningCurrentFeature(
     PlanningFeatureStatus Status);
 
 public sealed record MaterializePlanningRequest(bool Force);
+
+public sealed record ImportPlanningFeatureRequest(string Path);
+
+public sealed record PlanningFeatureImportResponse(
+    string Slug,
+    string Title,
+    PlanningFeatureStatus Status,
+    bool Created,
+    int ArtifactsCreated,
+    int ArtifactsUpdated,
+    string[] Notes,
+    int TrackedFiles,
+    PlanningMaterialization Materialization,
+    string? NextStep);
 
 public sealed record PlanningMaterializedFileResponse(string RelativePath, string Sha256);
 

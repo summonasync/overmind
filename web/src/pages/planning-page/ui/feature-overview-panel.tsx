@@ -49,6 +49,7 @@ export function FeatureOverviewPanel({ projectId, slug }: FeatureOverviewPanelPr
             <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
             <Badge>v{feature.version}</Badge>
             {boardItem?.isCurrent ? <Badge tone="info">current</Badge> : null}
+            {feature.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
           </div>
 
           {tasksTotal > 0 ? (

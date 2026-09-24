@@ -244,4 +244,75 @@ public class PlanningFeatureTests
         feature.IsCurrent.ShouldBeFalse();
         feature.Status.ShouldBe(PlanningFeatureStatus.Draft);
     }
+
+    [Fact]
+    public void AddBlockedBy_SameProjectFeature_StoresSingleLink()
+    {
+        var blocker = PlanningFeature.Create(ProjectId, "001-auth", "Auth", "body");
+        var feature = PlanningFeature.Create(ProjectId, "002-api", "Api", "body");
+
+        feature.AddBlockedBy(blocker);
+        feature.AddBlockedBy(blocker);
+
+        var link = feature.BlockedBy.Single();
+        link.FeatureId.ShouldBe(feature.Id);
+        link.BlockedByFeatureId.ShouldBe(blocker.Id);
+    }
+
+    [Fact]
+    public void AddBlockedBy_SelfReference_Throws()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", "body");
+
+        Should.Throw<ArgumentException>(() => feature.AddBlockedBy(feature));
+    }
+
+    [Fact]
+    public void AddBlockedBy_FeatureFromAnotherProject_Throws()
+    {
+        var blocker = PlanningFeature.Create(Guid.NewGuid(), "001-auth", "Auth", "body");
+        var feature = PlanningFeature.Create(ProjectId, "002-api", "Api", "body");
+
+        Should.Throw<ArgumentException>(() => feature.AddBlockedBy(blocker));
+    }
+
+    [Fact]
+    public void RemoveBlockedBy_ExistingLink_RemovesIt()
+    {
+        var blocker = PlanningFeature.Create(ProjectId, "001-auth", "Auth", "body");
+        var feature = PlanningFeature.Create(ProjectId, "002-api", "Api", "body");
+        feature.AddBlockedBy(blocker);
+
+        feature.RemoveBlockedBy(blocker);
+
+        feature.BlockedBy.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void RemoveBlockedBy_UnknownBlocker_IsNoOp()
+    {
+        var stranger = PlanningFeature.Create(ProjectId, "001-auth", "Auth", "body");
+        var feature = PlanningFeature.Create(ProjectId, "002-api", "Api", "body");
+
+        feature.RemoveBlockedBy(stranger);
+
+        feature.BlockedBy.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void GetBlocks_StoresOneDirection_DerivesReverseInMemory()
+    {
+        var first = PlanningFeature.Create(ProjectId, "001-auth", "Auth", "body");
+        var second = PlanningFeature.Create(ProjectId, "002-api", "Api", "body");
+        var third = PlanningFeature.Create(ProjectId, "003-ui", "Ui", "body");
+        second.AddBlockedBy(first);
+        third.AddBlockedBy(first);
+        third.AddBlockedBy(second);
+
+        var projectFeatures = new[] { first, second, third };
+
+        first.GetBlocks(projectFeatures).Select(f => f.Slug).ShouldBe(["002-api", "003-ui"]);
+        second.GetBlocks(projectFeatures).Select(f => f.Slug).ShouldBe(["003-ui"]);
+        third.GetBlocks(projectFeatures).ShouldBeEmpty();
+    }
 }

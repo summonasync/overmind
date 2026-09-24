@@ -209,6 +209,144 @@ public sealed class PlanningRoundTripTests : IDisposable
     }
 
     [Fact]
+    public async Task RoundTrip_DependencyLinks_ExportThenImportIntoFreshDatabase_RestoresLinks()
+    {
+        var projectId = await SeedProjectAsync();
+        using (var ctx = _db.CreateContext())
+        {
+            var auth = PlanningFeature.Create(projectId, "020-auth", "Auth", "<goal>\nAuth.\n</goal>");
+            var storage = PlanningFeature.Create(projectId, "030-storage", "Storage", "<goal>\nStorage.\n</goal>");
+            var demo = PlanningFeature.Create(projectId, "010-demo", "Demo", "<goal>\nDemo.\n</goal>");
+            demo.AddBlockedBy(storage);
+            demo.AddBlockedBy(auth);
+            ctx.PlanningFeatures.AddRange(auth, storage, demo);
+            await ctx.SaveChangesAsync();
+        }
+
+        await SyncAsync(projectId, force: true);
+
+        var demoDoc = await File.ReadAllTextAsync(Path.Combine(BacklogDir, "010-demo", "feature.md"));
+        demoDoc.ShouldContain("depends_on: 020-auth, 030-storage\n");
+        (await File.ReadAllTextAsync(Path.Combine(BacklogDir, "020-auth", "feature.md")))
+            .ShouldNotContain("depends_on");
+
+        var exported = await SnapshotAsync();
+
+        using var freshDb = new TempDatabase();
+        Guid freshProjectId;
+        using (var ctx = freshDb.CreateContext())
+        {
+            var project = Project.Create($"rt-fresh-{Guid.NewGuid():N}", _repoDir, string.Empty);
+            project.SetPlanningWorkflow(PlanningMaterialization.On, HumanValidationOverride.Unset);
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            freshProjectId = project.Id;
+        }
+
+        BacklogImportReport report;
+        using (var ctx = freshDb.CreateContext())
+        {
+            report = await CreateImporter(ctx)
+                .ImportAsync(new BacklogImportRequest(_repoDir, freshProjectId), CancellationToken.None);
+        }
+
+        report.FeaturesCreated.ShouldBe(3);
+        report.Skipped.ShouldContain(s => s.Contains("linked: 010-demo depends on 020-auth"));
+        report.Skipped.ShouldContain(s => s.Contains("linked: 010-demo depends on 030-storage"));
+        report.Skipped.ShouldNotContain(s => s.Contains("unlinked"));
+
+        using (var ctx = freshDb.CreateContext())
+        {
+            var blockers = await ctx.PlanningFeatures
+                .Include(f => f.BlockedBy)
+                .SingleAsync(f => f.ProjectId == freshProjectId && f.Slug == "010-demo");
+            var slugById = await ctx.PlanningFeatures
+                .Where(f => f.ProjectId == freshProjectId)
+                .ToDictionaryAsync(f => f.Id, f => f.Slug);
+
+            blockers.BlockedBy
+                .Select(link => slugById[link.BlockedByFeatureId])
+                .OrderBy(slug => slug, StringComparer.Ordinal)
+                .ShouldBe(["020-auth", "030-storage"]);
+            (await ctx.PlanningFeatureDependencies.CountAsync()).ShouldBe(2);
+        }
+
+        using (var ctx = freshDb.CreateContext())
+        {
+            await CreateMaterializer(ctx).SyncAsync(freshProjectId, ct: CancellationToken.None);
+        }
+
+        (await SnapshotAsync()).ShouldBe(exported);
+    }
+
+    [Fact]
+    public async Task Import_NonSortedDependsOn_RestoresFileOrderAndReExportIsStable()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteRaw("010-demo/feature.md",
+            "---\n" +
+            "feature: 010\n" +
+            "slug: demo\n" +
+            "status: ready\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "depends_on: 030-storage, 020-auth\n" +
+            "---\n\n" +
+            "# Feature 010 — Demo feature title\n\n" +
+            "<goal>\nBuild the demo.\n</goal>\n");
+        WriteRaw("020-auth/feature.md",
+            "---\n" +
+            "feature: 020\n" +
+            "slug: auth\n" +
+            "status: done\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 020 — Auth\n\n" +
+            "<goal>\nAuth.\n</goal>\n");
+        WriteRaw("030-storage/feature.md",
+            "---\n" +
+            "feature: 030\n" +
+            "slug: storage\n" +
+            "status: done\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 030 — Storage\n\n" +
+            "<goal>\nStorage.\n</goal>\n");
+
+        var report = await ImportAsync(projectId);
+
+        report.FeaturesCreated.ShouldBe(3);
+        report.Skipped.ShouldNotContain(s => s.Contains("unlinked"));
+
+        using (var ctx = _db.CreateContext())
+        {
+            var dependent = await ctx.PlanningFeatures
+                .Include(f => f.BlockedBy)
+                .SingleAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+            var slugById = await ctx.PlanningFeatures
+                .Where(f => f.ProjectId == projectId)
+                .ToDictionaryAsync(f => f.Id, f => f.Slug);
+
+            dependent.BlockedBy
+                .Select(link => slugById[link.BlockedByFeatureId])
+                .OrderBy(slug => slug, StringComparer.Ordinal)
+                .ShouldBe(["020-auth", "030-storage"]);
+        }
+
+        await SyncAsync(projectId, force: true);
+
+        var demoDoc = await File.ReadAllTextAsync(Path.Combine(BacklogDir, "010-demo", "feature.md"));
+        demoDoc.ShouldContain("depends_on: 020-auth, 030-storage\n");
+        var exported = await SnapshotAsync();
+
+        await SyncAsync(projectId);
+
+        (await SnapshotAsync()).ShouldBe(exported);
+    }
+
+    [Fact]
     public async Task Import_UnknownPriority_DowngradesToP2WithReportLine()
     {
         var projectId = await SeedProjectAsync();

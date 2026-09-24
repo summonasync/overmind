@@ -2,12 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  addPlanningFeatureDependency,
   appendPlanningLog,
   createPlanningArtifact,
   createPlanningFeature,
   deletePlanningArtifact,
   deletePlanningFeature,
   materializePlanning,
+  removePlanningFeatureDependency,
   setPlanningArtifactStatus,
   setPlanningFeatureCurrent,
   updatePlanningArtifact,
@@ -76,6 +78,22 @@ export function usePlanningMutations(projectId: string) {
     },
   });
 
+  const addFeatureDependency = useMutation({
+    mutationFn: (input: { slug: string; blockedBy: string }) =>
+      addPlanningFeatureDependency(projectId, input.slug, input.blockedBy),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: planningKeys.all });
+    },
+  });
+
+  const removeFeatureDependency = useMutation({
+    mutationFn: (input: { slug: string; blockedBy: string }) =>
+      removePlanningFeatureDependency(projectId, input.slug, input.blockedBy),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: planningKeys.all });
+    },
+  });
+
   const createArtifact = useMutation({
     mutationFn: ({ slug, values }: { slug: string; values: CreatePlanningArtifactValues }) =>
       createPlanningArtifact(projectId, slug, values),
@@ -124,6 +142,8 @@ export function usePlanningMutations(projectId: string) {
     updateFeature,
     deleteFeature,
     setFeatureCurrent,
+    addFeatureDependency,
+    removeFeatureDependency,
     createArtifact,
     updateArtifact,
     deleteArtifact,

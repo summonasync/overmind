@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Overmind.Core;
 using Overmind.Infrastructure.Persistence;
 
@@ -15,10 +16,11 @@ public sealed class TempDatabase : IDisposable
         context.Database.Migrate();
     }
 
-    public OvermindDbContext CreateContext()
+    public OvermindDbContext CreateContext(params IInterceptor[] interceptors)
     {
         var options = new DbContextOptionsBuilder<OvermindDbContext>()
             .UseSqlite($"Data Source={_path};Pooling=false")
+            .AddInterceptors(interceptors)
             .Options;
 
         return new OvermindDbContext(options);

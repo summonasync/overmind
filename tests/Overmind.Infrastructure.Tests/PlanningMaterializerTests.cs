@@ -99,6 +99,36 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
+    public async Task On_BlockedFeature_WritesSortedDependsOnLine()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+        await SeedFeatureAsync(projectId, "004-auth", "Auth", "body", PlanningFeatureStatus.Done);
+        await SeedFeatureAsync(projectId, "008-storage", "Storage", "body", PlanningFeatureStatus.Done);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var features = await ctx.PlanningFeatures
+                .Include(f => f.BlockedBy)
+                .Where(f => f.ProjectId == projectId)
+                .ToListAsync();
+            var demo = features.Single(f => f.Slug == "006-demo");
+            demo.AddBlockedBy(features.Single(f => f.Slug == "008-storage"));
+            demo.AddBlockedBy(features.Single(f => f.Slug == "004-auth"));
+            await ctx.SaveChangesAsync();
+        }
+
+        using var syncCtx = _db.CreateContext();
+        await CreateMaterializer(syncCtx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var featureDoc = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md"));
+        featureDoc.ShouldContain(
+            $"created: {DateTime.UtcNow:yyyy-MM-dd}\ndepends_on: 004-auth, 008-storage\n---");
+        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "004-auth", "feature.md")))
+            .ShouldNotContain("depends_on");
+    }
+
+    [Fact]
     public async Task On_ReviewFeature_EmitsReviewStatusAndTildeMarker()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);

@@ -6,6 +6,7 @@ import type {
   PlanningArtifactVersionResponse,
   PlanningDriftItem,
   PlanningFeatureBoardItem,
+  PlanningFeatureDependenciesResponse,
   PlanningFeatureFormValues,
   PlanningFeatureResponse,
   PlanningMaterializationReport,
@@ -60,6 +61,27 @@ export function setPlanningFeatureCurrent(
   return apiPost<PlanningFeatureResponse>(`/projects/${projectId}/planning/features/${slug}/current`, {
     isCurrent,
   });
+}
+
+export function addPlanningFeatureDependency(
+  projectId: string,
+  slug: string,
+  blockedBySlug: string,
+): Promise<PlanningFeatureDependenciesResponse> {
+  return apiPost<PlanningFeatureDependenciesResponse>(
+    `/projects/${projectId}/planning/features/${slug}/dependencies`,
+    { blockedBy: blockedBySlug },
+  );
+}
+
+export function removePlanningFeatureDependency(
+  projectId: string,
+  slug: string,
+  blockedBySlug: string,
+): Promise<PlanningFeatureDependenciesResponse> {
+  return apiDelete<PlanningFeatureDependenciesResponse>(
+    `/projects/${projectId}/planning/features/${slug}/dependencies/${blockedBySlug}`,
+  );
 }
 
 export function getPlanningArtifact(artifactId: string): Promise<PlanningArtifactResponse> {

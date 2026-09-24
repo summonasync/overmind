@@ -311,6 +311,21 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("PlanningFeatures");
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningFeatureDependency", b =>
+                {
+                    b.Property<Guid>("FeatureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BlockedByFeatureId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("FeatureId", "BlockedByFeatureId");
+
+                    b.HasIndex("BlockedByFeatureId");
+
+                    b.ToTable("PlanningFeatureDependencies");
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningMaterializedFile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -620,6 +635,25 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningFeatureDependency", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningFeature", "BlockedBy")
+                        .WithMany()
+                        .HasForeignKey("BlockedByFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Overmind.Core.PlanningFeature", "Feature")
+                        .WithMany("BlockedBy")
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BlockedBy");
+
+                    b.Navigation("Feature");
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningMaterializedFile", b =>
                 {
                     b.HasOne("Overmind.Core.PlanningFeature", null)
@@ -709,6 +743,8 @@ namespace Overmind.Infrastructure.Migrations
             modelBuilder.Entity("Overmind.Core.PlanningFeature", b =>
                 {
                     b.Navigation("Artifacts");
+
+                    b.Navigation("BlockedBy");
                 });
 
             modelBuilder.Entity("Overmind.Core.SkillKit", b =>

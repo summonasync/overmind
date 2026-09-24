@@ -6,6 +6,7 @@ export { BoardSearchInput } from "./components/board-search-input";
 export { CeremonyStepper } from "./components/ceremony-stepper";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
+export { FeatureDependenciesPanel } from "./components/feature-dependencies-panel";
 export { FeatureForm } from "./components/feature-form";
 export { FeatureNumber } from "./components/feature-number";
 export { FeatureNumberBadge } from "./components/feature-number-badge";
@@ -73,6 +74,8 @@ export type {
   PlanningDriftItem,
   PlanningDriftKind,
   PlanningFeatureBoardItem,
+  PlanningFeatureDependencyEntry,
+  PlanningFeatureDependenciesResponse,
   PlanningFeatureFormValues,
   PlanningFeaturePriority,
   PlanningFeatureResponse,

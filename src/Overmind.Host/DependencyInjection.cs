@@ -61,10 +61,13 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<CreatePlanningFeatureRequest>, CreatePlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<UpdatePlanningFeatureRequest>, UpdatePlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<CreatePlanningArtifactRequest>, CreatePlanningArtifactRequestValidator>();
+        services.AddSingleton<IValidator<CreatePlanningTasksRequest>, CreatePlanningTasksRequestValidator>();
         services.AddSingleton<IValidator<UpdatePlanningArtifactRequest>, UpdatePlanningArtifactRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningFeatureStatusRequest>, SetPlanningFeatureStatusRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
+        services.AddSingleton<IValidator<ImportPlanningFeatureRequest>, ImportPlanningFeatureRequestValidator>();
+        services.AddSingleton<IValidator<AddPlanningFeatureDependencyRequest>, AddPlanningFeatureDependencyRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();
         services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
         services.AddSingleton<IValidator<CreateNotificationRequest>, CreateNotificationRequestValidator>();
@@ -93,6 +96,7 @@ public static class DependencyInjection
             provider.GetRequiredService<PlanningPolicy>(),
             OvermindPaths.DataDirectory));
         services.AddScoped<PlanningFeatureService>();
+        services.AddScoped<FeatureDependencyService>();
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();

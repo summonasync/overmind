@@ -35,11 +35,15 @@ public static class PlanningFeaturesApi
 
         var features = await db.PlanningFeatures
             .Include(f => f.Artifacts)
+            .Include(f => f.BlockedBy)
             .Where(f => f.ProjectId == projectId)
             .OrderBy(f => f.Slug)
             .ToListAsync(ct);
 
-        return Results.Ok(features.Select(PlanningMapper.ToBoardItem).ToArray());
+        var projectFeatures = features.ToDictionary(f => f.Id);
+        return Results.Ok(features
+            .Select(f => PlanningMapper.ToBoardItem(f, PlanningMapper.HasOpenBlocker(f, projectFeatures)))
+            .ToArray());
     }
 
     internal static async Task<IResult> CreateFeature(
@@ -47,6 +51,7 @@ public static class PlanningFeaturesApi
         CreatePlanningFeatureRequest request,
         IValidator<CreatePlanningFeatureRequest> validator,
         PlanningFeatureService service,
+        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -79,11 +84,16 @@ public static class PlanningFeaturesApi
         var feature = await LoadFeatureWithArtifacts(db, projectId, request.Slug, ct);
         return Results.Created(
             $"/api/projects/{projectId}/planning/features/{request.Slug}",
-            PlanningMapper.ToFeatureResponse(feature!));
+            PlanningMapper.ToFeatureResponse(
+                feature!, await dependencies.ListDependenciesAsync(projectId, request.Slug, ct)));
     }
 
     internal static async Task<IResult> GetFeature(
-        Guid projectId, string slug, OvermindDbContext db, CancellationToken ct)
+        Guid projectId,
+        string slug,
+        OvermindDbContext db,
+        FeatureDependencyService dependencies,
+        CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
         if (!projectExists)
@@ -97,7 +107,8 @@ public static class PlanningFeaturesApi
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
         }
 
-        return Results.Ok(PlanningMapper.ToFeatureResponse(feature));
+        return Results.Ok(PlanningMapper.ToFeatureResponse(
+            feature, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
     }
 
     internal static async Task<IResult> UpdateFeature(
@@ -106,6 +117,7 @@ public static class PlanningFeaturesApi
         UpdatePlanningFeatureRequest request,
         IValidator<UpdatePlanningFeatureRequest> validator,
         PlanningFeatureService service,
+        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -136,7 +148,8 @@ public static class PlanningFeaturesApi
         }
 
         var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
-        return Results.Ok(PlanningMapper.ToFeatureResponse(feature!));
+        return Results.Ok(PlanningMapper.ToFeatureResponse(
+            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
     }
 
     internal static async Task<IResult> DeleteFeature(
@@ -159,6 +172,7 @@ public static class PlanningFeaturesApi
         string slug,
         SetPlanningFeatureCurrentRequest request,
         PlanningFeatureService service,
+        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -172,7 +186,8 @@ public static class PlanningFeaturesApi
         }
 
         var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
-        return Results.Ok(PlanningMapper.ToFeatureResponse(feature!));
+        return Results.Ok(PlanningMapper.ToFeatureResponse(
+            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
     }
 
     private static async Task<PlanningFeature?> LoadFeatureWithArtifacts(

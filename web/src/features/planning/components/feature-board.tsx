@@ -153,6 +153,7 @@ export function FeatureBoard({
               </a>
               <div className="flex shrink-0 items-center gap-1.5">
                 {item.isCurrent ? <Badge tone="info">current</Badge> : null}
+                {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
                 <FeatureStatusSelect projectId={projectId} item={item} />
               </div>
             </div>

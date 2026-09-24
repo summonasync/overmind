@@ -23,6 +23,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<MaterializedFile> MaterializedFiles => Set<MaterializedFile>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<PlanningFeature> PlanningFeatures => Set<PlanningFeature>();
+    public DbSet<PlanningFeatureDependency> PlanningFeatureDependencies => Set<PlanningFeatureDependency>();
     public DbSet<PlanningArtifact> PlanningArtifacts => Set<PlanningArtifact>();
     public DbSet<PlanningArtifactVersion> PlanningArtifactVersions => Set<PlanningArtifactVersion>();
     public DbSet<PlanningMaterializedFile> PlanningMaterializedFiles => Set<PlanningMaterializedFile>();
@@ -163,6 +164,23 @@ public sealed class OvermindDbContext : DbContext
 
             builder.Property(f => f.IsCurrent).HasDefaultValue(false);
             builder.Property(f => f.Priority).HasDefaultValue(FeaturePriority.P2).HasSentinel(FeaturePriority.P2);
+        });
+
+        // Deleting either endpoint of a dependency link must drop the link row; SQLite accepts
+        // the self-referencing cascade pair, SQL Server would not.
+        modelBuilder.Entity<PlanningFeatureDependency>(builder =>
+        {
+            builder.HasKey(d => new { d.FeatureId, d.BlockedByFeatureId });
+
+            builder.HasOne(d => d.Feature)
+                .WithMany(f => f.BlockedBy)
+                .HasForeignKey(d => d.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(d => d.BlockedBy)
+                .WithMany()
+                .HasForeignKey(d => d.BlockedByFeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PlanningArtifact>(builder =>

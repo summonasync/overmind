@@ -23,5 +23,7 @@ public enum PlanningFailureCode
     TickTextAmbiguous,
     TickItemNotCheckable,
     InvalidPatchRequest,
-    PatchLogSectionNotReplaceable
+    PatchLogSectionNotReplaceable,
+    DependencyCycle,
+    FeatureBlocked
 }

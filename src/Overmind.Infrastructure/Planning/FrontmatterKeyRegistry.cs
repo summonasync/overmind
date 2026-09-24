@@ -7,6 +7,8 @@ namespace Overmind.Infrastructure.Planning;
 
 public sealed class FrontmatterKeyRegistry
 {
+    public const string DependenciesKey = "depends_on";
+
     private readonly OvermindDbContext _db;
     private readonly ILogger<FrontmatterKeyRegistry> _logger;
 

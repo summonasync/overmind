@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff, Pin, X } from "lucide-react";
+import { Ban, EyeOff, Pin, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Select } from "@/shared/ui/select";
 import { cn } from "@/shared/lib/cn";
@@ -159,6 +159,16 @@ export function BoardFilterBar({ search }: BoardFilterBarProps) {
       >
         <EyeOff size={12} aria-hidden />
         Hide done
+      </button>
+
+      <button
+        type="button"
+        aria-pressed={filters.blockedOnly}
+        onClick={() => setFilters({ ...filters, blockedOnly: !filters.blockedOnly })}
+        className={cn(chipBase, filters.blockedOnly ? chipActive : chipInactive)}
+      >
+        <Ban size={12} aria-hidden />
+        Blocked
       </button>
 
       {isActive ? (

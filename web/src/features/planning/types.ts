@@ -64,12 +64,25 @@ export interface PlanningFeatureBoardItem {
   status: PlanningFeatureStatus;
   priority: PlanningFeaturePriority;
   isCurrent: boolean;
+  isBlocked: boolean;
   version: number;
   specStatus: PlanningArtifactStatus | null;
   planStatus: PlanningArtifactStatus | null;
   taskTotal: number;
   taskDone: number;
   updatedAt: string;
+}
+
+export interface PlanningFeatureDependencyEntry {
+  slug: string;
+  status: PlanningFeatureStatus;
+  closed: boolean;
+}
+
+export interface PlanningFeatureDependenciesResponse {
+  slug: string;
+  blockedBy: PlanningFeatureDependencyEntry[];
+  blocks: PlanningFeatureDependencyEntry[];
 }
 
 export interface PlanningLogLine {
@@ -102,6 +115,9 @@ export interface PlanningFeatureResponse {
   createdAt: string;
   updatedAt: string;
   artifacts: PlanningArtifactResponse[];
+  isBlocked: boolean;
+  blockedBy: PlanningFeatureDependencyEntry[];
+  blocks: PlanningFeatureDependencyEntry[];
 }
 
 export interface PlanningArtifactVersionResponse {

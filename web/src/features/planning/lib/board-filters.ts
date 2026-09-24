@@ -18,6 +18,7 @@ export interface PlanningBoardFilters {
   plan: PlanningBoardArtifactFilter;
   currentOnly: boolean;
   hideDone: boolean;
+  blockedOnly: boolean;
 }
 
 export interface BoardFilterSearchParams {
@@ -38,6 +39,7 @@ export const EMPTY_BOARD_FILTERS: PlanningBoardFilters = {
   plan: "any",
   currentOnly: false,
   hideDone: true,
+  blockedOnly: false,
 };
 
 const ARTIFACT_FILTER_VALUES = new Set<string>(BOARD_ARTIFACT_FILTERS);
@@ -60,6 +62,7 @@ export function parseBoardFilters(searchParams: BoardFilterSearchParams): Planni
     plan: parseArtifactFilter(searchParams.get("plan")),
     currentOnly: searchParams.get("current") === "1",
     hideDone: searchParams.get("hidedone") !== "0",
+    blockedOnly: searchParams.get("blocked") === "1",
   };
 }
 
@@ -83,6 +86,7 @@ export function coerceBoardFilters(value: unknown): PlanningBoardFilters | null 
     plan: parseArtifactFilter(typeof record.plan === "string" ? record.plan : null),
     currentOnly: record.currentOnly === true,
     hideDone: record.hideDone !== false,
+    blockedOnly: record.blockedOnly === true,
   };
 }
 
@@ -93,7 +97,8 @@ export function isBoardFilterActive(filters: PlanningBoardFilters): boolean {
     filters.spec !== "any" ||
     filters.plan !== "any" ||
     filters.currentOnly ||
-    !filters.hideDone
+    !filters.hideDone ||
+    filters.blockedOnly
   );
 }
 
@@ -109,7 +114,8 @@ export function filterBoardItems(
       (filters.priorities.length === 0 || filters.priorities.includes(item.priority)) &&
       matchesArtifactFilter(item.specStatus, filters.spec) &&
       matchesArtifactFilter(item.planStatus, filters.plan) &&
-      (!filters.currentOnly || item.isCurrent),
+      (!filters.currentOnly || item.isCurrent) &&
+      (!filters.blockedOnly || item.isBlocked),
   );
 }
 

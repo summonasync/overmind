@@ -138,6 +138,7 @@ public sealed class PlanningFtsSyncTests : IDisposable
                 FeaturePriority.P2,
                 1,
                 now,
+                [],
                 [new BacklogArtifactImport(
                     PlanningArtifactKind.Spec,
                     0,

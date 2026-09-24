@@ -1,11 +1,12 @@
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
+using Overmind.Infrastructure.Planning;
 
 namespace Overmind.Host.Api.Mapping;
 
 public static class PlanningMapper
 {
-    public static PlanningFeatureBoardItem ToBoardItem(PlanningFeature feature)
+    public static PlanningFeatureBoardItem ToBoardItem(PlanningFeature feature, bool isBlocked)
     {
         var artifacts = feature.Artifacts;
         var spec = artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
@@ -23,10 +24,18 @@ public static class PlanningMapper
             tasks.Count,
             tasks.Count(t => t.Status == PlanningArtifactStatus.Done),
             feature.UpdatedAt,
-            feature.IsCurrent);
+            feature.IsCurrent,
+            isBlocked);
     }
 
-    public static PlanningFeatureResponse ToFeatureResponse(PlanningFeature feature)
+    public static bool HasOpenBlocker(
+        PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures) =>
+        feature.BlockedBy.Any(link =>
+            projectFeatures.TryGetValue(link.BlockedByFeatureId, out var blocker) &&
+            !FeatureDependencyEntry.IsClosed(blocker.Status));
+
+    public static PlanningFeatureResponse ToFeatureResponse(
+        PlanningFeature feature, FeatureDependencies dependencies)
     {
         return new PlanningFeatureResponse(
             feature.Slug,
@@ -41,8 +50,23 @@ public static class PlanningMapper
                 .OrderBy(a => a.Kind)
                 .ThenBy(a => a.Order)
                 .Select(ToArtifactResponse)
-                .ToArray());
+                .ToArray(),
+            dependencies.BlockedBy.Any(entry => !entry.Closed),
+            [.. dependencies.BlockedBy.Select(ToDependencyEntryResponse)],
+            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)]);
     }
+
+    public static PlanningFeatureDependenciesResponse ToDependenciesResponse(FeatureDependencies dependencies)
+    {
+        return new PlanningFeatureDependenciesResponse(
+            dependencies.Slug,
+            [.. dependencies.BlockedBy.Select(ToDependencyEntryResponse)],
+            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)]);
+    }
+
+    private static PlanningFeatureDependencyEntryResponse ToDependencyEntryResponse(
+        FeatureDependencyEntry entry) =>
+        new(entry.Slug, entry.Status, entry.Closed);
 
     public static PlanningArtifactResponse ToArtifactResponse(PlanningArtifact artifact)
     {

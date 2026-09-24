@@ -38,6 +38,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         var features = await _db.PlanningFeatures
             .Include(f => f.Artifacts)
+            .Include(f => f.BlockedBy)
             .Where(f => f.ProjectId == projectId)
             .OrderBy(f => f.Slug)
             .ToListAsync(ct);
@@ -280,6 +281,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
     private static List<FilePlan> BuildPlans(
         string root, List<PlanningFeature> features, List<PlanningMaterializedFile> rows)
     {
+        var slugById = features.ToDictionary(f => f.Id, f => f.Slug);
         var plans = new List<FilePlan>();
 
         foreach (var feature in features)
@@ -288,7 +290,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             var directory = $"BACKLOG/{feature.Slug}";
 
             plans.Add(FilePlan.Create(
-                root, feature.Id, $"{directory}/feature.md", FeatureDocument(feature, featurePart, slugPart)));
+                root, feature.Id, $"{directory}/feature.md",
+                FeatureDocument(feature, featurePart, slugPart, slugById)));
 
             foreach (var artifact in feature.Artifacts.Where(a =>
                          a.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan or PlanningArtifactKind.Result))
@@ -516,7 +519,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         return null;
     }
 
-    private static string FeatureDocument(PlanningFeature feature, string featurePart, string slugPart)
+    private static string FeatureDocument(
+        PlanningFeature feature, string featurePart, string slugPart, IReadOnlyDictionary<Guid, string> slugById)
     {
         var builder = new StringBuilder();
         builder.Append("---\n");
@@ -526,6 +530,17 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"priority: {PriorityText(feature.Priority)}\n");
         builder.Append($"version: {feature.Version}\n");
         builder.Append($"created: {feature.CreatedAt:yyyy-MM-dd}\n");
+
+        var blockers = feature.BlockedBy
+            .Where(link => slugById.ContainsKey(link.BlockedByFeatureId))
+            .Select(link => slugById[link.BlockedByFeatureId])
+            .OrderBy(slug => slug, StringComparer.Ordinal)
+            .ToList();
+        if (blockers.Count > 0)
+        {
+            builder.Append($"{FrontmatterKeyRegistry.DependenciesKey}: {string.Join(", ", blockers)}\n");
+        }
+
         builder.Append("---\n\n");
         builder.Append($"# Feature {featurePart} — {feature.Title}\n\n");
         builder.Append(BacklogMarkdown.StripLeadingHeadings(feature.Body));

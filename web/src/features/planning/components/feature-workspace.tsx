@@ -16,6 +16,7 @@ import { Select } from "@/shared/ui/select";
 import { ArtifactEditor } from "@/features/planning/components/artifact-editor";
 import { ArtifactLog } from "@/features/planning/components/artifact-log";
 import { CeremonyStepper } from "@/features/planning/components/ceremony-stepper";
+import { FeatureDependenciesPanel } from "@/features/planning/components/feature-dependencies-panel";
 import { FeatureForm } from "@/features/planning/components/feature-form";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
 import { TaskBoard } from "@/features/planning/components/task-board";
@@ -176,6 +177,8 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
       </header>
 
       <ErrorText error={updateFeature.error as Error | null} />
+
+      <FeatureDependenciesPanel projectId={projectId} feature={feature} />
 
       <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
 
