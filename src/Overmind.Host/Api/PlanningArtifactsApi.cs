@@ -70,6 +70,50 @@ public static class PlanningArtifactsApi
         }
     }
 
+    internal static async Task<IResult> CreateTasks(
+        Guid projectId,
+        string slug,
+        CreatePlanningTasksRequest request,
+        IValidator<CreatePlanningTasksRequest> validator,
+        PlanningArtifactService artifactService,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        PlanningFeature feature;
+        try
+        {
+            feature = await ResolveFeatureOrThrow(db, projectId, slug, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        try
+        {
+            var batch = await artifactService.UpsertTasksAsync(
+                feature.Id,
+                request.Tasks.Select(t => new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief))
+                    .ToArray(),
+                ct);
+
+            return Results.Ok(new CreatePlanningTasksResponse(
+                batch.Created,
+                batch.Updated,
+                batch.Artifacts.Select(PlanningMapper.ToArtifactResponse).ToArray()));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
     internal static async Task<IResult> GetArtifact(
         Guid id, OvermindDbContext db, CancellationToken ct)
     {

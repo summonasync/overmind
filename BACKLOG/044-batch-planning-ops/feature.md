@@ -1,7 +1,7 @@
 ---
 feature: 044
 slug: batch-planning-ops
-status: inProgress
+status: done
 priority: p1
 version: 2
 created: 2026-09-22
@@ -32,4 +32,5 @@ created: 2026-09-22
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — by user request in-session — task done, review APPROVED after fix round (W1/W2/S1), result artifact complete, suite re-run green
 </log>

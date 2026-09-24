@@ -109,6 +109,96 @@ public sealed class PlanningArtifactService
             .FirstAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
     }
 
+    public async Task<PlanningTaskBatchResult> UpsertTasksAsync(
+        Guid featureId, IReadOnlyList<PlanningTaskUpsert> tasks, CancellationToken ct = default)
+    {
+        var feature = await _db.PlanningFeatures.FirstOrDefaultAsync(f => f.Id == featureId, ct);
+        if (feature is null)
+        {
+            throw PlanningException.MissingFeature(featureId.ToString());
+        }
+
+        var siblings = await _db.PlanningArtifacts
+            .Where(a => a.FeatureId == featureId && a.Kind == PlanningArtifactKind.Task)
+            .ToListAsync(ct);
+
+        var staged = new List<PlanningArtifact>(tasks.Count);
+        var created = 0;
+
+        for (var i = 0; i < tasks.Count; i++)
+        {
+            try
+            {
+                var (artifact, isNew) = StageTask(featureId, tasks[i], siblings);
+                staged.Add(artifact);
+                if (isNew)
+                {
+                    created++;
+                }
+            }
+            catch (PlanningException ex)
+            {
+                throw PlanningException.TaskBatchItem(i, ex);
+            }
+            catch (InvalidOperationException)
+            {
+                throw PlanningException.TaskBatchItem(i, PlanningException.ChangeNoteRequired());
+            }
+        }
+
+        if (created > 0)
+        {
+            TransitionOnArtifactCreate(feature, PlanningArtifactKind.Task);
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
+        {
+            throw PlanningException.TaskBatchConcurrentWrite();
+        }
+
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+
+        return new PlanningTaskBatchResult(staged, created, staged.Count - created);
+    }
+
+    private (PlanningArtifact Artifact, bool IsNew) StageTask(
+        Guid featureId, PlanningTaskUpsert task, List<PlanningArtifact> siblings)
+    {
+        var resolvedOrder = task.Order ?? (siblings.Count == 0 ? 0 : siblings.Max(a => a.Order) + 1);
+        var existing = siblings.FirstOrDefault(a => a.Order == resolvedOrder);
+
+        if (existing is not null)
+        {
+            if (existing.Body != task.Body || !string.IsNullOrWhiteSpace(task.LogNote))
+            {
+                existing.UpdateBody(task.Body, task.LogNote);
+            }
+
+            if (task.Review.HasValue)
+            {
+                existing.SetReview(task.Review.Value);
+            }
+
+            if (task.Brief is not null)
+            {
+                existing.SetBrief(task.Brief);
+            }
+
+            return (existing, false);
+        }
+
+        var artifact = PlanningArtifact.Create(
+            featureId, PlanningArtifactKind.Task, task.Body, resolvedOrder,
+            task.Review ?? PlanningReviewLevel.Light, task.Brief);
+        _db.PlanningArtifacts.Add(artifact);
+        siblings.Add(artifact);
+        return (artifact, true);
+    }
+
     public async Task<string[]?> SetStatusAsync(
         Guid artifactId, PlanningArtifactStatus status, PlanningLogSource source, string logNote,
         CancellationToken ct = default)
