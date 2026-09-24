@@ -99,6 +99,34 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
+    public async Task On_HeadinglessTaskWithBrief_FilenameCarriesBriefSlug()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = PlanningFeature.Create(projectId, "076-demo", "Naming", "<goal>\nShip it.\n</goal>");
+            ctx.PlanningFeatures.Add(feature);
+
+            var latin = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "<goal>\nDo it.\n</goal>", 1);
+            latin.SetBrief("Data + EF: blockedBy on PlanningFeature");
+            var cyrillic = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "<goal>\nТоже.\n</goal>", 2);
+            cyrillic.SetBrief("CPM: обновление пакетов Aspire 13.5");
+
+            ctx.PlanningArtifacts.AddRange(latin, cyrillic);
+            await ctx.SaveChangesAsync();
+        }
+
+        using var sync = _db.CreateContext();
+        await CreateMaterializer(sync).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var tasksDir = Path.Combine(_projectDir, "BACKLOG", "076-demo", "tasks");
+        File.Exists(Path.Combine(tasksDir, "01-data-ef-blockedby-on-planningfeature.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(tasksDir, "02-cpm-обновление-пакетов-aspire-13-5.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(tasksDir, "02-task-02.md")).ShouldBeFalse();
+        (await CreateMaterializer(sync).DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task On_BlockedFeature_WritesSortedDependsOnLine()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);

@@ -309,10 +309,10 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 var relative = PinnedTaskPath(rows, feature.Id, directory, task.Order);
                 if (relative is null)
                 {
-                    var heading = FirstHeading(task.Body);
-                    var taskSlug = heading is null
+                    var title = FirstHeading(task.Body) ?? task.Brief;
+                    var taskSlug = title is null
                         ? $"task-{task.Order:D2}"
-                        : Slug.From(heading, $"task-{task.Order:D2}");
+                        : Slug.From(title, $"task-{task.Order:D2}");
                     relative = $"{directory}/tasks/{BacklogNaming.TaskFileName(task.Order, taskSlug)}";
                 }
 
