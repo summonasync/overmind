@@ -13,7 +13,7 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_OnboardDescription_OpensWithCallThisFirst()
+    public async Task ToolsList_OnboardDescription_AllowsSkipWhenProjectIdIsExplicit()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -21,7 +21,8 @@ public class OnboardingToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldStartWith("Call this first");
+        description.ShouldNotContain("Call this first");
+        description.ShouldContain("may skip it");
         description.ShouldContain("OVERMIND_PROJECT_ID");
         description.ShouldContain("worktree");
     }

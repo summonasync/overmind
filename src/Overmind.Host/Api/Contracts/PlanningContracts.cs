@@ -50,6 +50,8 @@ public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Sta
 
 public sealed record AppendPlanningLogRequest(string Note);
 
+public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
+
 public sealed record PatchPlanningArtifactRequest(
     string? Op,
     string? Section,

@@ -19,7 +19,7 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Call this first before any other overmind tool. Reports the adapter's working directory to the host, which resolves (creating if needed) the matching project, and returns the project id, board summary and onboarding quickstart. The payload also carries a materialization block (strategy, targetDir, trigger, lastRun) and a validation block (humanGate). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastRun) and a validation block (humanGate). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
     public async Task<string> Onboard(CancellationToken ct)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));

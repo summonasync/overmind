@@ -1,7 +1,7 @@
 ---
 feature: 054
 slug: materialization-silent-off
-status: inProgress
+status: done
 priority: p0
 version: 1
 created: 2026-09-23
@@ -22,4 +22,5 @@ Target model from the field report: Overmind is the single write point, `BACKLOG
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate 2026-09-24 ("берём задачи и делаем", user away): code shipped in 6da5e99, tasks 2/2 done honestly, post-merge review PASS-WITH-NITS 0 BLOCKER (audits/review-054-062-048.md). NIT-3/NIT-4 → microbatch #49/accepted.
 </log>

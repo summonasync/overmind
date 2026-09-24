@@ -1,7 +1,7 @@
 ---
 feature: 055
 slug: human-validation-gate-default
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-23
@@ -17,4 +17,5 @@ Requests from the report: enable the gate for the DMT project (or flip the defau
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate 2026-09-24: single task done with light review PASS-WITH-NITS (audits/review-055-01.md); all three AC met (gate STOP covered via per-project override tests, onboard visibility delivered by 042). The global default flip (planning.requireHumanValidationDefault → on) remains PENDING USER SIGN-OFF by the task's own constraints — one settings line, offered on return.
 </log>

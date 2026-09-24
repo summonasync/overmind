@@ -662,6 +662,7 @@ public sealed class PlanningApiTests : IDisposable
         putResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await putResponse.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("ChangeNoteRequired");
+        problem.Detail!.ShouldContain("logNote");
     }
 
     [Fact]

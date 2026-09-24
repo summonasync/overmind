@@ -376,6 +376,7 @@ public sealed class PlanningServiceTests : IDisposable
             () => artifactService.UpsertAsync(
                 feature.Id, PlanningArtifactKind.Spec, "v2", null, null, null, default));
         ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Message.ShouldContain("logNote");
     }
 
     [Fact]
@@ -493,6 +494,59 @@ public sealed class PlanningServiceTests : IDisposable
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
         persisted.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_CreateTask_OnReviewFeature_ReopenCollapsesToSingleLineWithoutRepromotion()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var closedTasks = new List<PlanningArtifact>();
+        for (var i = 1; i <= 4; i++)
+        {
+            closedTasks.Add(await artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Task, $"task {i}", null, null, null, default));
+        }
+
+        foreach (var task in closedTasks)
+        {
+            await artifactService.SetStatusAsync(
+                task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task closed", default);
+        }
+
+        var inReview = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        inReview.Status.ShouldBe(PlanningFeatureStatus.Review);
+        PlanningLog.Parse(inReview.Body)
+            .Count(l => l.Text == "all tasks done + spec + plan → review")
+            .ShouldBe(1);
+
+        var fifth = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 5", null, null, null, default);
+
+        var reopened = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        reopened.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        var reopenLines = PlanningLog.Parse(reopened.Body);
+        reopenLines.Count.ShouldBe(3);
+        var reopenLine = reopenLines
+            .Single(l => l.Text == "task created while in review — reopened for the new work");
+        reopenLine.Source.ShouldBe(PlanningLogSource.Auto);
+        reopenLines.Count(l => l.Text == "all tasks done + spec + plan → review").ShouldBe(1);
+
+        await artifactService.SetStatusAsync(
+            fifth.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 5 closed", default);
+
+        var backInReview = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        backInReview.Status.ShouldBe(PlanningFeatureStatus.Review);
+        var transitionTexts = PlanningLog.Parse(backInReview.Body).Select(l => l.Text).ToList();
+        transitionTexts.Count.ShouldBe(4);
+        transitionTexts[0].ShouldBe("artifact created → inProgress");
+        transitionTexts[1].ShouldBe("all tasks done + spec + plan → review");
+        transitionTexts[2].ShouldBe("task created while in review — reopened for the new work");
+        transitionTexts[3].ShouldBe("all tasks done + spec + plan → review");
     }
 
     [Fact]

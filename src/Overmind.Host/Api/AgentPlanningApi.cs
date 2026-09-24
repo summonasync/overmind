@@ -33,11 +33,19 @@ public static class AgentPlanningApi
 
     internal static async Task<IResult> Validate(
         Guid id,
+        ValidatePlanningArtifactRequest? request,
         PlanningArtifactService artifactService,
         PlanningPolicy policy,
         OvermindDbContext db,
         CancellationToken ct)
     {
+        var asMigrated = request?.AsMigrated == true;
+
+        if (asMigrated && string.IsNullOrWhiteSpace(request!.LogNote))
+        {
+            return PlanningErrors.Map(PlanningException.MigratedNoteRequired());
+        }
+
         var target = await db.PlanningArtifacts
             .Where(a => a.Id == id)
             .Select(a => new
@@ -59,12 +67,25 @@ public static class AgentPlanningApi
             return HttpErrors.NotFound($"Artifact '{id}' was not found.");
         }
 
-        if (await policy.ResolveValidationGateAsync(target.ProjectId, ct))
+        if (!asMigrated && await policy.ResolveValidationGateAsync(target.ProjectId, ct))
         {
             return PlanningErrors.Map(PlanningException.HumanValidationRequired(target.Kind, target.FeatureSlug));
         }
 
-        return await PlanningArtifactsApi.Validate(id, artifactService, ct);
+        var migrationNote = asMigrated
+            ? $"validated as migrated — pre-approved on disk: {request!.LogNote!.Trim()}"
+            : null;
+
+        try
+        {
+            await artifactService.ValidateAsync(id, migrationNote, PlanningLogSource.Agent, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        return Results.Ok();
     }
 
     internal static async Task<IResult> GetArtifact(

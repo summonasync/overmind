@@ -51,6 +51,9 @@ public sealed class OvermindPlanningTools
     private const string PatchShapeError =
         "A patch carries either a section with its replacement content, or an acceptance-criteria tick (acIndex or exact acText) — not both and not neither.";
 
+    private const string MigratedNoteRequired =
+        "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
+
     private readonly OvermindApiClient _api;
 
     public OvermindPlanningTools(OvermindApiClient api)
@@ -132,7 +135,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -166,7 +169,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
-    [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected.")]
+    [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected. Each move appends one line to the artifact's <log> section, shaped '- YYYY-MM-DD [agent] — <logNote>'.")]
     public async Task<JsonElement> SetStatus(
         [Description("Id of the artifact to move.")] Guid artifactId,
         [Description("New status: draft, validated, todo, inProgress, review, done or blocked.")] string status,
@@ -263,16 +266,23 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_validate", Destructive = false, Idempotent = false)]
-    [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying.")]
+    [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying. asMigrated is the migration escape hatch for artifacts pre-approved before import (e.g. already frozen on disk): it skips the human gate, requires a logNote carrying the provenance, and leaves a 'validated as migrated — pre-approved on disk' marker line in the artifact log.")]
     public async Task<CallToolResult> Validate(
         [Description("Id of the artifact to validate.")] Guid artifactId,
-        CancellationToken ct)
+        [Description("True only for artifacts pre-approved before migration (e.g. already frozen on disk); skips the human gate and leaves a loud migration marker in the log.")] bool? asMigrated = null,
+        [Description("Required with asMigrated: provenance of the pre-approval, e.g. 'frozen v9 on disk, user-approved'; recorded inside the marker line.")] string? logNote = null,
+        CancellationToken ct = default)
     {
+        if (asMigrated == true && string.IsNullOrWhiteSpace(logNote))
+        {
+            throw new McpException(MigratedNoteRequired);
+        }
+
         try
         {
             await Guarded(() => _api.PostAsync(
                 $"/api/agent/planning/artifacts/{artifactId}/validate",
-                new { },
+                new { asMigrated, logNote },
                 ct));
         }
         catch (McpException ex) when (ex.Message.StartsWith("STOP:", StringComparison.Ordinal))
@@ -284,7 +294,10 @@ public sealed class OvermindPlanningTools
             };
         }
 
-        return new CallToolResult { Content = [new TextContentBlock { Text = "Artifact validated." }] };
+        var text = asMigrated == true
+            ? "Artifact validated as migrated — provenance line added to the log."
+            : "Artifact validated.";
+        return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
@@ -353,6 +366,12 @@ public sealed class OvermindPlanningTools
             ["updatedAt"] = artifact.GetProperty("updatedAt").GetString(),
             ["bodyChars"] = artifact.GetProperty("body").GetString()?.Length ?? 0
         };
+
+        if (artifact.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)
+        {
+            compact["brief"] = brief.GetString();
+        }
+
         return compact.Deserialize<JsonElement>();
     }
 

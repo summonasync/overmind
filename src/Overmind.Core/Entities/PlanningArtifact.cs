@@ -239,7 +239,7 @@ public sealed class PlanningArtifact
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Validate()
+    public void Validate(string? logNote = null, PlanningLogSource? source = null)
     {
         if (Kind == PlanningArtifactKind.Task)
         {
@@ -247,6 +247,11 @@ public sealed class PlanningArtifact
         }
 
         var now = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(logNote))
+        {
+            Body = PlanningLog.Append(Body, logNote, now, source);
+        }
+
         Status = PlanningArtifactStatus.Validated;
         FrozenAt = now;
         UpdatedAt = now;

@@ -85,6 +85,23 @@ public class StatusModelContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningSetStatusDescription_DocumentsTheAppendedLogLineShape()
+    {
+        var description = await ToolDescription("planning_set_status");
+
+        description.ShouldContain("- YYYY-MM-DD [agent] — <logNote>");
+        description.ShouldContain("<log>");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifactDescription_SaysLogNoteIsNotNeededOnCreate()
+    {
+        var description = await ToolDescription("planning_upsert_artifact");
+
+        description.ShouldContain("Editing a validated artifact requires a logNote — not needed on create.");
+    }
+
+    [Fact]
     public async Task PlanningUpsertArtifactDescription_CarriesDraftCreateAndValidationPath()
     {
         var description = await ToolDescription("planning_upsert_artifact");

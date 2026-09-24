@@ -312,6 +312,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         confirmation["kind"]!.GetValue<string>().ShouldBe("task");
         confirmation["status"]!.GetValue<string>().ShouldBe("draft");
         confirmation["version"]!.GetValue<int>().ShouldBe(1);
+        confirmation["brief"]!.GetValue<string>().ShouldBe("Wire the polling hook");
         confirmation["bodyChars"]!.GetValue<int>().ShouldBe("# Third task\n\n<goal>More work.</goal>".Length);
         text.ShouldNotContain("More work.");
         text.ShouldNotContain("\"log\"");
@@ -344,9 +345,9 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task PlanningUpsertArtifact_WithoutBrief_OmitsItFromThePostedJson()
+    public async Task PlanningUpsertArtifact_WithoutBrief_OmitsItFromThePostedJsonAndTheEcho()
     {
-        await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
         {
             ["projectId"] = Canned.ProjectId.ToString(),
             ["featureSlug"] = Canned.PlanningSlug,
@@ -357,6 +358,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         var request = Stub.Requests.Single(r =>
             r.Method == "POST" && r.Path.EndsWith("/artifacts", StringComparison.Ordinal));
         JsonNode.Parse(request.Body)!.AsObject().ContainsKey("brief").ShouldBeFalse();
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation.ContainsKey("brief").ShouldBeFalse();
     }
 
     [Fact]
@@ -708,6 +712,40 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         Stub.Requests.Count(r => r.Path.StartsWith("/api/agent/", StringComparison.Ordinal)).ShouldBe(1);
         Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningValidate_AsMigratedForwardsFlagAndNote()
+    {
+        var response = await Driver.CallToolAsync("planning_validate", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString(),
+            ["asMigrated"] = true,
+            ["logNote"] = "frozen v9 on disk, user-approved"
+        });
+
+        var request = FindRequest("POST", $"/api/agent/planning/artifacts/{Canned.PlanningSpecArtifactId}/validate");
+        var submitted = JsonNode.Parse(request.Body)!;
+        submitted["asMigrated"]!.GetValue<bool>().ShouldBeTrue();
+        submitted["logNote"]!.GetValue<string>().ShouldBe("frozen v9 on disk, user-approved");
+
+        response["result"]!["isError"].ShouldBeNull();
+        Canned.ToolResultText(response).ShouldContain("validated as migrated");
+    }
+
+    [Fact]
+    public async Task PlanningValidate_AsMigratedWithoutLogNote_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_validate", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString(),
+            ["asMigrated"] = true
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("logNote is required");
+        text.ShouldContain("asMigrated");
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path.EndsWith("/validate", StringComparison.Ordinal));
     }
 
     [Theory]

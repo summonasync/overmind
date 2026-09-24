@@ -1,7 +1,7 @@
 ---
 feature: 062
 slug: dashboard-visualisation-issues
-status: inProgress
+status: done
 priority: p0
 version: 1
 created: 2026-09-23
@@ -19,4 +19,5 @@ Supersedes 060-priority-badge-colors and 061-task-feature-number-prefix (both to
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate 2026-09-24 ("берём задачи и делаем", user away): code shipped in ac2d6a4, tasks 2/2 done honestly, post-merge review PASS-WITH-NITS 0 BLOCKER (audits/review-054-062-048.md). NIT-5 informational, NIT-6 → microbatch #50.
 </log>

@@ -1,7 +1,7 @@
 ---
 feature: 057
 slug: review-autotransition-flicker
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-23
@@ -15,4 +15,5 @@ Fix options from the report (pick the minimal robust combination): debounce the 
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate 2026-09-24: single task done with light review PASS (audits/review-057-01.md); reopen-collapse shipped, OM-5 reproduced and pinned.
 </log>

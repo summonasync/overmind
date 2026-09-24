@@ -64,6 +64,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("ChangeNoteRequired");
+        problem.Detail!.ShouldContain("logNote");
     }
 
     [Fact]
@@ -177,6 +178,47 @@ public sealed class AgentPlanningApiTests : IDisposable
             $"/api/planning/artifacts/{spec.Id}", JsonOptions);
         artifact!.Status.ShouldBe("validated");
         artifact.FrozenAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Validate_GateOn_AsMigratedWithLogNote_ValidatesAndLeavesMarkerLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await SetValidationGateAsync(project.Id, on: true);
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "# Spec" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentValidateUrl(spec.Id),
+            new { AsMigrated = true, LogNote = "frozen v9 on disk, user-approved" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Status.ShouldBe("validated");
+        artifact.FrozenAt.ShouldNotBeNull();
+        artifact.Body.ShouldContain("[agent] — validated as migrated — pre-approved on disk: frozen v9 on disk, user-approved");
+    }
+
+    [Fact]
+    public async Task Validate_GateOn_AsMigratedWithoutLogNote_Returns400AndWritesNothing()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await SetValidationGateAsync(project.Id, on: true);
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "# Spec" });
+
+        var response = await _client.PostAsJsonAsync(AgentValidateUrl(spec.Id), new { AsMigrated = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("MigratedNoteRequired");
+        problem.Detail.ShouldContain("logNote");
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Status.ShouldBe("draft");
+        artifact.FrozenAt.ShouldBeNull();
     }
 
     [Fact]

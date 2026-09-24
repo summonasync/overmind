@@ -1,7 +1,7 @@
 ---
 feature: 059
 slug: mcp-response-polish
-status: inProgress
+status: done
 priority: p1
 version: 2
 created: 2026-09-23
@@ -19,4 +19,5 @@ Field report OM-9 (FEATURELIST/overmind-features-2026-09-23.md), five small nits
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate 2026-09-24: single task done with light review PASS (audits/review-059-01.md), code in the working tree ready to commit with the wave.
 </log>

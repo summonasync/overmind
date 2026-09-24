@@ -207,7 +207,7 @@ public static class PlanningArtifactsApi
     {
         try
         {
-            await service.ValidateAsync(id, ct);
+            await service.ValidateAsync(id, ct: ct);
         }
         catch (PlanningException ex)
         {

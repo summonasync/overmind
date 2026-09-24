@@ -181,13 +181,14 @@ public sealed class PlanningArtifactService
         return artifact;
     }
 
-    public async Task ValidateAsync(Guid artifactId, CancellationToken ct = default)
+    public async Task ValidateAsync(
+        Guid artifactId, string? logNote = null, PlanningLogSource? source = null, CancellationToken ct = default)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
 
         try
         {
-            artifact.Validate();
+            artifact.Validate(logNote, source);
         }
         catch (InvalidOperationException)
         {
@@ -245,11 +246,19 @@ public sealed class PlanningArtifactService
 
     private static void TransitionOnArtifactCreate(PlanningFeature feature, PlanningArtifactKind kind)
     {
-        if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready ||
-            (feature.Status is PlanningFeatureStatus.Review && kind is PlanningArtifactKind.Task))
+        if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready)
         {
             feature.SetStatus(
                 PlanningFeatureStatus.InProgress, "artifact created → inProgress", PlanningLogSource.Auto);
+            return;
+        }
+
+        if (feature.Status is PlanningFeatureStatus.Review && kind is PlanningArtifactKind.Task)
+        {
+            feature.SetStatus(
+                PlanningFeatureStatus.InProgress,
+                "task created while in review — reopened for the new work",
+                PlanningLogSource.Auto);
         }
     }
 

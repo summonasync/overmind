@@ -32,7 +32,7 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidSlug, $"Slug '{slug}' does not match the required pattern (lowercase alphanumeric with hyphens, max 64 chars).");
 
     public static PlanningException ChangeNoteRequired() =>
-        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ChangeNoteRequired, "A change note is required to modify a frozen artifact.");
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ChangeNoteRequired, "A logNote is required to modify a frozen artifact.");
 
     public static PlanningException CannotValidateTask() =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.CannotValidateTask, "Task artifacts cannot be validated.");
@@ -58,6 +58,10 @@ public sealed class PlanningException : Exception
     public static PlanningException HumanValidationRequired(PlanningArtifactKind kind, string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.HumanValidationRequired,
             $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.");
+
+    public static PlanningException MigratedNoteRequired() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.MigratedNoteRequired,
+            "asMigrated requires a logNote: the marker line must record where the pre-approval came from, e.g. 'frozen v9 on disk, user-approved before migration'.");
 
     public static PlanningException ImportFailed(string source, Exception? inner = null) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ImportFailed,
