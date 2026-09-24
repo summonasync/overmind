@@ -383,6 +383,46 @@ public class PlanningToolContractTests : McpSessionTestBase
         confirmation["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
         confirmation["status"]!.GetValue<string>().ShouldBe("review");
         confirmation["lastLogLine"]!.GetValue<string>().ShouldBe("implementation finished, handing to review");
+        confirmation.ContainsKey("warnings").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningSetStatus_ApiReportsWarnings_SurfacesThemInTheConfirmation()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/status",
+            200,
+            """{"warnings":["8 of 12 acceptance items unticked"]}""");
+
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["status"] = "done",
+            ["logNote"] = "field report closed the loop"
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation["status"]!.GetValue<string>().ShouldBe("done");
+        var warnings = confirmation["warnings"]!.AsArray();
+        warnings.Count.ShouldBe(1);
+        warnings[0]!.GetValue<string>().ShouldBe("8 of 12 acceptance items unticked");
+    }
+
+    [Fact]
+    public async Task PlanningSetStatus_ApiReportsNoWarnings_OmitsTheProperty()
+    {
+        Stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "{}");
+
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["status"] = "done",
+            ["logNote"] = "every item ticked"
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation.ContainsKey("warnings").ShouldBeFalse();
     }
 
     [Fact]

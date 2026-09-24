@@ -85,6 +85,23 @@ public class StatusModelContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningSetStatusDescription_StatesTheFreeFormTransitionModel()
+    {
+        var description = await ToolDescription("planning_set_status");
+
+        description.ShouldContain("Transitions are free-form");
+        description.ShouldContain("no enforced sequence");
+    }
+
+    [Fact]
+    public async Task PlanningSetStatusDescription_WarnsAboutUntickedAcOnDoneWithoutBlocking()
+    {
+        var description = await ToolDescription("planning_set_status");
+
+        description.ShouldContain("non-blocking warning");
+    }
+
+    [Fact]
     public async Task PlanningSetStatusDescription_DocumentsTheAppendedLogLineShape()
     {
         var description = await ToolDescription("planning_set_status");

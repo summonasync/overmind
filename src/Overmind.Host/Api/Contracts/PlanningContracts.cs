@@ -50,6 +50,9 @@ public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Sta
 
 public sealed record AppendPlanningLogRequest(string Note);
 
+public sealed record SetPlanningArtifactStatusResponse(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null);
+
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 
 public sealed record PatchPlanningArtifactRequest(

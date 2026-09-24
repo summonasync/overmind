@@ -169,7 +169,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
-    [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected. Each move appends one line to the artifact's <log> section, shaped '- YYYY-MM-DD [agent] — <logNote>'.")]
+    [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected. Each move appends one line to the artifact's <log> section, shaped '- YYYY-MM-DD [agent] — <logNote>'. Transitions are free-form: any allowed status of the kind can be reached from any current status — there is no enforced sequence. A task closed done with unticked acceptance-criteria items still moves, and the response carries a non-blocking warning counting them.")]
     public async Task<JsonElement> SetStatus(
         [Description("Id of the artifact to move.")] Guid artifactId,
         [Description("New status: draft, validated, todo, inProgress, review, done or blocked.")] string status,
@@ -182,16 +182,19 @@ public sealed class OvermindPlanningTools
         }
 
         var normalized = NormalizeStatus(status);
-        await Guarded(() => _api.PostAsync(
+        var payload = await Guarded(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{artifactId}/status",
             new { status = normalized, logNote },
             ct));
-        return new JsonObject
+
+        var confirmation = new JsonObject
         {
             ["id"] = artifactId.ToString(),
             ["status"] = normalized,
             ["lastLogLine"] = logNote
-        }.Deserialize<JsonElement>();
+        };
+        CopyWarnings(payload, confirmation);
+        return confirmation.Deserialize<JsonElement>();
     }
 
     [McpServerTool(Name = "planning_set_current", Destructive = false, Idempotent = true)]
@@ -298,6 +301,18 @@ public sealed class OvermindPlanningTools
             ? "Artifact validated as migrated — provenance line added to the log."
             : "Artifact validated.";
         return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+    }
+
+    private static void CopyWarnings(JsonElement payload, JsonObject confirmation)
+    {
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty("warnings", out var warnings) ||
+            warnings.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        confirmation["warnings"] = JsonNode.Parse(warnings.GetRawText());
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)

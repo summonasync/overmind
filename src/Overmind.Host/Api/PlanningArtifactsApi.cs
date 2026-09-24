@@ -167,14 +167,14 @@ public static class PlanningArtifactsApi
 
         try
         {
-            await service.SetStatusAsync(id, request.Status, PlanningLogSource.Ui, request.LogNote, ct);
+            var warnings = await service.SetStatusAsync(
+                id, request.Status, PlanningLogSource.Ui, request.LogNote, ct);
+            return Results.Ok(new SetPlanningArtifactStatusResponse(warnings));
         }
         catch (PlanningException ex)
         {
             return PlanningErrors.Map(ex);
         }
-
-        return Results.Ok();
     }
 
     internal static async Task<IResult> AppendLog(

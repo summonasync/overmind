@@ -109,7 +109,7 @@ public sealed class PlanningArtifactService
             .FirstAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
     }
 
-    public async Task SetStatusAsync(
+    public async Task<string[]?> SetStatusAsync(
         Guid artifactId, PlanningArtifactStatus status, PlanningLogSource source, string logNote,
         CancellationToken ct = default)
     {
@@ -141,6 +141,21 @@ public sealed class PlanningArtifactService
 
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+
+        return UntickedAcWarning(artifact, status);
+    }
+
+    private static string[]? UntickedAcWarning(PlanningArtifact artifact, PlanningArtifactStatus status)
+    {
+        if (status != PlanningArtifactStatus.Done || artifact.Kind != PlanningArtifactKind.Task)
+        {
+            return null;
+        }
+
+        var items = PlanningSections.ParseAcceptanceCriteria(artifact.Body);
+        var unticked = items.Count(item => item.Checked == false);
+
+        return unticked > 0 ? [$"{unticked} of {items.Count} acceptance items unticked"] : null;
     }
 
     public async Task<PlanningArtifact> PatchAsync(

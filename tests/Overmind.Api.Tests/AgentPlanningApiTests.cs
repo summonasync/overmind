@@ -213,7 +213,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("MigratedNoteRequired");
-        problem.Detail.ShouldContain("logNote");
+        problem.Detail!.ShouldContain("logNote");
 
         var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
             $"/api/planning/artifacts/{spec.Id}", JsonOptions);
@@ -380,6 +380,92 @@ public sealed class AgentPlanningApiTests : IDisposable
         current.State.ShouldBe("task");
         current.Artifact!.Order.ShouldBe(2);
         current.Reason.ShouldBe("The next task is blocked.");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_TaskDoneWithUntickedAc_SucceedsWithWarning()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [x] endpoint wired\n- [ ] docs written\n- [ ] manual pass\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(task.Id),
+            new { Status = "done", LogNote = "closing with open items" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.GetProperty("warnings").EnumerateArray()
+            .Select(w => w.GetString()).ToArray()
+            .ShouldBe(["2 of 3 acceptance items unticked"]);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Status.ShouldBe("done");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_TaskDoneWithAllAcTicked_ReturnsNoWarnings()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [x] endpoint wired\n- [x] docs written\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(task.Id),
+            new { Status = "done", LogNote = "everything ticked" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        PropertyNames(raw).ShouldNotContain("warnings");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_TaskDoneWithoutAcSection_ReturnsNoWarnings()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nShip it.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(task.Id),
+            new { Status = "done", LogNote = "no acceptance section" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        PropertyNames(raw).ShouldNotContain("warnings");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_NonDoneTransition_NeverWarns()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] first thing\n- [ ] second thing\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(task.Id),
+            new { Status = "review", LogNote = "handing over with open items" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        PropertyNames(raw).ShouldNotContain("warnings");
     }
 
     [Theory]
@@ -868,6 +954,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     private static string AgentValidateUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}/validate";
+
+    private static string AgentStatusUrl(Guid artifactId) =>
+        $"/api/agent/planning/artifacts/{artifactId}/status";
 
     private static string AgentFeatureStatusUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}/status";

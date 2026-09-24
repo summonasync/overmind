@@ -1,7 +1,7 @@
 ---
 feature: 056
 slug: task-status-transition-contract
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-23
@@ -17,4 +17,5 @@ Requested fix: one description line on `planning_set_status` documenting transit
 
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate 2026-09-24: single task done with light review PASS-WITH-NITS (audits/review-056-01.md). This closes the 2026-09-23 field wave: 054, 055, 056, 057, 059 done; 062 done; 048 awaiting its prod-measurement AC on the next deploy.
 </log>
