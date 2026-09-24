@@ -2,6 +2,7 @@ export { ArtifactEditor } from "./components/artifact-editor";
 export type { ArtifactEditorValues } from "./components/artifact-editor";
 export { ArtifactLog } from "./components/artifact-log";
 export { BoardFilterBar } from "./components/board-filter-bar";
+export { BoardSearchInput } from "./components/board-search-input";
 export { CeremonyStepper } from "./components/ceremony-stepper";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
@@ -37,12 +38,15 @@ export {
   isBoardFilterActive,
   parseBoardFilters,
 } from "./lib/board-filters";
+export { boardItemMatchesSearch } from "./lib/board-search";
 export type {
   BoardFilterSearchParams,
   PlanningBoardArtifactFilter,
   PlanningBoardFilters,
 } from "./lib/board-filters";
 export { useBoardFilters } from "./lib/use-board-filters";
+export { useBoardSearch } from "./lib/use-board-search";
+export type { BoardSearchController } from "./lib/use-board-search";
 export { extractOpenQuestions } from "./lib/open-questions";
 export { priorityTone } from "./lib/priority-tone";
 export { featureNumber } from "./lib/feature-number";

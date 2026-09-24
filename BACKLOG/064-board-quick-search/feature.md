@@ -1,7 +1,7 @@
 ---
 feature: 064
 slug: board-quick-search
-status: inProgress
+status: done
 priority: p0
 version: 1
 created: 2026-09-23
@@ -22,4 +22,5 @@ Note: Enter/Esc/Shift+Esc semantics come from the user verbatim — treat them a
 
 <log>
 - 2026-09-24 [auto] — artifact created → inProgress
+- 2026-09-24 [agent] — Closing by user mandate (p0 board-search): single task done with light review PASS-WITH-NITS; the search ships client-side with the verbatim Enter/Esc/Shift+Esc contract. Perf NIT documented optional (same cost class as existing page interactions).
 </log>

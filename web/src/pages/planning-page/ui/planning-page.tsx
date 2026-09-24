@@ -10,12 +10,14 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { useInfoPanel } from "@/widgets/app-shell";
 import {
   BoardFilterBar,
+  boardItemMatchesSearch,
   DriftPanel,
   FeatureBoard,
   FeatureForm,
   FeatureWorkspace,
   filterBoardItems,
   useBoardFilters,
+  useBoardSearch,
   usePlanningBoard,
   usePlanningFeature,
   usePlanningMutations,
@@ -38,6 +40,7 @@ function PlanningPageContent() {
 
   const { data: features, loading, error } = usePlanningBoard(projectId);
   const boardFilters = useBoardFilters();
+  const boardSearch = useBoardSearch();
   const { createFeature, updateFeature, deleteFeature, setFeatureCurrent } = usePlanningMutations(projectId);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -107,7 +110,14 @@ function PlanningPageContent() {
     );
   }
 
-  const visibleFeatures = filterBoardItems(features, boardFilters.filters);
+  const searchedFeatures = boardSearch.isActive
+    ? features.filter((item) => boardItemMatchesSearch(item, boardSearch.query))
+    : features;
+  const visibleFeatures = filterBoardItems(searchedFeatures, boardFilters.filters);
+  const clearBoardRestrictions = () => {
+    boardSearch.clear();
+    boardFilters.clearFilters();
+  };
 
   return (
     <div className="space-y-4">
@@ -133,14 +143,18 @@ function PlanningPageContent() {
         <LoadingState label="Loading features…" />
       ) : (
         <>
-          <BoardFilterBar />
-          {boardFilters.isActive && visibleFeatures.length === 0 ? (
+          <BoardFilterBar search={boardSearch} />
+          {(boardFilters.isActive || boardSearch.isActive) && visibleFeatures.length === 0 ? (
             <EmptyState
-              title="No features match the filters"
-              hint="Remove a filter or clear them all to see the whole board."
+              title="No features match"
+              hint={
+                boardSearch.isActive
+                  ? "Nothing survives the search combined with the active filters."
+                  : "Remove a filter or clear them all to see the whole board."
+              }
               action={
-                <Button variant="secondary" onClick={boardFilters.clearFilters}>
-                  Clear filters
+                <Button variant="secondary" onClick={clearBoardRestrictions}>
+                  {boardSearch.isActive ? "Clear search & filters" : "Clear filters"}
                 </Button>
               }
             />

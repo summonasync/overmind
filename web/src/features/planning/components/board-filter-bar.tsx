@@ -4,6 +4,7 @@ import { EyeOff, Pin, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Select } from "@/shared/ui/select";
 import { cn } from "@/shared/lib/cn";
+import { BoardSearchInput } from "@/features/planning/components/board-search-input";
 import { BOARD_ARTIFACT_FILTERS } from "@/features/planning/lib/board-filters";
 import { useBoardFilters } from "@/features/planning/lib/use-board-filters";
 import { FEATURE_PRIORITIES, PLANNING_FEATURE_STATUSES } from "@/features/planning/types";
@@ -11,6 +12,7 @@ import type {
   PlanningBoardArtifactFilter,
   PlanningBoardFilters,
 } from "@/features/planning/lib/board-filters";
+import type { BoardSearchController } from "@/features/planning/lib/use-board-search";
 import type { PlanningFeaturePriority, PlanningFeatureStatus } from "@/features/planning/types";
 
 const ARTIFACT_FILTER_LABELS: Record<PlanningBoardArtifactFilter, string> = {
@@ -25,7 +27,11 @@ const chipBase =
 const chipInactive = "border-border text-muted hover:border-border-strong hover:text-foreground";
 const chipActive = "border-primary bg-primary/10 text-primary";
 
-export function BoardFilterBar() {
+interface BoardFilterBarProps {
+  search: BoardSearchController;
+}
+
+export function BoardFilterBar({ search }: BoardFilterBarProps) {
   const { filters, isActive, setFilters, clearFilters } = useBoardFilters();
 
   const toggleStatus = (status: PlanningFeatureStatus) => {
@@ -52,6 +58,18 @@ export function BoardFilterBar() {
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
+      <BoardSearchInput
+        value={search.draft}
+        applied={search.isActive}
+        onChange={search.setDraft}
+        onApply={search.apply}
+        onClear={search.clear}
+        onClearAll={() => {
+          search.clear();
+          clearFilters();
+        }}
+      />
+
       <span className="text-xs font-medium text-muted">Filters</span>
 
       <div role="group" aria-label="Filter by feature status" className="flex flex-wrap items-center gap-1.5">
