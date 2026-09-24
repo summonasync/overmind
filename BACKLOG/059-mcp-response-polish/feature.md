@@ -2,8 +2,8 @@
 feature: 059
 slug: mcp-response-polish
 status: inProgress
-priority: p2
-version: 1
+priority: p1
+version: 2
 created: 2026-09-23
 ---
 
