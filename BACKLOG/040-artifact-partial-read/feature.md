@@ -1,9 +1,9 @@
 ---
 feature: 040
 slug: artifact-partial-read
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-22
 ---
 
@@ -33,3 +33,7 @@ grep/sed-эквивалент над телами артефактов. Сего
 - FEATURELIST/03-tool-description-gaps.md (сниппеты в search), FEATURELIST/08-migration-field-report.md («sed -n '55,80p' для obstacles, здесь all-or-nothing»).
 - Тот же корень, что 039: единица работы — весь документ; 039 лечит запись, 040 — чтение.
 </refs>
+
+<log>
+- 2026-09-24 [ui] — status moved to 'done' via ui
+</log>

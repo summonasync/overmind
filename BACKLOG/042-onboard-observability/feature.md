@@ -1,9 +1,9 @@
 ---
 feature: 042
 slug: onboard-observability
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-22
 ---
 
@@ -35,4 +35,5 @@ created: 2026-09-22
 <log>
 - 2026-09-23 [auto] — artifact created → inProgress
 - 2026-09-23 [auto] — all tasks done + spec + plan → review
+- 2026-09-24 [ui] — status moved to 'done' via ui
 </log>

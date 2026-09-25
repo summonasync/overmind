@@ -1,9 +1,9 @@
 ---
 feature: 041
 slug: entries-metadata-listing
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-22
 ---
 
@@ -29,3 +29,7 @@ created: 2026-09-22
 - FEATURELIST/09-api-nits.md — недокументированные лимиты/пагинация.
 - README FEATURELIST п.3: «первое, с чем встречается каждый агент».
 </refs>
+
+<log>
+- 2026-09-24 [ui] — status moved to 'done' via ui
+</log>

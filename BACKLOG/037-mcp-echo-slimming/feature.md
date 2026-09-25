@@ -1,9 +1,9 @@
 ---
 feature: 037
 slug: mcp-echo-slimming
-status: review
+status: done
 priority: p2
-version: 2
+version: 3
 created: 2026-09-20
 ---
 
@@ -29,3 +29,7 @@ created: 2026-09-20
 ## Источник
 
 Наблюдение юзера в сессии 2026-09-20 (ночь): «planning_upsert_artifact эхом возвращает всё тело — тратить огромное количество токенов». Подтверждено оркестратором на трафике ночи (~30 мутаций × KB-тела).
+
+<log>
+- 2026-09-24 [ui] — status moved to 'done' via ui
+</log>

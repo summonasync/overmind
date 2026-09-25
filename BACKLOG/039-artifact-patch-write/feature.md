@@ -1,9 +1,9 @@
 ---
 feature: 039
 slug: artifact-patch-write
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-22
 ---
 
@@ -36,3 +36,7 @@ created: 2026-09-22
 - FEATURELIST/03-tool-description-gaps.md, FEATURELIST/08-migration-field-report.md — соавторы требования.
 - 037-mcp-echo-slimming — срезали эхо на мутациях; 039 — следующий шаг в ту же сторону (вход вместо выхода).
 </refs>
+
+<log>
+- 2026-09-24 [ui] — status moved to 'done' via ui
+</log>

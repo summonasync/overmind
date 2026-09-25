@@ -1,9 +1,9 @@
 ---
 feature: 043
 slug: status-provenance
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-22
 ---
 
@@ -31,3 +31,7 @@ created: 2026-09-22
 - README FEATURELIST пп. 9–10.
 - 023-feature-lifecycle-flow — сама машина состояний; 032 — документация статус-модели (доки уже улучшали, жалоба — на расхождение с фактом).
 </refs>
+
+<log>
+- 2026-09-24 [ui] — status moved to 'done' via ui
+</log>

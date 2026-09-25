@@ -1,7 +1,7 @@
 ---
 feature: 035
 slug: execution-queue
-status: draft
+status: done
 priority: p2
 version: 1
 created: 2026-09-20
@@ -30,3 +30,7 @@ created: 2026-09-20
 - Агентская дверь: чтение (onboard/current-task отдаёт очередь?) vs запись (move-in-queue через MCP) — и в какой версии.
 - Связь с 034: очередь доминирует над P-рангом при сортировке? Или независимые сущности (queue = явный план, priority = атрибут)?
 - Члены очереди: только фичи, или микробатчи/заметки тоже (микробатч — не фича на борде).
+
+<log>
+- 2026-09-24 [agent] — Superseded by 030-feature-dependencies (enforcement, «кто следующий») + 072-planning-task-queue (проекция борды) — closed by user request in-session 2026-09-24. Tombstone: не воскресить без явного решения юзера.
+</log>
