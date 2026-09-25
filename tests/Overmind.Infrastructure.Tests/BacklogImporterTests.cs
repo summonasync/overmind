@@ -142,7 +142,7 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
-    public async Task ImportFeature_ReimportAfterStatusDrift_RestoresStatusWithImportMarker()
+    public async Task ImportFeature_ReimportAfterStatusDrift_StaleMirrorRejectedAndLogIntact()
     {
         WriteFullFeature();
         await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
@@ -152,6 +152,44 @@ public sealed class BacklogImporterTests : IDisposable
         task.SetStatus(PlanningArtifactStatus.Blocked, "hit a wall mid-task", PlanningLogSource.Agent);
         await _context.SaveChangesAsync();
 
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo")));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+
+        feature = await LoadFeatureAsync("010-demo");
+        task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
+        task.Status.ShouldBe(PlanningArtifactStatus.Blocked);
+        task.Body.ShouldContain("hit a wall mid-task");
+    }
+
+    [Fact]
+    public async Task ImportFeature_ReimportAfterStatusDrift_RematerializedMirrorRestoresStatusWithImportMarker()
+    {
+        WriteFullFeature();
+        await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
+
+        var feature = await LoadFeatureAsync("010-demo");
+        var task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
+        task.SetStatus(PlanningArtifactStatus.Blocked, "hit a wall mid-task", PlanningLogSource.Agent);
+        await _context.SaveChangesAsync();
+        var driftedBody = task.Body;
+
+        _repo.Write(
+            "010-demo/tasks/02-second.md",
+            """
+            ---
+            feature: 010
+            task: 02
+            slug: demo
+            status: in_progress
+            review: light
+            created: 2026-09-01
+            ---
+
+            """ + driftedBody);
+
         var report = await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
 
         report.Created.ShouldBeFalse();
@@ -160,6 +198,7 @@ public sealed class BacklogImporterTests : IDisposable
         feature = await LoadFeatureAsync("010-demo");
         task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
         task.Status.ShouldBe(PlanningArtifactStatus.InProgress);
+        task.Body.ShouldContain("hit a wall mid-task");
         task.Body.ShouldContain("[import] — status restored from imported file");
     }
 

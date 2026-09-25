@@ -1,7 +1,7 @@
 ---
 feature: 078
 slug: upsert-log-guard
-status: draft
+status: done
 priority: p1
 version: 2
 created: 2026-09-24
@@ -29,4 +29,6 @@ Source: note «Полевые заметки агента (BobHouse 020, 2026-09
 <log>
 - 2026-09-24 [ui] — status moved to 'inProgress' via ui
 - 2026-09-24 [ui] — status moved to 'draft' via ui
+- 2026-09-25 [auto] — artifact created → inProgress
+- 2026-09-25 [agent] — by user request in-session — full cycle done: task e9e08ff8 (review PASS, no blockers), result 58a332f5; build 0w/0e, 1344/1344 tests
 </log>

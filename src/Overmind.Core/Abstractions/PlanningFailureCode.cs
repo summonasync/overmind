@@ -24,6 +24,7 @@ public enum PlanningFailureCode
     TickItemNotCheckable,
     InvalidPatchRequest,
     PatchLogSectionNotReplaceable,
+    LogHistoryNotAppendable,
     DependencyCycle,
     FeatureBlocked
 }

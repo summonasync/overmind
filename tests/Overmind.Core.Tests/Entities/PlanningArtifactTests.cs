@@ -38,6 +38,19 @@ original goal text
 </acceptance-criteria>
 """;
 
+    private const string LoggedBody = """
+# Task
+
+<goal>
+ship the guard
+</goal>
+
+<log>
+- 2026-09-01 — seeded
+- 2026-09-02 — review feedback applied
+</log>
+""";
+
     [Theory]
     [InlineData(PlanningArtifactKind.Spec, PlanningArtifactStatus.Draft)]
     [InlineData(PlanningArtifactKind.Plan, PlanningArtifactStatus.Draft)]
@@ -252,6 +265,179 @@ original goal text
         artifact.Versions[1].Body.ShouldBe("body-v2");
         artifact.Versions[2].Version.ShouldBe(3);
         artifact.Versions[2].Body.ShouldBe("body-v3");
+    }
+
+    [Fact]
+    public void UpdateBody_ResentIdenticalBodyWithLog_Passes()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+        var original = artifact.Body;
+
+        artifact.UpdateBody(LoggedBody);
+
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UpdateBody_TailAppendedLogLine_Passes()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        artifact.UpdateBody("""
+            # Task
+
+            <goal>
+            ship the guard
+            </goal>
+
+            <log>
+            - 2026-09-01 — seeded
+            - 2026-09-02 — review feedback applied
+            - 2026-09-03 — follow-up noted
+            </log>
+            """);
+
+        PlanningLog.Parse(artifact.Body).Count.ShouldBe(3);
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UpdateBody_LogSectionAddedToBodyWithoutOne_Passes()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId, PlanningArtifactKind.Task, "# Task\n\n<goal>\nship it\n</goal>\n");
+
+        artifact.UpdateBody(
+            "# Task\n\n<goal>\nship it\n</goal>\n\n<log>\n- 2026-09-03 — history starts\n</log>\n");
+
+        PlanningLog.Parse(artifact.Body).ShouldHaveSingleItem().Text.ShouldBe("history starts");
+    }
+
+    [Fact]
+    public void UpdateBody_ReflowedLogLineIndentation_PassesTrimNormalized()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        artifact.UpdateBody("""
+            # Task
+
+            <goal>
+            ship the guard
+            </goal>
+
+            <log>
+            - 2026-09-01 — seeded
+              - 2026-09-02 — review feedback applied
+            </log>
+            """);
+
+        PlanningLog.Parse(artifact.Body).Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UpdateBody_ModifiedStoredLogLine_ThrowsWithDivergenceDiagnostics()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+        var original = artifact.Body;
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody("""
+            # Task
+
+            <goal>
+            ship the guard
+            </goal>
+
+            <log>
+            - 2026-09-01 — seeded
+            - 2026-09-02 — history was polished
+            </log>
+            """));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("log line 1");
+        ex.Message.ShouldContain("stored 2");
+        ex.Message.ShouldContain("incoming 2");
+        ex.Message.ShouldContain("planning_append_log");
+        ex.Message.ShouldContain("planning_patch_artifact");
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void UpdateBody_RemovedStoredLogLine_ThrowsNamingFirstDroppedLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody("""
+            # Task
+
+            <goal>
+            ship the guard
+            </goal>
+
+            <log>
+            - 2026-09-01 — seeded
+            </log>
+            """));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Message.ShouldContain("log line 1");
+        ex.Message.ShouldContain("stored 2");
+        ex.Message.ShouldContain("incoming 1");
+    }
+
+    [Fact]
+    public void UpdateBody_ReorderedLogLines_ThrowsAtFirstDivergence()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody("""
+            # Task
+
+            <goal>
+            ship the guard
+            </goal>
+
+            <log>
+            - 2026-09-02 — review feedback applied
+            - 2026-09-01 — seeded
+            </log>
+            """));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Message.ShouldContain("log line 0");
+    }
+
+    [Fact]
+    public void UpdateBody_LogSectionDropped_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        var ex = Should.Throw<PlanningException>(() =>
+            artifact.UpdateBody("# Task\n\n<goal>\nship the guard\n</goal>\n"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Message.ShouldContain("log line 0");
+        ex.Message.ShouldContain("stored 2");
+        ex.Message.ShouldContain("incoming 0");
+    }
+
+    [Fact]
+    public void UpdateBody_SourceMarkerStrippedFromStoredLine_Throws()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId,
+            PlanningArtifactKind.Task,
+            "# Task\n\n<log>\n- 2026-09-01 — seeded\n- 2026-09-02 [agent] — hit a wall mid-task\n</log>\n");
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody(
+            "# Task\n\n<log>\n- 2026-09-01 — seeded\n- 2026-09-02 — hit a wall mid-task\n</log>\n"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Message.ShouldContain("log line 1");
     }
 
     [Fact]

@@ -131,6 +131,7 @@ public sealed class PlanningArtifact
     public void UpdateBody(string body, string? logNote = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
+        RequireLogHistoryAppendable(body);
         RequireChangeNoteWhenFrozen(logNote);
         ApplyBodyMutation(body, logNote);
     }
@@ -284,6 +285,31 @@ public sealed class PlanningArtifact
     {
         Brief = brief == string.Empty ? null : brief;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    private void RequireLogHistoryAppendable(string incomingBody)
+    {
+        var stored = PlanningLog.Parse(Body);
+        if (stored.Count == 0)
+        {
+            return;
+        }
+
+        var incoming = PlanningLog.Parse(incomingBody);
+        var shared = Math.Min(stored.Count, incoming.Count);
+
+        for (var i = 0; i < shared; i++)
+        {
+            if (stored[i] != incoming[i])
+            {
+                throw PlanningException.LogHistoryNotAppendable(i, stored.Count, incoming.Count);
+            }
+        }
+
+        if (incoming.Count < stored.Count)
+        {
+            throw PlanningException.LogHistoryNotAppendable(incoming.Count, stored.Count, incoming.Count);
+        }
     }
 
     private void RequireChangeNoteWhenFrozen(string? logNote)

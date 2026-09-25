@@ -109,6 +109,13 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchLogSectionNotReplaceable,
             "The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or the artifact log endpoint; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.");
 
+    public static PlanningException LogHistoryNotAppendable(int divergentIndex, int storedCount, int incomingCount) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LogHistoryNotAppendable,
+            $"The log section is append-only: a resent body must carry the stored log lines as an exact ordered prefix, " +
+            $"but log line {divergentIndex} is the first to diverge (stored {storedCount} lines, incoming {incomingCount}). " +
+            "Append via planning_append_log, edit other sections via planning_patch_artifact, or resend the full body " +
+            "with every stored log line untouched and new lines only at the end.");
+
     public static PlanningException DependencyCycle(string slug, string blockedBySlug, IReadOnlyList<string> chain) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DependencyCycle,
             $"Adding '{blockedBySlug}' as a blocker of '{slug}' would create a dependency cycle: {string.Join(" -> ", chain)}.");
