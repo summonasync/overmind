@@ -36,7 +36,7 @@ public class OnboardingToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("materialization block (strategy, targetDir, trigger, lastRun");
+        description.ShouldContain("materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt");
         description.ShouldContain("skipped-file count");
         description.ShouldContain("validation block (humanGate)");
     }
@@ -102,26 +102,63 @@ public class OnboardingToolContractTests : McpSessionTestBase
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
 
         var text = Canned.ToolResultText(response);
-        text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-23T10:15:00Z");
+        text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, " +
+            "lastSuccess=2026-09-23T10:15:00Z, lastAttempt=2026-09-23T10:15:00Z");
         text.ShouldContain("Validation: humanGate=off");
     }
 
     [Fact]
-    public async Task Onboard_OffStrategy_ShowsTriggerExplanationAndNeverLastRun()
+    public async Task ToolsList_OnboardDescription_MentionsSemanticSearchBlock()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("semantic search block (availability, with the verbatim probe reason when down)");
+    }
+
+    [Fact]
+    public async Task Onboard_HealthySemanticBlock_ShowsAvailableAfterValidation()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        var validationAt = text.IndexOf("Validation: humanGate=off", StringComparison.Ordinal);
+        var semanticAt = text.IndexOf("Semantic search: available", StringComparison.Ordinal);
+        validationAt.ShouldBeGreaterThanOrEqualTo(0);
+        semanticAt.ShouldBeGreaterThan(validationAt);
+    }
+
+    [Fact]
+    public async Task Onboard_UnavailableSemanticBlock_ShowsVerbatimProbeReason()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardSemanticUnavailableJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Semantic search: unavailable (model 'all-minilm-l6-v2' not found, HTTP 404)");
+    }
+
+    [Fact]
+    public async Task Onboard_OffStrategy_ShowsTriggerExplanationAndNeverSplit()
     {
         Stub.Route("POST", "/api/onboard", 200, Canned.OnboardOffStrategyJson);
 
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
 
         var text = Canned.ToolResultText(response);
-        text.ShouldContain("Materialization: strategy=off, targetDir=/repo/BACKLOG, lastRun=never");
+        text.ShouldContain("Materialization: strategy=off, targetDir=/repo/BACKLOG, lastSuccess=never, lastAttempt=never");
         text.ShouldContain("Materialization is off for this project — the materializer will not run.");
         text.ShouldContain("Enable it via the planning.materializationDefault setting or the per-project override.");
         text.ShouldContain("Validation: humanGate=on");
     }
 
     [Fact]
-    public async Task Onboard_FailedMaterialization_ShowsErrorAndFailedAtOnLastRunLine()
+    public async Task Onboard_FailedMaterialization_ShowsSuccessAttemptSplitWithFailureReason()
     {
         Stub.Route("POST", "/api/onboard", 200, Canned.OnboardFailedMaterializationJson);
 
@@ -129,7 +166,8 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var text = Canned.ToolResultText(response);
         text.ShouldContain(
-            "Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-23T10:15:00Z " +
+            "Materialization: strategy=on, targetDir=/repo/BACKLOG, " +
+            "lastSuccess=2026-09-23T10:15:00Z, lastAttempt=2026-09-23T18:00:00Z " +
             "(failed 2026-09-23T18:00:00Z: Refusing to overwrite locally modified tracked files:");
         text.ShouldContain("- /repo/BACKLOG/006-demo/tasks/01-first-task.md)");
     }
@@ -142,10 +180,11 @@ public class OnboardingToolContractTests : McpSessionTestBase
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
 
         var text = Canned.ToolResultText(response);
-        text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, lastRun=2026-09-24T09:00:00Z");
-        text.ShouldContain("Skipped on the last pass: 2 file(s)");
-        text.ShouldContain("- BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind");
-        text.ShouldContain("- BACKLOG/demo-feature/tasks/01-build.md: tracked file has local edits that are not on the board");
+        text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, " +
+            "lastSuccess=2026-09-24T09:00:00Z, lastAttempt=2026-09-24T09:00:00Z");
+        text.ShouldContain("Skipped at the last successful pass (byte-identical no-ops): 2 file(s)");
+        text.ShouldContain("- BACKLOG/foreign/feature.md: content already matches the board");
+        text.ShouldContain("- BACKLOG/demo-feature/tasks/01-build.md: content already matches the board");
         text.ShouldNotContain("failed");
     }
 

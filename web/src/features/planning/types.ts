@@ -63,6 +63,7 @@ export interface PlanningFeatureBoardItem {
   title: string;
   status: PlanningFeatureStatus;
   priority: PlanningFeaturePriority;
+  queuePosition: number;
   isCurrent: boolean;
   isBlocked: boolean;
   version: number;
@@ -71,6 +72,11 @@ export interface PlanningFeatureBoardItem {
   taskTotal: number;
   taskDone: number;
   updatedAt: string;
+}
+
+export interface ReorderPlanningQueueValues {
+  priority: PlanningFeaturePriority;
+  slugs: string[];
 }
 
 export interface PlanningFeatureDependencyEntry {

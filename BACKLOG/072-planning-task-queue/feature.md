@@ -1,7 +1,7 @@
 ---
 feature: 072
 slug: planning-task-queue
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -30,3 +30,9 @@ One MCP tool answering "what should be worked on next": planning_task_queue(proj
 - User request 2026-09-24 ("получить task-queue по mcp, а я изменяю" — agent reads, human reorders via existing controls).
 - planning_list_features (the data source); 034 (priority data), 038 (inline priority editing — the human's lever), 030 (blocked-awareness input), 035 (execution queue — fate decided in spec), 052-briefing (start-of-session sibling; queue is mid-session "what next").
 </refs>
+
+<log>
+- 2026-09-25 [auto] — artifact created → inProgress
+- 2026-09-25 [auto] — all tasks done + spec + plan → review
+- 2026-09-25 [agent] — Done by user request in-session («закрывай» after the drag-scroll bugfix smoke passed): all 8 tasks done, spec c2f0c760 + plan 86f6a90e validated, result ce7aa203 validated, user smoke passed live (drag persistence, band scoping, rollback; scroll bug found and fixed as task 08, user re-confirmed). Field verification by MCP users rides the deploy.
+</log>

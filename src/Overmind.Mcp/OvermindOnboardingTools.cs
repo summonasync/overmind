@@ -19,7 +19,7 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastRun, and the skipped-file count with the head of skipped paths and reasons when the last pass skipped any) and a validation block (humanGate). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate) and a semantic search block (availability, with the verbatim probe reason when down). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
     public async Task<string> Onboard(CancellationToken ct)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));
@@ -80,6 +80,7 @@ public sealed class OvermindOnboardingTools
 
         AppendMaterialization(payload, output);
         AppendValidation(payload, output);
+        AppendSemantic(payload, output);
 
         output.AppendLine();
         output.Append(payload.GetProperty("quickstart").GetString());
@@ -101,9 +102,13 @@ public sealed class OvermindOnboardingTools
         }
 
         var targetDir = block.TryGetProperty("targetDir", out var dir) ? dir.GetString() : null;
-        var lastRun = block.TryGetProperty("lastRun", out var run) &&
-                      run.ValueKind == JsonValueKind.String
-            ? run.GetString()
+        var lastSuccess = block.TryGetProperty("lastSuccess", out var success) &&
+                          success.ValueKind == JsonValueKind.String
+            ? success.GetString()
+            : "never";
+        var lastAttempt = block.TryGetProperty("lastAttempt", out var attempt) &&
+                          attempt.ValueKind == JsonValueKind.String
+            ? attempt.GetString()
             : "never";
 
         var failureSuffix = string.Empty;
@@ -121,7 +126,8 @@ public sealed class OvermindOnboardingTools
         }
 
         output.AppendLine(
-            $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, lastRun={lastRun}{failureSuffix}");
+            $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, " +
+            $"lastSuccess={lastSuccess}, lastAttempt={lastAttempt}{failureSuffix}");
 
         AppendSkipped(block, output);
 
@@ -141,7 +147,7 @@ public sealed class OvermindOnboardingTools
             return;
         }
 
-        output.AppendLine($"Skipped on the last pass: {count.GetInt32()} file(s)");
+        output.AppendLine($"Skipped at the last successful pass (byte-identical no-ops): {count.GetInt32()} file(s)");
         if (!block.TryGetProperty("skipped", out var head) ||
             head.ValueKind != JsonValueKind.Array)
         {
@@ -176,6 +182,30 @@ public sealed class OvermindOnboardingTools
         if (state is not null)
         {
             output.AppendLine($"Validation: humanGate={state}");
+        }
+    }
+
+    private static void AppendSemantic(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("semantic", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("available", out var available))
+        {
+            return;
+        }
+
+        if (available.ValueKind == JsonValueKind.True)
+        {
+            output.AppendLine("Semantic search: available");
+            return;
+        }
+
+        if (available.ValueKind == JsonValueKind.False &&
+            block.TryGetProperty("reason", out var reason) &&
+            reason.ValueKind == JsonValueKind.String &&
+            reason.GetString() is { Length: > 0 } reasonText)
+        {
+            output.AppendLine($"Semantic search: unavailable ({reasonText})");
         }
     }
 }

@@ -224,12 +224,12 @@ public sealed class OnboardApiTests : IDisposable
         var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
 
         onboard.Quickstart.ShouldContain("Materialization: the BACKLOG/ tree under the project root is rewritten after every planning mutation");
-        onboard.Quickstart.ShouldContain("lastRun (null = never)");
+        onboard.Quickstart.ShouldContain("lastSuccess (null = never materialized) and lastAttempt (null = never attempted)");
         onboard.Quickstart.ShouldContain("humanGate is on, planning_validate returns STOP");
     }
 
     [Fact]
-    public async Task Onboard_MaterializationBlock_OnStrategy_ResolvesWithTargetDirAndNullLastRun()
+    public async Task Onboard_MaterializationBlock_OnStrategy_ResolvesWithTargetDirAndNeverSplit()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
         var diskPath = TestPaths.DiskPath(name);
@@ -242,7 +242,8 @@ public sealed class OnboardApiTests : IDisposable
         onboard.Materialization.Strategy.ShouldBe("on");
         onboard.Materialization.TargetDir.ShouldBe(Path.Combine(diskPath, "BACKLOG"));
         onboard.Materialization.Trigger.ShouldContain("after every planning mutation");
-        onboard.Materialization.LastRun.ShouldBeNull();
+        onboard.Materialization.LastSuccess.ShouldBeNull();
+        onboard.Materialization.LastAttempt.ShouldBeNull();
         onboard.Validation.HumanGate.ShouldBeTrue();
     }
 
@@ -260,7 +261,8 @@ public sealed class OnboardApiTests : IDisposable
         onboard.Materialization.TargetDir.ShouldBe(Path.Combine(OvermindPaths.DataDirectory, "projects", name, "backlog"));
         onboard.Materialization.TargetDir.ShouldNotBe(Path.Combine(diskPath, "BACKLOG"));
         onboard.Materialization.Trigger.ShouldContain("after every planning mutation");
-        onboard.Materialization.LastRun.ShouldBeNull();
+        onboard.Materialization.LastSuccess.ShouldBeNull();
+        onboard.Materialization.LastAttempt.ShouldBeNull();
     }
 
     [Fact]
@@ -278,7 +280,8 @@ public sealed class OnboardApiTests : IDisposable
         onboard.Materialization.TargetDir.ShouldBe(Path.Combine(diskPath, "BACKLOG"));
         onboard.Materialization.Trigger.ShouldContain("will not run");
         onboard.Materialization.Trigger.ShouldContain("Enable it via the planning.materializationDefault setting");
-        onboard.Materialization.LastRun.ShouldBeNull();
+        onboard.Materialization.LastSuccess.ShouldBeNull();
+        onboard.Materialization.LastAttempt.ShouldBeNull();
         onboard.Validation.HumanGate.ShouldBeFalse();
     }
 
@@ -297,7 +300,7 @@ public sealed class OnboardApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Onboard_MaterializationLastRun_NullBeforePass_SetAfterMutationTriggeredPass()
+    public async Task Onboard_MaterializationSplit_NullBeforePass_SetAfterMutationTriggeredPass()
     {
         var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-mat-{Guid.NewGuid():N}");
         Directory.CreateDirectory(sandbox);
@@ -308,7 +311,8 @@ public sealed class OnboardApiTests : IDisposable
             await SetWorkflowAsync(project.Id, materialization: "on");
 
             var before = await OnboardAsync(new { Cwd = sandbox });
-            before.Materialization.LastRun.ShouldBeNull();
+            before.Materialization.LastSuccess.ShouldBeNull();
+            before.Materialization.LastAttempt.ShouldBeNull();
 
             var create = await _client.PostAsJsonAsync(
                 $"/api/projects/{project.Id}/planning/features",
@@ -318,8 +322,44 @@ public sealed class OnboardApiTests : IDisposable
             File.Exists(Path.Combine(sandbox, "BACKLOG", "feat", "feature.md")).ShouldBeTrue();
 
             var after = await OnboardAsync(new { Cwd = sandbox });
-            after.Materialization.LastRun.ShouldNotBeNull();
+            after.Materialization.LastSuccess.ShouldNotBeNull();
+            after.Materialization.LastAttempt.ShouldNotBeNull();
             after.Materialization.Strategy.ShouldBe("on");
+        }
+        finally
+        {
+            Directory.Delete(sandbox, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationSplit_FailedAttemptAfterSuccess_KeepsLastSuccessAndAdvancesAttempt()
+    {
+        var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-split-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(sandbox);
+        try
+        {
+            var name = $"split-{Guid.NewGuid():N}";
+            var project = await CreateProjectAsync(name, sandbox);
+            await SetWorkflowAsync(project.Id, materialization: "on");
+            await CreateFeatureAsync(project.Id, "feat", "Feat");
+
+            var clean = await OnboardAsync(new { Cwd = sandbox });
+            clean.Materialization.LastSuccess.ShouldNotBeNull();
+            clean.Materialization.LastAttempt.ShouldNotBeNull();
+            clean.Materialization.Error.ShouldBeNull();
+
+            var featureDoc = Path.Combine(sandbox, "BACKLOG", "feat", "feature.md");
+            await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+            await CreateFeatureAsync(project.Id, "second", "Second");
+
+            var refused = await OnboardAsync(new { Cwd = sandbox });
+            refused.Materialization.LastSuccess.ShouldBe(clean.Materialization.LastSuccess);
+            refused.Materialization.LastAttempt.ShouldNotBeNull();
+            refused.Materialization.LastAttempt!.Value
+                .ShouldBeGreaterThan(clean.Materialization.LastAttempt!.Value);
+            refused.Materialization.Error.ShouldNotBeNull();
+            refused.Materialization.FailedAt.ShouldNotBeNull();
         }
         finally
         {
@@ -357,10 +397,15 @@ public sealed class OnboardApiTests : IDisposable
             failed.Materialization.Error.ShouldNotBeNull();
             failed.Materialization.Error.ShouldContain("nothing was written");
             failed.Materialization.FailedAt.ShouldNotBeNull();
-            failed.Materialization.LastRun.ShouldNotBeNull();
+            failed.Materialization.LastAttempt.ShouldNotBeNull();
+            failed.Materialization.LastSuccess.ShouldNotBeNull();
 
             await File.WriteAllTextAsync(featureDoc, pristine);
             await File.WriteAllTextAsync(indexPath, pristineIndex);
+
+            await File.WriteAllTextAsync(featureDoc, pristine);
+            await File.WriteAllTextAsync(indexPath, pristineIndex);
+            File.Delete(squatter);
 
             await CreateFeatureAsync(project.Id, "third", "Third");
 
@@ -375,7 +420,7 @@ public sealed class OnboardApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Onboard_MaterializationBlock_PartialSkip_ShowsCountAndHeadThenClearsOnCleanPass()
+    public async Task Onboard_MaterializationBlock_RefusedSync_CarriesErrorAndClearsOnCleanPass()
     {
         var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-skip-{Guid.NewGuid():N}");
         Directory.CreateDirectory(sandbox);
@@ -392,22 +437,25 @@ public sealed class OnboardApiTests : IDisposable
 
             await CreateFeatureAsync(project.Id, "second", "Second");
 
-            var partial = await OnboardAsync(new { Cwd = sandbox });
-            partial.Materialization.LastRun.ShouldNotBeNull();
-            partial.Materialization.Error.ShouldBeNull();
-            partial.Materialization.SkippedCount.ShouldBe(1);
-            partial.Materialization.Skipped.ShouldNotBeNull();
-            partial.Materialization.Skipped!.ShouldHaveSingleItem().ShouldBe(
-                "BACKLOG/feat/feature.md: tracked file has local edits that are not on the board");
-            File.Exists(Path.Combine(sandbox, "BACKLOG", "second", "feature.md")).ShouldBeTrue();
+            var refused = await OnboardAsync(new { Cwd = sandbox });
+            refused.Materialization.LastAttempt.ShouldNotBeNull();
+            refused.Materialization.LastSuccess.ShouldNotBeNull();
+            refused.Materialization.Error.ShouldNotBeNull();
+            refused.Materialization.Error!.ShouldContain("local edits");
+            refused.Materialization.FailedAt.ShouldNotBeNull();
+            File.Exists(Path.Combine(sandbox, "BACKLOG", "second", "feature.md")).ShouldBeFalse();
 
             await File.WriteAllTextAsync(featureDoc, pristine);
 
             await CreateFeatureAsync(project.Id, "third", "Third");
 
             var clean = await OnboardAsync(new { Cwd = sandbox });
-            clean.Materialization.SkippedCount.ShouldBeNull();
-            clean.Materialization.Skipped.ShouldBeNull();
+            clean.Materialization.Error.ShouldBeNull();
+            clean.Materialization.FailedAt.ShouldBeNull();
+            clean.Materialization.SkippedCount.ShouldBe(1);
+            clean.Materialization.Skipped.ShouldNotBeNull();
+            clean.Materialization.Skipped!.ShouldHaveSingleItem().ShouldBe(
+                "BACKLOG/feat/feature.md: content already matches the board");
         }
         finally
         {
@@ -492,8 +540,8 @@ public sealed class OnboardApiTests : IDisposable
     public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus, string? CurrentSlug);
 
     public sealed record OnboardMaterializationJson(
-        string Strategy, string TargetDir, string Trigger, DateTime? LastRun, string? Error, DateTime? FailedAt,
-        int? SkippedCount, IReadOnlyList<string>? Skipped);
+        string Strategy, string TargetDir, string Trigger, DateTime? LastSuccess, DateTime? LastAttempt,
+        string? Error, DateTime? FailedAt, int? SkippedCount, IReadOnlyList<string>? Skipped);
 
     public sealed record OnboardValidationJson(bool HumanGate);
 

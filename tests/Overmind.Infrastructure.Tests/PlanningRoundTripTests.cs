@@ -461,6 +461,77 @@ public sealed class PlanningRoundTripTests : IDisposable
         (await File.ReadAllTextAsync(Path.Combine(BacklogDir, "010-demo", "feature.md"))).ShouldBe(healed);
     }
 
+    [Fact]
+    public async Task Import_CreatedFeaturesLandAtTheirPriorityBandTail()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePrioritizedFeature(null);
+        WriteRaw("020-later/feature.md",
+            "---\n" +
+            "feature: 020\n" +
+            "slug: later\n" +
+            "status: ready\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 020 — Later\n\n" +
+            "<goal>\nLater.\n</goal>\n");
+        WriteRaw("030-urgent/feature.md",
+            "---\n" +
+            "feature: 030\n" +
+            "slug: urgent\n" +
+            "status: ready\n" +
+            "priority: p0\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 030 — Urgent\n\n" +
+            "<goal>\nUrgent.\n</goal>\n");
+
+        var report = await ImportAsync(projectId);
+
+        report.FeaturesCreated.ShouldBe(3);
+
+        using var ctx = _db.CreateContext();
+        var positions = await ctx.PlanningFeatures
+            .Where(f => f.ProjectId == projectId)
+            .ToDictionaryAsync(f => f.Slug, f => f.QueuePosition);
+        positions["010-demo"].ShouldBe(1);
+        positions["020-later"].ShouldBe(2);
+        positions["030-urgent"].ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ReImport_LeavesQueuePositionUntouched_EvenWhenPriorityFlips()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePrioritizedFeature("priority: p1");
+        await ImportAsync(projectId);
+        await SyncAsync(projectId, force: true);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures.SingleAsync(
+                f => f.ProjectId == projectId && f.Slug == "010-demo");
+            feature.QueuePosition.ShouldBe(1);
+            await ctx.Database.ExecuteSqlAsync(
+                $"UPDATE PlanningFeatures SET QueuePosition = 7 WHERE Id = {feature.Id}");
+        }
+
+        WritePrioritizedFeature(null);
+        var report = await ImportAsync(projectId);
+
+        report.FeaturesUpdated.ShouldBe(1);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures.SingleAsync(
+                f => f.ProjectId == projectId && f.Slug == "010-demo");
+            feature.Priority.ShouldBe(FeaturePriority.P2);
+            feature.QueuePosition.ShouldBe(7);
+        }
+    }
+
     private async Task<Guid> SeedProjectAsync()
     {
         using var ctx = _db.CreateContext();

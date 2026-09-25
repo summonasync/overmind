@@ -41,12 +41,16 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.MissingProject(projectId);
         }
 
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
         var feature = PlanningFeature.Create(projectId, slug, title, body, priority);
         _db.PlanningFeatures.Add(feature);
+        await AssignQueueTailAsync(feature, ct);
 
         try
         {
             await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
         catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
         {
@@ -90,12 +94,16 @@ public sealed partial class PlanningFeatureService
                 PlanningLogSource.Ui);
         }
 
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
         if (priority is { } target && target != feature.Priority)
         {
             feature.SetPriority(target);
+            await AssignQueueTailAsync(feature, ct);
         }
 
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
         return feature;
     }
@@ -226,6 +234,7 @@ public sealed partial class PlanningFeatureService
                 import.Status, import.Version, import.CreatedAt, import.CreatedAt, isCurrent: false,
                 priority: import.Priority);
             _db.PlanningFeatures.Add(feature);
+            await AssignQueueTailAsync(feature, ct);
             featureCreated = true;
         }
         else
@@ -415,6 +424,17 @@ public sealed partial class PlanningFeatureService
         }
 
         return notes;
+    }
+
+    private async Task AssignQueueTailAsync(PlanningFeature feature, CancellationToken ct)
+    {
+        var bandMax = await _db.PlanningFeatures
+            .Where(f => f.ProjectId == feature.ProjectId
+                        && f.Priority == feature.Priority
+                        && f.Id != feature.Id)
+            .MaxAsync(f => (int?)f.QueuePosition, ct);
+
+        feature.SetQueuePosition((bandMax ?? 0) + 1);
     }
 
     private static string ContentKey(string body) =>

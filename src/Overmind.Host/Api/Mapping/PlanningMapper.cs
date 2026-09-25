@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Planning;
@@ -6,12 +7,11 @@ namespace Overmind.Host.Api.Mapping;
 
 public static class PlanningMapper
 {
+    private static readonly Regex FeatureNumberPattern = new(@"^([0-9]+[a-z]?)(?:-|$)", RegexOptions.Compiled);
+
     public static PlanningFeatureBoardItem ToBoardItem(PlanningFeature feature, bool isBlocked)
     {
         var artifacts = feature.Artifacts;
-        var spec = artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
-        var plan = artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Plan);
-        var tasks = artifacts.Where(a => a.Kind == PlanningArtifactKind.Task).ToList();
 
         return new PlanningFeatureBoardItem(
             feature.Slug,
@@ -19,14 +19,67 @@ public static class PlanningMapper
             feature.Status,
             feature.Priority,
             feature.Version,
-            spec?.Status,
-            plan?.Status,
-            tasks.Count,
-            tasks.Count(t => t.Status == PlanningArtifactStatus.Done),
+            ArtifactStatus(artifacts, PlanningArtifactKind.Spec),
+            ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
+            TaskTotal(artifacts),
+            TaskDone(artifacts),
             feature.UpdatedAt,
             feature.IsCurrent,
-            isBlocked);
+            isBlocked,
+            feature.QueuePosition);
     }
+
+    public static PlanningQueueItem ToQueueItem(
+        PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures)
+    {
+        var blockers = OpenBlockerSlugs(feature, projectFeatures);
+        var artifacts = feature.Artifacts;
+
+        return new PlanningQueueItem(
+            feature.Slug,
+            FeatureNumber(feature.Slug),
+            feature.Title,
+            feature.Priority,
+            feature.Status,
+            feature.QueuePosition,
+            ArtifactStatus(artifacts, PlanningArtifactKind.Spec),
+            ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
+            TaskDone(artifacts),
+            TaskTotal(artifacts),
+            Readiness(feature),
+            blockers,
+            blockers.Length > 0,
+            feature.IsCurrent);
+    }
+
+    public static int Readiness(PlanningFeature feature) =>
+        (ArtifactStatus(feature.Artifacts, PlanningArtifactKind.Spec) == PlanningArtifactStatus.Validated ? 1 : 0) +
+        (ArtifactStatus(feature.Artifacts, PlanningArtifactKind.Plan) == PlanningArtifactStatus.Validated ? 1 : 0) +
+        (TaskTotal(feature.Artifacts) > 0 ? 1 : 0);
+
+    public static string? FeatureNumber(string slug)
+    {
+        var match = FeatureNumberPattern.Match(slug);
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    public static string[] OpenBlockerSlugs(
+        PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures) =>
+        [.. feature.BlockedBy
+            .Select(link => projectFeatures.TryGetValue(link.BlockedByFeatureId, out var blocker) ? blocker : null)
+            .Where(b => b is not null && !FeatureDependencyEntry.IsClosed(b!.Status))
+            .Select(b => b!.Slug)
+            .OrderBy(s => s, StringComparer.Ordinal)];
+
+    private static PlanningArtifactStatus? ArtifactStatus(
+        IReadOnlyCollection<PlanningArtifact> artifacts, PlanningArtifactKind kind) =>
+        artifacts.FirstOrDefault(a => a.Kind == kind)?.Status;
+
+    private static int TaskTotal(IReadOnlyCollection<PlanningArtifact> artifacts) =>
+        artifacts.Count(a => a.Kind == PlanningArtifactKind.Task);
+
+    private static int TaskDone(IReadOnlyCollection<PlanningArtifact> artifacts) =>
+        artifacts.Count(a => a.Kind == PlanningArtifactKind.Task && a.Status == PlanningArtifactStatus.Done);
 
     public static bool HasOpenBlocker(
         PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures) =>

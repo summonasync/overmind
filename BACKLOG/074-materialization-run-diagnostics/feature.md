@@ -1,7 +1,7 @@
 ---
 feature: 074
 slug: materialization-run-diagnostics
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -26,3 +26,9 @@ An agent (or human) can read the true state of the materialized mirror from tool
 
 <refs>
 Source: note «Полевые заметки агента: Overmind MCP на живой ceremony-сессии (BobHouse 020, 2026-09-24)», B1 + "честное ограничение" section (entry c7f34f40-3cea-49ec-8e23-bb1d8fe8e9c9). Related done work: 054, 033, 067. Microbatch relatives: #49, #56c.</refs>
+
+<log>
+- 2026-09-25 [auto] — artifact created → inProgress
+- 2026-09-25 [auto] — all tasks done + spec + plan → review
+- 2026-09-25 [agent] — Done by user request in-session («закрывай»): both tasks done (01 through a BLOCKED→fixed→re-approved cycle), spec 1f69dd0b + plan b8e98220 validated, results ecff2ad2 validated, live atomic-abort walk verified on an isolated host. Policy flag (067-D2 supersede: skip-not-abort → refusal+atomic-abort) documented in the result deferred section — user review welcome; field verification by MCP users after the deploy.
+</log>

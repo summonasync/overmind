@@ -108,8 +108,7 @@ public sealed class FtsSearchService
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            SELECT e."Id", e."Title", e."Type",
-                   snippet(entry_fts, 1, '<mark>', '</mark>', '…', 16),
+            SELECT e."Id", e."Title", e."Type", e."Content",
                    bm25(entry_fts)
             FROM entry_fts
             JOIN "ContextEntries" e ON e.rowid = entry_fts.rowid
@@ -128,7 +127,7 @@ public sealed class FtsSearchService
                 Guid.Parse(reader.GetString(0)),
                 reader.GetString(1),
                 (EntryType)reader.GetInt32(2),
-                await ReadSnippetAsync(reader, 3, ct),
+                WindowSnippet(reader.GetString(3), matchQuery),
                 reader.GetDouble(4)));
         }
 
@@ -241,10 +240,6 @@ public sealed class FtsSearchService
             "$projectId", projectId.HasValue ? projectId.Value.ToString().ToUpperInvariant() : DBNull.Value));
         command.Parameters.Add(new SqliteParameter("$limit", limit));
     }
-
-    private static async Task<string> ReadSnippetAsync(
-        DbDataReader reader, int ordinal, CancellationToken ct) =>
-        await reader.IsDBNullAsync(ordinal, ct) ? string.Empty : reader.GetString(ordinal);
 
     private static string SanitizeQuery(string query)
     {

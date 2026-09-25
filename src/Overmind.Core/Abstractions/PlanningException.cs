@@ -125,6 +125,19 @@ public sealed class PlanningException : Exception
             $"STOP: feature '{slug}' is blocked by unclosed features: {string.Join(", ", openBlockers)}. " +
             "Pinning is refused — work a blocker first or ask the user to clear the link.");
 
+    public static PlanningException FeatureNotInQueue(string slug) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.FeatureNotInQueue,
+            $"Feature '{slug}' is done and no longer part of the queue; only non-done features can be moved.");
+
+    public static PlanningException InvalidQueuePosition(string slug, int position, int bandSize) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidQueuePosition,
+            $"Position {position} is outside the queue band of '{slug}': the band holds {bandSize} " +
+            $"non-done features, so the valid range is 1..{bandSize}.");
+
+    public static PlanningException InvalidQueueReorder(FeaturePriority priority, string discrepancy) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidQueueReorder,
+            $"Reordering the '{priority.ToString().ToLowerInvariant()}' band failed: {discrepancy}");
+
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
 }

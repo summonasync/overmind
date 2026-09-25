@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheEighteenPlanningTools()
+    public async Task ToolsList_ContainsTheTwentyTwoPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -35,10 +35,14 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_validate",
             "planning_set_current",
             "planning_set_feature_status",
+            "planning_task_queue",
+            "planning_move_feature",
+            "planning_set_feature_priority",
             "planning_list_feature_dependencies",
             "planning_add_feature_dependency",
             "planning_remove_feature_dependency",
             "planning_materialize",
+            "planning_materialize_status",
             "planning_import_feature"
         ];
         foreach (var name in expected)
@@ -58,11 +62,21 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("priority asc");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("dragging");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("readiness 0-3");
+        tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("band-scoped");
+        tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("toPosition");
+        tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("planning_set_feature_priority");
+        tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("explicit approval");
+        tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("tail");
+        tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("planning_move_feature");
         tools["planning_list_feature_dependencies"]!["description"]!.GetValue<string>().ShouldContain("done or review");
         tools["planning_add_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("cycle");
         tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
         tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldContain("board mutation");
+        tools["planning_materialize_status"]!["description"]!.GetValue<string>().ShouldContain("stalePaths");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("all-or-nothing");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("one feature auto-transition evaluation");
         tools["planning_import_feature"]!["description"]!.GetValue<string>().ShouldContain("never pass through the model");
@@ -913,6 +927,222 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningTaskQueue_ReadsTheAgentQueueRoute()
+    {
+        var response = await Driver.CallToolAsync("planning_task_queue", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/task-queue");
+        request.Query.ShouldBeEmpty();
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("\"slug\":\"demo-feature\"");
+        text.ShouldContain("\"slug\":\"draft-one\"");
+        text.ShouldContain("\"queuePosition\":2");
+        text.ShouldContain("\"blockedBy\":[\"demo-feature\"]");
+        text.ShouldContain("\"readiness\":2");
+    }
+
+    [Fact]
+    public async Task PlanningTaskQueue_LimitTruncatesThroughTheQuery()
+    {
+        var response = await Driver.CallToolAsync("planning_task_queue", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["limit"] = 2
+        });
+
+        FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/task-queue")
+            .Query.ShouldBe("limit=2");
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("\"slug\":\"demo-feature\"");
+        text.ShouldNotContain("\"slug\":\"draft-one\"");
+    }
+
+    [Theory]
+    [InlineData("up", null)]
+    [InlineData("down", null)]
+    [InlineData("first", null)]
+    [InlineData("last", null)]
+    [InlineData("toPosition", 3)]
+    public async Task PlanningMoveFeature_PostsTheGestureToTheAgentRoute(string move, int? position)
+    {
+        var arguments = new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["move"] = move
+        };
+        if (position is not null)
+        {
+            arguments["position"] = position.Value;
+        }
+
+        var response = await Driver.CallToolAsync("planning_move_feature", arguments);
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/queue-move", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/queue-move");
+        var body = JsonNode.Parse(request.Body)!;
+        body["move"]!.GetValue<string>().ShouldBe(move.ToLowerInvariant());
+        var positionNode = body["position"];
+        if (position is null)
+        {
+            positionNode.ShouldBeNull();
+        }
+        else
+        {
+            positionNode!.GetValue<int>().ShouldBe(position.Value);
+        }
+
+        Canned.ToolResultText(response).ShouldContain("queue position 2 in band 'p1'");
+    }
+
+    [Theory]
+    [InlineData("banana")]
+    [InlineData("backward")]
+    [InlineData("TO_THE_TOP")]
+    public async Task PlanningMoveFeature_UnknownMove_NamesTheContractWithoutHttpCall(string move)
+    {
+        var response = await Driver.CallToolAsync("planning_move_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["move"] = move
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain($"Invalid queue move '{move}'");
+        text.ShouldContain("up, down, first, last, toPosition");
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/queue-move", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningMoveFeature_ToPositionWithoutPosition_NamesTheContractWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_move_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["move"] = "toPosition"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("position is required when move is 'toPosition'");
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/queue-move", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("up")]
+    [InlineData("down")]
+    [InlineData("first")]
+    [InlineData("last")]
+    public async Task PlanningMoveFeature_PositionOutsideToPosition_NamesTheContractWithoutHttpCall(string move)
+    {
+        var response = await Driver.CallToolAsync("planning_move_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["move"] = move,
+            ["position"] = 2
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("position is only allowed when move is 'toPosition'");
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/queue-move", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningMoveFeature_NonPositivePosition_NamesTheContractWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_move_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["move"] = "toPosition",
+            ["position"] = 0
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("position must be a positive int (1-based)");
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/queue-move", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningMoveFeature_OutOfRangePosition_SurfacesTheEndpointContractText()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/queue-move",
+            400,
+            Canned.PlanningQueueOutOfRangeJson);
+
+        var response = await Driver.CallToolAsync("planning_move_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["move"] = "toPosition",
+            ["position"] = 9
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Position 9 is outside the queue band of 'demo-feature'");
+        text.ShouldContain("the band holds 3 non-done features, so the valid range is 1..3.");
+        text.ShouldNotContain("One or more validation errors");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningSetFeaturePriority_PutsPriorityThroughTheHumanDoor()
+    {
+        var response = await Driver.CallToolAsync("planning_set_feature_priority", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["priority"] = "P0"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "PUT");
+        request.Path.ShouldBe(
+            $"/api/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}");
+        var body = JsonNode.Parse(request.Body)!;
+        body["priority"]!.GetValue<string>().ShouldBe("p0");
+        body.AsObject().Count.ShouldBe(1);
+
+        var payload = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        payload["priority"]!.GetValue<string>().ShouldBe("p0");
+        payload["version"]!.GetValue<int>().ShouldBe(5);
+        payload["bodyChars"]!.GetValue<int>().ShouldBeGreaterThan(0);
+        payload.ShouldNotContainKey("body");
+    }
+
+    [Theory]
+    [InlineData("banana")]
+    [InlineData("urgent")]
+    [InlineData("p4")]
+    public async Task PlanningSetFeaturePriority_InvalidPriority_RejectedWithoutHttpCall(string priority)
+    {
+        var response = await Driver.CallToolAsync("planning_set_feature_priority", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["priority"] = priority
+        });
+
+        ToolErrorText(response).ShouldContain($"Invalid feature priority '{priority}'");
+        Stub.Requests.ShouldNotContain(r => r.Method == "PUT");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task PlanningAppendLog_PostsTheNote()
     {
         var response = await Driver.CallToolAsync("planning_append_log", new JsonObject
@@ -1166,6 +1396,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         echo["written"]!.GetValue<int>().ShouldBe(3);
         echo["skipped"]!.GetValue<int>().ShouldBe(2);
         echo["force"]!.GetValue<bool>().ShouldBeFalse();
+        echo["lastSuccess"]!.GetValue<string>().ShouldBe("2026-09-23T10:15:00Z");
+        echo["lastAttempt"]!.GetValue<string>().ShouldBe("2026-09-24T09:30:00Z");
         text.ShouldNotContain("sha256");
         text.ShouldNotContain("Overwrote untracked file");
     }
@@ -1198,9 +1430,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         var head = echo["skippedHead"]!.AsArray();
         head.Count.ShouldBe(2);
         head[0]!.GetValue<string>().ShouldBe(
-            "BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind");
+            "BACKLOG/foreign/feature.md: content already matches the board");
         head[1]!.GetValue<string>().ShouldBe(
-            "BACKLOG/demo-feature/tasks/01-build.md: tracked file has local edits that are not on the board");
+            "BACKLOG/demo-feature/tasks/01-build.md: content already matches the board");
     }
 
     [Fact]
@@ -1220,6 +1452,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
         echo["written"]!.GetValue<int>().ShouldBe(2);
         echo["skipped"]!.GetValue<int>().ShouldBe(0);
+        echo["lastSuccess"]!.GetValue<string>().ShouldBe("2026-09-24T09:30:00Z");
         echo.ContainsKey("skippedHead").ShouldBeFalse();
     }
 
@@ -1320,7 +1553,81 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldBe(
-            "Triggers a materialization pass: rewrites the BACKLOG/ mirror from the board, writing every clean file and skipping guarded ones (untracked or locally-edited) with a reason — a rerun never silently overwrites disk content. A normal board mutation already triggers a pass automatically; call this after an import, a strategy switch, or when onboard reports skips or a stale lastRun. force overwrites guarded files with per-file warnings instead of skipping them; transcribe hand edits to the board before forcing.");
+            "Triggers a materialization pass: the full plan is computed first, then written atomically — " +
+            "any guarded file (untracked at a planned path, or tracked with local edits not on the board) " +
+            "aborts the whole run with a 409 listing every refusal, and nothing is written that run. " +
+            "Skips in the report are byte-identical no-ops (content already matches the board), not guarded files. " +
+            "A normal board mutation already triggers a pass automatically; call this after an import, " +
+            "a strategy switch, or when onboard reports a failed attempt or stale mirror state. " +
+            "force adopts guarded files with per-file warnings instead of refusing; transcribe hand edits to the board before forcing.");
+    }
+
+    [Fact]
+    public async Task PlanningMaterializeStatus_CallsTheAgentStatusRouteAndEchoesThePayload()
+    {
+        var response = await Driver.CallToolAsync("planning_materialize_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/materialization-status");
+        request.Path.ShouldBe($"/api/agent/projects/{Canned.ProjectId}/planning/materialization-status");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["projectId"]!.GetValue<string>().ShouldBe(Canned.ProjectId.ToString());
+        echo["lastSuccess"]!.GetValue<string>().ShouldBe("2026-09-23T10:15:00Z");
+        echo["lastAttempt"]!.GetValue<string>().ShouldBe("2026-09-24T09:30:00Z");
+        echo["lastAttemptReason"].ShouldBeNull();
+        echo["trackedFiles"]!.GetValue<int>().ShouldBe(2);
+        echo["stalePaths"]!.AsArray().Count.ShouldBe(1);
+        echo["strategy"]!.GetValue<string>().ShouldBe("on");
+        echo["targetDir"]!.GetValue<string>().ShouldBe("/repo/BACKLOG");
+
+        var run = echo["lastRun"]!.AsObject();
+        run["startedAt"]!.GetValue<string>().ShouldBe("2026-09-24T09:30:00Z");
+        run["finishedAt"]!.GetValue<string>().ShouldBe("2026-09-24T09:30:05Z");
+        run["atomic"]!.GetValue<bool>().ShouldBeTrue();
+        run["written"]!.AsArray().Count.ShouldBe(2);
+        run["skipped"]!.AsArray().ShouldHaveSingleItem();
+        run["refused"]!.AsArray().Count.ShouldBe(0);
+        run["skipped"]!.AsArray()[0]!["relativePath"]!.GetValue<string>().ShouldBe("BACKLOG/foreign/feature.md");
+    }
+
+    [Fact]
+    public async Task PlanningMaterializeStatus_AbsentReport_RendersNoReportForTheAttempt()
+    {
+        Stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/materialization-status",
+            Canned.PlanningMaterializeStatusNoReportJson);
+
+        var response = await Driver.CallToolAsync("planning_materialize_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.ContainsKey("lastRun").ShouldBeTrue();
+        echo["lastRun"].ShouldBeNull();
+        echo["lastAttemptReason"]!.GetValue<string>().ShouldContain("Duplicate materialization target");
+        echo["stalePaths"]!.AsArray().Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task PlanningMaterializeStatus_Description_PinsTheDiagnosticContract()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_materialize_status"]!["description"]!.GetValue<string>().ShouldBe(
+            "Mirror diagnostics without filesystem access: returns the project's materialization state as one " +
+            "structured payload — lastSuccess vs lastAttempt (lastAttemptReason carries the failure when the " +
+            "attempt did not succeed), the persisted last-run report per file (startedAt, finishedAt, atomic, " +
+            "written paths, skipped and refused with reasons), trackedFiles, stalePaths (tracked files the last " +
+            "run neither wrote nor skipped, plus tracked files whose disk bytes drifted), strategy and targetDir. " +
+            "lastRun is null when the failed attempt persisted no report — read it as no report for this attempt. " +
+            "Read-only: never triggers a pass; use planning_materialize for that.");
     }
 
     [Theory]

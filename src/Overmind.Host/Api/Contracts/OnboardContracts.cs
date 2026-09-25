@@ -12,13 +12,16 @@ public sealed record OnboardMaterializationBlock(
     string Strategy,
     string TargetDir,
     string Trigger,
-    DateTime? LastRun,
+    DateTime? LastSuccess,
+    DateTime? LastAttempt,
     string? Error,
     DateTime? FailedAt,
     int? SkippedCount,
     IReadOnlyList<string>? Skipped);
 
 public sealed record OnboardValidationBlock(bool HumanGate);
+
+public sealed record OnboardSemanticBlock(bool Available, string? Reason);
 
 public sealed record OnboardResponse(
     Guid ProjectId,
@@ -27,4 +30,5 @@ public sealed record OnboardResponse(
     OnboardBoardSummary Board,
     OnboardMaterializationBlock Materialization,
     OnboardValidationBlock Validation,
+    OnboardSemanticBlock Semantic,
     string Quickstart);

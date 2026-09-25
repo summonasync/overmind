@@ -143,7 +143,7 @@ public sealed class PlanningServiceGuardTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_PartialSkipThroughGuard_RecordsNoFailureAndStamps()
+    public async Task Sync_PartialRefusalThroughGuard_RecordsFailureWithoutPropagating()
     {
         var projectId = await SeedProjectAsync();
         await SeedFeatureWithTaskAsync(projectId);
@@ -167,9 +167,11 @@ public sealed class PlanningServiceGuardTests : IDisposable
 
         using var verify = _db.CreateContext();
         var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
-        project.LastMaterializationError.ShouldBeNull();
-        project.LastMaterializationFailedAt.ShouldBeNull();
-        project.LastMaterializedAt!.Value.ShouldBeGreaterThan(firstStamp);
+        project.LastMaterializationError.ShouldNotBeNull();
+        project.LastMaterializationError!.ShouldContain("local edits");
+        project.LastMaterializationFailedAt.ShouldNotBeNull();
+        project.LastMaterializationAttemptAt.ShouldNotBeNull();
+        project.LastMaterializedAt.ShouldBe(firstStamp);
         (await File.ReadAllTextAsync(taskPath)).ShouldContain("hand edit");
     }
 

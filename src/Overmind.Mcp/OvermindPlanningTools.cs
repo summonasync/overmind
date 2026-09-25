@@ -42,6 +42,11 @@ public sealed class OvermindPlanningTools
         "p0", "p1", "p2", "p3"
     };
 
+    private static readonly HashSet<string> QueueMoves = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "up", "down", "first", "last", "toPosition"
+    };
+
     private const string StatusNoteRequired =
         "logNote is required for status moves: every status change is recorded as a dated line in the artifact <log>.";
 
@@ -64,7 +69,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_list_features", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress. Read it before picking work.")]
+    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection.")]
     public Task<JsonElement> ListFeatures(
         [Description("Id of the project whose feature board to read.")] Guid projectId,
         CancellationToken ct) =>
@@ -383,6 +388,79 @@ public sealed class OvermindPlanningTools
         return $"Feature status moved to '{normalized}'.";
     }
 
+    [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
+    [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The board order IS the queue: first on the board is next in the queue, and the dashboard board shows exactly this order. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, readiness 0-3, blockedBy, isBlocked, isCurrent. limit truncates to the first N entries; omit it for the full queue.")]
+    public Task<JsonElement> TaskQueue(
+        [Description("Id of the project whose queue to read.")] Guid projectId,
+        [Description("Optional positive int; truncates the queue to the first N entries.")] int? limit = null,
+        CancellationToken ct = default)
+    {
+        var url = $"/api/agent/projects/{projectId}/planning/task-queue";
+        if (limit is not null)
+        {
+            url += $"?limit={limit}";
+        }
+
+        return Guarded(() => _api.GetAsync(url, ct));
+    }
+
+    [McpServerTool(Name = "planning_move_feature", Destructive = false, Idempotent = false)]
+    [Description("Moves a feature within its priority band on the planning queue — band-scoped only; crossing bands means planning_set_feature_priority. Moves: 'up' and 'down' swap with the adjacent non-done feature (no-op at the band edges), 'first' and 'last' jump to the band head or tail, 'toPosition' takes the absolute 1-based spot in position. The server resolves neighbors and renumbers, so no band-wide read is needed. Contract violations (unknown move, position only for toPosition, out-of-range) return error text naming the contract; the human reorders by dragging on the dashboard board.")]
+    public async Task<CallToolResult> MoveFeature(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to move, as shown on the board.")] string slug,
+        [Description("One of: up, down, first, last, toPosition.")] string move,
+        [Description("1-based spot in the feature's priority band; required only when move is toPosition.")] int? position = null,
+        CancellationToken ct = default)
+    {
+        var contract = QueueMoveContractError(move, position);
+        if (contract is not null)
+        {
+            return ContractViolation(contract);
+        }
+
+        JsonElement moved;
+        try
+        {
+            moved = await Guarded(() => _api.PostAsync(
+                $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/queue-move",
+                new { move = move.Trim().ToLowerInvariant(), position },
+                ct));
+        }
+        catch (McpException ex)
+        {
+            return ContractViolation(DetailAfterOperationMark(ex.Message) ?? ex.Message);
+        }
+
+        return new CallToolResult
+        {
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = $"Feature '{slug}' is now at queue position {moved.GetProperty("queuePosition").GetInt32()} " +
+                        $"in band '{moved.GetProperty("priority").GetString()}'."
+                }
+            ]
+        };
+    }
+
+    [McpServerTool(Name = "planning_set_feature_priority", Destructive = false, Idempotent = false)]
+    [Description("Changes a feature priority (p0 critical, p1 high, p2 normal, p3 low) — the feature re-enters at the tail of the new band. Band crossings are the weightier act: only on the user's explicit approval in the current session, never on the agent's own initiative. Moves within one band belong to planning_move_feature or the human board drag.")]
+    public async Task<JsonElement> SetFeaturePriority(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to re-prioritize, as shown on the board.")] string slug,
+        [Description("New priority: p0 (critical), p1 (high), p2 (normal), p3 (low).")] string priority,
+        CancellationToken ct = default)
+    {
+        var normalized = NormalizePriority(priority);
+        var feature = await Guarded(() => _api.PutAsync(
+            $"/api/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}",
+            new { priority = normalized },
+            ct));
+        return CompactFeature(feature);
+    }
+
     [McpServerTool(Name = "planning_list_feature_dependencies", ReadOnly = true, Idempotent = true)]
     [Description("Lists the dependency graph of a feature: blockedBy (features this one waits for) and blocks (features waiting on this one), each entry carrying slug, status and closed — a dependency closes when its blocker reaches done or review. An unclosed blockedBy stops planning_current_task and planning_set_current.")]
     public Task<JsonElement> ListFeatureDependencies(
@@ -519,10 +597,10 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_materialize", Destructive = false, Idempotent = false)]
-    [Description("Triggers a materialization pass: rewrites the BACKLOG/ mirror from the board, writing every clean file and skipping guarded ones (untracked or locally-edited) with a reason — a rerun never silently overwrites disk content. A normal board mutation already triggers a pass automatically; call this after an import, a strategy switch, or when onboard reports skips or a stale lastRun. force overwrites guarded files with per-file warnings instead of skipping them; transcribe hand edits to the board before forcing.")]
+    [Description("Triggers a materialization pass: the full plan is computed first, then written atomically — any guarded file (untracked at a planned path, or tracked with local edits not on the board) aborts the whole run with a 409 listing every refusal, and nothing is written that run. Skips in the report are byte-identical no-ops (content already matches the board), not guarded files. A normal board mutation already triggers a pass automatically; call this after an import, a strategy switch, or when onboard reports a failed attempt or stale mirror state. force adopts guarded files with per-file warnings instead of refusing; transcribe hand edits to the board before forcing.")]
     public async Task<JsonElement> Materialize(
         [Description("Id of the project to materialize.")] Guid projectId,
-        [Description("True to overwrite guarded files with per-file warnings instead of skipping them; transcribe hand edits to the board before forcing.")] bool force = false,
+        [Description("True to overwrite guarded files with per-file warnings instead of refusing them; transcribe hand edits to the board before forcing.")] bool force = false,
         CancellationToken ct = default)
     {
         var report = await Guarded(() => _api.PostAsync(
@@ -531,6 +609,15 @@ public sealed class OvermindPlanningTools
             ct));
         return CompactMaterialization(report, force);
     }
+
+    [McpServerTool(Name = "planning_materialize_status", ReadOnly = true, Idempotent = true)]
+    [Description("Mirror diagnostics without filesystem access: returns the project's materialization state as one structured payload — lastSuccess vs lastAttempt (lastAttemptReason carries the failure when the attempt did not succeed), the persisted last-run report per file (startedAt, finishedAt, atomic, written paths, skipped and refused with reasons), trackedFiles, stalePaths (tracked files the last run neither wrote nor skipped, plus tracked files whose disk bytes drifted), strategy and targetDir. lastRun is null when the failed attempt persisted no report — read it as no report for this attempt. Read-only: never triggers a pass; use planning_materialize for that.")]
+    public Task<JsonElement> MaterializeStatus(
+        [Description("Id of the project to inspect.")] Guid projectId,
+        CancellationToken ct = default) =>
+        Guarded(() => _api.GetAsync(
+            $"/api/agent/projects/{projectId}/planning/materialization-status",
+            ct));
 
     private static void CopyWarnings(JsonElement payload, JsonObject confirmation)
     {
@@ -563,14 +650,51 @@ public sealed class OvermindPlanningTools
     // OvermindApiClient packs the ProblemDetails detail behind "): "; the gate's STOP text must lead the agent-visible error.
     private static string? StopDetailOf(ApiStatusException ex)
     {
-        var boundary = ex.Message.IndexOf("): ", StringComparison.Ordinal);
-        if (boundary < 0)
+        var detail = DetailAfterOperationMark(ex.Message);
+        return detail is not null && detail.StartsWith("STOP:", StringComparison.Ordinal) ? detail : null;
+    }
+
+    private static string? DetailAfterOperationMark(string message)
+    {
+        var boundary = message.IndexOf("): ", StringComparison.Ordinal);
+        return boundary < 0 ? null : message[(boundary + 3)..];
+    }
+
+    private static CallToolResult ContractViolation(string text) => new()
+    {
+        IsError = true,
+        Content = [new TextContentBlock { Text = text }]
+    };
+
+    private static string? QueueMoveContractError(string? move, int? position)
+    {
+        if (string.IsNullOrWhiteSpace(move))
         {
-            return null;
+            return "move is required: one of up, down, first, last, toPosition. position carries the 1-based spot and belongs to toPosition alone.";
         }
 
-        var detail = ex.Message[(boundary + 3)..];
-        return detail.StartsWith("STOP:", StringComparison.Ordinal) ? detail : null;
+        var gesture = move.Trim();
+        if (!QueueMoves.Contains(gesture))
+        {
+            return $"Invalid queue move '{move}'. Expected one of: up, down, first, last, toPosition. " +
+                "position carries the 1-based spot in the priority band and belongs to toPosition alone.";
+        }
+
+        if (string.Equals(gesture, "toPosition", StringComparison.OrdinalIgnoreCase))
+        {
+            return position switch
+            {
+                null => "position is required when move is 'toPosition': the 1-based spot in the feature's priority band. " +
+                    "The other moves resolve the spot themselves.",
+                < 1 => $"position must be a positive int (1-based), got {position}.",
+                _ => null
+            };
+        }
+
+        return position is null
+            ? null
+            : "position is only allowed when move is 'toPosition'; omit it for up, down, first and last — " +
+                "the server swaps with the adjacent non-done feature or jumps to the band edges itself.";
     }
 
     private static JsonElement LeadWithStopReason(JsonElement payload)
@@ -644,6 +768,20 @@ public sealed class OvermindPlanningTools
             ["skipped"] = skipped.GetArrayLength(),
             ["force"] = force
         };
+
+        if (report.TryGetProperty("lastSuccess", out var lastSuccess))
+        {
+            compact["lastSuccess"] = lastSuccess.ValueKind == JsonValueKind.String
+                ? lastSuccess.GetString()
+                : null;
+        }
+
+        if (report.TryGetProperty("lastAttempt", out var lastAttempt))
+        {
+            compact["lastAttempt"] = lastAttempt.ValueKind == JsonValueKind.String
+                ? lastAttempt.GetString()
+                : null;
+        }
 
         if (skipped.GetArrayLength() > 0)
         {

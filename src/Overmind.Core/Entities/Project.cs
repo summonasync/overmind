@@ -17,8 +17,10 @@ public sealed class Project
     public HumanValidationOverride RequireHumanValidation { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? LastMaterializedAt { get; private set; }
+    public DateTime? LastMaterializationAttemptAt { get; private set; }
     public string? LastMaterializationError { get; private set; }
     public DateTime? LastMaterializationFailedAt { get; private set; }
+    public string? LastMaterializationRun { get; private set; }
     public int? LastMaterializationSkipCount { get; private set; }
     public string? LastMaterializationSkipHead { get; private set; }
 
@@ -57,6 +59,12 @@ public sealed class Project
                 .Take(MaxMaterializationSkipHead)
                 .Select(skip => $"{skip.RelativePath}: {skip.Reason}"));
     }
+
+    public void MarkMaterializationAttempt(DateTime startedAt) =>
+        LastMaterializationAttemptAt = startedAt;
+
+    public void RecordMaterializationRun(string run) =>
+        LastMaterializationRun = run;
 
     public void MarkMaterializationFailed(string error)
     {

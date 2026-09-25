@@ -35,41 +35,41 @@ public sealed class PlanningMaterializationTests : IDisposable
     }
 
     [Fact]
-    public async Task Materialize_WithoutForce_SkipsForeignFileWritesTheRest()
+    public async Task Materialize_WithoutForce_RefusesForeignFileAndWritesNothing()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
 
         var foreign = Path.Combine(_projectDir, "BACKLOG", "invader", "feature.md");
         Directory.CreateDirectory(Path.GetDirectoryName(foreign)!);
         await File.WriteAllTextAsync(foreign, "user content");
+        var foreignBytes = await File.ReadAllBytesAsync(foreign);
 
         await CreateFeatureAsync(project.Id, "invader", "Invader");
 
         var response = await _client.PostAsJsonAsync(
             $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await File.ReadAllTextAsync(foreign)).ShouldBe("user content");
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Status.ShouldBe(409);
+        problem!.Detail.ShouldNotBeNull();
+        problem!.Detail!.ShouldContain("BACKLOG/invader/feature.md");
+        problem.Detail.ShouldContain("not tracked by Overmind");
 
-        var report = await response.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
-        report.ShouldNotBeNull();
-        var skip = report!.Skipped.ShouldHaveSingleItem();
-        skip.RelativePath.ShouldBe("BACKLOG/invader/feature.md");
-        skip.Reason.ShouldContain("not tracked by Overmind");
-        report.Files.ShouldNotContain(f => f.RelativePath == "BACKLOG/invader/feature.md");
-        report.Files.ShouldContain(f => f.RelativePath == "BACKLOG.md");
+        (await File.ReadAllBytesAsync(foreign)).ShouldBe(foreignBytes);
+        File.Exists(Path.Combine(_projectDir, "BACKLOG.md")).ShouldBeFalse();
     }
 
     [Fact]
-    public async Task Materialize_EverythingGuarded_Returns409ListingSkipsInDetail()
+    public async Task Materialize_EverythingGuarded_Returns409ListingRefusalsInDetail()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "invader", "Invader");
 
         var foreign = Path.Combine(_projectDir, "BACKLOG", "invader", "feature.md");
         Directory.CreateDirectory(Path.GetDirectoryName(foreign)!);
         await File.WriteAllTextAsync(foreign, "user content");
-
-        await CreateFeatureAsync(project.Id, "invader", "Invader");
 
         var indexPath = Path.Combine(_projectDir, "BACKLOG.md");
         await File.WriteAllTextAsync(indexPath, (await File.ReadAllTextAsync(indexPath))
@@ -114,6 +114,8 @@ public sealed class PlanningMaterializationTests : IDisposable
         report!.Strategy.ShouldBe("on");
         report.Warnings.Length.ShouldBe(1);
         report.Files.ShouldContain(f => f.RelativePath == "BACKLOG/invader/feature.md");
+        report.LastSuccess.ShouldNotBeNull();
+        report.LastAttempt.ShouldNotBeNull();
 
         (await File.ReadAllTextAsync(foreign)).ShouldContain("feature: invader");
 
@@ -123,7 +125,7 @@ public sealed class PlanningMaterializationTests : IDisposable
     }
 
     [Fact]
-    public async Task Materialize_TrackedFileHandEdited_SkipsItAndReturnsReasonInReport()
+    public async Task Materialize_TrackedFileHandEdited_RefusesAndReturnsReasonInDetail()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
         await CreateFeatureAsync(project.Id, "feat", "Feature");
@@ -138,13 +140,13 @@ public sealed class PlanningMaterializationTests : IDisposable
         var response = await _client.PostAsJsonAsync(
             $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var report = await response.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
-        report.ShouldNotBeNull();
-        var skip = report!.Skipped.ShouldHaveSingleItem();
-        skip.RelativePath.ShouldBe("BACKLOG/feat/tasks/01-task-one.md");
-        skip.Reason.ShouldContain("local edits");
-        report.Files.ShouldContain(f => f.RelativePath == "BACKLOG/feat/feature.md");
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Status.ShouldBe(409);
+        problem!.Detail.ShouldNotBeNull();
+        problem!.Detail!.ShouldContain("BACKLOG/feat/tasks/01-task-one.md");
+        problem.Detail.ShouldContain("local edits");
         (await File.ReadAllTextAsync(taskFile)).ShouldContain("external edit");
     }
 
@@ -168,6 +170,8 @@ public sealed class PlanningMaterializationTests : IDisposable
         var report = await response.Content.ReadFromJsonAsync<MaterializationReportJson>(JsonOptions);
         report.ShouldNotBeNull();
         report!.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {taskFile}");
+        report.LastSuccess.ShouldNotBeNull();
+        report.LastAttempt.ShouldNotBeNull();
 
         (await File.ReadAllTextAsync(taskFile)).ShouldNotContain("external edit");
         var drift = await _client.GetFromJsonAsync<DriftItemJson[]>(
@@ -235,6 +239,92 @@ public sealed class PlanningMaterializationTests : IDisposable
         index.ShouldContain("- `[~]` myfeat → `BACKLOG/myfeat/` — My Feature");
     }
 
+    [Fact]
+    public async Task MaterializationStatus_AfterCleanPass_ReturnsCamelCaseStructuredMirrorState()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.GetAsync($"/api/agent/projects/{project.Id}/planning/materialization-status");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.ShouldContain("\"lastSuccess\":");
+        raw.ShouldContain("\"lastAttempt\":");
+        raw.ShouldContain("\"lastAttemptReason\":");
+        raw.ShouldContain("\"trackedFiles\":2");
+        raw.ShouldContain("\"stalePaths\":[]");
+        raw.ShouldNotContain("LastSuccess", Case.Sensitive);
+
+        var status = await response.Content.ReadFromJsonAsync<MaterializationStatusJson>(JsonOptions);
+        status.ShouldNotBeNull();
+        status!.ProjectId.ShouldBe(project.Id);
+        status.LastSuccess.ShouldNotBeNull();
+        status.LastAttempt.ShouldNotBeNull();
+        status.LastAttemptReason.ShouldBeNull();
+        status.Strategy.ShouldBe("on");
+        status.TargetDir.ShouldBe(Path.Combine(_projectDir, "BACKLOG"));
+        status.TrackedFiles.ShouldBe(2);
+        status.StalePaths.ShouldBeEmpty();
+
+        var run = status.LastRun.ShouldNotBeNull();
+        run!.Atomic.ShouldBeTrue();
+        run.Written.ShouldContain("BACKLOG/feat/feature.md");
+        run.Written.ShouldContain("BACKLOG.md");
+        run.Skipped.ShouldBeEmpty();
+        run.Refused.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task MaterializationStatus_DriftedTrackedFile_AppearsInStalePaths()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+        var featureDoc = Path.Combine(_projectDir, "BACKLOG", "feat", "feature.md");
+        await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+
+        var status = await _client.GetFromJsonAsync<MaterializationStatusJson>(
+            $"/api/agent/projects/{project.Id}/planning/materialization-status", JsonOptions);
+
+        status.ShouldNotBeNull();
+        status!.StalePaths.ShouldHaveSingleItem().ShouldBe("BACKLOG/feat/feature.md");
+        status.LastRun.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task MaterializationStatus_RefusedRun_TreatsEveryTrackedFileAsUnhandled()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+        var featureDoc = Path.Combine(_projectDir, "BACKLOG", "feat", "feature.md");
+        await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+
+        await CreateFeatureAsync(project.Id, "second", "Second");
+
+        var status = await _client.GetFromJsonAsync<MaterializationStatusJson>(
+            $"/api/agent/projects/{project.Id}/planning/materialization-status", JsonOptions);
+
+        status.ShouldNotBeNull();
+        status!.LastAttemptReason.ShouldNotBeNull();
+        status.LastAttemptReason!.ShouldContain("local edits");
+        var run = status.LastRun.ShouldNotBeNull();
+        run!.Atomic.ShouldBeFalse();
+        run.Written.ShouldBeEmpty();
+        run.Refused.ShouldNotBeEmpty();
+        status.StalePaths.Length.ShouldBe(status.TrackedFiles);
+        status.StalePaths.ShouldContain("BACKLOG.md");
+        status.StalePaths.ShouldContain("BACKLOG/feat/feature.md");
+    }
+
+    [Fact]
+    public async Task MaterializationStatus_UnknownProject_Returns404()
+    {
+        var response = await _client.GetAsync(
+            $"/api/agent/projects/{Guid.NewGuid()}/planning/materialization-status");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private async Task<ProjectJson> CreateProjectWithMaterializationAsync(string strategy)
     {
         var response = await _client.PostAsJsonAsync("/api/projects", new
@@ -269,13 +359,21 @@ public sealed class PlanningMaterializationTests : IDisposable
 
     public sealed record MaterializationReportJson(
         Guid ProjectId, string Strategy, MaterializedFileJson[] Files, string[] Warnings,
-        MaterializationSkipJson[] Skipped);
+        MaterializationSkipJson[] Skipped, DateTime? LastSuccess, DateTime? LastAttempt);
 
     public sealed record MaterializedFileJson(string RelativePath, string Sha256);
 
     public sealed record MaterializationSkipJson(string RelativePath, string Reason);
 
     public sealed record DriftItemJson(Guid ProjectId, string? FeatureSlug, string RelativePath, string Kind);
+
+    public sealed record MaterializationStatusJson(
+        Guid ProjectId, DateTime? LastSuccess, DateTime? LastAttempt, string? LastAttemptReason,
+        MaterializationRunJson? LastRun, int TrackedFiles, string[] StalePaths, string Strategy, string TargetDir);
+
+    public sealed record MaterializationRunJson(
+        DateTime StartedAt, DateTime FinishedAt, bool Atomic, string[] Written,
+        MaterializationSkipJson[] Skipped, MaterializationSkipJson[] Refused);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

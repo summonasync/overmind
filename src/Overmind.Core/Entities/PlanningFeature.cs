@@ -14,6 +14,7 @@ public sealed class PlanningFeature
     public PlanningFeatureStatus Status { get; private set; }
     public FeaturePriority Priority { get; private set; } = FeaturePriority.P2;
     public bool IsCurrent { get; private set; }
+    public int QueuePosition { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -119,6 +120,12 @@ public sealed class PlanningFeature
     {
         Priority = priority;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetQueuePosition(int position)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(position, 1);
+        QueuePosition = position;
     }
 
     public void AddBlockedBy(PlanningFeature blocker)

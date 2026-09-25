@@ -18,9 +18,11 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.Board);
         group.MapPost("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.CreateFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
+        group.MapGet("/projects/{projectId:guid}/planning/task-queue", PlanningQueueApi.QueueRead);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove);
@@ -31,6 +33,7 @@ public static class AgentPlanningApi
         group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
         group.MapPost("/projects/{projectId:guid}/planning/import", ImportFeature);
+        group.MapGet("/projects/{projectId:guid}/planning/materialization-status", MaterializationStatus);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
 
         return group;
@@ -76,6 +79,45 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(ex);
         }
     }
+
+    internal static async Task<IResult> MaterializationStatus(
+        Guid projectId,
+        PlanningMaterializationStatusReader reader,
+        CancellationToken ct)
+    {
+        PlanningMaterializationStatus status;
+        try
+        {
+            status = await reader.ReadAsync(projectId, ct);
+        }
+        catch (MaterializationException ex) when (ex.Kind is MaterializationFailureKind.NotFound)
+        {
+            return HttpErrors.NotFound(ex.Message);
+        }
+
+        return Results.Ok(new PlanningMaterializationStatusResponse(
+            status.ProjectId,
+            status.LastSuccess,
+            status.LastAttempt,
+            status.LastAttemptReason,
+            status.LastRun is null
+                ? null
+                : new PlanningMaterializationStatusRunResponse(
+                    status.LastRun.StartedAt,
+                    status.LastRun.FinishedAt,
+                    status.LastRun.Atomic,
+                    status.LastRun.Written,
+                    ToSkipResponses(status.LastRun.Skipped),
+                    ToSkipResponses(status.LastRun.Refused)),
+            status.TrackedFiles,
+            [.. status.StalePaths],
+            status.Strategy,
+            status.TargetDir));
+    }
+
+    private static PlanningMaterializationSkipResponse[] ToSkipResponses(
+        IReadOnlyList<PlanningMaterializationSkip> skips) =>
+        [.. skips.Select(s => new PlanningMaterializationSkipResponse(s.RelativePath, s.Reason))];
 
     internal static async Task<IResult> Validate(
         Guid id,

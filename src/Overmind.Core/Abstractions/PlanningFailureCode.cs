@@ -26,5 +26,8 @@ public enum PlanningFailureCode
     PatchLogSectionNotReplaceable,
     LogHistoryNotAppendable,
     DependencyCycle,
-    FeatureBlocked
+    FeatureBlocked,
+    FeatureNotInQueue,
+    InvalidQueuePosition,
+    InvalidQueueReorder
 }

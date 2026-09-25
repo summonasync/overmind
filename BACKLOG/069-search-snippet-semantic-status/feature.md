@@ -1,7 +1,7 @@
 ---
 feature: 069
 slug: search-snippet-semantic-status
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -27,3 +27,9 @@ Two search-side field bugs: (1) fulltext hits return "snippet": "" even when the
 - FEATURELIST/overmind-features-2026-09-24.md OM-14 (P1); OM-6 (round-2 original).
 - src/Overmind.Mcp/SearchSnippet.cs (the window algorithm); 040/02 review (structural pins); 042 onboard-block pattern; 025 vector-search history (proxy/model lessons).
 </refs>
+
+<log>
+- 2026-09-25 [auto] — artifact created → inProgress
+- 2026-09-25 [auto] — all tasks done + spec + plan → review
+- 2026-09-25 [agent] — Done by user request in-session («закрывай»): single task done, spec 74b6622e + plan 0e616f35 validated, review APPROVED-WITH-WARNINGS 0 blockers (audits/review-069-01.md), live red-first proof. Field verification of snippets/semantic-line by MCP users after the deploy, per user's plan.
+</log>

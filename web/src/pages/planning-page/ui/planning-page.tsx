@@ -28,7 +28,7 @@ import { PlanningInfoPanel } from "@/pages/planning-page/ui/planning-info-panel"
 import { EmptyState } from "@/shared/ui/empty-state";
 
 const PLANNING_DESCRIPTION =
-  "Plan features as spec, plan, tasks and result. Track ceremony from draft to done.";
+  "Plan features as spec, plan, tasks and result. Track ceremony from draft to done. The board order is the queue — first card is next up; drag within a priority band to reorder.";
 
 function PlanningPageContent() {
   const searchParams = useSearchParams();

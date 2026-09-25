@@ -167,6 +167,17 @@ public sealed class FtsUnionSearchTests : IDisposable
         unionHit.Snippet.ShouldBe(entryHit.Snippet);
     }
 
+    [Fact]
+    public async Task Entries_TermPresentInContent_ReturnsNonEmptySnippetContainingTerm()
+    {
+        await SeedEntryAsync("stoat field notes", "the stoat vanishes into the stone wall before anyone blinks");
+
+        var hit = (await EntriesAsync("vanishes")).ShouldHaveSingleItem();
+
+        hit.Snippet.ShouldNotBeEmpty();
+        hit.Snippet.ShouldContain("vanishes");
+    }
+
     private async Task<Guid> SeedEntryAsync(string title, string content, Guid? projectId = null)
     {
         using var ctx = _db.CreateContext();

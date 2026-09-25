@@ -401,3 +401,4 @@ FodyWeavers.xsd
 
 # Portable distribution output (build/pack.sh)
 dist/
+.idea/

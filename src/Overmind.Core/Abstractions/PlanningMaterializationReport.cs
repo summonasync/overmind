@@ -9,4 +9,8 @@ public sealed record PlanningMaterializationReport(
     PlanningMaterialization Strategy,
     IReadOnlyList<PlanningMaterializedFileInfo> Files,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<PlanningMaterializationSkip> Skipped);
+    IReadOnlyList<PlanningMaterializationSkip> Skipped,
+    IReadOnlyList<PlanningMaterializationSkip>? Refused = null,
+    bool Atomic = true,
+    DateTime StartedAt = default,
+    DateTime FinishedAt = default);

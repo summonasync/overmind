@@ -5,6 +5,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
+using System.Security.Cryptography;
 using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
@@ -272,7 +273,7 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_UntrackedExistingFile_SkipsItWritesSiblingsAndKeepsBytes()
+    public async Task Sync_UntrackedFileAtPlannedPath_RefusesAndWritesNothing()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         await SeedDefaultFeatureAsync(projectId);
@@ -280,31 +281,36 @@ public sealed class PlanningMaterializerTests : IDisposable
         var foreign = Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md");
         Directory.CreateDirectory(Path.GetDirectoryName(foreign)!);
         await File.WriteAllTextAsync(foreign, "user data");
-        var foreignBytes = await File.ReadAllBytesAsync(foreign);
+        var before = await SnapshotTreeAsync(_projectDir);
 
         using var ctx = _db.CreateContext();
-        var report = await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None));
 
-        (await File.ReadAllBytesAsync(foreign)).ShouldBe(foreignBytes);
+        ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
+        ex.OffendingPath.ShouldBe("BACKLOG/006-demo/feature.md");
+        ex.Message.ShouldContain("BACKLOG/006-demo/feature.md");
+        ex.Message.ShouldContain("not tracked by Overmind");
 
-        var skip = report.Skipped.ShouldHaveSingleItem();
-        skip.RelativePath.ShouldBe("BACKLOG/006-demo/feature.md");
-        skip.Reason.ShouldContain("not tracked by Overmind");
-        report.Files.Count.ShouldBe(4);
-        report.Files.ShouldNotContain(f => f.RelativePath == "BACKLOG/006-demo/feature.md");
+        (await SnapshotTreeAsync(_projectDir)).ShouldBe(before);
 
-        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md")))
-            .ShouldEndWith("<scope>\nSpec body.\n</scope>");
-        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md")).ShouldBeTrue();
-        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG.md")))
-            .ShouldContain("`[ ]` 006-demo");
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializedAt.ShouldBeNull();
+        project.LastMaterializationAttemptAt.ShouldNotBeNull();
+        project.LastMaterializationError.ShouldNotBeNull();
+        project.LastMaterializationError!.ShouldContain("not tracked by Overmind");
+        project.LastMaterializationFailedAt.ShouldNotBeNull();
+        (await verify.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(0);
 
-        var rows = await ctx.PlanningMaterializedFiles
-            .Where(m => m.ProjectId == projectId)
-            .Select(m => m.RelativePath)
-            .ToListAsync();
-        rows.ShouldNotContain("BACKLOG/006-demo/feature.md");
-        rows.Count.ShouldBe(4);
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run.ShouldNotBeNull();
+        run!.Atomic.ShouldBeFalse();
+        run.Written.ShouldBeEmpty();
+        run.Skipped.ShouldBeEmpty();
+        var refusal = run.Refused.ShouldHaveSingleItem();
+        refusal.RelativePath.ShouldBe("BACKLOG/006-demo/feature.md");
+        refusal.Reason.ShouldContain("not tracked by Overmind");
     }
 
     [Fact]
@@ -327,7 +333,7 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_TrackedFilesHandEdited_SkipsBothWithReasonsAndKeepsBytes()
+    public async Task Sync_TrackedFilesHandEdited_RefusesWholeRunAndKeepsBytes()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         await SeedDefaultFeatureAsync(projectId);
@@ -340,28 +346,32 @@ public sealed class PlanningMaterializerTests : IDisposable
         var specPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md");
         await File.AppendAllTextAsync(taskPath, "\nhand note\n");
         await File.WriteAllTextAsync(specPath, (await File.ReadAllTextAsync(specPath)) + "\nhand edit\n");
-        var taskBytes = await File.ReadAllBytesAsync(taskPath);
-        var specBytes = await File.ReadAllBytesAsync(specPath);
+        var before = await SnapshotTreeAsync(_projectDir);
 
-        var report = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
 
-        (await File.ReadAllBytesAsync(taskPath)).ShouldBe(taskBytes);
-        (await File.ReadAllBytesAsync(specPath)).ShouldBe(specBytes);
+        ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
+        ex.OffendingPath.ShouldBeNull();
+        ex.Message.ShouldContain("BACKLOG/006-demo/tasks/01-first-task.md");
+        ex.Message.ShouldContain("BACKLOG/006-demo/spec.md");
 
-        report.Skipped.Count.ShouldBe(2);
-        report.Skipped.ShouldContain(s =>
-            s.RelativePath == "BACKLOG/006-demo/tasks/01-first-task.md" &&
-            s.Reason.Contains("local edits", StringComparison.Ordinal));
-        report.Skipped.ShouldContain(s =>
-            s.RelativePath == "BACKLOG/006-demo/spec.md" &&
-            s.Reason.Contains("local edits", StringComparison.Ordinal));
-        report.Files.Count.ShouldBe(3);
-        report.Files.ShouldContain(f => f.RelativePath == "BACKLOG/006-demo/feature.md");
-        report.Files.ShouldContain(f => f.RelativePath == "BACKLOG.md");
+        (await SnapshotTreeAsync(_projectDir)).ShouldBe(before);
 
-        var drift = await materializer.DetectDriftAsync(projectId, CancellationToken.None);
-        drift.Count.ShouldBe(2);
-        drift.ShouldAllBe(d => d.Kind == DriftKind.Modified);
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        var firstSuccess = project.LastMaterializedAt!.Value;
+        project.LastMaterializationAttemptAt!.Value.ShouldBeGreaterThanOrEqualTo(firstSuccess);
+        project.LastMaterializationError.ShouldNotBeNull();
+        project.LastMaterializationError!.ShouldContain("local edits");
+        (await verify.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(5);
+
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run!.Atomic.ShouldBeFalse();
+        run.Written.ShouldBeEmpty();
+        run.Refused.Length.ShouldBe(2);
+        run.Refused.ShouldAllBe(r => r.Reason.Contains("local edits", StringComparison.Ordinal));
+        run.Skipped.Length.ShouldBe(3);
     }
 
     [Fact]
@@ -380,7 +390,8 @@ public sealed class PlanningMaterializerTests : IDisposable
         var report = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
 
         report.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {taskPath}");
-        report.Skipped.ShouldBeEmpty();
+        report.Refused.ShouldBeEmpty();
+        report.Skipped.Count.ShouldBe(4);
         var content = await File.ReadAllTextAsync(taskPath);
         content.ShouldNotContain("hand note");
         content.ShouldContain("# First Task");
@@ -388,7 +399,7 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_AllPlansGuarded_ThrowsAllSkippedWithoutStamping()
+    public async Task Sync_AllFilesRefused_AbortsAndStampsAttemptWithoutSuccess()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         await SeedDefaultFeatureAsync(projectId);
@@ -398,9 +409,12 @@ public sealed class PlanningMaterializerTests : IDisposable
         await materializer.SyncAsync(projectId, ct: CancellationToken.None);
 
         DateTime firstStamp;
+        DateTime firstAttempt;
         using (var seeded = _db.CreateContext())
         {
-            firstStamp = (await seeded.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt!.Value;
+            var first = await seeded.Projects.SingleAsync(p => p.Id == projectId);
+            firstStamp = first.LastMaterializedAt!.Value;
+            firstAttempt = first.LastMaterializationAttemptAt!.Value;
         }
 
         var guarded = new List<(string Path, byte[] Bytes)>();
@@ -425,7 +439,7 @@ public sealed class PlanningMaterializerTests : IDisposable
         var ex = await Should.ThrowAsync<MaterializationException>(
             () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
 
-        ex.Kind.ShouldBe(MaterializationFailureKind.AllSkipped);
+        ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
         ex.OffendingPath.ShouldBeNull();
         ex.Message.ShouldContain("nothing was written");
         ex.Message.ShouldContain("planning_upsert_artifact");
@@ -449,8 +463,15 @@ public sealed class PlanningMaterializerTests : IDisposable
         using var verify = _db.CreateContext();
         var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
         project.LastMaterializedAt.ShouldBe(firstStamp);
-        project.LastMaterializationError.ShouldBeNull();
+        project.LastMaterializationAttemptAt!.Value.ShouldBeGreaterThan(firstAttempt);
+        project.LastMaterializationError.ShouldNotBeNull();
+        project.LastMaterializationFailedAt.ShouldNotBeNull();
         (await verify.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(5);
+
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run!.Atomic.ShouldBeFalse();
+        run.Refused.Length.ShouldBe(5);
+        run.Written.ShouldBeEmpty();
     }
 
     [Fact]
@@ -508,7 +529,7 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_BacklogEditOutsideManagedBlock_NeverBlocks_InsideBlockEdit_SkipsIndexOnly()
+    public async Task Sync_BacklogEditOutsideManagedBlock_NeverBlocks_InsideBlockEdit_Refuses()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         await SeedDefaultFeatureAsync(projectId);
@@ -522,7 +543,10 @@ public sealed class PlanningMaterializerTests : IDisposable
 
         var outside = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
         outside.Warnings.ShouldBeEmpty();
-        outside.Skipped.ShouldBeEmpty();
+        outside.Refused.ShouldBeEmpty();
+        outside.Atomic.ShouldBeTrue();
+        outside.Files.ShouldBeEmpty();
+        outside.Skipped.Count.ShouldBe(5);
         (await File.ReadAllTextAsync(indexPath)).ShouldContain("## Human notes");
 
         var edited = (await File.ReadAllTextAsync(indexPath))
@@ -530,15 +554,10 @@ public sealed class PlanningMaterializerTests : IDisposable
         await File.WriteAllTextAsync(indexPath, edited);
         var editedBytes = await File.ReadAllBytesAsync(indexPath);
 
-        var partial = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+        await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
 
         (await File.ReadAllBytesAsync(indexPath)).ShouldBe(editedBytes);
-        var skip = partial.Skipped.ShouldHaveSingleItem();
-        skip.RelativePath.ShouldBe("BACKLOG.md");
-        skip.Reason.ShouldContain("local edits");
-        partial.Files.Count.ShouldBe(4);
-        (await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md")))
-            .ShouldContain("Demo Feature");
 
         var forced = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
         forced.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {indexPath}");
@@ -683,7 +702,53 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
-    public async Task StrategySwitch_ArchiveToOn_WithForeignRepoFile_SkipsItAndWritesTheRest()
+    public async Task StrategySwitch_WritePhaseFailure_OtherRootRowsDropAndPlannedRowsStayOut()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using (var firstCtx = _db.CreateContext())
+        {
+            await CreateMaterializer(firstCtx).SyncAsync(projectId, ct: CancellationToken.None);
+            (await firstCtx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(5);
+        }
+
+        using (var switchCtx = _db.CreateContext())
+        {
+            var project = await switchCtx.Projects.FirstAsync(p => p.Id == projectId);
+            project.SetPlanningWorkflow(PlanningMaterialization.Archive, HumanValidationOverride.Unset);
+            await switchCtx.SaveChangesAsync();
+        }
+
+        var sabotagedDir = Path.Combine(_dataDir, "projects", "demo", "backlog", "BACKLOG", "006-demo");
+        Directory.CreateDirectory(Path.GetDirectoryName(sabotagedDir)!);
+        await File.WriteAllTextAsync(sabotagedDir, "a file where the archive feature directory belongs");
+
+        using var failCtx = _db.CreateContext();
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => CreateMaterializer(failCtx).SyncAsync(projectId, ct: CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.IoError);
+
+        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md")).ShouldBeFalse();
+        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md")).ShouldBeFalse();
+
+        (await failCtx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(0);
+
+        var failedProject = await failCtx.Projects.SingleAsync(p => p.Id == projectId);
+        failedProject.LastMaterializationAttemptAt.ShouldNotBeNull();
+        failedProject.LastMaterializationFailedAt.ShouldNotBeNull();
+        failedProject.LastMaterializationError.ShouldNotBeNull();
+
+        var run = MaterializationRunJson.Deserialize(failedProject.LastMaterializationRun);
+        run.ShouldNotBeNull();
+        run!.Atomic.ShouldBeFalse();
+        run.Written.ShouldBeEmpty();
+        run.Refused.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task StrategySwitch_ArchiveToOn_WithForeignRepoFile_RefusesThenForceAdopts()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.Archive);
         await SeedDefaultFeatureAsync(projectId);
@@ -710,18 +775,13 @@ public sealed class PlanningMaterializerTests : IDisposable
         using var onCtx = _db.CreateContext();
         var onMaterializer = CreateMaterializer(onCtx);
 
-        var report = await onMaterializer.SyncAsync(projectId, ct: CancellationToken.None);
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => onMaterializer.SyncAsync(projectId, ct: CancellationToken.None));
 
+        ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
         (await File.ReadAllBytesAsync(repoFile)).ShouldBe(repoBytes);
-        var skip = report.Skipped.ShouldHaveSingleItem();
-        skip.RelativePath.ShouldBe("BACKLOG/006-demo/feature.md");
-        skip.Reason.ShouldContain("not tracked by Overmind");
-        report.Files.ShouldNotContain(f => f.RelativePath == "BACKLOG/006-demo/feature.md");
-        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md")).ShouldBeTrue();
-        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md")).ShouldBeTrue();
-        File.Exists(Path.Combine(_projectDir, "BACKLOG.md")).ShouldBeTrue();
-        File.Exists(archiveFile).ShouldBeFalse();
-        (await onCtx.PlanningMaterializedFiles.CountAsync()).ShouldBe(4);
+        File.Exists(archiveFile).ShouldBeTrue();
+        (await onCtx.PlanningMaterializedFiles.CountAsync()).ShouldBe(5);
 
         var forced = await onMaterializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
 
@@ -905,6 +965,57 @@ public sealed class PlanningMaterializerTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_WritePhaseIoFailure_PersistsAttemptStampAndAbortedReport()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        DateTime firstAttempt;
+        using (var seeded = _db.CreateContext())
+        {
+            firstAttempt = (await seeded.Projects.SingleAsync(p => p.Id == projectId))
+                .LastMaterializationAttemptAt!.Value;
+        }
+
+        var feature = await ctx.PlanningFeatures.SingleAsync(f => f.ProjectId == projectId);
+        feature.Update(null, "<goal>\nShip it v2.\n</goal>");
+        await ctx.SaveChangesAsync();
+
+        var featureDir = Path.Combine(_projectDir, "BACKLOG", "006-demo");
+        Directory.Delete(featureDir, recursive: true);
+        await File.WriteAllTextAsync(featureDir, "a file where the feature directory belongs");
+
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.IoError);
+        ex.Message.ShouldContain(featureDir);
+
+        await materializer.RecordSyncFailureAsync(projectId, ex.Message, CancellationToken.None);
+
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializationAttemptAt!.Value.ShouldBeGreaterThan(firstAttempt);
+        project.LastMaterializationFailedAt.ShouldNotBeNull();
+        project.LastMaterializationError.ShouldNotBeNull();
+        project.LastMaterializationError!.ShouldContain("File operation failed");
+        (await verify.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(5);
+
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run.ShouldNotBeNull();
+        run!.Atomic.ShouldBeFalse();
+        run.StartedAt.ShouldNotBe(default);
+        run.FinishedAt.ShouldBeGreaterThanOrEqualTo(run.StartedAt);
+        run.Written.ShouldBeEmpty();
+        run.Refused.ShouldBeEmpty();
+        run.Skipped.ShouldHaveSingleItem().RelativePath.ShouldBe("BACKLOG.md");
+    }
+
+    [Fact]
     public async Task Sync_TraversalSlug_ThrowsAndWritesNothing()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
@@ -1046,22 +1157,48 @@ public sealed class PlanningMaterializerTests : IDisposable
     private static int CountHeadings(string content) =>
         content.Split('\n').Count(line => line.StartsWith("# ", StringComparison.Ordinal));
 
+    private static async Task<Dictionary<string, string>> SnapshotTreeAsync(string root)
+    {
+        var snapshot = new Dictionary<string, string>();
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var bytes = await File.ReadAllBytesAsync(file);
+            snapshot[file[root.Length..].Replace('\\', '/')] = Convert.ToHexString(SHA256.HashData(bytes));
+        }
+
+        return snapshot;
+    }
+
     [Fact]
-    public async Task Sync_Success_StampsLastMaterializedAt()
+    public async Task Sync_Success_StampsAttemptLastMaterializedAndRunReport()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         await SeedDefaultFeatureAsync(projectId);
 
         using (var seed = _db.CreateContext())
         {
-            (await seed.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldBeNull();
+            var fresh = await seed.Projects.SingleAsync(p => p.Id == projectId);
+            fresh.LastMaterializedAt.ShouldBeNull();
+            fresh.LastMaterializationAttemptAt.ShouldBeNull();
+            fresh.LastMaterializationRun.ShouldBeNull();
         }
 
         using var ctx = _db.CreateContext();
         await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
 
         using var verify = _db.CreateContext();
-        (await verify.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldNotBeNull();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializedAt.ShouldNotBeNull();
+        project.LastMaterializationAttemptAt.ShouldNotBeNull();
+        project.LastMaterializationAttemptAt!.Value.ShouldBeLessThanOrEqualTo(project.LastMaterializedAt!.Value);
+        project.LastMaterializationError.ShouldBeNull();
+
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run.ShouldNotBeNull();
+        run!.Atomic.ShouldBeTrue();
+        run.Written.Length.ShouldBe(5);
+        run.Skipped.ShouldBeEmpty();
+        run.Refused.ShouldBeEmpty();
     }
 
     [Fact]
@@ -1074,11 +1211,14 @@ public sealed class PlanningMaterializerTests : IDisposable
         await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
 
         using var verify = _db.CreateContext();
-        (await verify.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt.ShouldBeNull();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializedAt.ShouldBeNull();
+        project.LastMaterializationAttemptAt.ShouldBeNull();
+        project.LastMaterializationRun.ShouldBeNull();
     }
 
     [Fact]
-    public async Task Sync_PartialSkip_StillStampsLastMaterializedAt()
+    public async Task Sync_RerunWithoutBoardChanges_SkipsEverythingAndStampsSuccess()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         await SeedDefaultFeatureAsync(projectId);
@@ -1093,24 +1233,115 @@ public sealed class PlanningMaterializerTests : IDisposable
             firstStamp = (await seeded.Projects.SingleAsync(p => p.Id == projectId)).LastMaterializedAt!.Value;
         }
 
+        var before = await SnapshotTreeAsync(_projectDir);
+        var rerun = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        rerun.Atomic.ShouldBeTrue();
+        rerun.Files.ShouldBeEmpty();
+        rerun.Refused.ShouldBeEmpty();
+        rerun.Skipped.Count.ShouldBe(5);
+        rerun.Skipped.ShouldAllBe(s => s.Reason.Contains("already matches", StringComparison.Ordinal));
+        (await SnapshotTreeAsync(_projectDir)).ShouldBe(before);
+
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializedAt!.Value.ShouldBeGreaterThan(firstStamp);
+        project.LastMaterializationError.ShouldBeNull();
+        project.LastMaterializationSkipCount.ShouldBe(5);
+        (await verify.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(5);
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_FailedRunThenSuccess_SplitsAttemptFromSuccessStamps()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        DateTime firstStamp;
+        DateTime firstAttempt;
+        using (var seeded = _db.CreateContext())
+        {
+            var first = await seeded.Projects.SingleAsync(p => p.Id == projectId);
+            firstStamp = first.LastMaterializedAt!.Value;
+            firstAttempt = first.LastMaterializationAttemptAt!.Value;
+        }
+
         var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
         await File.AppendAllTextAsync(taskPath, "\nhand edit\n");
 
-        var report = await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+        await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
 
-        report.Skipped.ShouldHaveSingleItem().RelativePath.ShouldBe("BACKLOG/006-demo/tasks/01-first-task.md");
-        (await File.ReadAllTextAsync(taskPath)).ShouldContain("hand edit");
+        using (var failed = _db.CreateContext())
+        {
+            var project = await failed.Projects.SingleAsync(p => p.Id == projectId);
+            project.LastMaterializedAt.ShouldBe(firstStamp);
+            project.LastMaterializationAttemptAt!.Value.ShouldBeGreaterThan(firstAttempt);
+            project.LastMaterializationError.ShouldNotBeNull();
+            project.LastMaterializationError!.ShouldContain("local edits");
+            project.LastMaterializationFailedAt.ShouldNotBeNull();
+        }
+
+        var report = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
+
+        report.Warnings.ShouldHaveSingleItem().ShouldContain(taskPath);
+        report.Refused.ShouldBeEmpty();
+        report.Atomic.ShouldBeTrue();
+        report.Skipped.Count.ShouldBe(4);
 
         using var verify = _db.CreateContext();
         var stamped = await verify.Projects.SingleAsync(p => p.Id == projectId);
         stamped.LastMaterializedAt!.Value.ShouldBeGreaterThan(firstStamp);
-        stamped.LastMaterializationSkipCount.ShouldBe(1);
-        stamped.LastMaterializationSkipHead.ShouldBe(
-            "BACKLOG/006-demo/tasks/01-first-task.md: tracked file has local edits that are not on the board");
+        stamped.LastMaterializationAttemptAt!.Value.ShouldBeGreaterThanOrEqualTo(report.StartedAt);
+        stamped.LastMaterializationError.ShouldBeNull();
+        stamped.LastMaterializationFailedAt.ShouldBeNull();
+        stamped.LastMaterializationSkipCount.ShouldBe(4);
+        stamped.LastMaterializationSkipHead.ShouldNotBeNull();
     }
 
     [Fact]
-    public async Task Sync_AllPlansGuardedSingleSkip_OffendingPathStaysRelative()
+    public async Task Sync_RunReportJson_RoundTripsPerFileOutcomes()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        await SeedDefaultFeatureAsync(projectId);
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.SyncAsync(projectId, ct: CancellationToken.None);
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
+        await File.AppendAllTextAsync(taskPath, "\nhand edit\n");
+
+        await Should.ThrowAsync<MaterializationException>(
+            () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
+
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run.ShouldNotBeNull();
+        run!.Atomic.ShouldBeFalse();
+        run.StartedAt.ShouldNotBe(default);
+        run.FinishedAt.ShouldBeGreaterThanOrEqualTo(run.StartedAt);
+        run.Written.ShouldBeEmpty();
+
+        var refusal = run.Refused.ShouldHaveSingleItem();
+        refusal.RelativePath.ShouldBe("BACKLOG/006-demo/tasks/01-first-task.md");
+        refusal.Reason.ShouldContain("local edits");
+
+        run.Skipped.Length.ShouldBe(4);
+        run.Skipped.ShouldContain(s =>
+            s.RelativePath == "BACKLOG.md" &&
+            s.Reason.Contains("already matches", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Sync_SingleRefusedIndex_OffendingPathStaysRelative()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
 
@@ -1128,7 +1359,7 @@ public sealed class PlanningMaterializerTests : IDisposable
         var ex = await Should.ThrowAsync<MaterializationException>(
             () => materializer.SyncAsync(projectId, ct: CancellationToken.None));
 
-        ex.Kind.ShouldBe(MaterializationFailureKind.AllSkipped);
+        ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
         ex.OffendingPath.ShouldBe("BACKLOG.md");
         ex.Message.ShouldContain("- BACKLOG.md: tracked file has local edits that are not on the board");
         ex.Message.ShouldNotContain(indexPath);

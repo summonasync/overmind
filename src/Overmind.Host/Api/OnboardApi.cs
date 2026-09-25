@@ -23,6 +23,7 @@ public static class OnboardApi
         IValidator<OnboardRequest> validator,
         OvermindDbContext db,
         PlanningPolicy policy,
+        ISemanticSearch semanticSearch,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -76,6 +77,7 @@ public static class OnboardApi
         var board = await BuildBoardSummaryAsync(db, project.Id, ct);
         var strategy = await policy.ResolveMaterializationAsync(project.Id, ct);
         var humanGate = await policy.ResolveValidationGateAsync(project.Id, ct);
+        var vectorHealth = await semanticSearch.HealthReportAsync(ct);
 
         return Results.Ok(new OnboardResponse(
             project.Id,
@@ -87,12 +89,28 @@ public static class OnboardApi
                 TargetDir(project, strategy),
                 TriggerText(strategy),
                 project.LastMaterializedAt,
+                project.LastMaterializationAttemptAt,
                 project.LastMaterializationError,
                 project.LastMaterializationFailedAt,
                 project.LastMaterializationSkipCount,
                 SkipHeadLines(project.LastMaterializationSkipHead)),
             new OnboardValidationBlock(humanGate),
+            new OnboardSemanticBlock(vectorHealth.Up, SemanticUnavailableReason(vectorHealth)),
             OnboardQuickstart.Text));
+    }
+
+    private static string? SemanticUnavailableReason(VectorSearchHealthReport report)
+    {
+        if (report.Up)
+        {
+            return null;
+        }
+
+        var reasons = new[] { report.Qdrant.Error, report.Embedding.Error }
+            .Where(error => !string.IsNullOrEmpty(error))
+            .ToArray();
+
+        return reasons.Length > 0 ? string.Join("; ", reasons) : "probe reported no failure reason";
     }
 
     private static string StrategyText(PlanningMaterialization strategy) => strategy switch

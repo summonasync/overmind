@@ -68,6 +68,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<ImportPlanningFeatureRequest>, ImportPlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<AddPlanningFeatureDependencyRequest>, AddPlanningFeatureDependencyRequestValidator>();
+        services.AddSingleton<IValidator<PlanningQueueMoveRequest>, PlanningQueueMoveRequestValidator>();
+        services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();
         services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
         services.AddSingleton<IValidator<CreateNotificationRequest>, CreateNotificationRequestValidator>();
@@ -95,8 +97,14 @@ public static class DependencyInjection
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<PlanningPolicy>(),
             OvermindPaths.DataDirectory));
+        services.AddScoped<PlanningMaterializationStatusReader>(provider => new PlanningMaterializationStatusReader(
+            provider.GetRequiredService<OvermindDbContext>(),
+            provider.GetRequiredService<PlanningPolicy>(),
+            provider.GetRequiredService<IPlanningMaterializer>(),
+            OvermindPaths.DataDirectory));
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<FeatureDependencyService>();
+        services.AddScoped<FeatureQueueService>();
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();

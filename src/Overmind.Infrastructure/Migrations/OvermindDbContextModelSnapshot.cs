@@ -283,6 +283,11 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(2);
 
+                    b.Property<int>("QueuePosition")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT");
 
@@ -376,10 +381,16 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LastMaterializationAttemptAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("LastMaterializationError")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("LastMaterializationFailedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastMaterializationRun")
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("LastMaterializationSkipCount")

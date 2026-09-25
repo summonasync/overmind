@@ -110,3 +110,42 @@ public sealed class AddPlanningFeatureDependencyRequestValidator : AbstractValid
         RuleFor(x => x.BlockedBy).NotEmpty().MaximumLength(64);
     }
 }
+
+public sealed class PlanningQueueMoveRequestValidator : AbstractValidator<PlanningQueueMoveRequest>
+{
+    public PlanningQueueMoveRequestValidator()
+    {
+        RuleFor(x => x.Move).NotEmpty()
+            .Must(m => Normalize(m) is "up" or "down" or "first" or "last" or "toposition")
+            .WithMessage("Must be one of: up, down, first, last, toPosition.");
+
+        RuleFor(x => x.Position).NotNull()
+            .WithMessage("position is required when move is 'toPosition'; the queue-move contract carries position only for toPosition.")
+            .When(x => Normalize(x.Move) == "toposition");
+
+        RuleFor(x => x.Position).Null()
+            .WithMessage("position is only allowed when move is 'toPosition'; omit it for the other moves.")
+            .When(x => Normalize(x.Move) is not null and not "toposition");
+
+        RuleFor(x => x.Position).GreaterThan(0)
+            .WithMessage("position must be a positive int (1-based).")
+            .When(x => x.Position.HasValue);
+    }
+
+    private static string? Normalize(string? move) => move?.Trim().ToLowerInvariant();
+}
+
+public sealed class PlanningQueueReorderRequestValidator : AbstractValidator<PlanningQueueReorderRequest>
+{
+    public PlanningQueueReorderRequestValidator()
+    {
+        RuleFor(x => x.Priority).NotEmpty();
+        RuleFor(x => x.Slugs).NotNull()
+            .WithMessage("A reorder carries the full ordered slug list of one priority band.");
+        RuleFor(x => x.Slugs).NotEmpty()
+            .WithMessage("A reorder carries the full ordered slug list of one priority band.")
+            .When(x => x.Slugs is not null);
+        RuleForEach(x => x.Slugs).NotEmpty()
+            .WithMessage("Every slug in the reorder list must be non-empty.");
+    }
+}

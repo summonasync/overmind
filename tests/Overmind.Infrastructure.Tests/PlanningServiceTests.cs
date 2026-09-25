@@ -175,6 +175,41 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateFeature_LandsAtPriorityBandTail()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "second", "Title", "body", FeaturePriority.P2);
+        await service.CreateAsync(_projectId, "first", "Title", "body", FeaturePriority.P2);
+        await service.CreateAsync(_projectId, "urgent", "Title", "body", FeaturePriority.P0);
+
+        var positions = await _context.PlanningFeatures
+            .Where(f => f.ProjectId == _projectId)
+            .ToDictionaryAsync(f => f.Slug, f => f.QueuePosition);
+
+        positions["second"].ShouldBe(1);
+        positions["first"].ShouldBe(2);
+        positions["urgent"].ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_PriorityChange_RetailsIntoNewBand()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "one", "Title", "body", FeaturePriority.P0);
+        await service.CreateAsync(_projectId, "two", "Title", "body", FeaturePriority.P0);
+        await service.CreateAsync(_projectId, "three", "Title", "body", FeaturePriority.P2);
+
+        await service.UpdateAsync(_projectId, "two", null, null, null, FeaturePriority.P2, default);
+
+        var positions = await _context.PlanningFeatures
+            .Where(f => f.ProjectId == _projectId)
+            .ToDictionaryAsync(f => f.Slug, f => f.QueuePosition);
+        positions["one"].ShouldBe(1);
+        positions["two"].ShouldBe(2);
+        positions["three"].ShouldBe(1);
+    }
+
+    [Fact]
     public async Task DeleteFeature_ClearsMaterializationBeforeRowsRemoved()
     {
         var service = CreateFeatureService();

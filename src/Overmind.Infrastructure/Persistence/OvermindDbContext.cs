@@ -164,6 +164,7 @@ public sealed class OvermindDbContext : DbContext
 
             builder.Property(f => f.IsCurrent).HasDefaultValue(false);
             builder.Property(f => f.Priority).HasDefaultValue(FeaturePriority.P2).HasSentinel(FeaturePriority.P2);
+            builder.Property(f => f.QueuePosition).HasDefaultValue(0);
         });
 
         // Deleting either endpoint of a dependency link must drop the link row; SQLite accepts

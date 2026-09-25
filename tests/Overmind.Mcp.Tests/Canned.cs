@@ -158,6 +158,29 @@ public static class Canned
         {"slug":"demo-feature","blockedBy":[{"slug":"shipped-one","status":"done","closed":true}],"blocks":[{"slug":"waiting-on-demo","status":"draft","closed":false}]}
         """;
 
+    public const string PlanningQueueItemJson =
+        """
+        {"slug":"demo-feature","number":null,"title":"Demo feature","priority":"p1","status":"inProgress","queuePosition":2,"specStatus":"validated","planStatus":"draft","taskDone":1,"taskTotal":2,"readiness":2,"blockedBy":[],"isBlocked":false,"isCurrent":true}
+        """;
+
+    public const string PlanningQueueJson =
+        """
+        {"items":[{"slug":"demo-feature","number":null,"title":"Demo feature","priority":"p1","status":"inProgress","queuePosition":2,"specStatus":"validated","planStatus":"draft","taskDone":1,"taskTotal":2,"readiness":2,"blockedBy":[],"isBlocked":false,"isCurrent":true},{"slug":"draft-one","number":null,"title":"Draft one","priority":"p2","status":"draft","queuePosition":1,"specStatus":null,"planStatus":null,"taskDone":0,"taskTotal":0,"readiness":0,"blockedBy":["demo-feature"],"isBlocked":true,"isCurrent":false}]}
+        """;
+
+    public const string PlanningQueueHeadJson =
+        """
+        {"items":[{"slug":"demo-feature","number":null,"title":"Demo feature","priority":"p1","status":"inProgress","queuePosition":2,"specStatus":"validated","planStatus":"draft","taskDone":1,"taskTotal":2,"readiness":2,"blockedBy":[],"isBlocked":false,"isCurrent":true}]}
+        """;
+
+    public const string PlanningQueueOutOfRangeJson =
+        """{"title":"InvalidQueuePosition","detail":"Position 9 is outside the queue band of 'demo-feature': the band holds 3 non-done features, so the valid range is 1..3.","status":400}""";
+
+    public const string PlanningFeaturePriorityJson =
+        """
+        {"slug":"demo-feature","title":"Demo feature","body":"<goal>\nShip the demo.\n</goal>","status":"inProgress","priority":"p0","version":5,"createdAt":"2026-09-08T10:00:00Z","updatedAt":"2026-09-25T09:00:00Z","artifacts":[],"isBlocked":false,"blockedBy":[],"blocks":[]}
+        """;
+
     public const string PlanningCurrentEmptyJson =
         """
         {"state":"empty","feature":{"slug":"all-done","title":"All done","status":"inProgress"},"artifact":null,"reason":"All tasks are done — write the result artifact."}
@@ -171,12 +194,12 @@ public static class Canned
 
     public const string PlanningMaterializeReportJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG/demo-feature/spec.md","sha256":"bb"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":["Overwrote untracked file: /repo/BACKLOG/stray.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"file exists on disk but is not tracked by Overmind"},{"relativePath":"BACKLOG/demo-feature/tasks/01-build.md","reason":"tracked file has local edits that are not on the board"}]}
+        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG/demo-feature/spec.md","sha256":"bb"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":["Overwrote untracked file: /repo/BACKLOG/stray.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"content already matches the board"},{"relativePath":"BACKLOG/demo-feature/tasks/01-build.md","reason":"content already matches the board"}],"lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z"}
         """;
 
     public const string PlanningMaterializeCleanReportJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":[],"skipped":[]}
+        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":[],"skipped":[],"lastSuccess":"2026-09-24T09:30:00Z","lastAttempt":"2026-09-24T09:30:00Z"}
         """;
 
     public const string PlanningMaterializeAllSkippedJson =
@@ -192,9 +215,19 @@ public static class Canned
     public const string PlanningImportOutsideRootJson =
         """{"title":"ImportFailed","detail":"Importing '/elsewhere/BACKLOG/058-demo' failed: Path '/elsewhere/BACKLOG/058-demo' resolves outside the project directory '/repo'.","status":400}""";
 
+    public const string PlanningMaterializeStatusJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z","lastAttemptReason":null,"lastRun":{"startedAt":"2026-09-24T09:30:00Z","finishedAt":"2026-09-24T09:30:05Z","atomic":true,"written":["BACKLOG/demo-feature/feature.md","BACKLOG.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"content already matches the board"}],"refused":[]},"trackedFiles":2,"stalePaths":["BACKLOG/demo-feature/spec.md"],"strategy":"on","targetDir":"/repo/BACKLOG"}
+        """;
+
+    public const string PlanningMaterializeStatusNoReportJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z","lastAttemptReason":"Duplicate materialization target: /repo/BACKLOG/demo-feature/feature.md","lastRun":null,"trackedFiles":2,"stalePaths":["BACKLOG/demo-feature/feature.md","BACKLOG/demo-feature/spec.md"],"strategy":"on","targetDir":"/repo/BACKLOG"}
+        """;
+
     public const string OnboardSkippedMaterializationJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastRun":"2026-09-24T09:00:00Z","error":null,"failedAt":null,"skippedCount":2,"skipped":["BACKLOG/foreign/feature.md: file exists on disk but is not tracked by Overmind","BACKLOG/demo-feature/tasks/01-build.md: tracked file has local edits that are not on the board"]},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":"2026-09-24T09:00:00Z","lastAttempt":"2026-09-24T09:00:00Z","error":null,"failedAt":null,"skippedCount":2,"skipped":["BACKLOG/foreign/feature.md: content already matches the board","BACKLOG/demo-feature/tasks/01-build.md: content already matches the board"]},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardQuickstartText = "Onboarding quickstart from the host — verbatim payload text.";
@@ -207,22 +240,27 @@ public static class Canned
 
     public const string OnboardJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastRun":"2026-09-23T10:15:00Z"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T10:15:00Z"},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
+    public const string OnboardSemanticUnavailableJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":false,"reason":"model 'all-minilm-l6-v2' not found, HTTP 404"},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardOffStrategyJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"off","targetDir":"/repo/BACKLOG","trigger":"Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override.","lastRun":null},"validation":{"humanGate":true},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"off","targetDir":"/repo/BACKLOG","trigger":"Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":true},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardFailedMaterializationJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastRun":"2026-09-23T10:15:00Z","error":"Refusing to overwrite locally modified tracked files:\n- /repo/BACKLOG/006-demo/tasks/01-first-task.md","failedAt":"2026-09-23T18:00:00Z"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T18:00:00Z","error":"Refusing to overwrite locally modified tracked files:\n- /repo/BACKLOG/006-demo/tasks/01-first-task.md","failedAt":"2026-09-23T18:00:00Z"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardCyrillicJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"кириллический проект","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastRun":null},"validation":{"humanGate":false},"quickstart":"Быстрый старт — кириллица едет литералом, включая тег <goal> и стрелку →."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"кириллический проект","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"quickstart":"Быстрый старт — кириллица едет литералом, включая тег <goal> и стрелку →."}
         """;
 
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";

@@ -15,7 +15,30 @@ public sealed record PlanningFeatureBoardItem(
     int TaskDone,
     DateTime UpdatedAt,
     bool IsCurrent,
-    bool IsBlocked);
+    bool IsBlocked,
+    int QueuePosition);
+
+public sealed record PlanningQueueItem(
+    string Slug,
+    string? Number,
+    string Title,
+    FeaturePriority Priority,
+    PlanningFeatureStatus Status,
+    int QueuePosition,
+    PlanningArtifactStatus? SpecStatus,
+    PlanningArtifactStatus? PlanStatus,
+    int TaskDone,
+    int TaskTotal,
+    int Readiness,
+    string[] BlockedBy,
+    bool IsBlocked,
+    bool IsCurrent);
+
+public sealed record PlanningQueueResponse(PlanningQueueItem[] Items);
+
+public sealed record PlanningQueueMoveRequest(string? Move, int? Position);
+
+public sealed record PlanningQueueReorderRequest(string Priority, string[] Slugs);
 
 public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body, string? Priority = null);
 
@@ -175,7 +198,28 @@ public sealed record PlanningMaterializationReportResponse(
     PlanningMaterialization Strategy,
     PlanningMaterializedFileResponse[] Files,
     string[] Warnings,
-    PlanningMaterializationSkipResponse[] Skipped);
+    PlanningMaterializationSkipResponse[] Skipped,
+    DateTime? LastSuccess,
+    DateTime? LastAttempt);
+
+public sealed record PlanningMaterializationStatusRunResponse(
+    DateTime StartedAt,
+    DateTime FinishedAt,
+    bool Atomic,
+    string[] Written,
+    PlanningMaterializationSkipResponse[] Skipped,
+    PlanningMaterializationSkipResponse[] Refused);
+
+public sealed record PlanningMaterializationStatusResponse(
+    Guid ProjectId,
+    DateTime? LastSuccess,
+    DateTime? LastAttempt,
+    string? LastAttemptReason,
+    PlanningMaterializationStatusRunResponse? LastRun,
+    int TrackedFiles,
+    string[] StalePaths,
+    PlanningMaterialization Strategy,
+    string TargetDir);
 
 public sealed record PlanningDriftResponse(
     Guid ProjectId,

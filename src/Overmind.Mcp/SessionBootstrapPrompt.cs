@@ -18,6 +18,9 @@ public sealed class SessionBootstrapPrompt
     private const string DependencyRouting =
         "Feature dependencies: planning_list_feature_dependencies reads the graph, planning_add_feature_dependency / planning_remove_feature_dependency edit it; a feature with unclosed blockers stops current_task naming them — clear or work the blockers, never sneak past.";
 
+    private const string QueueRouting =
+        "Work queue: what's next = planning_task_queue; the board order IS the queue (priority asc, then position); the human reorders by dragging, the agent moves with planning_move_feature, and crossing bands via planning_set_feature_priority needs the user's explicit approval.";
+
     private const string FallbackText =
         "At session start, read overmind://projects to list available projects, then read " +
         "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
@@ -25,7 +28,7 @@ public sealed class SessionBootstrapPrompt
         "overmind://projects/{id}/planning/features/<slug>/current for your next task, obey any STOP line " +
         "(a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
         "and report progress with planning_set_status and planning_append_log. " +
-        WriteCostRouting + " " + ReadCostRouting + " " + DependencyRouting +
+        WriteCostRouting + " " + ReadCostRouting + " " + DependencyRouting + " " + QueueRouting +
         " Set OVERMIND_PROJECT_ID to make the active project explicit.";
 
     private readonly OvermindApiClient _api;
@@ -66,7 +69,7 @@ public sealed class SessionBootstrapPrompt
               $"Planning loop: read overmind://projects/{activeProjectId}/planning/features for the board, " +
               $"take overmind://projects/{activeProjectId}/planning/features/<slug>/current for your next task, " +
               "obey any STOP line (a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
-              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting}";
+              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting} {QueueRouting}";
 
         return new GetPromptResult
         {

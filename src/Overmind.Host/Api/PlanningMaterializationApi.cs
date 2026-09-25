@@ -21,12 +21,19 @@ public static class PlanningMaterializationApi
         Guid projectId,
         MaterializePlanningRequest request,
         IPlanningMaterializer materializer,
+        OvermindDbContext db,
         CancellationToken ct)
     {
         try
         {
             var report = await materializer.SyncAsync(projectId, request.Force, ct);
-            return Results.Ok(ToResponse(report));
+            var project = await db.Projects
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == projectId, ct);
+            return Results.Ok(ToResponse(
+                report,
+                project?.LastMaterializedAt,
+                project?.LastMaterializationAttemptAt));
         }
         catch (MaterializationException ex)
         {
@@ -58,13 +65,16 @@ public static class PlanningMaterializationApi
         }
     }
 
-    private static PlanningMaterializationReportResponse ToResponse(PlanningMaterializationReport report) =>
+    private static PlanningMaterializationReportResponse ToResponse(
+        PlanningMaterializationReport report, DateTime? lastSuccess, DateTime? lastAttempt) =>
         new(
             report.ProjectId,
             report.Strategy,
             report.Files.Select(f => new PlanningMaterializedFileResponse(f.RelativePath, f.Sha256)).ToArray(),
             report.Warnings.ToArray(),
-            report.Skipped.Select(s => new PlanningMaterializationSkipResponse(s.RelativePath, s.Reason)).ToArray());
+            report.Skipped.Select(s => new PlanningMaterializationSkipResponse(s.RelativePath, s.Reason)).ToArray(),
+            lastSuccess,
+            lastAttempt);
 
     private static IResult MaterializationError(MaterializationException ex)
     {
@@ -77,7 +87,7 @@ public static class PlanningMaterializationApi
                     title: "Invalid materialization target",
                     detail: ex.Message),
             MaterializationFailureKind.OverwriteBlocked or MaterializationFailureKind.LocalEditsBlocked
-                or MaterializationFailureKind.AllSkipped =>
+                or MaterializationFailureKind.Refused =>
                 HttpErrors.Conflict(ex.Message),
             _ => Results.Problem(
                 statusCode: StatusCodes.Status500InternalServerError,

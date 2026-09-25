@@ -11,6 +11,7 @@ import type {
   PlanningFeatureResponse,
   PlanningMaterializationReport,
   PlanningWorkflowResponse,
+  ReorderPlanningQueueValues,
   UpdatePlanningArtifactValues,
   UpdatePlanningFeatureValues,
   UpdatePlanningWorkflowValues,
@@ -51,6 +52,16 @@ export function updatePlanningFeature(
 
 export function deletePlanningFeature(projectId: string, slug: string): Promise<void> {
   return apiDelete(`/projects/${projectId}/planning/features/${slug}`);
+}
+
+export function reorderPlanningQueue(
+  projectId: string,
+  values: ReorderPlanningQueueValues,
+): Promise<void> {
+  return apiPost<void>(`/projects/${projectId}/planning/queue/reorder`, {
+    priority: values.priority,
+    slugs: values.slugs,
+  });
 }
 
 export function setPlanningFeatureCurrent(

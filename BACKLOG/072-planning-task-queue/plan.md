@@ -1,0 +1,31 @@
+---
+feature: 072
+slug: planning-task-queue
+status: validated
+created: 2026-09-25
+validated: 2026-09-25
+---
+
+# Plan 072 — Planning task queue: MCP-тул «что брать следующим» — проекция борды (приоритет asc, blocked-aware, readiness), юзер рулит приоритетами с борды
+
+<approach>
+Bottom-up, one concern per task: (1) storage — QueuePosition column + deterministic backfill + tail auto-assign at the single create/priority-change funnel (PlanningFeatureService covers API, MCP and import paths — ImportAsync routes through it); (2) the band-renumber service — all five move primitives + full-band reorder over one shared infrastructure service; (3) HTTP doors — additive DTO, three endpoints (queue read on the agent door, full-band reorder on the human door, move gesture on the agent door); (4) MCP tools as thin HTTP wrappers (three tools); (5) web dragndrop over native HTML5 DnD with the 022/038 optimistic-rollback vocabulary; (6) closeout with a hard review. Task 4 (MCP) and task 5 (web) touch disjoint file sets and may run in parallel after task 3; everything else is sequential (shared Infrastructure/Planning files).
+</approach>
+
+<tasks>
+- [ ] 01-queue-position-core — QueuePosition (int, not null, default 0) on PlanningFeature + EF config + additive migration AddPlanningFeatureQueuePosition with deterministic backfill (priority asc → createdAt asc, 1..N per priority band); tail auto-assign (band max+1) in PlanningFeatureService.CreateAsync and the import Restore path; re-tail on priority-band change in the update path; re-import must NOT touch positions (pin test); Infrastructure tests → tasks/01-queue-position-core.md. Verify: dotnet build 0 warnings; dotnet test Overmind.sln
+- [ ] 02-queue-service — FeatureQueueService (Infrastructure/Planning, beside FeatureDependencyService): band loads non-done features ordered by position; MoveUp/MoveDown (adjacent swap, no-op success at band edges), MoveFirst/MoveLast, MoveToPosition(1-based within non-done band list), ReorderBand(full ordered slug list of one band — validated: project + priority + full coverage); one transaction per call, renumber 1..N; DI registration beside the dependency service; Infrastructure tests for every primitive + edges + done-neighbors-skipped → tasks/02-queue-service.md. Verify: dotnet test Overmind.sln
+- [ ] 03-queue-api — PlanningContracts: PlanningFeatureBoardItem + QueuePosition (additive); QueueResponse entry {slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, readiness, blockedBy, isBlocked, isCurrent} with readiness ordinal 0–3 (spec validated + plan validated + taskTotal>0) and direct blocker slugs (empty array when none); endpoints: GET /api/agent/projects/{id}/planning/task-queue?limit (sorted priority asc → position asc, done excluded), POST /api/projects/{id}/planning/queue/reorder (human door, {priority, slugs}), POST /api/agent/projects/{id}/planning/features/{slug}/queue-move ({move: up|down|first|last|toPosition, position? — required iff toPosition, 400 naming the contract otherwise}); validators + typed 400s (unknown move value, position out of range, partial/foreign-band reorder lists); Api.Tests → tasks/03-queue-api.md. Verify: dotnet test Overmind.sln
+- [ ] 04-queue-mcp-tools — three thin tools in OvermindPlanningTools: planning_task_queue (ReadOnly, Idempotent, limit optional, description states the ordering contract + human reorders via the board), planning_move_feature (five moves, CallToolResult text for 400 contract violations — planning_set_current precedent), planning_set_feature_priority (wrapper over the existing feature PUT; description demands explicit in-session user approval); compact echo per 037; Mcp.Tests (wiring, limit truncation, error text passthrough) → tasks/04-queue-mcp-tools.md. Verify: dotnet test Overmind.sln. Parallelizable with 05 (disjoint files).
+- [ ] 05-board-dragndrop — web: composite board sort → priority asc → queuePosition asc (feature-board.tsx inline sort); types.ts queuePosition; native HTML5 DnD within a priority band (draggable cards, band-scoped drop zones, no new packages); reorder mutation via api.ts POST queue/reorder with the full post-drop band list; optimistic planningKeys.board patch + snapshot rollback (022/038 vocabulary); Gates: npm run lint && npx tsc --noEmit && npm run build → tasks/05-board-dragndrop.md. Verify: web gates green. Parallelizable with 04 (disjoint files).
+- [ ] 06-closeout-e2e — live walk: create/pin/move through MCP doors, drag in UI, re-import position preservation, full suite (dotnet test, web gates); result artifact; hard review (dotnet-code-reviewer over the C# wave + next-js-code-reviewer over the web wave) → tasks/06-closeout-e2e.md. Verify: reviews PASS, suite green.
+- [ ] 07-ceremony-queue-docs — state the mechanic in plain text everywhere the ceremony is described, no hidden mechanics: MCP tool descriptions (planning_list_features points picking work at the queue; planning_task_queue contract line), onboarding quickstart (board → queue ordering line), bootstrap prompt (one queue-routing line, DependencyRouting precedent), web ceremony texts (titles and ceremony step descriptions on the planning/feature pages); plus a dated note entry in the dotNetCrew Overmind project (resolve via list_projects) recording the ceremony update for agents on other runtimes → tasks/07-ceremony-queue-docs.md. Verify: dotnet build 0 warnings; web gates green; note visible in dotNetCrew entries. Depends on 04 (final tool texts) + 05 (final UI texts).
+</tasks>
+
+<verification>
+- Migration applies on the live dev database; backfill produces contiguous 1..N within each priority band ordered by creation time.
+- Agent loop: planning_task_queue → planning_move_feature up/down → queue reflects new order → planning_set_feature_priority lands the feature at the new band's tail.
+- Human loop: drag a card within its band in the dashboard, reload — order persists; failed reorder (killed backend) rolls the visual order back.
+- Re-import of BACKLOG/ leaves queue positions untouched.
+- Full suite: dotnet test Overmind.sln green (baseline 1344); web lint + tsc + build green.
+</verification>

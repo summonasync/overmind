@@ -80,6 +80,22 @@ public abstract class McpSessionTestBase : IAsyncLifetime
     protected static void RegisterPlanningRoutes(StubOvermindApi stub)
     {
         stub.RouteGet($"/api/agent/projects/{Canned.ProjectId}/planning/features", Canned.PlanningBoardJson);
+        stub.Route(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/task-queue",
+            req => ParseQuery(req.Query).ContainsKey("limit")
+                ? new StubOvermindApi.Response(200, Canned.PlanningQueueHeadJson)
+                : new StubOvermindApi.Response(200, Canned.PlanningQueueJson));
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/queue-move",
+            200,
+            Canned.PlanningQueueItemJson);
+        stub.Route(
+            "PUT",
+            $"/api/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
+            200,
+            Canned.PlanningFeaturePriorityJson);
         stub.Route("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/features", 201, Canned.PlanningFeatureJson);
         stub.Route(
             "POST",
@@ -91,6 +107,9 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/import",
             200,
             Canned.PlanningImportReportJson);
+        stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/materialization-status",
+            Canned.PlanningMaterializeStatusJson);
         stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
             Canned.PlanningFeatureJson);

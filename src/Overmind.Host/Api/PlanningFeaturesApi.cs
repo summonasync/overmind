@@ -20,6 +20,7 @@ public static class PlanningFeaturesApi
         group.MapPut("/projects/{projectId:guid}/planning/features/{slug}", UpdateFeature);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}", DeleteFeature);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
+        group.MapPost("/projects/{projectId:guid}/planning/queue/reorder", PlanningQueueApi.Reorder);
 
         return group;
     }
@@ -199,7 +200,7 @@ public static class PlanningFeaturesApi
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
     }
 
-    private static bool TryParseEnum<TEnum>(string value, out TEnum parsed) where TEnum : struct, Enum
+    internal static bool TryParseEnum<TEnum>(string value, out TEnum parsed) where TEnum : struct, Enum
     {
         return Enum.TryParse(value, ignoreCase: true, out parsed) && Enum.IsDefined(parsed);
     }
