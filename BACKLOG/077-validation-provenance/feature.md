@@ -1,7 +1,7 @@
 ---
 feature: 077
 slug: validation-provenance
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -25,3 +25,9 @@ planning_validate carries structural proof of human approval, not the agent's wo
 
 <refs>
 Source: note «Полевые заметки агента (BobHouse 020, 2026-09-24)», B4 (entry c7f34f40-3cea-49ec-8e23-bb1d8fe8e9c9). Related done: 055, 043; microbatch #43 (Validate without sourced log line).</refs>
+
+<log>
+- 2026-09-26 [auto] — artifact created → inProgress
+- 2026-09-26 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-26 [agent] — by user request in-session («как ты рекомендовал» = флип+коммит+деплой): спека 55333889 + план 114c3e53 валидированы юзером, 2/2 таска done (light review + фикс-раунд ProjectId-биндинга), e2e dogfood 10/10 ноль отклонений, result 1e1f88cf, тесты 1482→1500. W-2 решён юзером: reply-семантика остаётся, approve-функция откладена до внутреннего copilot
+</log>
