@@ -1,7 +1,7 @@
 ---
 feature: 068
 slug: mutation-transparency
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -29,3 +29,9 @@ The agent SEES what its mutation did. Today: append_log and patch(logNote) write
 - 043-status-provenance (the marker system this extends); 055/056 (the response/warning idioms this follows).
 - Microbatch #45 (append_log markers — absorbed here, remove from the queue when this lands).
 </refs>
+
+<log>
+- 2026-09-26 [auto] — artifact created → inProgress
+- 2026-09-26 [auto] — all tasks done + spec + plan → review
+- 2026-09-26 [agent] — by user request in-session («го флип»): полный цикл — спека 9f1fa31e + план 4d6ded97 валидированы юзером, 4/4 таска done с ревью (light ×3 + hard RE-APPROVED + closing architect APPROVED-WITH-WARNINGS, audits/review-068-01..04.md + architect-review-2026-09-26-068.md), e2e dogfood на изолированном хосте ноль расхождений, result 6e849a62, тесты 1441→1482
+</log>
