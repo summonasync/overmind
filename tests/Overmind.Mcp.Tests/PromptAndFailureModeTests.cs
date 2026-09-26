@@ -25,6 +25,17 @@ public class PromptContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task SessionBootstrap_StatesTheValidationProofFlow()
+    {
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        var text = PromptText(response);
+        text.ShouldContain("overmind_notify(kind=approval, featureSlug)");
+        text.ShouldContain("the human's bell reply → planning_validate");
+        text.ShouldContain("every edit voids the reply");
+    }
+
+    [Fact]
     public async Task SessionBootstrap_WithSingleProject_PointsAtItsGatesAndGuards()
     {
         Stub.RouteGet("/api/projects", $$"""

@@ -199,6 +199,9 @@ public static class Canned
     public const string PlanningValidateGateJson =
         """{"title":"HumanValidationRequired","detail":"STOP: the spec of feature 'demo-feature' awaits human validation — ask the user to approve it in the Overmind UI.","status":409}""";
 
+    public const string PlanningValidationProofRequiredJson =
+        """{"title":"ValidationProofRequired","detail":"Human approval required: send overmind_notify(kind=approval, featureSlug=demo-feature) and wait for the human's reply in the notification center, or validate via the UI.","status":409}""";
+
     public const string PlanningFeatureNotFoundJson =
         """{"title":"Not Found","detail":"Feature 'demo-feature' was not found.","status":404}""";
 

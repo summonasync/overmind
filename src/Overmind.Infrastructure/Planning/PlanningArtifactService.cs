@@ -306,9 +306,15 @@ public sealed class PlanningArtifactService
     }
 
     public async Task ValidateAsync(
-        Guid artifactId, string? logNote = null, PlanningLogSource? source = null, CancellationToken ct = default)
+        Guid artifactId, string? logNote = null, PlanningLogSource? source = null,
+        bool requireHumanProof = false, CancellationToken ct = default)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
+
+        if (requireHumanProof && string.IsNullOrWhiteSpace(logNote))
+        {
+            logNote = await BuildHumanProofLineAsync(artifact, ct);
+        }
 
         try
         {
@@ -321,6 +327,33 @@ public sealed class PlanningArtifactService
 
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+    }
+
+    private async Task<string> BuildHumanProofLineAsync(PlanningArtifact artifact, CancellationToken ct)
+    {
+        var feature = await _db.PlanningFeatures
+            .AsNoTracking()
+            .Where(f => f.Id == artifact.FeatureId)
+            .Select(f => new { f.Slug, f.ProjectId })
+            .FirstAsync(ct);
+
+        var proof = await _db.AgentNotifications
+            .AsNoTracking()
+            .Where(n => n.Kind == NotificationKind.Approval
+                && n.ProjectId == feature.ProjectId
+                && n.FeatureSlug == feature.Slug
+                && n.ReplyText != null && n.ReplyText != string.Empty
+                && n.RepliedAt >= artifact.UpdatedAt)
+            .OrderByDescending(n => n.RepliedAt)
+            .Select(n => new { n.Id, n.RepliedAt })
+            .FirstOrDefaultAsync(ct);
+
+        if (proof is null)
+        {
+            throw PlanningException.ValidationProofRequired(feature.Slug);
+        }
+
+        return $"validated with human proof: notification {proof.Id} replied {proof.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
     }
 
     public async Task AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default,

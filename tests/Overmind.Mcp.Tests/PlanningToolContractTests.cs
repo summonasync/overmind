@@ -1375,6 +1375,43 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningValidate_Description_DocumentsProofAndThe409()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_validate"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("overmind_notify(kind=approval");
+        description.ShouldContain("notify → reply → validate");
+        description.ShouldContain("ValidationProofRequired");
+        description.ShouldContain("human door");
+        description.ShouldContain("every edit voids it");
+    }
+
+    [Fact]
+    public async Task PlanningValidate_ProofRequired409_SurfacesTheActionableDetail()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/validate",
+            409,
+            Canned.PlanningValidationProofRequiredJson);
+
+        var response = await Driver.CallToolAsync("planning_validate", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("overmind API returned 409");
+        text.ShouldContain("Human approval required: send overmind_notify(kind=approval, featureSlug=demo-feature)");
+        text.ShouldContain("or validate via the UI");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task PlanningPatchArtifact_LogSection_SurfacesTheAppendLogRedirect()
     {
         Stub.Route(

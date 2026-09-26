@@ -29,5 +29,6 @@ public enum PlanningFailureCode
     FeatureBlocked,
     FeatureNotInQueue,
     InvalidQueuePosition,
-    InvalidQueueReorder
+    InvalidQueueReorder,
+    ValidationProofRequired
 }

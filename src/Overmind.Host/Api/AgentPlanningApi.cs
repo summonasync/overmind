@@ -184,10 +184,13 @@ public static class AgentPlanningApi
         var migrationNote = asMigrated
             ? $"validated as migrated — pre-approved on disk: {request!.LogNote!.Trim()}"
             : null;
+        var documentGated = target.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan;
 
         try
         {
-            await artifactService.ValidateAsync(id, migrationNote, PlanningLogSource.Agent, ct);
+            await artifactService.ValidateAsync(
+                id, migrationNote, PlanningLogSource.Agent,
+                requireHumanProof: !asMigrated && documentGated, ct: ct);
         }
         catch (PlanningException ex)
         {

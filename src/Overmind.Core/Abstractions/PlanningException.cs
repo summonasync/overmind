@@ -66,6 +66,11 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.HumanValidationRequired,
             $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.");
 
+    public static PlanningException ValidationProofRequired(string featureSlug) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ValidationProofRequired,
+            "Human approval required: send overmind_notify(kind=approval, featureSlug=" + featureSlug +
+            ") and wait for the human's reply in the notification center, or validate via the UI.");
+
     public static PlanningException MigratedNoteRequired() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.MigratedNoteRequired,
             "asMigrated requires a logNote: the marker line must record where the pre-approval came from, e.g. 'validated v9 on disk, user-approved before migration'.");

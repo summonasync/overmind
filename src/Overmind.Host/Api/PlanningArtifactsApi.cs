@@ -279,7 +279,7 @@ public static class PlanningArtifactsApi
     {
         try
         {
-            await service.ValidateAsync(id, ct: ct);
+            await service.ValidateAsync(id, "validated via UI", PlanningLogSource.Ui, ct: ct);
         }
         catch (PlanningException ex)
         {

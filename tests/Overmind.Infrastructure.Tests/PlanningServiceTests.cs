@@ -1534,6 +1534,176 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ValidateAsync_WithRepliedApproval_ValidationCarriesProofLine()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.ValidateAsync(
+            spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        await _context.Entry(spec).ReloadAsync();
+        var line = PlanningLog.Parse(spec.Body).ShouldHaveSingleItem();
+        line.Source.ShouldBe(PlanningLogSource.Agent);
+        line.Text.ShouldBe($"validated with human proof: notification {notification.Id} replied {notification.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC");
+    }
+
+    [Fact]
+    public async Task ValidateAsync_WithoutNotification_ThrowsValidationProofRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+        ex.Message.ShouldBe(
+            "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
+            "and wait for the human's reply in the notification center, or validate via the UI.");
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ArtifactEditedAfterReply_ThrowsValidationProofRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v2", null, null, "edited after the reply", default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ApprovalReplyOnOtherFeature_ThrowsValidationProofRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the other feature", _projectId, "other-feature");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ApprovalReplyInOtherProject_ThrowsValidationProofRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var otherProject = Project.Create("other-project", "/tmp/other-project");
+        _context.Projects.Add(otherProject);
+        await _context.SaveChangesAsync();
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve feat", otherProject.Id, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_UnrepliedApproval_DoesNotCountAsProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        _context.AgentNotifications.Add(
+            AgentNotification.Create(NotificationKind.Approval, "please approve the spec", _projectId, "feat"));
+        await _context.SaveChangesAsync();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_QuestionKindReply_DoesNotCountAsProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Question, "which scope?", _projectId, "feat");
+        notification.Reply("the narrow one");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ExplicitLogNote_BypassesProofSearch()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        await artifactService.ValidateAsync(spec.Id, "validated as migrated — pre-approved on disk: x", PlanningLogSource.Agent, ct: default);
+
+        await _context.Entry(spec).ReloadAsync();
+        var line = PlanningLog.Parse(spec.Body).ShouldHaveSingleItem();
+        line.Source.ShouldBe(PlanningLogSource.Agent);
+        line.Text.ShouldBe("validated as migrated — pre-approved on disk: x");
+    }
+
+    [Fact]
     public async Task PatchAsync_SectionPatch_PersistsSnapshot_AndSyncsMaterialization()
     {
         var featureService = CreateFeatureService();

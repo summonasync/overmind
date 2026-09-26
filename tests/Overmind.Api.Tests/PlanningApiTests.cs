@@ -655,9 +655,12 @@ public sealed class PlanningApiTests : IDisposable
 
         await _client.PostAsync($"/api/planning/artifacts/{created!.Id}/validate", null);
 
+        var frozen = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+
         var putResponse = await _client.PutAsJsonAsync(
             $"/api/planning/artifacts/{created.Id}",
-            new { Body = "v2" });
+            new { Body = frozen!.Body.Replace("v1", "v2") });
 
         putResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await putResponse.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
@@ -678,17 +681,21 @@ public sealed class PlanningApiTests : IDisposable
 
         await _client.PostAsync($"/api/planning/artifacts/{created!.Id}/validate", null);
 
+        var frozen = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+
         var putResponse = await _client.PutAsJsonAsync(
             $"/api/planning/artifacts/{created.Id}",
-            new { Body = "v2", LogNote = "unfreezing" });
+            new { Body = frozen!.Body, LogNote = "unfreezing" });
 
         putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         var updated = await putResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
         updated!.Status.ShouldBe("draft");
         updated.FrozenAt.ShouldBeNull();
-        updated.Log.Length.ShouldBe(2);
-        updated.Log[0].Text.ShouldBe("unfreezing");
-        updated.Log[1].Text.ShouldBe("artifact demoted: validated → draft");
+        updated.Log.Length.ShouldBe(3);
+        updated.Log[0].Text.ShouldBe("validated via UI");
+        updated.Log[1].Text.ShouldBe("unfreezing");
+        updated.Log[2].Text.ShouldBe("artifact demoted: validated → draft");
         updated.StatusChanged.ShouldBe("validated → draft");
     }
 

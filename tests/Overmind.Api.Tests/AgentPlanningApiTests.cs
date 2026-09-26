@@ -58,9 +58,11 @@ public sealed class AgentPlanningApiTests : IDisposable
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
         var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
         await FreezeViaHumanDoorAsync(spec.Id);
+        var frozen = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
 
         var response = await _client.PostAsJsonAsync(
-            AgentArtifactsUrl(project.Id, "feat"), new { Kind = "spec", Body = "v2" });
+            AgentArtifactsUrl(project.Id, "feat"),
+            new { Kind = "spec", Body = frozen!.Body.Replace("v1", "v2") });
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
@@ -75,9 +77,11 @@ public sealed class AgentPlanningApiTests : IDisposable
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
         var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
         await FreezeViaHumanDoorAsync(spec.Id);
+        var frozen = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
 
         var response = await _client.PostAsJsonAsync(
-            AgentArtifactsUrl(project.Id, "feat"), new { Kind = "spec", Body = "v2", LogNote = "unfreezing" });
+            AgentArtifactsUrl(project.Id, "feat"),
+            new { Kind = "spec", Body = frozen!.Body.Replace("v1", "v2"), LogNote = "unfreezing" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var updated = await response.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
@@ -93,9 +97,11 @@ public sealed class AgentPlanningApiTests : IDisposable
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
         var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
         await FreezeViaHumanDoorAsync(spec.Id);
+        var frozen = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
 
         var response = await _client.PostAsJsonAsync(
-            AgentArtifactsUrl(project.Id, "feat"), new { Kind = "spec", Body = "v2", LogNote = "unfreezing" });
+            AgentArtifactsUrl(project.Id, "feat"),
+            new { Kind = "spec", Body = frozen!.Body.Replace("v1", "v2"), LogNote = "unfreezing" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
@@ -182,6 +188,144 @@ public sealed class AgentPlanningApiTests : IDisposable
             $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
         feature!.Status.ShouldBe("inProgress");
         feature.Body.ShouldContain("[auto] — feature demoted: review → inProgress (spec no longer validated)");
+    }
+
+    [Fact]
+    public async Task Validate_WithRepliedApproval_SucceedsAndWritesTheProofLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        var notificationId = await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain($"[agent] — validated with human proof: notification {notificationId} replied");
+    }
+
+    [Fact]
+    public async Task Validate_WithoutNotification_Returns409WithActionableDetail()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+
+        var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ValidationProofRequired");
+        problem.Detail!.ShouldBe(
+            "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
+            "and wait for the human's reply in the notification center, or validate via the UI.");
+    }
+
+    [Fact]
+    public async Task Validate_ArtifactEditedAfterTheReply_Returns409()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOriginal.\n</goal>\n"
+        });
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "<goal>\nAmended.\n</goal>", LogNote = "edited after the reply" });
+
+        var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ValidationProofRequired");
+    }
+
+    [Fact]
+    public async Task Validate_ApprovalReplyOnOtherFeature_Returns409()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        await NotifyAndReplyAsync(project.Id, "other-feature");
+
+        var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ValidationProofRequired");
+    }
+
+    [Fact]
+    public async Task Validate_QuestionKindReply_DoesNotCountAsProof()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        await NotifyAndReplyAsync(project.Id, "feat", kind: "question");
+
+        var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ValidationProofRequired");
+    }
+
+    [Fact]
+    public async Task Validate_HumanDoor_IsFreeWithoutNotification_AndWritesTheUiLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+
+        var response = await _client.PostAsync($"/api/planning/artifacts/{spec.Id}/validate", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain("[ui] — validated via UI");
+    }
+
+    [Fact]
+    public async Task Validate_GateOn_StopsBeforeProofLogic()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        await NotifyAndReplyAsync(project.Id, "feat");
+        await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/workflow",
+            new { RequireHumanValidation = "on" });
+
+        var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("HumanValidationRequired");
+        problem.Detail!.ShouldStartWith("STOP:");
+        problem.Detail.ShouldContain("awaits human validation");
+    }
+
+    private async Task<string> NotifyAndReplyAsync(Guid projectId, string featureSlug, string kind = "approval")
+    {
+        var create = await _client.PostAsJsonAsync("/api/agent/notifications", new
+        {
+            Kind = kind,
+            Text = $"please approve {featureSlug}",
+            ProjectId = projectId,
+            FeatureSlug = featureSlug
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var notificationId = JsonNode.Parse(await create.Content.ReadAsStringAsync())!["id"]!.GetValue<string>();
+
+        var reply = await _client.PostAsJsonAsync(
+            $"/api/notifications/{notificationId}/reply", new { Text = "lgtm" });
+        reply.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        return notificationId;
     }
 
     [Fact]
@@ -439,6 +583,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         await SetValidationGateAsync(project.Id, on: false);
 
         var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "# Spec" });
+        await NotifyAndReplyAsync(project.Id, "feat");
 
         var response = await _client.PostAsync(AgentValidateUrl(spec.Id), null);
 
