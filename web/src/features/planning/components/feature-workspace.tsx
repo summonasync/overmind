@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Markdown } from "@/shared/lib/markdown";
 import { cn } from "@/shared/lib/cn";
+import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -22,7 +23,6 @@ import { FeaturePrioritySelect } from "@/features/planning/components/feature-pr
 import { TaskBoard } from "@/features/planning/components/task-board";
 import { TaskEditor } from "@/features/planning/components/task-editor";
 import { usePlanningFeature, usePlanningMutations } from "@/features/planning/lib/use-planning";
-import { formatRelativeTime } from "@/features/planning/lib/relative-time";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
 import {
@@ -388,7 +388,7 @@ function DocumentPanel({ artifact, onEdit }: { artifact: PlanningArtifactRespons
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge tone={artifactStatusTone(artifact.status)}>{artifact.status}</Badge>
         {artifact.frozenAt !== null ? (
-          <Badge tone="success">validated {new Date(artifact.frozenAt).toLocaleDateString()}</Badge>
+          <Badge tone="success">validated {formatCalendarDate(artifact.frozenAt)}</Badge>
         ) : null}
         <Badge tone={artifact.review === "hard" ? "warning" : "neutral"}>{artifact.review}</Badge>
         <span className="ml-auto font-mono text-xs text-muted">

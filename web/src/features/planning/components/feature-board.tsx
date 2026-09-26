@@ -15,7 +15,7 @@ import { compareBoardItems } from "@/features/planning/lib/board-order";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
-import { formatRelativeTime } from "@/features/planning/lib/relative-time";
+import { formatRelativeTime } from "@/shared/lib/relative-time";
 import { useDragAutoscroll } from "@/features/planning/lib/use-drag-autoscroll";
 import { useQueueReorder } from "@/features/planning/lib/use-queue-reorder";
 import { planningKeys } from "@/features/planning/queries";

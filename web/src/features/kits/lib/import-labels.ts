@@ -1,6 +1,7 @@
 import type {
   BadgeTone,
 } from "@/shared/ui/badge";
+import { parseInstant } from "@/shared/lib/relative-time";
 import type {
   KitImportFailureKind,
   KitReimportOutcome,
@@ -45,6 +46,6 @@ export const REIMPORT_OUTCOME_TONES: Record<KitReimportOutcome, BadgeTone> = {
 };
 
 export function formatImportedAt(iso: string): string {
-  const imported = new Date(iso);
-  return Number.isNaN(imported.getTime()) ? iso : imported.toLocaleString();
+  const timestamp = parseInstant(iso);
+  return timestamp === null ? iso : new Date(timestamp).toLocaleString();
 }

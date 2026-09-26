@@ -2,6 +2,7 @@
 
 import { ArrowRight, Clock, Lightbulb, NotebookText } from "lucide-react";
 import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
+import { formatCalendarDate } from "@/shared/lib/relative-time";
 import { ENTRY_TYPES } from "@/shared/api/types";
 import type { EntryResponse } from "@/features/entries";
 
@@ -60,7 +61,7 @@ export function EntriesInfoPanel({ entries, loading }: EntriesInfoPanelProps) {
               >
                 <span className="truncate text-xs text-foreground">{entry.title}</span>
                 <span className="shrink-0 font-mono text-[10px] text-muted">
-                  {new Date(entry.updatedAt).toLocaleDateString()}
+                  {formatCalendarDate(entry.updatedAt)}
                 </span>
               </li>
             ))}

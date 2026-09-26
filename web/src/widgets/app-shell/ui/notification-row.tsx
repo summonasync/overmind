@@ -1,44 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { CircleHelp, Info, Send, TriangleAlert } from "lucide-react";
+import { Check, CircleHelp, Info, Send, TriangleAlert, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { featureNumber } from "@/features/planning";
-import { useNotificationMutations } from "@/features/notifications";
+import { APPROVAL_REPLY, approvalChoice, useNotificationMutations } from "@/features/notifications";
 import type { NotificationItem, NotificationKind } from "@/features/notifications";
 import { Badge, type BadgeTone } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Input } from "@/shared/ui/input";
 import { cn } from "@/shared/lib/cn";
-
-const MINUTE = 60;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
+import { formatNotificationTime } from "@/shared/lib/relative-time";
 
 const kindMeta: Record<NotificationKind, { tone: BadgeTone; icon: LucideIcon }> = {
   approval: { tone: "warning", icon: TriangleAlert },
   question: { tone: "info", icon: CircleHelp },
   info: { tone: "neutral", icon: Info },
 };
-
-function formatNotificationTime(iso: string): string {
-  const timestamp = Date.parse(iso);
-  if (Number.isNaN(timestamp)) {
-    return "";
-  }
-  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
-  if (seconds < MINUTE) {
-    return "just now";
-  }
-  if (seconds < HOUR) {
-    return `${Math.floor(seconds / MINUTE)}m ago`;
-  }
-  if (seconds < DAY) {
-    return `${Math.floor(seconds / HOUR)}h ago`;
-  }
-  return `${Math.floor(seconds / DAY)}d ago`;
-}
 
 function notificationHref(item: NotificationItem): string {
   const params = new URLSearchParams();
@@ -77,6 +56,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
   const KindIcon = meta.icon;
   const existingReply = typeof item.replyText === "string" ? item.replyText : null;
   const replied = existingReply !== null;
+  const choice = approvalChoice(existingReply);
   const unread = item.readAt === null || item.readAt === undefined;
   const markingThis = markRead.isPending && markRead.variables === item.id;
   const replyingThis = reply.isPending && reply.variables?.id === item.id;
@@ -133,7 +113,45 @@ export function NotificationRow({ item }: NotificationRowProps) {
           </Button>
         ) : null}
       </div>
-      {item.kind !== "info" ? (
+      {/* No server denial semantics: reject posts a regular reply, 077 proof search reads any reply — backend left unchanged by user decision. */}
+      {item.kind === "approval" ? (
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            variant="secondary"
+            className="shrink-0 px-2 py-1 text-xs"
+            disabled={replied || replyingThis}
+            onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.approve })}
+            aria-label={`Approve request from ${item.agent}`}
+          >
+            <Check size={12} className="text-success" aria-hidden />
+            Approve
+          </Button>
+          <Button
+            variant="danger"
+            className="shrink-0 px-2 py-1 text-xs"
+            disabled={replied || replyingThis}
+            onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.reject })}
+            aria-label={`Reject request from ${item.agent}`}
+            title={`Sends reply "rejected"; it does not block the agent's validation by itself`}
+          >
+            <X size={12} aria-hidden />
+            Reject
+          </Button>
+          {replied ? (
+            <span
+              className={cn(
+                "text-xs font-medium",
+                choice === "approve" && "text-success",
+                choice === "reject" && "text-danger",
+                choice === null && "text-muted",
+              )}
+            >
+              Reply: {existingReply}
+            </span>
+          ) : null}
+          <ErrorText error={reply.error} />
+        </div>
+      ) : item.kind === "question" ? (
         <form
           className="mt-2 flex items-center gap-2"
           onSubmit={(event) => {

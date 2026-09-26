@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Markdown } from "@/shared/lib/markdown";
+import { formatCalendarDate } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -73,7 +74,7 @@ export function ArtifactEditor({
 
       {frozenAt !== null ? (
         <p className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success">
-          Validated {new Date(frozenAt).toLocaleDateString()} — editing resets it to draft.
+          Validated {formatCalendarDate(frozenAt)} — editing resets it to draft.
         </p>
       ) : null}
 

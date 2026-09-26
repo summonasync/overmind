@@ -51,7 +51,7 @@ export type { BoardSearchController } from "./lib/use-board-search";
 export { extractOpenQuestions } from "./lib/open-questions";
 export { priorityTone } from "./lib/priority-tone";
 export { featureNumber } from "./lib/feature-number";
-export { formatBacklogAge, formatRelativeTime } from "./lib/relative-time";
+export { formatBacklogAge, formatRelativeTime } from "@/shared/lib/relative-time";
 export { artifactStatusTone, featureStatusTone } from "./lib/status-tone";
 export {
   FEATURE_PRIORITIES,

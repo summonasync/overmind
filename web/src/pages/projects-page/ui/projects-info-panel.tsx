@@ -3,6 +3,7 @@
 import { Clock, Folder } from "lucide-react";
 import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
 import { useProjectList } from "@/features/projects";
+import { formatCalendarDate } from "@/shared/lib/relative-time";
 
 export function ProjectsInfoPanel() {
   const { data: projects, loading } = useProjectList();
@@ -39,7 +40,7 @@ export function ProjectsInfoPanel() {
               >
                 <span className="truncate text-xs text-foreground">{project.name}</span>
                 <span className="shrink-0 font-mono text-[10px] text-muted">
-                  {new Date(project.createdAt).toLocaleDateString()}
+                  {formatCalendarDate(project.createdAt)}
                 </span>
               </li>
             ))}

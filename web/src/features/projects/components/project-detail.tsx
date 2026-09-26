@@ -2,6 +2,7 @@
 
 import { FolderOpen } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
+import { formatCalendarDate } from "@/shared/lib/relative-time";
 import type { ProjectResponse } from "@/features/projects/types";
 
 export function ProjectDetail({ project }: { project: ProjectResponse }) {
@@ -17,7 +18,7 @@ export function ProjectDetail({ project }: { project: ProjectResponse }) {
         <p className="text-sm text-foreground">{project.description}</p>
       ) : null}
       <p className="text-xs text-muted">
-        Created {new Date(project.createdAt).toLocaleDateString()}
+        Created {formatCalendarDate(project.createdAt)}
       </p>
       <div>
         <a
