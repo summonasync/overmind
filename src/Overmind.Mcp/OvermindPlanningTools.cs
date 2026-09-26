@@ -89,6 +89,23 @@ public sealed class OvermindPlanningTools
         return KeepReviewOnlyOnTaskArtifacts(feature);
     }
 
+    [McpServerTool(Name = "planning_list_artifacts", ReadOnly = true, Idempotent = true)]
+    [Description("Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature.")]
+    public Task<JsonElement> ListArtifacts(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature, as shown on the board.")] string slug,
+        [Description("Optional artifact kind filter: spec, plan, task or result — the server validates the value and rejects unknown ones with a 400.")] string? kind = null,
+        CancellationToken ct = default)
+    {
+        var url = $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/artifacts";
+        if (!string.IsNullOrWhiteSpace(kind))
+        {
+            url += $"?kind={Uri.EscapeDataString(kind)}";
+        }
+
+        return Guarded(() => _api.GetAsync(url, ct));
+    }
+
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
     [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only.")]
     public async Task<JsonElement> ReadArtifact(

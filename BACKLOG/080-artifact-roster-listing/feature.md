@@ -1,9 +1,9 @@
 ---
 feature: 080
 slug: artifact-roster-listing
-status: draft
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-26
 ---
 
@@ -30,3 +30,9 @@ Kill the 2-tier read cliff on the agent path. Today `planning_list_features` ret
 - Shape precedent: 041-entries-metadata-listing.
 - Companion gaps from the same report: current_task held-signal → folded into 068 (OM-13); task-level dependencies → 081.
 </refs>
+
+<log>
+- 2026-09-26 [auto] — artifact created → inProgress
+- 2026-09-26 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-26 [ui] — status moved to 'done' via ui
+</log>

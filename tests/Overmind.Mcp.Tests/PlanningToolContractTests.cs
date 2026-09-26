@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheTwentyTwoPlanningTools()
+    public async Task ToolsList_ContainsTheTwentyThreePlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -24,6 +24,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         [
             "planning_list_features",
             "planning_read_feature",
+            "planning_list_artifacts",
             "planning_read_artifact",
             "planning_current_task",
             "planning_create_feature",
@@ -178,6 +179,78 @@ public class PlanningToolContractTests : McpSessionTestBase
         byId[Canned.PlanningPlanArtifactId.ToString()]!.ContainsKey("review").ShouldBeFalse();
         byId[Canned.PlanningTaskOneId.ToString()]!["review"]!.GetValue<string>().ShouldBe("light");
         byId[Canned.PlanningTaskTwoId.ToString()]!["review"]!.GetValue<string>().ShouldBe("hard");
+    }
+
+    [Fact]
+    public async Task PlanningListArtifacts_ProxiesAgentRosterRoute_Unchanged()
+    {
+        var response = await Driver.CallToolAsync("planning_list_artifacts", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts");
+        request.Query.ShouldBeEmpty();
+
+        var roster = JsonNode.Parse(Canned.ToolResultText(response))!;
+        JsonNode.DeepEquals(roster, JsonNode.Parse(Canned.PlanningArtifactRosterJson)).ShouldBeTrue();
+
+        var items = roster["artifacts"]!.AsArray();
+        items.Count.ShouldBe(4);
+        items.ShouldNotContain(i => i!.AsObject().ContainsKey("body"));
+        items.ShouldNotContain(i => i!.AsObject().ContainsKey("log"));
+        items.Single(i => i!["kind"]!.GetValue<string>() == "spec")!.AsObject().ContainsKey("review").ShouldBeFalse();
+        var task = items.Single(i => i!["artifactId"]!.GetValue<string>() == Canned.PlanningTaskTwoId.ToString())!.AsObject();
+        task["review"]!.GetValue<string>().ShouldBe("hard");
+        task["acTicked"]!.GetValue<int>().ShouldBe(0);
+        task["acTotal"]!.GetValue<int>().ShouldBe(3);
+        task["brief"]!.GetValue<string>().ShouldBe("Wire the endpoints");
+    }
+
+    [Fact]
+    public async Task PlanningListArtifacts_KindFilter_IsForwardedInTheRequestUrl()
+    {
+        var response = await Driver.CallToolAsync("planning_list_artifacts", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["kind"] = "task"
+        });
+
+        var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts");
+        ParseQuery(request.Query)["kind"].ShouldBe("task");
+    }
+
+    [Fact]
+    public async Task PlanningListArtifacts_UnknownFeature_SurfacesApiErrorAsToolError()
+    {
+        Stub.Route(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts",
+            404,
+            Canned.PlanningFeatureNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_list_artifacts", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        ToolErrorText(response).ShouldContain("Feature 'demo-feature' was not found.");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningListArtifacts_Description_PinsTheRosterPitch()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_list_artifacts"]!["description"]!.GetValue<string>().ShouldBe(
+            "Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature.");
     }
 
     [Fact]

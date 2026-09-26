@@ -162,6 +162,20 @@ public sealed record PlanningArtifactReadResponse(
     string Body,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? MissingSections = null);
 
+public sealed record PlanningArtifactRosterResponse(PlanningArtifactRosterItemResponse[] Artifacts);
+
+public sealed record PlanningArtifactRosterItemResponse(
+    Guid ArtifactId,
+    PlanningArtifactKind Kind,
+    PlanningArtifactStatus Status,
+    int Version,
+    int Order,
+    DateTime UpdatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PlanningReviewLevel? Review = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AcTicked = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AcTotal = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Brief = null);
+
 public sealed record PlanningArtifactResponse(
     Guid Id,
     PlanningArtifactKind Kind,

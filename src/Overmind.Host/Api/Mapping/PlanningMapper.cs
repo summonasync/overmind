@@ -121,6 +121,25 @@ public static class PlanningMapper
         FeatureDependencyEntry entry) =>
         new(entry.Slug, entry.Status, entry.Closed);
 
+    public static PlanningArtifactRosterItemResponse ToRosterItem(PlanningArtifact artifact)
+    {
+        if (artifact.Kind != PlanningArtifactKind.Task)
+        {
+            return new(
+                artifact.Id, artifact.Kind, artifact.Status,
+                artifact.Version, artifact.Order, artifact.UpdatedAt);
+        }
+
+        var items = PlanningSections.ParseAcceptanceCriteria(artifact.Body);
+        return new(
+            artifact.Id, artifact.Kind, artifact.Status,
+            artifact.Version, artifact.Order, artifact.UpdatedAt,
+            artifact.Review,
+            items.Count(i => i.Checked == true),
+            items.Count,
+            artifact.Brief);
+    }
+
     public static PlanningArtifactResponse ToArtifactResponse(PlanningArtifact artifact)
     {
         return new PlanningArtifactResponse(

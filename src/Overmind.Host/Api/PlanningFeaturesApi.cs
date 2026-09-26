@@ -112,6 +112,48 @@ public static class PlanningFeaturesApi
             feature, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
     }
 
+    internal static async Task<IResult> ListArtifacts(
+        Guid projectId,
+        string slug,
+        string? kind,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        PlanningArtifactKind? kindFilter = null;
+        if (kind is not null)
+        {
+            if (!TryParseEnum(kind, out PlanningArtifactKind parsed))
+            {
+                return HttpErrors.BadRequest(
+                    $"Unknown kind '{kind}'. Allowed values: spec, plan, task, result.");
+            }
+
+            kindFilter = parsed;
+        }
+
+        var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
+        if (!projectExists)
+        {
+            return HttpErrors.NotFound($"Project '{projectId}' was not found.");
+        }
+
+        var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
+        if (feature is null)
+        {
+            return HttpErrors.NotFound($"Feature '{slug}' was not found.");
+        }
+
+        var artifacts = feature.Artifacts
+            .Where(a => kindFilter is null || a.Kind == kindFilter)
+            .OrderBy(a => a.Kind == PlanningArtifactKind.Task)
+            .ThenBy(a => a.Kind)
+            .ThenBy(a => a.Order)
+            .Select(PlanningMapper.ToRosterItem)
+            .ToArray();
+
+        return Results.Ok(new PlanningArtifactRosterResponse(artifacts));
+    }
+
     internal static async Task<IResult> UpdateFeature(
         Guid projectId,
         string slug,

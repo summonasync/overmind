@@ -127,6 +127,16 @@ public static class Canned
         }
         """;
 
+    public const string PlanningArtifactRosterJson =
+        """
+        {"artifacts":[
+          {"artifactId":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z"},
+          {"artifactId":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","version":1,"order":0,"updatedAt":"2026-09-08T11:00:00Z"},
+          {"artifactId":"88888888-8888-8888-8888-888888888888","kind":"task","status":"done","version":1,"order":1,"updatedAt":"2026-09-09T12:00:00Z","review":"light","acTicked":1,"acTotal":2,"brief":"Build the domain"},
+          {"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","review":"hard","acTicked":0,"acTotal":3,"brief":"Wire the endpoints"}
+        ]}
+        """;
+
     public const string PlanningTaskTwoJson =
         """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]}""";
 

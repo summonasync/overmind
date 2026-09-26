@@ -48,6 +48,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", CreateArtifact);
+        group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningFeaturesApi.ListArtifacts);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts/tasks", PlanningArtifactsApi.CreateTasks);
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus);
