@@ -173,7 +173,6 @@ public static class PlanningFeaturesApi
         string slug,
         SetPlanningFeatureCurrentRequest request,
         PlanningFeatureService service,
-        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -186,9 +185,9 @@ public static class PlanningFeaturesApi
             return PlanningErrors.Map(ex);
         }
 
-        var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
-        return Results.Ok(PlanningMapper.ToFeatureResponse(
-            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
+        var feature = await db.PlanningFeatures
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
+        return Results.Ok(PlanningMapper.ToMutationResponse(feature!));
     }
 
     private static async Task<PlanningFeature?> LoadFeatureWithArtifacts(

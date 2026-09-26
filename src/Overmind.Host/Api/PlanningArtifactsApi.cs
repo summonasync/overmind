@@ -230,7 +230,13 @@ public static class PlanningArtifactsApi
         {
             var result = await service.SetStatusAsync(
                 id, request.Status, PlanningLogSource.Ui, request.LogNote, ct);
-            return Results.Ok(new SetPlanningArtifactStatusResponse(result.Warnings, result.FeatureStatusChanged));
+            return Results.Ok(new SetPlanningArtifactStatusResponse(
+                result.ArtifactId,
+                result.Status,
+                result.Version,
+                result.LastLogLine,
+                result.Warnings,
+                result.FeatureStatusChanged));
         }
         catch (PlanningException ex)
         {
@@ -262,16 +268,15 @@ public static class PlanningArtifactsApi
 
         try
         {
-            await service.AppendLogAsync(
+            var artifact = await service.AppendLogAsync(
                 id, request.Note, ct,
                 PlanningDoorSource.Resolve(request.Source, fallbackSource));
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
         }
         catch (PlanningException ex)
         {
             return PlanningErrors.Map(ex);
         }
-
-        return Results.Ok();
     }
 
     internal static async Task<IResult> Validate(
@@ -279,14 +284,13 @@ public static class PlanningArtifactsApi
     {
         try
         {
-            await service.ValidateAsync(id, "validated via UI", PlanningLogSource.Ui, ct: ct);
+            var artifact = await service.ValidateAsync(id, "validated via UI", PlanningLogSource.Ui, ct: ct);
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
         }
         catch (PlanningException ex)
         {
             return PlanningErrors.Map(ex);
         }
-
-        return Results.Ok();
     }
 
     private static async Task<PlanningFeature> ResolveFeatureOrThrow(

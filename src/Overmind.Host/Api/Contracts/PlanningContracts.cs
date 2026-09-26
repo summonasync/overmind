@@ -109,8 +109,24 @@ public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Sta
 public sealed record AppendPlanningLogRequest(string Note, string? Source = null);
 
 public sealed record SetPlanningArtifactStatusResponse(
+    Guid Id,
+    PlanningArtifactStatus Status,
+    int Version,
+    string LastLogLine,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
+
+public sealed record PlanningArtifactMutationResponse(
+    Guid Id,
+    PlanningArtifactStatus Status,
+    int Version,
+    string LastLogLine);
+
+public sealed record PlanningFeatureMutationResponse(
+    string Slug,
+    PlanningFeatureStatus Status,
+    int Version,
+    string LastLogLine);
 
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 
@@ -129,8 +145,11 @@ public sealed record PlanningArtifactPatchResponse(
     string Section,
     int Version,
     int BodyChars,
+    PlanningArtifactStatus Status,
+    string LastLogLine,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusChanged = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? AlreadyTicked = null);
 
 public sealed record PlanningArtifactReadResponse(
     Guid Id,

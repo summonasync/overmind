@@ -460,6 +460,150 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task DeleteEntry_RemovesANote_AndItLeavesTheListing()
+    {
+        var deleted = false;
+        Stub.Route(
+            "GET",
+            $"/api/projects/{Canned.ProjectId}/entries",
+            _ => deleted
+                ? new StubOvermindApi.Response(200, "[]")
+                : new StubOvermindApi.Response(200, Canned.NotesJson));
+        Stub.Route(
+            "DELETE",
+            "/api/entries/[^/]+",
+            _ =>
+            {
+                deleted = true;
+                return new StubOvermindApi.Response(204, "");
+            });
+
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.EntryId.ToString());
+        echo["type"]!.GetValue<string>().ShouldBe("note");
+        echo["deleted"]!.GetValue<bool>().ShouldBeTrue();
+
+        var listing = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+        Canned.ToolResultText(listing).ShouldNotContain("Note One");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_KitLinkedEntry_RefusedWithKitOwnedEntryVerbatim()
+    {
+        Stub.RouteGet("/api/kits", Canned.KitsJson);
+
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("KitOwnedEntry");
+        text.ShouldContain("managed by a skill kit 'core-kit'");
+        text.ShouldContain("the kit reimport or the UI owns it");
+
+        Stub.Requests.ShouldNotContain(r => r.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_SkillKindEntry_RefusedWithoutDeleting()
+    {
+        Stub.RouteGet($"/api/entries/{Canned.EntryId}", Canned.SkillEntryJson);
+
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("SkillEntryDeleteRefused");
+        text.ShouldContain("Overmind UI");
+
+        Stub.Requests.ShouldNotContain(r => r.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_EntryFromAnotherProject_RefusedBeforeAnyDeletion()
+    {
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.SecondProjectId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("does not belong to the resolved project");
+
+        Stub.Requests.ShouldNotContain(r => r.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_NoExplicitProject_ResolvesThroughTheOnboardCwd()
+    {
+        await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString()
+        });
+
+        var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        JsonNode.Parse(onboard.Body)!["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        FindRequest("DELETE", $"/api/entries/{Canned.EntryId}");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_ProjectIdEnvOverride_SkipsOnboard()
+    {
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_PROJECT_ID"] = Canned.ProjectId.ToString()
+        });
+        await driver.InitializeAsync();
+
+        await driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString()
+        });
+
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
+        Stub.Requests.ShouldContain(r => r.Method == "DELETE" && r.Path == $"/api/entries/{Canned.EntryId}");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_Description_PinsPermanenceAndTheGuards()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["delete_entry"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("permanent");
+        description.ShouldContain("no tombstones");
+        description.ShouldContain("no undo");
+        description.ShouldContain("KitOwnedEntry");
+        description.ShouldContain("the kit reimport or the UI owns it");
+        description.ShouldContain("OVERMIND_PROJECT_ID");
+    }
+
+    [Fact]
     public async Task ReadEntry_NotFound_MapsToToolError()
     {
         Stub.Route("GET", $"/api/entries/{Canned.MissingEntryId}", 404, Canned.NotFoundJson);

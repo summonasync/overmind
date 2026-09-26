@@ -1,7 +1,7 @@
 ---
 feature: 070
 slug: response-polish-round3
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -30,3 +30,9 @@ Third-round polish: (OM-15) mutation tools return one uniform object {id, versio
 - FEATURELIST/overmind-features-2026-09-24.md OM-15/16/17 (P2).
 - 037/059 echo lineage; 032 self-documentation; round-1 README items 13 (docs) still open.
 </refs>
+
+<log>
+- 2026-09-26 [auto] — artifact created → inProgress
+- 2026-09-26 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-26 [agent] — by user request in-session (batch flip): 4/4 таска done, ревью light ×4 + closing architect APPROVED-WITH-WARNINGS (audits/architect-review-2026-09-26-070.md), dogfood 4 блока на изолированном хосте, result 4125116a validated, R1-R10+D1 подтверждены, спека валидирована через собственную 077-механику (notify→reply→validate)
+</log>

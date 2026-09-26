@@ -56,7 +56,17 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("brief");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("free-form markdown with <log> as the only machine-parsed section");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
         tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("priority");
+        tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
@@ -130,7 +140,44 @@ public class PlanningToolContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldContain("# Wire the API");
         text.ShouldContain("\"brief\":\"Wire the endpoints\"");
+        text.ShouldContain("\"review\":\"hard\"");
         text.ShouldNotContain("missingSections");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_DropsReviewFromDocumentKinds()
+    {
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+",
+            Canned.PlanningArtifactSpecReadJson);
+
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString()
+        });
+
+        var artifact = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        artifact["kind"]!.GetValue<string>().ShouldBe("spec");
+        artifact.ContainsKey("review").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningReadFeature_KeepsReviewOnTasks_DropsItFromDocuments()
+    {
+        var response = await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        var feature = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        var artifacts = feature["artifacts"]!.AsArray();
+        var byId = artifacts.ToDictionary(a => a!["id"]!.GetValue<string>(), a => a!.AsObject());
+
+        byId[Canned.PlanningSpecArtifactId.ToString()]!.ContainsKey("review").ShouldBeFalse();
+        byId[Canned.PlanningPlanArtifactId.ToString()]!.ContainsKey("review").ShouldBeFalse();
+        byId[Canned.PlanningTaskOneId.ToString()]!["review"]!.GetValue<string>().ShouldBe("light");
+        byId[Canned.PlanningTaskTwoId.ToString()]!["review"]!.GetValue<string>().ShouldBe("hard");
     }
 
     [Fact]
@@ -179,7 +226,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_read_artifact"]!["description"]!.GetValue<string>().ShouldBe(
-            "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one.");
+            "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only.");
     }
 
     [Fact]
@@ -191,7 +238,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldBe(
-            "Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document.");
+            "Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only.");
     }
 
     [Fact]
@@ -606,9 +653,14 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["logNote"]!.GetValue<string>().ShouldBe("implementation finished, handing to review");
 
         var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine"]);
         confirmation["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        confirmation["version"]!.GetValue<int>().ShouldBe(4);
         confirmation["status"]!.GetValue<string>().ShouldBe("review");
-        confirmation["lastLogLine"]!.GetValue<string>().ShouldBe("implementation finished, handing to review");
+        confirmation["lastLogLine"]!.GetValue<string>().ShouldBe("status move recorded on the board");
+        confirmation["lastLogLine"]!.GetValue<string>()
+            .ShouldNotBe("implementation finished, handing to review");
         confirmation.ContainsKey("warnings").ShouldBeFalse();
     }
 
@@ -619,7 +671,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "POST",
             "/api/agent/planning/artifacts/[^/]+/status",
             200,
-            """{"warnings":["8 of 12 acceptance items unticked"]}""");
+            """{"id":"99999999-9999-9999-9999-999999999999","status":"done","version":5,"lastLogLine":"closed with gaps","warnings":["8 of 12 acceptance items unticked"]}""");
 
         var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
         {
@@ -629,7 +681,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         });
 
         var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine", "warnings"]);
         confirmation["status"]!.GetValue<string>().ShouldBe("done");
+        confirmation["lastLogLine"]!.GetValue<string>().ShouldBe("closed with gaps");
         var warnings = confirmation["warnings"]!.AsArray();
         warnings.Count.ShouldBe(1);
         warnings[0]!.GetValue<string>().ShouldBe("8 of 12 acceptance items unticked");
@@ -638,7 +693,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     [Fact]
     public async Task PlanningSetStatus_ApiReportsNoWarnings_OmitsTheProperty()
     {
-        Stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "{}");
+        Stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, Canned.PlanningArtifactStatusEchoJson);
 
         var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
         {
@@ -650,6 +705,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
         confirmation.ContainsKey("warnings").ShouldBeFalse();
         confirmation.ContainsKey("featureStatusChanged").ShouldBeFalse();
+        confirmation["status"]!.GetValue<string>().ShouldBe("review");
     }
 
     [Fact]
@@ -659,7 +715,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "POST",
             "/api/agent/planning/artifacts/[^/]+/status",
             200,
-            """{"featureStatusChanged":"review → inProgress"}""");
+            """{"id":"99999999-9999-9999-9999-999999999999","status":"draft","version":6,"lastLogLine":"demotion recorded on the board","featureStatusChanged":"review → inProgress"}""");
 
         var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
         {
@@ -669,6 +725,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         });
 
         var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine", "featureStatusChanged"]);
         confirmation["status"]!.GetValue<string>().ShouldBe("draft");
         confirmation["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
     }
@@ -689,7 +747,13 @@ public class PlanningToolContractTests : McpSessionTestBase
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current");
         JsonNode.Parse(request.Body)!["isCurrent"]!.GetValue<bool>().ShouldBeTrue();
 
-        Canned.ToolResultText(response).ShouldContain("pinned as current");
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine"]);
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
+        echo["version"]!.GetValue<int>().ShouldBe(5);
+        echo["status"]!.GetValue<string>().ShouldBe("inProgress");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("feature mutation recorded on the board");
     }
 
     [Fact]
@@ -898,7 +962,12 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["status"]!.GetValue<string>().ShouldBe("done");
         body["logNote"]!.GetValue<string>().ShouldBe("by user request in-session");
 
-        Canned.ToolResultText(response).ShouldContain("moved to 'done'");
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine"]);
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
+        echo["version"]!.GetValue<int>().ShouldBe(5);
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("feature mutation recorded on the board");
     }
 
     [Fact]
@@ -1197,7 +1266,13 @@ public class PlanningToolContractTests : McpSessionTestBase
         posted["note"]!.GetValue<string>().ShouldBe("halfway through the wiring");
         posted["source"]!.GetValue<string>().ShouldBe("agent");
 
-        Canned.ToolResultText(response).ShouldContain("appended");
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine"]);
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        echo["version"]!.GetValue<int>().ShouldBe(3);
+        echo["status"]!.GetValue<string>().ShouldBe("inProgress");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("log line recorded on the board");
     }
 
     [Fact]
@@ -1222,12 +1297,15 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["source"]!.GetValue<string>().ShouldBe("agent");
 
         response["result"]!["isError"].ShouldBeNull();
-        var text = Canned.ToolResultText(response);
-        text.ShouldContain("task artifact");
-        text.ShouldContain(Canned.PlanningTaskTwoId.ToString());
-        text.ShouldContain("section 'goal'");
-        text.ShouldContain("version 3");
-        text.ShouldContain("412 body chars");
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine", "section", "bodyChars"]);
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        echo["version"]!.GetValue<int>().ShouldBe(3);
+        echo["status"]!.GetValue<string>().ShouldBe("inProgress");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("patch recorded on the board");
+        echo["section"]!.GetValue<string>().ShouldBe("goal");
+        echo["bodyChars"]!.GetValue<int>().ShouldBe(412);
     }
 
     [Fact]
@@ -1245,7 +1323,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["op"]!.GetValue<string>().ShouldBe("tick_ac");
         body["acIndex"]!.GetValue<int>().ShouldBe(1);
 
-        Canned.ToolResultText(response).ShouldContain("section 'acceptance-criteria'");
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["section"]!.GetValue<string>().ShouldBe("acceptance-criteria");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("patch recorded on the board");
     }
 
     [Fact]
@@ -1281,10 +1361,12 @@ public class PlanningToolContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldNotContain(marker);
         text.ShouldNotContain("yyyy");
-        text.Length.ShouldBeLessThan(200);
-        text.ShouldContain(Canned.PlanningTaskTwoId.ToString());
-        text.ShouldContain("version 3");
-        text.ShouldContain("412 body chars");
+        text.Length.ShouldBeLessThan(300);
+
+        var echo = JsonNode.Parse(text)!.AsObject();
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        echo["version"]!.GetValue<int>().ShouldBe(3);
+        echo["bodyChars"]!.GetValue<int>().ShouldBe(412);
     }
 
     [Fact]
@@ -1294,7 +1376,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "POST",
             "/api/agent/planning/artifacts/[^/]+/patch",
             200,
-            """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"spec","section":"goal","version":3,"bodyChars":97,"statusChanged":"validated → draft","featureStatusChanged":"review → inProgress"}""");
+            """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"spec","section":"goal","version":3,"bodyChars":97,"status":"draft","lastLogLine":"reopened for rework","statusChanged":"validated → draft","featureStatusChanged":"review → inProgress"}""");
 
         var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
         {
@@ -1304,10 +1386,96 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["logNote"] = "reopened for rework"
         });
 
-        var text = Canned.ToolResultText(response);
-        text.ShouldContain("version 3");
-        text.ShouldContain("statusChanged 'validated → draft'");
-        text.ShouldContain("featureStatusChanged 'review → inProgress'");
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine", "section", "bodyChars", "statusChanged", "featureStatusChanged"]);
+        echo["version"]!.GetValue<int>().ShouldBe(3);
+        echo["status"]!.GetValue<string>().ShouldBe("draft");
+        echo["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
+        echo["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_Retick_RendersTheHonestNoOpText()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            200,
+            Canned.PlanningPatchRetickEchoJson);
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["acIndex"] = 0
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        Canned.ToolResultText(response).ShouldBe("already ticked — no change");
+    }
+
+    [Fact]
+    public async Task PlanningMutationTools_ProjectTheUniformEchoKeySet()
+    {
+        var upsert = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "# Uniform echo task"
+        })))!.AsObject();
+        upsert.Select(p => p.Key).ToArray().ShouldBe(
+            ["id", "kind", "status", "version", "order", "frozenAt", "updatedAt", "bodyChars", "lastLogLine"]);
+        upsert["lastLogLine"]!.GetValue<string>().ShouldBe("stubbed creation log line");
+
+        var patch = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "goal",
+            ["content"] = "<goal>\nRewired.\n</goal>"
+        })))!.AsObject();
+        patch.Select(p => p.Key).ToArray().ShouldBe(
+            ["id", "version", "status", "lastLogLine", "section", "bodyChars"]);
+
+        var appendLog = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_append_log", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["note"] = "uniform echo probe"
+        })))!.AsObject();
+        appendLog.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
+
+        var setStatus = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["status"] = "review",
+            ["logNote"] = "uniform echo probe"
+        })))!.AsObject();
+        setStatus.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
+
+        var validate = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_validate", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString()
+        })))!.AsObject();
+        validate.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
+
+        var setCurrent = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_set_current", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["isCurrent"] = true
+        })))!.AsObject();
+        setCurrent.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
+        setCurrent["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
+
+        var setFeatureStatus = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_set_feature_status", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["status"] = "done",
+            ["logNote"] = "by user request in-session"
+        })))!.AsObject();
+        setFeatureStatus.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
+        setFeatureStatus["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
     }
 
     [Fact]
@@ -1444,7 +1612,13 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         FindRequest("POST", $"/api/agent/planning/artifacts/{Canned.PlanningSpecArtifactId}/validate");
         response["result"]!["isError"].ShouldBeNull();
-        Canned.ToolResultText(response).ShouldContain("validated");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine"]);
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSpecArtifactId.ToString());
+        echo["status"]!.GetValue<string>().ShouldBe("validated");
+        echo["lastLogLine"]!.GetValue<string>().ShouldContain("validated with human proof");
     }
 
     [Fact]
@@ -1486,7 +1660,11 @@ public class PlanningToolContractTests : McpSessionTestBase
         submitted["logNote"]!.GetValue<string>().ShouldBe("frozen v9 on disk, user-approved");
 
         response["result"]!["isError"].ShouldBeNull();
-        Canned.ToolResultText(response).ShouldContain("validated as migrated");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["status"]!.GetValue<string>().ShouldBe("validated");
+        echo["lastLogLine"]!.GetValue<string>()
+            .ShouldBe("validated as migrated — pre-approved on disk: frozen v9 on disk, user-approved");
     }
 
     [Fact]

@@ -188,7 +188,7 @@ public class StatusModelContractTests : McpSessionTestBase
         var description = await ToolDescription("planning_patch_artifact");
 
         description.ShouldContain("no-op");
-        description.ShouldContain("retried tick is safe");
+        description.ShouldContain("already ticked — no change");
     }
 
     [Fact]

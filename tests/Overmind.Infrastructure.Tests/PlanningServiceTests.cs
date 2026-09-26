@@ -1375,8 +1375,8 @@ public sealed class PlanningServiceTests : IDisposable
         var demoteLine = PlanningLog.Parse(inReview.Body).Last();
         demoteLine.Source.ShouldBe(PlanningLogSource.Auto);
         demoteLine.Text.ShouldBe("feature demoted: review → inProgress (spec no longer validated)");
-        patched.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
-        patched.FeatureStatusChanged.ShouldBe(PlanningArtifact.FeatureDemotedStatusEcho);
+        patched.Artifact.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
+        patched.Artifact.FeatureStatusChanged.ShouldBe(PlanningArtifact.FeatureDemotedStatusEcho);
     }
 
     [Fact]
@@ -1412,7 +1412,7 @@ public sealed class PlanningServiceTests : IDisposable
         var demoteLine = PlanningLog.Parse(inReview.Body).Last();
         demoteLine.Source.ShouldBe(PlanningLogSource.Auto);
         demoteLine.Text.ShouldBe("feature demoted: review → inProgress (plan no longer validated)");
-        patched.FeatureStatusChanged.ShouldBe(PlanningArtifact.FeatureDemotedStatusEcho);
+        patched.Artifact.FeatureStatusChanged.ShouldBe(PlanningArtifact.FeatureDemotedStatusEcho);
     }
 
     [Fact]
@@ -1718,9 +1718,9 @@ public sealed class PlanningServiceTests : IDisposable
         var patched = await artifactService.PatchAsync(
             artifact.Id, new PlanningArtifactPatch(Section: "goal", Content: "patched goal"), default);
 
-        patched.Version.ShouldBe(2);
-        patched.Body.ShouldContain("patched goal");
-        patched.Body.ShouldNotContain("old goal");
+        patched.Artifact.Version.ShouldBe(2);
+        patched.Artifact.Body.ShouldContain("patched goal");
+        patched.Artifact.Body.ShouldNotContain("old goal");
 
         await _context.Entry(artifact).ReloadAsync();
         artifact.Body.ShouldContain("patched goal");
@@ -1748,8 +1748,8 @@ public sealed class PlanningServiceTests : IDisposable
         var patched = await artifactService.PatchAsync(
             artifact.Id, new PlanningArtifactPatch(TickIndex: 0), default);
 
-        patched.Version.ShouldBe(2);
-        patched.Body.ShouldContain("[x] write the parser");
+        patched.Artifact.Version.ShouldBe(2);
+        patched.Artifact.Body.ShouldContain("[x] write the parser");
 
         var persisted = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
         persisted.Body.ShouldContain("[ ] write the parser");
@@ -1809,8 +1809,8 @@ public sealed class PlanningServiceTests : IDisposable
             new PlanningArtifactPatch(Section: "goal", Content: "new", LogNote: "reopened for rework"),
             default);
 
-        patched.Status.ShouldBe(PlanningArtifactStatus.Draft);
-        patched.Version.ShouldBe(2);
+        patched.Artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        patched.Artifact.Version.ShouldBe(2);
 
         await _context.Entry(artifact).ReloadAsync();
         artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
@@ -1836,10 +1836,119 @@ public sealed class PlanningServiceTests : IDisposable
         var patched = await artifactService.PatchAsync(
             artifact.Id, new PlanningArtifactPatch(TickIndex: 0), default);
 
-        patched.Version.ShouldBe(1);
+        patched.AlreadyTicked.ShouldBeTrue();
+        patched.Artifact.Version.ShouldBe(1);
 
         var snapshots = await _context.PlanningArtifactVersions.CountAsync(v => v.ArtifactId == artifact.Id);
         snapshots.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task ArtifactMutation_MovesFeatureUpdatedAt_WithoutTouchingItsLog()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\nold goal\n</goal>\n",
+            null, null, null, default);
+
+        await _context.Entry(feature).ReloadAsync();
+        var updatedAtAfterCreate = feature.UpdatedAt;
+        var featureLogBefore = PlanningLog.Parse(feature.Body).Count;
+        updatedAtAfterCreate.ShouldBeGreaterThan(feature.CreatedAt);
+
+        await artifactService.AppendLogAsync(spec.Id, "progress line", default);
+        await artifactService.PatchAsync(
+            spec.Id, new PlanningArtifactPatch(Section: "goal", Content: "new goal"), default);
+        await artifactService.SetStatusAsync(
+            spec.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "freezing", default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        await _context.Entry(feature).ReloadAsync();
+        feature.UpdatedAt.ShouldBeGreaterThan(updatedAtAfterCreate);
+        PlanningLog.Parse(feature.Body).Count.ShouldBe(featureLogBefore);
+    }
+
+    [Fact]
+    public async Task AppendLogAsync_RealTick_AndRetick_MoveFeatureUpdatedAtOnlyOnRealChange()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "<acceptance-criteria>\n- [ ] ship it\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        await _context.Entry(feature).ReloadAsync();
+        var updatedAtAfterCreate = feature.UpdatedAt;
+
+        await artifactService.AppendLogAsync(task.Id, "halfway there", default);
+        await _context.Entry(feature).ReloadAsync();
+        var updatedAtAfterLog = feature.UpdatedAt;
+        updatedAtAfterLog.ShouldBeGreaterThan(updatedAtAfterCreate);
+
+        var flip = await artifactService.PatchAsync(
+            task.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+        flip.AlreadyTicked.ShouldBeFalse();
+        await _context.Entry(feature).ReloadAsync();
+        var updatedAtAfterTick = feature.UpdatedAt;
+        updatedAtAfterTick.ShouldBeGreaterThan(updatedAtAfterLog);
+
+        await artifactService.PatchAsync(
+            task.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+        await _context.Entry(feature).ReloadAsync();
+        feature.UpdatedAt.ShouldBe(updatedAtAfterTick);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_IdenticalBodyWithoutNote_DoesNotMoveFeatureUpdatedAt()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec body", null, null, null, default);
+
+        await _context.Entry(feature).ReloadAsync();
+        var updatedAtAfterCreate = feature.UpdatedAt;
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec body", null, null, null, default);
+
+        await _context.Entry(feature).ReloadAsync();
+        feature.UpdatedAt.ShouldBe(updatedAtAfterCreate);
+    }
+
+    [Fact]
+    public async Task UpsertTasksAsync_MovesFeatureUpdatedAt_WhenATaskChanges()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task 1", 0, null, null, null)],
+            default);
+
+        await _context.Entry(feature).ReloadAsync();
+        var updatedAtAfterCreate = feature.UpdatedAt;
+
+        await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task 1 rewritten", 0, null, "rework", null)],
+            default);
+
+        await _context.Entry(feature).ReloadAsync();
+        feature.UpdatedAt.ShouldBeGreaterThan(updatedAtAfterCreate);
     }
 
     [Fact]

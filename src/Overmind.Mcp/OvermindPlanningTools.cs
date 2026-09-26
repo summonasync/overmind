@@ -78,17 +78,20 @@ public sealed class OvermindPlanningTools
         Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document.")]
-    public Task<JsonElement> ReadFeature(
+    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only.")]
+    public async Task<JsonElement> ReadFeature(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
-        CancellationToken ct) =>
-        Guarded(() => _api.GetAsync(
+        CancellationToken ct)
+    {
+        var feature = await Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}", ct));
+        return KeepReviewOnlyOnTaskArtifacts(feature);
+    }
 
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one.")]
-    public Task<JsonElement> ReadArtifact(
+    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only.")]
+    public async Task<JsonElement> ReadArtifact(
         [Description("Id of the artifact to read, as handed out by planning_current_task.")] Guid artifactId,
         [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections.")] string? sections = null,
         CancellationToken ct = default)
@@ -99,7 +102,42 @@ public sealed class OvermindPlanningTools
             url += $"?sections={Uri.EscapeDataString(sections)}";
         }
 
-        return Guarded(() => _api.GetAsync(url, ct));
+        var artifact = await Guarded(() => _api.GetAsync(url, ct));
+        return KeepReviewOnlyOnTasks(artifact);
+    }
+
+    private static JsonElement KeepReviewOnlyOnTaskArtifacts(JsonElement feature)
+    {
+        if (feature.ValueKind != JsonValueKind.Object ||
+            !feature.TryGetProperty("artifacts", out var artifacts) ||
+            artifacts.ValueKind != JsonValueKind.Array)
+        {
+            return feature;
+        }
+
+        var node = JsonNode.Parse(feature.GetRawText())!.AsObject();
+        foreach (var artifact in node["artifacts"]!.AsArray())
+        {
+            if (artifact?["kind"]?.GetValue<string>().Equals("task", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                artifact!.AsObject().Remove("review");
+            }
+        }
+
+        return node.Deserialize<JsonElement>();
+    }
+
+    private static JsonElement KeepReviewOnlyOnTasks(JsonElement artifact)
+    {
+        if (artifact.ValueKind != JsonValueKind.Object ||
+            artifact.GetProperty("kind").GetString()?.Equals("task", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return artifact;
+        }
+
+        var node = JsonNode.Parse(artifact.GetRawText())!.AsObject();
+        node.Remove("review");
+        return node.Deserialize<JsonElement>();
     }
 
     [McpServerTool(Name = "planning_current_task", ReadOnly = true, Idempotent = true)]
@@ -115,7 +153,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_create_feature", Destructive = false, Idempotent = false)]
-    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact to write its spec.")]
+    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact to write its spec. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
     public async Task<JsonElement> CreateFeature(
         [Description("Id of the project to create the feature in.")] Guid projectId,
         [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars.")] string slug,
@@ -144,7 +182,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -179,7 +217,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_tasks", Destructive = false, Idempotent = false)]
-    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization sync and one feature auto-transition evaluation run after the batch, never per item — creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order (omitted → assigned after the current max), review light/hard, brief (task-only, one line, max 500 chars), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. An item whose order hits an existing task updates that task in place.")]
+    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization sync and one feature auto-transition evaluation run after the batch, never per item — creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order, review light/hard, brief (task-only, one line, max 500 chars), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). An item whose order hits an existing task updates that task in place.")]
     public async Task<JsonElement> UpsertTasks(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to create or update tasks in.")] string featureSlug,
@@ -324,15 +362,7 @@ public sealed class OvermindPlanningTools
             new { status = normalized, logNote },
             ct));
 
-        var confirmation = new JsonObject
-        {
-            ["id"] = artifactId.ToString(),
-            ["status"] = normalized,
-            ["lastLogLine"] = logNote
-        };
-        CopyWarnings(payload, confirmation);
-        CopyFeatureStatusChanged(payload, confirmation);
-        return confirmation.Deserialize<JsonElement>();
+        return MutationEcho(payload, "id");
     }
 
     [McpServerTool(Name = "planning_set_current", Destructive = false, Idempotent = true)]
@@ -345,7 +375,8 @@ public sealed class OvermindPlanningTools
     {
         try
         {
-            await Guarded(() => _api.SetPlanningFeatureCurrent(projectId, slug, isCurrent, ct));
+            var echo = await Guarded(() => _api.SetPlanningFeatureCurrent(projectId, slug, isCurrent, ct));
+            return EchoResult(MutationEcho(echo, "slug"));
         }
         catch (McpException ex) when (ex.Message.StartsWith("STOP:", StringComparison.Ordinal))
         {
@@ -355,24 +386,11 @@ public sealed class OvermindPlanningTools
                 Content = [new TextContentBlock { Text = ex.Message }]
             };
         }
-
-        return new CallToolResult
-        {
-            Content =
-            [
-                new TextContentBlock
-                {
-                    Text = isCurrent
-                        ? $"Feature '{slug}' pinned as current."
-                        : $"Feature '{slug}' unpinned."
-                }
-            ]
-        };
     }
 
     [McpServerTool(Name = "planning_set_feature_status", Destructive = false, Idempotent = false)]
     [Description("Moves a feature status on the planning board — only on the user's explicit request in the current session, never on the agent's own initiative. Allowed targets: done (close, from any non-done status) or inProgress (review rollback); every other manual move belongs to the human door in the Overmind UI. The logNote is mandatory, lands as a dated line in the feature log, and must carry the provenance, e.g. 'by user request in-session'.")]
-    public async Task<string> SetFeatureStatus(
+    public async Task<JsonElement> SetFeatureStatus(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to move, as shown on the board.")] string slug,
         [Description("New status: done or inProgress — the only agent-door targets.")] string status,
@@ -385,11 +403,11 @@ public sealed class OvermindPlanningTools
         }
 
         var normalized = NormalizeFeatureStatus(status);
-        await Guarded(() => _api.PostAsync(
+        var echo = await Guarded(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/status",
             new { status = normalized, logNote },
             ct));
-        return $"Feature status moved to '{normalized}'.";
+        return MutationEcho(echo, "slug");
     }
 
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
@@ -514,21 +532,23 @@ public sealed class OvermindPlanningTools
 
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body — the cheapest write: one dated line, body is not resent. Use it to report progress between status moves.")]
-    public async Task<string> AppendLog(
+    public async Task<JsonElement> AppendLog(
         [Description("Id of the artifact to append the note to.")] Guid artifactId,
         [Description("Note text recorded as a dated log line.")] string note,
         CancellationToken ct = default)
     {
-        await Guarded(() => _api.PostAsync(
+        var echo = await Guarded(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{artifactId}/log",
             new { note, source = DoorSource },
             ct));
-        return "Log line appended.";
+        return MutationEcho(echo, "id");
     }
 
+    private const string AlreadyTickedNoChangeText = "already ticked — no change";
+
     [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
-    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched. Give section plus content to replace one section, or acIndex/acText to tick one acceptance-criteria item; never both. A missing section or item is a 400 that lists what is available. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Ticking an already-ticked item is a successful no-op, so a retried tick is safe; a replaced section is a real change every time. Editing a validated artifact requires a logNote.")]
-    public async Task<string> PatchArtifact(
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched. Give section plus content to replace one section, or acIndex/acText to tick one acceptance-criteria item; never both. A missing section or item is a 400 that lists what is available. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Ticking an already-ticked item is a successful no-op rendering 'already ticked — no change'; a replaced section is a real change every time. Editing a validated artifact requires a logNote.")]
+    public async Task<CallToolResult> PatchArtifact(
         [Description("Id of the artifact to patch.")] Guid artifactId,
         [Description("Name of the XML section to replace, e.g. goal.")] string? section = null,
         [Description("Full replacement content of the section.")] string? content = null,
@@ -542,17 +562,42 @@ public sealed class OvermindPlanningTools
             $"/api/agent/planning/artifacts/{artifactId}/patch",
             new { op, section, content, acIndex, acText, logNote, source = DoorSource },
             ct));
-        var statusChanged = patch.TryGetProperty("statusChanged", out var echoedChange) &&
-            echoedChange.ValueKind == JsonValueKind.String
-            ? $", statusChanged '{echoedChange.GetString()}'"
-            : string.Empty;
-        var featureStatusChanged = patch.TryGetProperty("featureStatusChanged", out var echoedFeatureChange) &&
-            echoedFeatureChange.ValueKind == JsonValueKind.String
-            ? $", featureStatusChanged '{echoedFeatureChange.GetString()}'"
-            : string.Empty;
-        return $"{patch.GetProperty("kind").GetString()} artifact {patch.GetProperty("artifactId").GetString()} patched — " +
-            $"section '{patch.GetProperty("section").GetString()}', version {patch.GetProperty("version").GetInt32()}, " +
-            $"{patch.GetProperty("bodyChars").GetInt32()} body chars{statusChanged}{featureStatusChanged}.";
+
+        if (patch.TryGetProperty("alreadyTicked", out var alreadyTicked) &&
+            alreadyTicked.ValueKind == JsonValueKind.True)
+        {
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = AlreadyTickedNoChangeText }]
+            };
+        }
+
+        var echo = new JsonObject
+        {
+            ["id"] = patch.GetProperty("artifactId").GetString(),
+            ["version"] = patch.GetProperty("version").GetInt32(),
+            ["status"] = patch.GetProperty("status").GetString(),
+            ["lastLogLine"] = patch.GetProperty("lastLogLine").GetString(),
+            ["section"] = patch.GetProperty("section").GetString(),
+            ["bodyChars"] = patch.GetProperty("bodyChars").GetInt32()
+        };
+
+        if (patch.TryGetProperty("statusChanged", out var statusChanged) &&
+            statusChanged.ValueKind == JsonValueKind.String)
+        {
+            echo["statusChanged"] = statusChanged.GetString();
+        }
+
+        if (patch.TryGetProperty("featureStatusChanged", out var featureStatusChanged) &&
+            featureStatusChanged.ValueKind == JsonValueKind.String)
+        {
+            echo["featureStatusChanged"] = featureStatusChanged.GetString();
+        }
+
+        return new CallToolResult
+        {
+            Content = [new TextContentBlock { Text = echo.ToJsonString() }]
+        };
     }
 
     [McpServerTool(Name = "planning_validate", Destructive = false, Idempotent = false)]
@@ -570,10 +615,11 @@ public sealed class OvermindPlanningTools
 
         try
         {
-            await Guarded(() => _api.PostAsync(
+            var echo = await Guarded(() => _api.PostAsync(
                 $"/api/agent/planning/artifacts/{artifactId}/validate",
                 new { asMigrated, logNote },
                 ct));
+            return EchoResult(MutationEcho(echo, "id"));
         }
         catch (McpException ex) when (ex.Message.StartsWith("STOP:", StringComparison.Ordinal))
         {
@@ -583,11 +629,6 @@ public sealed class OvermindPlanningTools
                 Content = [new TextContentBlock { Text = ex.Message }]
             };
         }
-
-        var text = asMigrated == true
-            ? "Artifact validated as migrated — provenance line added to the log."
-            : "Artifact validated.";
-        return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
     }
 
     [McpServerTool(Name = "planning_import_feature", Destructive = false, Idempotent = false)]
@@ -630,30 +671,6 @@ public sealed class OvermindPlanningTools
         Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/materialization-status",
             ct));
-
-    private static void CopyWarnings(JsonElement payload, JsonObject confirmation)
-    {
-        if (payload.ValueKind != JsonValueKind.Object ||
-            !payload.TryGetProperty("warnings", out var warnings) ||
-            warnings.ValueKind != JsonValueKind.Array)
-        {
-            return;
-        }
-
-        confirmation["warnings"] = JsonNode.Parse(warnings.GetRawText());
-    }
-
-    private static void CopyFeatureStatusChanged(JsonElement payload, JsonObject confirmation)
-    {
-        if (payload.ValueKind != JsonValueKind.Object ||
-            !payload.TryGetProperty("featureStatusChanged", out var featureStatusChanged) ||
-            featureStatusChanged.ValueKind != JsonValueKind.String)
-        {
-            return;
-        }
-
-        confirmation["featureStatusChanged"] = featureStatusChanged.GetString();
-    }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
     {
@@ -745,6 +762,52 @@ public sealed class OvermindPlanningTools
         return reordered.Deserialize<JsonElement>();
     }
 
+    private static JsonElement MutationEcho(JsonElement payload, string idKey)
+    {
+        var echo = new JsonObject
+        {
+            ["id"] = payload.GetProperty(idKey).GetString(),
+            ["version"] = payload.GetProperty("version").GetInt32(),
+            ["status"] = payload.GetProperty("status").GetString(),
+            ["lastLogLine"] = payload.GetProperty("lastLogLine").GetString()
+        };
+
+        if (payload.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array &&
+            warnings.GetArrayLength() > 0)
+        {
+            echo["warnings"] = JsonNode.Parse(warnings.GetRawText());
+        }
+
+        if (payload.TryGetProperty("featureStatusChanged", out var featureStatusChanged) &&
+            featureStatusChanged.ValueKind == JsonValueKind.String)
+        {
+            echo["featureStatusChanged"] = featureStatusChanged.GetString();
+        }
+
+        return echo.Deserialize<JsonElement>();
+    }
+
+    private static CallToolResult EchoResult(JsonElement echo) =>
+        new() { Content = [new TextContentBlock { Text = echo.GetRawText() }] };
+
+    private static string LastLogLineOf(JsonElement artifact)
+    {
+        if (!artifact.TryGetProperty("log", out var log) ||
+            log.ValueKind != JsonValueKind.Array ||
+            log.GetArrayLength() == 0)
+        {
+            return string.Empty;
+        }
+
+        var last = log[log.GetArrayLength() - 1];
+        return last.ValueKind == JsonValueKind.Object &&
+            last.TryGetProperty("text", out var text) &&
+            text.ValueKind == JsonValueKind.String
+            ? text.GetString() ?? string.Empty
+            : string.Empty;
+    }
+
     private static JsonElement CompactArtifact(JsonElement artifact)
     {
         var compact = new JsonObject
@@ -756,7 +819,8 @@ public sealed class OvermindPlanningTools
             ["order"] = artifact.GetProperty("order").GetInt32(),
             ["frozenAt"] = artifact.GetProperty("frozenAt").GetString(),
             ["updatedAt"] = artifact.GetProperty("updatedAt").GetString(),
-            ["bodyChars"] = artifact.GetProperty("body").GetString()?.Length ?? 0
+            ["bodyChars"] = artifact.GetProperty("body").GetString()?.Length ?? 0,
+            ["lastLogLine"] = LastLogLineOf(artifact)
         };
 
         if (artifact.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)

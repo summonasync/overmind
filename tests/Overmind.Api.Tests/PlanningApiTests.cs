@@ -765,6 +765,102 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task AppendLog_ReturnsCompactEchoCarryingTheNewLastLogLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "body" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var logResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/log",
+            new { Note = "echoed note" });
+
+        logResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await logResponse.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "status", "version", "lastLogLine"]);
+        var echo = await logResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Id.ShouldBe(created.Id);
+        echo.Version.ShouldBe(created.Version + 1);
+        echo.Status.ShouldBe("draft");
+        echo.LastLogLine.ShouldBe("echoed note");
+    }
+
+    [Fact]
+    public async Task Validate_ReturnsCompactEchoCarryingTheValidationMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var validateResponse = await _client.PostAsync(
+            $"/api/planning/artifacts/{created!.Id}/validate", null);
+
+        validateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await validateResponse.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "status", "version", "lastLogLine"]);
+        var echo = await validateResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Id.ShouldBe(created.Id);
+        echo.Status.ShouldBe("validated");
+        echo.LastLogLine.ShouldBe("validated via UI");
+    }
+
+    [Fact]
+    public async Task SetStatus_ReturnsCompactEchoKeySet()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var statusResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/status",
+            new { Status = "inProgress", LogNote = "started work" });
+
+        statusResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await statusResponse.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "status", "version", "lastLogLine"]);
+        var echo = await statusResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Id.ShouldBe(created.Id);
+        echo.Status.ShouldBe("inProgress");
+        echo.Version.ShouldBe(created.Version);
+        echo.LastLogLine.ShouldBe("started work");
+    }
+
+    [Fact]
+    public async Task SetCurrent_Pin_ReturnsCompactFeatureEcho()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat-a", "Feature A");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat-a/current",
+            new { IsCurrent = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["slug", "status", "version", "lastLogLine"]);
+        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
+        echo!.Slug.ShouldBe("feat-a");
+        echo.Status.ShouldBe("draft");
+        echo.Version.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task AppendLog_HttpDoor_WritesTheUiMarker()
     {
         var project = await CreateProjectAsync();
@@ -899,8 +995,8 @@ public sealed class PlanningApiTests : IDisposable
             new { IsCurrent = true });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
-        feature.ShouldNotBeNull();
+        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
+        echo!.Slug.ShouldBe("feat-a");
 
         var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
             $"/api/projects/{project.Id}/planning/features", JsonOptions);
@@ -1070,6 +1166,10 @@ public sealed class PlanningApiTests : IDisposable
     public sealed record VersionJson(int Version, string Body, DateTime CreatedAt);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
+
+    public sealed record ArtifactMutationJson(Guid Id, string Status, int Version, string LastLogLine);
+
+    public sealed record FeatureMutationJson(string Slug, string Status, int Version, string LastLogLine);
 
     public sealed record ValidationProblemJson(Dictionary<string, string[]> Errors);
 }

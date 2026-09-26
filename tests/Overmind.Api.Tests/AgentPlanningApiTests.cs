@@ -1159,9 +1159,17 @@ public sealed class AgentPlanningApiTests : IDisposable
             new { Status = "done", LogNote = "by user request in-session" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
-        feature!.Status.ShouldBe("done");
-        feature.Body.ShouldContain("by user request in-session");
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["slug", "status", "version", "lastLogLine"]);
+        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
+        echo!.Slug.ShouldBe("feat");
+        echo.Status.ShouldBe("done");
+        echo.LastLogLine.ShouldBe("by user request in-session");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldContain("by user request in-session");
     }
 
     [Fact]
@@ -1176,9 +1184,9 @@ public sealed class AgentPlanningApiTests : IDisposable
             new { Status = "inProgress", LogNote = "review findings need fixes" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
-        feature!.Status.ShouldBe("inProgress");
-        feature.Body.ShouldContain("review findings need fixes");
+        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
+        echo!.Status.ShouldBe("inProgress");
+        echo.LastLogLine.ShouldBe("review findings need fixes");
     }
 
     [Fact]
@@ -1193,9 +1201,13 @@ public sealed class AgentPlanningApiTests : IDisposable
             new { Status = "inProgress", LogNote = "by user request in-session" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
-        feature!.Status.ShouldBe("inProgress");
-        feature.Body.ShouldNotContain("by user request in-session");
+        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
+        echo!.Status.ShouldBe("inProgress");
+        echo.LastLogLine.ShouldNotBe("by user request in-session");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldNotContain("by user request in-session");
     }
 
     [Theory]
@@ -1291,13 +1303,15 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var raw = await response.Content.ReadAsStringAsync();
         JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
-            .ShouldBe(["artifactId", "kind", "section", "version", "bodyChars"]);
+            .ShouldBe(["artifactId", "kind", "section", "version", "bodyChars", "status", "lastLogLine"]);
 
         var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
         patch!.ArtifactId.ShouldBe(spec.Id);
         patch.Kind.ShouldBe("spec");
         patch.Section.ShouldBe("goal");
         patch.Version.ShouldBe(2);
+        patch.Status.ShouldBe("draft");
+        patch.LastLogLine.ShouldBe(string.Empty);
 
         var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
             $"/api/planning/artifacts/{spec.Id}", JsonOptions);
@@ -1355,6 +1369,123 @@ public sealed class AgentPlanningApiTests : IDisposable
             $"/api/planning/artifacts/{task.Id}", JsonOptions);
         artifact!.Body.ShouldContain("- [x] write the docs");
         artifact.Body.ShouldContain("- [ ] wire the endpoint");
+    }
+
+    [Fact]
+    public async Task AppendLog_ReturnsCompactEchoCarryingTheNewLastLogLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Note = "progress note", Source = "agent" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "status", "version", "lastLogLine"]);
+        var echo = await response.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Id.ShouldBe(spec.Id);
+        echo.Version.ShouldBe(2);
+        echo.Status.ShouldBe("draft");
+        echo.LastLogLine.ShouldBe("progress note");
+    }
+
+    [Fact]
+    public async Task Validate_ReturnsCompactEchoCarryingTheValidationMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentValidateUrl(spec.Id),
+            new { AsMigrated = true, LogNote = "frozen v1 on disk, user-approved" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "status", "version", "lastLogLine"]);
+        var echo = await response.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Id.ShouldBe(spec.Id);
+        echo.Status.ShouldBe("validated");
+        echo.LastLogLine.ShouldBe("validated as migrated — pre-approved on disk: frozen v1 on disk, user-approved");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_ReturnsCompactEchoKeySet()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(task.Id), new { Status = "inProgress", LogNote = "started" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["id", "status", "version", "lastLogLine"]);
+        var echo = await response.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Id.ShouldBe(task.Id);
+        echo.Status.ShouldBe("inProgress");
+        echo.Version.ShouldBe(1);
+        echo.LastLogLine.ShouldBe("started");
+    }
+
+    [Fact]
+    public async Task Patch_RetickSurfacesAlreadyTicked_AndLeavesVersionUntouched()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] first thing\n</acceptance-criteria>\n"
+        });
+
+        var first = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id), new { Op = "tick_ac", AcIndex = 0 });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var firstEcho = await first.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        firstEcho!.AlreadyTicked.ShouldBe(false);
+        firstEcho.Version.ShouldBe(2);
+
+        var second = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id), new { Op = "tick_ac", AcIndex = 0 });
+        second.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var secondEcho = await second.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        secondEcho!.AlreadyTicked.ShouldBe(true);
+        secondEcho.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Patch_SectionReplace_OmitsAlreadyTicked_AndMovesFeatureUpdatedAt()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n"
+        });
+
+        var featureBefore = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "New goal." });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["artifactId", "kind", "section", "version", "bodyChars", "status", "lastLogLine"]);
+
+        var featureAfter = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        featureAfter!.UpdatedAt.ShouldBeGreaterThan(featureBefore!.UpdatedAt);
     }
 
     [Fact]
@@ -1747,6 +1878,9 @@ public sealed class AgentPlanningApiTests : IDisposable
     private static string AgentFeatureStatusUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}/status";
 
+    private static string AgentFeatureUrl(Guid projectId, string slug) =>
+        $"/api/agent/projects/{projectId}/planning/features/{slug}";
+
     private static string AgentPatchUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}/patch";
 
@@ -1982,7 +2116,13 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record CurrentFeatureJson(string Slug, string Title, string Status);
 
     public sealed record PatchResultJson(
-        Guid ArtifactId, string Kind, string Section, int Version, int BodyChars);
+        Guid ArtifactId, string Kind, string Section, int Version, int BodyChars,
+        string Status, string? LastLogLine,
+        string? StatusChanged = null, string? FeatureStatusChanged = null, bool? AlreadyTicked = null);
+
+    public sealed record FeatureMutationJson(string Slug, string Status, int Version, string LastLogLine);
+
+    public sealed record ArtifactMutationJson(Guid Id, string Status, int Version, string LastLogLine);
 
     public sealed record ArtifactReadJson(
         Guid Id, string Kind, string Status, int Version, int Order,

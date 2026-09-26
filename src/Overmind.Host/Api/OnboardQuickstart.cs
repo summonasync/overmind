@@ -26,6 +26,6 @@ public static class OnboardQuickstart
         planning_import_feature imports one materialized feature folder from disk in a single call — give its absolute path under the project root.
         Log lines carry [agent]/[ui]/[auto]/[import] markers saying who moved a status.
         Artifact statuses — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the documents' terminal; result has no done.
-        Before working, read notes/decisions/guards via overmind://resources and list_entries filters.
+        Before working, read notes/decisions/guards with list_entries (type=note|decision|gate|guard) and read_entry.
         """;
 }

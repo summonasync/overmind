@@ -634,7 +634,7 @@ ship the guard
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         var original = artifact.Body;
 
-        artifact.TickAc(0, null);
+        artifact.TickAc(0, null).ShouldBeTrue();
 
         artifact.Body.ShouldContain("[x] write the parser");
         artifact.Body.ShouldNotContain("[ ] write the parser");
@@ -694,7 +694,7 @@ ship the guard
         var original = artifact.Body;
         var updatedAtBefore = artifact.UpdatedAt;
 
-        artifact.TickAc(2, null);
+        artifact.TickAc(2, null).ShouldBeFalse();
 
         artifact.Body.ShouldBe(original);
         artifact.Version.ShouldBe(1);

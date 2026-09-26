@@ -186,9 +186,10 @@ public static class AgentPlanningApi
             : null;
         var documentGated = target.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan;
 
+        PlanningArtifact artifact;
         try
         {
-            await artifactService.ValidateAsync(
+            artifact = await artifactService.ValidateAsync(
                 id, migrationNote, PlanningLogSource.Agent,
                 requireHumanProof: !asMigrated && documentGated, ct: ct);
         }
@@ -197,7 +198,7 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(ex);
         }
 
-        return Results.Ok();
+        return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
     }
 
     internal static async Task<IResult> GetArtifact(
@@ -276,7 +277,13 @@ public static class AgentPlanningApi
         {
             var result = await service.SetStatusAsync(
                 id, request.Status, PlanningLogSource.Agent, request.LogNote, ct);
-            return Results.Ok(new SetPlanningArtifactStatusResponse(result.Warnings, result.FeatureStatusChanged));
+            return Results.Ok(new SetPlanningArtifactStatusResponse(
+                result.ArtifactId,
+                result.Status,
+                result.Version,
+                result.LastLogLine,
+                result.Warnings,
+                result.FeatureStatusChanged));
         }
         catch (PlanningException ex)
         {
@@ -290,7 +297,6 @@ public static class AgentPlanningApi
         SetPlanningFeatureStatusRequest request,
         IValidator<SetPlanningFeatureStatusRequest> validator,
         PlanningFeatureService service,
-        FeatureDependencyService dependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -315,11 +321,8 @@ public static class AgentPlanningApi
         }
 
         var feature = await db.PlanningFeatures
-            .Include(f => f.Artifacts)
-            .ThenInclude(a => a.Versions)
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
-        return Results.Ok(PlanningMapper.ToFeatureResponse(
-            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
+        return Results.Ok(PlanningMapper.ToMutationResponse(feature!));
     }
 
     internal static async Task<IResult> SetCurrent(
@@ -348,7 +351,7 @@ public static class AgentPlanningApi
             }
         }
 
-        return await PlanningFeaturesApi.SetCurrent(projectId, slug, request, service, dependencies, db, ct);
+        return await PlanningFeaturesApi.SetCurrent(projectId, slug, request, service, db, ct);
     }
 
     internal static async Task<IResult> Current(
@@ -499,12 +502,13 @@ public static class AgentPlanningApi
 
         try
         {
-            var artifact = await service.PatchAsync(
+            var result = await service.PatchAsync(
                 id,
                 new PlanningArtifactPatch(
                     request.Section, request.Content, request.AcIndex, request.AcText, request.LogNote),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
+            var artifact = result.Artifact;
 
             return Results.Ok(new PlanningArtifactPatchResponse(
                 artifact.Id,
@@ -512,8 +516,11 @@ public static class AgentPlanningApi
                 request.Op!.Trim() == "tick_ac" ? "acceptance-criteria" : request.Section!,
                 artifact.Version,
                 artifact.Body.Length,
+                artifact.Status,
+                artifact.LastLogLine,
                 artifact.StatusChanged,
-                artifact.FeatureStatusChanged));
+                artifact.FeatureStatusChanged,
+                request.Op!.Trim() == "tick_ac" ? result.AlreadyTicked : null));
         }
         catch (PlanningException ex)
         {

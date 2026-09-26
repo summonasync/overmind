@@ -43,6 +43,7 @@ public sealed class PlanningArtifactService
             .FirstOrDefaultAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
 
         PlanningArtifact? created = null;
+        var mutated = false;
 
         if (existing is not null)
         {
@@ -57,6 +58,8 @@ public sealed class PlanningArtifactService
                     throw PlanningException.ChangeNoteRequired();
                 }
 
+                mutated = true;
+
                 if (existing.StatusChanged is not null)
                 {
                     DemoteReviewFeatureOnDocumentInvalidation(existing, feature);
@@ -66,11 +69,13 @@ public sealed class PlanningArtifactService
             if (review.HasValue)
             {
                 existing.SetReview(review.Value);
+                mutated = true;
             }
 
             if (brief is not null)
             {
                 existing.SetBrief(brief);
+                mutated = true;
             }
         }
         else
@@ -79,6 +84,12 @@ public sealed class PlanningArtifactService
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
             _db.PlanningArtifacts.Add(created);
             TransitionOnArtifactCreate(feature, kind);
+            mutated = true;
+        }
+
+        if (mutated)
+        {
+            feature.Touch();
         }
 
         try
@@ -97,6 +108,7 @@ public sealed class PlanningArtifactService
             _db.PlanningArtifacts.Add(
                 PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief));
             TransitionOnArtifactCreate(feature, kind);
+            feature.Touch();
 
             try
             {
@@ -130,13 +142,15 @@ public sealed class PlanningArtifactService
 
         var staged = new List<PlanningArtifact>(tasks.Count);
         var created = 0;
+        var mutated = false;
 
         for (var i = 0; i < tasks.Count; i++)
         {
             try
             {
-                var (artifact, isNew) = StageTask(featureId, tasks[i], siblings, source);
+                var (artifact, isNew, changed) = StageTask(featureId, tasks[i], siblings, source);
                 staged.Add(artifact);
+                mutated |= changed;
                 if (isNew)
                 {
                     created++;
@@ -157,6 +171,11 @@ public sealed class PlanningArtifactService
             TransitionOnArtifactCreate(feature, PlanningArtifactKind.Task);
         }
 
+        if (mutated)
+        {
+            feature.Touch();
+        }
+
         try
         {
             await _db.SaveChangesAsync(ct);
@@ -171,7 +190,7 @@ public sealed class PlanningArtifactService
         return new PlanningTaskBatchResult(staged, created, staged.Count - created);
     }
 
-    private (PlanningArtifact Artifact, bool IsNew) StageTask(
+    private (PlanningArtifact Artifact, bool IsNew, bool Mutated) StageTask(
         Guid featureId, PlanningTaskUpsert task, List<PlanningArtifact> siblings, PlanningLogSource? source)
     {
         var resolvedOrder = task.Order ?? (siblings.Count == 0 ? 0 : siblings.Max(a => a.Order) + 1);
@@ -179,22 +198,27 @@ public sealed class PlanningArtifactService
 
         if (existing is not null)
         {
+            var changed = false;
+
             if (existing.Body != task.Body || !string.IsNullOrWhiteSpace(task.LogNote))
             {
                 existing.UpdateBody(task.Body, task.LogNote, source);
+                changed = true;
             }
 
             if (task.Review.HasValue)
             {
                 existing.SetReview(task.Review.Value);
+                changed = true;
             }
 
             if (task.Brief is not null)
             {
                 existing.SetBrief(task.Brief);
+                changed = true;
             }
 
-            return (existing, false);
+            return (existing, false, changed);
         }
 
         var artifact = PlanningArtifact.Create(
@@ -202,7 +226,7 @@ public sealed class PlanningArtifactService
             task.Review ?? PlanningReviewLevel.Light, task.Brief);
         _db.PlanningArtifacts.Add(artifact);
         siblings.Add(artifact);
-        return (artifact, true);
+        return (artifact, true, true);
     }
 
     public async Task<PlanningArtifactStatusResult> SetStatusAsync(
@@ -241,10 +265,13 @@ public sealed class PlanningArtifactService
             await TryPromoteToReviewAsync(feature, ct);
         }
 
+        feature.Touch();
+
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
 
         return new PlanningArtifactStatusResult(
+            artifact.Id, artifact.Status, artifact.Version, artifact.LastLogLine,
             UntickedAcWarning(artifact, status), artifact.FeatureStatusChanged);
     }
 
@@ -261,7 +288,7 @@ public sealed class PlanningArtifactService
         return unticked > 0 ? [$"{unticked} of {items.Count} acceptance items unticked"] : null;
     }
 
-    public async Task<PlanningArtifact> PatchAsync(
+    public async Task<PlanningArtifactPatchResult> PatchAsync(
         Guid artifactId, PlanningArtifactPatch patch, CancellationToken ct = default,
         PlanningLogSource? source = null)
     {
@@ -277,6 +304,7 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        var alreadyTicked = false;
 
         try
         {
@@ -286,7 +314,7 @@ public sealed class PlanningArtifactService
             }
             else
             {
-                artifact.TickAc(patch.TickIndex, patch.TickText, patch.LogNote, source);
+                alreadyTicked = !artifact.TickAc(patch.TickIndex, patch.TickText, patch.LogNote, source);
             }
 
             if (artifact.StatusChanged is not null)
@@ -299,17 +327,23 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
+        if (!alreadyTicked)
+        {
+            feature.Touch();
+        }
+
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
 
-        return artifact;
+        return new PlanningArtifactPatchResult(artifact, alreadyTicked);
     }
 
-    public async Task ValidateAsync(
+    public async Task<PlanningArtifact> ValidateAsync(
         Guid artifactId, string? logNote = null, PlanningLogSource? source = null,
         bool requireHumanProof = false, CancellationToken ct = default)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
 
         if (requireHumanProof && string.IsNullOrWhiteSpace(logNote))
         {
@@ -325,8 +359,12 @@ public sealed class PlanningArtifactService
             throw PlanningException.CannotValidateTask();
         }
 
+        feature.Touch();
+
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+
+        return artifact;
     }
 
     private async Task<string> BuildHumanProofLineAsync(PlanningArtifact artifact, CancellationToken ct)
@@ -356,14 +394,19 @@ public sealed class PlanningArtifactService
         return $"validated with human proof: notification {proof.Id} replied {proof.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
     }
 
-    public async Task AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default,
+    public async Task<PlanningArtifact> AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default,
         PlanningLogSource? source = null)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+
         artifact.AppendLog(note, source);
+        feature.Touch();
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+
+        return artifact;
     }
 
     public async Task DeleteAsync(Guid artifactId, CancellationToken ct = default)

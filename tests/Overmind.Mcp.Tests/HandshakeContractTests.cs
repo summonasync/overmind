@@ -29,6 +29,17 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task Initialize_Instructions_PointAtListEntries_NeverAtTheDeadResourcesUri()
+    {
+        var result = await Driver.InitializeAsync();
+
+        var instructions = result["result"]!["instructions"]!.GetValue<string>();
+        instructions.ShouldNotContain("overmind://resources");
+        instructions.ShouldContain("list_entries");
+        instructions.ShouldContain("overmind_onboard");
+    }
+
+    [Fact]
     public async Task StartupToHandshake_CompletesWithinTwoSeconds()
     {
         await Task.CompletedTask;
@@ -37,7 +48,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheThirtyOneTools()
+    public async Task ToolsList_ExposesExactlyTheThirtyTwoTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -47,7 +58,7 @@ public class HandshakeContractTests : McpSessionTestBase
             .ToArray();
 
         names.ShouldBe([
-            "list_entries", "list_projects", "overmind_notify", "overmind_onboard",
+            "delete_entry", "list_entries", "list_projects", "overmind_notify", "overmind_onboard",
             "overmind_replies", "planning_add_feature_dependency",
             "planning_append_log",
             "planning_create_feature", "planning_current_task", "planning_import_feature",

@@ -56,6 +56,9 @@ public sealed class PlanningArtifact
     [NotMapped]
     public string? FeatureStatusChanged { get; private set; }
 
+    [NotMapped]
+    public string LastLogLine => PlanningLog.Parse(Body).LastOrDefault()?.Text ?? string.Empty;
+
     public void RecordFeatureDemotion() => FeatureStatusChanged = FeatureDemotedStatusEcho;
 
     public static IReadOnlySet<PlanningArtifactStatus> AllowedStatuses(PlanningArtifactKind kind) => kind switch
@@ -169,7 +172,7 @@ public sealed class PlanningArtifact
         ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote, source);
     }
 
-    public void TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null)
+    public bool TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null)
     {
         if (index is null && text is null)
         {
@@ -213,7 +216,7 @@ public sealed class PlanningArtifact
 
         if (target.Checked is true)
         {
-            return;
+            return false;
         }
 
         if (target.Checked is null)
@@ -223,6 +226,7 @@ public sealed class PlanningArtifact
 
         RequireChangeNoteWhenFrozen(logNote);
         ApplyBodyMutation(FlipAcMarker(Body, target.Index), logNote, source);
+        return true;
     }
 
     public void SetStatus(PlanningArtifactStatus status, string? logNote = null, PlanningLogSource? source = null)

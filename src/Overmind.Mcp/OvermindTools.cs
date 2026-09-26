@@ -22,6 +22,15 @@ public sealed class OvermindTools
     private const string SkillManagedElsewhere =
         "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. Supported types: note, decision, gate, guard.";
 
+    private const string SkillDeleteRefused =
+        "SkillEntryDeleteRefused: skill entries are managed via the Overmind UI — they carry skill files and a kit lifecycle, so delete_entry refuses them.";
+
+    private const string KitOwnedEntryText =
+        "KitOwnedEntry: entry '{0}' is managed by a skill kit '{1}' — the kit reimport or the UI owns it.";
+
+    private const string ProjectMismatch =
+        "Entry '{0}' does not belong to the resolved project ({1}). Pass the projectId that owns the entry, or call overmind_onboard.";
+
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
@@ -144,6 +153,54 @@ public sealed class OvermindTools
         return CompactEntry(entry);
     }
 
+    [McpServerTool(Name = "delete_entry", Destructive = true, Idempotent = true)]
+    [Description("Deletes one entry permanently — notes, decisions, gates and guards only. Deletion is permanent and immediate: entries have no tombstones and there is no undo, the content is gone. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
+    public async Task<JsonElement> DeleteEntry(
+        [Description("Id of the entry to delete.")] Guid entryId,
+        [Description("Id of the project the entry belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        var resolvedProjectId = await ResolveProjectIdAsync(projectId, ct);
+
+        var entry = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
+
+        if (!Guid.TryParse(entry.GetProperty("projectId").GetString(), out var ownerProject) ||
+            ownerProject != resolvedProjectId)
+        {
+            throw new McpException(string.Format(ProjectMismatch, entryId, resolvedProjectId));
+        }
+
+        if (string.Equals(entry.GetProperty("type").GetString(), "skill", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new McpException(SkillDeleteRefused);
+        }
+
+        var kits = await Guarded(() => _api.GetAsync("/api/kits", ct));
+        foreach (var kit in kits.EnumerateArray())
+        {
+            var owns = kit.TryGetProperty("entryIds", out var entryIds) &&
+                entryIds.ValueKind == JsonValueKind.Array &&
+                entryIds.EnumerateArray().Any(id =>
+                    Guid.TryParse(id.GetString(), out var owned) && owned == entryId);
+
+            if (owns)
+            {
+                throw new McpException(string.Format(
+                    KitOwnedEntryText, entryId, kit.GetProperty("name").GetString()));
+            }
+        }
+
+        await Guarded(() => _api.DeleteAsync($"/api/entries/{entryId}", ct));
+
+        var echo = new JsonObject
+        {
+            ["id"] = entryId.ToString(),
+            ["type"] = entry.GetProperty("type").GetString(),
+            ["deleted"] = true
+        };
+        return echo.Deserialize<JsonElement>();
+    }
+
     [McpServerTool(Name = "search", ReadOnly = true)]
     [Description(SearchDescription)]
     public async Task<JsonElement> Search(
@@ -186,6 +243,42 @@ public sealed class OvermindTools
         {
             throw new McpException(ex.Message);
         }
+    }
+
+    private async Task<Guid> ResolveProjectIdAsync(Guid? projectId, CancellationToken ct)
+    {
+        if (projectId is not null)
+        {
+            return projectId.Value;
+        }
+
+        var overrideId = Environment.GetEnvironmentVariable("OVERMIND_PROJECT_ID");
+        if (Guid.TryParse(overrideId, out var fromEnvironment))
+        {
+            return fromEnvironment;
+        }
+
+        JsonElement onboard;
+        try
+        {
+            onboard = await _api.PostAsync("/api/onboard", new { cwd = Environment.CurrentDirectory }, ct);
+        }
+        catch (Exception ex) when (ex is ApiNotFoundException or ApiUnreachableException or ApiStatusException)
+        {
+            throw new McpException(
+                $"Could not resolve the project for the entry: {ex.Message}. Pass projectId explicitly or call overmind_onboard first.");
+        }
+
+        if (onboard.ValueKind == JsonValueKind.Object &&
+            onboard.TryGetProperty("projectId", out var value) &&
+            value.ValueKind == JsonValueKind.String &&
+            Guid.TryParse(value.GetString(), out var resolved))
+        {
+            return resolved;
+        }
+
+        throw new McpException(
+            "The host returned no usable projectId for the working directory. Call overmind_onboard, then pass its projectId explicitly.");
     }
 
     private static JsonElement CompactEntry(JsonElement entry)

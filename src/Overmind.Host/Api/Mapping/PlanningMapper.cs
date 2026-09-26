@@ -148,4 +148,16 @@ public static class PlanningMapper
     {
         return new PlanningArtifactVersionResponse(version.Version, version.Body, version.CreatedAt);
     }
+
+    public static PlanningArtifactMutationResponse ToMutationResponse(PlanningArtifact artifact)
+    {
+        return new PlanningArtifactMutationResponse(
+            artifact.Id, artifact.Status, artifact.Version, artifact.LastLogLine);
+    }
+
+    public static PlanningFeatureMutationResponse ToMutationResponse(PlanningFeature feature)
+    {
+        return new PlanningFeatureMutationResponse(
+            feature.Slug, feature.Status, feature.Version, feature.LastLogLine);
+    }
 }

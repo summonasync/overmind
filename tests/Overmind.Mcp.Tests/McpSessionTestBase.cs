@@ -66,6 +66,8 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             return new StubOvermindApi.Response(201, body.ToJsonString());
         });
         stub.Route("PUT", $"/api/entries/{Canned.EntryId}", 200, Canned.EntryJson);
+        stub.Route("DELETE", "/api/entries/[^/]+", 204, "");
+        stub.RouteGet("/api/kits", Canned.KitsWithoutEntryJson);
         stub.RouteGet("/api/search", Canned.SearchJson);
         RegisterNotificationRoutes(stub);
     }
@@ -160,7 +162,7 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                     ["version"] = 1,
                     ["createdAt"] = "2026-09-20T10:00:00Z",
                     ["updatedAt"] = "2026-09-20T10:00:00Z",
-                    ["log"] = new JsonArray()
+                    ["log"] = new JsonArray { new JsonObject { ["date"] = "2026-09-20", ["text"] = "stubbed creation log line" } }
                 };
                 return new StubOvermindApi.Response(201, artifact.ToJsonString());
             });
@@ -205,9 +207,26 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             req => ParseQuery(req.Query).ContainsKey("sections")
                 ? new StubOvermindApi.Response(200, Canned.PlanningArtifactSectionedJson)
                 : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
-        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, "");
-        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, "");
-        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/validate", 200, "");
+        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, Canned.PlanningArtifactStatusEchoJson);
+        stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, Canned.PlanningArtifactLogEchoJson);
+        stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/validate",
+            req =>
+            {
+                var submitted = JsonNode.Parse(req.Body)!;
+                var lastLogLine = submitted["asMigrated"]?.GetValue<bool>() == true
+                    ? $"validated as migrated — pre-approved on disk: {submitted["logNote"]!.GetValue<string>()}"
+                    : "validated with human proof: notification 13131313-1313-1313-1313-131313131313 replied 2026-09-26 10:00:00 UTC";
+                var echo = new JsonObject
+                {
+                    ["id"] = Canned.PlanningSpecArtifactId.ToString(),
+                    ["status"] = "validated",
+                    ["version"] = 3,
+                    ["lastLogLine"] = lastLogLine
+                };
+                return new StubOvermindApi.Response(200, echo.ToJsonString());
+            });
         stub.Route(
             "POST",
             "/api/agent/planning/artifacts/[^/]+/patch",
@@ -222,7 +241,9 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                         ? section
                         : "acceptance-criteria",
                     ["version"] = 3,
-                    ["bodyChars"] = 412
+                    ["bodyChars"] = 412,
+                    ["status"] = "inProgress",
+                    ["lastLogLine"] = "patch recorded on the board"
                 };
                 return new StubOvermindApi.Response(200, result.ToJsonString());
             });
@@ -230,12 +251,12 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/current",
             200,
-            Canned.PlanningFeatureJson);
+            Canned.PlanningFeatureMutationEchoJson);
         stub.Route(
             "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/status",
             200,
-            Canned.PlanningFeatureJson);
+            Canned.PlanningFeatureMutationEchoJson);
     }
 
     protected static Dictionary<string, string> ParseQuery(string query)

@@ -116,6 +116,10 @@ public sealed class PlanningFeature
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Touch() => UpdatedAt = DateTime.UtcNow;
+
+    public string LastLogLine => PlanningLog.Parse(Body).LastOrDefault()?.Text ?? string.Empty;
+
     public void SetPriority(FeaturePriority priority)
     {
         Priority = priority;

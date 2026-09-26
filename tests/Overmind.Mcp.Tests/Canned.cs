@@ -37,6 +37,13 @@ public static class Canned
 
     public const string EntryJson =
         """{"id":"33333333-3333-3333-3333-333333333333","projectId":"11111111-1111-1111-1111-111111111111","type":"note","title":"Entry One","content":"Entry body here.","currentVersion":3,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-09-03T10:00:00Z","tags":["core"],"skillFiles":[]}""";
+    public const string SkillEntryJson =
+        """{"id":"33333333-3333-3333-3333-333333333333","projectId":"11111111-1111-1111-1111-111111111111","type":"skill","title":"Skill One","content":"Skill body here.","currentVersion":1,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-09-01T10:00:00Z","tags":[],"skillFiles":[{"platform":"claude","relativePath":"SKILL.md","content":"# Skill"}]}""";
+    public const string KitsJson =
+        """[{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","name":"core-kit","version":1,"description":"Core kit","entryIds":["33333333-3333-3333-3333-333333333333"],"sourceKind":"manual","sourcePath":null,"importedAtUtc":null}]""";
+    public const string KitsWithoutEntryJson =
+        """[{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","name":"core-kit","version":1,"description":"Core kit","entryIds":["eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"],"sourceKind":"manual","sourcePath":null,"importedAtUtc":null}]""";
+
 
     public const string GatesJson =
         """
@@ -123,11 +130,29 @@ public static class Canned
     public const string PlanningTaskTwoJson =
         """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]}""";
 
+    public const string PlanningArtifactStatusEchoJson =
+        """{"id":"99999999-9999-9999-9999-999999999999","status":"review","version":4,"lastLogLine":"status move recorded on the board"}""";
+
+    public const string PlanningArtifactLogEchoJson =
+        """{"id":"99999999-9999-9999-9999-999999999999","status":"inProgress","version":3,"lastLogLine":"log line recorded on the board"}""";
+
+    public const string PlanningArtifactValidateEchoJson =
+        """{"id":"66666666-6666-6666-6666-666666666666","status":"validated","version":3,"lastLogLine":"validated with human proof: notification 13131313-1313-1313-1313-131313131313 replied 2026-09-26 10:00:00 UTC"}""";
+
+    public const string PlanningFeatureMutationEchoJson =
+        """{"slug":"demo-feature","status":"inProgress","version":5,"lastLogLine":"feature mutation recorded on the board"}""";
+
+    public const string PlanningPatchRetickEchoJson =
+        """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","section":"acceptance-criteria","version":3,"bodyChars":412,"status":"inProgress","lastLogLine":"patch recorded on the board","alreadyTicked":true}""";
+
     public const string PlanningArtifactReadJson =
-        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"}""";
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"}""";
 
     public const string PlanningArtifactSectionedJson =
-        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"<goal>\nExpose the endpoints.\n</goal>","missingSections":["obstacles"]}""";
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"<goal>\nExpose the endpoints.\n</goal>","missingSections":["obstacles"]}""";
+
+    public const string PlanningArtifactSpecReadJson =
+        """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","review":"light","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z","body":"# Demo spec\n\nShip the demo."}""";
 
     public const string PlanningArtifactNotFoundJson =
         """{"title":"Not Found","detail":"Artifact '99999999-9999-9999-9999-999999999999' was not found.","status":404}""";
