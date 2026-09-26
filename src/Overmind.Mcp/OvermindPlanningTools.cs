@@ -59,6 +59,8 @@ public sealed class OvermindPlanningTools
     private const string MigratedNoteRequired =
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
 
+    private const string DoorSource = "agent";
+
     private const int SkipHeadLimit = 5;
 
     private readonly OvermindApiClient _api;
@@ -101,7 +103,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_current_task", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 2: the current task of a feature, or a stop/empty state whose reason is the first thing in the payload. Obey a STOP line — ask the user, do not work around it. A feature with unclosed blockers returns a stop state naming them — reads stay open, task issuance does not.")]
+    [Description("Planning ceremony, step 2: the current task of a feature, or a stop/held/empty state whose reason leads the payload. Obey a STOP line — ask the user, do not work around it. A feature with unclosed blockers returns a stop state naming them — reads stay open, task issuance does not. Held means every remaining task sits in review; the all-done states tell you to write the result artifact, validate a drafted one, or close the feature after validation; task payloads carry soft spec/plan warnings (never STOP).")]
     public async Task<JsonElement> CurrentTask(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to take the current task from.")] string slug,
@@ -160,7 +162,8 @@ public sealed class OvermindPlanningTools
             ["body"] = body,
             ["order"] = order,
             ["review"] = review is null ? null : NormalizeReview(review),
-            ["logNote"] = logNote
+            ["logNote"] = logNote,
+            ["source"] = DoorSource
         };
 
         if (brief is not null)
@@ -328,6 +331,7 @@ public sealed class OvermindPlanningTools
             ["lastLogLine"] = logNote
         };
         CopyWarnings(payload, confirmation);
+        CopyFeatureStatusChanged(payload, confirmation);
         return confirmation.Deserialize<JsonElement>();
     }
 
@@ -517,7 +521,7 @@ public sealed class OvermindPlanningTools
     {
         await Guarded(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{artifactId}/log",
-            new { note },
+            new { note, source = DoorSource },
             ct));
         return "Log line appended.";
     }
@@ -536,19 +540,27 @@ public sealed class OvermindPlanningTools
         var op = PatchOpOf(section, content, acIndex, acText);
         var patch = await Guarded(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{artifactId}/patch",
-            new { op, section, content, acIndex, acText, logNote },
+            new { op, section, content, acIndex, acText, logNote, source = DoorSource },
             ct));
+        var statusChanged = patch.TryGetProperty("statusChanged", out var echoedChange) &&
+            echoedChange.ValueKind == JsonValueKind.String
+            ? $", statusChanged '{echoedChange.GetString()}'"
+            : string.Empty;
+        var featureStatusChanged = patch.TryGetProperty("featureStatusChanged", out var echoedFeatureChange) &&
+            echoedFeatureChange.ValueKind == JsonValueKind.String
+            ? $", featureStatusChanged '{echoedFeatureChange.GetString()}'"
+            : string.Empty;
         return $"{patch.GetProperty("kind").GetString()} artifact {patch.GetProperty("artifactId").GetString()} patched — " +
             $"section '{patch.GetProperty("section").GetString()}', version {patch.GetProperty("version").GetInt32()}, " +
-            $"{patch.GetProperty("bodyChars").GetInt32()} body chars.";
+            $"{patch.GetProperty("bodyChars").GetInt32()} body chars{statusChanged}{featureStatusChanged}.";
     }
 
     [McpServerTool(Name = "planning_validate", Destructive = false, Idempotent = false)]
-    [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying. asMigrated is the migration escape hatch for artifacts pre-approved before import (e.g. already frozen on disk): it skips the human gate, requires a logNote carrying the provenance, and leaves a 'validated as migrated — pre-approved on disk' marker line in the artifact log.")]
+    [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying. asMigrated is the migration escape hatch for artifacts pre-approved before import (e.g. already validated on disk): it skips the human gate, requires a logNote carrying the provenance, and leaves a 'validated as migrated — pre-approved on disk' marker line in the artifact log.")]
     public async Task<CallToolResult> Validate(
         [Description("Id of the artifact to validate.")] Guid artifactId,
-        [Description("True only for artifacts pre-approved before migration (e.g. already frozen on disk); skips the human gate and leaves a loud migration marker in the log.")] bool? asMigrated = null,
-        [Description("Required with asMigrated: provenance of the pre-approval, e.g. 'frozen v9 on disk, user-approved'; recorded inside the marker line.")] string? logNote = null,
+        [Description("True only for artifacts pre-approved before migration (e.g. already validated on disk); skips the human gate and leaves a loud migration marker in the log.")] bool? asMigrated = null,
+        [Description("Required with asMigrated: provenance of the pre-approval, e.g. 'validated v9 on disk, user-approved'; recorded inside the marker line.")] string? logNote = null,
         CancellationToken ct = default)
     {
         if (asMigrated == true && string.IsNullOrWhiteSpace(logNote))
@@ -629,6 +641,18 @@ public sealed class OvermindPlanningTools
         }
 
         confirmation["warnings"] = JsonNode.Parse(warnings.GetRawText());
+    }
+
+    private static void CopyFeatureStatusChanged(JsonElement payload, JsonObject confirmation)
+    {
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty("featureStatusChanged", out var featureStatusChanged) ||
+            featureStatusChanged.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        confirmation["featureStatusChanged"] = featureStatusChanged.GetString();
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
@@ -738,6 +762,18 @@ public sealed class OvermindPlanningTools
         if (artifact.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)
         {
             compact["brief"] = brief.GetString();
+        }
+
+        if (artifact.TryGetProperty("statusChanged", out var statusChanged) &&
+            statusChanged.ValueKind == JsonValueKind.String)
+        {
+            compact["statusChanged"] = statusChanged.GetString();
+        }
+
+        if (artifact.TryGetProperty("featureStatusChanged", out var featureStatusChanged) &&
+            featureStatusChanged.ValueKind == JsonValueKind.String)
+        {
+            compact["featureStatusChanged"] = featureStatusChanged.GetString();
         }
 
         return compact.Deserialize<JsonElement>();

@@ -11,6 +11,27 @@ namespace Overmind.Host.Api;
 
 public static class AgentPlanningApi
 {
+    internal static Task<IResult> CreateArtifact(
+        Guid projectId,
+        string slug,
+        CreatePlanningArtifactRequest request,
+        IValidator<CreatePlanningArtifactRequest> validator,
+        PlanningFeatureService featureService,
+        PlanningArtifactService artifactService,
+        OvermindDbContext db,
+        CancellationToken ct) =>
+        PlanningArtifactsApi.CreateArtifactForDoor(
+            projectId, slug, request, validator, featureService, artifactService, db,
+            PlanningLogSource.Agent, ct);
+
+    internal static Task<IResult> AppendLog(
+        Guid id,
+        AppendPlanningLogRequest request,
+        IValidator<AppendPlanningLogRequest> validator,
+        PlanningArtifactService service,
+        CancellationToken ct) =>
+        PlanningArtifactsApi.AppendLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
+
     public static RouteGroupBuilder MapAgentPlanningApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/agent");
@@ -26,11 +47,11 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningArtifactsApi.CreateArtifact);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", CreateArtifact);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts/tasks", PlanningArtifactsApi.CreateTasks);
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus);
-        group.MapPost("/planning/artifacts/{id:guid}/log", PlanningArtifactsApi.AppendLog);
+        group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog);
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
         group.MapPost("/projects/{projectId:guid}/planning/import", ImportFeature);
         group.MapGet("/projects/{projectId:guid}/planning/materialization-status", MaterializationStatus);
@@ -250,9 +271,9 @@ public static class AgentPlanningApi
 
         try
         {
-            var warnings = await service.SetStatusAsync(
+            var result = await service.SetStatusAsync(
                 id, request.Status, PlanningLogSource.Agent, request.LogNote, ct);
-            return Results.Ok(new SetPlanningArtifactStatusResponse(warnings));
+            return Results.Ok(new SetPlanningArtifactStatusResponse(result.Warnings, result.FeatureStatusChanged));
         }
         catch (PlanningException ex)
         {
@@ -395,17 +416,71 @@ public static class AgentPlanningApi
         if (tasks.All(t => t.Status == PlanningArtifactStatus.Done))
         {
             return Results.Ok(new PlanningCurrentResponse(
-                "empty", currentFeature, null,
-                "All tasks are done — write the result artifact."));
+                "empty", currentFeature, null, ResultStateReason(feature)));
         }
 
-        var next = tasks.FirstOrDefault(
-            t => t.Status is not PlanningArtifactStatus.Done and not PlanningArtifactStatus.Blocked)
-            ?? tasks.First(t => t.Status != PlanningArtifactStatus.Done);
+        var workable = tasks.FirstOrDefault(
+            t => t.Status is PlanningArtifactStatus.Todo or PlanningArtifactStatus.InProgress);
 
-        var reason = next.Status == PlanningArtifactStatus.Blocked ? "The next task is blocked." : null;
+        if (workable is not null)
+        {
+            return Results.Ok(new PlanningCurrentResponse(
+                "task",
+                currentFeature,
+                PlanningMapper.ToArtifactResponse(workable),
+                null,
+                SpecPlanWarnings(feature)));
+        }
+
+        var inReview = tasks.Count(t => t.Status == PlanningArtifactStatus.Review);
+        if (inReview > 0)
+        {
+            return Results.Ok(new PlanningCurrentResponse(
+                "held", currentFeature, null,
+                $"{inReview} in review — awaiting review completion."));
+        }
+
+        var blocked = tasks.First(t => t.Status == PlanningArtifactStatus.Blocked);
         return Results.Ok(new PlanningCurrentResponse(
-            "task", currentFeature, PlanningMapper.ToArtifactResponse(next), reason));
+            "task",
+            currentFeature,
+            PlanningMapper.ToArtifactResponse(blocked),
+            "The next task is blocked.",
+            SpecPlanWarnings(feature)));
+    }
+
+    private static string ResultStateReason(PlanningFeature feature)
+    {
+        var result = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Result);
+        return result?.Status switch
+        {
+            PlanningArtifactStatus.Draft => "Result artifact drafted — validate it.",
+            PlanningArtifactStatus.Validated => "Result validated — close the feature.",
+            _ => "All tasks are done — write the result artifact."
+        };
+    }
+
+    private static string[]? SpecPlanWarnings(PlanningFeature feature)
+    {
+        var spec = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
+        var plan = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Plan);
+
+        var warnings = new List<string>(2);
+        if (spec is null)
+        {
+            warnings.Add("spec missing");
+        }
+        else if (spec.Status == PlanningArtifactStatus.Draft)
+        {
+            warnings.Add("spec not validated");
+        }
+
+        if (plan is null || plan.Status == PlanningArtifactStatus.Draft)
+        {
+            warnings.Add("plan not validated");
+        }
+
+        return warnings.Count == 0 ? null : [.. warnings];
     }
 
     internal static async Task<IResult> Patch(
@@ -425,14 +500,17 @@ public static class AgentPlanningApi
                 id,
                 new PlanningArtifactPatch(
                     request.Section, request.Content, request.AcIndex, request.AcText, request.LogNote),
-                ct);
+                ct,
+                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
 
             return Results.Ok(new PlanningArtifactPatchResponse(
                 artifact.Id,
                 artifact.Kind,
                 request.Op!.Trim() == "tick_ac" ? "acceptance-criteria" : request.Section!,
                 artifact.Version,
-                artifact.Body.Length));
+                artifact.Body.Length,
+                artifact.StatusChanged,
+                artifact.FeatureStatusChanged));
         }
         catch (PlanningException ex)
         {

@@ -17,6 +17,8 @@ public static class Canned
 
     public const string PlanningSlug = "demo-feature";
     public const string PlanningStopSlug = "gate-locked";
+
+    public const string PlanningHeldSlug = "review-pending";
     public const string PlanningEmptySlug = "all-done";
     public const string PlanningBlockedSlug = "blocked-feature";
 
@@ -130,9 +132,17 @@ public static class Canned
     public const string PlanningArtifactNotFoundJson =
         """{"title":"Not Found","detail":"Artifact '99999999-9999-9999-9999-999999999999' was not found.","status":404}""";
 
+    public const string PlanningArtifactDemotedJson =
+        """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"draft","review":"light","order":0,"body":"# Demo spec\n\n<goal>\nReworked after review.\n</goal>","frozenAt":null,"version":3,"createdAt":"2026-09-08T10:05:00Z","updatedAt":"2026-09-26T09:00:00Z","log":[{"date":"2026-09-26","text":"artifact demoted: validated → draft"}],"statusChanged":"validated → draft","featureStatusChanged":"review → inProgress"}""";
+
     public const string PlanningCurrentTaskJson =
         """
-        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]},"reason":null}
+        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]},"reason":null,"warnings":["plan not validated"]}
+        """;
+
+    public const string PlanningCurrentHeldJson =
+        """
+        {"state":"held","feature":{"slug":"review-pending","title":"Review pending","status":"review"},"artifact":null,"reason":"2 in review — awaiting review completion."}
         """;
 
     public const string PlanningCurrentStopJson =

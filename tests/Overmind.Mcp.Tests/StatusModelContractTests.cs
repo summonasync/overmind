@@ -25,6 +25,49 @@ public class StatusModelContractTests : McpSessionTestBase
         }
     }
 
+    [Fact]
+    public void Quickstart_StatesTheReviewInvariantAndDemoteRule()
+    {
+        var text = OnboardQuickstart.Text;
+
+        text.ShouldContain("review ⟺ spec+plan validated AND all tasks done");
+        text.ShouldContain("pulls a review feature back to inProgress");
+    }
+
+    [Fact]
+    public async Task MachineSurfaces_NeverSayFrozen()
+    {
+        var tools = await Driver.ListToolsAsync();
+        foreach (var tool in tools["result"]!["tools"]!.AsArray())
+        {
+            tool!["description"]!.GetValue<string>().ShouldNotContain("frozen", Case.Insensitive);
+        }
+
+        var prompt = await Driver.GetPromptAsync("session_bootstrap");
+        var promptText = prompt["result"]!["messages"]!.AsArray().First()!["content"]!["text"]!.GetValue<string>();
+        promptText.ShouldNotContain("frozen", Case.Insensitive);
+
+        OnboardQuickstart.Text.ShouldNotContain("frozen", Case.Insensitive);
+
+        var changeNote = PlanningException.ChangeNoteRequired().Message;
+        changeNote.ShouldContain("validated");
+        changeNote.ShouldNotContain("frozen", Case.Insensitive);
+
+        PlanningException.MigratedNoteRequired().Message.ShouldNotContain("frozen", Case.Insensitive);
+
+        var guarded = PlanningArtifact.Create(Guid.NewGuid(), PlanningArtifactKind.Spec, "body");
+        guarded.Validate();
+
+        var updateGuard = Should.Throw<InvalidOperationException>(() => guarded.UpdateBody("v2"));
+        updateGuard.Message.ShouldContain("validated");
+        updateGuard.Message.ShouldNotContain("frozen", Case.Insensitive);
+
+        var moveGuard = Should.Throw<InvalidOperationException>(
+            () => guarded.SetStatus(PlanningArtifactStatus.Draft));
+        moveGuard.Message.ShouldContain("validated");
+        moveGuard.Message.ShouldNotContain("frozen", Case.Insensitive);
+    }
+
     [Theory]
     [InlineData(PlanningArtifactKind.Spec)]
     [InlineData(PlanningArtifactKind.Plan)]

@@ -686,8 +686,10 @@ public sealed class PlanningApiTests : IDisposable
         var updated = await putResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
         updated!.Status.ShouldBe("draft");
         updated.FrozenAt.ShouldBeNull();
-        updated.Log.Length.ShouldBe(1);
+        updated.Log.Length.ShouldBe(2);
         updated.Log[0].Text.ShouldBe("unfreezing");
+        updated.Log[1].Text.ShouldBe("artifact demoted: validated → draft");
+        updated.StatusChanged.ShouldBe("validated → draft");
     }
 
     [Fact]
@@ -753,6 +755,112 @@ public sealed class PlanningApiTests : IDisposable
             $"/api/planning/artifacts/{created.Id}", JsonOptions);
         getResponse!.Version.ShouldBe(created.Version + 1);
         getResponse.Body.ShouldContain("a log note");
+    }
+
+    [Fact]
+    public async Task AppendLog_HttpDoor_WritesTheUiMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "body" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/log",
+            new { Note = "board-side note" });
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[ui] — board-side note");
+    }
+
+    [Fact]
+    public async Task CreateArtifact_WithLogNote_WritesTheUiMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "v1" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "v2", LogNote = "board rewrite" });
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created!.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[ui] — board rewrite");
+    }
+
+    [Fact]
+    public async Task AppendLog_DeclaredSource_Agent_IsHonored()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "body" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/log",
+            new { Note = "declared agent", Source = "agent" });
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[agent] — declared agent");
+    }
+
+    [Fact]
+    public async Task AppendLog_DeclaredSource_Ui_IsHonored()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "body" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/log",
+            new { Note = "declared ui", Source = "ui" });
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[ui] — declared ui");
+    }
+
+    [Fact]
+    public async Task AppendLog_ReservedSource_FallsBackToTheDoorDefault()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "body" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/log",
+            new { Note = "reserved auto", Source = "auto" });
+        await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/log",
+            new { Note = "garbage claim", Source = "banana" });
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[ui] — reserved auto");
+        getResponse.Body.ShouldContain("[ui] — garbage claim");
+        getResponse.Body.ShouldNotContain("[auto]");
+        getResponse.Body.ShouldNotContain("[import]");
     }
 
     [Fact]
@@ -947,7 +1055,8 @@ public sealed class PlanningApiTests : IDisposable
     public sealed record ArtifactJson(
         Guid Id, string Kind, string Status, string Review,
         int Order, string Body, DateTime? FrozenAt, int Version,
-        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null);
+        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null,
+        string? StatusChanged = null);
 
     public sealed record LogLineJson(string? Date, string Text);
 

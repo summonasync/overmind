@@ -81,9 +81,14 @@ public sealed record CreatePlanningArtifactRequest(
     int? Order,
     PlanningReviewLevel? Review,
     string? LogNote,
-    string? Brief = null);
+    string? Brief = null,
+    string? Source = null);
 
-public sealed record UpdatePlanningArtifactRequest(string Body, string? LogNote, string? Brief = null);
+public sealed record UpdatePlanningArtifactRequest(
+    string Body,
+    string? LogNote,
+    string? Brief = null,
+    string? Source = null);
 
 public sealed record PlanningTaskUpsertRequest(
     string Body,
@@ -92,7 +97,7 @@ public sealed record PlanningTaskUpsertRequest(
     string? LogNote = null,
     string? Brief = null);
 
-public sealed record CreatePlanningTasksRequest(PlanningTaskUpsertRequest[] Tasks);
+public sealed record CreatePlanningTasksRequest(PlanningTaskUpsertRequest[] Tasks, string? Source = null);
 
 public sealed record CreatePlanningTasksResponse(
     int Created,
@@ -101,10 +106,11 @@ public sealed record CreatePlanningTasksResponse(
 
 public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Status, string LogNote);
 
-public sealed record AppendPlanningLogRequest(string Note);
+public sealed record AppendPlanningLogRequest(string Note, string? Source = null);
 
 public sealed record SetPlanningArtifactStatusResponse(
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
 
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 
@@ -114,14 +120,17 @@ public sealed record PatchPlanningArtifactRequest(
     string? Content,
     int? AcIndex,
     string? AcText,
-    string? LogNote = null);
+    string? LogNote = null,
+    string? Source = null);
 
 public sealed record PlanningArtifactPatchResponse(
     Guid ArtifactId,
     PlanningArtifactKind Kind,
     string Section,
     int Version,
-    int BodyChars);
+    int BodyChars,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusChanged = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
 
 public sealed record PlanningArtifactReadResponse(
     Guid Id,
@@ -146,7 +155,9 @@ public sealed record PlanningArtifactResponse(
     int Version,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    PlanningLogLineResponse[] Log);
+    PlanningLogLineResponse[] Log,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusChanged = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 
@@ -166,7 +177,8 @@ public sealed record PlanningCurrentResponse(
     string State,
     PlanningCurrentFeature Feature,
     PlanningArtifactResponse? Artifact,
-    string? Reason);
+    string? Reason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null);
 
 public sealed record PlanningCurrentFeature(
     string Slug,

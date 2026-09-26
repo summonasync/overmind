@@ -16,7 +16,9 @@ public static class OnboardQuickstart
         Escape hatch: set the OVERMIND_PROJECT_ID environment variable to skip cwd matching and pin a project id.
 
         Feature lifecycle: draft → ready → inProgress → review → done.
-        Auto-transitions: artifact create → inProgress; all tasks done + spec + plan → review; task create on review → back to inProgress.
+        Review invariant: review ⟺ spec+plan validated AND all tasks done.
+        Auto-transitions: artifact create → inProgress; all tasks done + spec + plan validated → review; task create on review → back to inProgress.
+        Editing a validated spec or plan demotes it to draft and pulls a review feature back to inProgress in the same write ([auto] line records it); done features are never resurrected.
         planning_set_feature_status reaches done from ANY non-done status; done is terminal.
         A done feature receiving a new artifact stays done — no transition fires.
         Without a plan there is no auto-promotion to review, even when all tasks are done — spec AND plan are required.

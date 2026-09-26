@@ -26,7 +26,7 @@ public static class PlanningArtifactsApi
         return group;
     }
 
-    internal static async Task<IResult> CreateArtifact(
+    internal static Task<IResult> CreateArtifact(
         Guid projectId,
         string slug,
         CreatePlanningArtifactRequest request,
@@ -34,6 +34,20 @@ public static class PlanningArtifactsApi
         PlanningFeatureService featureService,
         PlanningArtifactService artifactService,
         OvermindDbContext db,
+        CancellationToken ct) =>
+        CreateArtifactForDoor(
+            projectId, slug, request, validator, featureService, artifactService, db,
+            PlanningLogSource.Ui, ct);
+
+    internal static async Task<IResult> CreateArtifactForDoor(
+        Guid projectId,
+        string slug,
+        CreatePlanningArtifactRequest request,
+        IValidator<CreatePlanningArtifactRequest> validator,
+        PlanningFeatureService featureService,
+        PlanningArtifactService artifactService,
+        OvermindDbContext db,
+        PlanningLogSource fallbackSource,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -56,7 +70,8 @@ public static class PlanningArtifactsApi
         {
             var artifact = await artifactService.UpsertAsync(
                 feature.Id, request.Kind, request.Body, request.Order, request.Review, request.LogNote, ct,
-                brief: request.Brief);
+                brief: request.Brief,
+                source: PlanningDoorSource.Resolve(request.Source, fallbackSource));
 
             var response = PlanningMapper.ToArtifactResponse(artifact);
             var isNew = artifact.Version == 1;
@@ -101,7 +116,8 @@ public static class PlanningArtifactsApi
                 feature.Id,
                 request.Tasks.Select(t => new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief))
                     .ToArray(),
-                ct);
+                ct,
+                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
 
             return Results.Ok(new CreatePlanningTasksResponse(
                 batch.Created,
@@ -170,7 +186,8 @@ public static class PlanningArtifactsApi
         {
             await service.UpsertAsync(
                 artifact.FeatureId, artifact.Kind, request.Body, artifact.Order,
-                null, request.LogNote, ct, brief: request.Brief);
+                null, request.LogNote, ct, brief: request.Brief,
+                source: PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Ui));
         }
         catch (PlanningException ex)
         {
@@ -211,9 +228,9 @@ public static class PlanningArtifactsApi
 
         try
         {
-            var warnings = await service.SetStatusAsync(
+            var result = await service.SetStatusAsync(
                 id, request.Status, PlanningLogSource.Ui, request.LogNote, ct);
-            return Results.Ok(new SetPlanningArtifactStatusResponse(warnings));
+            return Results.Ok(new SetPlanningArtifactStatusResponse(result.Warnings, result.FeatureStatusChanged));
         }
         catch (PlanningException ex)
         {
@@ -221,11 +238,20 @@ public static class PlanningArtifactsApi
         }
     }
 
-    internal static async Task<IResult> AppendLog(
+    internal static Task<IResult> AppendLog(
         Guid id,
         AppendPlanningLogRequest request,
         IValidator<AppendPlanningLogRequest> validator,
         PlanningArtifactService service,
+        CancellationToken ct) =>
+        AppendLogForDoor(id, request, validator, service, PlanningLogSource.Ui, ct);
+
+    internal static async Task<IResult> AppendLogForDoor(
+        Guid id,
+        AppendPlanningLogRequest request,
+        IValidator<AppendPlanningLogRequest> validator,
+        PlanningArtifactService service,
+        PlanningLogSource fallbackSource,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -236,7 +262,9 @@ public static class PlanningArtifactsApi
 
         try
         {
-            await service.AppendLogAsync(id, request.Note, ct);
+            await service.AppendLogAsync(
+                id, request.Note, ct,
+                PlanningDoorSource.Resolve(request.Source, fallbackSource));
         }
         catch (PlanningException ex)
         {

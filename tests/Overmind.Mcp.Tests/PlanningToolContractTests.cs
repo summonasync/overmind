@@ -205,7 +205,24 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current");
 
-        Canned.ToolResultText(response).ShouldContain("Wire the API");
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Wire the API");
+        text.ShouldContain("plan not validated");
+    }
+
+    [Fact]
+    public async Task PlanningCurrentTask_HeldState_LeadsWithTheReason()
+    {
+        var response = await Driver.CallToolAsync("planning_current_task", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningHeldSlug
+        });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("\"state\":\"held\"");
+        text.ShouldContain("2 in review — awaiting review completion.");
+        text.ShouldNotContain("\"artifact\":{");
     }
 
     [Fact]
@@ -330,8 +347,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["review"]!.GetValue<string>().ShouldBe("hard");
         body["logNote"]!.GetValue<string>().ShouldBe("adding a task");
         body["brief"]!.GetValue<string>().ShouldBe("Wire the polling hook");
+        body["source"]!.GetValue<string>().ShouldBe("agent");
         body.AsObject().Select(p => p.Key).ToArray().ShouldBe(
-            ["kind", "body", "order", "review", "logNote", "brief"], ignoreOrder: true);
+            ["kind", "body", "order", "review", "logNote", "brief", "source"], ignoreOrder: true);
 
         response["result"]!["isError"].ShouldBeNull();
 
@@ -460,7 +478,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts/tasks",
             400,
-            """{"title":"ChangeNoteRequired","detail":"tasks[1]: A logNote is required to modify a frozen artifact.","status":400}""");
+            """{"title":"ChangeNoteRequired","detail":"tasks[1]: A logNote is required to modify a validated artifact.","status":400}""");
 
         var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
         {
@@ -631,6 +649,28 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
         confirmation.ContainsKey("warnings").ShouldBeFalse();
+        confirmation.ContainsKey("featureStatusChanged").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningSetStatus_ApiReportsFeatureDemotion_EchoesFeatureStatusChanged()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/status",
+            200,
+            """{"featureStatusChanged":"review → inProgress"}""");
+
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["status"] = "draft",
+            ["logNote"] = "review outcome: spec rejected"
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation["status"]!.GetValue<string>().ShouldBe("draft");
+        confirmation["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
     }
 
     [Fact]
@@ -1153,7 +1193,9 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/log", StringComparison.Ordinal));
         request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/log");
-        JsonNode.Parse(request.Body)!["note"]!.GetValue<string>().ShouldBe("halfway through the wiring");
+        var posted = JsonNode.Parse(request.Body)!;
+        posted["note"]!.GetValue<string>().ShouldBe("halfway through the wiring");
+        posted["source"]!.GetValue<string>().ShouldBe("agent");
 
         Canned.ToolResultText(response).ShouldContain("appended");
     }
@@ -1177,6 +1219,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         body["section"]!.GetValue<string>().ShouldBe("goal");
         body["content"]!.GetValue<string>().ShouldContain("Rewired for real.");
         body["logNote"]!.GetValue<string>().ShouldBe("rewiring the goal");
+        body["source"]!.GetValue<string>().ShouldBe("agent");
 
         response["result"]!["isError"].ShouldBeNull();
         var text = Canned.ToolResultText(response);
@@ -1242,6 +1285,53 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain(Canned.PlanningTaskTwoId.ToString());
         text.ShouldContain("version 3");
         text.ShouldContain("412 body chars");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_Demotion_EchoesStatusChanged()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            200,
+            """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"spec","section":"goal","version":3,"bodyChars":97,"statusChanged":"validated → draft","featureStatusChanged":"review → inProgress"}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "goal",
+            ["content"] = "<goal>\nReworked after review.\n</goal>",
+            ["logNote"] = "reopened for rework"
+        });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("version 3");
+        text.ShouldContain("statusChanged 'validated → draft'");
+        text.ShouldContain("featureStatusChanged 'review → inProgress'");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_Demotion_EchoCarriesStatusChanged()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts",
+            200,
+            Canned.PlanningArtifactDemotedJson);
+
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "spec",
+            ["body"] = "# Spec\n\n<goal>\nReworked after review.\n</goal>",
+            ["logNote"] = "reopened for rework"
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation["status"]!.GetValue<string>().ShouldBe("draft");
+        confirmation["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
+        confirmation["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
     }
 
     [Theory]

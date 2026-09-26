@@ -34,7 +34,7 @@ public sealed class OvermindPlanningResources
     }
 
     [McpServerResource(UriTemplate = "overmind://projects/{id}/planning/features/{slug}/current", Name = "project-planning-current", Title = "Current planning task", MimeType = "text/markdown")]
-    [Description("The current task of a feature prefixed with 'Current task:', or a STOP / NOTHING TO DO first line when there is nothing the agent may do.")]
+    [Description("The current task of a feature prefixed with 'Current task:' (soft spec/plan warnings listed beneath), or a STOP / HELD / NOTHING TO DO first line when there is nothing the agent may do.")]
     public async Task<string> GetCurrent(Guid id, string slug, CancellationToken ct)
     {
         var current = await Guarded(() => _api.GetAsync(
@@ -143,6 +143,11 @@ public sealed class OvermindPlanningResources
             return $"NOTHING TO DO: {reason}\n";
         }
 
+        if (state == "held")
+        {
+            return $"HELD: {reason}\n";
+        }
+
         if (current.TryGetProperty("artifact", out var artifact) && artifact.ValueKind == JsonValueKind.Object)
         {
             current.TryGetProperty("feature", out var feature);
@@ -152,6 +157,18 @@ public sealed class OvermindPlanningResources
             if (reason.Length > 0)
             {
                 builder.Append($"\n{reason}\n");
+            }
+
+            if (current.TryGetProperty("warnings", out var warnings) && warnings.ValueKind == JsonValueKind.Array)
+            {
+                var listed = warnings.EnumerateArray()
+                    .Select(w => w.GetString())
+                    .Where(w => !string.IsNullOrWhiteSpace(w))
+                    .ToArray();
+                if (listed.Length > 0)
+                {
+                    builder.Append($"\nWarnings: {string.Join(", ", listed)}\n");
+                }
             }
 
             builder.Append($"\n{StringOf(artifact, "body")}\n");

@@ -72,8 +72,18 @@ public class PlanningResourceContractTests : McpSessionTestBase
 
         var text = Canned.ResourceText(response);
         text.ShouldStartWith("Current task: demo-feature #02 [inProgress]");
+        text.ShouldContain("Warnings: plan not validated");
         text.ShouldContain("Wire the API");
         text.ShouldContain("Expose the endpoints.");
+    }
+
+    [Fact]
+    public async Task PlanningCurrentResource_HeldState_LeadsWithHeld()
+    {
+        var response = await Driver.ReadResourceAsync(
+            $"overmind://projects/{Canned.ProjectId}/planning/features/{Canned.PlanningHeldSlug}/current");
+
+        Canned.ResourceText(response).ShouldStartWith("HELD: 2 in review — awaiting review completion.");
     }
 
     [Fact]

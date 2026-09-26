@@ -1098,6 +1098,7 @@ public sealed class BacklogImporterTests : IDisposable
         task.Version.ShouldBe(2);
         task.Body.ShouldContain("edited on disk");
         task.Body.ShouldContain("re-imported from ");
+        task.Body.ShouldContain("[import] — re-imported from ");
         task.Body.Split("re-imported from ").Length.ShouldBe(2);
 
         var third = await ImportAsync(_repo.Root);

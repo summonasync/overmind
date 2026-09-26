@@ -212,6 +212,19 @@ ship the guard
     }
 
     [Fact]
+    public void AppendLog_WithSource_AppendsSourcedLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body");
+
+        artifact.AppendLog("halfway through the wiring", PlanningLogSource.Agent);
+
+        var lines = PlanningLog.Parse(artifact.Body);
+        lines.ShouldHaveSingleItem();
+        lines[0].Text.ShouldBe("halfway through the wiring");
+        lines[0].Source.ShouldBe(PlanningLogSource.Agent);
+    }
+
+    [Fact]
     public void SetStatus_WithNote_AppendsToLog()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body");
@@ -542,6 +555,32 @@ ship the guard
         artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(frozenBody);
         artifact.Body.ShouldContain("rework after review");
         artifact.Body.ShouldContain("spec reopened by the human door");
+    }
+
+    [Fact]
+    public void PatchSection_FrozenWithNote_RecordsDemotionEchoAndAutoLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+
+        artifact.PatchSection("goal", "rework after review", "spec reopened by the human door");
+
+        artifact.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
+        var lines = PlanningLog.Parse(artifact.Body);
+        lines.Last().Source.ShouldBe(PlanningLogSource.Auto);
+        lines.Last().Text.ShouldBe(PlanningArtifact.DemotionLogNote);
+    }
+
+    [Fact]
+    public void PatchSection_NotFrozen_StatusChangedStaysNull()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+
+        artifact.PatchSection("goal", "fresh goal", "mid-session correction");
+
+        artifact.StatusChanged.ShouldBeNull();
+        PlanningLog.Parse(artifact.Body).Count.ShouldBe(2);
+        PlanningLog.Parse(artifact.Body).Last().Text.ShouldBe("mid-session correction");
     }
 
     [Fact]

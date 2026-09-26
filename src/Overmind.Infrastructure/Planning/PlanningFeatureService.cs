@@ -314,7 +314,7 @@ public sealed partial class PlanningFeatureService
             var bodyChanged = !MatchesImportedBody(existing.Body, artifact.Body, note);
             if (bodyChanged)
             {
-                existing.UpdateBody(artifact.Body, note);
+                existing.UpdateBody(artifact.Body, note, PlanningLogSource.Import);
             }
 
             var reviewChanged = existing.Review != artifact.Review;

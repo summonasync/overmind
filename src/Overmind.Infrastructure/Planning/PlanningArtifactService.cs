@@ -24,7 +24,7 @@ public sealed class PlanningArtifactService
     public async Task<PlanningArtifact> UpsertAsync(
         Guid featureId, PlanningArtifactKind kind, string body, int? order,
         PlanningReviewLevel? review, string? logNote, CancellationToken ct = default,
-        string? brief = null)
+        string? brief = null, PlanningLogSource? source = null)
     {
         if (brief is not null && kind != PlanningArtifactKind.Task)
         {
@@ -50,11 +50,16 @@ public sealed class PlanningArtifactService
             {
                 try
                 {
-                    existing.UpdateBody(body, logNote);
+                    existing.UpdateBody(body, logNote, source);
                 }
                 catch (InvalidOperationException)
                 {
                     throw PlanningException.ChangeNoteRequired();
+                }
+
+                if (existing.StatusChanged is not null)
+                {
+                    DemoteReviewFeatureOnDocumentInvalidation(existing, feature);
                 }
             }
 
@@ -110,7 +115,8 @@ public sealed class PlanningArtifactService
     }
 
     public async Task<PlanningTaskBatchResult> UpsertTasksAsync(
-        Guid featureId, IReadOnlyList<PlanningTaskUpsert> tasks, CancellationToken ct = default)
+        Guid featureId, IReadOnlyList<PlanningTaskUpsert> tasks, CancellationToken ct = default,
+        PlanningLogSource? source = null)
     {
         var feature = await _db.PlanningFeatures.FirstOrDefaultAsync(f => f.Id == featureId, ct);
         if (feature is null)
@@ -129,7 +135,7 @@ public sealed class PlanningArtifactService
         {
             try
             {
-                var (artifact, isNew) = StageTask(featureId, tasks[i], siblings);
+                var (artifact, isNew) = StageTask(featureId, tasks[i], siblings, source);
                 staged.Add(artifact);
                 if (isNew)
                 {
@@ -166,7 +172,7 @@ public sealed class PlanningArtifactService
     }
 
     private (PlanningArtifact Artifact, bool IsNew) StageTask(
-        Guid featureId, PlanningTaskUpsert task, List<PlanningArtifact> siblings)
+        Guid featureId, PlanningTaskUpsert task, List<PlanningArtifact> siblings, PlanningLogSource? source)
     {
         var resolvedOrder = task.Order ?? (siblings.Count == 0 ? 0 : siblings.Max(a => a.Order) + 1);
         var existing = siblings.FirstOrDefault(a => a.Order == resolvedOrder);
@@ -175,7 +181,7 @@ public sealed class PlanningArtifactService
         {
             if (existing.Body != task.Body || !string.IsNullOrWhiteSpace(task.LogNote))
             {
-                existing.UpdateBody(task.Body, task.LogNote);
+                existing.UpdateBody(task.Body, task.LogNote, source);
             }
 
             if (task.Review.HasValue)
@@ -199,7 +205,7 @@ public sealed class PlanningArtifactService
         return (artifact, true);
     }
 
-    public async Task<string[]?> SetStatusAsync(
+    public async Task<PlanningArtifactStatusResult> SetStatusAsync(
         Guid artifactId, PlanningArtifactStatus status, PlanningLogSource source, string logNote,
         CancellationToken ct = default)
     {
@@ -210,6 +216,7 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        var wasValidated = artifact.IsFrozen;
 
         try
         {
@@ -224,6 +231,11 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
+        if (wasValidated && status != PlanningArtifactStatus.Validated)
+        {
+            DemoteReviewFeatureOnDocumentInvalidation(artifact, feature);
+        }
+
         if (artifact.Kind == PlanningArtifactKind.Task && artifact.Status == PlanningArtifactStatus.Done)
         {
             await TryPromoteToReviewAsync(feature, ct);
@@ -232,7 +244,8 @@ public sealed class PlanningArtifactService
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
 
-        return UntickedAcWarning(artifact, status);
+        return new PlanningArtifactStatusResult(
+            UntickedAcWarning(artifact, status), artifact.FeatureStatusChanged);
     }
 
     private static string[]? UntickedAcWarning(PlanningArtifact artifact, PlanningArtifactStatus status)
@@ -249,7 +262,8 @@ public sealed class PlanningArtifactService
     }
 
     public async Task<PlanningArtifact> PatchAsync(
-        Guid artifactId, PlanningArtifactPatch patch, CancellationToken ct = default)
+        Guid artifactId, PlanningArtifactPatch patch, CancellationToken ct = default,
+        PlanningLogSource? source = null)
     {
         ArgumentNullException.ThrowIfNull(patch);
 
@@ -268,11 +282,16 @@ public sealed class PlanningArtifactService
         {
             if (wantsSection)
             {
-                artifact.PatchSection(patch.Section!, patch.Content!, patch.LogNote);
+                artifact.PatchSection(patch.Section!, patch.Content!, patch.LogNote, source);
             }
             else
             {
-                artifact.TickAc(patch.TickIndex, patch.TickText, patch.LogNote);
+                artifact.TickAc(patch.TickIndex, patch.TickText, patch.LogNote, source);
+            }
+
+            if (artifact.StatusChanged is not null)
+            {
+                DemoteReviewFeatureOnDocumentInvalidation(artifact, feature);
             }
         }
         catch (InvalidOperationException)
@@ -304,10 +323,11 @@ public sealed class PlanningArtifactService
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
     }
 
-    public async Task AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default)
+    public async Task AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default,
+        PlanningLogSource? source = null)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
-        artifact.AppendLog(note);
+        artifact.AppendLog(note, source);
 
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, await GetProjectIdAsync(artifact.FeatureId, ct), ct);
@@ -367,6 +387,22 @@ public sealed class PlanningArtifactService
         }
     }
 
+    private static void DemoteReviewFeatureOnDocumentInvalidation(
+        PlanningArtifact artifact, PlanningFeature feature)
+    {
+        if (artifact.Kind is not (PlanningArtifactKind.Spec or PlanningArtifactKind.Plan) ||
+            feature.Status != PlanningFeatureStatus.Review)
+        {
+            return;
+        }
+
+        feature.SetStatus(
+            PlanningFeatureStatus.InProgress,
+            $"feature demoted: review → inProgress ({artifact.Kind.ToString().ToLowerInvariant()} no longer validated)",
+            PlanningLogSource.Auto);
+        artifact.RecordFeatureDemotion();
+    }
+
     private async Task TryPromoteToReviewAsync(PlanningFeature feature, CancellationToken ct)
     {
         if (feature.Status is not (PlanningFeatureStatus.InProgress or PlanningFeatureStatus.Ready))
@@ -379,19 +415,23 @@ public sealed class PlanningArtifactService
             .ToListAsync(ct);
 
         var tasks = siblings.Where(a => a.Kind == PlanningArtifactKind.Task).ToList();
-        var hasSpec = siblings.Any(a => a.Kind == PlanningArtifactKind.Spec);
-        var hasPlan = siblings.Any(a => a.Kind == PlanningArtifactKind.Plan);
+        var hasValidatedSpec = siblings.Any(a =>
+            a.Kind == PlanningArtifactKind.Spec && a.Status == PlanningArtifactStatus.Validated);
+        var hasValidatedPlan = siblings.Any(a =>
+            a.Kind == PlanningArtifactKind.Plan && a.Status == PlanningArtifactStatus.Validated);
 
         if (tasks.Count == 0 ||
             !tasks.All(t => t.Status == PlanningArtifactStatus.Done) ||
-            !hasSpec ||
-            !hasPlan)
+            !hasValidatedSpec ||
+            !hasValidatedPlan)
         {
             return;
         }
 
         feature.SetStatus(
-            PlanningFeatureStatus.Review, "all tasks done + spec + plan → review", PlanningLogSource.Auto);
+            PlanningFeatureStatus.Review,
+            "all tasks done + spec + plan validated → review",
+            PlanningLogSource.Auto);
     }
 
     private async Task<int> ResolveOrderAsync(PlanningArtifactKind kind, int? order, Guid featureId, CancellationToken ct)

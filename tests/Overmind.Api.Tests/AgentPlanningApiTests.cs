@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shouldly;
 using Xunit;
 
@@ -83,6 +84,136 @@ public sealed class AgentPlanningApiTests : IDisposable
         updated!.Status.ShouldBe("draft");
         updated.FrozenAt.ShouldBeNull();
         updated.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Upsert_WithLogNote_WritesTheAgentMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+
+        var response = await _client.PostAsJsonAsync(
+            AgentArtifactsUrl(project.Id, "feat"), new { Kind = "spec", Body = "v2", LogNote = "unfreezing" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain("[agent] — unfreezing");
+        artifact.Body.ShouldContain("[auto] — artifact demoted: validated → draft");
+    }
+
+    [Fact]
+    public async Task AppendLog_AgentDoor_WritesTheAgentMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Note = "halfway through the wiring" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain("[agent] — halfway through the wiring");
+    }
+
+    [Fact]
+    public async Task Patch_WithLogNote_WritesTheAgentMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n"
+        });
+        await FreezeViaHumanDoorAsync(spec.Id);
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "<goal>\nNew goal.\n</goal>", LogNote = "reopened for rework" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain("[agent] — reopened for rework");
+        artifact.Body.ShouldContain("[auto] — artifact demoted: validated → draft");
+    }
+
+    [Fact]
+    public async Task Patch_DemotingValidatedSpec_OnReviewFeature_PullsFeatureBackToInProgress()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOriginal.\n</goal>\n"
+        });
+        var plan = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "plan", Body = "plan" });
+        var task1 = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task one" });
+        var task2 = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task two" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await FreezeViaHumanDoorAsync(plan.Id);
+        await SetTaskStatusAsync(task1.Id, "done");
+        await SetTaskStatusAsync(task2.Id, "done");
+
+        var inReview = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        inReview!.Status.ShouldBe("review");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "<goal>\nNew goal.\n</goal>", LogNote = "reopened for rework" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
+        echoed["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.ShouldContain("[auto] — feature demoted: review → inProgress (spec no longer validated)");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_ManualValidatedToDraft_OnReviewFeature_PullsFeatureBackToInProgress()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOriginal.\n</goal>\n"
+        });
+        var plan = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "plan", Body = "plan" });
+        var task1 = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task one" });
+        var task2 = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task two" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await FreezeViaHumanDoorAsync(plan.Id);
+        await SetTaskStatusAsync(task1.Id, "done");
+        await SetTaskStatusAsync(task2.Id, "done");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(spec.Id),
+            new { Status = "draft", LogNote = "review outcome: spec rejected" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.ShouldContain("[auto] — feature demoted: review → inProgress (spec no longer validated)");
     }
 
     [Fact]
@@ -468,6 +599,117 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Current_ResultDraft_TellsToValidateIt()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 1" });
+        await SetTaskStatusAsync(task.Id, "done");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "# Result\n\n<goal>\nShipped.\n</goal>" });
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+
+        current.State.ShouldBe("empty");
+        current.Artifact.ShouldBeNull();
+        current.Reason.ShouldBe("Result artifact drafted — validate it.");
+    }
+
+    [Fact]
+    public async Task Current_ResultValidated_TellsToCloseTheFeature()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 1" });
+        await SetTaskStatusAsync(task.Id, "done");
+        var result = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "# Result" });
+        await FreezeViaHumanDoorAsync(result.Id);
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+
+        current.State.ShouldBe("empty");
+        current.Artifact.ShouldBeNull();
+        current.Reason.ShouldBe("Result validated — close the feature.");
+    }
+
+    [Fact]
+    public async Task Current_OnlyReviewTasksLeft_ReturnsHeld()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var first = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 1", Order = 1 });
+        var second = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 2", Order = 2 });
+        await SetTaskStatusAsync(first.Id, "review");
+        await SetTaskStatusAsync(second.Id, "review");
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+
+        current.State.ShouldBe("held");
+        current.Artifact.ShouldBeNull();
+        current.Reason.ShouldBe("2 in review — awaiting review completion.");
+    }
+
+    [Fact]
+    public async Task Current_ReviewAndBlockedLeft_ReturnsHeldNamingReviewCount()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var first = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 1", Order = 1 });
+        var second = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 2", Order = 2 });
+        await SetTaskStatusAsync(first.Id, "review");
+        await SetTaskStatusAsync(second.Id, "blocked");
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+
+        current.State.ShouldBe("held");
+        current.Artifact.ShouldBeNull();
+        current.Reason.ShouldBe("1 in review — awaiting review completion.");
+    }
+
+    [Fact]
+    public async Task Current_WorkableTodoBeatsHeld_ReturnsTheTodoTask()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var first = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 1", Order = 1 });
+        var second = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 2", Order = 2 });
+        await SetTaskStatusAsync(first.Id, "review");
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+
+        current.State.ShouldBe("task");
+        current.Reason.ShouldBeNull();
+        current.Artifact.ShouldNotBeNull();
+        current.Artifact!.Order.ShouldBe(2);
+        current.Artifact.Status.ShouldBe("todo");
+    }
+
+    [Fact]
+    public async Task Current_TaskPayload_Warnings_AllFourSpecPlanCombinations()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "t1", Order = 0 });
+
+        (await GetCurrentAsync(project.Id, "feat")).Warnings!
+            .ShouldBe(["spec missing", "plan not validated"]);
+
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+
+        (await GetCurrentAsync(project.Id, "feat")).Warnings!
+            .ShouldBe(["spec not validated", "plan not validated"]);
+
+        await FreezeViaHumanDoorAsync(spec.Id);
+
+        (await GetCurrentAsync(project.Id, "feat")).Warnings!
+            .ShouldBe(["plan not validated"]);
+
+        var plan = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "plan", Body = "plan" });
+        await FreezeViaHumanDoorAsync(plan.Id);
+
+        (await GetCurrentAsync(project.Id, "feat")).Warnings.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Current_ReturnsFirstOpenTaskByOrder()
     {
         var project = await CreateProjectAsync();
@@ -518,6 +760,28 @@ public sealed class AgentPlanningApiTests : IDisposable
         current.State.ShouldBe("task");
         current.Artifact!.Order.ShouldBe(2);
         current.Reason.ShouldBe("The next task is blocked.");
+        current.Warnings!.ShouldBe(["spec missing", "plan not validated"]);
+    }
+
+    [Fact]
+    public async Task Current_CleanSpecPlan_RawWirePayload_OmitsTheWarningsKey()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        var plan = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "plan", Body = "plan" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await FreezeViaHumanDoorAsync(plan.Id);
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task 1" });
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+
+        current.State.ShouldBe("task");
+        current.Warnings.ShouldBeNull();
+
+        var raw = await _client.GetStringAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/feat/current");
+        JsonNode.Parse(raw)!.AsObject().ContainsKey("warnings").ShouldBeFalse();
     }
 
     [Fact]
@@ -1341,6 +1605,9 @@ public sealed class AgentPlanningApiTests : IDisposable
     private static string AgentPatchUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}/patch";
 
+    private static string AgentLogUrl(Guid artifactId) =>
+        $"/api/agent/planning/artifacts/{artifactId}/log";
+
     private static string AgentReadUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}";
 
@@ -1564,7 +1831,8 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record VersionJson(int Version, string Body, DateTime CreatedAt);
 
     public sealed record CurrentJson(
-        string State, CurrentFeatureJson Feature, ArtifactJson? Artifact, string? Reason);
+        string State, CurrentFeatureJson Feature, ArtifactJson? Artifact, string? Reason,
+        string[]? Warnings = null);
 
     public sealed record CurrentFeatureJson(string Slug, string Title, string Status);
 

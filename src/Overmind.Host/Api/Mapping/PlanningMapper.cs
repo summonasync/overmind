@@ -139,7 +139,9 @@ public static class PlanningMapper
                 .Select(l => new PlanningLogLineResponse(
                     l.Date?.ToString("yyyy-MM-dd"),
                     l.Text))
-                .ToArray());
+                .ToArray(),
+            artifact.StatusChanged,
+            artifact.FeatureStatusChanged);
     }
 
     public static PlanningArtifactVersionResponse ToVersionResponse(PlanningArtifactVersion version)

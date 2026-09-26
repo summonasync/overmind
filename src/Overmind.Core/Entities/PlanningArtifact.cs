@@ -1,9 +1,16 @@
 using System.Collections.Frozen;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Overmind.Core;
 
 public sealed class PlanningArtifact
 {
+    public const string DemotedStatusEcho = "validated → draft";
+
+    public const string DemotionLogNote = "artifact demoted: validated → draft";
+
+    public const string FeatureDemotedStatusEcho = "review → inProgress";
+
     private static readonly FrozenSet<PlanningArtifactStatus> SpecPlanResultStatuses =
         new HashSet<PlanningArtifactStatus>
         {
@@ -42,6 +49,14 @@ public sealed class PlanningArtifact
     public List<PlanningArtifactVersion> Versions { get; private set; } = [];
 
     public bool IsFrozen => Status == PlanningArtifactStatus.Validated;
+
+    [NotMapped]
+    public string? StatusChanged { get; private set; }
+
+    [NotMapped]
+    public string? FeatureStatusChanged { get; private set; }
+
+    public void RecordFeatureDemotion() => FeatureStatusChanged = FeatureDemotedStatusEcho;
 
     public static IReadOnlySet<PlanningArtifactStatus> AllowedStatuses(PlanningArtifactKind kind) => kind switch
     {
@@ -128,15 +143,15 @@ public sealed class PlanningArtifact
         };
     }
 
-    public void UpdateBody(string body, string? logNote = null)
+    public void UpdateBody(string body, string? logNote = null, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
         RequireLogHistoryAppendable(body);
         RequireChangeNoteWhenFrozen(logNote);
-        ApplyBodyMutation(body, logNote);
+        ApplyBodyMutation(body, logNote, source);
     }
 
-    public void PatchSection(string section, string content, string? logNote = null)
+    public void PatchSection(string section, string content, string? logNote = null, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(section);
 
@@ -151,10 +166,10 @@ public sealed class PlanningArtifact
         }
 
         RequireChangeNoteWhenFrozen(logNote);
-        ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote);
+        ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote, source);
     }
 
-    public void TickAc(int? index, string? text, string? logNote = null)
+    public void TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null)
     {
         if (index is null && text is null)
         {
@@ -207,7 +222,7 @@ public sealed class PlanningArtifact
         }
 
         RequireChangeNoteWhenFrozen(logNote);
-        ApplyBodyMutation(FlipAcMarker(Body, target.Index), logNote);
+        ApplyBodyMutation(FlipAcMarker(Body, target.Index), logNote, source);
     }
 
     public void SetStatus(PlanningArtifactStatus status, string? logNote = null, PlanningLogSource? source = null)
@@ -223,7 +238,7 @@ public sealed class PlanningArtifact
         if (IsFrozen && status != PlanningArtifactStatus.Validated && string.IsNullOrWhiteSpace(logNote))
         {
             throw new InvalidOperationException(
-                "Cannot leave the frozen state without a change note.");
+                "Cannot move a validated artifact to another status without a change note.");
         }
 
         if (!string.IsNullOrWhiteSpace(logNote))
@@ -258,13 +273,13 @@ public sealed class PlanningArtifact
         UpdatedAt = now;
     }
 
-    public void AppendLog(string note)
+    public void AppendLog(string note, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(note);
 
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 
-        Body = PlanningLog.Append(Body, note);
+        Body = PlanningLog.Append(Body, note, source: source);
         Version++;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -317,12 +332,16 @@ public sealed class PlanningArtifact
         if (IsFrozen && string.IsNullOrWhiteSpace(logNote))
         {
             throw new InvalidOperationException(
-                "Cannot update a frozen artifact without a change note.");
+                "Cannot update a validated artifact without a change note.");
         }
     }
 
-    private void ApplyBodyMutation(string newBody, string? logNote)
+    private void ApplyBodyMutation(string newBody, string? logNote, PlanningLogSource? source)
     {
+        var wasValidated = IsFrozen;
+        StatusChanged = null;
+        FeatureStatusChanged = null;
+
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 
         Body = newBody;
@@ -331,13 +350,15 @@ public sealed class PlanningArtifact
 
         if (!string.IsNullOrWhiteSpace(logNote))
         {
-            Body = PlanningLog.Append(Body, logNote);
+            Body = PlanningLog.Append(Body, logNote, source: source);
         }
 
-        if (IsFrozen)
+        if (wasValidated)
         {
             Status = PlanningArtifactStatus.Draft;
             FrozenAt = null;
+            StatusChanged = DemotedStatusEcho;
+            Body = PlanningLog.Append(Body, DemotionLogNote, source: PlanningLogSource.Auto);
         }
     }
 
