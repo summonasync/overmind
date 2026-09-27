@@ -30,5 +30,10 @@ public enum PlanningFailureCode
     FeatureNotInQueue,
     InvalidQueuePosition,
     InvalidQueueReorder,
-    ValidationProofRequired
+    ValidationProofRequired,
+    TaskDependencyCycle,
+    BlockedByOrderUnknown,
+    BlockedBySelfReference,
+    BlockedByDuplicateOrder,
+    BlockedByNotAllowedForKind
 }

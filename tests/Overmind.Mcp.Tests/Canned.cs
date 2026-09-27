@@ -21,6 +21,7 @@ public static class Canned
     public const string PlanningHeldSlug = "review-pending";
     public const string PlanningEmptySlug = "all-done";
     public const string PlanningBlockedSlug = "blocked-feature";
+    public const string PlanningTaskBlockedSlug = "tasks-gated";
 
     public const string HealthJson = """{"status":"ok","vectorSearch":"up","version":"test"}""";
 
@@ -122,7 +123,7 @@ public static class Canned
             {"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","review":"light","order":0,"body":"# Demo spec\n\nShip the demo.","frozenAt":"2026-09-09T10:00:00Z","version":2,"createdAt":"2026-09-08T10:05:00Z","updatedAt":"2026-09-09T10:00:00Z","log":[{"date":"2026-09-09","text":"frozen by the user"}]},
             {"id":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","review":"light","order":0,"body":"# Demo plan\n\nTwo tasks.","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:00:00Z","updatedAt":"2026-09-08T11:00:00Z","log":[]},
             {"id":"88888888-8888-8888-8888-888888888888","kind":"task","status":"done","review":"light","order":1,"body":"# Build the domain\n\n<goal>Model it.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:05:00Z","updatedAt":"2026-09-09T12:00:00Z","log":[]},
-            {"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]}
+            {"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[],"blocked":false,"blockedBy":[1]}
           ]
         }
         """;
@@ -133,7 +134,7 @@ public static class Canned
           {"artifactId":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z"},
           {"artifactId":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","version":1,"order":0,"updatedAt":"2026-09-08T11:00:00Z"},
           {"artifactId":"88888888-8888-8888-8888-888888888888","kind":"task","status":"done","version":1,"order":1,"updatedAt":"2026-09-09T12:00:00Z","review":"light","acTicked":1,"acTotal":2,"brief":"Build the domain"},
-          {"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","review":"hard","acTicked":0,"acTotal":3,"brief":"Wire the endpoints"}
+          {"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","review":"hard","acTicked":0,"acTotal":3,"brief":"Wire the endpoints","blocked":false,"blockedBy":[1]}
         ]}
         """;
 
@@ -175,7 +176,7 @@ public static class Canned
 
     public const string PlanningCurrentTaskJson =
         """
-        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[]},"reason":null,"warnings":["plan not validated"]}
+        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[],"blocked":false,"blockedBy":[1]},"reason":null,"warnings":["plan not validated"]}
         """;
 
     public const string PlanningCurrentHeldJson =
@@ -191,6 +192,11 @@ public static class Canned
     public const string PlanningCurrentBlockedStopJson =
         """
         {"state":"stop","feature":{"slug":"blocked-feature","title":"Blocked feature","status":"ready"},"artifact":null,"reason":"STOP: feature 'blocked-feature' is blocked by unclosed features: gate-locked (ready), draft-one (draft). Reads stay open; task issuance stops until every blocker closes (done or review)."}
+        """;
+
+    public const string PlanningCurrentTaskBlockedStopJson =
+        """
+        {"state":"stop","feature":{"slug":"tasks-gated","title":"Tasks gated","status":"inProgress"},"artifact":null,"reason":"STOP: every actionable task is blocked by unclosed tasks: task 3 blocked by [1, 2]. Reads stay open; task issuance stops until every blocker closes (done or review)."}
         """;
 
     public const string PlanningSetCurrentBlockedJson =

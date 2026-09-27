@@ -23,6 +23,9 @@ public sealed class BacklogImporter
     private static readonly HashSet<string> FeatureStructuralKeys =
         new(StructuralKeys, StringComparer.OrdinalIgnoreCase) { FrontmatterKeyRegistry.DependenciesKey };
 
+    private static readonly HashSet<string> TaskStructuralKeys =
+        new(StructuralKeys, StringComparer.OrdinalIgnoreCase) { FrontmatterKeyRegistry.DependenciesKey };
+
     private readonly PlanningFeatureService _features;
     private readonly FrontmatterKeyRegistry _keys;
     private readonly Dictionary<string, FrontmatterKeyRegistration> _keyCache = new(StringComparer.Ordinal);
@@ -403,7 +406,7 @@ public sealed class BacklogImporter
             return null;
         }
 
-        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct, StructuralKeys);
+        var preserved = await ExtractPreservedAsync(fields, relative, notes, ct, TaskStructuralKeys);
 
         return new BacklogArtifactImport(
             PlanningArtifactKind.Task,
@@ -417,7 +420,8 @@ public sealed class BacklogImporter
             read.Sha256,
             reassignedFrom,
             preserved,
-            Raw(fields, "brief"));
+            Raw(fields, "brief"),
+            ParseBlockedBy(Raw(fields, FrontmatterKeyRegistry.DependenciesKey)));
     }
 
     private static async Task<SourceRead?> TryReadAsync(

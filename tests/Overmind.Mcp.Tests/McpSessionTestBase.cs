@@ -131,6 +131,9 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningBlockedSlug}/current",
             Canned.PlanningCurrentBlockedStopJson);
         stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningTaskBlockedSlug}/current",
+            Canned.PlanningCurrentTaskBlockedStopJson);
+        stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/dependencies",
             Canned.PlanningDependenciesJson);
         stub.Route(

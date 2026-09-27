@@ -47,6 +47,7 @@ public sealed class PlanningArtifact
     public string? PreservedFrontmatter { get; private set; }
 
     public List<PlanningArtifactVersion> Versions { get; private set; } = [];
+    public List<PlanningTaskDependency> BlockedBy { get; private set; } = [];
 
     public bool IsFrozen => Status == PlanningArtifactStatus.Validated;
 
@@ -304,6 +305,29 @@ public sealed class PlanningArtifact
     {
         Brief = brief == string.Empty ? null : brief;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ReplaceBlockedEdges(IReadOnlyCollection<Guid> blockingIds)
+    {
+        ArgumentNullException.ThrowIfNull(blockingIds);
+
+        var incoming = new HashSet<Guid>(blockingIds);
+        for (var i = BlockedBy.Count - 1; i >= 0; i--)
+        {
+            if (!incoming.Contains(BlockedBy[i].BlockingId))
+            {
+                BlockedBy.RemoveAt(i);
+            }
+        }
+
+        var present = BlockedBy.Select(d => d.BlockingId).ToHashSet();
+        foreach (var id in blockingIds)
+        {
+            if (present.Add(id))
+            {
+                BlockedBy.Add(PlanningTaskDependency.Create(Id, id));
+            }
+        }
     }
 
     private void RequireLogHistoryAppendable(string incomingBody)

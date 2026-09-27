@@ -8,6 +8,7 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Modal } from "@/shared/ui/modal";
 import { Textarea } from "@/shared/ui/textarea";
 import { FeatureNumber } from "@/features/planning/components/feature-number";
+import { taskBlockers, taskBlockersSummary } from "@/features/planning/lib/task-blockers";
 import { taskHeading } from "@/features/planning/lib/task-heading";
 import type { PlanningArtifactResponse, PlanningArtifactStatus } from "@/features/planning/types";
 
@@ -89,7 +90,14 @@ export function TaskBoard({ tasks, featureSlug, pending, error, onOpen, onMove }
               ) : (
                 <ul className="space-y-2">
                   {columnTasks.map((task) => (
-                    <TaskCard key={task.id} task={task} featureSlug={featureSlug} onOpen={onOpen} onMove={openMove} />
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      siblings={tasks}
+                      featureSlug={featureSlug}
+                      onOpen={onOpen}
+                      onMove={openMove}
+                    />
                   ))}
                 </ul>
               )}
@@ -133,12 +141,14 @@ export function TaskBoard({ tasks, featureSlug, pending, error, onOpen, onMove }
 
 interface TaskCardProps {
   task: PlanningArtifactResponse;
+  siblings: PlanningArtifactResponse[];
   featureSlug: string;
   onOpen: (artifact: PlanningArtifactResponse) => void;
   onMove: (artifact: PlanningArtifactResponse, status: PlanningArtifactStatus) => void;
 }
 
-function TaskCard({ task, featureSlug, onOpen, onMove }: TaskCardProps) {
+function TaskCard({ task, siblings, featureSlug, onOpen, onMove }: TaskCardProps) {
+  const blockers = task.blocked ? taskBlockers(task, siblings) : [];
   return (
     <li className="rounded-md border border-border bg-surface p-2.5">
       <button
@@ -158,6 +168,14 @@ function TaskCard({ task, featureSlug, onOpen, onMove }: TaskCardProps) {
         <span className="mt-1.5 flex items-center gap-1.5">
           <Badge>#{task.order}</Badge>
           <Badge tone={task.review === "hard" ? "warning" : "neutral"}>{task.review}</Badge>
+          {blockers.length > 0 ? (
+            <span
+              title={`Blocked by ${taskBlockersSummary(blockers)}`}
+              className="inline-flex items-center rounded-md border border-border/50 px-2 py-0.5 font-mono text-xs font-medium text-muted/70"
+            >
+              blocked
+            </span>
+          ) : null}
         </span>
       </button>
       <div className="mt-2 flex flex-wrap gap-0.5 border-t border-border pt-2">

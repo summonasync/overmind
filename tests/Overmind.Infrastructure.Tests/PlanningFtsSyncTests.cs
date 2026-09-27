@@ -125,6 +125,7 @@ public sealed class PlanningFtsSyncTests : IDisposable
             ctx,
             materializer,
             new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
+            new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance),
             NullLogger<PlanningFeatureService>.Instance);
 
         var now = DateTime.UtcNow;

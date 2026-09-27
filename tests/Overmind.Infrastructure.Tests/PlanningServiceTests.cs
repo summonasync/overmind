@@ -48,10 +48,16 @@ public sealed class PlanningServiceTests : IDisposable
             _context,
             _materializer,
             new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
             NullLogger<PlanningFeatureService>.Instance);
 
     private PlanningArtifactService CreateArtifactService() =>
-        new(_context, _materializer, NullLogger<PlanningArtifactService>.Instance);
+        new(
+            _context,
+            _materializer,
+            NullLogger<PlanningArtifactService>.Instance,
+            new TaskDependencyService(
+                _context, _materializer, NullLogger<TaskDependencyService>.Instance));
 
     [Fact]
     public async Task CreateFeature_ValidSlug_Succeeds()
@@ -813,6 +819,78 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertTasks_BlockedByOnItems_CreatesEdgesInOneSave()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("task zero"),
+                new PlanningTaskUpsert("task one", BlockedBy: [0]),
+                new PlanningTaskUpsert("task two", BlockedBy: [0, 1])
+            ],
+            default);
+
+        batch.Created.ShouldBe(3);
+        _context.ChangeTracker.Clear();
+
+        var states = await CreateDependencyReader().BlockedOrdersAsync(feature.Id);
+        states.Select(s => s.Blocked).ShouldBe([false, true, true]);
+        states[2].BlockedBy.ShouldBe([0, 1]);
+        (await _context.PlanningTaskDependencies.CountAsync()).ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ForwardReferenceWithinBatch_ResolvesAgainstLaterItems()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("task zero", Order: 0, BlockedBy: [1]),
+                new PlanningTaskUpsert("task one", Order: 1)
+            ],
+            default);
+
+        _context.ChangeTracker.Clear();
+        var states = await CreateDependencyReader().BlockedOrdersAsync(feature.Id);
+        states[0].Blocked.ShouldBeTrue();
+        states[0].BlockedBy.ShouldBe([1]);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_UnknownBlockerOrder_FailsTheItemAndPersistsNothing()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.UpsertTasksAsync(
+                feature.Id,
+                [
+                    new PlanningTaskUpsert("task zero", BlockedBy: [1]),
+                    new PlanningTaskUpsert("task one", BlockedBy: [7])
+                ],
+                default));
+
+        ex.Message.ShouldStartWith("tasks[1]:");
+        ex.Message.ShouldContain("blockedBy order 7");
+        _context.ChangeTracker.Clear();
+        (await _context.PlanningArtifacts.CountAsync(a => a.FeatureId == feature.Id)).ShouldBe(0);
+        _context.PlanningTaskDependencies.ShouldBeEmpty();
+    }
+
+    private TaskDependencyService CreateDependencyReader() =>
+        new(_context, _materializer, NullLogger<TaskDependencyService>.Instance);
+
+    [Fact]
     public async Task UpsertTasks_RewrittenStoredLogLine_ThrowsWrappedAsBatchItemAndRollsBack()
     {
         var featureService = CreateFeatureService();
@@ -861,7 +939,8 @@ public sealed class PlanningServiceTests : IDisposable
             });
         using var context = _db.CreateContext(interceptor);
         var artifactService = new PlanningArtifactService(
-            context, _materializer, NullLogger<PlanningArtifactService>.Instance);
+            context, _materializer, NullLogger<PlanningArtifactService>.Instance,
+            new TaskDependencyService(context, _materializer, NullLogger<TaskDependencyService>.Instance));
 
         _materializer.ClearReceivedCalls();
         armed = true;
@@ -2015,5 +2094,178 @@ public sealed class PlanningServiceTests : IDisposable
                 artifact.Id, new PlanningArtifactPatch(Section: "goal"), default));
 
         ex.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_TaskBlockedBy_ResolvesOrdersToEdges()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default);
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default,
+            blockedBy: [1]);
+
+        var blocked = await _context.PlanningArtifacts
+            .Include(a => a.BlockedBy)
+            .SingleAsync(a => a.FeatureId == feature.Id && a.Order == 0);
+        var blocker = await _context.PlanningArtifacts
+            .SingleAsync(a => a.FeatureId == feature.Id && a.Order == 1);
+
+        blocked.BlockedBy.Single().BlockingId.ShouldBe(blocker.Id);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_CreateTaskWithBlockedBy_CreatesEdges()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default);
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task two", 2, null, null, default,
+            blockedBy: [0, 1]);
+
+        var created = await _context.PlanningArtifacts
+            .Include(a => a.BlockedBy)
+            .SingleAsync(a => a.FeatureId == feature.Id && a.Order == 2);
+
+        created.BlockedBy.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_BlockedByRearrayed_ReplacesEdgeSet()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task two", 2, null, null, default);
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default, blockedBy: [1]);
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default, blockedBy: [2]);
+
+        var blocked = await _context.PlanningArtifacts
+            .Include(a => a.BlockedBy)
+            .SingleAsync(a => a.FeatureId == feature.Id && a.Order == 0);
+
+        blocked.BlockedBy.Single().BlockingId.ShouldBe(
+            (await _context.PlanningArtifacts.SingleAsync(a => a.Order == 2 && a.FeatureId == feature.Id)).Id);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_BlockedByEmptyArray_ClearsEdgeSet()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default);
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default, blockedBy: [1]);
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default, blockedBy: []);
+
+        _context.PlanningTaskDependencies.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_WithoutBlockedBy_KeepsExistingEdges()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default);
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default, blockedBy: [1]);
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task zero edited", 0, null, null, default);
+
+        _context.PlanningTaskDependencies.Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_TaskBlockedByUnknownOrder_RefusesWithoutCreating()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default,
+                blockedBy: [3]));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Code.ShouldBe(PlanningFailureCode.BlockedByOrderUnknown);
+        (await _context.PlanningArtifacts.CountAsync(a => a.FeatureId == feature.Id)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_TaskBlockedBySelfReference_Throws()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default,
+                blockedBy: [0]));
+
+        ex.Code.ShouldBe(PlanningFailureCode.BlockedBySelfReference);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_TaskBlockedByDuplicateOrder_Throws()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default,
+                blockedBy: [1, 1]));
+
+        ex.Code.ShouldBe(PlanningFailureCode.BlockedByDuplicateOrder);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_TaskBlockedByCycle_Rejected()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default);
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task one", 1, null, null, default, blockedBy: [0]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Task, "task zero", 0, null, null, default,
+                blockedBy: [1]));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TaskDependencyCycle);
+        _context.PlanningTaskDependencies.Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_BlockedByOnSpec_Throws()
+    {
+        var artifactService = CreateArtifactService();
+        var feature = await CreateFeatureService().CreateAsync(_projectId, "feat", "Title", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nx\n</goal>\n", null, null, null, default,
+                blockedBy: []));
+
+        ex.Code.ShouldBe(PlanningFailureCode.BlockedByNotAllowedForKind);
     }
 }

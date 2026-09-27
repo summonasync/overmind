@@ -490,7 +490,8 @@ public sealed class PlanningMaterializerTests : IDisposable
         var task = await ctx.PlanningArtifacts.SingleAsync(a =>
             a.Kind == PlanningArtifactKind.Task && a.Order == 1);
         var artifactService = new PlanningArtifactService(
-            ctx, materializer, NullLogger<PlanningArtifactService>.Instance);
+            ctx, materializer, NullLogger<PlanningArtifactService>.Instance,
+            new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance));
         await artifactService.AppendLogAsync(task.Id, "board-side note", CancellationToken.None);
 
         task.Body.ShouldContain("board-side note");

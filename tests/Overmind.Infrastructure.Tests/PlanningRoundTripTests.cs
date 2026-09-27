@@ -347,6 +347,151 @@ public sealed class PlanningRoundTripTests : IDisposable
     }
 
     [Fact]
+    public async Task RoundTrip_TaskDependencyLinks_ExportThenImportIntoFreshDatabase_RestoresLinks()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteTaskDependencyFeature();
+
+        await ImportAsync(projectId);
+        await SyncAsync(projectId, force: true);
+
+        var taskDir = Path.Combine(BacklogDir, "010-demo", "tasks");
+        (await File.ReadAllTextAsync(Path.Combine(taskDir, "01-shell-task.md")))
+            .ShouldNotContain("depends_on");
+        (await File.ReadAllTextAsync(Path.Combine(taskDir, "02-pack-task.md")))
+            .ShouldContain("depends_on: 01\n");
+        (await File.ReadAllTextAsync(Path.Combine(taskDir, "03-ship-task.md")))
+            .ShouldContain("depends_on: 01, 02\n");
+
+        var exported = await SnapshotAsync();
+
+        using var freshDb = new TempDatabase();
+        Guid freshProjectId;
+        using (var ctx = freshDb.CreateContext())
+        {
+            var project = Project.Create($"rt-fresh-{Guid.NewGuid():N}", _repoDir, string.Empty);
+            project.SetPlanningWorkflow(PlanningMaterialization.On, HumanValidationOverride.Unset);
+            ctx.Projects.Add(project);
+            await ctx.SaveChangesAsync();
+            freshProjectId = project.Id;
+        }
+
+        BacklogImportReport report;
+        using (var ctx = freshDb.CreateContext())
+        {
+            report = await CreateImporter(ctx)
+                .ImportAsync(new BacklogImportRequest(_repoDir, freshProjectId), CancellationToken.None);
+        }
+
+        report.Skipped.Count(s => s.Contains("linked:") && s.Contains("tasks/")).ShouldBe(3);
+        report.Skipped.ShouldNotContain(s => s.Contains("unlinked"));
+
+        using (var ctx = freshDb.CreateContext())
+        {
+            (await ctx.PlanningTaskDependencies.CountAsync()).ShouldBe(3);
+            var blocked = await ctx.PlanningArtifacts
+                .Include(a => a.BlockedBy)
+                .SingleAsync(a => a.Kind == PlanningArtifactKind.Task && a.Order == 3);
+            var orders = await ctx.PlanningArtifacts.ToDictionaryAsync(a => a.Id, a => a.Order);
+            blocked.BlockedBy
+                .Select(d => orders[d.BlockingId])
+                .OrderBy(o => o)
+                .ShouldBe([1, 2]);
+        }
+
+        using (var ctx = freshDb.CreateContext())
+        {
+            await CreateMaterializer(ctx).SyncAsync(freshProjectId, ct: CancellationToken.None);
+        }
+
+        (await SnapshotAsync()).ShouldBe(exported);
+
+        using (var ctx = freshDb.CreateContext())
+        {
+            var reimport = await CreateImporter(ctx)
+                .ImportAsync(new BacklogImportRequest(_repoDir, freshProjectId), CancellationToken.None);
+            reimport.ArtifactsCreated.ShouldBe(0);
+            reimport.ArtifactsUpdated.ShouldBe(0);
+            reimport.Skipped.ShouldNotContain(s => s.Contains("linked:"));
+        }
+
+        (await SnapshotAsync()).ShouldBe(exported);
+    }
+
+    private void WriteTaskDependencyFeature()
+    {
+        WriteRaw("010-demo/feature.md",
+            """
+            ---
+            feature: 010
+            slug: demo
+            status: ready
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 010 — Demo feature title
+
+            <goal>
+            Build the demo.
+            </goal>
+            """);
+        WriteRaw("010-demo/tasks/01-shell-task.md",
+            """
+            ---
+            feature: 010
+            task: 01
+            slug: demo
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Shell task
+
+            <goal>
+            Shell.
+            </goal>
+            """);
+        WriteRaw("010-demo/tasks/02-pack-task.md",
+            """
+            ---
+            feature: 010
+            task: 02
+            slug: demo
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 01
+            ---
+
+            # Pack task
+
+            <goal>
+            Pack.
+            </goal>
+            """);
+        WriteRaw("010-demo/tasks/03-ship-task.md",
+            """
+            ---
+            feature: 010
+            task: 03
+            slug: demo
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 01, 02
+            ---
+
+            # Ship task
+
+            <goal>
+            Ship.
+            </goal>
+            """);
+    }
+
+    [Fact]
     public async Task Import_UnknownPriority_DowngradesToP2WithReportLine()
     {
         var projectId = await SeedProjectAsync();
@@ -561,6 +706,7 @@ public sealed class PlanningRoundTripTests : IDisposable
                 ctx,
                 CreateMaterializer(ctx),
                 new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
+                new TaskDependencyService(ctx, CreateMaterializer(ctx), NullLogger<TaskDependencyService>.Instance),
                 NullLogger<PlanningFeatureService>.Instance),
             new FrontmatterKeyRegistry(ctx, NullLogger<FrontmatterKeyRegistry>.Instance));
 

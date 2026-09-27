@@ -10,25 +10,34 @@ public sealed class PlanningArtifactService
     private readonly OvermindDbContext _db;
     private readonly IPlanningMaterializer _materializer;
     private readonly ILogger<PlanningArtifactService> _logger;
+    private readonly TaskDependencyService _taskDependencies;
 
     public PlanningArtifactService(
         OvermindDbContext db,
         IPlanningMaterializer materializer,
-        ILogger<PlanningArtifactService> logger)
+        ILogger<PlanningArtifactService> logger,
+        TaskDependencyService taskDependencies)
     {
         _db = db;
         _materializer = materializer;
         _logger = logger;
+        _taskDependencies = taskDependencies;
     }
 
     public async Task<PlanningArtifact> UpsertAsync(
         Guid featureId, PlanningArtifactKind kind, string body, int? order,
         PlanningReviewLevel? review, string? logNote, CancellationToken ct = default,
-        string? brief = null, PlanningLogSource? source = null)
+        string? brief = null, PlanningLogSource? source = null,
+        IReadOnlyList<int>? blockedBy = null)
     {
         if (brief is not null && kind != PlanningArtifactKind.Task)
         {
             throw PlanningException.BriefNotAllowedForKind(kind);
+        }
+
+        if (blockedBy is not null && kind != PlanningArtifactKind.Task)
+        {
+            throw PlanningException.BlockedByNotAllowedForKind(kind);
         }
 
         var feature = await _db.PlanningFeatures.FirstOrDefaultAsync(f => f.Id == featureId, ct);
@@ -87,6 +96,11 @@ public sealed class PlanningArtifactService
             mutated = true;
         }
 
+        if (blockedBy is not null)
+        {
+            mutated |= await _taskDependencies.StageBlockedByAsync(existing ?? created!, blockedBy, ct);
+        }
+
         if (mutated)
         {
             feature.Touch();
@@ -103,10 +117,18 @@ public sealed class PlanningArtifactService
                 throw PlanningException.DuplicateArtifact(kind, resolvedOrder);
             }
 
+            _db.PlanningTaskDependencies.RemoveRange(created.BlockedBy);
             _db.PlanningArtifacts.Remove(created);
             resolvedOrder = await ResolveOrderAsync(kind, null, featureId, ct);
-            _db.PlanningArtifacts.Add(
-                PlanningArtifact.Create(featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief));
+            created = PlanningArtifact.Create(
+                featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
+            _db.PlanningArtifacts.Add(created);
+
+            if (blockedBy is not null)
+            {
+                await _taskDependencies.StageBlockedByAsync(created, blockedBy, ct);
+            }
+
             TransitionOnArtifactCreate(feature, kind);
             feature.Touch();
 
@@ -120,10 +142,13 @@ public sealed class PlanningArtifactService
             }
         }
 
+        var artifact = existing ?? created
+            ?? await _db.PlanningArtifacts
+                .FirstAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
+
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
 
-        return existing ?? await _db.PlanningArtifacts
-            .FirstAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
+        return artifact;
     }
 
     public async Task<PlanningTaskBatchResult> UpsertTasksAsync(
@@ -137,6 +162,7 @@ public sealed class PlanningArtifactService
         }
 
         var siblings = await _db.PlanningArtifacts
+            .Include(a => a.BlockedBy)
             .Where(a => a.FeatureId == featureId && a.Kind == PlanningArtifactKind.Task)
             .ToListAsync(ct);
 
@@ -163,6 +189,24 @@ public sealed class PlanningArtifactService
             catch (InvalidOperationException)
             {
                 throw PlanningException.TaskBatchItem(i, PlanningException.ChangeNoteRequired());
+            }
+        }
+
+        var siblingsById = siblings.ToDictionary(a => a.Id);
+        for (var i = 0; i < tasks.Count; i++)
+        {
+            if (tasks[i].BlockedBy is not { } blockedBy)
+            {
+                continue;
+            }
+
+            try
+            {
+                mutated |= _taskDependencies.StageBlockedBy(staged[i], blockedBy, siblingsById);
+            }
+            catch (PlanningException ex)
+            {
+                throw PlanningException.TaskBatchItem(i, ex);
             }
         }
 

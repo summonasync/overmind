@@ -63,6 +63,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("empty array clears");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("empty array clears");
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
         tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("priority");
         tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
@@ -186,6 +188,25 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningReadFeature_TaskDependencies_PassThroughOnTasksOnly()
+    {
+        var response = await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        var artifacts = JsonNode.Parse(Canned.ToolResultText(response))!["artifacts"]!.AsArray();
+        var byId = artifacts.ToDictionary(a => a!["id"]!.GetValue<string>(), a => a!.AsObject());
+
+        byId[Canned.PlanningTaskTwoId.ToString()]!["blocked"]!.GetValue<bool>().ShouldBeFalse();
+        byId[Canned.PlanningTaskTwoId.ToString()]!["blockedBy"]!.ToJsonString().ShouldBe("[1]");
+        byId[Canned.PlanningTaskOneId.ToString()]!.ContainsKey("blocked").ShouldBeFalse();
+        byId[Canned.PlanningSpecArtifactId.ToString()]!.ContainsKey("blocked").ShouldBeFalse();
+        byId[Canned.PlanningSpecArtifactId.ToString()]!.ContainsKey("blockedBy").ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task PlanningListArtifacts_ProxiesAgentRosterRoute_Unchanged()
     {
         var response = await Driver.CallToolAsync("planning_list_artifacts", new JsonObject
@@ -210,6 +231,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         task["acTicked"]!.GetValue<int>().ShouldBe(0);
         task["acTotal"]!.GetValue<int>().ShouldBe(3);
         task["brief"]!.GetValue<string>().ShouldBe("Wire the endpoints");
+        task["blocked"]!.GetValue<bool>().ShouldBeFalse();
+        task["blockedBy"]!.ToJsonString().ShouldBe("[1]");
     }
 
     [Fact]
@@ -332,6 +355,25 @@ public class PlanningToolContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldContain("Wire the API");
         text.ShouldContain("plan not validated");
+        text.ShouldContain("\"blocked\":false");
+        text.ShouldContain("\"blockedBy\":[1]");
+    }
+
+    [Fact]
+    public async Task PlanningCurrentTask_TaskBlockedStop_NamesTheUnclosedTaskChain()
+    {
+        var response = await Driver.CallToolAsync("planning_current_task", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningTaskBlockedSlug
+        });
+
+        var payload = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        payload.First().Key.ShouldBe("reason");
+        payload["reason"]!.GetValue<string>().ShouldContain("STOP: every actionable task is blocked by unclosed tasks");
+        payload["reason"]!.GetValue<string>().ShouldContain("task 3 blocked by [1, 2]");
+        payload["state"]!.GetValue<string>().ShouldBe("stop");
+        payload["artifact"].ShouldBeNull();
     }
 
     [Fact]
@@ -535,6 +577,62 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningUpsertArtifact_ForwardsBlockedByOrdersInThePayload()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "# Gated task\n\n<goal>Wait for the domain model.</goal>",
+            ["order"] = 3,
+            ["blockedBy"] = new JsonArray(1, 2)
+        });
+
+        var body = JsonNode.Parse(Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts", StringComparison.Ordinal)).Body)!;
+        body["blockedBy"]!.ToJsonString().ShouldBe("[1,2]");
+        body.AsObject().Select(p => p.Key).ShouldContain("blockedBy");
+
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_EmptyBlockedBy_IsForwardedToClearEdges()
+    {
+        await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "# Ungated task\n\n<goal>Standalone work.</goal>",
+            ["order"] = 3,
+            ["blockedBy"] = new JsonArray()
+        });
+
+        var body = JsonNode.Parse(Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts", StringComparison.Ordinal)).Body)!;
+        body["blockedBy"]!.ToJsonString().ShouldBe("[]");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_WithoutBlockedBy_OmitsItFromThePostedJson()
+    {
+        await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "# Solo task\n\n<goal>No waits.</goal>",
+            ["order"] = 4
+        });
+
+        var body = JsonNode.Parse(Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts", StringComparison.Ordinal)).Body)!;
+        body.AsObject().ContainsKey("blockedBy").ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task PlanningUpsertTasks_PostsTheWholeBatchToTheTasksRouteInOneCall()
     {
         var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
@@ -593,6 +691,66 @@ public class PlanningToolContractTests : McpSessionTestBase
         tasks[0]!["brief"]!.GetValue<string>().ShouldBe("Model the domain");
         text.ShouldNotContain("Wire it.");
         text.ShouldNotContain("\"log\"");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertTasks_ItemsForwardBlockedBy_IncludingEmptyToClear()
+    {
+        await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["body"] = "# Task one\n\n<goal>Model it.</goal>",
+                    ["order"] = 1,
+                    ["blockedBy"] = new JsonArray(2)
+                },
+                new JsonObject
+                {
+                    ["body"] = "# Task two\n\n<goal>Wire it.</goal>",
+                    ["order"] = 2,
+                    ["blockedBy"] = new JsonArray()
+                },
+                new JsonObject
+                {
+                    ["body"] = "# Task three\n\n<goal>Ship it.</goal>",
+                    ["order"] = 3
+                }
+            }
+        });
+
+        var posted = JsonNode.Parse(Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal)).Body)!["tasks"]!.AsArray();
+        posted.Count.ShouldBe(3);
+        posted[0]!["blockedBy"]!.ToJsonString().ShouldBe("[2]");
+        posted[1]!["blockedBy"]!.ToJsonString().ShouldBe("[]");
+        posted[2]!.AsObject().ContainsKey("blockedBy").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningUpsertTasks_NonArrayBlockedBy_RejectedInsteadOfSilentlyDropped()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["body"] = "# Task one\n\n<goal>Model it.</goal>",
+                    ["order"] = 1,
+                    ["blockedBy"] = 3
+                }
+            }
+        });
+
+        ToolErrorText(response).ShouldContain("blockedBy must be an array of task orders");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal));
     }
 
     [Fact]

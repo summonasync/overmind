@@ -248,7 +248,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             status: todo
             review: light
             created: 2026-09-01
-            depends_on: 02-other
+            epic: demo
             risk_level: high
             ---
 
@@ -264,7 +264,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             Path.Combine(_backlogDir, "024-keys", "tasks", "01-key-task.md"));
         materialized.ShouldContain(
             "created: 2026-09-01\n" +
-            "depends_on: 02-other\n" +
+            "epic: demo\n" +
             "risk_level: high\n" +
             "---\n\n" +
             "# Key task");
@@ -279,7 +279,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             .Include(f => f.Artifacts)
             .FirstAsync(f => f.ProjectId == projectId && f.Slug == "024-keys");
         feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task).PreservedFrontmatter
-            .ShouldBe("{\"depends_on\":\"02-other\",\"risk_level\":\"high\"}");
+            .ShouldBe("{\"epic\":\"demo\",\"risk_level\":\"high\"}");
     }
 
     [Fact]
@@ -371,6 +371,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             ctx,
             CreateMaterializer(ctx),
             new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
+            new TaskDependencyService(ctx, CreateMaterializer(ctx), NullLogger<TaskDependencyService>.Instance),
             NullLogger<PlanningFeatureService>.Instance);
         await features.UpdateAsync(projectId, "010-demo", title: "Demo feature retitled", body: null, status: null);
         await features.CreateAsync(projectId, "020-second", "Second feature", "Fresh body");
@@ -401,7 +402,11 @@ public sealed class BacklogImportMaterializationTests : IDisposable
         var materializer = CreateMaterializer(ctx);
         var seeder = new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)));
         var features = new PlanningFeatureService(
-            ctx, materializer, seeder, NullLogger<PlanningFeatureService>.Instance);
+            ctx,
+            materializer,
+            seeder,
+            new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance),
+            NullLogger<PlanningFeatureService>.Instance);
         var keys = new FrontmatterKeyRegistry(ctx, NullLogger<FrontmatterKeyRegistry>.Instance);
         return new BacklogImporter(features, keys);
     }

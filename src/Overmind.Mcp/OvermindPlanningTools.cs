@@ -199,7 +199,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -209,6 +209,7 @@ public sealed class OvermindPlanningTools
         [Description("Optional review level of a task: light or hard.")] string? review = null,
         [Description("Change note recorded in the artifact log; required when editing a validated artifact.")] string? logNote = null,
         [Description("Optional one-line brief of a task artifact, max 500 chars; not allowed for other kinds.")] string? brief = null,
+        [Description("Optional task-only blockedBy: sibling task orders of the same feature this task waits on. Re-upsert replaces the edge set declaratively (empty array clears); omitted preserves the current edges on update and sets none on create.")] int[]? blockedBy = null,
         CancellationToken ct = default)
     {
         var payload = new JsonObject
@@ -226,6 +227,11 @@ public sealed class OvermindPlanningTools
             payload["brief"] = brief;
         }
 
+        if (blockedBy is not null)
+        {
+            payload["blockedBy"] = new JsonArray([.. blockedBy.Select(o => JsonValue.Create(o))]);
+        }
+
         var artifact = await Guarded(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
             payload,
@@ -234,11 +240,11 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_tasks", Destructive = false, Idempotent = false)]
-    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization sync and one feature auto-transition evaluation run after the batch, never per item — creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order, review light/hard, brief (task-only, one line, max 500 chars), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). An item whose order hits an existing task updates that task in place.")]
+    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization sync and one feature auto-transition evaluation run after the batch, never per item — creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order, review light/hard, brief (task-only, one line, max 500 chars), blockedBy (sibling task orders this task waits on; empty array clears, omitted preserves the current edges), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). An item whose order hits an existing task updates that task in place.")]
     public async Task<JsonElement> UpsertTasks(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to create or update tasks in.")] string featureSlug,
-        [Description("Array of task items, each an object: body (required), order, review, logNote, brief.")] JsonElement tasks,
+        [Description("Array of task items, each an object: body (required), order, review, logNote, brief, blockedBy.")] JsonElement tasks,
         CancellationToken ct = default)
     {
         var payload = new JsonObject
@@ -289,7 +295,7 @@ public sealed class OvermindPlanningTools
     {
         if (item.ValueKind != JsonValueKind.Object)
         {
-            throw new McpException("each item must be an object with body, order, review, logNote, brief.");
+            throw new McpException("each item must be an object with body, order, review, logNote, brief, blockedBy.");
         }
 
         if (!item.TryGetProperty("body", out var body) ||
@@ -324,6 +330,17 @@ public sealed class OvermindPlanningTools
         if (item.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)
         {
             payload["brief"] = brief.GetString();
+        }
+
+        if (item.TryGetProperty("blockedBy", out var blockedBy))
+        {
+            if (blockedBy.ValueKind is not JsonValueKind.Array)
+            {
+                throw new McpException(
+                    "blockedBy must be an array of task orders; omit it to preserve the current edges.");
+            }
+
+            payload["blockedBy"] = JsonNode.Parse(blockedBy.GetRawText());
         }
 
         return payload;

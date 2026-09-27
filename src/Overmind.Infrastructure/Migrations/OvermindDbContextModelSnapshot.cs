@@ -364,6 +364,21 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("PlanningMaterializedFiles");
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningTaskDependency", b =>
+                {
+                    b.Property<Guid>("BlockedById")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BlockingId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("BlockedById", "BlockingId");
+
+                    b.HasIndex("BlockingId");
+
+                    b.ToTable("PlanningTaskDependencies");
+                });
+
             modelBuilder.Entity("Overmind.Core.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -679,6 +694,25 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningTaskDependency", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningArtifact", "BlockedBy")
+                        .WithMany()
+                        .HasForeignKey("BlockingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Overmind.Core.PlanningArtifact", "Task")
+                        .WithMany("BlockedBy")
+                        .HasForeignKey("BlockedById")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BlockedBy");
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("Overmind.Core.ProjectKit", b =>
                 {
                     b.HasOne("Overmind.Core.SkillKit", null)
@@ -748,6 +782,8 @@ namespace Overmind.Infrastructure.Migrations
 
             modelBuilder.Entity("Overmind.Core.PlanningArtifact", b =>
                 {
+                    b.Navigation("BlockedBy");
+
                     b.Navigation("Versions");
                 });
 

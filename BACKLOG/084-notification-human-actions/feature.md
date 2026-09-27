@@ -1,7 +1,7 @@
 ---
 feature: 084
 slug: notification-human-actions
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-26
@@ -30,3 +30,7 @@ Human actions requested by agents (approval/question notifications) are currentl
 - 077-validation-provenance (done): approval reply = validation proof — approve UX feeds it directly.
 - 082-п.3 shares the "resources pointer" cleanup only; no overlap here.
 </refs>
+
+<log>
+- 2026-09-27 [auto] — artifact created → inProgress
+</log>

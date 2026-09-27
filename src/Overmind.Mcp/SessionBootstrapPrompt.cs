@@ -16,7 +16,7 @@ public sealed class SessionBootstrapPrompt
         "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.";
 
     private const string DependencyRouting =
-        "Feature dependencies: planning_list_feature_dependencies reads the graph, planning_add_feature_dependency / planning_remove_feature_dependency edit it; a feature with unclosed blockers stops current_task naming them — clear or work the blockers, never sneak past.";
+        "Feature dependencies: planning_list_feature_dependencies reads the graph, planning_add_feature_dependency / planning_remove_feature_dependency edit it; a feature with unclosed blockers stops current_task naming them — clear or work the blockers, never sneak past. Task level: declare blockedBy sibling orders on the task upsert (declarative replace, empty array clears); current_task skips blocked tasks and stops naming the chain when everything left is blocked.";
 
     private const string QueueRouting =
         "Work queue: what's next = planning_task_queue; the board order IS the queue (priority asc, then position); the human reorders by dragging, the agent moves with planning_move_feature, and crossing bands via planning_set_feature_priority needs the user's explicit approval.";

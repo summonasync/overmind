@@ -88,7 +88,8 @@ public static class PlanningMapper
             !FeatureDependencyEntry.IsClosed(blocker.Status));
 
     public static PlanningFeatureResponse ToFeatureResponse(
-        PlanningFeature feature, FeatureDependencies dependencies)
+        PlanningFeature feature, FeatureDependencies dependencies,
+        IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
     {
         return new PlanningFeatureResponse(
             feature.Slug,
@@ -102,7 +103,7 @@ public static class PlanningMapper
             feature.Artifacts
                 .OrderBy(a => a.Kind)
                 .ThenBy(a => a.Order)
-                .Select(ToArtifactResponse)
+                .Select(a => ToArtifactResponse(a, blockedStates))
                 .ToArray(),
             dependencies.BlockedBy.Any(entry => !entry.Closed),
             [.. dependencies.BlockedBy.Select(ToDependencyEntryResponse)],
@@ -121,7 +122,8 @@ public static class PlanningMapper
         FeatureDependencyEntry entry) =>
         new(entry.Slug, entry.Status, entry.Closed);
 
-    public static PlanningArtifactRosterItemResponse ToRosterItem(PlanningArtifact artifact)
+    public static PlanningArtifactRosterItemResponse ToRosterItem(
+        PlanningArtifact artifact, IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
     {
         if (artifact.Kind != PlanningArtifactKind.Task)
         {
@@ -130,6 +132,7 @@ public static class PlanningMapper
                 artifact.Version, artifact.Order, artifact.UpdatedAt);
         }
 
+        var (blocked, blockedBy) = BlockedView(artifact, blockedStates);
         var items = PlanningSections.ParseAcceptanceCriteria(artifact.Body);
         return new(
             artifact.Id, artifact.Kind, artifact.Status,
@@ -137,11 +140,15 @@ public static class PlanningMapper
             artifact.Review,
             items.Count(i => i.Checked == true),
             items.Count,
-            artifact.Brief);
+            artifact.Brief,
+            blocked,
+            blockedBy);
     }
 
-    public static PlanningArtifactResponse ToArtifactResponse(PlanningArtifact artifact)
+    public static PlanningArtifactResponse ToArtifactResponse(
+        PlanningArtifact artifact, IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
     {
+        var (blocked, blockedBy) = BlockedView(artifact, blockedStates);
         return new PlanningArtifactResponse(
             artifact.Id,
             artifact.Kind,
@@ -160,7 +167,23 @@ public static class PlanningMapper
                     l.Text))
                 .ToArray(),
             artifact.StatusChanged,
-            artifact.FeatureStatusChanged);
+            artifact.FeatureStatusChanged,
+            blocked,
+            blockedBy);
+    }
+
+    private static (bool? Blocked, int[]? BlockedBy) BlockedView(
+        PlanningArtifact artifact, IReadOnlyDictionary<int, TaskBlockedState>? blockedStates)
+    {
+        if (artifact.Kind != PlanningArtifactKind.Task ||
+            blockedStates is null ||
+            !blockedStates.TryGetValue(artifact.Order, out var state) ||
+            state.BlockedBy.Count == 0)
+        {
+            return (null, null);
+        }
+
+        return (state.Blocked, [.. state.BlockedBy]);
     }
 
     public static PlanningArtifactVersionResponse ToVersionResponse(PlanningArtifactVersion version)

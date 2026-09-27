@@ -12,17 +12,20 @@ public sealed partial class PlanningFeatureService
     private readonly OvermindDbContext _db;
     private readonly IPlanningMaterializer _materializer;
     private readonly BacklogImportSeeder _seeder;
+    private readonly TaskDependencyService _taskDependencies;
     private readonly ILogger<PlanningFeatureService> _logger;
 
     public PlanningFeatureService(
         OvermindDbContext db,
         IPlanningMaterializer materializer,
         BacklogImportSeeder seeder,
+        TaskDependencyService taskDependencies,
         ILogger<PlanningFeatureService> logger)
     {
         _db = db;
         _materializer = materializer;
         _seeder = seeder;
+        _taskDependencies = taskDependencies;
         _logger = logger;
     }
 
@@ -302,6 +305,7 @@ public sealed partial class PlanningFeatureService
         var kept = new List<string>();
         var imported = new HashSet<Guid>();
         var taskContent = new Dictionary<string, PlanningArtifact>(StringComparer.Ordinal);
+        var taskDependencyImports = new List<TaskDependencyImport>();
         foreach (var task in feature.Artifacts
                      .Where(a => a.Kind == PlanningArtifactKind.Task)
                      .OrderBy(a => a.Order))
@@ -321,6 +325,8 @@ public sealed partial class PlanningFeatureService
             {
                 kept.Add(
                     $"matched: {artifact.SourcePath} (identical content to task order {identical.Order}; no new artifact)");
+                taskDependencyImports.Add(
+                    new TaskDependencyImport(identical, artifact.SourcePath, artifact.DependsOn ?? []));
                 imported.Add(identical.Id);
                 continue;
             }
@@ -336,6 +342,8 @@ public sealed partial class PlanningFeatureService
                 if (artifact.Kind == PlanningArtifactKind.Task)
                 {
                     taskContent.TryAdd(ContentHash.Normalize(restored.Body), restored);
+                    taskDependencyImports.Add(
+                        new TaskDependencyImport(restored, artifact.SourcePath, artifact.DependsOn ?? []));
                 }
 
                 if (artifact.ReassignedFrom.HasValue)
@@ -395,6 +403,12 @@ public sealed partial class PlanningFeatureService
                 artifactsUpdated++;
             }
 
+            if (artifact.Kind == PlanningArtifactKind.Task)
+            {
+                taskDependencyImports.Add(
+                    new TaskDependencyImport(existing, artifact.SourcePath, artifact.DependsOn ?? []));
+            }
+
             imported.Add(existing.Id);
         }
 
@@ -409,6 +423,8 @@ public sealed partial class PlanningFeatureService
 
         try
         {
+            await _db.SaveChangesAsync(ct);
+            kept.AddRange(await _taskDependencies.RestoreFromImportAsync(feature, taskDependencyImports, ct));
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }

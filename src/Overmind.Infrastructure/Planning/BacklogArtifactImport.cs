@@ -14,4 +14,5 @@ public sealed record BacklogArtifactImport(
     string SourceSha256,
     int? ReassignedFrom = null,
     IReadOnlyDictionary<string, string>? Preserved = null,
-    string? Brief = null);
+    string? Brief = null,
+    IReadOnlyList<string>? DependsOn = null);

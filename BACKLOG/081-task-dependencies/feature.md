@@ -1,7 +1,7 @@
 ---
 feature: 081
 slug: task-dependencies
-status: draft
+status: review
 priority: p1
 version: 1
 created: 2026-09-26
@@ -28,3 +28,8 @@ Task sequencing today lives only in prose (`<refs>` text like "57 must not start
 - 030-feature-dependencies (done) — the semantic template to extend downward.
 - Source: MindlashStudio report 2026-09-26 gap 3 + BobHouse 020 B7.
 </refs>
+
+<log>
+- 2026-09-27 [auto] — artifact created → inProgress
+- 2026-09-27 [auto] — all tasks done + spec + plan validated → review
+</log>

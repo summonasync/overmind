@@ -394,6 +394,7 @@ public static class AgentPlanningApi
         string slug,
         PlanningPolicy policy,
         FeatureDependencyService dependencies,
+        TaskDependencyService taskDependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -460,17 +461,37 @@ public static class AgentPlanningApi
                 "empty", currentFeature, null, ResultStateReason(feature)));
         }
 
-        var workable = tasks.FirstOrDefault(
-            t => t.Status is PlanningArtifactStatus.Todo or PlanningArtifactStatus.InProgress);
+        var candidates = tasks
+            .Where(t => t.Status is PlanningArtifactStatus.Todo or PlanningArtifactStatus.InProgress)
+            .ToList();
 
-        if (workable is not null)
+        if (candidates.Count > 0)
         {
+            var blockedStates = await taskDependencies.BlockedOrdersAsync(feature.Id, ct);
+            var blockedOrders = blockedStates
+                .Where(s => s.Blocked)
+                .Select(s => s.Order)
+                .ToHashSet();
+
+            var actionable = candidates.FirstOrDefault(t => !blockedOrders.Contains(t.Order));
+            if (actionable is not null)
+            {
+                return Results.Ok(new PlanningCurrentResponse(
+                    "task",
+                    currentFeature,
+                    PlanningMapper.ToArtifactResponse(
+                        actionable, blockedStates.ToDictionary(s => s.Order)),
+                    null,
+                    SpecPlanWarnings(feature)));
+            }
+
             return Results.Ok(new PlanningCurrentResponse(
-                "task",
+                "stop",
                 currentFeature,
-                PlanningMapper.ToArtifactResponse(workable),
                 null,
-                SpecPlanWarnings(feature)));
+                $"STOP: every actionable task is blocked by unclosed tasks: " +
+                $"{await UnclosedChainAsync(taskDependencies, candidates, ct)}. " +
+                "Reads stay open; task issuance stops until every blocker closes (done or review)."));
         }
 
         var inReview = tasks.Count(t => t.Status == PlanningArtifactStatus.Review);
@@ -488,6 +509,21 @@ public static class AgentPlanningApi
             PlanningMapper.ToArtifactResponse(blocked),
             "The next task is blocked.",
             SpecPlanWarnings(feature)));
+    }
+
+    private static async Task<string> UnclosedChainAsync(
+        TaskDependencyService taskDependencies,
+        IReadOnlyList<PlanningArtifact> candidates,
+        CancellationToken ct)
+    {
+        var links = new List<string>(candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            var blockers = await taskDependencies.UnclosedBlockersAsync(candidate.Id, ct);
+            links.Add($"task {candidate.Order} blocked by [{string.Join(", ", blockers.Select(b => b.Order))}]");
+        }
+
+        return string.Join(", ", links);
     }
 
     private static string ResultStateReason(PlanningFeature feature)

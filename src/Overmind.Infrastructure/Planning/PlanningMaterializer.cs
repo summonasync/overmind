@@ -42,6 +42,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         var features = await _db.PlanningFeatures
             .Include(f => f.Artifacts)
+            .ThenInclude(a => a.BlockedBy)
             .Include(f => f.BlockedBy)
             .Where(f => f.ProjectId == projectId)
             .OrderBy(f => f.Slug)
@@ -392,6 +393,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         string root, List<PlanningFeature> features, List<PlanningMaterializedFile> rows)
     {
         var slugById = features.ToDictionary(f => f.Id, f => f.Slug);
+        var blockerOrders = BlockerOrdersByTaskId(features);
         var plans = new List<FilePlan>();
 
         foreach (var feature in features)
@@ -426,7 +428,10 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                     relative = $"{directory}/tasks/{BacklogNaming.TaskFileName(task.Order, taskSlug)}";
                 }
 
-                plans.Add(FilePlan.Create(root, feature.Id, relative, TaskDocument(task, featurePart, slugPart)));
+                blockerOrders.TryGetValue(task.Id, out var taskBlockers);
+                plans.Add(FilePlan.Create(
+                    root, feature.Id, relative,
+                    TaskDocument(task, featurePart, slugPart, taskBlockers ?? [])));
             }
         }
 
@@ -698,7 +703,35 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         return builder.ToString();
     }
 
-    private static string TaskDocument(PlanningArtifact task, string featurePart, string slugPart)
+    private static Dictionary<Guid, IReadOnlyList<int>> BlockerOrdersByTaskId(List<PlanningFeature> features)
+    {
+        var orders = new Dictionary<Guid, IReadOnlyList<int>>();
+        foreach (var feature in features)
+        {
+            var siblingOrders = feature.Artifacts
+                .Where(a => a.Kind == PlanningArtifactKind.Task)
+                .ToDictionary(a => a.Id, a => a.Order);
+
+            foreach (var task in feature.Artifacts)
+            {
+                if (task.Kind != PlanningArtifactKind.Task)
+                {
+                    continue;
+                }
+
+                orders[task.Id] = task.BlockedBy
+                    .Where(d => siblingOrders.ContainsKey(d.BlockingId))
+                    .Select(d => siblingOrders[d.BlockingId])
+                    .OrderBy(o => o)
+                    .ToList();
+            }
+        }
+
+        return orders;
+    }
+
+    private static string TaskDocument(
+        PlanningArtifact task, string featurePart, string slugPart, IReadOnlyList<int> blockerOrders)
     {
         var builder = new StringBuilder();
         builder.Append("---\n");
@@ -708,6 +741,12 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         builder.Append($"status: {task.Status.ToString().ToLowerInvariant()}\n");
         builder.Append($"review: {task.Review.ToString().ToLowerInvariant()}\n");
         builder.Append($"created: {task.CreatedAt:yyyy-MM-dd}\n");
+        if (blockerOrders.Count > 0)
+        {
+            builder.Append(
+                $"{FrontmatterKeyRegistry.DependenciesKey}: {string.Join(", ", blockerOrders.Select(o => $"{o:D2}"))}\n");
+        }
+
         if (task.Brief is not null)
         {
             builder.Append($"brief: {task.Brief}\n");

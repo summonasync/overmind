@@ -21,6 +21,7 @@ import { FeatureDependenciesPanel } from "@/features/planning/components/feature
 import { FeatureForm } from "@/features/planning/components/feature-form";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
 import { TaskBoard } from "@/features/planning/components/task-board";
+import { TaskDependenciesPanel } from "@/features/planning/components/task-dependencies-panel";
 import { TaskEditor } from "@/features/planning/components/task-editor";
 import { usePlanningFeature, usePlanningMutations } from "@/features/planning/lib/use-planning";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
@@ -179,6 +180,8 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
       <ErrorText error={updateFeature.error as Error | null} />
 
       <FeatureDependenciesPanel projectId={projectId} feature={feature} />
+
+      <TaskDependenciesPanel featureSlug={slug} tasks={tasks} />
 
       <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
 

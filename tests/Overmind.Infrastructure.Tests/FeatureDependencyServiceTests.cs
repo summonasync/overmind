@@ -44,6 +44,7 @@ public sealed class FeatureDependencyServiceTests : IDisposable
             _context,
             _materializer,
             new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
             NullLogger<PlanningFeatureService>.Instance);
 
     private FeatureDependencyService CreateDependencyService() =>

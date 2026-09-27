@@ -14,6 +14,7 @@ export { FeaturePrioritySelect } from "./components/feature-priority-select";
 export { FeatureWorkspace } from "./components/feature-workspace";
 export { PlanningWorkflowSettings } from "./components/workflow-settings";
 export { TaskBoard } from "./components/task-board";
+export { TaskDependenciesPanel } from "./components/task-dependencies-panel";
 export { TaskEditor } from "./components/task-editor";
 export {
   useMaterializeMutation,

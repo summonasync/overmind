@@ -26,6 +26,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningFeatureDependency> PlanningFeatureDependencies => Set<PlanningFeatureDependency>();
     public DbSet<PlanningArtifact> PlanningArtifacts => Set<PlanningArtifact>();
     public DbSet<PlanningArtifactVersion> PlanningArtifactVersions => Set<PlanningArtifactVersion>();
+    public DbSet<PlanningTaskDependency> PlanningTaskDependencies => Set<PlanningTaskDependency>();
     public DbSet<PlanningMaterializedFile> PlanningMaterializedFiles => Set<PlanningMaterializedFile>();
     public DbSet<FrontmatterKey> FrontmatterKeys => Set<FrontmatterKey>();
     public DbSet<AgentNotification> AgentNotifications => Set<AgentNotification>();
@@ -199,6 +200,21 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(v => v.Id).ValueGeneratedNever();
 
             builder.HasIndex(v => new { v.ArtifactId, v.Version }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlanningTaskDependency>(builder =>
+        {
+            builder.HasKey(d => new { d.BlockedById, d.BlockingId });
+
+            builder.HasOne(d => d.Task)
+                .WithMany(a => a.BlockedBy)
+                .HasForeignKey(d => d.BlockedById)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(d => d.BlockedBy)
+                .WithMany()
+                .HasForeignKey(d => d.BlockingId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // PlanningMaterializedFile has multiple cascade paths (Project direct, Project -> PlanningFeature -> row,

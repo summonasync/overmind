@@ -64,6 +64,8 @@ public sealed class CreatePlanningArtifactRequestValidator : AbstractValidator<C
         RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
             .WithMessage("Brief must be a single line.")
             .When(x => x.Brief is not null);
+        RuleForEach(x => x.BlockedBy).GreaterThanOrEqualTo(0)
+            .WithMessage("blockedBy must contain non-negative task orders.");
     }
 }
 

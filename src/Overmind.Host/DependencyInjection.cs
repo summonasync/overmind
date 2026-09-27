@@ -47,6 +47,7 @@ public static class DependencyInjection
             provider.GetRequiredService<ILogger<BundledSeedService>>(),
             OvermindPaths.BundledDirectory));
 
+        services.AddScoped<TaskDependencyService>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<NotificationsService>();
 
@@ -104,6 +105,7 @@ public static class DependencyInjection
             provider.GetRequiredService<IPlanningMaterializer>(),
             OvermindPaths.DataDirectory));
         services.AddScoped<PlanningFeatureService>();
+        services.AddScoped<TaskDependencyService>();
         services.AddScoped<FeatureDependencyService>();
         services.AddScoped<FeatureQueueService>();
         services.AddScoped<FrontmatterKeyRegistry>();

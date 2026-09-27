@@ -143,6 +143,27 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidQueueReorder,
             $"Reordering the '{priority.ToString().ToLowerInvariant()}' band failed: {discrepancy}");
 
+    public static PlanningException TaskDependencyCycle(int order, IReadOnlyList<int> chain) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.TaskDependencyCycle,
+            $"Setting blockedBy on task order {order} would create a dependency cycle: {string.Join(" -> ", chain)}.");
+
+    public static PlanningException BlockedByOrderUnknown(int order, IReadOnlyList<int> taskOrders) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BlockedByOrderUnknown,
+            $"blockedBy order {order} does not match any task of the feature. Task orders present: " +
+            $"{(taskOrders.Count == 0 ? "(none)" : string.Join(", ", taskOrders))}.");
+
+    public static PlanningException BlockedBySelfReference(int order) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BlockedBySelfReference,
+            $"Task order {order} cannot block itself.");
+
+    public static PlanningException BlockedByDuplicateOrder(int order) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BlockedByDuplicateOrder,
+            $"blockedBy lists order {order} more than once.");
+
+    public static PlanningException BlockedByNotAllowedForKind(PlanningArtifactKind kind) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BlockedByNotAllowedForKind,
+            $"blockedBy is only allowed on task artifacts; kind '{kind}' cannot carry one.");
+
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
 }

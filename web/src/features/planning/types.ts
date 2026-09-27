@@ -109,6 +109,8 @@ export interface PlanningArtifactResponse {
   createdAt: string;
   updatedAt: string;
   log: PlanningLogLine[];
+  blocked?: boolean;
+  blockedBy?: number[];
 }
 
 export interface PlanningFeatureResponse {

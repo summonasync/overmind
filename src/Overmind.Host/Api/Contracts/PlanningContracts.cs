@@ -85,7 +85,8 @@ public sealed record CreatePlanningArtifactRequest(
     PlanningReviewLevel? Review,
     string? LogNote,
     string? Brief = null,
-    string? Source = null);
+    string? Source = null,
+    IReadOnlyList<int>? BlockedBy = null);
 
 public sealed record UpdatePlanningArtifactRequest(
     string Body,
@@ -98,7 +99,8 @@ public sealed record PlanningTaskUpsertRequest(
     int? Order = null,
     PlanningReviewLevel? Review = null,
     string? LogNote = null,
-    string? Brief = null);
+    string? Brief = null,
+    IReadOnlyList<int>? BlockedBy = null);
 
 public sealed record CreatePlanningTasksRequest(PlanningTaskUpsertRequest[] Tasks, string? Source = null);
 
@@ -184,7 +186,9 @@ public sealed record PlanningArtifactRosterItemResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PlanningReviewLevel? Review = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AcTicked = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AcTotal = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Brief = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Brief = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null);
 
 public sealed record PlanningArtifactResponse(
     Guid Id,
@@ -200,7 +204,9 @@ public sealed record PlanningArtifactResponse(
     DateTime UpdatedAt,
     PlanningLogLineResponse[] Log,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusChanged = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 

@@ -53,6 +53,7 @@ public static class PlanningFeaturesApi
         IValidator<CreatePlanningFeatureRequest> validator,
         PlanningFeatureService service,
         FeatureDependencyService dependencies,
+        TaskDependencyService taskDependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -86,7 +87,8 @@ public static class PlanningFeaturesApi
         return Results.Created(
             $"/api/projects/{projectId}/planning/features/{request.Slug}",
             PlanningMapper.ToFeatureResponse(
-                feature!, await dependencies.ListDependenciesAsync(projectId, request.Slug, ct)));
+                feature!, await dependencies.ListDependenciesAsync(projectId, request.Slug, ct),
+                await BlockedStatesAsync(taskDependencies, feature!, ct)));
     }
 
     internal static async Task<IResult> GetFeature(
@@ -94,6 +96,7 @@ public static class PlanningFeaturesApi
         string slug,
         OvermindDbContext db,
         FeatureDependencyService dependencies,
+        TaskDependencyService taskDependencies,
         CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
@@ -109,7 +112,8 @@ public static class PlanningFeaturesApi
         }
 
         return Results.Ok(PlanningMapper.ToFeatureResponse(
-            feature, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
+            feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
+            await BlockedStatesAsync(taskDependencies, feature, ct)));
     }
 
     internal static async Task<IResult> ListArtifacts(
@@ -117,6 +121,7 @@ public static class PlanningFeaturesApi
         string slug,
         string? kind,
         OvermindDbContext db,
+        TaskDependencyService taskDependencies,
         CancellationToken ct)
     {
         PlanningArtifactKind? kindFilter = null;
@@ -143,12 +148,13 @@ public static class PlanningFeaturesApi
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
         }
 
+        var blockedStates = await BlockedStatesAsync(taskDependencies, feature, ct);
         var artifacts = feature.Artifacts
             .Where(a => kindFilter is null || a.Kind == kindFilter)
             .OrderBy(a => a.Kind == PlanningArtifactKind.Task)
             .ThenBy(a => a.Kind)
             .ThenBy(a => a.Order)
-            .Select(PlanningMapper.ToRosterItem)
+            .Select(a => PlanningMapper.ToRosterItem(a, blockedStates))
             .ToArray();
 
         return Results.Ok(new PlanningArtifactRosterResponse(artifacts));
@@ -161,6 +167,7 @@ public static class PlanningFeaturesApi
         IValidator<UpdatePlanningFeatureRequest> validator,
         PlanningFeatureService service,
         FeatureDependencyService dependencies,
+        TaskDependencyService taskDependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -192,7 +199,8 @@ public static class PlanningFeaturesApi
 
         var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
         return Results.Ok(PlanningMapper.ToFeatureResponse(
-            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct)));
+            feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct),
+            await BlockedStatesAsync(taskDependencies, feature!, ct)));
     }
 
     internal static async Task<IResult> DeleteFeature(
@@ -240,6 +248,10 @@ public static class PlanningFeaturesApi
             .ThenInclude(a => a.Versions)
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
     }
+
+    private static async Task<IReadOnlyDictionary<int, TaskBlockedState>> BlockedStatesAsync(
+        TaskDependencyService taskDependencies, PlanningFeature feature, CancellationToken ct) =>
+        (await taskDependencies.BlockedOrdersAsync(feature.Id, ct)).ToDictionary(s => s.Order);
 
     internal static bool TryParseEnum<TEnum>(string value, out TEnum parsed) where TEnum : struct, Enum
     {

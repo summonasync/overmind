@@ -45,6 +45,7 @@ public sealed class BacklogImporterTests : IDisposable
                 _context,
                 _materializer,
                 new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+                new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
                 NullLogger<PlanningFeatureService>.Instance),
             new FrontmatterKeyRegistry(_context, NullLogger<FrontmatterKeyRegistry>.Instance));
 
@@ -1289,8 +1290,13 @@ public sealed class BacklogImporterTests : IDisposable
             _context,
             _materializer,
             new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
+            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
             NullLogger<PlanningFeatureService>.Instance);
-        var artifactService = new PlanningArtifactService(_context, _materializer, NullLogger<PlanningArtifactService>.Instance);
+        var artifactService = new PlanningArtifactService(
+            _context,
+            _materializer,
+            NullLogger<PlanningArtifactService>.Instance,
+            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance));
         var created = await featureService.CreateAsync(_projectId, "010-demo", "Old title", "old body");
         await artifactService.UpsertAsync(
             created.Id, PlanningArtifactKind.Task, "ui-created task", 5, null, null, CancellationToken.None);
@@ -1539,7 +1545,7 @@ public sealed class BacklogImporterTests : IDisposable
             status: todo
             review: light
             created: 2026-09-01
-            depends_on: 02-other
+            epic: demo
             risk_level: high
             ---
 
@@ -1551,17 +1557,17 @@ public sealed class BacklogImporterTests : IDisposable
         var feature = await LoadFeatureAsync("024-keys");
         feature.ShouldNotBeNull();
         var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
-        task.PreservedFrontmatter.ShouldBe("{\"depends_on\":\"02-other\",\"risk_level\":\"high\"}");
+        task.PreservedFrontmatter.ShouldBe("{\"epic\":\"demo\",\"risk_level\":\"high\"}");
         var preserved = PreservedFrontmatterJson.Deserialize(task.PreservedFrontmatter)!;
-        preserved["depends_on"].ShouldBe("02-other");
+        preserved["epic"].ShouldBe("demo");
         preserved["risk_level"].ShouldBe("high");
 
         var relative = Path.Combine("BACKLOG", "024-keys", "tasks", "01-key.md");
         report.Preserved.ShouldContain(
             entry => entry.Contains(relative)
-                && entry.Contains("depends_on")
+                && entry.Contains("epic")
                 && entry.Contains("risk_level"));
-        report.Skipped.ShouldNotContain(entry => entry.Contains("depends_on") || entry.Contains("risk_level"));
+        report.Skipped.ShouldNotContain(entry => entry.Contains("epic") || entry.Contains("risk_level"));
     }
 
     [Fact]
@@ -1606,6 +1612,208 @@ public sealed class BacklogImporterTests : IDisposable
         report.NewKeys.ShouldContain(
             key => key.Name == "risk_level" && key.Color == registered.Color);
         report.NewKeys.ShouldNotContain(key => key.Name == "depends_on");
+    }
+
+    [Fact]
+    public async Task Import_TaskDependsOn_RestoresEdgesAfterAllTasksLoaded()
+    {
+        WriteDependencyFeature();
+
+        var report = await ImportAsync(_repo.Root);
+
+        (await BlockerOrdersAsync(2)).ShouldBe([1]);
+        (await BlockerOrdersAsync(3)).ShouldBe([1, 2]);
+        (await BlockerOrdersAsync(1)).ShouldBeEmpty();
+        (await CountTaskEdgesAsync()).ShouldBe(3);
+
+        report.Skipped.ShouldContain(
+            s => s.Contains("BACKLOG/028-deps/tasks/02-pack.md") && s.Contains("depends on task 01"));
+        report.Skipped.ShouldContain(s => s.Contains("03-ship.md") && s.Contains("depends on task 01"));
+        report.Skipped.ShouldContain(s => s.Contains("03-ship.md") && s.Contains("depends on task 02"));
+        report.Skipped.ShouldNotContain(s => s.Contains("unlinked"));
+    }
+
+    [Fact]
+    public async Task Import_TaskDependsOn_UnknownOrder_ReportedAndRestIsLinked()
+    {
+        WriteDependencyFeature();
+        _repo.Write("028-deps/tasks/03-ship.md",
+            """
+            ---
+            feature: 028
+            task: 03
+            slug: deps
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 02, 09
+            ---
+
+            # Ship task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        (await BlockerOrdersAsync(3)).ShouldBe([2]);
+        (await CountTaskEdgesAsync()).ShouldBe(2);
+        report.Skipped.ShouldContain(
+            s => s.Contains("03-ship.md") && s.Contains("depends on task 09") && s.Contains("task not on the feature"));
+    }
+
+    [Fact]
+    public async Task Import_TaskDependsOn_NonNumericToken_ReportedNotLinked()
+    {
+        WriteDependencyFeature();
+        _repo.Write("028-deps/tasks/03-ship.md",
+            """
+            ---
+            feature: 028
+            task: 03
+            slug: deps
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 02-auth
+            ---
+
+            # Ship task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        (await BlockerOrdersAsync(3)).ShouldBeEmpty();
+        (await CountTaskEdgesAsync()).ShouldBe(1);
+        report.Skipped.ShouldContain(
+            s => s.Contains("03-ship.md") && s.Contains("depends on 02-auth") && s.Contains("not a task order"));
+    }
+
+    [Fact]
+    public async Task Import_TaskDependsOn_SelfReference_ReportedNotLinked()
+    {
+        WriteDependencyFeature();
+        _repo.Write("028-deps/tasks/02-pack.md",
+            """
+            ---
+            feature: 028
+            task: 02
+            slug: deps
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 02
+            ---
+
+            # Pack task
+            """);
+
+        var report = await ImportAsync(_repo.Root);
+
+        (await BlockerOrdersAsync(2)).ShouldBeEmpty();
+        (await CountTaskEdgesAsync()).ShouldBe(2);
+        report.Skipped.ShouldContain(
+            s => s.Contains("02-pack.md") && s.Contains("a task cannot block itself"));
+    }
+
+    [Fact]
+    public async Task Import_TaskDependsOn_IsStructural_NotPreserved()
+    {
+        WriteDependencyFeature();
+
+        var report = await ImportAsync(_repo.Root);
+
+        var feature = await LoadFeatureAsync("028-deps");
+        feature.ShouldNotBeNull();
+        feature.Artifacts.ShouldAllBe(a => a.PreservedFrontmatter == null);
+        report.NewKeys.ShouldNotContain(key => key.Name == "depends_on");
+        report.Preserved.ShouldNotContain(entry => entry.Contains("028-deps") && entry.Contains("depends_on"));
+    }
+
+    [Fact]
+    public async Task ReImport_TaskDependsOn_LinksOnceAndAddsNothing()
+    {
+        WriteDependencyFeature();
+
+        var first = await ImportAsync(_repo.Root);
+        var second = await ImportAsync(_repo.Root);
+
+        first.Skipped.Count(s => s.Contains("linked:")).ShouldBe(3);
+        second.Skipped.ShouldNotContain(s => s.Contains("linked:"));
+        second.ArtifactsCreated.ShouldBe(0);
+        second.ArtifactsUpdated.ShouldBe(0);
+        (await CountTaskEdgesAsync()).ShouldBe(3);
+    }
+
+    private async Task<IReadOnlyList<int>> BlockerOrdersAsync(int order)
+    {
+        var task = await _context.PlanningArtifacts
+            .Include(a => a.BlockedBy)
+            .SingleAsync(a => a.Kind == PlanningArtifactKind.Task && a.Order == order);
+        var orders = await _context.PlanningArtifacts.ToDictionaryAsync(a => a.Id, a => a.Order);
+
+        return task.BlockedBy
+            .Select(d => orders[d.BlockingId])
+            .OrderBy(o => o)
+            .ToList();
+    }
+
+    private async Task<int> CountTaskEdgesAsync() =>
+        await _context.PlanningTaskDependencies.CountAsync();
+
+    private void WriteDependencyFeature()
+    {
+        _repo.Write("028-deps/feature.md",
+            """
+            ---
+            feature: 028
+            slug: deps
+            status: draft
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 028 — Deps
+            """);
+        _repo.Write("028-deps/tasks/01-shell.md",
+            """
+            ---
+            feature: 028
+            task: 01
+            slug: deps
+            status: todo
+            review: light
+            created: 2026-09-01
+            ---
+
+            # Shell task
+            """);
+        _repo.Write("028-deps/tasks/02-pack.md",
+            """
+            ---
+            feature: 028
+            task: 02
+            slug: deps
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 01
+            ---
+
+            # Pack task
+            """);
+        _repo.Write("028-deps/tasks/03-ship.md",
+            """
+            ---
+            feature: 028
+            task: 03
+            slug: deps
+            status: todo
+            review: light
+            created: 2026-09-01
+            depends_on: 02, 01
+            ---
+
+            # Ship task
+            """);
     }
 
     [Fact]

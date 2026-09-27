@@ -71,7 +71,8 @@ public static class PlanningArtifactsApi
             var artifact = await artifactService.UpsertAsync(
                 feature.Id, request.Kind, request.Body, request.Order, request.Review, request.LogNote, ct,
                 brief: request.Brief,
-                source: PlanningDoorSource.Resolve(request.Source, fallbackSource));
+                source: PlanningDoorSource.Resolve(request.Source, fallbackSource),
+                blockedBy: request.BlockedBy);
 
             var response = PlanningMapper.ToArtifactResponse(artifact);
             var isNew = artifact.Version == 1;
@@ -91,6 +92,7 @@ public static class PlanningArtifactsApi
         CreatePlanningTasksRequest request,
         IValidator<CreatePlanningTasksRequest> validator,
         PlanningArtifactService artifactService,
+        TaskDependencyService taskDependencies,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -114,15 +116,19 @@ public static class PlanningArtifactsApi
         {
             var batch = await artifactService.UpsertTasksAsync(
                 feature.Id,
-                request.Tasks.Select(t => new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief))
+                request.Tasks.Select(t =>
+                        new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief, t.BlockedBy))
                     .ToArray(),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
 
+            var blockedStates = (await taskDependencies.BlockedOrdersAsync(feature.Id, ct))
+                .ToDictionary(s => s.Order);
+
             return Results.Ok(new CreatePlanningTasksResponse(
                 batch.Created,
                 batch.Updated,
-                batch.Artifacts.Select(PlanningMapper.ToArtifactResponse).ToArray()));
+                batch.Artifacts.Select(a => PlanningMapper.ToArtifactResponse(a, blockedStates)).ToArray()));
         }
         catch (PlanningException ex)
         {
