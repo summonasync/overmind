@@ -173,7 +173,7 @@ Antigravity has no hook engine, so these rules are binding behavioral constraint
 **Onboarding mode:** for users new to this system, keep Antigravity's approval mode strict — the agent must request each terminal command explicitly. Loosen incrementally as trust is earned.
 
 ## Overmind Integration (planning ceremonies live on the board, NOT in files)
-The Overmind MCP server owns ALL planning state: features, spec/plan/task/result artifacts, statuses, entries. The full ceremony contract (probe, lifecycle, gates, capability matrix, sub-agent briefing) lives in the `overmind-ceremony` skill — read it before ANY board interaction. This file and `task-orchestrator` define the pipeline; `overmind-ceremony` defines the mechanics.
+The Overmind MCP server owns ALL planning state: features, spec/plan/task/result artifacts, statuses, entries. The full ceremony contract (probe, lifecycle, gates, capability matrix, sub-agent briefing) lives in the `overmind-ceremony` skill — read it before ANY board interaction. This file and `feature-orchestrator` define the pipeline; `overmind-ceremony` defines the mechanics.
 
 1. **Hard requirement.** No overmind MCP in the session → STOP and ask the user to configure it. Never fall back to hand-written backlog files. First call of any ceremony is always `overmind_onboard` (projectId, materialization status, humanGate).
 2. **Source of truth.** Board (DB) = truth. `BACKLOG/` on disk = read-only materialized mirror, rewritten by Overmind after every mutation. NEVER hand-edit materialized files — all writes via `planning_*` tools. There is no `BACKLOG.md` index anymore.

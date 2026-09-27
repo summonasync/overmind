@@ -19,7 +19,7 @@ Deliver a solution to a test task (тестовое задание) that is prod
 ## Scope Boundary (DO NOT CROSS)
 This skill handles **coding-challenge tasks only** — discrete, self-contained assignments where the deliverable will be reviewed by humans (typically hiring managers) who may be hostile to AI usage.
 
-For regular project tasks — use `task-orchestrator`. For system-wide audits — use `audit-orchestrator`.
+For regular project tasks — use `feature-orchestrator`. For system-wide audits — use `audit-orchestrator`.
 
 ## Core Rule (ABSOLUTE)
 - **Obfuscation is ALWAYS executed by the qwen3.8-max model** via `ai-obfuscator`. Never by the model that wrote or reviewed the code.

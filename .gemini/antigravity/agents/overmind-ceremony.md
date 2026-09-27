@@ -3,7 +3,7 @@ name: overmind-ceremony
 description: "Owns Overmind planning ceremonies: board, artifacts, gates, sub-agent briefing"
 whenToUse: Feature/spec/plan/task lifecycle on the Overmind board, validation gates, agent-human notifications
 subagents:
-  - task-orchestrator
+  - feature-orchestrator
   - coder
   - explore
 ---

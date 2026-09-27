@@ -1,16 +1,14 @@
 ---
-name: task-orchestrator
+name: feature-orchestrator
 description: |
-  Orchestrate complex development tasks through multiple phases: planning -> coding -> review.
-  Use when the user asks to implement a feature, fix a complex bug, or create a multi-file component.
-  Automatically manages handoff between architect, coder, and reviewer skills.
+  Owns the pipeline INSIDE one feature: intake → spec gate → plan gate → task breakdown → coder dispatch → review → fix loop → result.
+  Use when the user asks to implement a feature or a complex board bug.
 type: prompt
 whenToUse: |
-  When the user asks to implement a feature, create a complex component,
-  or perform multi-file changes that require review after completion.
+  Use when the user asks to implement a feature or a complex board bug.
 ---
 
-# Task Orchestrator Skill
+# Feature Orchestrator Skill
 
 All planning state lives on the Overmind board. This skill owns the PIPELINE (phases, review
 gates, delegation); ceremony mechanics (which MCP call, which status, which gate, sub-agent

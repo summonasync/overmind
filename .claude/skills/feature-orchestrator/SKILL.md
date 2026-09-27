@@ -1,16 +1,14 @@
 ---
-name: task-orchestrator
+name: feature-orchestrator
 description: |
-  Orchestrate complex development tasks through multiple phases: planning -> coding -> review.
-  Use when the user asks to implement a feature, fix a complex bug, or create a multi-file component.
-  Automatically manages handoff between architect, coder, and reviewer skills.
+  Owns the pipeline INSIDE one feature: intake → spec gate → plan gate → task breakdown → coder dispatch → review → fix loop → result.
+  Use when the user asks to implement a feature or a complex board bug.
 type: prompt
 whenToUse: |
-  When the user asks to implement a feature, create a complex component,
-  or perform multi-file changes that require review after completion.
+  Use when the user asks to implement a feature or a complex board bug.
 ---
 
-# Task Orchestrator Skill
+# Feature Orchestrator Skill
 
 All planning state lives on the Overmind board. This skill owns the PIPELINE (phases, review
 gates, delegation); ceremony mechanics (which MCP call, which status, which gate, sub-agent
@@ -21,7 +19,7 @@ This skill handles **task-based development workflows** only: planning → codin
 
 For **system-wide audits** (sprint retrospectives, phase-end validation, security/compliance checks, comprehensive health checks) — use `audit-orchestrator`. Do NOT attempt to perform full-project audits within this skill.
 
-For **coding challenges / тестовые задания** (any task marked as a test task, where the deliverable must show zero AI-agent traces) — hand over to `coding-challenge-orchestrator` immediately. Its fixed pipeline (coding → review → obfuscation via strongest reasoning model → obfuscation review → validation) replaces this skill's pipeline entirely. Detect the marker at intake: task tagged as тестовое/challenge, or the user states the work is a test assignment.
+For **coding challenges / тестовые задания** (any task marked as a test task, where the deliverable must show zero AI-agent traces) — hand over to `coding-challenge-orchestrator` immediately. Its fixed pipeline (coding → review → obfuscation via Opus → obfuscation review → validation) replaces this skill's pipeline entirely. Detect the marker at intake: task tagged as тестовое/challenge, or the user states the work is a test assignment.
 
 
 ## Start-of-Work Protocol (MANDATORY — execute before ANY task)

@@ -18,10 +18,10 @@ gates, sub-agent briefing, capability matrix) are owned by the `overmind-ceremon
 
 | Step | Skill / Owner | Artifacts (Overmind board) | Gate |
 |------|---------------|-----------|------|
-| 0.0 Intake (OPTIONAL, trigger-based — only for messy raw inputs) | task-orchestrator (intake mode) | notes in feature body / entry | User confirms requirements are complete |
-| 0.1 Spec | task-orchestrator + Socratic questioning (`overmind-ceremony` techniques) | spec artifact (`planning_upsert_artifact`) | **USER APPROVAL → `planning_validate` — frozen after** |
-| 0.2 Plan | task-orchestrator + plan decomposition (`overmind-ceremony` techniques) | plan artifact | **USER APPROVAL → `planning_validate` — frozen after** |
-| Tasks | task-orchestrator | task artifacts with `<goal>/<scope>/<anti-scope>/<constraints>/<acceptance-criteria>/<refs>/<obstacles>/<log>` | — |
+| 0.0 Intake (OPTIONAL, trigger-based — only for messy raw inputs) | feature-orchestrator (intake mode) | notes in feature body / entry | User confirms requirements are complete |
+| 0.1 Spec | feature-orchestrator + Socratic questioning (`overmind-ceremony` techniques) | spec artifact (`planning_upsert_artifact`) | **USER APPROVAL → `planning_validate` — frozen after** |
+| 0.2 Plan | feature-orchestrator + plan decomposition (`overmind-ceremony` techniques) | plan artifact | **USER APPROVAL → `planning_validate` — frozen after** |
+| Tasks | feature-orchestrator | task artifacts with `<goal>/<scope>/<anti-scope>/<constraints>/<acceptance-criteria>/<refs>/<obstacles>/<log>` | — |
 
 The feature is created on the board (`planning_create_feature`) when it enters the backlog, **before Phase 0**.
 | 2 Implement | `dotnet-coder` / `next-js-coder` / `maui-coder` (Sonnet) | code + `<obstacles>`/`<log>` patched into the task artifact | `nuget-licensing-guard` before any NuGet change |

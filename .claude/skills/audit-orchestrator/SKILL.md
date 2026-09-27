@@ -13,7 +13,7 @@ whenToUse: |
 # Audit Orchestrator Skill
 
 ## Purpose
-This skill performs **system-wide audits** (not task-based reviews). It analyzes the entire project state against documentation, identifies gaps, and produces a structured audit report. Unlike `task-orchestrator` which reviews changes after a specific task, `audit-orchestrator` evaluates the whole system or a specific domain area on demand.
+This skill performs **system-wide audits** (not task-based reviews). It analyzes the entire project state against documentation, identifies gaps, and produces a structured audit report. Unlike `feature-orchestrator` which reviews changes after a specific task, `audit-orchestrator` evaluates the whole system or a specific domain area on demand.
 
 ## Start-of-Audit Protocol (MANDATORY)
 
@@ -138,7 +138,7 @@ Run against `documentation-writer` skill rules:
 - [ ] **Dependency materialization:** no prose cross-references between tasks/features ("done when X is ready") outside `<refs>` — every such reference must exist as a `<refs>` entry (structured board dependencies not shipped yet — Overmind board feature 030).
 - [ ] **Cloud spend guard:** no `gcloud`/`az`/`aws` mutations in shell history or scripts without a corresponding user-approved task — flag any autonomous infra change as BLOCKER.
 - [ ] **Artifact provenance:** every generated report/doc outside the Overmind-managed `BACKLOG/` tree lives in `audits/` and carries a skill-prefix (`audits/audit-*`, `audits/review-*`, `audits/obfuscation-*`, `audits/intake-*`) per AGENTS.md provenance rule — anonymous or misplaced artifacts are a WARNING.
-- [ ] **SKILLFLOW.md consistency:** routes and transitions described in `SKILLFLOW.md` still match reality (skills referenced there exist, gates listed there are actually enforced in task-orchestrator).
+- [ ] **SKILLFLOW.md consistency:** routes and transitions described in `SKILLFLOW.md` still match reality (skills referenced there exist, gates listed there are actually enforced in feature-orchestrator).
 
 ---
 
@@ -192,7 +192,7 @@ After completing all audit types, generate a structured report:
 ---
 
 ## Post-Audit Actions
-- If **BLOCKER found** → recommend immediate `task-orchestrator` session to fix
+- If **BLOCKER found** → recommend immediate `feature-orchestrator` session to fix
 - If **architecture drift detected** → recommend updating `CONTEXT.md` and `TECHNICAL-SOLUTIONS.md`
 - If **tech debt > threshold** → recommend dedicated sprint for debt reduction
 - If **no critical issues** → record an "Audit passed" note on the board (`write_entry`, type=note)
@@ -212,6 +212,6 @@ After completing all audit types, generate a structured report:
 ## Output Contract (MANDATORY)
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
-2. **Next step** — user triages findings; P0 items become tasks via `task-orchestrator`.
+2. **Next step** — user triages findings; P0 items become tasks via `feature-orchestrator`.
 3. **Alternatives** — `architect-review` (Hard) for structural findings; `documentation-writer` for doc-drift fixes.
 Suggest, never auto-proceed. The user picks the next step.

@@ -89,5 +89,5 @@ When writing or updating `TECHNICAL-SOLUTIONS.md` entries, use this format per d
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
 2. **Next step** — report changed docs to the user — the docs-only route skips Phase 3 code review.
-3. **Alternatives** — `audit-orchestrator` (Documentation Audit) for a full consistency sweep; `task-orchestrator` if doc work uncovered missing feature work.
+3. **Alternatives** — `audit-orchestrator` (Documentation Audit) for a full consistency sweep; `feature-orchestrator` if doc work uncovered missing feature work.
 Suggest, never auto-proceed. The user picks the next step.

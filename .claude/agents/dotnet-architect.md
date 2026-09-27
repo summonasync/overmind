@@ -1,6 +1,6 @@
 ---
 name: dotnet-architect
-description: ".NET solution architect: boundaries, Aspire, messaging topology, ADRs. Use when architecture decisions and feature planning"
+description: ".NET solution architect: boundaries, Aspire, messaging topology, ADRs. Use when architecture decisions and system design"
 model: sonnet
 ---
 

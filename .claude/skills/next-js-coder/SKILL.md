@@ -1,12 +1,12 @@
 ---
 name: next-js-coder
 description: |
-  Write, edit, review, or refactor Next.js/React/TypeScript code following senior frontend standards.
+  Write, edit, or refactor Next.js/React/TypeScript code following senior frontend standards.
   Use for creating components, Server Actions, API routes, hooks, types, React Query queries, or any frontend code modification.
   Strictly follows FSD, React Query v5, BFF pattern, RSC-first approach, no-comments rule, and English-only code.
 type: prompt
 whenToUse: |
-  When writing, editing, reviewing, or refactoring Next.js code, creating React components,
+  When writing, editing, or refactoring Next.js code, creating React components,
   Server Actions, API routes, React Query hooks, FSD features, or frontend tests.
 ---
 
@@ -133,5 +133,5 @@ When generating or editing Next.js code:
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
 2. **Next step** — `next-js-code-reviewer` (mandatory Phase 3 for Complex tasks).
-3. **Alternatives** — `next-js-architect` for boundary decisions; `task-orchestrator` for the next task.
+3. **Alternatives** — `next-js-architect` for boundary decisions; `feature-orchestrator` for the next task.
 Suggest, never auto-proceed. The user picks the next step.

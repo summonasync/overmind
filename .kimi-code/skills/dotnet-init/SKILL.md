@@ -1,6 +1,6 @@
 ---
 name: dotnet-init
-description: Initialize, scan, or analyze .NET projects. Use when the user asks to initialize a project, scan codebase, create or update AGENTS.md, set up Clean Architecture structure, or configure a new microservice. Follows .NET 9/10+, MassTransit, Aspire, and strict code style conventions.
+description: Initialize, scan, or analyze .NET projects. Use when the user asks to initialize a project, scan codebase, create or update AGENTS.md, set up Clean Architecture structure, or configure a new microservice. Follows .NET 10+ (latest LTS), Mediator/Wolverine stack, Aspire, and strict code style conventions.
 type: prompt
 whenToUse: When initializing a .NET project, scanning .NET codebase structure, creating AGENTS.md, setting up project structure, or configuring new microservices.
 ---
@@ -17,17 +17,17 @@ Before making ANY changes, read the project documentation in this strict order:
 If these files do not exist, create them following the user's conventions.
 
 ## Tech Stack & Runtime
-- **Runtime**: .NET 9/10+ (prefer latest LTS)
-- **Language**: C# 13+ with modern features (records, pattern matching, required init, primary constructors, collection expressions)
+- **Runtime**: .NET 10+ (prefer latest LTS)
+- **Language**: C# 14+ with modern features (records, pattern matching, required init, primary constructors, collection expressions, extension members)
 - **New Microservices**: Start with **Aspire** orchestration by default
-- **Message Brokers**: Use **MassTransit** (not raw RabbitMQ/Azure ServiceBus clients)
+- **Message Brokers**: Use **Wolverine** (not raw RabbitMQ/Azure ServiceBus clients). MassTransit appears only in legacy codebases, never in new code.
 - **Architecture**: Clean Architecture (Domain -> Application -> Infrastructure -> API). Vertical Slice when appropriate.
 - **API**: Minimal APIs or Carter modules. Avoid heavy Controllers.
 - **ORM**: EF Core. Migrations in separate assembly if modular monolith.
 - **DI**: Microsoft.Extensions.DependencyInjection only (no external containers like Autofac)
 - **Validation**: FluentValidation
 - **Logging**: Serilog with structured logging
-- **Testing**: xUnit + FluentAssertions + NSubstitute
+- **Testing**: xUnit + Shouldly + NSubstitute
 
 ## Code Style (Strict)
 - **NO comments in code.** Code must be self-explanatory through naming.
@@ -63,7 +63,7 @@ If these files do not exist, create them following the user's conventions.
 1. Identify .NET version from `.csproj` (`<TargetFramework>`)
 2. List all NuGet packages and versions
 3. Detect Aspire orchestration (AppHost, ServiceDefaults)
-4. Detect MassTransit usage and transport (RabbitMQ, Azure ServiceBus, In-Memory)
+4. Detect messaging library (Wolverine; MassTransit means a legacy codebase) and transport (RabbitMQ, Azure ServiceBus, In-Memory)
 5. Determine architecture pattern (Clean Arch, Vertical Slice, Modular Monolith)
 6. Identify test framework and coverage
 7. Check for Central Package Management (`Directory.Packages.props`)
@@ -74,7 +74,7 @@ If these files do not exist, create them following the user's conventions.
 Generate `AGENTS.md` including:
 - Project type (Web API, Worker Service, Library, Aspire AppHost)
 - .NET version and C# language version
-- Architecture pattern and MassTransit transport if used
+- Architecture pattern and messaging transport if used (Wolverine; MassTransit only in legacy codebases)
 - Aspire usage yes/no
 - Build/test commands
 - Key NuGet packages
@@ -87,6 +87,6 @@ Generate `AGENTS.md` including:
 ## Output Contract (MANDATORY)
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
-2. **Next step** — `task-orchestrator` intake for the first feature, or `dotnet-coder` for direct implementation.
+2. **Next step** — `feature-orchestrator` intake for the first feature, or `dotnet-coder` for direct implementation.
 3. **Alternatives** — `documentation-writer` to polish generated docs (README, AGENTS.md); `architect-review` as a structural baseline.
 Suggest, never auto-proceed. The user picks the next step.

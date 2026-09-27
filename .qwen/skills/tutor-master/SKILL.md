@@ -84,7 +84,7 @@ Dense reference for a mastered topic: tables, signatures, idioms, "X in PyTorch 
 - **Honesty about difficulty.** If a topic has real math prerequisites (linear algebra for DL), state it up front and offer a minimal crash module.
 
 ## Code Examples
-- C# first, following project conventions: no comments, English-only, modern C# 13.
+- C# first, following project conventions: no comments, English-only, modern C# 14.
 - For ML topics prefer ONNX Runtime for inference examples, TorchSharp for training concepts, ML.NET for classical ML.
 - Keep examples minimal but runnable — one file, no omitted pieces.
 

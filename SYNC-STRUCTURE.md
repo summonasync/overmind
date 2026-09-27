@@ -27,7 +27,7 @@ A single-line `description:` / `whenToUse:` value that contains `: ` (colon + sp
 
 Escaping: `"` → `\"`, and never write a bare `\` inside a double-quoted value (`C:\foo` becomes an escape sequence) — switch that value to a `>-` block scalar instead. Multi-line `description: |` block scalars (used by all crew skills) are already valid and need no quotes.
 
-Applies to every side. As of this writing the affected set is 8 agents — `architect-review` (`review: hard` in backticks), `dotnet-architect`, `dotnet-code-reviewer`, `dotnet-init`, `frontend-designer`, `next-js-architect`, `next-js-code-reviewer`, `task-orchestrator` — quoted in the `description:` field on the Claude/Qwen sides and in `whenToUse:` for `architect-review` on the Kimi/Antigravity sides, where the description is not folded.
+Applies to every side. As of this writing the affected set is 8 agents — `architect-review` (`review: hard` in backticks), `dotnet-architect`, `dotnet-code-reviewer`, `dotnet-init`, `frontend-designer`, `next-js-architect`, `next-js-code-reviewer`, `feature-orchestrator` — quoted in the `description:` field on the Claude/Qwen sides and in `whenToUse:` for `architect-review` on the Kimi/Antigravity sides, where the description is not folded.
 
 ## File mapping
 
@@ -55,7 +55,8 @@ Applies to every side. As of this writing the affected set is 8 agents — `arch
 | `.kimi-code/agents/next-js-coder.md` | `.claude/agents/next-js-coder.md` | `.gemini/antigravity/agents/next-js-coder.md` | `.qwen/agents/next-js-coder.md` |
 | `.kimi-code/agents/overmind-ceremony.md` | `.claude/agents/overmind-ceremony.md` | `.gemini/antigravity/agents/overmind-ceremony.md` | `.qwen/agents/overmind-ceremony.md` |
 | `.kimi-code/agents/pipeline-doctor.md` | `.claude/agents/pipeline-doctor.md` | `.gemini/antigravity/agents/pipeline-doctor.md` | `.qwen/agents/pipeline-doctor.md` |
-| `.kimi-code/agents/task-orchestrator.md` | `.claude/agents/task-orchestrator.md` | `.gemini/antigravity/agents/task-orchestrator.md` | `.qwen/agents/task-orchestrator.md` |
+| `.kimi-code/agents/feature-orchestrator.md` | `.claude/agents/feature-orchestrator.md` | `.gemini/antigravity/agents/feature-orchestrator.md` | `.qwen/agents/feature-orchestrator.md` |
+| `.kimi-code/agents/sprint-planner.md` | `.claude/agents/sprint-planner.md` | `.gemini/antigravity/agents/sprint-planner.md` | `.qwen/agents/sprint-planner.md` |
 | `.kimi-code/agents/tutor-master.md` | `.claude/agents/tutor-master.md` | `.gemini/antigravity/agents/tutor-master.md` | `.qwen/agents/tutor-master.md` |
 | `.kimi-code/skills/ai-code-detector/` | `.claude/skills/ai-code-detector/` | `.gemini/antigravity/skills/ai-code-detector/` | `.qwen/skills/ai-code-detector/` |
 | `.kimi-code/skills/ai-obfuscation-reviewer/` | `.claude/skills/ai-obfuscation-reviewer/` | `.gemini/antigravity/skills/ai-obfuscation-reviewer/` | `.qwen/skills/ai-obfuscation-reviewer/` |
@@ -80,7 +81,8 @@ Applies to every side. As of this writing the affected set is 8 agents — `arch
 | `.kimi-code/skills/overmind-ceremony/` | `.claude/skills/overmind-ceremony/` | `.gemini/antigravity/skills/overmind-ceremony/` | `.qwen/skills/overmind-ceremony/` |
 | `.kimi-code/skills/pipeline-doctor/` | `.claude/skills/pipeline-doctor/` | `.gemini/antigravity/skills/pipeline-doctor/` | `.qwen/skills/pipeline-doctor/` |
 | `.kimi-code/skills/squeezr-ops/` | `.claude/skills/squeezr-ops/` | `.gemini/antigravity/skills/squeezr-ops/` | `.qwen/skills/squeezr-ops/` |
-| `.kimi-code/skills/task-orchestrator/` | `.claude/skills/task-orchestrator/` | `.gemini/antigravity/skills/task-orchestrator/` | `.qwen/skills/task-orchestrator/` |
+| `.kimi-code/skills/feature-orchestrator/` | `.claude/skills/feature-orchestrator/` | `.gemini/antigravity/skills/feature-orchestrator/` | `.qwen/skills/feature-orchestrator/` |
+| `.kimi-code/skills/sprint-planner/` | `.claude/skills/sprint-planner/` | `.gemini/antigravity/skills/sprint-planner/` | `.qwen/skills/sprint-planner/` |
 | `.kimi-code/skills/tutor-master/` | `.claude/skills/tutor-master/` | `.gemini/antigravity/skills/tutor-master/` | `.qwen/skills/tutor-master/` |
 
 ## Non-paired entries
@@ -205,7 +207,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 22 agent files + 25 skill dirs on each of the four sides.
+4. Count parity intact: 23 agent files + 26 skill dirs on each of the four sides.
    ```bash
    for d in .kimi-code .claude .gemini/antigravity .qwen; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```

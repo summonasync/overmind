@@ -18,10 +18,10 @@ gates, sub-agent briefing, capability matrix) are owned by the `overmind-ceremon
 
 | Step | Skill / Owner | Artifacts (Overmind board) | Gate |
 |------|---------------|-----------|------|
-| 0.0 Intake (OPTIONAL, trigger-based — only for messy raw inputs) | task-orchestrator (intake mode) | notes in feature body / entry | User confirms requirements are complete |
-| 0.1 Spec | task-orchestrator + Socratic questioning (`overmind-ceremony` techniques) | spec artifact (`planning_upsert_artifact`) | **USER APPROVAL → `planning_validate` — frozen after** |
-| 0.2 Plan | task-orchestrator + plan decomposition (`overmind-ceremony` techniques) | plan artifact | **USER APPROVAL → `planning_validate` — frozen after** |
-| Tasks | task-orchestrator | task artifacts with `<goal>/<scope>/<anti-scope>/<constraints>/<acceptance-criteria>/<refs>/<obstacles>/<log>` | — |
+| 0.0 Intake (OPTIONAL, trigger-based — only for messy raw inputs) | feature-orchestrator (intake mode) | notes in feature body / entry | User confirms requirements are complete |
+| 0.1 Spec | feature-orchestrator + Socratic questioning (`overmind-ceremony` techniques) | spec artifact (`planning_upsert_artifact`) | **USER APPROVAL → `planning_validate` — frozen after** |
+| 0.2 Plan | feature-orchestrator + plan decomposition (`overmind-ceremony` techniques) | plan artifact | **USER APPROVAL → `planning_validate` — frozen after** |
+| Tasks | feature-orchestrator | task artifacts with `<goal>/<scope>/<anti-scope>/<constraints>/<acceptance-criteria>/<refs>/<obstacles>/<log>` | — |
 
 The feature is created on the board (`planning_create_feature`) when it enters the backlog, **before Phase 0**.
 | 2 Implement | `dotnet-coder` / `next-js-coder` / `maui-coder` (K2.7) | code + `<obstacles>`/`<log>` patched into the task artifact | `nuget-licensing-guard` before any NuGet change |
@@ -30,6 +30,9 @@ The feature is created on the board (`planning_create_feature`) when it enters t
 | 5 Arch gate | `architect-review` Hard checklist (end of sprint phase / big refactor only) | `audits/architect-review-YYYY-MM-DD.md` + ADR in `TECHNICAL-SOLUTIONS.md` | — |
 
 ## Alternative Routes
+
+**Board planning (sprint):**
+`sprint-planner` — board-level planning ONLY: triages the queue (`planning_task_queue`), orders priority bands (`planning_move_feature`; band crossings via `planning_set_feature_priority` ONLY on explicit user approval), wires feature dependencies (`planning_add_feature_dependency` / `planning_remove_feature_dependency`), creates features (`planning_create_feature`), slices sprints/phases. Never enters a feature's inner pipeline — implementation hands off to `feature-orchestrator`; phase end hands off to `audit-orchestrator`.
 
 **Quick fix (bug):**
 QA/bug report arrives AS a task artifact on the board (goal = expected behavior, acceptance = fix verification) → root-cause-first debugging (`overmind-ceremony` techniques — no fix without reproduced root cause) → coder fix → verification-before-completion → `planning_set_status(done)`. No spec/plan gates. Complex bugs (>3 files) still get Phase 3 review.
