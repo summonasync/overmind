@@ -1297,6 +1297,32 @@ public sealed class BacklogImporterTests : IDisposable
 
         WriteFullFeature();
 
+        var mirroredBody = """
+            # Feature 010 — Demo feature title
+
+            <goal>
+            Build the demo.
+            </goal>
+            """;
+        foreach (var line in PlanningLog.Parse(created.Body))
+        {
+            mirroredBody = PlanningLog.Append(
+                mirroredBody, line.Text, line.Date?.ToDateTime(TimeOnly.MinValue), line.Source);
+        }
+
+        _repo.Write("010-demo/feature.md",
+            $"""
+            ---
+            feature: 010
+            slug: demo
+            status: ready
+            version: 3
+            created: 2026-09-01
+            ---
+
+            {mirroredBody}
+            """);
+
         var report = await ImportAsync(_repo.Root);
 
         report.Skipped.ShouldContain("kept: task 5 not present on disk");

@@ -152,6 +152,9 @@ public static class Canned
     public const string PlanningFeatureMutationEchoJson =
         """{"slug":"demo-feature","status":"inProgress","version":5,"lastLogLine":"feature mutation recorded on the board"}""";
 
+    public const string PlanningFeatureUpdateEchoJson =
+        """{"slug":"demo-feature","status":"inProgress","version":6,"updatedAt":"2026-09-26T12:00:00Z","bodyChars":512}""";
+
     public const string PlanningPatchRetickEchoJson =
         """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","section":"acceptance-criteria","version":3,"bodyChars":412,"status":"inProgress","lastLogLine":"patch recorded on the board","alreadyTicked":true}""";
 

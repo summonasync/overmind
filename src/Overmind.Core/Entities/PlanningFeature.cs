@@ -76,8 +76,10 @@ public sealed class PlanningFeature
         };
     }
 
-    public void Update(string? title, string? body)
+    public void Update(string? title, string? body, string? logNote = null, PlanningLogSource? source = null)
     {
+        RequireLogHistoryAppendable(body ?? Body);
+
         if (title is not null)
         {
             Title = title.Trim();
@@ -88,11 +90,41 @@ public sealed class PlanningFeature
             Body = body;
         }
 
+        if (!string.IsNullOrWhiteSpace(logNote))
+        {
+            Body = PlanningLog.Append(Body, logNote, source: source);
+        }
+
         UpdatedAt = DateTime.UtcNow;
 
         if (Status != PlanningFeatureStatus.Draft)
         {
             Version++;
+        }
+    }
+
+    private void RequireLogHistoryAppendable(string incomingBody)
+    {
+        var stored = PlanningLog.Parse(Body);
+        if (stored.Count == 0)
+        {
+            return;
+        }
+
+        var incoming = PlanningLog.Parse(incomingBody);
+        var shared = Math.Min(stored.Count, incoming.Count);
+
+        for (var i = 0; i < shared; i++)
+        {
+            if (stored[i] != incoming[i])
+            {
+                throw PlanningException.LogHistoryNotAppendable(i, stored.Count, incoming.Count);
+            }
+        }
+
+        if (incoming.Count < stored.Count)
+        {
+            throw PlanningException.LogHistoryNotAppendable(incoming.Count, stored.Count, incoming.Count);
         }
     }
 

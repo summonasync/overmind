@@ -1,9 +1,9 @@
 ---
 feature: 083
 slug: feature-body-update
-status: draft
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-26
 ---
 
@@ -30,3 +30,9 @@ A feature body is "durable what/why", yet it is frozen for agents the moment it 
 - 078-upsert-log-guard — the artifact log-guard contract to reuse for the feature door.
 - Microbatch #74 (PlanningFeature.Update log-guard absence — absorbed here, remove from the queue when this lands).
 </refs>
+
+<log>
+- 2026-09-26 [auto] — artifact created → inProgress
+- 2026-09-27 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-27 [ui] — status moved to 'done' via ui
+</log>

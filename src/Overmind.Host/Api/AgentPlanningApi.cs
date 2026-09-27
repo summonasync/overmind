@@ -43,6 +43,7 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add);
@@ -324,6 +325,39 @@ public static class AgentPlanningApi
         var feature = await db.PlanningFeatures
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
         return Results.Ok(PlanningMapper.ToMutationResponse(feature!));
+    }
+
+    internal static async Task<IResult> UpdateFeature(
+        Guid projectId,
+        string slug,
+        UpdatePlanningFeatureByAgentRequest request,
+        IValidator<UpdatePlanningFeatureByAgentRequest> validator,
+        PlanningFeatureService service,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        FeaturePriority? priority = request.Priority is null
+            ? null
+            : Enum.Parse<FeaturePriority>(request.Priority, ignoreCase: true);
+
+        try
+        {
+            var feature = await service.UpdateAsync(
+                projectId, slug, request.Title, request.Body,
+                priority, request.LogNote, PlanningLogSource.Agent, ct);
+
+            return Results.Ok(new PlanningFeatureAgentUpdateResponse(
+                feature.Slug, feature.Status, feature.Version, feature.UpdatedAt, feature.Body.Length));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
     }
 
     internal static async Task<IResult> SetCurrent(

@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheTwentyThreePlanningTools()
+    public async Task ToolsList_ContainsTheTwentyFourPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -37,6 +37,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_set_current",
             "planning_set_feature_status",
             "planning_task_queue",
+            "planning_update_feature",
             "planning_move_feature",
             "planning_set_feature_priority",
             "planning_list_feature_dependencies",
@@ -73,6 +74,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
+        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("logNote is mandatory");
+        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("tail of its priority band");
+        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("planning_set_feature_status");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("priority asc");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("dragging");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("readiness 0-3");
@@ -1105,6 +1109,157 @@ public class PlanningToolContractTests : McpSessionTestBase
         var text = ToolErrorText(response);
         text.ShouldContain("cannot move from 'done'");
         text.ShouldContain("allowed targets");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_Description_PinsThePartialEditPitch()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldBe(
+            "Partial edit of a feature's title, body, or priority — durable what/why stays correctable by agents. " +
+            "logNote is mandatory and lands as a dated line in the feature log. " +
+            "A priority change moves the feature to the tail of its priority band. " +
+            "Status is not editable here — use planning_set_feature_status.");
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_Schema_MakesLogNoteRequired()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_update_feature")!;
+
+        var required = tool["inputSchema"]!["required"]!.AsArray()
+            .Select(r => r!.GetValue<string>())
+            .ToArray();
+        required.ShouldContain("projectId");
+        required.ShouldContain("slug");
+        required.ShouldContain("logNote");
+        required.ShouldNotContain("title");
+        required.ShouldNotContain("body");
+        required.ShouldNotContain("priority");
+
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("projectId");
+        properties.ShouldContainKey("slug");
+        properties.ShouldContainKey("logNote");
+        properties.ShouldContainKey("title");
+        properties.ShouldContainKey("body");
+        properties.ShouldContainKey("priority");
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_PostsLogNoteAndSetFields_PassesEchoThrough()
+    {
+        var response = await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["logNote"] = "fixing the typo the field agent could not",
+            ["title"] = "Correct title",
+            ["body"] = "<goal>\nFixed.\n</goal>"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/update", StringComparison.Ordinal) &&
+            r.Path.Contains("/planning/features/", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/update");
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body["logNote"]!.GetValue<string>().ShouldBe("fixing the typo the field agent could not");
+        body["title"]!.GetValue<string>().ShouldBe("Correct title");
+        body["body"]!.GetValue<string>().ShouldBe("<goal>\nFixed.\n</goal>");
+        body.ContainsKey("priority").ShouldBeFalse();
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!;
+        JsonNode.DeepEquals(echo, JsonNode.Parse(Canned.PlanningFeatureUpdateEchoJson)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_WithoutOptionalFields_SendsLogNoteOnly()
+    {
+        await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["logNote"] = "no-op edit probe"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/update", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body.Count.ShouldBe(1);
+        body["logNote"]!.GetValue<string>().ShouldBe("no-op edit probe");
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_BlankOptionalFields_OmittedFromPayload()
+    {
+        await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["logNote"] = "blank-field probe",
+            ["title"] = "   ",
+            ["body"] = "  \n\t",
+            ["priority"] = " "
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/update", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body.Count.ShouldBe(1);
+        body.ContainsKey("title").ShouldBeFalse();
+        body.ContainsKey("body").ShouldBeFalse();
+        body.ContainsKey("priority").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_BadPriority_SurfacesApiErrorAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/update",
+            400,
+            """{"title":"InvalidFeaturePriority","detail":"Invalid feature priority 'p9'. Expected one of: p0, p1, p2, p3.","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["priority"] = "p9",
+            ["logNote"] = "priority probe"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Invalid feature priority 'p9'");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_UnknownFeature_SurfacesApiErrorAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/update",
+            404,
+            Canned.PlanningFeatureNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["title"] = "Renamed",
+            ["logNote"] = "rename probe"
+        });
+
+        ToolErrorText(response).ShouldContain("Feature 'demo-feature' was not found.");
         Driver.HasExited.ShouldBeFalse();
     }
 

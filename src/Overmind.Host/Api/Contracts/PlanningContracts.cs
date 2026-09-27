@@ -45,6 +45,9 @@ public sealed record CreatePlanningFeatureRequest(string Slug, string Title, str
 public sealed record UpdatePlanningFeatureRequest(
     string? Title, string? Body, PlanningFeatureStatus? Status, string? Priority = null);
 
+public sealed record UpdatePlanningFeatureByAgentRequest(
+    string? Title, string? Body, string? Priority, string LogNote);
+
 public sealed record SetPlanningFeatureCurrentRequest(bool IsCurrent);
 
 public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
@@ -127,6 +130,13 @@ public sealed record PlanningFeatureMutationResponse(
     PlanningFeatureStatus Status,
     int Version,
     string LastLogLine);
+
+public sealed record PlanningFeatureAgentUpdateResponse(
+    string Slug,
+    PlanningFeatureStatus Status,
+    int Version,
+    DateTime UpdatedAt,
+    int BodyChars);
 
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 

@@ -427,6 +427,40 @@ public sealed class OvermindPlanningTools
         return MutationEcho(echo, "slug");
     }
 
+    [McpServerTool(Name = "planning_update_feature", Destructive = false, Idempotent = false)]
+    [Description("Partial edit of a feature's title, body, or priority — durable what/why stays correctable by agents. logNote is mandatory and lands as a dated line in the feature log. A priority change moves the feature to the tail of its priority band. Status is not editable here — use planning_set_feature_status.")]
+    public Task<JsonElement> UpdateFeature(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to edit, as shown on the board.")] string slug,
+        [Description("Required note recorded as a dated [agent] line in the feature log — why the edit happened.")] string logNote,
+        [Description("New feature title; omit to keep the current one.")] string? title = null,
+        [Description("Full replacement body — markdown with its XML sections; omit to keep the current one.")] string? body = null,
+        [Description("New priority: p0 (critical), p1 (high), p2 (normal), p3 (low); omit to keep the current one.")] string? priority = null,
+        CancellationToken ct = default)
+    {
+        var payload = new JsonObject { ["logNote"] = logNote };
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            payload["title"] = title;
+        }
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            payload["body"] = body;
+        }
+
+        if (!string.IsNullOrWhiteSpace(priority))
+        {
+            payload["priority"] = priority;
+        }
+
+        return Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/update",
+            payload,
+            ct));
+    }
+
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
     [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The board order IS the queue: first on the board is next in the queue, and the dashboard board shows exactly this order. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, readiness 0-3, blockedBy, isBlocked, isCurrent. limit truncates to the first N entries; omit it for the full queue.")]
     public Task<JsonElement> TaskQueue(

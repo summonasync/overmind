@@ -315,4 +315,153 @@ public class PlanningFeatureTests
         second.GetBlocks(projectFeatures).Select(f => f.Slug).ShouldBe(["003-ui"]);
         third.GetBlocks(projectFeatures).ShouldBeEmpty();
     }
+
+    private const string LoggedBody = """
+        # 001-auth
+
+        <log>
+        - 2026-09-01 — seeded
+        - 2026-09-02 [agent] — review feedback applied
+        </log>
+        """;
+
+    [Fact]
+    public void Update_MutatedStoredLogLine_ThrowsAndLeavesFeatureUntouched()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", LoggedBody);
+        var originalTitle = feature.Title;
+        var originalBody = feature.Body;
+        var originalVersion = feature.Version;
+        var originalUpdatedAt = feature.UpdatedAt;
+
+        var ex = Should.Throw<PlanningException>(() => feature.Update(null, """
+            # 001-auth
+
+            <log>
+            - 2026-09-01 — seeded
+            - 2026-09-02 [agent] — history was polished
+            </log>
+            """));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("log line 1");
+        ex.Message.ShouldContain("stored 2");
+        ex.Message.ShouldContain("incoming 2");
+        feature.Title.ShouldBe(originalTitle);
+        feature.Body.ShouldBe(originalBody);
+        feature.Version.ShouldBe(originalVersion);
+        feature.UpdatedAt.ShouldBe(originalUpdatedAt);
+    }
+
+    [Fact]
+    public void Update_DeletedStoredLogTail_Throws()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", LoggedBody);
+
+        var ex = Should.Throw<PlanningException>(() => feature.Update(null, """
+            # 001-auth
+
+            <log>
+            - 2026-09-01 — seeded
+            </log>
+            """));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+        ex.Message.ShouldContain("log line 1");
+        ex.Message.ShouldContain("stored 2");
+        ex.Message.ShouldContain("incoming 1");
+    }
+
+    [Fact]
+    public void Update_PureAppendWithSourcedNote_LandsOneDatedSourcedLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", LoggedBody);
+
+        feature.Update(null, LoggedBody, "task 083/01 executed", PlanningLogSource.Agent);
+
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.Count.ShouldBe(3);
+        lines[2].Text.ShouldBe("task 083/01 executed");
+        lines[2].Source.ShouldBe(PlanningLogSource.Agent);
+        lines[2].Date.ShouldBe(DateOnly.FromDateTime(DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Update_EmptyStoredLog_AcceptsAnyIncomingBody()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", "plain body, no log yet");
+
+        feature.Update(null, """
+            # 001-auth
+
+            <log>
+            - 2020-01-01 — brand new history
+            </log>
+            """);
+
+        feature.Body.ShouldContain("brand new history");
+        PlanningLog.Parse(feature.Body).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void Update_TitleOnlyWithIntactLog_Passes()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", LoggedBody);
+
+        feature.Update("Auth flow v2", null);
+
+        feature.Title.ShouldBe("Auth flow v2");
+        feature.Body.ShouldBe(LoggedBody);
+        PlanningLog.Parse(feature.Body).Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void Update_TitleOnlyWithSourcedNote_AppendsToExistingLog()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", LoggedBody);
+
+        feature.Update("Auth flow v2", null, "renamed by user request", PlanningLogSource.Ui);
+
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.Count.ShouldBe(3);
+        lines[2].Text.ShouldBe("renamed by user request");
+        lines[2].Source.ShouldBe(PlanningLogSource.Ui);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Update_AbsentLogNote_AppendsNothingAndStillGuards(string? logNote)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth", LoggedBody);
+
+        feature.Update("renamed", LoggedBody, logNote);
+
+        PlanningLog.Parse(feature.Body).Count.ShouldBe(2);
+        feature.Title.ShouldBe("renamed");
+
+        Should.Throw<PlanningException>(() =>
+            feature.Update(null, "no log section anymore", logNote))
+            .Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
+    }
+
+    [Fact]
+    public void Update_VersionPinnedToBumpOnlyOutsideDraft()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        feature.Update("t2", "b2");
+        feature.Version.ShouldBe(1);
+
+        feature.SetStatus(PlanningFeatureStatus.Ready);
+        feature.Version.ShouldBe(1);
+
+        feature.Update("t3", "b3");
+        feature.Version.ShouldBe(2);
+
+        feature.Update("t4", "b4");
+        feature.Version.ShouldBe(3);
+    }
 }

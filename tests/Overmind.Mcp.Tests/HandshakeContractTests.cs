@@ -48,7 +48,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheThirtyThreeTools()
+    public async Task ToolsList_ExposesExactlyTheThirtyFourTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -69,7 +69,7 @@ public class HandshakeContractTests : McpSessionTestBase
             "planning_remove_feature_dependency",
             "planning_set_current",
             "planning_set_feature_priority", "planning_set_feature_status", "planning_set_status",
-            "planning_task_queue", "planning_upsert_artifact",
+            "planning_task_queue", "planning_update_feature", "planning_upsert_artifact",
             "planning_upsert_tasks", "planning_validate",
             "read_entry", "search", "update_entry", "write_entry"
         ]);

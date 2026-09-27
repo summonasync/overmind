@@ -1,4 +1,5 @@
 using FluentValidation;
+using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 
 namespace Overmind.Host.Api.Validation;
@@ -20,6 +21,37 @@ public sealed class UpdatePlanningFeatureRequestValidator : AbstractValidator<Up
         {
             RuleFor(x => x.Title).MaximumLength(200);
         });
+    }
+}
+
+public sealed class UpdatePlanningFeatureByAgentRequestValidator
+    : AbstractValidator<UpdatePlanningFeatureByAgentRequest>
+{
+    public UpdatePlanningFeatureByAgentRequestValidator()
+    {
+        var allowedPriorities = string.Join(
+            ", ", Enum.GetNames<FeaturePriority>().Select(n => n.ToLowerInvariant()));
+
+        RuleFor(x => x.LogNote).NotEmpty();
+
+        RuleFor(x => x)
+            .Must(x => x.Title is not null || x.Body is not null || x.Priority is not null)
+            .WithMessage("Provide at least one editable field: title, body, priority.");
+
+        RuleFor(x => x.Title)
+            .Must(t => !string.IsNullOrWhiteSpace(t))
+            .WithMessage("Title must be non-empty text when provided.")
+            .When(x => x.Title is not null);
+
+        RuleFor(x => x.Body)
+            .Must(b => !string.IsNullOrWhiteSpace(b))
+            .WithMessage("Body must be non-empty text when provided.")
+            .When(x => x.Body is not null);
+
+        RuleFor(x => x.Priority)
+            .Must(p => Enum.TryParse(p, ignoreCase: true, out FeaturePriority parsed) && Enum.IsDefined(parsed))
+            .WithMessage($"Must be one of: {allowedPriorities}.")
+            .When(x => x.Priority is not null);
     }
 }
 

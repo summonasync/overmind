@@ -1286,6 +1286,204 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateFeature_TitleOnly_RenamesAndEchoesSlimProjection()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Title = "Renamed feature", LogNote = "title polish" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["slug", "status", "version", "updatedAt", "bodyChars"]);
+
+        var echo = await response.Content.ReadFromJsonAsync<FeatureUpdateJson>(JsonOptions);
+        echo!.Slug.ShouldBe("feat");
+        echo.Status.ShouldBe("draft");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Title.ShouldBe("Renamed feature");
+        echo.BodyChars.ShouldBe(feature.Body.Length);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_BodyOnly_ReplacesBodyAndKeepsTitle()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Body = "<goal>\nFresh goal.\n</goal>\n", LogNote = "rewrite body" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<FeatureUpdateJson>(JsonOptions);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Title.ShouldBe("Feature");
+        feature.Body.ShouldStartWith("<goal>");
+        echo!.BodyChars.ShouldBe(feature.Body.Length);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_PriorityOnly_MovesToTailOfTargetBand()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "moved", "Moved");
+        await CreateAgentFeatureAsync(project.Id, "p2-stays", "Stays");
+        await CreateAgentFeatureAsync(project.Id, "p1-first", "First", "p1");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "moved"),
+            new { Priority = "p1", LogNote = "bumping priority by user request" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var queueResponse = await _client.GetAsync(
+            $"/api/agent/projects/{project.Id}/planning/task-queue");
+        queueResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var queue = await queueResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var positions = queue.GetProperty("items").EnumerateArray().ToDictionary(
+            i => i.GetProperty("slug").GetString()!,
+            i => (Priority: i.GetProperty("priority").GetString()!,
+                Position: i.GetProperty("queuePosition").GetInt32()));
+
+        positions["moved"].Priority.ShouldBe("p1");
+        positions["moved"].Position.ShouldBe(2);
+        positions["p1-first"].Position.ShouldBe(1);
+        positions["p2-stays"].Position.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_MissingLogNote_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Title = "Renamed feature", LogNote = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_AllEditableFieldsEmpty_Returns400NamingFields()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { LogNote = "empty edit" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var messages = body.GetProperty("errors").EnumerateObject().SelectMany(e => e.Value.EnumerateArray());
+        messages.ShouldContain(m => m.GetString()!.Contains("title", StringComparison.Ordinal));
+        messages.ShouldContain(m => m.GetString()!.Contains("body", StringComparison.Ordinal));
+        messages.ShouldContain(m => m.GetString()!.Contains("priority", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("\n\t")]
+    public async Task UpdateFeature_WhitespaceOnlyTitleOrBody_Returns400(string whitespace)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var titleResponse = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Title = whitespace, LogNote = "n" });
+        var bodyResponse = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Body = whitespace, LogNote = "n" });
+
+        titleResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        bodyResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_UnknownPriority_Returns400ListingBands()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Priority = "banana", LogNote = "n" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var messages = body.GetProperty("errors").EnumerateObject().SelectMany(e => e.Value.EnumerateArray());
+        messages.ShouldContain(m => m.GetString()!.Contains("p0, p1, p2, p3", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateFeature_UnknownFeature_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "missing"),
+            new { Title = "X", LogNote = "n" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_RewrittenLogHistory_FailsAsNotAppendable()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "inProgress");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        var tampered = string.Join('\n', feature!.Body.Split('\n')
+            .Where(line => !line.Contains("status moved", StringComparison.Ordinal)));
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Body = tampered, LogNote = "sneaky rewrite" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogHistoryNotAppendable");
+    }
+
+    [Fact]
+    public async Task UpdateFeature_WritesAgentMarkerThenHumanPutStillWorksWithoutLogNote()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var agentResponse = await _client.PostAsJsonAsync(
+            AgentFeatureUpdateUrl(project.Id, "feat"),
+            new { Title = "Agent renamed", LogNote = "agent edit" });
+        agentResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldContain("[agent] — agent edit");
+
+        var humanResponse = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Title = "Human renamed" });
+        humanResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var updated = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        updated!.Title.ShouldBe("Human renamed");
+    }
+
+    [Fact]
     public async Task Patch_ReplaceSection_ReturnsD7ProjectionAndRewritesTheBody()
     {
         var project = await CreateProjectAsync();
@@ -1878,6 +2076,9 @@ public sealed class AgentPlanningApiTests : IDisposable
     private static string AgentFeatureStatusUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}/status";
 
+    private static string AgentFeatureUpdateUrl(Guid projectId, string slug) =>
+        $"/api/agent/projects/{projectId}/planning/features/{slug}/update";
+
     private static string AgentFeatureUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}";
 
@@ -2008,11 +2209,11 @@ public sealed class AgentPlanningApiTests : IDisposable
         return (project!, root);
     }
 
-    private async Task<FeatureJson> CreateAgentFeatureAsync(Guid projectId, string slug, string title)
+    private async Task<FeatureJson> CreateAgentFeatureAsync(Guid projectId, string slug, string title, string? priority = null)
     {
         var response = await _client.PostAsJsonAsync(
             $"/api/agent/projects/{projectId}/planning/features",
-            new { Slug = slug, Title = title, Body = "" });
+            new { Slug = slug, Title = title, Body = "", Priority = priority });
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
@@ -2121,6 +2322,8 @@ public sealed class AgentPlanningApiTests : IDisposable
         string? StatusChanged = null, string? FeatureStatusChanged = null, bool? AlreadyTicked = null);
 
     public sealed record FeatureMutationJson(string Slug, string Status, int Version, string LastLogLine);
+
+    public sealed record FeatureUpdateJson(string Slug, string Status, int Version, DateTime UpdatedAt, int BodyChars);
 
     public sealed record ArtifactMutationJson(Guid Id, string Status, int Version, string LastLogLine);
 

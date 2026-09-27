@@ -260,6 +260,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/status",
             200,
             Canned.PlanningFeatureMutationEchoJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/update",
+            200,
+            Canned.PlanningFeatureUpdateEchoJson);
     }
 
     protected static Dictionary<string, string> ParseQuery(string query)
