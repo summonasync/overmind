@@ -1,7 +1,7 @@
 ---
 feature: 005
 slug: global-deploy-rename-validation
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-27
@@ -42,3 +42,8 @@ Deploy the reworked crew (003 output) to the four global tool homes and PROVE th
 
 - SYNC-STRUCTURE.md «Deploy modes»: mirror = rsync -a --delete / robocopy /MIR (self-cleaning for renames); merge = children-only (orphans on delete — the exact risk this feature validates).
 - Blocked by 003 (needs the committed rename); blocks 004.
+
+<log>
+- 2026-09-27 [auto] — artifact created → inProgress
+- 2026-09-27 [agent] — User ordered execution in chat («коммит, пуш, поехали дальше 005», 2026-09-28). All 3 tasks done via gated pipeline; my independent home sweep confirms: kimi 26/23, claude 26/23, qwen 26/24 (+1 foreign), task-orchestrator absent everywhere, presence 6/6, orphans removed exactly as scoped. Open item documented: ~/.gemini absent on this machine — antigravity side deploys on next install.sh run once the home exists.
+</log>
