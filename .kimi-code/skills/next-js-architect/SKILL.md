@@ -1,23 +1,24 @@
 ---
 name: next-js-architect
 description: |
-  Make architectural decisions for Next.js frontend, plan features, design component boundaries,
+  Make architectural decisions for Next.js frontend, design component boundaries,
   BFF routing, FSD structure, React Query strategy, and state management.
   Use when the user asks about frontend system design, Next.js App Router structure,
-  BFF proxy design, FSD migration, React Query architecture, or planning large UI features across multiple files.
+  BFF proxy design, FSD migration, or React Query architecture.
 type: prompt
 whenToUse: |
   When making frontend architectural decisions, designing Next.js App Router structure,
-  planning BFF proxy layer, designing FSD feature boundaries, planning React Query strategy,
-  or planning large UI features across multiple files.
+  planning BFF proxy layer, designing FSD feature boundaries, or planning React Query strategy.
 ---
 
 # Next.js Architecture & Documentation Skill
 
+**Ownership:** consulted BY `feature-orchestrator` (Phase 1) — never runs planning gates, never creates spec/plan/task artifacts.
+
 ## Documentation-First Approach
-Before any architectural decision or large feature planning, read documentation in strict order:
+Before any architectural decision or large structural work, read documentation in strict order:
 1. **`CONTEXT.md`** — System design: frontend architecture, BFF rules, FSD structure, component boundaries, AI Framework details, development phases (Russian)
-2. **`BACKLOG.md`** — Sprint backlog: tasks per phase with checkboxes, deferred items, execution order (Mixed EN headers, RU descriptions)
+2. **Overmind board** — features, statuses, execution state via `planning_list_features` (ceremony rules: `overmind-ceremony`)
 3. **`STRUCTURE.md`** — Frontend structure, FSD rules, code style guidelines, component rules, AI agent guidelines, Do/Don't (English)
 4. **`AGENTS.md`** — Tech stack, build commands, security, conventions for AI coding agents (English)
 
@@ -115,6 +116,6 @@ src/
 ## Output Contract (MANDATORY)
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
-2. **Next step** — `task-orchestrator` gates, then `next-js-coder` implementation.
+2. **Next step** — `feature-orchestrator` gates, then `next-js-coder` implementation.
 3. **Alternatives** — ADR entry in `TECHNICAL-SOLUTIONS.md` (user approves); `architect-review` against the existing FSD graph.
 Suggest, never auto-proceed. The user picks the next step.

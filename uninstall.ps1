@@ -12,6 +12,7 @@ $homePaths = @{
     claude      = Join-Path $HOME '.claude'
     gemini      = Join-Path $HOME '.gemini'
     antigravity = Join-Path $HOME '.gemini\antigravity'
+    qwen        = Join-Path $HOME '.qwen'
 }
 
 $targets = @()
@@ -19,11 +20,24 @@ foreach ($entry in $manifest.entries) {
     $destHome = $homePaths[$entry.home]
     if (-not (Test-Path $destHome)) { continue }
     $name = Split-Path -Leaf $entry.source
-    $dst = Join-Path $destHome $name
-    $targets += [pscustomobject]@{ Path = $dst; Type = $entry.type; Home = $destHome }
+
+    if ($entry.type -eq 'dir' -and $entry.mode -eq 'merge') {
+        # Merge-mode deploys children individually, so removal is per child too — the shared
+        # destination directory itself may hold third-party content we must not touch.
+        # Limitation: only children that still exist in the repo are known to the manifest.
+        $srcDir = Join-Path $root $entry.source
+        if (Test-Path $srcDir) {
+            foreach ($child in Get-ChildItem $srcDir -Force) {
+                $targets += [pscustomobject]@{ Path = (Join-Path (Join-Path $destHome $name) $child.Name); Type = 'child'; Home = $destHome }
+            }
+        }
+        continue
+    }
+
+    $targets += [pscustomobject]@{ Path = (Join-Path $destHome $name); Type = $entry.type; Home = $destHome }
 }
 
-$targets = $targets | Sort-Object -Property Path -Unique
+$targets = @($targets | Sort-Object -Property Path -Unique)
 
 if ($DryRun) {
     foreach ($t in $targets) { Write-Host "Would remove $($t.Path)" }

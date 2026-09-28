@@ -19,7 +19,7 @@ Deliver a solution to a test task (тестовое задание) that is prod
 ## Scope Boundary (DO NOT CROSS)
 This skill handles **coding-challenge tasks only** — discrete, self-contained assignments where the deliverable will be reviewed by humans (typically hiring managers) who may be hostile to AI usage.
 
-For regular project tasks — use `task-orchestrator`. For system-wide audits — use `audit-orchestrator`.
+For regular project tasks — use `feature-orchestrator`. For system-wide audits — use `audit-orchestrator`.
 
 ## Core Rule (ABSOLUTE)
 - **Obfuscation is ALWAYS executed by the strongest reasoning model (selected in Agent Manager)** via `ai-obfuscator`. Never by the model that wrote or reviewed the code.
@@ -31,7 +31,7 @@ For regular project tasks — use `task-orchestrator`. For system-wide audits �
 ### Phase 0: Task Intake
 1. Read the task statement verbatim. Extract: explicit requirements, implicit expectations (framework versions, project layout the reviewer expects), submission format, deadline.
 2. **Set up the isolated workspace:** all challenge work lives in `coding-challenges/<task-slug>/`. This folder is the deliverable root. Nothing outside it is touched; nothing from the outer project (docs, configs, agent files) is copied into it.
-3. Read project docs per standard order (`AGENTS.md` → `CONTEXT.md` → `BACKLOG.md` → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md`) **only if the challenge lives inside an existing repo**. For a standalone challenge — the task statement overrides project conventions. The "Coding Challenge Rules" section of `AGENTS.md` ALWAYS applies.
+3. Read project docs per standard order (`AGENTS.md` → `CONTEXT.md` → Overmind board → `STRUCTURE.md` → `TECHNICAL-SOLUTIONS.md`) **only if the challenge lives inside an existing repo**. For a standalone challenge — the task statement overrides project conventions. The "Coding Challenge Rules" section of `AGENTS.md` ALWAYS applies.
 4. Confirm scope with the user: "Задача: [X]. Требования: [список]. Формат сдачи: [Y]. Workspace: `coding-challenges/<slug>/`. Скоуп зафиксирован, приступаю."
 
 ### Phase 1: Implementation
@@ -62,7 +62,7 @@ For regular project tasks — use `task-orchestrator`. For system-wide audits �
   - lint / format checks **as configured in the challenge repo** (not our project defaults)
   - requirements checklist: every explicit requirement from Phase 0 mapped to where it's implemented
 - **AI-leakage sweep of the deliverable folder** (mandatory, hostile review):
-  - no `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.kimi-code/`, `.kimi/`, `.claude/`, `.gemini/`, `.cursor/`, `.ai/`, `.superpowers/`, agent configs, or skill references anywhere in `coding-challenges/<task-slug>/` — regardless of which runtime ran the challenge
+  - no `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `QWEN.md`, `.kimi-code/`, `.kimi/`, `.claude/`, `.gemini/`, `.qwen/`, `.cursor/`, `.ai/`, `.superpowers/`, agent configs, or skill references anywhere in `coding-challenges/<task-slug>/` — regardless of which runtime ran the challenge
   - no mentions of AI tooling in code comments, README, configs, or git history
   - no AI-perfect README (delegate README to `documentation-writer`, then obfuscate it too — AI-perfect READMEs are a common tell)
   - commit history (if any) looks human: message style, count, no co-author trailers

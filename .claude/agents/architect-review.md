@@ -1,6 +1,6 @@
 ---
 name: architect-review
-description: Structural integrity reviewer (light/hard modes, backend + frontend). Use when phase end, big refactor, or task files declaring `review: hard`
+description: "Structural integrity reviewer (light/hard modes, backend + frontend). Use when phase end, big refactor, or task files declaring `review: hard`"
 model: opus
 tools:
   - Read

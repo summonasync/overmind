@@ -1,6 +1,6 @@
 ---
 name: frontend-designer
-description: UI/UX designer: research, palettes, brand-book, a11y. Use when design analysis, redesigns, brand-book work
+description: "UI/UX designer: research, palettes, brand-book, a11y. Use when design analysis, redesigns, brand-book work"
 model: sonnet
 ---
 

@@ -1,12 +1,12 @@
 ---
 name: dotnet-code-reviewer
 description: |
-  Review C# / .NET code for Clean Architecture compliance, MassTransit conventions, 
-  code style, security, and senior backend standards. Use when the user asks for PR review, 
+  Review C# / .NET code for Clean Architecture compliance, Wolverine messaging conventions,
+  code style, security, and senior backend standards. Use when the user asks for PR review,
   code audit, or quality check of .NET code.
 type: prompt
 whenToUse: |
-  When reviewing C# code, checking Clean Architecture layers, MassTransit usage, 
+  When reviewing C# code, checking Clean Architecture layers, Wolverine messaging usage,
   code style compliance, security vulnerabilities, or backend PR review.
 ---
 
@@ -14,8 +14,8 @@ whenToUse: |
 
 ## Context & Documentation Order
 Before reviewing code, read project documentation in this strict order:
-1. `CONTEXT.md` — Architecture decisions, service boundaries, MassTransit topology (Russian)
-2. `BACKLOG.md` — Current sprint context (Mixed EN/RU)
+1. `CONTEXT.md` — Architecture decisions, service boundaries, messaging topology (Russian)
+2. Overmind board — current feature/task context via `planning_list_features` (see `overmind-ceremony`)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
 
@@ -26,7 +26,7 @@ Before reviewing code, read project documentation in this strict order:
 ### Architecture & Layers
 - [ ] **Clean Architecture respected.** Domain has no infra dependencies. Application has no API dependencies.
 - [ ] **No business logic in API layer.** Controllers/Minimal API endpoints are thin.
-- [ ] **No direct HTTP between microservices.** Messaging (MassTransit) used for service communication.
+- [ ] **No direct HTTP between microservices.** Messaging (Wolverine) used for service communication.
 - [ ] **No shared databases.** One DB per service boundary.
 - [ ] **EF Core configurations** in separate `IEntityTypeConfiguration<T>` classes.
 
@@ -39,29 +39,34 @@ Before reviewing code, read project documentation in this strict order:
 - [ ] **CancellationToken** in ALL async methods.
 
 ### .NET Conventions
-- [ ] **Primary constructors** used for services (C# 13+).
+- [ ] **Primary constructors** used for services (C# 14+).
 - [ ] **Records** for DTOs and immutable value objects.
 - [ ] **Strongly-typed IDs** (`record struct UserId(Guid Value)`) where applicable.
 - [ ] **Result<T> pattern OR exceptions** — not mixed randomly.
 - [ ] **No `async void`.** Use `async Task` or `IAsyncEnumerable<T>`.
 - [ ] **Prefer `IReadOnlyList<T>`** over `List<T>` in public APIs.
 
-### MassTransit & Messaging
-- [ ] **MassTransit used.** No raw RabbitMQ/Azure ServiceBus clients.
-- [ ] **One queue/topic per consumer type**, not per message type.
-- [ ] **Retry policies** at bus level, not per consumer.
-- [ ] **Outbox pattern** for critical messages (if applicable).
-- [ ] **Sagas** use State Machine Sagas, not manual orchestration.
+### Messaging (Wolverine)
+- [ ] **Wolverine used for async messaging.** No raw RabbitMQ/Azure ServiceBus clients.
+- [ ] **No MassTransit in new code** — BLOCKER. Allowed only in legacy codebases; note the legacy status in the review, never bless it into new modules.
+- [ ] **Handlers live in Application layer**, bus configuration in Infrastructure.
+- [ ] **Retry policies** at bus level, not per handler.
+- [ ] **Durable/outbox messaging** for critical messages (if applicable).
+- [ ] **Sagas** use Wolverine's durable sagas, not manual orchestration.
 
 ### Validation & Logging
 - [ ] **FluentValidation** for all inputs.
 - [ ] **Serilog structured logging.** No string interpolation in log templates (`Log.Information("User {UserId}", id)`).
 - [ ] **No secrets in logs.**
 
+### Third-Party Library Stack
+- [ ] **Mediator (martinothamar) for CQRS, Wolverine for messaging, Mapperly or manual mapping, Shouldly for asserts.** Version-pinned rules: `nuget-licensing-guard`.
+- [ ] **MediatR, MassTransit, AutoMapper, or FluentAssertions in NEW code = BLOCKER.** Only acceptable inside legacy codebases — flag it with an explicit legacy note in the review output, never propagate these libraries into new modules or migrations of existing ones.
+
 ### Testing
 - [ ] **Tests exist** for new business logic.
 - [ ] **Naming:** `MethodName_Scenario_ExpectedResult`.
-- [ ] **NSubstitute** for mocks, **FluentAssertions** for asserts.
+- [ ] **NSubstitute** for mocks, **Shouldly** for asserts. **FluentAssertions in new code = BLOCKER** (legacy codebases only).
 - [ ] **Theory** used for parameterized tests.
 
 ### Security Review (CRITICAL — check on EVERY PR touching auth, API, config, or data)
@@ -70,7 +75,7 @@ Before reviewing code, read project documentation in this strict order:
 - [ ] **AuthZ on all endpoints.** Every Minimal API endpoint must have `.RequireAuthorization()` or explicit `[AllowAnonymous]` with justification.
 - [ ] **No insecure deserialization.** `BinaryFormatter` = BLOCKER. `Newtonsoft.Json` with `TypeNameHandling.All` = BLOCKER. Use `System.Text.Json` with strict options.
 - [ ] **CORS is restrictive.** `AllowAnyOrigin()` + `AllowCredentials()` = BLOCKER (broken combo). Explicit origins only.
-- [ ] **Sensitive data in MassTransit messages encrypted or tokenized.** PII must not travel in plain text across bus.
+- [ ] **Sensitive data in bus messages encrypted or tokenized.** PII must not travel in plain text across the bus.
 - [ ] **No mass assignment vulnerabilities.** DTOs must not expose ID/created-by fields that user can override.
 - [ ] **Input validation on boundary.** All public API inputs validated via FluentValidation before hitting business logic.
 - [ ] **No exception details leaked to client.** Generic error messages in API responses; details only in logs.

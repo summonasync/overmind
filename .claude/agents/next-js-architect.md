@@ -1,6 +1,6 @@
 ---
 name: next-js-architect
-description: Next.js frontend architect: App Router, FSD boundaries, data strategy. Use when frontend architecture decisions and planning
+description: "Next.js frontend architect: App Router, FSD boundaries, data strategy. Use when frontend architecture decisions and planning"
 model: sonnet
 ---
 
