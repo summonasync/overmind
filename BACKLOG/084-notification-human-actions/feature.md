@@ -1,9 +1,9 @@
 ---
 feature: 084
 slug: notification-human-actions
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-26
 ---
 
@@ -34,4 +34,5 @@ Human actions requested by agents (approval/question notifications) are currentl
 <log>
 - 2026-09-27 [auto] — artifact created → inProgress
 - 2026-09-28 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-28 [ui] — status moved to 'done' via ui
 </log>

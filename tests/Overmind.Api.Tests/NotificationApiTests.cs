@@ -186,6 +186,79 @@ public sealed class NotificationApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_RemovesRow_AndSecondCallReturns404()
+    {
+        var removed = await NotifyAsync("info", "delete me");
+        var survivor = await NotifyAsync("info", "keep me");
+
+        (await DeleteNotificationAsync(removed.Id)).ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteNotificationAsync(removed.Id)).ShouldBe(HttpStatusCode.NotFound);
+
+        var list = await ListAsync();
+        list.Items.Single().Id.ShouldBe(survivor.Id);
+        list.UnreadCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ReadAll_MarksOnlyUnread_AndReturnsExactCount()
+    {
+        var read = await NotifyAsync("info", "already read");
+        var readAt = (await MarkReadAsync(read.Id)).ReadAt;
+        var first = await NotifyAsync("question", "one");
+        var second = await NotifyAsync("info", "two");
+
+        (await ReadAllAsync()).Marked.ShouldBe(2);
+        (await ReadAllAsync()).Marked.ShouldBe(0);
+
+        var list = await ListAsync();
+        list.UnreadCount.ShouldBe(0);
+        list.Items.Length.ShouldBe(3);
+        list.Items.Single(i => i.Id == read.Id).ReadAt.ShouldBe(readAt);
+        list.Items.Single(i => i.Id == first.Id).ReadAt.ShouldNotBeNull();
+        list.Items.Single(i => i.Id == second.Id).ReadAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ClearRead_DeletesOnlyReadNotifications()
+    {
+        var read = await NotifyAsync("info", "read");
+        await MarkReadAsync(read.Id);
+        var unread = await NotifyAsync("approval", "still unread");
+
+        (await ClearReadAsync()).Deleted.ShouldBe(1);
+        (await ClearReadAsync()).Deleted.ShouldBe(0);
+
+        var list = await ListAsync();
+        list.Items.Single().Id.ShouldBe(unread.Id);
+        list.UnreadCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ClearRead_KeepsRepliedProofRows_UnreadApprovalSurvivesReadAll()
+    {
+        var approval = await NotifyAsync("approval", "Approve the deploy?");
+        var replied = await NotifyAsync("question", "Ship or hold?");
+        await ReplyAsync(replied.Id, "ship it");
+
+        (await ClearReadAsync()).Deleted.ShouldBe(0);
+
+        var afterClear = await ListAsync();
+        afterClear.Items.Count().ShouldBe(2);
+        afterClear.UnreadCount.ShouldBe(1);
+
+        (await ReadAllAsync()).Marked.ShouldBe(1);
+
+        var afterReadAll = await ListAsync();
+        afterReadAll.UnreadCount.ShouldBe(0);
+
+        var deleteReplied = await _client.DeleteAsync($"/api/notifications/{replied.Id}");
+        deleteReplied.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var afterExplicitDelete = await ListAsync();
+        afterExplicitDelete.Items.Single().Id.ShouldBe(approval.Id);
+    }
+
+    [Fact]
     public async Task MarkRead_UnknownId_Returns404()
     {
         var response = await _client.PostAsync($"/api/notifications/{Guid.NewGuid()}/read", null);
@@ -279,6 +352,28 @@ public sealed class NotificationApiTests : IDisposable
             ?? throw new InvalidOperationException("reply body was null");
     }
 
+    private async Task<HttpStatusCode> DeleteNotificationAsync(Guid id)
+    {
+        var response = await _client.DeleteAsync($"/api/notifications/{id}");
+        return response.StatusCode;
+    }
+
+    private async Task<ReadAllJson> ReadAllAsync()
+    {
+        var response = await _client.PostAsync("/api/notifications/read-all", null);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<ReadAllJson>(JsonOptions)
+            ?? throw new InvalidOperationException("read-all body was null");
+    }
+
+    private async Task<ClearReadJson> ClearReadAsync()
+    {
+        var response = await _client.PostAsync("/api/notifications/clear-read", null);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<ClearReadJson>(JsonOptions)
+            ?? throw new InvalidOperationException("clear-read body was null");
+    }
+
     private async Task<RepliesJson> RepliesAsync(Guid? projectId = null, bool includeRead = true)
     {
         var readFlag = includeRead ? "true" : "false";
@@ -305,4 +400,8 @@ public sealed class NotificationApiTests : IDisposable
     public sealed record NotificationsJson(NotificationJson[] Items, int UnreadCount);
 
     public sealed record RepliesJson(NotificationJson[] Items);
+
+    public sealed record ReadAllJson(int Marked);
+
+    public sealed record ClearReadJson(int Deleted);
 }

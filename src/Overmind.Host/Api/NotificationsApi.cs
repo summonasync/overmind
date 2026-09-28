@@ -14,6 +14,9 @@ public static class NotificationsApi
         human.MapGet("/notifications", List);
         human.MapPost("/notifications/{id:guid}/read", MarkRead);
         human.MapPost("/notifications/{id:guid}/reply", Reply);
+        human.MapDelete("/notifications/{id:guid}", Delete);
+        human.MapPost("/notifications/read-all", MarkAllRead);
+        human.MapPost("/notifications/clear-read", ClearRead);
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/notifications", Create);
@@ -97,5 +100,30 @@ public static class NotificationsApi
         }
 
         return Results.Ok(NotificationMapper.ToResponse(notification));
+    }
+
+    internal static async Task<IResult> Delete(Guid id, NotificationsService service, CancellationToken ct)
+    {
+        var deleted = await service.DeleteAsync(id, ct);
+        if (!deleted)
+        {
+            return HttpErrors.NotFound($"Notification '{id}' was not found.");
+        }
+
+        return Results.NoContent();
+    }
+
+    internal static async Task<IResult> MarkAllRead(NotificationsService service, CancellationToken ct)
+    {
+        var marked = await service.MarkAllReadAsync(ct);
+
+        return Results.Ok(new ReadAllNotificationsResponse(marked));
+    }
+
+    internal static async Task<IResult> ClearRead(NotificationsService service, CancellationToken ct)
+    {
+        var deleted = await service.ClearReadAsync(ct);
+
+        return Results.Ok(new ClearReadNotificationsResponse(deleted));
     }
 }

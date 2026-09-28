@@ -81,6 +81,31 @@ public sealed class NotificationsService(OvermindDbContext db)
         return notification;
     }
 
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+    {
+        var deleted = await db.AgentNotifications
+            .Where(n => n.Id == id)
+            .ExecuteDeleteAsync(ct);
+
+        return deleted > 0;
+    }
+
+    public async Task<int> MarkAllReadAsync(CancellationToken ct)
+    {
+        return await db.AgentNotifications
+            .Where(n => n.ReadAt == null)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(n => n.ReadAt, DateTime.UtcNow),
+                ct);
+    }
+
+    public async Task<int> ClearReadAsync(CancellationToken ct)
+    {
+        return await db.AgentNotifications
+            .Where(n => n.ReadAt != null && n.ReplyText == null)
+            .ExecuteDeleteAsync(ct);
+    }
+
     public async Task<AgentNotification?> ReplyAsync(Guid id, string text, CancellationToken ct)
     {
         var notification = await db.AgentNotifications.FirstOrDefaultAsync(n => n.Id == id, ct);

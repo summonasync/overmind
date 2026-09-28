@@ -1,5 +1,5 @@
-import { apiGet, apiPost } from "@/shared/api/client";
-import type { NotificationItem, NotificationsResponse } from "@/features/notifications/types";
+import { apiDelete, apiGet, apiPost } from "@/shared/api/client";
+import type { BulkResult, NotificationItem, NotificationsResponse } from "@/features/notifications/types";
 
 export function listNotifications(): Promise<NotificationsResponse> {
   return apiGet<NotificationsResponse>("/notifications");
@@ -11,4 +11,16 @@ export function markNotificationRead(id: string): Promise<NotificationItem> {
 
 export function replyToNotification(id: string, text: string): Promise<NotificationItem> {
   return apiPost<NotificationItem>(`/notifications/${id}/reply`, { text });
+}
+
+export function deleteNotification(id: string): Promise<void> {
+  return apiDelete(`/notifications/${id}`);
+}
+
+export function readAllNotifications(): Promise<BulkResult> {
+  return apiPost<BulkResult>("/notifications/read-all");
+}
+
+export function clearReadNotifications(): Promise<BulkResult> {
+  return apiPost<BulkResult>("/notifications/clear-read");
 }

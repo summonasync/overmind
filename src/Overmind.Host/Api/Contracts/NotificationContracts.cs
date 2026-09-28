@@ -28,3 +28,7 @@ public sealed record NotificationResponse(
 public sealed record NotificationsResponse(NotificationResponse[] Items, int UnreadCount);
 
 public sealed record RepliesResponse(NotificationResponse[] Items);
+
+public sealed record ReadAllNotificationsResponse(int Marked);
+
+public sealed record ClearReadNotificationsResponse(int Deleted);

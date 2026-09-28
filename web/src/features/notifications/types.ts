@@ -20,3 +20,5 @@ export interface NotificationsResponse {
   items: NotificationItem[];
   unreadCount: number;
 }
+
+export type BulkResult = { marked: number } | { deleted: number };

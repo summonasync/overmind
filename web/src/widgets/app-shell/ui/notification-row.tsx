@@ -39,7 +39,7 @@ interface NotificationRowProps {
 
 export function NotificationRow({ item }: NotificationRowProps) {
   const [draft, setDraft] = useState("");
-  const { markRead, reply } = useNotificationMutations();
+  const { markRead, reply, remove } = useNotificationMutations();
 
   const meta = kindMeta[item.kind];
   const KindIcon = meta.icon;
@@ -49,6 +49,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
   const unread = item.readAt === null || item.readAt === undefined;
   const markingThis = markRead.isPending && markRead.variables === item.id;
   const replyingThis = reply.isPending && reply.variables?.id === item.id;
+  const removingThis = remove.isPending && remove.variables === item.id;
 
   const sendReply = () => {
     const text = draft.trim();
@@ -61,7 +62,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
   return (
     <li
       className={cn(
-        "rounded-lg border bg-surface p-3",
+        "group rounded-lg border bg-surface p-3",
         unread ? "border-primary/30" : "border-border opacity-60",
       )}
     >
@@ -74,6 +75,17 @@ export function NotificationRow({ item }: NotificationRowProps) {
         <span className="ml-auto shrink-0 text-xs text-muted">
           {formatNotificationTime(item.createdAt)}
         </span>
+        {replyingThis ? null : (
+          <Button
+            variant="ghost"
+            className="shrink-0 px-2 py-1 text-xs opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+            aria-label="Delete notification"
+            disabled={removingThis}
+            onClick={() => remove.mutate(item.id)}
+          >
+            <X size={12} aria-hidden />
+          </Button>
+        )}
       </div>
       <p className="mt-2 text-sm text-foreground">{item.text}</p>
       <div className="mt-2 flex items-center gap-2">
@@ -101,6 +113,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
             Mark read
           </Button>
         ) : null}
+        <ErrorText error={remove.error} />
       </div>
       {/* No server denial semantics: reject posts a regular reply, 077 proof search reads any reply — backend left unchanged by user decision. */}
       {item.kind === "approval" ? (
