@@ -4,7 +4,7 @@ description: |
   Transform AI-generated code into code that appears human-written.
   Remove typical LLM artifacts, boilerplate patterns, and predictable structures;
   inject organic imperfections a real developer would leave.
-  ALWAYS executed by the qwen3.8-max model — never by the model that wrote the code.
+  ALWAYS executed by the qwen3.8-flash model — never by the model that wrote the code.
 type: prompt
 whenToUse: |
   In coding-challenge (test task) flow, after code review passes and before final validation.
@@ -13,7 +13,7 @@ whenToUse: |
 
 # AI Trace Obfuscation Skill
 
-> **Model policy:** Obfuscation is ALWAYS performed by the qwen3.8-max model. The model that wrote the code must not obfuscate its own output — self-obfuscation leaves correlated artifacts.
+> **Model policy:** Obfuscation is ALWAYS performed by the qwen3.8-flash model. The model that wrote the code must not obfuscate its own output — self-obfuscation leaves correlated artifacts.
 
 ## Purpose
 Transform AI-generated code into code that appears human-written. Remove typical LLM artifacts, boilerplate patterns, and predictable structures. Inject organic imperfections, personal style choices, and context-specific decisions that a real developer would make.
@@ -369,5 +369,5 @@ Despite obfuscation, NEVER introduce:
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
 2. **Next step** — `ai-obfuscation-reviewer` (mandatory verification gate).
-3. **Alternatives** — `ai-code-detector` re-scan to confirm traces are gone; `dotnet-code-reviewer` / `next-js-code-reviewer` if behavior-affecting edits slipped in.
+3. **Alternatives** — `ai-code-detector` re-scan to confirm traces are gone; `dotnet-code-reviewer` / `web-code-reviewer` if behavior-affecting edits slipped in.
 Suggest, never auto-proceed. The user picks the next step.

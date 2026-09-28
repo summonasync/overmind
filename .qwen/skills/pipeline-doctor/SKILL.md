@@ -19,13 +19,13 @@ type: prompt
 - AGENTS.md / SKILLFLOW.md give project context — skip codebase exploration for the fix itself.
 
 ## The Loop (max 3 iterations — HARD CAP)
-1. **Diagnose.** Spawn a log-reader sub-agent (qwen3.7-plus): fetch the failing job logs via `gh run view --log` (or glab equivalent). Output: root cause hypothesis + affected files. Apply root-cause-first debugging (`overmind-ceremony` techniques) — no fixes without root cause.
-2. **Fix.** Coder sub-agent (qwen3.7-plus) applies the minimal fix locally. No scope creep: only what the failing stage needs.
+1. **Diagnose.** Spawn a log-reader sub-agent (qwen3.8-flash): fetch the failing job logs via `gh run view --log` (or glab equivalent). Output: root cause hypothesis + affected files. Apply root-cause-first debugging (`overmind-ceremony` techniques) — no fixes without root cause.
+2. **Fix.** Coder sub-agent (qwen3.8-flash) applies the minimal fix locally. No scope creep: only what the failing stage needs.
 3. **Trigger & watch.** Push the fix branch / trigger the pipeline (`gh workflow run` or push). Watch until completion (`gh run watch`).
 4. **If green** → go to Review. **If red** → logs back to step 1. **After 3 failed iterations → STOP**: report root-cause hypotheses tried, current error, and why it's likely outside the repo (secrets, quotas, infra) — human takes over.
 
 ## Review Gate
-- A separate reviewer sub-agent (qwen3.7-plus) reviews the accumulated fix diff before reporting success: the fix must address the root cause, not mask it (no skipped tests, no `continue-on-error`, no pinned-to-old-version hacks without explicit user sign-off).
+- A separate reviewer sub-agent (qwen3.8-flash) reviews the accumulated fix diff before reporting success: the fix must address the root cause, not mask it (no skipped tests, no `continue-on-error`, no pinned-to-old-version hacks without explicit user sign-off).
 - Mask-style fixes are BLOCKERS — present to user with the trade-off, never merge silently.
 
 ## Output Contract

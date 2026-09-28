@@ -6,7 +6,7 @@ This repo maintains one agent crew for four runtimes: **Kimi Code CLI** (`.kimi-
 
 **Edit one side — edit the other three in the same commit.** No asymmetric changes to crew behavior, policies, workflows, or skill logic. Divergence is allowed ONLY for tool-specific concerns:
 
-- model names, aliases, and selection mechanics (Kimi `K2.7`/`K3` pool vs Claude `sonnet`/`opus` vs Antigravity role-based choice in Agent Manager vs Qwen `qwen3.7-plus`/`qwen3.8-max` pins)
+- model names, aliases, and selection mechanics (Kimi `K2.7`/`K3` pool vs Claude `sonnet`/`opus` vs Antigravity role-based choice in Agent Manager vs Qwen `qwen3.8-flash` pin)
 - home directory paths (`~/.kimi-code/` vs `~/.claude/` vs `~/.gemini/` + `~/.gemini/antigravity/` vs `~/.qwen/`)
 - tool identifier names inside agent `tools:` allowlists (Claude Code `Read`/`Grep`/`Glob`/`Bash`/`WebSearch`/`FetchURL` vs canonical Qwen `read_file`/`grep_search`/`glob`/`run_shell_command`/`web_fetch`) — the *restriction* is mirrored, only the spelling follows the runtime
 - runtime-specific features (Kimi `AgentSwarm` + config.toml secondary-model pool; Claude Task tool + settings.json; Antigravity Agent Manager + UI permission settings; Qwen `agent` tool + `subagent_type: "fork"` + settings.json `permissions`/`hooks`)
@@ -27,7 +27,7 @@ A single-line `description:` / `whenToUse:` value that contains `: ` (colon + sp
 
 Escaping: `"` → `\"`, and never write a bare `\` inside a double-quoted value (`C:\foo` becomes an escape sequence) — switch that value to a `>-` block scalar instead. Multi-line `description: |` block scalars (used by all crew skills) are already valid and need no quotes.
 
-Applies to every side. As of this writing the affected set is 8 agents — `architect-review` (`review: hard` in backticks), `dotnet-architect`, `dotnet-code-reviewer`, `dotnet-init`, `frontend-designer`, `next-js-architect`, `next-js-code-reviewer`, `feature-orchestrator` — quoted in the `description:` field on the Claude/Qwen sides and in `whenToUse:` for `architect-review` on the Kimi/Antigravity sides, where the description is not folded.
+Applies to every side. As of this writing the affected set is 16 agents — `architect-review` (`review: hard` in backticks), `dotnet-architect`, `dotnet-code-reviewer`, `dotnet-init`, `feature-orchestrator`, `frontend-designer`, `go-code-reviewer`, `js-platform-code-reviewer`, `node-architect`, `node-code-reviewer`, `overmind-ceremony`, `python-code-reviewer`, `solution-architect`, `sprint-planner`, `web-architect`, `web-code-reviewer` — quoted in the `description:` field on the Claude/Qwen sides and in `whenToUse:` for `architect-review` on the Kimi/Antigravity sides, where the description is not folded.
 
 ## File mapping
 
@@ -48,11 +48,21 @@ Applies to every side. As of this writing the affected set is 8 agents — `arch
 | `.kimi-code/agents/dotnet-init.md` | `.claude/agents/dotnet-init.md` | `.gemini/antigravity/agents/dotnet-init.md` | `.qwen/agents/dotnet-init.md` |
 | `.kimi-code/agents/fast-fixer-coder.md` | `.claude/agents/fast-fixer-coder.md` | `.gemini/antigravity/agents/fast-fixer-coder.md` | `.qwen/agents/fast-fixer-coder.md` |
 | `.kimi-code/agents/frontend-designer.md` | `.claude/agents/frontend-designer.md` | `.gemini/antigravity/agents/frontend-designer.md` | `.qwen/agents/frontend-designer.md` |
+| `.kimi-code/agents/go-code-reviewer.md` | `.claude/agents/go-code-reviewer.md` | `.gemini/antigravity/agents/go-code-reviewer.md` | `.qwen/agents/go-code-reviewer.md` |
+| `.kimi-code/agents/go-coder.md` | `.claude/agents/go-coder.md` | `.gemini/antigravity/agents/go-coder.md` | `.qwen/agents/go-coder.md` |
 | `.kimi-code/agents/maui-coder.md` | `.claude/agents/maui-coder.md` | `.gemini/antigravity/agents/maui-coder.md` | `.qwen/agents/maui-coder.md` |
 | `.kimi-code/agents/naming-helper.md` | `.claude/agents/naming-helper.md` | `.gemini/antigravity/agents/naming-helper.md` | `.qwen/agents/naming-helper.md` |
-| `.kimi-code/agents/next-js-architect.md` | `.claude/agents/next-js-architect.md` | `.gemini/antigravity/agents/next-js-architect.md` | `.qwen/agents/next-js-architect.md` |
-| `.kimi-code/agents/next-js-code-reviewer.md` | `.claude/agents/next-js-code-reviewer.md` | `.gemini/antigravity/agents/next-js-code-reviewer.md` | `.qwen/agents/next-js-code-reviewer.md` |
-| `.kimi-code/agents/next-js-coder.md` | `.claude/agents/next-js-coder.md` | `.gemini/antigravity/agents/next-js-coder.md` | `.qwen/agents/next-js-coder.md` |
+| `.kimi-code/agents/js-platform-code-reviewer.md` | `.claude/agents/js-platform-code-reviewer.md` | `.gemini/antigravity/agents/js-platform-code-reviewer.md` | `.qwen/agents/js-platform-code-reviewer.md` |
+| `.kimi-code/agents/js-platform-coder.md` | `.claude/agents/js-platform-coder.md` | `.gemini/antigravity/agents/js-platform-coder.md` | `.qwen/agents/js-platform-coder.md` |
+| `.kimi-code/agents/node-architect.md` | `.claude/agents/node-architect.md` | `.gemini/antigravity/agents/node-architect.md` | `.qwen/agents/node-architect.md` |
+| `.kimi-code/agents/node-code-reviewer.md` | `.claude/agents/node-code-reviewer.md` | `.gemini/antigravity/agents/node-code-reviewer.md` | `.qwen/agents/node-code-reviewer.md` |
+| `.kimi-code/agents/node-coder.md` | `.claude/agents/node-coder.md` | `.gemini/antigravity/agents/node-coder.md` | `.qwen/agents/node-coder.md` |
+| `.kimi-code/agents/python-code-reviewer.md` | `.claude/agents/python-code-reviewer.md` | `.gemini/antigravity/agents/python-code-reviewer.md` | `.qwen/agents/python-code-reviewer.md` |
+| `.kimi-code/agents/python-coder.md` | `.claude/agents/python-coder.md` | `.gemini/antigravity/agents/python-coder.md` | `.qwen/agents/python-coder.md` |
+| `.kimi-code/agents/solution-architect.md` | `.claude/agents/solution-architect.md` | `.gemini/antigravity/agents/solution-architect.md` | `.qwen/agents/solution-architect.md` |
+| `.kimi-code/agents/web-architect.md` | `.claude/agents/web-architect.md` | `.gemini/antigravity/agents/web-architect.md` | `.qwen/agents/web-architect.md` |
+| `.kimi-code/agents/web-code-reviewer.md` | `.claude/agents/web-code-reviewer.md` | `.gemini/antigravity/agents/web-code-reviewer.md` | `.qwen/agents/web-code-reviewer.md` |
+| `.kimi-code/agents/web-coder.md` | `.claude/agents/web-coder.md` | `.gemini/antigravity/agents/web-coder.md` | `.qwen/agents/web-coder.md` |
 | `.kimi-code/agents/overmind-ceremony.md` | `.claude/agents/overmind-ceremony.md` | `.gemini/antigravity/agents/overmind-ceremony.md` | `.qwen/agents/overmind-ceremony.md` |
 | `.kimi-code/agents/pipeline-doctor.md` | `.claude/agents/pipeline-doctor.md` | `.gemini/antigravity/agents/pipeline-doctor.md` | `.qwen/agents/pipeline-doctor.md` |
 | `.kimi-code/agents/feature-orchestrator.md` | `.claude/agents/feature-orchestrator.md` | `.gemini/antigravity/agents/feature-orchestrator.md` | `.qwen/agents/feature-orchestrator.md` |
@@ -72,11 +82,26 @@ Applies to every side. As of this writing the affected set is 8 agents — `arch
 | `.kimi-code/skills/dotnet-init/` | `.claude/skills/dotnet-init/` | `.gemini/antigravity/skills/dotnet-init/` | `.qwen/skills/dotnet-init/` |
 | `.kimi-code/skills/fast-fixer-coder/` | `.claude/skills/fast-fixer-coder/` | `.gemini/antigravity/skills/fast-fixer-coder/` | `.qwen/skills/fast-fixer-coder/` |
 | `.kimi-code/skills/frontend-designer/` | `.claude/skills/frontend-designer/` | `.gemini/antigravity/skills/frontend-designer/` | `.qwen/skills/frontend-designer/` |
+| `.kimi-code/skills/go-best-practices/` | `.claude/skills/go-best-practices/` | `.gemini/antigravity/skills/go-best-practices/` | `.qwen/skills/go-best-practices/` |
+| `.kimi-code/skills/go-code-reviewer/` | `.claude/skills/go-code-reviewer/` | `.gemini/antigravity/skills/go-code-reviewer/` | `.qwen/skills/go-code-reviewer/` |
+| `.kimi-code/skills/go-coder/` | `.claude/skills/go-coder/` | `.gemini/antigravity/skills/go-coder/` | `.qwen/skills/go-coder/` |
 | `.kimi-code/skills/maui-coder/` | `.claude/skills/maui-coder/` | `.gemini/antigravity/skills/maui-coder/` | `.qwen/skills/maui-coder/` |
 | `.kimi-code/skills/naming-helper/` | `.claude/skills/naming-helper/` | `.gemini/antigravity/skills/naming-helper/` | `.qwen/skills/naming-helper/` |
-| `.kimi-code/skills/next-js-architect/` | `.claude/skills/next-js-architect/` | `.gemini/antigravity/skills/next-js-architect/` | `.qwen/skills/next-js-architect/` |
-| `.kimi-code/skills/next-js-code-reviewer/` | `.claude/skills/next-js-code-reviewer/` | `.gemini/antigravity/skills/next-js-code-reviewer/` | `.qwen/skills/next-js-code-reviewer/` |
-| `.kimi-code/skills/next-js-coder/` | `.claude/skills/next-js-coder/` | `.gemini/antigravity/skills/next-js-coder/` | `.qwen/skills/next-js-coder/` |
+| `.kimi-code/skills/js-platform-best-practices/` | `.claude/skills/js-platform-best-practices/` | `.gemini/antigravity/skills/js-platform-best-practices/` | `.qwen/skills/js-platform-best-practices/` |
+| `.kimi-code/skills/js-platform-code-reviewer/` | `.claude/skills/js-platform-code-reviewer/` | `.gemini/antigravity/skills/js-platform-code-reviewer/` | `.qwen/skills/js-platform-code-reviewer/` |
+| `.kimi-code/skills/js-platform-coder/` | `.claude/skills/js-platform-coder/` | `.gemini/antigravity/skills/js-platform-coder/` | `.qwen/skills/js-platform-coder/` |
+| `.kimi-code/skills/node-architect/` | `.claude/skills/node-architect/` | `.gemini/antigravity/skills/node-architect/` | `.qwen/skills/node-architect/` |
+| `.kimi-code/skills/node-best-practices/` | `.claude/skills/node-best-practices/` | `.gemini/antigravity/skills/node-best-practices/` | `.qwen/skills/node-best-practices/` |
+| `.kimi-code/skills/node-code-reviewer/` | `.claude/skills/node-code-reviewer/` | `.gemini/antigravity/skills/node-code-reviewer/` | `.qwen/skills/node-code-reviewer/` |
+| `.kimi-code/skills/node-coder/` | `.claude/skills/node-coder/` | `.gemini/antigravity/skills/node-coder/` | `.qwen/skills/node-coder/` |
+| `.kimi-code/skills/python-best-practices/` | `.claude/skills/python-best-practices/` | `.gemini/antigravity/skills/python-best-practices/` | `.qwen/skills/python-best-practices/` |
+| `.kimi-code/skills/python-code-reviewer/` | `.claude/skills/python-code-reviewer/` | `.gemini/antigravity/skills/python-code-reviewer/` | `.qwen/skills/python-code-reviewer/` |
+| `.kimi-code/skills/python-coder/` | `.claude/skills/python-coder/` | `.gemini/antigravity/skills/python-coder/` | `.qwen/skills/python-coder/` |
+| `.kimi-code/skills/solution-architect/` | `.claude/skills/solution-architect/` | `.gemini/antigravity/skills/solution-architect/` | `.qwen/skills/solution-architect/` |
+| `.kimi-code/skills/web-architect/` | `.claude/skills/web-architect/` | `.gemini/antigravity/skills/web-architect/` | `.qwen/skills/web-architect/` |
+| `.kimi-code/skills/web-best-practices/` | `.claude/skills/web-best-practices/` | `.gemini/antigravity/skills/web-best-practices/` | `.qwen/skills/web-best-practices/` |
+| `.kimi-code/skills/web-code-reviewer/` | `.claude/skills/web-code-reviewer/` | `.gemini/antigravity/skills/web-code-reviewer/` | `.qwen/skills/web-code-reviewer/` |
+| `.kimi-code/skills/web-coder/` | `.claude/skills/web-coder/` | `.gemini/antigravity/skills/web-coder/` | `.qwen/skills/web-coder/` |
 | `.kimi-code/skills/nuget-licensing-guard/` | `.claude/skills/nuget-licensing-guard/` | `.gemini/antigravity/skills/nuget-licensing-guard/` | `.qwen/skills/nuget-licensing-guard/` |
 | `.kimi-code/skills/overmind-ceremony/` | `.claude/skills/overmind-ceremony/` | `.gemini/antigravity/skills/overmind-ceremony/` | `.qwen/skills/overmind-ceremony/` |
 | `.kimi-code/skills/pipeline-doctor/` | `.claude/skills/pipeline-doctor/` | `.gemini/antigravity/skills/pipeline-doctor/` | `.qwen/skills/pipeline-doctor/` |
@@ -101,7 +126,7 @@ Applies to every side. As of this writing the affected set is 8 agents — `arch
 | Aspect | Kimi side | Claude side | Antigravity side | Qwen side |
 |--------|-----------|-------------|------------------|-----------|
 | Sub-agent allowlists | `agents:` / model-pool restrictions enforced via config.toml + agent bodies | `subagents:` frontmatter DROPPED — unsupported key; policy in skill bodies, prompt-enforced | Policy in GEMINI.md Delegation Rules + skill bodies, prompt-enforced; delegation via Agent Manager | `subagents:`/`whenToUse:` DROPPED — unsupported keys; `tools:` allowlists KEPT (Qwen supports them) with canonical Qwen tool names; delegation policy in QWEN.md + skill bodies |
-| Model pool enforcement | `[secondary_model]` in config.toml limits spawnable models | No config-level pool; policy text in CLAUDE.md + skill bodies | No fixed pool; role-based wording (strong execution / strongest reasoning model), model picked in Agent Manager | `model:` frontmatter pin per agent (`qwen3.7-plus` / `qwen3.8-max`), resolved through `modelProviders.openai` in settings.json; `inherit` forbidden for crew sub-agents |
+| Model pool enforcement | `[secondary_model]` in config.toml limits spawnable models | No config-level pool; policy text in CLAUDE.md + skill bodies | No fixed pool; role-based wording (strong execution / strongest reasoning model), model picked in Agent Manager | `model:` frontmatter pin per agent (`qwen3.8-flash` uniform), resolved through `modelProviders.openai` in settings.json; `inherit` forbidden for crew sub-agents |
 | Parallel spawn primitive | `AgentSwarm` | Multiple `Task` tool calls in one message | Parallel background agents in Agent Manager | Multiple `agent` tool calls in one message; `subagent_type: "fork"` when the child needs parent context |
 | Deterministic enforcement | Hooks (PreToolUse/PostToolUse) + config deny-list | Prompt-enforced only | Behavioral rules in GEMINI.md + IDE permission settings configured by the user | `permissions.deny`/`ask` + `PostToolUse` hooks in `~/.qwen/settings.json`, shipped as `.qwen/settings-snippet.jsonc` for hand-merging. Read/Edit deny rules also cover equivalent shell commands, so there is no `cat .env` bypass |
 | Agent frontmatter extras | — | — | `whenToUse`, `tools`, `subagents` keys kept; unknown keys are ignored by the runtime | `tools` kept (canonical names); `whenToUse` folded into `description` (Qwen delegates on `description`) |
@@ -158,17 +183,17 @@ Apply strictly in this order (most specific first). After the table, a manual pa
 |---|------|---------|
 | 1 | `~/.kimi-code/skills` | `~/.qwen/skills` |
 | 2 | `~/.kimi-code/` | `~/.qwen/` |
-| 3 | `kimi-code/kimi-for-coding-highspeed` / `kimi-code/kimi-for-coding` | `qwen3.7-plus` |
-| 4 | `kimi-code/kimi-k3` / `kimi-code/k3-256k` / `kimi-code/k3` | `qwen3.8-max` |
-| 5 | `Kimi K2.7` / `K2.7` | `qwen3.7-plus` |
-| 6 | `Kimi K3` / `K3` | `qwen3.8-max` |
+| 3 | `kimi-code/kimi-for-coding-highspeed` / `kimi-code/kimi-for-coding` | `qwen3.8-flash` |
+| 4 | `kimi-code/kimi-k3` / `kimi-code/k3-256k` / `kimi-code/k3` | `qwen3.8-flash` |
+| 5 | `Kimi K2.7` / `K2.7` | `qwen3.8-flash` |
+| 6 | `Kimi K3` / `K3` | `qwen3.8-flash` |
 | 7 | `Kimi Code CLI` / `Kimi Code` | `Qwen Code` |
 | 8 | `kimi-code` | `qwen` (path/identifier contexts only — eyeball every hit) |
 | 9 | `AgentSwarm` | `multiple agent tool calls in one message` |
 | 10 | `config.toml` | `~/.qwen/settings.json` (crew ships `.qwen/settings-snippet.jsonc` to merge by hand) |
 | 11 | agent frontmatter `Read` / `Grep` / `Glob` / `Bash` / `WebSearch` / `FetchURL` | `read_file` / `grep_search` / `glob` / `run_shell_command` / `web_fetch` / `web_fetch` — then dedupe (`WebSearch` has no Qwen equivalent, it collapses into `web_fetch`) |
 | 12 | `AGENTS.md` **as the name of the crew contract file** (global-context header, repo-layout line) | `QWEN.md`. Leave `AGENTS.md` alone where skill bodies cite it generically as the crew contract — all four sides do that identically, and Qwen Code reads a project `AGENTS.md` natively |
-| 13 | `~/.claude` / `sonnet` / `opus` / `haiku` (if porting from the Claude side instead) | `~/.qwen` / `qwen3.7-plus` / `qwen3.8-max` |
+| 13 | `~/.claude` / `sonnet` / `opus` / `haiku` (if porting from the Claude side instead) | `~/.qwen` / `qwen3.8-flash` |
 | — | `mcp__overmind__*` / `planning_*` / `overmind_*` tool names | DO NOT TRANSLATE — MCP tool names are identical on every runtime |
 
 Porting from the **Claude side** is the shortest path for agents and skills: only rows 11–13 plus `~/.claude/skills` → `~/.qwen/skills` apply.
@@ -207,7 +232,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 23 agent files + 26 skill dirs on each of the four sides.
+4. Count parity intact: 33 agent files + 41 skill dirs on each of the four sides.
    ```bash
    for d in .kimi-code .claude .gemini/antigravity .qwen; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```
@@ -218,7 +243,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    powershell -File uninstall.ps1 -DryRun
    ./uninstall.sh --dry-run
    ```
-6. Qwen model pins still exist in the configured provider — if the ModelStudio lineup changed, `.qwen/agents/*.md` `model:` values, QWEN.md «Sub-Agent Rules» and row 5–8 of the Kimi→Qwen table are updated together.
+6. The Qwen model pin still exists in the configured provider — if the ModelStudio lineup changes, `.qwen/agents/*.md` `model:` values, QWEN.md «Sub-Agent Rules» and the model rows (3–6, 13) of the Kimi→Qwen table are updated together.
 7. Frontmatter stays valid YAML on all four sides (see «Frontmatter convention») — an unquoted `: ` in a single-line value is a silent regression:
    ```bash
    grep -rnE '^(description|whenToUse): [^"|>-].*: ' .kimi-code/agents .claude/agents .gemini/antigravity/agents .qwen/agents   # must be empty

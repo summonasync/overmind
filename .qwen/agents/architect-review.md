@@ -1,7 +1,7 @@
 ---
 name: architect-review
 description: "Structural integrity reviewer (light/hard modes, backend + frontend). Use when phase end, big refactor, or task files declaring `review: hard`"
-model: qwen3.8-max
+model: qwen3.8-flash
 tools:
   - read_file
   - grep_search

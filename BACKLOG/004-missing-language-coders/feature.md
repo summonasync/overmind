@@ -1,7 +1,7 @@
 ---
 feature: 004
 slug: missing-language-coders
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-27
@@ -42,4 +42,6 @@ The js-ts domain split. User's working hypothesis (2026-09-28): ONE js-ts-coder 
 
 <log>
 - 2026-09-27 [auto] — artifact created → inProgress
+- 2026-09-28 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-28 [agent] — User accepted in chat: «Коммить, пуш, раскатывай на локал» (2026-09-28). Review passed: 19/19 tasks done via gated pipeline, result artifact 4b5435b1, T14 final sweep 10/10 PASS. Crew final size 33 agents / 41 skills ×4.
 </log>

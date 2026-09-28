@@ -13,7 +13,7 @@ whenToUse: |
 
 # Architect Review Skill
 
-Reviews STRUCTURE, not line-level code (that's `dotnet-code-reviewer` / `next-js-code-reviewer`).
+Reviews STRUCTURE, not line-level code (that's `dotnet-code-reviewer` / `web-code-reviewer`).
 Question being answered: "Is the system still shaped the way CONTEXT.md / STRUCTURE.md say it should be?"
 
 ## Inputs (read in this order)

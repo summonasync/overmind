@@ -77,15 +77,21 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 5. Medium features (no validation ceremony needed) MAY skip spec/plan — tasks only. Simple tasks = single task artifact.
 
 ### Phase 1: Architecture (if needed)
-- If task involves new routes, API contracts, or service boundaries → consult `dotnet-architect` or `next-js-architect` first.
+- If task involves new routes, API contracts, or service boundaries → consult `dotnet-architect` or `web-architect` first.
+- The stack architects (`dotnet-architect` / `web-architect` / `node-architect`) decide inside their stack; cross-stack seams they cannot settle there escalate to `solution-architect`.
 - Output: updated `CONTEXT.md`, folder structure, API contract.
 - **Requirements unclear or feature under-specified?** → return to Phase 0 spec gate: Socratic questioning per `overmind-ceremony`. Output lands in the spec artifact / `CONTEXT.md` — never in side files.
 
 ### Phase 2: Implementation
 - Delegate work to the appropriate skill:
   - `.NET backend` → `dotnet-coder`
-  - `Next.js frontend` → `next-js-coder`
+  - `Web app — Next.js/React full-stack (UI + RSC + Server Actions + BFF + API routes, SPAs, UI component libraries)` → `web-coder`
+  - `Standalone Node backend (Express/Fastify/Nest/Hono services, workers, scripts/CLI, non-UI npm libraries)` → `node-coder`
+  - `Electron desktop / React Native app` → `js-platform-coder`
   - `.NET MAUI app` (pages, view models, XAML, platform code) → `maui-coder`
+  - `Python backend (FastAPI services, CLIs, data/ETL pipelines, packages, ML/DL tooling)` → `python-coder`
+  - `Go backend (net/http, gRPC services, CLIs, workers, library packages, tooling)` → `go-coder`
+  - `Solution-level architecture / technology selection` (greenfield system design, service decomposition, ADR ritual) → `solution-architect`
   - `Documentation` (README, ADR, runbooks, doc restructure) → `documentation-writer`
   - `Learning materials` (study plans, concept explanations, assessments) → `tutor-master`
 - Coder MUST follow all rules from their skill file.
@@ -103,8 +109,12 @@ After Phase 2 completion, run reviews in this order:
 
 **ALWAYS run:**
 - `.NET code changed` → apply `dotnet-code-reviewer` checklist + `dotnet-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
-- `Next.js code changed` → apply `next-js-code-reviewer` checklist
+- `Web code changed` → apply `web-code-reviewer` checklist
+- `Standalone Node backend code changed` → apply `node-code-reviewer` checklist + `node-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
+- `Electron/React Native app code changed` → apply `js-platform-code-reviewer` checklist + `js-platform-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
 - `MAUI code changed` → apply `dotnet-code-reviewer` checklist + `maui-coder` rules (MVVM, code-behind purity, platform isolation)
+- `Python code changed` → apply `python-code-reviewer` checklist + `python-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
+- `Go code changed` → apply `go-code-reviewer` checklist + `go-best-practices` BP-rules (cite violations as `BP-NN [severity]`)
 
 **Review depth from the task artifact:** read the `review:` flag of the executed task (`light` default / `hard`).
 - `light` → matching code reviewer checklist only.
@@ -113,7 +123,7 @@ After Phase 2 completion, run reviews in this order:
 **CONDITIONALLY run additional reviews:**
 - **Security-related changes?** (auth, new endpoints, config, secrets, PII handling) → run `dotnet-code-reviewer` Security section with elevated priority.
 - **Large refactoring / Phase completion?** (>10 files, architectural shift, monolith split) → run `architect-review` Hard checklist (global structure integrity, dependency direction, service boundaries, ADR coverage).
-- **Both stacks changed?** → run BOTH `dotnet-code-reviewer` and `next-js-code-reviewer` sequentially.
+- **Both stacks changed?** → run BOTH `dotnet-code-reviewer` and `web-code-reviewer` sequentially.
 
 Review output must include:
 1. Severity-classified issues (BLOCKER / WARNING / SUGGESTION)
@@ -164,9 +174,13 @@ Task is COMPLEX if:
 |---------|-----------|----------|
 | Security | Auth, secrets, new endpoints, PII, config changes | `dotnet-code-reviewer` (Security section) |
 | Architecture | >10 files, phase completion, structural refactoring | `architect-review` or `dotnet-architect` |
-| Frontend | Next.js files changed | `next-js-code-reviewer` |
+| Frontend | Web/Next.js files changed | `web-code-reviewer` |
 | Backend | C# files changed | `dotnet-code-reviewer` |
+| Node backend | Standalone Node service/worker/CLI files changed | `node-code-reviewer` |
+| Electron/RN | Electron or React Native app files changed | `js-platform-code-reviewer` |
 | MAUI | .NET MAUI files changed (XAML, view models, Platforms/) | `dotnet-code-reviewer` + `maui-coder` rules |
+| Python | Python files changed | `python-code-reviewer` |
+| Go | Go files changed | `go-code-reviewer` |
 | Docs | Documentation files created/changed | `documentation-writer` verification checklist |
 
 ---

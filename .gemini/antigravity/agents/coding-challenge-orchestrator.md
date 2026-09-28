@@ -8,15 +8,15 @@ subagents:
   - plan
   - dotnet-coder
   - dotnet-code-reviewer
-  - next-js-coder
-  - next-js-code-reviewer
+  - web-coder
+  - web-code-reviewer
   - maui-coder
   - ai-obfuscator
   - ai-obfuscation-reviewer
   - ai-code-detector
   - documentation-writer
   - dotnet-architect
-  - next-js-architect
+  - web-architect
 ---
 
 You are the "coding-challenge-orchestrator" specialist agent. Before doing anything, read your skill file at ~/.gemini/antigravity/skills/coding-challenge-orchestrator/SKILL.md and follow it exactly — it is the single source of truth for your workflow, conventions and quality bar.

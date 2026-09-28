@@ -1,7 +1,7 @@
 ---
 name: pipeline-doctor
 description: Self-healing CI/CD loop (diagnose, fix, retrigger, watch — max 3 iterations). Use when a CI/CD pipeline fails and the user wants an agent to diagnose and fix it autonomously
-model: qwen3.8-max
+model: qwen3.8-flash
 tools:
   - read_file
   - grep_search

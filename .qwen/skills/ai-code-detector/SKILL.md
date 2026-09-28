@@ -4,7 +4,7 @@ description: |
   Analyze any project or codebase for the presence of AI-generated code.
   Produces a report: where AI-written code likely lives, estimated volume,
   and which specific signatures were detected. Read-only — never modifies code.
-  ALWAYS runs on the qwen3.8-max model.
+  ALWAYS runs on the qwen3.8-flash model.
 type: prompt
 whenToUse: |
   When the user asks to check a project for AI-generated code, estimate how much
@@ -14,7 +14,7 @@ whenToUse: |
 
 # AI Code Detector Skill
 
-> **Model policy:** ALWAYS executed by the qwen3.8-max model. Detection quality depends on pattern-recognition over long context — do not run on qwen3.7-plus.
+> **Model policy:** ALWAYS executed by the qwen3.8-flash model. Detection quality depends on pattern-recognition over long context
 
 ## Mission
 Scan a codebase and answer: **is there AI-generated code here, where exactly, how much, and what gives it away.** This is a forensic analysis skill — it detects, classifies, and reports. It never fixes or obfuscates anything (that is `ai-obfuscator`'s job).

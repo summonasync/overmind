@@ -274,6 +274,6 @@ When creating brand-book, structure it as:
 ## Output Contract (MANDATORY)
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
-2. **Next step** — `next-js-coder` implements the approved design.
+2. **Next step** — `web-coder` implements the approved design.
 3. **Alternatives** — `documentation-writer` to persist the brand-book; another calibration iteration with the user.
 Suggest, never auto-proceed. The user picks the next step.

@@ -1,7 +1,7 @@
 ---
 name: dotnet-code-reviewer
 description: "Strict .NET code reviewer: Clean Architecture, style, security. Use when reviewing C# code or backend PRs"
-model: qwen3.7-plus
+model: qwen3.8-flash
 tools:
   - read_file
   - grep_search

@@ -1,7 +1,7 @@
 ---
 name: ai-code-detector
 description: Audits a codebase for AI-generated code signatures. Use when estimating AI-written code volume in a repo
-model: qwen3.8-max
+model: qwen3.8-flash
 tools:
   - read_file
   - grep_search

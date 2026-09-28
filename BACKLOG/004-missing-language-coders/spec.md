@@ -81,4 +81,6 @@ No go-architect — deferred. Counts: +2 agents, +3 skills per side.
 
 <log>
 - 2026-09-27 [agent] — validated with human proof: notification ff240c87-11ab-4cef-b9a8-68c7f3267371 replied 2026-09-27 21:49:23 UTC
+- 2026-09-28 [agent] — User correction 2026-09-28: qwen model pins are uniform `qwen3.8-flash` everywhere — no 3.7-plus/3.8-max differentiation exists in the current ModelStudio lineup. All qwen agent pins in this feature (and the existing crew) use qwen3.8-flash. Body not edited (frozen); execution follows this note.
+- 2026-09-28 [agent] — Clarification 2026-09-28 (orchestrator, after re-reading the user's absolute correction): the uniform `qwen3.8-flash` pin covers solution-architect TOO — §Phase D's «qwen qwen3.8-max» wording is superseded. T13 executes with qwen3.8-flash; T14 verifies zero qwen3.7-plus/qwen3.8-max mentions repo-wide.
 </log>

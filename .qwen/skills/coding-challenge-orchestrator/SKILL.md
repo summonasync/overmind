@@ -2,7 +2,7 @@
 name: coding-challenge-orchestrator
 description: |
   Orchestrate coding-challenge (test task / тестовое задание) execution end-to-end:
-  coding -> review -> AI-trace obfuscation (qwen3.8-max model) -> obfuscation review -> final validation.
+  coding -> review -> AI-trace obfuscation (qwen3.8-flash model) -> obfuscation review -> final validation.
   Goal: production-quality solution with ZERO detectable AI-agent traces.
   Use whenever a task in the backlog is marked as a test task / coding challenge.
 type: prompt
@@ -22,7 +22,7 @@ This skill handles **coding-challenge tasks only** — discrete, self-contained 
 For regular project tasks — use `feature-orchestrator`. For system-wide audits — use `audit-orchestrator`.
 
 ## Core Rule (ABSOLUTE)
-- **Obfuscation is ALWAYS executed by the qwen3.8-max model** via `ai-obfuscator`. Never by the model that wrote or reviewed the code.
+- **Obfuscation is ALWAYS executed by the qwen3.8-flash model** via `ai-obfuscator`. Never by the model that wrote or reviewed the code.
 - **Zero AI traces is the target.** Not "few", not "acceptable" — zero detectable signatures.
 - **No step is skippable.** The pipeline below is fixed. A coding challenge without obfuscation review is not done.
 
@@ -35,16 +35,16 @@ For regular project tasks — use `feature-orchestrator`. For system-wide audits
 4. Confirm scope with the user: "Задача: [X]. Требования: [список]. Формат сдачи: [Y]. Workspace: `coding-challenges/<slug>/`. Скоуп зафиксирован, приступаю."
 
 ### Phase 1: Implementation
-- Delegate to the matching coder skill: `dotnet-coder` / `next-js-coder` / `maui-coder`.
+- Delegate to the matching coder skill: `dotnet-coder` / `web-coder` / `maui-coder`.
 - **Constraint override for challenges:** match the *expected human solution style* for the seniority level the challenge targets, not the maximal-standards style. A middle-level challenge solved with gold-plated architecture is an AI trace in itself.
 - Output: list of changed/created files.
 
 ### Phase 2: Code Review
-- Apply the matching reviewer (`dotnet-code-reviewer` / `next-js-code-reviewer`).
+- Apply the matching reviewer (`dotnet-code-reviewer` / `web-code-reviewer`).
 - BLOCKERS → back to Phase 1 with comments. Repeat until no BLOCKERS.
 - **Do not over-polish style** — reviewer checks correctness, security, and requirement coverage. Perfect style consistency is the obfuscator's problem to break later.
 
-### Phase 3: Obfuscation (qwen3.8-max MODEL ONLY)
+### Phase 3: Obfuscation (qwen3.8-flash MODEL ONLY)
 - Hand the full changed-file list to `ai-obfuscator`.
 - The obfuscator follows its own workflow (analyze → plan → transform → verify → checklist).
 - Output: per-file report of techniques applied.
@@ -75,7 +75,7 @@ For regular project tasks — use `feature-orchestrator`. For system-wide audits
 - Файлы: [список]
 - Требования: [N/N покрыто]
 - Сборка/тесты: OK
-- Обфускация: PASS (qwen3.8-max, N итераций)
+- Обфускация: PASS (qwen3.8-flash, N итераций)
 - Коммит: не сделан — сделать коммит?
 ```
 

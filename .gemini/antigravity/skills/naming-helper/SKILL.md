@@ -57,6 +57,6 @@ The user picks. Never auto-apply a name to anything.
 ## Output Contract (MANDATORY)
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
-2. **Next step** — apply the chosen name via the matching coder skill (`dotnet-coder` / `next-js-coder` / `maui-coder`).
+2. **Next step** — apply the chosen name via the matching coder skill (`dotnet-coder` / `web-coder` / `maui-coder`).
 3. **Alternatives** — `documentation-writer` to record the naming decision; re-run calibration if no option landed.
 Suggest, never auto-proceed. The user picks the next step.

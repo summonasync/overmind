@@ -1,7 +1,7 @@
 ---
 name: ai-obfuscation-reviewer
 description: Verifies obfuscation quality and remaining AI traces. Use when after obfuscation, before final validation
-model: qwen3.8-max
+model: qwen3.8-flash
 tools:
   - read_file
   - grep_search

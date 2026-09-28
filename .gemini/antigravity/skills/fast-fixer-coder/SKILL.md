@@ -48,7 +48,7 @@ Refusing out-of-scope work IS the job. A refusal looks like:
 
 Routing table:
 
-- Behavior/logic change → matching coder (`dotnet-coder` / `next-js-coder` / `maui-coder`)
+- Behavior/logic change → matching coder (`dotnet-coder` / `web-coder` / `maui-coder`)
 - Multi-file or feature-shaped → `feature-orchestrator`
 - Something is broken → bug route in SKILLFLOW.md (root-cause-first debugging per `overmind-ceremony`)
 - Docs restructure → `documentation-writer`

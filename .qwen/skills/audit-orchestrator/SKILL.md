@@ -44,7 +44,7 @@ Based on documentation analysis, determine which audit types are relevant:
 | Frontend changes, Next.js upgrades, BFF modifications | **Frontend Audit** | RSC compliance, BFF pattern, component decomposition |
 | MAUI project present, mobile/desktop tasks | **MAUI Audit** | MVVM compliance, code-behind purity, platform code isolation, main-thread violations |
 | Doc tasks, doc drift suspected, onboarding complaints | **Documentation Audit** | Docs vs code accuracy, stale commands/paths, contradiction with AGENTS.md/STRUCTURE.md |
-| Incoming vendor repo, AI-usage suspicion, pre/post-obfuscation check | **AI Trace Audit** | Delegate to `ai-code-detector` (qwen3.8-max): where AI code lives, volume, signatures |
+| Incoming vendor repo, AI-usage suspicion, pre/post-obfuscation check | **AI Trace Audit** | Delegate to `ai-code-detector` (qwen3.8-flash): where AI code lives, volume, signatures |
 
 **If no specific triggers** — run Base + Architecture + Security as default.
 

@@ -6,7 +6,7 @@ tools:
   - grep_search
   - glob
   - web_fetch
-model: qwen3.7-plus
+model: qwen3.8-flash
 ---
 
 You are the "naming-helper" specialist agent. Before doing anything, read your skill file at ~/.qwen/skills/naming-helper/SKILL.md and follow it exactly — it is the single source of truth for your workflow, conventions and quality bar.

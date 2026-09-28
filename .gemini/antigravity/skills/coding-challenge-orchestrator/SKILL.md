@@ -35,12 +35,12 @@ For regular project tasks — use `feature-orchestrator`. For system-wide audits
 4. Confirm scope with the user: "Задача: [X]. Требования: [список]. Формат сдачи: [Y]. Workspace: `coding-challenges/<slug>/`. Скоуп зафиксирован, приступаю."
 
 ### Phase 1: Implementation
-- Delegate to the matching coder skill: `dotnet-coder` / `next-js-coder` / `maui-coder`.
+- Delegate to the matching coder skill: `dotnet-coder` / `web-coder` / `maui-coder`.
 - **Constraint override for challenges:** match the *expected human solution style* for the seniority level the challenge targets, not the maximal-standards style. A middle-level challenge solved with gold-plated architecture is an AI trace in itself.
 - Output: list of changed/created files.
 
 ### Phase 2: Code Review
-- Apply the matching reviewer (`dotnet-code-reviewer` / `next-js-code-reviewer`).
+- Apply the matching reviewer (`dotnet-code-reviewer` / `web-code-reviewer`).
 - BLOCKERS → back to Phase 1 with comments. Repeat until no BLOCKERS.
 - **Do not over-polish style** — reviewer checks correctness, security, and requirement coverage. Perfect style consistency is the obfuscator's problem to break later.
 

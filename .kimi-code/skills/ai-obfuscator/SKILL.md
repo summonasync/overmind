@@ -369,5 +369,5 @@ Despite obfuscation, NEVER introduce:
 End with the fixed closing block, then STOP:
 1. **Done** — summary + artifact paths (skill-prefixed per AGENTS.md provenance rule).
 2. **Next step** — `ai-obfuscation-reviewer` (mandatory verification gate).
-3. **Alternatives** — `ai-code-detector` re-scan to confirm traces are gone; `dotnet-code-reviewer` / `next-js-code-reviewer` if behavior-affecting edits slipped in.
+3. **Alternatives** — `ai-code-detector` re-scan to confirm traces are gone; `dotnet-code-reviewer` / `web-code-reviewer` if behavior-affecting edits slipped in.
 Suggest, never auto-proceed. The user picks the next step.
