@@ -1,3 +1,4 @@
+using System.Globalization;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.VectorSearch;
@@ -76,6 +77,22 @@ public static class SettingsApi
                 $"Must be one of: {string.Join(", ", SettingDefaults.PlanningRequireHumanValidationDefaults)}.");
         }
 
+        if (request.NotificationNudgeMode is not null &&
+            !SettingDefaults.NotificationNudgeModes.Contains(
+                request.NotificationNudgeMode, StringComparer.OrdinalIgnoreCase))
+        {
+            return InvalidSetting(
+                nameof(request.NotificationNudgeMode),
+                $"Must be one of: {string.Join(", ", SettingDefaults.NotificationNudgeModes)}.");
+        }
+
+        if (request.NotificationNudgeIntervalMinutes is < 1)
+        {
+            return InvalidSetting(
+                nameof(request.NotificationNudgeIntervalMinutes),
+                "Must be greater than 0.");
+        }
+
         var reindexRecommended = await ChangesEmbeddingInputsAsync(settings, request, ct);
 
         if (request.EmbeddingProvider is not null)
@@ -123,6 +140,20 @@ public static class SettingsApi
                 request.PlanningRequireHumanValidationDefault.ToLowerInvariant(), ct);
         }
 
+        if (request.NotificationNudgeMode is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.NotificationNudgeMode,
+                request.NotificationNudgeMode.ToLowerInvariant(), ct);
+        }
+
+        if (request.NotificationNudgeIntervalMinutes is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.NotificationNudgeIntervalMinutes,
+                request.NotificationNudgeIntervalMinutes.Value.ToString(CultureInfo.InvariantCulture), ct);
+        }
+
         var updated = await ReadSettingsAsync(settings, ct);
         return Results.Ok(new UpdateSettingsResponse(
             updated.EmbeddingProvider,
@@ -133,6 +164,8 @@ public static class SettingsApi
             updated.OpenAiApiKeyConfigured,
             updated.PlanningMaterializationDefault,
             updated.PlanningRequireHumanValidationDefault,
+            updated.NotificationNudgeMode,
+            updated.NotificationNudgeIntervalMinutes,
             reindexRecommended));
     }
 
@@ -203,10 +236,20 @@ public static class SettingsApi
             SettingKeys.PlanningMaterializationDefault, SettingDefaults.PlanningMaterializationDefault, ct);
         var planningRequireHumanValidationDefault = await settings.GetOrDefaultAsync(
             SettingKeys.PlanningRequireHumanValidationDefault, SettingDefaults.PlanningRequireHumanValidationDefault, ct);
+        var notificationNudgeMode = await settings.GetOrDefaultAsync(
+            SettingKeys.NotificationNudgeMode, SettingDefaults.NotificationNudgeMode, ct);
+        var notificationNudgeIntervalRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.NotificationNudgeIntervalMinutes,
+            SettingDefaults.NotificationNudgeIntervalMinutes.ToString(CultureInfo.InvariantCulture), ct);
+        var notificationNudgeIntervalMinutes =
+            int.TryParse(notificationNudgeIntervalRaw, out var nudgeInterval) && nudgeInterval > 0
+                ? nudgeInterval
+                : SettingDefaults.NotificationNudgeIntervalMinutes;
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
-            planningMaterializationDefault, planningRequireHumanValidationDefault);
+            planningMaterializationDefault, planningRequireHumanValidationDefault,
+            notificationNudgeMode, notificationNudgeIntervalMinutes);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

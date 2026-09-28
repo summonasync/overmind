@@ -12,24 +12,13 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Input } from "@/shared/ui/input";
 import { cn } from "@/shared/lib/cn";
 import { formatNotificationTime } from "@/shared/lib/relative-time";
+import { notificationHref } from "@/widgets/app-shell/lib/notification-href";
 
 const kindMeta: Record<NotificationKind, { tone: BadgeTone; icon: LucideIcon }> = {
   approval: { tone: "warning", icon: TriangleAlert },
   question: { tone: "info", icon: CircleHelp },
   info: { tone: "neutral", icon: Info },
 };
-
-function notificationHref(item: NotificationItem): string {
-  const params = new URLSearchParams();
-  if (item.projectId) {
-    params.set("project", item.projectId);
-  }
-  params.set("feature", item.featureSlug ?? "");
-  if (item.tab) {
-    params.set("tab", item.tab);
-  }
-  return `/dashboard?${params.toString()}`;
-}
 
 function featureSlugLabel(slug: string) {
   const number = featureNumber(slug);

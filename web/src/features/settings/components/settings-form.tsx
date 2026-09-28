@@ -10,6 +10,7 @@ import { Select } from "@/shared/ui/select";
 import { TestVerdicts } from "@/features/settings/components/test-verdicts";
 import type { VectorSearchHealth } from "@/shared/api/types";
 import type {
+  NotificationNudgeMode,
   PlanningMaterializationDefault,
   PlanningValidationDefault,
   SettingsFormValues,
@@ -20,6 +21,7 @@ import type {
 const PROVIDERS = ["onnx", "ollama", "openai"] as const;
 const MATERIALIZATION_DEFAULTS = ["off", "on", "archive"] as const satisfies readonly PlanningMaterializationDefault[];
 const VALIDATION_DEFAULTS = ["on", "off"] as const satisfies readonly PlanningValidationDefault[];
+const NUDGE_MODES = ["quiet", "nag", "mini"] as const satisfies readonly NotificationNudgeMode[];
 
 interface SettingsFormProps {
   settings: SettingsResponse;
@@ -45,6 +47,11 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
   const [planningRequireHumanValidationDefault, setPlanningRequireHumanValidationDefault] = useState(
     settings.planningRequireHumanValidationDefault,
   );
+  const [notificationNudgeMode, setNotificationNudgeMode] = useState(settings.notificationNudgeMode);
+  const [notificationNudgeIntervalMinutes, setNotificationNudgeIntervalMinutes] = useState(
+    String(settings.notificationNudgeIntervalMinutes),
+  );
+  const [intervalError, setIntervalError] = useState<Error | null>(null);
   const [syncedSettings, setSyncedSettings] = useState(settings);
 
   if (syncedSettings !== settings) {
@@ -57,10 +64,18 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     setQdrantEndpoint(settings.qdrantEndpoint);
     setPlanningMaterializationDefault(settings.planningMaterializationDefault);
     setPlanningRequireHumanValidationDefault(settings.planningRequireHumanValidationDefault);
+    setNotificationNudgeMode(settings.notificationNudgeMode);
+    setNotificationNudgeIntervalMinutes(String(settings.notificationNudgeIntervalMinutes));
+    setIntervalError(null);
   }
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    const minutes = Number(notificationNudgeIntervalMinutes);
+    if (!Number.isSafeInteger(minutes) || minutes <= 0) {
+      setIntervalError(new Error("Nag interval must be a whole number of minutes greater than zero."));
+      return;
+    }
     onSubmit({
       embeddingProvider,
       ollamaBaseUrl: ollamaBaseUrl.trim(),
@@ -70,6 +85,8 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       qdrantEndpoint: qdrantEndpoint.trim(),
       planningMaterializationDefault,
       planningRequireHumanValidationDefault,
+      notificationNudgeMode,
+      notificationNudgeIntervalMinutes: minutes,
     });
   };
 
@@ -207,7 +224,54 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
         </div>
       </div>
 
-      <ErrorText error={error} />
+      <div className="space-y-3 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
+        <p className="text-xs text-muted">
+          Nudges remind you about work waiting on your approval. Quiet stays silent, mini shows a
+          one-time hint, nag repeats on the interval below.
+        </p>
+        <Field label="Nudge mode" htmlFor="notification-nudge-mode">
+          <Select
+            id="notification-nudge-mode"
+            value={notificationNudgeMode}
+            onChange={(event) => {
+              const mode = event.target.value as NotificationNudgeMode;
+              setNotificationNudgeMode(mode);
+              setIntervalError(null);
+              if (mode !== "nag") {
+                const minutes = Number(notificationNudgeIntervalMinutes);
+                if (!Number.isSafeInteger(minutes) || minutes <= 0) {
+                  setNotificationNudgeIntervalMinutes(String(settings.notificationNudgeIntervalMinutes));
+                }
+              }
+            }}
+            className="w-full"
+          >
+            {NUDGE_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {notificationNudgeMode === "nag" ? (
+          <Field label="Nag interval (minutes)" htmlFor="notification-nudge-interval-minutes">
+            <Input
+              id="notification-nudge-interval-minutes"
+              type="number"
+              min={1}
+              step={1}
+              value={notificationNudgeIntervalMinutes}
+              onChange={(event) => {
+                setNotificationNudgeIntervalMinutes(event.target.value);
+                setIntervalError(null);
+              }}
+            />
+          </Field>
+        ) : null}
+      </div>
+
+      <ErrorText error={intervalError ?? error} />
       <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : "Save settings"}
       </Button>

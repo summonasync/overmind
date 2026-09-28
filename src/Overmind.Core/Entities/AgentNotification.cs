@@ -109,6 +109,7 @@ public sealed class AgentNotification
 
         ReplyText = text.Trim();
         RepliedAt = DateTime.UtcNow;
+        ReadAt ??= DateTime.UtcNow;
     }
 
     private static void ThrowIfKindInvalid(NotificationKind kind)

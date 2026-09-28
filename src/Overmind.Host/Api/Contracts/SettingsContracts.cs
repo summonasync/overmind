@@ -8,7 +8,9 @@ public sealed record SettingsResponse(
     string QdrantEndpoint,
     bool OpenAiApiKeyConfigured,
     string PlanningMaterializationDefault,
-    string PlanningRequireHumanValidationDefault);
+    string PlanningRequireHumanValidationDefault,
+    string NotificationNudgeMode,
+    int NotificationNudgeIntervalMinutes);
 
 public sealed record UpdateSettingsResponse(
     string EmbeddingProvider,
@@ -19,6 +21,8 @@ public sealed record UpdateSettingsResponse(
     bool OpenAiApiKeyConfigured,
     string PlanningMaterializationDefault,
     string PlanningRequireHumanValidationDefault,
+    string NotificationNudgeMode,
+    int NotificationNudgeIntervalMinutes,
     bool ReindexRecommended);
 
 public sealed record UpdateSettingsRequest(
@@ -29,7 +33,9 @@ public sealed record UpdateSettingsRequest(
     string? OpenAiApiKey,
     string? QdrantEndpoint,
     string? PlanningMaterializationDefault,
-    string? PlanningRequireHumanValidationDefault);
+    string? PlanningRequireHumanValidationDefault,
+    string? NotificationNudgeMode,
+    int? NotificationNudgeIntervalMinutes);
 
 public sealed record TestSettingsRequest(
     string? Provider,

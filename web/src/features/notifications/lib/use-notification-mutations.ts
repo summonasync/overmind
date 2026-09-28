@@ -19,18 +19,27 @@ export function useNotificationMutations() {
     onMutate: async ({ id, text }) => {
       await queryClient.cancelQueries({ queryKey: listKey });
       const snapshot = queryClient.getQueryData<NotificationsResponse>(listKey);
-      queryClient.setQueryData<NotificationsResponse>(listKey, (current) =>
-        current === undefined
-          ? current
-          : {
-              ...current,
-              items: current.items.map((item) =>
-                item.id === id
-                  ? { ...item, replyText: text, repliedAt: new Date().toISOString() }
-                  : item,
-              ),
-            },
-      );
+      const now = new Date().toISOString();
+      queryClient.setQueryData<NotificationsResponse>(listKey, (current) => {
+        if (current === undefined) {
+          return current;
+        }
+        let becameRead = false;
+        const items = current.items.map((item) => {
+          if (item.id !== id) {
+            return item;
+          }
+          if (item.readAt == null) {
+            becameRead = true;
+          }
+          return { ...item, replyText: text, repliedAt: now, readAt: item.readAt ?? now };
+        });
+        return {
+          ...current,
+          items,
+          unreadCount: Math.max(0, current.unreadCount - (becameRead ? 1 : 0)),
+        };
+      });
       return { snapshot };
     },
     onError: (_error, _variables, context) => {

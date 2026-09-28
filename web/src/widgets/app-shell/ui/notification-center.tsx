@@ -1,13 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import { useNotifications } from "@/features/notifications";
 import { ErrorText } from "@/shared/ui/error-text";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { LoadingState } from "@/shared/ui/loading-state";
+import { cn } from "@/shared/lib/cn";
+import { NOTIFICATION_KIND_FILTERS } from "@/widgets/app-shell/lib/notification-kind-filter";
+import type { NotificationKindFilter } from "@/widgets/app-shell/lib/notification-kind-filter";
 import { NotificationRow } from "@/widgets/app-shell/ui/notification-row";
 
-export function NotificationCenter() {
+const chipBase =
+  "inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+const chipInactive = "border-border text-muted hover:border-border-strong hover:text-foreground";
+const chipActive = "border-primary bg-primary/10 text-primary";
+
+interface NotificationCenterProps {
+  initialKind?: NotificationKindFilter;
+}
+
+export function NotificationCenter({ initialKind = "all" }: NotificationCenterProps) {
   const { items, isPending, error } = useNotifications();
+  const [kind, setKind] = useState<NotificationKindFilter>(initialKind);
 
   if (isPending) {
     return <LoadingState label="Loading notifications…" />;
@@ -26,11 +40,35 @@ export function NotificationCenter() {
     );
   }
 
+  const visible = kind === "all" ? items : items.filter((item) => item.kind === kind);
+
   return (
-    <ul className="flex flex-col gap-2">
-      {items.map((item) => (
-        <NotificationRow key={item.id} item={item} />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3">
+      <div role="group" aria-label="Filter by kind" className="flex flex-wrap items-center gap-1.5">
+        {NOTIFICATION_KIND_FILTERS.map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            aria-pressed={kind === filter}
+            onClick={() => setKind(filter)}
+            className={cn(chipBase, kind === filter ? chipActive : chipInactive)}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
+      {visible.length === 0 ? (
+        <EmptyState
+          title="Nothing under this filter"
+          hint="No notifications of this kind — switch the filter to see the rest."
+        />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {visible.map((item) => (
+            <NotificationRow key={item.id} item={item} />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

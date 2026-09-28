@@ -3,6 +3,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import background from "@/shared/assets/brand/background.png";
 import { InfoPanelProvider } from "@/widgets/app-shell/lib/info-panel-context";
+import { ApprovalBubble } from "@/widgets/app-shell/ui/approval-bubble";
 import { AppSidebar } from "@/widgets/app-shell/ui/app-sidebar";
 import { AppTopbar } from "@/widgets/app-shell/ui/app-topbar";
 import { MobileNav } from "@/widgets/app-shell/ui/mobile-nav";
@@ -49,6 +50,7 @@ export function AppShell({ children }: AppShellProps) {
             <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />
           </div>
         </div>
+        <ApprovalBubble />
       </div>
     </InfoPanelProvider>
   );

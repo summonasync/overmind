@@ -291,4 +291,80 @@ public sealed class SettingsApiTests : IDisposable
         var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         document.RootElement.GetProperty("reindexRecommended").GetBoolean().ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task Get_IncludesNudgeDefaults()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("notificationNudgeMode").GetString().ShouldBe("quiet");
+        document.RootElement.GetProperty("notificationNudgeIntervalMinutes").GetInt32().ShouldBe(10);
+    }
+
+    [Theory]
+    [InlineData("quiet")]
+    [InlineData("NAG")]
+    [InlineData("mini")]
+    public async Task Put_NudgeMode_RoundTrips_AndSurvivesPartialUpdates(string mode)
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new { NotificationNudgeMode = mode });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("notificationNudgeMode").GetString().ShouldBe(mode.ToLowerInvariant());
+
+        await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("notificationNudgeMode").GetString().ShouldBe(mode.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Put_NudgeInterval_RoundTrips_AndSurvivesPartialUpdates()
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new { NotificationNudgeIntervalMinutes = 25 });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("notificationNudgeIntervalMinutes").GetInt32().ShouldBe(25);
+
+        await _client.PutAsJsonAsync("/api/settings", new { NotificationNudgeMode = "nag" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("notificationNudgeIntervalMinutes").GetInt32().ShouldBe(25);
+        document.RootElement.GetProperty("notificationNudgeMode").GetString().ShouldBe("nag");
+    }
+
+    [Theory]
+    [InlineData("loud")]
+    [InlineData("")]
+    public async Task Put_RejectsInvalidNudgeMode(string mode)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { NotificationNudgeMode = mode });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-10)]
+    public async Task Put_RejectsNonPositiveNudgeInterval(int minutes)
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { NotificationNudgeIntervalMinutes = minutes });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_RejectsNonIntegerNudgeInterval()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { NotificationNudgeIntervalMinutes = "soon" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }

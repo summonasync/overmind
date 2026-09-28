@@ -2,27 +2,38 @@
 
 import { useState } from "react";
 import { Bell } from "lucide-react";
-import { useNotifications } from "@/features/notifications";
+import { isAwaitingApproval, useNotifications } from "@/features/notifications";
 import { Badge } from "@/shared/ui/badge";
 import { Modal } from "@/shared/ui/modal";
+import { cn } from "@/shared/lib/cn";
 import { NotificationCenter } from "@/widgets/app-shell/ui/notification-center";
 
 const DISPLAY_CAP = 50;
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const { unreadCount } = useNotifications();
+  const { items, unreadCount } = useNotifications();
+  const awaitingApproval = items.some(isAwaitingApproval);
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Notifications (${unreadCount} unread)`}
+        aria-label={`Notifications (${unreadCount} unread)${awaitingApproval ? ", approvals awaiting reply" : ""}`}
         aria-haspopup="dialog"
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-muted transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className={cn(
+          "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-surface transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          awaitingApproval ? "border-warning/60 text-warning" : "border-border text-muted",
+        )}
       >
         <Bell size={16} aria-hidden />
+        {awaitingApproval ? (
+          <span
+            className="absolute -left-1.5 -top-1.5 h-2.5 w-2.5 animate-pulse rounded-full bg-warning ring-2 ring-background"
+            aria-hidden
+          />
+        ) : null}
         {unreadCount > 0 ? (
           <Badge
             tone="danger"

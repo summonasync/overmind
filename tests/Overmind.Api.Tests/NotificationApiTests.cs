@@ -79,6 +79,33 @@ public sealed class NotificationApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Reply_OnUnread_MarksItReadInTheSameOperation()
+    {
+        var notification = await NotifyAsync("approval", "Approve the plan?");
+
+        var replied = await ReplyAsync(notification.Id, "approved");
+
+        replied.ReplyText.ShouldBe("approved");
+        replied.ReadAt.ShouldNotBeNull();
+        replied.RepliedAt.ShouldNotBeNull();
+
+        var list = await ListAsync();
+        list.UnreadCount.ShouldBe(0);
+        list.Items.Single(i => i.Id == notification.Id).ReadAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Reply_OnAlreadyRead_KeepsTheOriginalReadAt()
+    {
+        var notification = await NotifyAsync("question", "Which database?");
+        var read = await MarkReadAsync(notification.Id);
+
+        var replied = await ReplyAsync(notification.Id, "SQLite");
+
+        replied.ReadAt.ShouldBe(read.ReadAt);
+    }
+
+    [Fact]
     public async Task Reply_SecondReply_OverwritesTheFirst()
     {
         var notification = await NotifyAsync("approval", "Activate the kit?");
@@ -87,6 +114,7 @@ public sealed class NotificationApiTests : IDisposable
         var second = await ReplyAsync(notification.Id, "go ahead");
 
         second.ReplyText.ShouldBe("go ahead");
+        second.ReadAt.ShouldNotBeNull();
 
         var replies = await RepliesAsync();
         replies.Items.Single().ReplyText.ShouldBe("go ahead");

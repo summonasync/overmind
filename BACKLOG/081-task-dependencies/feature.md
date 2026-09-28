@@ -1,9 +1,9 @@
 ---
 feature: 081
 slug: task-dependencies
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-26
 ---
 
@@ -32,4 +32,5 @@ Task sequencing today lives only in prose (`<refs>` text like "57 must not start
 <log>
 - 2026-09-27 [auto] — artifact created → inProgress
 - 2026-09-27 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-27 [ui] — status moved to 'done' via ui
 </log>

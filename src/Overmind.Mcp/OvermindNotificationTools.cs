@@ -63,7 +63,7 @@ public sealed class OvermindNotificationTools
     [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision.")]
     public async Task<JsonElement> Replies(
         [Description("Id of the project whose replies to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
-        [Description("Also include replied notifications the human has already marked read; the host default is true.")] bool? includeRead = null,
+        [Description("A reply marks its notification read, so false matches nothing — poll with the default true.")] bool? includeRead = null,
         CancellationToken ct = default)
     {
         var resolved = await ResolveProjectIdAsync(projectId, ct);

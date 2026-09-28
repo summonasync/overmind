@@ -43,6 +43,19 @@
   --color-ceremony-risks: var(--color-danger);
   --color-ceremony-verification: var(--color-success);
   --color-ceremony-findings: var(--color-info);
+
+  --animate-bubble-pop: bubble-pop 180ms ease-out;
+
+  @keyframes bubble-pop {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
 }
 
 @layer base {

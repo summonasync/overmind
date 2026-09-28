@@ -2,6 +2,8 @@ export type PlanningMaterializationDefault = "off" | "on" | "archive";
 
 export type PlanningValidationDefault = "on" | "off";
 
+export type NotificationNudgeMode = "quiet" | "nag" | "mini";
+
 export interface SettingsResponse {
   embeddingProvider: string;
   ollamaBaseUrl: string;
@@ -11,6 +13,8 @@ export interface SettingsResponse {
   openAiApiKeyConfigured: boolean;
   planningMaterializationDefault: PlanningMaterializationDefault;
   planningRequireHumanValidationDefault: PlanningValidationDefault;
+  notificationNudgeMode: NotificationNudgeMode;
+  notificationNudgeIntervalMinutes: number;
 }
 
 export interface UpdateSettingsResponse extends SettingsResponse {
@@ -26,6 +30,8 @@ export interface SettingsFormValues {
   qdrantEndpoint: string;
   planningMaterializationDefault: PlanningMaterializationDefault;
   planningRequireHumanValidationDefault: PlanningValidationDefault;
+  notificationNudgeMode: NotificationNudgeMode;
+  notificationNudgeIntervalMinutes: number;
 }
 
 export interface TestSettingsValues {
