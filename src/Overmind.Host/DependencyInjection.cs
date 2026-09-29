@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<NotificationsService>();
+        services.AddSingleton<BrowserOrigin>();
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();

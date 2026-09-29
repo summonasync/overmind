@@ -29,6 +29,8 @@ public static class NotificationsApi
         CreateNotificationRequest request,
         IValidator<CreateNotificationRequest> validator,
         NotificationsService service,
+        BrowserOrigin origin,
+        HttpContext context,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -46,7 +48,10 @@ public static class NotificationsApi
             return HttpErrors.NotFound($"Project '{request.ProjectId}' was not found.");
         }
 
-        return Results.Created($"/api/notifications/{notification.Id}", NotificationMapper.ToResponse(notification));
+        var url = NotificationLinks.Dashboard(
+            origin.Resolve(context), notification.ProjectId, notification.FeatureSlug, notification.Tab);
+
+        return Results.Created($"/api/notifications/{notification.Id}", NotificationMapper.ToAgentResponse(notification, url));
     }
 
     internal static async Task<IResult> Replies(

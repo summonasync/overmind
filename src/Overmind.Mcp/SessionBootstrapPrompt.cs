@@ -24,6 +24,9 @@ public sealed class SessionBootstrapPrompt
     private const string ValidationProofRouting =
         "Spec/plan validation needs human proof: overmind_notify(kind=approval, featureSlug) → the human's bell reply → planning_validate; every edit voids the reply (the UI door needs no proof).";
 
+    private const string NotificationUrlRouting =
+        "Notification reach: the overmind_notify response may carry url — quote the url in chat when asking for an approval or reporting a question so the human can click through.";
+
     private const string FallbackText =
         "At session start, read overmind://projects to list available projects, then read " +
         "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
@@ -32,7 +35,7 @@ public sealed class SessionBootstrapPrompt
         "(a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
         "and report progress with planning_set_status and planning_append_log. " +
         WriteCostRouting + " " + ReadCostRouting + " " + DependencyRouting + " " + QueueRouting +
-        " " + ValidationProofRouting +
+        " " + ValidationProofRouting + " " + NotificationUrlRouting +
         " Set OVERMIND_PROJECT_ID to make the active project explicit.";
 
     private readonly OvermindApiClient _api;
@@ -73,7 +76,7 @@ public sealed class SessionBootstrapPrompt
               $"Planning loop: read overmind://projects/{activeProjectId}/planning/features for the board, " +
               $"take overmind://projects/{activeProjectId}/planning/features/<slug>/current for your next task, " +
               "obey any STOP line (a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
-              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting} {QueueRouting} {ValidationProofRouting}";
+              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting} {QueueRouting} {ValidationProofRouting} {NotificationUrlRouting}";
 
         return new GetPromptResult
         {

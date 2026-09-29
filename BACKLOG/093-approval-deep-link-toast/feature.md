@@ -1,7 +1,7 @@
 ---
 feature: 093
 slug: approval-deep-link-toast
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-27
@@ -31,3 +31,9 @@ When an agent requests an approval, the human has to hunt for it: the chat reply
 - 088-bell-approval-quick-actions — existing bell approve/reject buttons to reuse in the toast.
 - 020 — notification agent↔human path (notify/reply, cap 50, unreadCount).
 </refs>
+
+<log>
+- 2026-09-28 [auto] — artifact created → inProgress
+- 2026-09-28 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-29 [agent] — by user request in-session («ну чего, мужик, закрывай задачку», 2026-09-29): result b3a499ef validated пруфом ba569102, 3/3 тасок done, все ревью позади (2×PASS, PASS-WITH-NITS, architect APPROVED), 1644/1644 + live e2e зелёные
+</log>

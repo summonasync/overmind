@@ -20,4 +20,21 @@ public static class NotificationMapper
             notification.ReplyText,
             notification.RepliedAt);
     }
+
+    public static AgentNotificationResponse ToAgentResponse(AgentNotification notification, string? url)
+    {
+        return new AgentNotificationResponse(
+            notification.Id,
+            notification.ProjectId,
+            notification.Kind,
+            notification.FeatureSlug,
+            notification.Tab,
+            notification.Text,
+            notification.Agent,
+            notification.CreatedAt,
+            notification.ReadAt,
+            notification.ReplyText,
+            notification.RepliedAt,
+            url);
+    }
 }

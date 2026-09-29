@@ -288,6 +288,56 @@ public sealed class NotificationApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Create_WithFeatureSlugTabAndProject_ReturnsAbsoluteDashboardUrl()
+    {
+        var project = await CreateProjectAsync();
+
+        var created = await NotifyAsync("approval", "Approve the spec", project.Id, "agent-notifications", "spec");
+
+        created.Url.ShouldBe($"http://overmind.localhost/dashboard?project={project.Id}&feature=agent-notifications&tab=spec");
+        Uri.TryCreate(created.Url, UriKind.Absolute, out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Create_WithFeatureSlugWithoutProject_OmitsProjectParam()
+    {
+        var created = await NotifyAsync("info", "no project attached", featureSlug: "materialize-status");
+
+        created.Url.ShouldBe("http://overmind.localhost/dashboard?feature=materialize-status");
+    }
+
+    [Fact]
+    public async Task Create_WithoutFeatureSlug_OmitsUrlField()
+    {
+        var response = await _client.PostAsJsonAsync("/api/agent/notifications", new { Kind = "info", Text = "bare" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        doc.RootElement.TryGetProperty("url", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task HumanDoor_ListReadReply_DoNotCarryUrl()
+    {
+        var project = await CreateProjectAsync();
+        var created = await NotifyAsync("question", "pick one", project.Id, "agent-notifications", "spec");
+
+        using var listDoc = JsonDocument.Parse(await _client.GetStringAsync("/api/notifications"));
+        foreach (var item in listDoc.RootElement.GetProperty("items").EnumerateArray())
+        {
+            item.TryGetProperty("url", out _).ShouldBeFalse();
+        }
+
+        var read = await _client.PostAsync($"/api/notifications/{created.Id}/read", null);
+        using var readDoc = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        readDoc.RootElement.TryGetProperty("url", out _).ShouldBeFalse();
+
+        var reply = await _client.PostAsJsonAsync($"/api/notifications/{created.Id}/reply", new { Text = "pick two" });
+        using var replyDoc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
+        replyDoc.RootElement.TryGetProperty("url", out _).ShouldBeFalse();
+    }
+
     public static TheoryData<string, string, string?> InvalidCreates => new()
     {
         { "urgent", "valid text", null },
@@ -395,7 +445,8 @@ public sealed class NotificationApiTests : IDisposable
         DateTime CreatedAt,
         DateTime? ReadAt,
         string? ReplyText,
-        DateTime? RepliedAt);
+        DateTime? RepliedAt,
+        string? Url);
 
     public sealed record NotificationsJson(NotificationJson[] Items, int UnreadCount);
 

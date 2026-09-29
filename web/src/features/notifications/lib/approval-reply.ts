@@ -11,6 +11,13 @@ export function isAwaitingApproval(item: NotificationItem): boolean {
   return item.kind === "approval" && typeof item.replyText !== "string";
 }
 
+export function isAwaitingResponse(item: NotificationItem): boolean {
+  if (item.readAt != null || typeof item.replyText === "string") {
+    return false;
+  }
+  return item.kind === "approval" || item.kind === "question";
+}
+
 export function approvalChoice(replyText: string | null | undefined): ApprovalChoice | null {
   if (replyText === APPROVAL_REPLY.approve) {
     return "approve";

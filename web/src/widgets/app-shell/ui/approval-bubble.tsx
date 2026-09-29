@@ -10,12 +10,16 @@ import { Zerling } from "@/shared/ui/zerling";
 import { cn } from "@/shared/lib/cn";
 import { notificationHref } from "@/widgets/app-shell/lib/notification-href";
 import { useApprovalBubble } from "@/widgets/app-shell/lib/use-approval-bubble";
+import { useAwaitingTitle } from "@/widgets/app-shell/lib/use-awaiting-title";
 import { NotificationCenter } from "@/widgets/app-shell/ui/notification-center";
 
 export function ApprovalBubble() {
-  const { surface, item, moreCount, deadTarget, dismiss, expand } = useApprovalBubble();
+  const { surface, item, moreCount, deadTarget, dismiss, expand, awaitingCount, centerKind } =
+    useApprovalBubble();
   const { reply } = useNotificationMutations();
   const [centerOpen, setCenterOpen] = useState(false);
+
+  useAwaitingTitle(awaitingCount);
 
   if (surface === "hidden" || item === null) {
     return null;
@@ -77,30 +81,32 @@ export function ApprovalBubble() {
               </p>
             </div>
           </div>
-          <div className="mt-2.5 flex items-center gap-2">
-            <Button
-              variant="secondary"
-              className="shrink-0 px-2 py-1 text-xs"
-              disabled={replying}
-              onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.approve })}
-              aria-label={`Approve request from ${item.agent}`}
-            >
-              <Check size={12} className="text-success" aria-hidden />
-              Approve
-            </Button>
-            <Button
-              variant="danger"
-              className="shrink-0 px-2 py-1 text-xs"
-              disabled={replying}
-              onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.reject })}
-              aria-label={`Reject request from ${item.agent}`}
-              title={`Sends reply "rejected"; it does not block the agent's validation by itself`}
-            >
-              <X size={12} aria-hidden />
-              Reject
-            </Button>
-            <ErrorText error={reply.error && reply.variables?.id === item.id ? reply.error : null} />
-          </div>
+          {item.kind === "approval" ? (
+            <div className="mt-2.5 flex items-center gap-2">
+              <Button
+                variant="secondary"
+                className="shrink-0 px-2 py-1 text-xs"
+                disabled={replying}
+                onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.approve })}
+                aria-label={`Approve request from ${item.agent}`}
+              >
+                <Check size={12} className="text-success" aria-hidden />
+                Approve
+              </Button>
+              <Button
+                variant="danger"
+                className="shrink-0 px-2 py-1 text-xs"
+                disabled={replying}
+                onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.reject })}
+                aria-label={`Reject request from ${item.agent}`}
+                title={`Sends reply "rejected"; it does not block the agent's validation by itself`}
+              >
+                <X size={12} aria-hidden />
+                Reject
+              </Button>
+              <ErrorText error={reply.error && reply.variables?.id === item.id ? reply.error : null} />
+            </div>
+          ) : null}
           <div className="mt-2 flex items-center gap-2">
             {item.featureSlug ? (
               <a href={notificationHref(item)} className="text-xs font-medium text-primary hover:underline">
@@ -113,14 +119,14 @@ export function ApprovalBubble() {
                 onClick={() => setCenterOpen(true)}
                 className="ml-auto inline-flex items-center rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-xs font-medium text-warning transition-colors hover:border-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                {moreCount} more → open approvals
+                {moreCount} more → {centerKind === "all" ? "open all" : "open approvals"}
               </button>
             ) : null}
           </div>
         </div>
       </div>
       <Modal title="Notifications" open={centerOpen} onClose={() => setCenterOpen(false)}>
-        <NotificationCenter initialKind="approval" />
+        <NotificationCenter initialKind={centerKind} />
       </Modal>
     </>
   );

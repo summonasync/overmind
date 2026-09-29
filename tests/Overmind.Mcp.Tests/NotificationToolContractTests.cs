@@ -22,8 +22,26 @@ public class NotificationToolContractTests : McpSessionTestBase
         notify.ShouldContain("question");
         notify.ShouldContain("approval");
         notify.ShouldContain("overmind_replies");
+        notify.ShouldContain("quote the url in chat when asking for an approval");
 
         tools["overmind_replies"]!["description"]!.GetValue<string>().ShouldContain("answers");
+    }
+
+    [Fact]
+    public async Task Notify_HostResponseUrl_ReachesTheToolResultUnmodified()
+    {
+        Stub.Route("POST", "/api/agent/notifications", 201, Canned.NotificationWithUrlJson);
+
+        var response = await Driver.CallToolAsync("overmind_notify", new JsonObject
+        {
+            ["kind"] = "approval",
+            ["text"] = "Spec gate wants your call on the persistence model.",
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tab"] = "spec"
+        });
+
+        Canned.ToolResultText(response).ShouldContain(Canned.NotificationUrl);
     }
 
     [Fact]

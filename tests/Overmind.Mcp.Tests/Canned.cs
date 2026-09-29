@@ -292,6 +292,12 @@ public static class Canned
     public const string NotificationJson =
         """{"id":"13131313-1313-1313-1313-131313131313","projectId":"11111111-1111-1111-1111-111111111111","kind":"question","featureSlug":"demo-feature","tab":"spec","text":"Spec gate wants your call on the persistence model.","agent":"coder","createdAt":"2026-09-20T10:00:00Z","readAt":null,"replyText":null,"repliedAt":null}""";
 
+    public const string NotificationUrl =
+        "http://127.0.0.1:5183/dashboard?project=11111111-1111-1111-1111-111111111111&feature=demo-feature&tab=spec";
+
+    public const string NotificationWithUrlJson =
+        """{"id":"13131313-1313-1313-1313-131313131313","projectId":"11111111-1111-1111-1111-111111111111","kind":"approval","featureSlug":"demo-feature","tab":"spec","text":"Spec gate wants your call on the persistence model.","agent":"coder","url":"http://127.0.0.1:5183/dashboard?project=11111111-1111-1111-1111-111111111111&feature=demo-feature&tab=spec","createdAt":"2026-09-20T10:00:00Z","readAt":null,"replyText":null,"repliedAt":null}""";
+
     public const string RepliesJson =
         """{"items":[{"id":"13131313-1313-1313-1313-131313131313","projectId":"11111111-1111-1111-1111-111111111111","kind":"question","featureSlug":"demo-feature","tab":"spec","text":"Spec gate wants your call on the persistence model.","agent":"coder","createdAt":"2026-09-20T10:00:00Z","readAt":"2026-09-20T10:05:00Z","replyText":"Ship it as planned.","repliedAt":"2026-09-20T10:05:00Z"}]}""";
 

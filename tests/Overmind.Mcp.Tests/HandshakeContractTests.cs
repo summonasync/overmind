@@ -37,6 +37,7 @@ public class HandshakeContractTests : McpSessionTestBase
         instructions.ShouldNotContain("overmind://resources");
         instructions.ShouldContain("list_entries");
         instructions.ShouldContain("overmind_onboard");
+        instructions.ShouldContain("quote the url in chat when asking for an approval");
     }
 
     [Fact]

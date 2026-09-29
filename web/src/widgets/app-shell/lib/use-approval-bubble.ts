@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { boardQueryOptions } from "@/features/planning";
-import { isAwaitingApproval, useNotifications } from "@/features/notifications";
+import { isAwaitingResponse, useNotifications } from "@/features/notifications";
 import type { NotificationItem } from "@/features/notifications";
 import { useSettings } from "@/features/settings";
 import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
@@ -17,6 +17,7 @@ import {
   expandBubble,
   initialBubbleDiscipline,
 } from "@/widgets/app-shell/lib/approval-bubble-state";
+import type { NotificationKindFilter } from "@/widgets/app-shell/lib/notification-kind-filter";
 import type {
   BubbleCandidate,
   BubbleDiscipline,
@@ -45,16 +46,17 @@ export function useApprovalBubble() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const awaitingItems = useMemo(() => items.filter(isAwaitingResponse), [items]);
+
   const candidates = useMemo(
     () =>
       bubbleCandidates(
-        items
-          .filter(isAwaitingApproval)
+        awaitingItems
           .map(toCandidate)
           .filter((candidate): candidate is BubbleCandidate => candidate !== null),
         nowMs,
       ),
-    [items, nowMs],
+    [awaitingItems, nowMs],
   );
 
   const item = items.find((entry) => entry.id === candidates[0]?.id) ?? null;
@@ -86,5 +88,20 @@ export function useApprovalBubble() {
     sync(expandBubble(discipline));
   }, [discipline, sync]);
 
-  return { surface, item, moreCount, deadTarget, dismiss, expand };
+  const centerKind: NotificationKindFilter = awaitingItems.some(
+    (entry) => entry.kind === "question",
+  )
+    ? "all"
+    : "approval";
+
+  return {
+    surface,
+    item,
+    moreCount,
+    deadTarget,
+    dismiss,
+    expand,
+    awaitingCount: awaitingItems.length,
+    centerKind,
+  };
 }

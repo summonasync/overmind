@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
@@ -11,6 +12,20 @@ public sealed record CreateNotificationRequest(
     string? From = null);
 
 public sealed record ReplyNotificationRequest(string Text);
+
+public sealed record AgentNotificationResponse(
+    Guid Id,
+    Guid? ProjectId,
+    NotificationKind Kind,
+    string? FeatureSlug,
+    string? Tab,
+    string Text,
+    string Agent,
+    DateTime CreatedAt,
+    DateTime? ReadAt,
+    string? ReplyText,
+    DateTime? RepliedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url);
 
 public sealed record NotificationResponse(
     Guid Id,

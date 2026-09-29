@@ -24,7 +24,7 @@ public sealed class OvermindNotificationTools
     }
 
     [McpServerTool(Name = "overmind_notify", Destructive = false, Idempotent = false)]
-    [Description("Tell the human something: posts a notification to the center the human watches in the Overmind web UI. Kind is info, question or approval; featureSlug and tab turn it into a deep link onto the feature page. Use question or approval when a gate needs the human's call, then pick the answer up with overmind_replies.")]
+    [Description("Tell the human something: posts a notification to the center the human watches in the Overmind web UI. Kind is info, question or approval; featureSlug and tab turn it into a deep link onto the feature page. Use question or approval when a gate needs the human's call, then pick the answer up with overmind_replies. The response may carry url (set when featureSlug is) — quote the url in chat when asking for an approval or reporting a question so the human can click through.")]
     public async Task<JsonElement> Notify(
         [Description("Notification kind: info, question or approval.")] string kind,
         [Description("Message body shown to the human, max 2000 chars.")] string text,

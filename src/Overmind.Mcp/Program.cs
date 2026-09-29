@@ -100,7 +100,8 @@ builder.Services
             "Overmind shared-context adapter. Call overmind_onboard first — it resolves your project and returns the onboarding quickstart. " +
             "Project gates, guards, notes, decisions and skills live as entries: list them with list_entries (type=gate|guard|note|decision|skill) " +
             "and read them with read_entry — the onboard payload names the active project. " +
-            "Use tools for project/entry CRUD and fulltext or semantic search.";
+            "Use tools for project/entry CRUD and fulltext or semantic search. " +
+            "When overmind_notify returns a url, quote the url in chat when asking for an approval or reporting a question so the human can click through.";
     })
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()

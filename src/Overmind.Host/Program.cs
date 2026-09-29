@@ -179,6 +179,12 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
 
     await app.StartAsync();
 
+    if (app.Urls.FirstOrDefault() is { } boundUrl && new Uri(boundUrl) is { Port: not 0 } bound)
+    {
+        app.Services.GetRequiredService<BrowserOrigin>()
+            .Bind(BrowserUri.FromLoopback(bound));
+    }
+
     var portFilePath = app.Configuration["Overmind:PortFilePath"];
     if (portFilePath is not null || !app.Environment.IsEnvironment("Testing"))
     {
