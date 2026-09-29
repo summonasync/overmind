@@ -4,7 +4,7 @@
 
 Single source of truth for one AI agent crew running on four runtimes: **Kimi Code CLI**, **Claude Code**, **Google Antigravity**, and **Qwen Code**. The repo holds all mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code, `.gemini/` (incl. `GEMINI.md`) serves Antigravity, `.qwen/` (incl. `QWEN.md`) serves Qwen Code. Content (rules, workflows, skills, agents) is semantically identical across the four; only tool-specific details (model names, home paths, tool identifiers, runtime features, enforcement mechanics) differ.
 
-The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming maniac (`naming-helper`) — 22 agents, 24 skills, one workflow graph.
+The crew: orchestrators, coders, reviewers, architects, a product strategist (`product-strategist`), an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming maniac (`naming-helper`) — 35 agents, 43 skills, one workflow graph.
 
 ## Prerequisites
 
@@ -26,26 +26,26 @@ The crew: orchestrators, coders, reviewers, architects, an audit machine, an AI-
 ├── uninstall.sh           # remove deployed paths (Git Bash/Linux); --dry-run / --force
 ├── .kimi-code/
 │   ├── AGENTS.md          # Kimi-side crew contract (global tool memory)
-│   ├── agents/            # 22 agent definitions
-│   ├── skills/            # 24 skill directories
+│   ├── agents/            # 35 agent definitions
+│   ├── skills/            # 43 skill directories
 │   ├── SKILLFLOW.md       # workflow graph shared by all skills
 │   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to all four homes)
 │   └── config.toml        # Kimi runtime config (secondary-model pool) — Kimi only
 ├── .claude/
 │   ├── CLAUDE.md          # Claude-side mirror of AGENTS.md
-│   ├── agents/            # 22 agent definitions (Claude format)
-│   ├── skills/            # 24 skill directories
+│   ├── agents/            # 35 agent definitions (Claude format)
+│   ├── skills/            # 43 skill directories
 │   └── SKILLFLOW.md
 ├── .gemini/
 │   ├── GEMINI.md          # Antigravity-side mirror of AGENTS.md (deploys to ~/.gemini/)
 │   └── antigravity/
-│       ├── agents/        # 22 agent definitions (deploys to ~/.gemini/antigravity/)
-│       ├── skills/        # 24 skill directories (open SKILL.md standard)
+│       ├── agents/        # 35 agent definitions (deploys to ~/.gemini/antigravity/)
+│       ├── skills/        # 43 skill directories (open SKILL.md standard)
 │       └── SKILLFLOW.md
 ├── .qwen/
 │   ├── QWEN.md            # Qwen-side mirror of AGENTS.md (deploys to ~/.qwen/)
-│   ├── agents/            # 22 agent definitions (Qwen format: model pins + canonical tool ids)
-│   ├── skills/            # 24 skill directories
+│   ├── agents/            # 34 agent definitions (Qwen format: model pins + canonical tool ids)
+│   ├── skills/            # 42 skill directories
 │   ├── SKILLFLOW.md
 │   ├── settings-snippet.jsonc  # Qwen-only permissions/hooks layer — merge by hand, never auto-installed
 │   └── hooks/             # Qwen-only PostToolUse verification hook (.ps1 + .sh)
@@ -123,7 +123,7 @@ Both hook scripts **fail open**: no payload, unknown tool, no project anchor, mi
 
 - **`~/.gemini/GEMINI.md` conflicts with the Gemini CLI**: both Antigravity and the Gemini CLI hardcode the same global config path and overwrite each other's rules (tracked in [google-gemini/gemini-cli#16058](https://github.com/google-gemini/gemini-cli/issues/16058)). If you use both tools, expect GEMINI.md edits from one side to leak into the other; re-run `install.*` to restore the crew version.
 - **`~/.qwen/QWEN.md` is global memory for every project**: Qwen Code loads it in every session on this machine, exactly like `~/.claude/CLAUDE.md` does for Claude Code. The crew contract is deliberately opinionated (Russian-only conversation, .NET/Next.js defaults) — if that leaks into unrelated work, scope it down or move the stack sections into per-project `QWEN.md`.
-- **This repo's `.qwen/` is also live project config**: Qwen Code reads `.qwen/skills/` and `.qwen/agents/` as *project-level* customizations, so working inside `Skills_dotNetCrew` activates all 24 skills and 22 agents for that session. Same as `.claude/` does for Claude Code — intended, but worth knowing when you wonder where a skill came from.
+- **This repo's `.qwen/` is also live project config**: Qwen Code reads `.qwen/skills/` and `.qwen/agents/` as *project-level* customizations, so working inside `Skills_dotNetCrew` activates all 42 skills and 34 agents for that session. Same as `.claude/` does for Claude Code — intended, but worth knowing when you wonder where a skill came from.
 - **`WebSearch` has no Qwen Code equivalent**: agents that carried `WebSearch` + `FetchURL` on the Claude side collapse to a single `web_fetch` entry on the Qwen side. Capability loss is limited to search-engine queries; direct URL fetching is unchanged.
 - **`settings-snippet.jsonc` path patterns are unverified end-to-end**: the `permissions` rule syntax follows the documented specifier forms, but the snippet has not been applied to a live `settings.json` and probed. Check `/permissions` after merging.
 
