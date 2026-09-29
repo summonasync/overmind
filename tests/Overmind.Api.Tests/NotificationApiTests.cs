@@ -165,6 +165,63 @@ public sealed class NotificationApiTests : IDisposable
         list.UnreadCount.ShouldBe(52);
     }
 
+    [Fact]
+    public async Task List_AwaitingTrue_ReturnsOnlyUnansweredApprovalAndQuestion()
+    {
+        var answered = await NotifyAsync("approval", "Approve the deploy?");
+        await ReplyAsync(answered.Id, "go");
+
+        var hidden = await NotifyAsync("question", "Hidden conversation");
+        await ReplyAsync(hidden.Id, "later");
+        (await ClearConversationsAsync()).Hidden.ShouldBe(2);
+
+        await NotifyAsync("info", "just a note");
+
+        var readUnanswered = await NotifyAsync("question", "Read but undecided");
+        await MarkReadAsync(readUnanswered.Id);
+
+        var approvalOpen = await NotifyAsync("approval", "Approve the spec");
+        var questionOpen = await NotifyAsync("question", "Which database?");
+
+        Guid[] expected = [questionOpen.Id, approvalOpen.Id, readUnanswered.Id];
+
+        var awaiting = await ListAsync(awaiting: true);
+        awaiting.Items.Select(i => i.Id).ToArray().ShouldBe(expected);
+        awaiting.Items.ShouldNotContain(i => i.ReplyText != null);
+        awaiting.Items.ShouldNotContain(i => i.HiddenAt != null);
+        awaiting.Items.ShouldNotContain(i => i.Kind == "info");
+        awaiting.UnreadCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task List_Take_DefaultStaysAtFiftyAndExplicitTakeWidensTheWindow()
+    {
+        for (var i = 0; i < 60; i++)
+        {
+            await NotifyAsync("info", $"note {i}");
+        }
+
+        var defaultList = await ListAsync();
+        defaultList.Items.Length.ShouldBe(50);
+        defaultList.Items[0].Text.ShouldBe("note 59");
+        defaultList.UnreadCount.ShouldBe(60);
+
+        var widened = await ListAsync(take: 200);
+        widened.Items.Length.ShouldBe(60);
+        widened.Items[0].Text.ShouldBe("note 59");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(501)]
+    public async Task List_TakeOutOfRange_Returns400(int take)
+    {
+        var response = await _client.GetAsync($"/api/notifications?take={take}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Theory]
     [MemberData(nameof(InvalidCreates))]
     public async Task Create_InvalidRequest_Returns400(string kind, string text, string? tab)
@@ -468,10 +525,26 @@ public sealed class NotificationApiTests : IDisposable
         return notification!;
     }
 
-    private async Task<NotificationsJson> ListAsync(bool includeHidden = false)
+    private async Task<NotificationsJson> ListAsync(bool includeHidden = false, bool awaiting = false, int? take = null)
     {
-        var query = includeHidden ? "?includeHidden=true" : string.Empty;
-        return await _client.GetFromJsonAsync<NotificationsJson>($"/api/notifications{query}", JsonOptions)
+        var query = new List<string>();
+        if (includeHidden)
+        {
+            query.Add("includeHidden=true");
+        }
+
+        if (awaiting)
+        {
+            query.Add("awaiting=true");
+        }
+
+        if (take is { } size)
+        {
+            query.Add($"take={size}");
+        }
+
+        var suffix = query.Count > 0 ? $"?{string.Join("&", query)}" : string.Empty;
+        return await _client.GetFromJsonAsync<NotificationsJson>($"/api/notifications{suffix}", JsonOptions)
             ?? throw new InvalidOperationException("list body was null");
     }
 

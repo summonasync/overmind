@@ -2,18 +2,56 @@
 
 import { useState } from "react";
 import { Bell } from "lucide-react";
-import { isAwaitingApproval, useNotifications } from "@/features/notifications";
+import {
+  isAwaitingApproval,
+  NOTIFICATION_KIND_META,
+  notificationHref,
+  unreadNotifications,
+  useNotifications,
+} from "@/features/notifications";
+import type { NotificationItem } from "@/features/notifications";
 import { Badge } from "@/shared/ui/badge";
+import { EmptyState } from "@/shared/ui/empty-state";
 import { Modal } from "@/shared/ui/modal";
 import { cn } from "@/shared/lib/cn";
-import { NotificationCenter } from "@/widgets/app-shell/ui/notification-center";
+import { formatNotificationTime } from "@/shared/lib/relative-time";
 
 const DISPLAY_CAP = 50;
+
+function BellPreviewRow({ item }: { item: NotificationItem }) {
+  const meta = NOTIFICATION_KIND_META[item.kind];
+  const KindIcon = meta.icon;
+  const href = item.featureSlug ? notificationHref(item) : null;
+
+  const content = (
+    <>
+      <KindIcon size={14} aria-hidden className={cn("shrink-0", meta.iconClass)} />
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.text}</span>
+      <span className="shrink-0 text-xs text-muted">{formatNotificationTime(item.createdAt)}</span>
+    </>
+  );
+
+  return (
+    <li>
+      {href ? (
+        <a
+          href={href}
+          className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          {content}
+        </a>
+      ) : (
+        <div className="flex items-center gap-2 px-2 py-2">{content}</div>
+      )}
+    </li>
+  );
+}
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const { items, unreadCount } = useNotifications();
   const awaitingApproval = items.some(isAwaitingApproval);
+  const unread = unreadNotifications(items);
 
   return (
     <>
@@ -44,7 +82,28 @@ export function NotificationBell() {
         ) : null}
       </button>
       <Modal title="Notifications" open={open} onClose={() => setOpen(false)}>
-        <NotificationCenter />
+        <div className="flex flex-col gap-3">
+          {unread.length === 0 ? (
+            <EmptyState
+              title="No unread notifications"
+              hint="Everything is read — the Attention page holds the awaiting queue and the full history."
+            />
+          ) : (
+            <ul className="flex flex-col">
+              {unread.map((item) => (
+                <BellPreviewRow key={item.id} item={item} />
+              ))}
+            </ul>
+          )}
+          <a
+            href="/attention"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-transparent px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Bell size={14} aria-hidden />
+            Open Attention
+          </a>
+        </div>
       </Modal>
     </>
   );

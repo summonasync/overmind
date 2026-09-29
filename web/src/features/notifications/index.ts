@@ -1,7 +1,16 @@
-export { notificationKeys, notificationsQueryOptions } from "./queries";
+export { notificationKeys, notificationsQueryOptions, awaitingNotificationsQueryOptions, AWAITING_TAKE } from "./queries";
+export type { ListNotificationsParams } from "./api";
+export { listNotifications } from "./api";
 export type { NotificationItem, NotificationKind, NotificationTab, NotificationsResponse } from "./types";
 export { useNotifications } from "./lib/use-notifications";
+export { useAwaitingNotifications } from "./lib/use-awaiting-notifications";
 export { useNotificationMutations } from "./lib/use-notification-mutations";
 export { APPROVAL_REPLY, approvalChoice, isAwaitingApproval, isAwaitingResponse } from "./lib/approval-reply";
 export type { ApprovalChoice } from "./lib/approval-reply";
+export { isAwaitingNotification } from "./lib/awaiting";
+export { unreadNotifications } from "./lib/bell-preview";
+export { NOTIFICATION_KIND_META } from "./lib/notification-kind-meta";
+export { notificationHref } from "./lib/notification-href";
 export { isHiddenNotification, repliedConversationsCount } from "./lib/conversation-archive";
+export { NotificationActions } from "./components/notification-actions";
+export { FeatureSlugLabel } from "./components/feature-slug-label";

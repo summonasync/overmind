@@ -1,7 +1,7 @@
 ---
 feature: 087
 slug: attention-page
-status: draft
+status: review
 priority: p1
 version: 1
 created: 2026-09-26
@@ -30,3 +30,8 @@ The bell modal is too small to be the single surface for human actions. A dedica
 - 020 (notification entity + doors), 077 (approve = proof), 017 (live sync), 064/024 (web patterns).
 - User request 2026-09-26: «отдельный ui слева в меню, страница со всеми вопросами и attention агентов ко мне — чтобы не только маленький колокольчик».
 </refs>
+
+<log>
+- 2026-09-29 [auto] — artifact created → inProgress
+- 2026-09-29 [auto] — all tasks done + spec + plan validated → review
+</log>

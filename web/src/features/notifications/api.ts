@@ -1,8 +1,25 @@
 import { apiDelete, apiGet, apiPost } from "@/shared/api/client";
 import type { BulkResult, NotificationItem, NotificationsResponse } from "@/features/notifications/types";
 
-export function listNotifications(includeHidden = false): Promise<NotificationsResponse> {
-  return apiGet<NotificationsResponse>(`/notifications${includeHidden ? "?includeHidden=true" : ""}`);
+export interface ListNotificationsParams {
+  includeHidden?: boolean;
+  awaiting?: boolean;
+  take?: number;
+}
+
+export function listNotifications(params: ListNotificationsParams = {}): Promise<NotificationsResponse> {
+  const search = new URLSearchParams();
+  if (params.includeHidden) {
+    search.set("includeHidden", "true");
+  }
+  if (params.awaiting) {
+    search.set("awaiting", "true");
+  }
+  if (params.take !== undefined) {
+    search.set("take", String(params.take));
+  }
+  const query = search.toString();
+  return apiGet<NotificationsResponse>(`/notifications${query ? `?${query}` : ""}`);
 }
 
 export function markNotificationRead(id: string): Promise<NotificationItem> {

@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Folder, Package, Search, Settings, type LucideIcon } from "lucide-react";
+import { BellRing, Folder, Package, Search, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
+import { AttentionBadge } from "@/widgets/app-shell/ui/attention-badge";
 
 interface NavItem {
   href: string;
@@ -12,6 +13,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
+  { href: "/attention", label: "Attention", icon: BellRing },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -38,6 +40,7 @@ export function MobileNav() {
           >
             <Icon size={15} aria-hidden />
             {item.label}
+            {item.href === "/attention" ? <AttentionBadge /> : null}
           </a>
         );
       })}

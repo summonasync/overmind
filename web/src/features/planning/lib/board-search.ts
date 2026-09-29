@@ -1,4 +1,4 @@
-import { featureNumber } from "@/features/planning/lib/feature-number";
+import { featureNumber } from "@/shared/lib/feature-number";
 import type { PlanningFeatureBoardItem } from "@/features/planning/types";
 
 export function boardItemMatchesSearch(

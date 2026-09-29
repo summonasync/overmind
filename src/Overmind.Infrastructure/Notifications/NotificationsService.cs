@@ -6,7 +6,7 @@ namespace Overmind.Infrastructure.Notifications;
 
 public sealed class NotificationsService(OvermindDbContext db)
 {
-    private const int ListCapacity = 50;
+    public const int ListCapacity = 50;
 
     public async Task<AgentNotification?> CreateAsync(
         NotificationKind kind,
@@ -29,17 +29,25 @@ public sealed class NotificationsService(OvermindDbContext db)
         return notification;
     }
 
-    public async Task<NotificationsOverview> GetOverviewAsync(bool includeHidden, CancellationToken ct)
+    public async Task<NotificationsOverview> GetOverviewAsync(
+        bool includeHidden, bool awaiting, int take, CancellationToken ct)
     {
         var notifications = db.AgentNotifications.AsNoTracking();
-        if (!includeHidden)
+        if (awaiting)
+        {
+            notifications = notifications.Where(n =>
+                n.ReplyText == null
+                && n.HiddenAt == null
+                && (n.Kind == NotificationKind.Approval || n.Kind == NotificationKind.Question));
+        }
+        else if (!includeHidden)
         {
             notifications = notifications.Where(n => n.HiddenAt == null);
         }
 
         var items = await notifications
             .OrderByDescending(n => n.CreatedAt)
-            .Take(ListCapacity)
+            .Take(take)
             .ToListAsync(ct);
 
         var unreadCount = await db.AgentNotifications

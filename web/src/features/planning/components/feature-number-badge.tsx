@@ -1,4 +1,4 @@
-import { formatFeatureNumber } from "@/features/planning/lib/feature-number";
+import { formatFeatureNumber } from "@/shared/lib/feature-number";
 
 interface FeatureNumberBadgeProps {
   slug: string;

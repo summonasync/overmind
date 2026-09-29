@@ -8,6 +8,8 @@ namespace Overmind.Host.Api;
 
 public static class NotificationsApi
 {
+    private const int MaxTake = 500;
+
     public static RouteGroupBuilder MapNotificationsApi(this IEndpointRouteBuilder routes)
     {
         var human = routes.MapGroup("/api");
@@ -67,9 +69,18 @@ public static class NotificationsApi
     }
 
     internal static async Task<IResult> List(
-        NotificationsService service, bool includeHidden = false, CancellationToken ct = default)
+        NotificationsService service,
+        bool includeHidden = false,
+        bool awaiting = false,
+        int take = NotificationsService.ListCapacity,
+        CancellationToken ct = default)
     {
-        var overview = await service.GetOverviewAsync(includeHidden, ct);
+        if (take is < 1 or > MaxTake)
+        {
+            return HttpErrors.BadRequest($"take must be between 1 and {MaxTake}.");
+        }
+
+        var overview = await service.GetOverviewAsync(includeHidden, awaiting, take, ct);
 
         return Results.Ok(new NotificationsResponse(
             overview.Items.Select(NotificationMapper.ToResponse).ToArray(),

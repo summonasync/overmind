@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
+  BellRing,
   ChevronDown,
   ChevronRight,
   Folder,
@@ -26,6 +27,7 @@ import {
   isProjectsSectionOpen,
   saveProjectsSectionOpen,
 } from "@/features/projects/lib/tree-session";
+import { AttentionBadge } from "@/widgets/app-shell/ui/attention-badge";
 import { SidebarQuote } from "@/widgets/app-shell/ui/sidebar-quote";
 
 const KERRIGAN_VARIANTS = [kerrigan1, kerrigan2, kerrigan3, kerrigan4, kerrigan5, kerrigan6, kerrigan7];
@@ -38,6 +40,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
+  { href: "/attention", label: "Attention", icon: BellRing },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -145,6 +148,7 @@ export function AppSidebar() {
             >
               <Icon size={16} aria-hidden />
               {item.label}
+              {item.href === "/attention" ? <AttentionBadge /> : null}
             </a>
           );
         })}
