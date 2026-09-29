@@ -33,6 +33,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<string>("FeatureSlug")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("HiddenAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 
@@ -283,13 +286,13 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(2);
 
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("QueuePosition")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0);
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -696,15 +699,15 @@ namespace Overmind.Infrastructure.Migrations
 
             modelBuilder.Entity("Overmind.Core.PlanningTaskDependency", b =>
                 {
-                    b.HasOne("Overmind.Core.PlanningArtifact", "BlockedBy")
-                        .WithMany()
-                        .HasForeignKey("BlockingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Overmind.Core.PlanningArtifact", "Task")
                         .WithMany("BlockedBy")
                         .HasForeignKey("BlockedById")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Overmind.Core.PlanningArtifact", "BlockedBy")
+                        .WithMany()
+                        .HasForeignKey("BlockingId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

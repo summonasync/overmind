@@ -38,7 +38,8 @@ public sealed record NotificationResponse(
     DateTime CreatedAt,
     DateTime? ReadAt,
     string? ReplyText,
-    DateTime? RepliedAt);
+    DateTime? RepliedAt,
+    DateTime? HiddenAt);
 
 public sealed record NotificationsResponse(NotificationResponse[] Items, int UnreadCount);
 
@@ -47,3 +48,5 @@ public sealed record RepliesResponse(NotificationResponse[] Items);
 public sealed record ReadAllNotificationsResponse(int Marked);
 
 public sealed record ClearReadNotificationsResponse(int Deleted);
+
+public sealed record HideConversationsResponse(int Hidden);

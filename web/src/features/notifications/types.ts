@@ -14,6 +14,7 @@ export interface NotificationItem {
   readAt?: string | null;
   replyText?: string | null;
   repliedAt?: string | null;
+  hiddenAt?: string | null;
 }
 
 export interface NotificationsResponse {
@@ -21,4 +22,4 @@ export interface NotificationsResponse {
   unreadCount: number;
 }
 
-export type BulkResult = { marked: number } | { deleted: number };
+export type BulkResult = { marked: number } | { deleted: number } | { hidden: number };

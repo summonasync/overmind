@@ -17,6 +17,7 @@ public static class NotificationsApi
         human.MapDelete("/notifications/{id:guid}", Delete);
         human.MapPost("/notifications/read-all", MarkAllRead);
         human.MapPost("/notifications/clear-read", ClearRead);
+        human.MapPost("/notifications/clear-conversations", ClearConversations);
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/notifications", Create);
@@ -65,9 +66,10 @@ public static class NotificationsApi
         return Results.Ok(new RepliesResponse(replies.Select(NotificationMapper.ToResponse).ToArray()));
     }
 
-    internal static async Task<IResult> List(NotificationsService service, CancellationToken ct)
+    internal static async Task<IResult> List(
+        NotificationsService service, bool includeHidden = false, CancellationToken ct = default)
     {
-        var overview = await service.GetOverviewAsync(ct);
+        var overview = await service.GetOverviewAsync(includeHidden, ct);
 
         return Results.Ok(new NotificationsResponse(
             overview.Items.Select(NotificationMapper.ToResponse).ToArray(),
@@ -130,5 +132,12 @@ public static class NotificationsApi
         var deleted = await service.ClearReadAsync(ct);
 
         return Results.Ok(new ClearReadNotificationsResponse(deleted));
+    }
+
+    internal static async Task<IResult> ClearConversations(NotificationsService service, CancellationToken ct)
+    {
+        var hidden = await service.ClearConversationsAsync(ct);
+
+        return Results.Ok(new HideConversationsResponse(hidden));
     }
 }

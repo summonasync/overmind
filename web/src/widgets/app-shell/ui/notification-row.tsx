@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, CircleHelp, Info, Send, TriangleAlert, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { featureNumber } from "@/features/planning";
-import { APPROVAL_REPLY, approvalChoice, useNotificationMutations } from "@/features/notifications";
+import { APPROVAL_REPLY, approvalChoice, isHiddenNotification, useNotificationMutations } from "@/features/notifications";
 import type { NotificationItem, NotificationKind } from "@/features/notifications";
 import { Badge, type BadgeTone } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -46,6 +46,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
   const existingReply = typeof item.replyText === "string" ? item.replyText : null;
   const replied = existingReply !== null;
   const choice = approvalChoice(existingReply);
+  const archived = isHiddenNotification(item);
   const unread = item.readAt === null || item.readAt === undefined;
   const markingThis = markRead.isPending && markRead.variables === item.id;
   const replyingThis = reply.isPending && reply.variables?.id === item.id;
@@ -63,7 +64,11 @@ export function NotificationRow({ item }: NotificationRowProps) {
     <li
       className={cn(
         "group rounded-lg border bg-surface p-3",
-        unread ? "border-primary/30" : "border-border opacity-60",
+        archived
+          ? "border-border/40 opacity-40"
+          : unread
+            ? "border-primary/30"
+            : "border-border opacity-60",
       )}
     >
       <div className="flex items-center gap-2">

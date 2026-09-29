@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   clearReadNotifications,
   deleteNotification,
+  hideConversations as hideConversationsRequest,
   markNotificationRead,
   readAllNotifications,
   replyToNotification,
@@ -111,5 +112,10 @@ export function useNotificationMutations() {
     onSettled: settleList,
   });
 
-  return { markRead, reply, remove, markAllRead, clearRead };
+  const hideConversations = useMutation({
+    mutationFn: hideConversationsRequest,
+    onSuccess: settleList,
+  });
+
+  return { markRead, reply, remove, markAllRead, clearRead, hideConversations };
 }

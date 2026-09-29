@@ -1,8 +1,8 @@
 import { apiDelete, apiGet, apiPost } from "@/shared/api/client";
 import type { BulkResult, NotificationItem, NotificationsResponse } from "@/features/notifications/types";
 
-export function listNotifications(): Promise<NotificationsResponse> {
-  return apiGet<NotificationsResponse>("/notifications");
+export function listNotifications(includeHidden = false): Promise<NotificationsResponse> {
+  return apiGet<NotificationsResponse>(`/notifications${includeHidden ? "?includeHidden=true" : ""}`);
 }
 
 export function markNotificationRead(id: string): Promise<NotificationItem> {
@@ -23,4 +23,8 @@ export function readAllNotifications(): Promise<BulkResult> {
 
 export function clearReadNotifications(): Promise<BulkResult> {
   return apiPost<BulkResult>("/notifications/clear-read");
+}
+
+export function hideConversations(): Promise<BulkResult> {
+  return apiPost<BulkResult>("/notifications/clear-conversations");
 }

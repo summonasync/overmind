@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useNotificationMutations, useNotifications } from "@/features/notifications";
+import {
+  repliedConversationsCount,
+  useNotificationMutations,
+  useNotifications,
+} from "@/features/notifications";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -21,10 +25,12 @@ interface NotificationCenterProps {
 }
 
 export function NotificationCenter({ initialKind = "all" }: NotificationCenterProps) {
-  const { items, unreadCount, isPending, error } = useNotifications();
-  const { markAllRead, clearRead } = useNotificationMutations();
   const [kind, setKind] = useState<NotificationKindFilter>(initialKind);
+  const [showHidden, setShowHidden] = useState(false);
+  const { items, unreadCount, isPending, error } = useNotifications(showHidden);
+  const { markAllRead, clearRead, hideConversations } = useNotificationMutations();
   const readCount = items.filter((item) => item.readAt != null).length;
+  const repliedCount = repliedConversationsCount(items);
 
   if (isPending) {
     return <LoadingState label="Loading notifications…" />;
@@ -34,17 +40,17 @@ export function NotificationCenter({ initialKind = "all" }: NotificationCenterPr
     return <ErrorText error={error} />;
   }
 
-  if (items.length === 0) {
-    return (
-      <EmptyState
-        title="No notifications"
-        hint="Agents can reach you here via overmind_notify — quiet for now."
-      />
-    );
-  }
-
   const visible = kind === "all" ? items : items.filter((item) => item.kind === kind);
-  const bulkError = markAllRead.error ?? clearRead.error;
+  const bulkError = markAllRead.error ?? clearRead.error ?? hideConversations.error;
+
+  let emptyTitle = "Nothing under this filter";
+  let emptyHint = "No notifications of this kind — switch the filter to see the rest.";
+  if (items.length === 0) {
+    emptyTitle = showHidden ? "Nothing hidden" : "No notifications";
+    emptyHint = showHidden
+      ? "Cleared conversations land in the archive — nothing there yet."
+      : "Agents can reach you here via overmind_notify — quiet for now.";
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -79,14 +85,27 @@ export function NotificationCenter({ initialKind = "all" }: NotificationCenterPr
           >
             Clear read
           </Button>
+          <Button
+            variant="ghost"
+            className="px-2 py-1 text-xs"
+            disabled={repliedCount === 0 || hideConversations.isPending}
+            onClick={() => hideConversations.mutate()}
+          >
+            Clear conversations
+          </Button>
+          <button
+            type="button"
+            aria-pressed={showHidden}
+            onClick={() => setShowHidden((current) => !current)}
+            className={cn(chipBase, showHidden ? chipActive : chipInactive)}
+          >
+            Show hidden
+          </button>
         </div>
       </div>
       {bulkError ? <ErrorText error={bulkError} /> : null}
       {visible.length === 0 ? (
-        <EmptyState
-          title="Nothing under this filter"
-          hint="No notifications of this kind — switch the filter to see the rest."
-        />
+        <EmptyState title={emptyTitle} hint={emptyHint} />
       ) : (
         <ul className="flex flex-col gap-2">
           {visible.map((item) => (

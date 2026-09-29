@@ -18,7 +18,8 @@ public static class NotificationMapper
             notification.CreatedAt,
             notification.ReadAt,
             notification.ReplyText,
-            notification.RepliedAt);
+            notification.RepliedAt,
+            notification.HiddenAt);
     }
 
     public static AgentNotificationResponse ToAgentResponse(AgentNotification notification, string? url)

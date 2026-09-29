@@ -259,6 +259,92 @@ public sealed class NotificationApiTests : IDisposable
     }
 
     [Fact]
+    public async Task ClearConversations_HidesOnlyRepliedRows_AndKeepsTheRestVisible()
+    {
+        var asked = await NotifyAsync("question", "Ship or hold?");
+        await ReplyAsync(asked.Id, "ship");
+        var read = await NotifyAsync("info", "read but not a conversation");
+        await MarkReadAsync(read.Id);
+        var unread = await NotifyAsync("approval", "still open");
+
+        (await ClearConversationsAsync()).Hidden.ShouldBe(1);
+
+        var list = await ListAsync();
+        list.Items.Length.ShouldBe(2);
+        list.Items.ShouldNotContain(i => i.Id == asked.Id);
+        list.Items.ShouldContain(i => i.Id == read.Id);
+        list.Items.ShouldContain(i => i.Id == unread.Id);
+        list.UnreadCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ClearConversations_SecondCall_HidesNothingMore()
+    {
+        var asked = await NotifyAsync("question", "Which database?");
+        await ReplyAsync(asked.Id, "SQLite");
+
+        (await ClearConversationsAsync()).Hidden.ShouldBe(1);
+        (await ClearConversationsAsync()).Hidden.ShouldBe(0);
+
+        var archive = await ListAsync(includeHidden: true);
+        var hidden = archive.Items.Single(i => i.Id == asked.Id);
+        hidden.HiddenAt.ShouldNotBeNull();
+        archive.UnreadCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Replies_ReturnHiddenConversations_Unfiltered()
+    {
+        var asked = await NotifyAsync("question", "Anyone there?");
+        await ReplyAsync(asked.Id, "yes");
+        (await ClearConversationsAsync()).Hidden.ShouldBe(1);
+
+        var replies = await RepliesAsync();
+        replies.Items.Single().Id.ShouldBe(asked.Id);
+        replies.Items.Single().ReplyText.ShouldBe("yes");
+    }
+
+    [Fact]
+    public async Task ClearRead_DoesNotDeleteHiddenConversations()
+    {
+        var asked = await NotifyAsync("question", "Ship or hold?");
+        await ReplyAsync(asked.Id, "ship");
+        (await ClearConversationsAsync()).Hidden.ShouldBe(1);
+
+        (await ClearReadAsync()).Deleted.ShouldBe(0);
+
+        var archive = await ListAsync(includeHidden: true);
+        archive.Items.ShouldContain(i => i.Id == asked.Id);
+    }
+
+    [Fact]
+    public async Task List_DropsHiddenRows_BeforeTheCapacityWindow()
+    {
+        for (var i = 0; i <= 51; i++)
+        {
+            await NotifyAsync("info", $"note {i}");
+        }
+
+        var beforeHide = await ListAsync();
+        await ReplyAsync(beforeHide.Items[0].Id, "answered");
+        await ReplyAsync(beforeHide.Items[1].Id, "also answered");
+        (await ClearConversationsAsync()).Hidden.ShouldBe(2);
+
+        var list = await ListAsync();
+        list.Items.Length.ShouldBe(50);
+        list.Items[0].Text.ShouldBe("note 49");
+        list.Items.Last().Text.ShouldBe("note 0");
+        list.Items.ShouldNotContain(i => i.Text == "note 51");
+        list.Items.ShouldNotContain(i => i.Text == "note 50");
+        list.UnreadCount.ShouldBe(50);
+
+        var archive = await ListAsync(includeHidden: true);
+        archive.Items.Length.ShouldBe(50);
+        archive.Items[0].Text.ShouldBe("note 51");
+        archive.Items.ShouldContain(i => i.Id == beforeHide.Items[0].Id);
+    }
+
+    [Fact]
     public async Task MarkRead_UnknownId_Returns404()
     {
         var response = await _client.PostAsync($"/api/notifications/{Guid.NewGuid()}/read", null);
@@ -382,9 +468,12 @@ public sealed class NotificationApiTests : IDisposable
         return notification!;
     }
 
-    private async Task<NotificationsJson> ListAsync() =>
-        await _client.GetFromJsonAsync<NotificationsJson>("/api/notifications", JsonOptions)
-        ?? throw new InvalidOperationException("list body was null");
+    private async Task<NotificationsJson> ListAsync(bool includeHidden = false)
+    {
+        var query = includeHidden ? "?includeHidden=true" : string.Empty;
+        return await _client.GetFromJsonAsync<NotificationsJson>($"/api/notifications{query}", JsonOptions)
+            ?? throw new InvalidOperationException("list body was null");
+    }
 
     private async Task<NotificationJson> MarkReadAsync(Guid id)
     {
@@ -424,6 +513,14 @@ public sealed class NotificationApiTests : IDisposable
             ?? throw new InvalidOperationException("clear-read body was null");
     }
 
+    private async Task<HiddenJson> ClearConversationsAsync()
+    {
+        var response = await _client.PostAsync("/api/notifications/clear-conversations", null);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<HiddenJson>(JsonOptions)
+            ?? throw new InvalidOperationException("clear-conversations body was null");
+    }
+
     private async Task<RepliesJson> RepliesAsync(Guid? projectId = null, bool includeRead = true)
     {
         var readFlag = includeRead ? "true" : "false";
@@ -446,6 +543,7 @@ public sealed class NotificationApiTests : IDisposable
         DateTime? ReadAt,
         string? ReplyText,
         DateTime? RepliedAt,
+        DateTime? HiddenAt,
         string? Url);
 
     public sealed record NotificationsJson(NotificationJson[] Items, int UnreadCount);
@@ -455,4 +553,6 @@ public sealed class NotificationApiTests : IDisposable
     public sealed record ReadAllJson(int Marked);
 
     public sealed record ClearReadJson(int Deleted);
+
+    public sealed record HiddenJson(int Hidden);
 }

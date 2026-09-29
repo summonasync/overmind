@@ -29,17 +29,22 @@ public sealed class NotificationsService(OvermindDbContext db)
         return notification;
     }
 
-    public async Task<NotificationsOverview> GetOverviewAsync(CancellationToken ct)
+    public async Task<NotificationsOverview> GetOverviewAsync(bool includeHidden, CancellationToken ct)
     {
-        var items = await db.AgentNotifications
-            .AsNoTracking()
+        var notifications = db.AgentNotifications.AsNoTracking();
+        if (!includeHidden)
+        {
+            notifications = notifications.Where(n => n.HiddenAt == null);
+        }
+
+        var items = await notifications
             .OrderByDescending(n => n.CreatedAt)
             .Take(ListCapacity)
             .ToListAsync(ct);
 
         var unreadCount = await db.AgentNotifications
             .AsNoTracking()
-            .CountAsync(n => n.ReadAt == null, ct);
+            .CountAsync(n => n.HiddenAt == null && n.ReadAt == null, ct);
 
         return new NotificationsOverview(items, unreadCount);
     }
@@ -104,6 +109,15 @@ public sealed class NotificationsService(OvermindDbContext db)
         return await db.AgentNotifications
             .Where(n => n.ReadAt != null && n.ReplyText == null)
             .ExecuteDeleteAsync(ct);
+    }
+
+    public async Task<int> ClearConversationsAsync(CancellationToken ct)
+    {
+        return await db.AgentNotifications
+            .Where(n => n.ReplyText != null && n.HiddenAt == null)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(n => n.HiddenAt, DateTime.UtcNow),
+                ct);
     }
 
     public async Task<AgentNotification?> ReplyAsync(Guid id, string text, CancellationToken ct)

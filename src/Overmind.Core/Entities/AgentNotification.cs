@@ -19,6 +19,7 @@ public sealed class AgentNotification
     public DateTime? ReadAt { get; private set; }
     public string? ReplyText { get; private set; }
     public DateTime? RepliedAt { get; private set; }
+    public DateTime? HiddenAt { get; private set; }
 
     public static IReadOnlySet<string> AllowedTabs { get; } =
         new HashSet<string>(["spec", "plan", "tasks", "result"], StringComparer.Ordinal);
@@ -110,6 +111,11 @@ public sealed class AgentNotification
         ReplyText = text.Trim();
         RepliedAt = DateTime.UtcNow;
         ReadAt ??= DateTime.UtcNow;
+    }
+
+    public void Hide()
+    {
+        HiddenAt ??= DateTime.UtcNow;
     }
 
     private static void ThrowIfKindInvalid(NotificationKind kind)
