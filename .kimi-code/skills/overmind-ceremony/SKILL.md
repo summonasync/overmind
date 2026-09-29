@@ -54,13 +54,13 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 | Agent→human notifications with deep links + reply path | `overmind_notify`, `overmind_replies` | 020 |
 | Entries: note/decision/gate/guard (skills via UI only) | `write_entry`, `read_entry`, `update_entry`, `list_entries`, `search` | 002 |
 | Materialization to `BACKLOG/` with clobber guard | automatic after mutations; status in `overmind_onboard` | 033, 054 |
+| Batch planning ops (`planning_upsert_tasks`, atomic all-or-nothing) | `planning_upsert_tasks` | 044; live on 007 (7 task artifacts, one call) |
+| Structured feature dependencies (blockedBy/blocks) | `planning_add_feature_dependency`, `planning_remove_feature_dependency`, `planning_list_feature_dependencies` | 030; wired on 007 |
+| Agent-side import of materialized feature folders | `planning_import_feature` | 058 (OM-7) |
 
 **Does NOT exist yet — never promise, never emulate silently:**
 | Missing | Board ref | Interim rule |
 |---|---|---|
-| Agent-side import of existing BACKLOG folders | 058 (inProgress) | Human imports via Overmind UI |
-| Batch planning ops | 044 (inProgress) | Loop single calls |
-| Structured feature dependencies (blockedBy/blocks) | 030 (draft) | Keep dependencies in `<refs>` sections |
 | Entry tombstones | 029 (draft) | Mark removals as `<removed YYYY-MM-DD — reason>` in bodies |
 | Entries materialization to disk | 051 (draft) | Entries live in DB only — read via MCP |
 | Agent briefing tool | 052 (draft) | Briefing = `overmind_onboard` + `planning_list_features` + `planning_current_task` + `list_entries` |
@@ -112,6 +112,10 @@ Rules:
 - **Tasks**: `planning_upsert_artifact(kind=task, order=N, brief=..., review=light|hard)` —
   body with XML sections `<goal>`, `<scope>`, `<anti-scope>`, `<constraints>`,
   `<acceptance-criteria>` (checkbox items), `<refs>`, `<obstacles>`, `<log>`.
+- **Tasks (batch)**: `planning_upsert_tasks` creates/updates N task artifacts atomically.
+  Known quirk (Overmind bug note `6ee3be0f`, 2026-09): batch-created task bodies register
+  only some XML sections — later `planning_patch_artifact(section=obstacles|refs|...)` can
+  400 with "Section not found". Workaround: stash findings via `planning_append_log`.
 - **Result**: when all tasks are done — `planning_upsert_artifact(kind=result)` summarizing
   outcome, deviations, follow-ups.
 
