@@ -1,7 +1,7 @@
 ---
 feature: 090
 slug: field-nits-batch
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-26
@@ -29,3 +29,7 @@ Close the small items left after the BobHouse 020 and MindlashStudio intake wave
 - 047-api-read-surface-polish — sibling doc-gap batch.
 - Item 3 superseded by 070 (R5) — confirmed live 2026-09-26.
 </refs>
+
+<log>
+- 2026-09-29 [auto] — artifact created → inProgress
+</log>

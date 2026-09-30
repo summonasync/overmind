@@ -1,7 +1,7 @@
 ---
 feature: 087
 slug: attention-page
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-26
@@ -34,4 +34,5 @@ The bell modal is too small to be the single surface for human actions. A dedica
 <log>
 - 2026-09-29 [auto] — artifact created → inProgress
 - 2026-09-29 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-29 [agent] — [agent] by user request in-session (ok в чате, 2026-09-29): result validated, все таски done 13/13 AC, architect light APPROVED-WITH-WARNINGS + fix round, live e2e пройден, код закоммичен 54cca56.
 </log>

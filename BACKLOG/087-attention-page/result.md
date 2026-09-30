@@ -1,8 +1,9 @@
 ---
 feature: 087
 slug: attention-page
-status: draft
+status: validated
 created: 2026-09-29
+validated: 2026-09-29
 ---
 
 # Result 087 — Attention-страница в левом меню: все вопросы и attention агентов в одном месте (не только колокольчик)
