@@ -94,6 +94,7 @@ public static class PlanningFeaturesApi
     internal static async Task<IResult> GetFeature(
         Guid projectId,
         string slug,
+        bool? includeArtifacts,
         OvermindDbContext db,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
@@ -109,6 +110,13 @@ public static class PlanningFeaturesApi
         if (feature is null)
         {
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
+        }
+
+        if (includeArtifacts == false)
+        {
+            return Results.Ok(PlanningMapper.ToFeatureRosterResponse(
+                feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
+                await BlockedStatesAsync(taskDependencies, feature, ct)));
         }
 
         return Results.Ok(PlanningMapper.ToFeatureResponse(

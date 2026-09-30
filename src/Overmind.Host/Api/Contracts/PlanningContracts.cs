@@ -66,6 +66,20 @@ public sealed record PlanningFeatureResponse(
     PlanningFeatureDependencyEntryResponse[] BlockedBy,
     PlanningFeatureDependencyEntryResponse[] Blocks);
 
+public sealed record PlanningFeatureRosterResponse(
+    string Slug,
+    string Title,
+    string Body,
+    PlanningFeatureStatus Status,
+    FeaturePriority Priority,
+    int Version,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    PlanningArtifactRosterItemResponse[] Artifacts,
+    bool IsBlocked,
+    PlanningFeatureDependencyEntryResponse[] BlockedBy,
+    PlanningFeatureDependencyEntryResponse[] Blocks);
+
 public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
 
 public sealed record PlanningFeatureDependencyEntryResponse(
@@ -148,6 +162,7 @@ public sealed record PatchPlanningArtifactRequest(
     string? Content,
     int? AcIndex,
     string? AcText,
+    string? Brief,
     string? LogNote = null,
     string? Source = null);
 

@@ -314,7 +314,223 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         var text = ToolErrorText(response);
         text.ShouldContain("Artifact '99999999-9999-9999-9999-999999999999' was not found");
+        text.ShouldContain("<slug>/T<order>");
+        text.ShouldContain("planning_list_artifacts");
         Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_TaskAlias_ResolvesThroughTheRosterAndReadsTheArtifact()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        Stub.Requests.Single(r =>
+            r.Method == "GET" &&
+            r.Path == $"/api/agent/projects/{Canned.ProjectId}/planning/features/demo-feature/artifacts");
+
+        var read = Stub.Requests.Single(r =>
+            r.Method == "GET" && r.Path.StartsWith("/api/agent/planning/artifacts/", StringComparison.Ordinal));
+        read.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}");
+
+        response["result"]!["isError"].ShouldBeNull();
+        Canned.ToolResultText(response).ShouldContain("# Wire the API");
+    }
+
+    [Theory]
+    [InlineData("demo-feature/S", "66666666-6666-6666-6666-666666666666")]
+    [InlineData("demo-feature/P", "77777777-7777-7777-7777-777777777777")]
+    public async Task PlanningReadArtifact_DocumentAlias_MatchesTheSingleKindIgnoringOrder(string alias, string expectedId)
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = alias
+        });
+
+        FindRequest("GET", $"/api/agent/planning/artifacts/{expectedId}");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_ResultAlias_ResolvesAgainstARosterWithAResult()
+    {
+        Stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts",
+            """{"artifacts":[{"artifactId":"55555555-5555-5555-5555-555555555555","kind":"result","status":"done","version":1,"order":0,"updatedAt":"2026-09-10T07:30:00Z"}]}""");
+
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/R"
+        });
+
+        FindRequest("GET", "/api/agent/planning/artifacts/55555555-5555-5555-5555-555555555555");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningAppendLog_TaskAlias_PostsToTheResolvedArtifact()
+    {
+        var response = await Driver.CallToolAsync("planning_append_log", new JsonObject
+        {
+            ["note"] = "aliased progress note",
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T1"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/log", StringComparison.Ordinal));
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskOneId}/log");
+        JsonNode.Parse(request.Body)!["note"]!.GetValue<string>().ShouldBe("aliased progress note");
+
+        Canned.ToolResultText(response).ShouldContain("log line recorded on the board");
+    }
+
+    [Fact]
+    public async Task PlanningSetStatus_Alias_MovesTheResolvedArtifact()
+    {
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["status"] = "review",
+            ["logNote"] = "aliased status move",
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/status", StringComparison.Ordinal));
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/status");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_TaskAlias_PatchesTheResolvedArtifact()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["section"] = "goal",
+            ["content"] = "<goal>\nAliased edit.\n</goal>",
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/patch");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_UnknownTaskOrder_ListsThePresentKindOrderPairs()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T9"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("No artifact matches alias 'demo-feature/T9'");
+        text.ShouldContain("spec/0, plan/0, task/1, task/2");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Path.StartsWith("/api/agent/planning/artifacts/", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_ResultAliasWithoutAResult_ListsThePresentKindOrderPairs()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/R"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("No artifact matches alias 'demo-feature/R'");
+        text.ShouldContain("spec/0, plan/0, task/1, task/2");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Path.StartsWith("/api/agent/planning/artifacts/", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("T3")]
+    [InlineData("demo-feature/")]
+    [InlineData("demo-feature/X5")]
+    [InlineData("demo-feature/T3/extra")]
+    [InlineData("demo-feature/T")]
+    [InlineData("demo-feature/T3x")]
+    public async Task PlanningReadArtifact_MalformedAlias_RejectedWithoutHttpCall(string alias)
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = alias
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain($"Invalid artifact alias '{alias}'");
+        text.ShouldContain("<slug>/T<order>");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_AliasWithArtifactId_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        ToolErrorText(response).ShouldContain("not both");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_AliasWithoutProjectId_RejectedNamingTheRequirement()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["alias"] = "demo-feature/T2"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("alias requires projectId");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningSetStatus_NeitherArtifactIdNorAlias_RejectedClientSide()
+    {
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["status"] = "review",
+            ["logNote"] = "orphan probe"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Provide artifactId, or alias together with projectId");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/status", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpsertArtifactAndCurrentTaskDescriptions_CarryTheNoPlanReviewRule()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        foreach (var name in new[] { "planning_upsert_artifact", "planning_current_task" })
+        {
+            var description = tools[name]!["description"]!.GetValue<string>();
+            description.ShouldContain("Without a validated plan the feature never auto-promotes to review");
+            description.ShouldContain("flip it manually via planning_set_feature_status");
+        }
     }
 
     [Fact]
@@ -338,7 +554,38 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldBe(
-            "Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only.");
+            "Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.");
+    }
+
+    [Fact]
+    public async Task PlanningReadFeature_IncludeArtifactsFalse_IsForwardedInTheRequestUrl()
+    {
+        await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["includeArtifacts"] = false
+        });
+
+        var request = FindRequest(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}");
+        ParseQuery(request.Query)["includeArtifacts"].ShouldBe("false");
+    }
+
+    [Fact]
+    public async Task PlanningReadFeature_WithoutFlag_SendsNoQuery()
+    {
+        await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        FindRequest(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}")
+            .Query.ShouldBeEmpty();
     }
 
     [Fact]

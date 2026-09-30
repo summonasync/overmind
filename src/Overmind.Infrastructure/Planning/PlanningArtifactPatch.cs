@@ -5,4 +5,5 @@ public sealed record PlanningArtifactPatch(
     string? Content = null,
     int? TickIndex = null,
     string? TickText = null,
+    string? Brief = null,
     string? LogNote = null);

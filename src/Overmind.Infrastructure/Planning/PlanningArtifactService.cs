@@ -340,8 +340,11 @@ public sealed class PlanningArtifactService
 
         var wantsSection = patch.Section is not null;
         var wantsTick = patch.TickIndex.HasValue || patch.TickText is not null;
+        var wantsBrief = patch.Brief is not null;
+        var actionCount = (wantsSection ? 1 : 0) + (wantsTick ? 1 : 0) + (wantsBrief ? 1 : 0);
 
-        if (wantsSection == wantsTick || (wantsSection && patch.Content is null))
+        if (actionCount != 1 || (wantsSection && patch.Content is null) ||
+            (wantsBrief && string.IsNullOrWhiteSpace(patch.Brief)))
         {
             throw PlanningException.InvalidPatchRequest();
         }
@@ -355,6 +358,15 @@ public sealed class PlanningArtifactService
             if (wantsSection)
             {
                 artifact.PatchSection(patch.Section!, patch.Content!, patch.LogNote, source);
+            }
+            else if (wantsBrief)
+            {
+                if (artifact.Kind != PlanningArtifactKind.Task)
+                {
+                    throw PlanningException.BriefNotAllowedForKind(artifact.Kind);
+                }
+
+                artifact.SetBrief(patch.Brief);
             }
             else
             {

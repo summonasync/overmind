@@ -1834,6 +1834,86 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_SetBrief_UpdatesTheTaskWithoutVersionBumpOrBodyChange()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var body = "# Task\n\n<goal>\nWire it.\n</goal>\n";
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = body,
+            Brief = "first brief"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "set_brief", Brief = "second brief" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["artifactId", "kind", "section", "version", "bodyChars", "status", "lastLogLine"]);
+
+        var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        patch!.ArtifactId.ShouldBe(task.Id);
+        patch.Kind.ShouldBe("task");
+        patch.Section.ShouldBe("brief");
+        patch.Version.ShouldBe(1);
+        patch.BodyChars.ShouldBe(body.Length);
+        patch.LastLogLine.ShouldBe(string.Empty);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Brief.ShouldBe("second brief");
+        artifact.Body.ShouldBe(body);
+        artifact.Version.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("spec")]
+    [InlineData("plan")]
+    [InlineData("result")]
+    public async Task Patch_SetBrief_OnNonTaskKind_Returns400BriefNotAllowedForKind(string kind)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var artifact = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = kind, Body = "# Doc" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(artifact.Id),
+            new { Op = "set_brief", Brief = "not allowed" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("BriefNotAllowedForKind");
+    }
+
+    [Theory]
+    [InlineData("replace_section", "goal", "New goal.", null)]
+    [InlineData("tick_ac", null, null, 0)]
+    public async Task Patch_BriefCombinedWithAnotherAction_Returns400InvalidPatchRequest(
+        string op, string? section, string? content, int? acIndex)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = op, Section = section, Content = content, AcIndex = acIndex, Brief = "stray brief" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidPatchRequest");
+        problem.Detail!.ShouldContain("or a brief");
+    }
+
+    [Fact]
     public async Task Read_ReturnsMetadataAndFullBodyByDefault()
     {
         var project = await CreateProjectAsync();
@@ -1929,7 +2009,9 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("Not Found");
-        problem.Detail.ShouldBe($"Artifact '{missing}' was not found.");
+        problem.Detail.ShouldStartWith($"Artifact '{missing}' was not found.");
+        problem.Detail.ShouldContain("<slug>/T<order>");
+        problem.Detail.ShouldContain("planning_list_artifacts");
     }
 
     [Fact]

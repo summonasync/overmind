@@ -145,7 +145,7 @@ public static class PlanningArtifactsApi
 
         if (artifact is null)
         {
-            return HttpErrors.NotFound($"Artifact '{id}' was not found.");
+            return ArtifactNotFound(id);
         }
 
         return Results.Ok(PlanningMapper.ToArtifactResponse(artifact));
@@ -157,7 +157,7 @@ public static class PlanningArtifactsApi
         var exists = await db.PlanningArtifacts.AnyAsync(a => a.Id == id, ct);
         if (!exists)
         {
-            return HttpErrors.NotFound($"Artifact '{id}' was not found.");
+            return ArtifactNotFound(id);
         }
 
         var versions = await db.PlanningArtifactVersions
@@ -185,7 +185,7 @@ public static class PlanningArtifactsApi
         var artifact = await db.PlanningArtifacts.FirstOrDefaultAsync(a => a.Id == id, ct);
         if (artifact is null)
         {
-            return HttpErrors.NotFound($"Artifact '{id}' was not found.");
+            return ArtifactNotFound(id);
         }
 
         try
@@ -298,6 +298,9 @@ public static class PlanningArtifactsApi
             return PlanningErrors.Map(ex);
         }
     }
+
+    private static IResult ArtifactNotFound(Guid id) =>
+        HttpErrors.NotFound($"Artifact '{id}' was not found. {PlanningException.ArtifactNotFoundHint}");
 
     private static async Task<PlanningFeature> ResolveFeatureOrThrow(
         OvermindDbContext db, Guid projectId, string slug, CancellationToken ct)

@@ -175,7 +175,8 @@ public static class AgentPlanningApi
 
         if (target is null)
         {
-            return HttpErrors.NotFound($"Artifact '{id}' was not found.");
+            return HttpErrors.NotFound(
+                $"Artifact '{id}' was not found. {PlanningException.ArtifactNotFoundHint}");
         }
 
         if (!asMigrated && await policy.ResolveValidationGateAsync(target.ProjectId, ct))
@@ -211,7 +212,8 @@ public static class AgentPlanningApi
 
         if (artifact is null)
         {
-            return HttpErrors.NotFound($"Artifact '{id}' was not found.");
+            return HttpErrors.NotFound(
+                $"Artifact '{id}' was not found. {PlanningException.ArtifactNotFoundHint}");
         }
 
         var requested = RequestedSections(sections);
@@ -573,10 +575,12 @@ public static class AgentPlanningApi
 
         try
         {
+            var op = request.Op!.Trim();
             var result = await service.PatchAsync(
                 id,
                 new PlanningArtifactPatch(
-                    request.Section, request.Content, request.AcIndex, request.AcText, request.LogNote),
+                    request.Section, request.Content, request.AcIndex, request.AcText,
+                    request.Brief, request.LogNote),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
             var artifact = result.Artifact;
@@ -584,14 +588,14 @@ public static class AgentPlanningApi
             return Results.Ok(new PlanningArtifactPatchResponse(
                 artifact.Id,
                 artifact.Kind,
-                request.Op!.Trim() == "tick_ac" ? "acceptance-criteria" : request.Section!,
+                op == "tick_ac" ? "acceptance-criteria" : op == "set_brief" ? "brief" : request.Section!,
                 artifact.Version,
                 artifact.Body.Length,
                 artifact.Status,
                 artifact.LastLogLine,
                 artifact.StatusChanged,
                 artifact.FeatureStatusChanged,
-                request.Op!.Trim() == "tick_ac" ? result.AlreadyTicked : null));
+                op == "tick_ac" ? result.AlreadyTicked : null));
         }
         catch (PlanningException ex)
         {
@@ -609,9 +613,19 @@ public static class AgentPlanningApi
     {
         var op = request.Op?.Trim();
 
+        if (op == "set_brief")
+        {
+            return request.Section is null &&
+                   request.Content is null &&
+                   request.AcIndex is null &&
+                   request.AcText is null &&
+                   !string.IsNullOrWhiteSpace(request.Brief);
+        }
+
         if (op == "replace_section")
         {
-            return !string.IsNullOrWhiteSpace(request.Section) &&
+            return request.Brief is null &&
+                   !string.IsNullOrWhiteSpace(request.Section) &&
                    !string.IsNullOrWhiteSpace(request.Content) &&
                    request.AcIndex is null &&
                    request.AcText is null;
@@ -619,7 +633,8 @@ public static class AgentPlanningApi
 
         if (op == "tick_ac")
         {
-            return request.Section is null &&
+            return request.Brief is null &&
+                   request.Section is null &&
                    request.Content is null &&
                    (request.AcIndex is not null) != (request.AcText is not null) &&
                    (request.AcText is null || !string.IsNullOrWhiteSpace(request.AcText));

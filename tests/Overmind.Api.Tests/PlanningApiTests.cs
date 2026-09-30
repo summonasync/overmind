@@ -184,6 +184,28 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task ArtifactRoutes_UnknownId_DetailCarriesTheAliasHint()
+    {
+        var missing = Guid.NewGuid();
+
+        var read = await _client.GetAsync($"/api/planning/artifacts/{missing}");
+        var versions = await _client.GetAsync($"/api/planning/artifacts/{missing}/versions");
+        var update = await _client.PutAsJsonAsync($"/api/planning/artifacts/{missing}", new { Body = "# v2" });
+
+        read.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        versions.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        update.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        foreach (var response in new[] { read, versions, update })
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+            problem!.Detail!.ShouldStartWith($"Artifact '{missing}' was not found.");
+            problem.Detail.ShouldContain("<slug>/T<order>");
+            problem.Detail.ShouldContain("planning_list_artifacts");
+        }
+    }
+
+    [Fact]
     public async Task GetFeature_WithArtifacts_ReturnsOrdered()
     {
         var project = await CreateProjectAsync();
@@ -203,6 +225,104 @@ public sealed class PlanningApiTests : IDisposable
         response!.Artifacts.Length.ShouldBe(2);
         response.Artifacts[0].Kind.ShouldBe("spec");
         response.Artifacts[1].Kind.ShouldBe("task");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?includeArtifacts=true")]
+    public async Task GetFeature_Default_ReturnsTheFullContractUnchanged(string query)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec" });
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec v2", LogNote = "spec note" });
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task body", Brief = "Wire the endpoints" });
+
+        var raw = await _client.GetStringAsync(
+            $"/api/projects/{project.Id}/planning/features/feat{query}");
+        var feature = JsonDocument.Parse(raw).RootElement;
+
+        feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
+            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks"]);
+
+        var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();
+        artifacts.Length.ShouldBe(2);
+
+        var spec = artifacts[0];
+        spec.GetProperty("kind").GetString().ShouldBe("spec");
+        spec.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
+            ["id", "kind", "status", "review", "order", "body", "brief", "frozenAt", "version", "createdAt", "updatedAt", "log"]);
+        spec.GetProperty("body").GetString().ShouldStartWith("# Spec v2");
+        spec.GetProperty("log").EnumerateArray().Single().GetProperty("text").GetString().ShouldBe("spec note");
+
+        var task = artifacts[1];
+        task.GetProperty("kind").GetString().ShouldBe("task");
+        task.GetProperty("body").GetString().ShouldBe("task body");
+        task.GetProperty("brief").GetString().ShouldBe("Wire the endpoints");
+    }
+
+    [Fact]
+    public async Task GetFeature_IncludeArtifactsFalse_ReturnsRosterWithoutBodiesOrLogs()
+    {
+        var project = await CreateProjectAsync();
+        var featureResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Slug = "feat", Title = "Feature", Body = "UNIQUE_FEATURE_MARKER" });
+        featureResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var specResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec UNIQUE_BODY_MARKER", LogNote = "spec note" });
+        var spec = await specResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        var taskResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new
+            {
+                Kind = "task",
+                Body = "# Wire\n\n<acceptance-criteria>\n- [x] one\n- [ ] two\n</acceptance-criteria>",
+                Brief = "Wire the endpoints"
+            });
+        var task = await taskResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var raw = await _client.GetStringAsync(
+            $"/api/projects/{project.Id}/planning/features/feat?includeArtifacts=false");
+
+        raw.ShouldNotContain("UNIQUE_BODY_MARKER");
+        raw.ShouldNotContain("spec note");
+        var feature = JsonDocument.Parse(raw).RootElement;
+        feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
+            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks"]);
+        feature.GetProperty("body").GetString().ShouldContain("UNIQUE_FEATURE_MARKER");
+
+        var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();
+        artifacts.Length.ShouldBe(2);
+        artifacts.ShouldNotContain(a =>
+            a.EnumerateObject().Any(p =>
+                p.Name == "body" || p.Name == "log" || p.Name == "frozenAt" || p.Name == "createdAt"));
+
+        var rosterSpec = artifacts[0];
+        rosterSpec.GetProperty("kind").GetString().ShouldBe("spec");
+        rosterSpec.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
+            ["artifactId", "kind", "status", "version", "order", "updatedAt"]);
+        rosterSpec.GetProperty("artifactId").GetString().ShouldBe(spec!.Id.ToString());
+
+        var rosterTask = artifacts[1];
+        rosterTask.GetProperty("kind").GetString().ShouldBe("task");
+        rosterTask.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
+            ["artifactId", "kind", "status", "version", "order", "updatedAt", "review", "acTicked", "acTotal", "brief"]);
+        rosterTask.GetProperty("artifactId").GetString().ShouldBe(task!.Id.ToString());
+        rosterTask.GetProperty("status").GetString().ShouldBe("todo");
+        rosterTask.GetProperty("order").GetInt32().ShouldBe(0);
+        rosterTask.GetProperty("acTicked").GetInt32().ShouldBe(1);
+        rosterTask.GetProperty("acTotal").GetInt32().ShouldBe(2);
+        rosterTask.GetProperty("brief").GetString().ShouldBe("Wire the endpoints");
     }
 
     [Fact]

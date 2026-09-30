@@ -110,6 +110,29 @@ public static class PlanningMapper
             [.. dependencies.Blocks.Select(ToDependencyEntryResponse)]);
     }
 
+    public static PlanningFeatureRosterResponse ToFeatureRosterResponse(
+        PlanningFeature feature, FeatureDependencies dependencies,
+        IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
+    {
+        return new PlanningFeatureRosterResponse(
+            feature.Slug,
+            feature.Title,
+            feature.Body,
+            feature.Status,
+            feature.Priority,
+            feature.Version,
+            feature.CreatedAt,
+            feature.UpdatedAt,
+            feature.Artifacts
+                .OrderBy(a => a.Kind)
+                .ThenBy(a => a.Order)
+                .Select(a => ToRosterItem(a, blockedStates))
+                .ToArray(),
+            dependencies.BlockedBy.Any(entry => !entry.Closed),
+            [.. dependencies.BlockedBy.Select(ToDependencyEntryResponse)],
+            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)]);
+    }
+
     public static PlanningFeatureDependenciesResponse ToDependenciesResponse(FeatureDependencies dependencies)
     {
         return new PlanningFeatureDependenciesResponse(

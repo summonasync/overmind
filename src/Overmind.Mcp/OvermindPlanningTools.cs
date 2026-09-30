@@ -54,7 +54,7 @@ public sealed class OvermindPlanningTools
         "logNote is required for feature status moves: the note is recorded as a dated line in the feature log and carries the provenance (who asked for the move).";
 
     private const string PatchShapeError =
-        "A patch carries either a section with its replacement content, or an acceptance-criteria tick (acIndex or exact acText) — not both and not neither.";
+        "A patch carries exactly one of: a section with its replacement content, an acceptance-criteria tick (acIndex or exact acText), or a task brief — not both and not neither.";
 
     private const string MigratedNoteRequired =
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
@@ -62,6 +62,20 @@ public sealed class OvermindPlanningTools
     private const string DoorSource = "agent";
 
     private const int SkipHeadLimit = 5;
+
+    private const string ArtifactAliasDescription =
+        "Optional alias instead of artifactId: '<slug>/T<order>' addresses a task by its order, " +
+        "'<slug>/S', '<slug>/P' and '<slug>/R' address the single spec, plan or result. " +
+        "Resolved against the feature roster, so it needs projectId, and it is mutually exclusive with artifactId.";
+
+    private const string AliasArtifactIdConflict =
+        "Pass alias or artifactId, not both — alias resolves to the artifact id against the feature roster.";
+
+    private const string AliasRequiresProjectId =
+        "alias requires projectId: the alias is resolved against that project's feature roster.";
+
+    private const string ArtifactAddressRequired =
+        "Provide artifactId, or alias together with projectId — nothing addresses the artifact.";
 
     private readonly OvermindApiClient _api;
 
@@ -78,14 +92,20 @@ public sealed class OvermindPlanningTools
         Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only.")]
+    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
     public async Task<JsonElement> ReadFeature(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
-        CancellationToken ct)
+        [Description("Set false for the cheap read: the feature body plus a roster summary (kind, order, status, brief for tasks, acTicked/acTotal) without artifact bodies or log lines. Default true returns every artifact in full.")] bool? includeArtifacts = null,
+        CancellationToken ct = default)
     {
-        var feature = await Guarded(() => _api.GetAsync(
-            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}", ct));
+        var url = $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}";
+        if (includeArtifacts == false)
+        {
+            url += "?includeArtifacts=false";
+        }
+
+        var feature = await Guarded(() => _api.GetAsync(url, ct));
         return KeepReviewOnlyOnTaskArtifacts(feature);
     }
 
@@ -109,11 +129,14 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
     [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only.")]
     public async Task<JsonElement> ReadArtifact(
-        [Description("Id of the artifact to read, as handed out by planning_current_task.")] Guid artifactId,
+        [Description("Id of the artifact to read, as handed out by planning_current_task; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections.")] string? sections = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)
     {
-        var url = $"/api/agent/planning/artifacts/{artifactId}";
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
+        var url = $"/api/agent/planning/artifacts/{id}";
         if (!string.IsNullOrWhiteSpace(sections))
         {
             url += $"?sections={Uri.EscapeDataString(sections)}";
@@ -158,7 +181,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_current_task", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 2: the current task of a feature, or a stop/held/empty state whose reason leads the payload. Obey a STOP line — ask the user, do not work around it. A feature with unclosed blockers returns a stop state naming them — reads stay open, task issuance does not. Held means every remaining task sits in review; the all-done states tell you to write the result artifact, validate a drafted one, or close the feature after validation; task payloads carry soft spec/plan warnings (never STOP).")]
+    [Description("Planning ceremony, step 2: the current task of a feature, or a stop/held/empty state whose reason leads the payload. Obey a STOP line — ask the user, do not work around it. A feature with unclosed blockers returns a stop state naming them — reads stay open, task issuance does not. Held means every remaining task sits in review; the all-done states tell you to write the result artifact, validate a drafted one, or close the feature after validation; task payloads carry soft spec/plan warnings (never STOP). Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
     public async Task<JsonElement> CurrentTask(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to take the current task from.")] string slug,
@@ -199,7 +222,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). Features cannot be deleted or archived via MCP — the UI owns feature deletion. Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
@@ -380,9 +403,11 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_set_status", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3: moves an artifact to a new status and records why in the artifact log. Allowed statuses per kind — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the terminal for documents; result has no done. The logNote is mandatory on every move — an unexplained status move is rejected. Each move appends one line to the artifact's <log> section, shaped '- YYYY-MM-DD [agent] — <logNote>'. Transitions are free-form: any allowed status of the kind can be reached from any current status — there is no enforced sequence. A task closed done with unticked acceptance-criteria items still moves, and the response carries a non-blocking warning counting them.")]
     public async Task<JsonElement> SetStatus(
-        [Description("Id of the artifact to move.")] Guid artifactId,
         [Description("New status: draft, validated, todo, inProgress, review, done or blocked.")] string status,
         [Description("Required note recorded as a dated log line explaining the status move.")] string logNote,
+        [Description("Id of the artifact to move; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(logNote))
@@ -390,9 +415,10 @@ public sealed class OvermindPlanningTools
             throw new McpException(StatusNoteRequired);
         }
 
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
         var normalized = NormalizeStatus(status);
         var payload = await Guarded(() => _api.PostAsync(
-            $"/api/agent/planning/artifacts/{artifactId}/status",
+            $"/api/agent/planning/artifacts/{id}/status",
             new { status = normalized, logNote },
             ct));
 
@@ -601,12 +627,15 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
     [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body — the cheapest write: one dated line, body is not resent. Use it to report progress between status moves.")]
     public async Task<JsonElement> AppendLog(
-        [Description("Id of the artifact to append the note to.")] Guid artifactId,
         [Description("Note text recorded as a dated log line.")] string note,
+        [Description("Id of the artifact to append the note to; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)
     {
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
         var echo = await Guarded(() => _api.PostAsync(
-            $"/api/agent/planning/artifacts/{artifactId}/log",
+            $"/api/agent/planning/artifacts/{id}/log",
             new { note, source = DoorSource },
             ct));
         return MutationEcho(echo, "id");
@@ -615,20 +644,24 @@ public sealed class OvermindPlanningTools
     private const string AlreadyTickedNoChangeText = "already ticked — no change";
 
     [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
-    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched. Give section plus content to replace one section, or acIndex/acText to tick one acceptance-criteria item; never both. A missing section or item is a 400 that lists what is available. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Ticking an already-ticked item is a successful no-op rendering 'already ticked — no change'; a replaced section is a real change every time. Editing a validated artifact requires a logNote.")]
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched. Give section plus content to replace one section, acIndex/acText to tick one acceptance-criteria item, or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. A missing section or item is a 400 that lists what is available. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Ticking an already-ticked item is a successful no-op rendering 'already ticked — no change'; a replaced section is a real change every time. Editing a validated artifact requires a logNote.")]
     public async Task<CallToolResult> PatchArtifact(
-        [Description("Id of the artifact to patch.")] Guid artifactId,
+        [Description("Id of the artifact to patch; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Name of the XML section to replace, e.g. goal.")] string? section = null,
         [Description("Full replacement content of the section.")] string? content = null,
         [Description("Index of the acceptance-criteria item to tick, as listed by the 400 diagnostics.")] int? acIndex = null,
         [Description("Exact text of the acceptance-criteria item to tick, without the checkbox marker.")] string? acText = null,
+        [Description("One-line brief to set on a task artifact, max 500 chars; task-only — spec/plan/result reject it; no version bump.")] string? brief = null,
         [Description("Change note recorded in the artifact log; required when the artifact is validated.")] string? logNote = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)
     {
-        var op = PatchOpOf(section, content, acIndex, acText);
+        var op = PatchOpOf(section, content, acIndex, acText, brief);
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
         var patch = await Guarded(() => _api.PostAsync(
-            $"/api/agent/planning/artifacts/{artifactId}/patch",
-            new { op, section, content, acIndex, acText, logNote, source = DoorSource },
+            $"/api/agent/planning/artifacts/{id}/patch",
+            new { op, section, content, acIndex, acText, brief, logNote, source = DoorSource },
             ct));
 
         if (patch.TryGetProperty("alreadyTicked", out var alreadyTicked) &&
@@ -1020,10 +1053,144 @@ public sealed class OvermindPlanningTools
         return normalized;
     }
 
-    private static string PatchOpOf(string? section, string? content, int? acIndex, string? acText)
+    private sealed record ArtifactAlias(string FeatureSlug, string Kind, int? Order);
+
+    private async Task<Guid> AddressArtifactAsync(Guid? artifactId, Guid? projectId, string? alias, CancellationToken ct)
+    {
+        if (alias is null)
+        {
+            return artifactId ?? throw new McpException(ArtifactAddressRequired);
+        }
+
+        if (artifactId is not null)
+        {
+            throw new McpException(AliasArtifactIdConflict);
+        }
+
+        if (projectId is null)
+        {
+            throw new McpException(AliasRequiresProjectId);
+        }
+
+        var parsed = ParseArtifactAlias(alias);
+        var roster = await Guarded(() => _api.GetAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(parsed.FeatureSlug)}/artifacts",
+            ct));
+        return ResolveRosterMatch(roster, parsed, alias.Trim());
+    }
+
+    private static Guid ResolveRosterMatch(JsonElement roster, ArtifactAlias wanted, string alias)
+    {
+        var present = new List<string>();
+        if (roster.ValueKind == JsonValueKind.Object &&
+            roster.TryGetProperty("artifacts", out var artifacts) &&
+            artifacts.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var artifact in artifacts.EnumerateArray())
+            {
+                var kind = artifact.TryGetProperty("kind", out var kindNode) &&
+                    kindNode.ValueKind == JsonValueKind.String
+                    ? kindNode.GetString()
+                    : null;
+                var order = artifact.TryGetProperty("order", out var orderNode) &&
+                    orderNode.ValueKind == JsonValueKind.Number
+                    ? (int?)orderNode.GetInt32()
+                    : null;
+
+                if (kind is null)
+                {
+                    continue;
+                }
+
+                present.Add($"{kind}/{order ?? 0}");
+
+                if (!kind.Equals(wanted.Kind, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (wanted.Order is { } expected && order != expected)
+                {
+                    continue;
+                }
+
+                if (artifact.TryGetProperty("artifactId", out var id) &&
+                    id.ValueKind == JsonValueKind.String &&
+                    Guid.TryParse(id.GetString(), out var artifactId))
+                {
+                    return artifactId;
+                }
+            }
+        }
+
+        throw new McpException(
+            $"No artifact matches alias '{alias}'. Present kind/order pairs: " +
+            $"{(present.Count == 0 ? "(none)" : string.Join(", ", present))}.");
+    }
+
+    private static ArtifactAlias ParseArtifactAlias(string alias)
+    {
+        var trimmed = alias.Trim();
+        var separator = trimmed.IndexOf('/');
+        if (separator <= 0 || separator == trimmed.Length - 1)
+        {
+            throw new McpException(InvalidAliasText(alias));
+        }
+
+        var slug = trimmed[..separator];
+        var suffix = trimmed[(separator + 1)..];
+
+        if (suffix.Length == 1)
+        {
+            var kind = char.ToUpperInvariant(suffix[0]) switch
+            {
+                'S' => "spec",
+                'P' => "plan",
+                'R' => "result",
+                _ => null
+            };
+
+            if (kind is not null)
+            {
+                return new ArtifactAlias(slug, kind, null);
+            }
+        }
+        else if (suffix[0] is 't' or 'T' && TryParseTaskOrder(suffix[1..]) is { } order)
+        {
+            return new ArtifactAlias(slug, "task", order);
+        }
+
+        throw new McpException(InvalidAliasText(alias));
+    }
+
+    private static int? TryParseTaskOrder(string digits) =>
+        digits.Length > 0 && digits.All(char.IsAsciiDigit) && int.TryParse(digits, out var order)
+            ? (int?)order
+            : null;
+
+    private static string InvalidAliasText(string alias) =>
+        $"Invalid artifact alias '{alias}'. Expected '<slug>/T<order>' for a task by order, " +
+        "or '<slug>/S', '<slug>/P', '<slug>/R' for the single spec, plan or result.";
+
+    private static string PatchOpOf(string? section, string? content, int? acIndex, string? acText, string? brief)
     {
         var wantsSection = section is not null || content is not null;
         var wantsTick = acIndex is not null || acText is not null;
+
+        if (brief is not null)
+        {
+            if (wantsSection || wantsTick)
+            {
+                throw new McpException(PatchShapeError);
+            }
+
+            if (string.IsNullOrWhiteSpace(brief) || brief.Contains('\r') || brief.Contains('\n') || brief.Length > 500)
+            {
+                throw new McpException("Setting a brief needs non-blank single-line text of at most 500 chars.");
+            }
+
+            return "set_brief";
+        }
 
         if (wantsSection == wantsTick)
         {

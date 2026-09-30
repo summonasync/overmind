@@ -19,8 +19,14 @@ public sealed class PlanningException : Exception
     public static PlanningException MissingFeature(string identifier) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingFeature, $"Feature '{identifier}' was not found.");
 
+    public const string ArtifactNotFoundHint =
+        "Addressing by slug? The MCP tools accept artifact aliases: '<slug>/T<order>' for a task, " +
+        "'<slug>/S', '<slug>/P', '<slug>/R' for the single spec, plan or result — " +
+        "planning_list_artifacts lists the feature's actual kind/order pairs.";
+
     public static PlanningException MissingArtifact(Guid artifactId) =>
-        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingArtifact, $"Artifact '{artifactId}' was not found.");
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingArtifact,
+            $"Artifact '{artifactId}' was not found. {ArtifactNotFoundHint}");
 
     public static PlanningException DuplicateSlug(string slug) =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateSlug, $"A feature with slug '{slug}' already exists in this project.");
@@ -108,7 +114,7 @@ public sealed class PlanningException : Exception
 
     public static PlanningException InvalidPatchRequest() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidPatchRequest,
-            "A patch must carry either a section with its replacement content or an acceptance-criteria tick (index or exact text), but not both.");
+            "A patch must carry exactly one of: a section with its replacement content, an acceptance-criteria tick (index or exact text), or a brief — combinations are rejected.");
 
     public static PlanningException PatchLogSectionNotReplaceable() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchLogSectionNotReplaceable,
