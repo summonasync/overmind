@@ -24,7 +24,6 @@ public static class PlanningMapper
             TaskTotal(artifacts),
             TaskDone(artifacts),
             feature.UpdatedAt,
-            feature.IsCurrent,
             isBlocked,
             feature.QueuePosition);
     }
@@ -48,8 +47,7 @@ public static class PlanningMapper
             TaskTotal(artifacts),
             Readiness(feature),
             blockers,
-            blockers.Length > 0,
-            feature.IsCurrent);
+            blockers.Length > 0);
     }
 
     public static int Readiness(PlanningFeature feature) =>

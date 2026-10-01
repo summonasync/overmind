@@ -38,7 +38,6 @@ public sealed class OnboardApiTests : IDisposable
         onboard.ProjectName.ShouldBe(name);
         onboard.Created.ShouldBeFalse();
         onboard.Board.CountsByStatus.ShouldBeEmpty();
-        onboard.Board.CurrentSlug.ShouldBeNull();
     }
 
     [Fact]
@@ -105,7 +104,6 @@ public sealed class OnboardApiTests : IDisposable
         onboard.ProjectName.ShouldBe(name);
         onboard.Created.ShouldBeTrue();
         onboard.Board.CountsByStatus.ShouldBeEmpty();
-        onboard.Board.CurrentSlug.ShouldBeNull();
     }
 
     [Fact]
@@ -180,18 +178,16 @@ public sealed class OnboardApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Onboard_BoardSummary_CountsByStatusAndPinnedCurrentSlug()
+    public async Task Onboard_BoardSummary_CountsByStatus()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
         var project = await CreateProjectAsync(name, TestPaths.DiskPath(name));
         await CreateFeatureAsync(project.Id, "feat-a", "Feature A");
         await CreateFeatureAsync(project.Id, "feat-b", "Feature B");
         await UpdateFeatureStatusAsync(project.Id, "feat-b", "InProgress");
-        await PinFeatureAsync(project.Id, "feat-b");
 
         var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
 
-        onboard.Board.CurrentSlug.ShouldBe("feat-b");
         onboard.Board.CountsByStatus.Count.ShouldBe(2);
         onboard.Board.CountsByStatus["draft"].ShouldBe(1);
         onboard.Board.CountsByStatus["inProgress"].ShouldBe(1);
@@ -513,15 +509,6 @@ public sealed class OnboardApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private async Task PinFeatureAsync(Guid projectId, string slug)
-    {
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/planning/features/{slug}/current",
-            new { IsCurrent = true });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
     private async Task SetWorkflowAsync(Guid projectId, string? materialization = null, string? validation = null)
     {
         var response = await _client.PutAsJsonAsync(
@@ -537,7 +524,7 @@ public sealed class OnboardApiTests : IDisposable
         Guid ProjectId, string ProjectName, bool Created, OnboardBoardJson Board,
         OnboardMaterializationJson Materialization, OnboardValidationJson Validation, string Quickstart);
 
-    public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus, string? CurrentSlug);
+    public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus);
 
     public sealed record OnboardMaterializationJson(
         string Strategy, string TargetDir, string Trigger, DateTime? LastSuccess, DateTime? LastAttempt,

@@ -339,7 +339,7 @@ public sealed class FeatureDependencyApiTests : IDisposable
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
         string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt,
-        bool IsCurrent, bool IsBlocked);
+        bool IsBlocked);
 
     public sealed record FeatureJson(
         string Slug, string Title, string Body, string Status, string Priority,

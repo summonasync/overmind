@@ -425,29 +425,6 @@ public sealed class OvermindPlanningTools
         return MutationEcho(payload, "id");
     }
 
-    [McpServerTool(Name = "planning_set_current", Destructive = false, Idempotent = true)]
-    [Description("Pins a feature as the current one on the planning board, or unpins it. Pinning one feature unpins any other — at most one feature is current per project. Pinning a feature with unclosed blockers is refused with a STOP error naming them; the human door in the Overmind UI is never blocked.")]
-    public async Task<CallToolResult> SetCurrent(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
-        [Description("Slug of the feature to pin or unpin, as shown on the board.")] string slug,
-        [Description("True to pin the feature as current; false to unpin it.")] bool isCurrent,
-        CancellationToken ct = default)
-    {
-        try
-        {
-            var echo = await Guarded(() => _api.SetPlanningFeatureCurrent(projectId, slug, isCurrent, ct));
-            return EchoResult(MutationEcho(echo, "slug"));
-        }
-        catch (McpException ex) when (ex.Message.StartsWith("STOP:", StringComparison.Ordinal))
-        {
-            return new CallToolResult
-            {
-                IsError = true,
-                Content = [new TextContentBlock { Text = ex.Message }]
-            };
-        }
-    }
-
     [McpServerTool(Name = "planning_set_feature_status", Destructive = false, Idempotent = false)]
     [Description("Moves a feature status on the planning board — only on the user's explicit request in the current session, never on the agent's own initiative. Allowed targets: done (close, from any non-done status) or inProgress (review rollback); every other manual move belongs to the human door in the Overmind UI. The logNote is mandatory, lands as a dated line in the feature log, and must carry the provenance, e.g. 'by user request in-session'.")]
     public async Task<JsonElement> SetFeatureStatus(
@@ -578,7 +555,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_list_feature_dependencies", ReadOnly = true, Idempotent = true)]
-    [Description("Lists the dependency graph of a feature: blockedBy (features this one waits for) and blocks (features waiting on this one), each entry carrying slug, status and closed — a dependency closes when its blocker reaches done or review. An unclosed blockedBy stops planning_current_task and planning_set_current.")]
+    [Description("Lists the dependency graph of a feature: blockedBy (features this one waits for) and blocks (features waiting on this one), each entry carrying slug, status and closed — a dependency closes when its blocker reaches done or review. An unclosed blockedBy stops planning_current_task.")]
     public Task<JsonElement> ListFeatureDependencies(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
@@ -606,7 +583,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_remove_feature_dependency", Destructive = false, Idempotent = false)]
-    [Description("Removes one blocker from a feature; removing a link that is not there is a no-op. Lifting the last unclosed blocker unblocks the feature for planning_current_task and planning_set_current.")]
+    [Description("Removes one blocker from a feature; removing a link that is not there is a no-op. Lifting the last unclosed blocker unblocks the feature for planning_current_task.")]
     public Task<JsonElement> RemoveFeatureDependency(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature whose blocker is removed.")] string slug,

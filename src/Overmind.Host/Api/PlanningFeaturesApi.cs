@@ -19,7 +19,6 @@ public static class PlanningFeaturesApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", GetFeature);
         group.MapPut("/projects/{projectId:guid}/planning/features/{slug}", UpdateFeature);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}", DeleteFeature);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
         group.MapPost("/projects/{projectId:guid}/planning/queue/reorder", PlanningQueueApi.Reorder);
 
         return group;
@@ -224,28 +223,6 @@ public static class PlanningFeaturesApi
         }
 
         return Results.NoContent();
-    }
-
-    internal static async Task<IResult> SetCurrent(
-        Guid projectId,
-        string slug,
-        SetPlanningFeatureCurrentRequest request,
-        PlanningFeatureService service,
-        OvermindDbContext db,
-        CancellationToken ct)
-    {
-        try
-        {
-            await service.SetCurrentAsync(projectId, slug, request.IsCurrent, ct);
-        }
-        catch (PlanningException ex)
-        {
-            return PlanningErrors.Map(ex);
-        }
-
-        var feature = await db.PlanningFeatures
-            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
-        return Results.Ok(PlanningMapper.ToMutationResponse(feature!));
     }
 
     private static async Task<PlanningFeature?> LoadFeatureWithArtifacts(

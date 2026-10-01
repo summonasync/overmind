@@ -138,17 +138,12 @@ public static class OnboardApi
     private static async Task<OnboardBoardSummary> BuildBoardSummaryAsync(
         OvermindDbContext db, Guid projectId, CancellationToken ct)
     {
-        var features = await db.PlanningFeatures
+        var countsByStatus = await db.PlanningFeatures
             .Where(f => f.ProjectId == projectId)
-            .Select(f => new { f.Status, f.Slug, f.IsCurrent })
-            .ToListAsync(ct);
-
-        var countsByStatus = features
             .GroupBy(f => f.Status)
-            .ToDictionary(g => g.Key, g => g.Count());
-        var currentSlug = features.FirstOrDefault(f => f.IsCurrent)?.Slug;
+            .ToDictionaryAsync(g => g.Key, g => g.Count(), ct);
 
-        return new OnboardBoardSummary(countsByStatus, currentSlug);
+        return new OnboardBoardSummary(countsByStatus);
     }
 
     private static async Task<string> ResolveUniqueNameAsync(

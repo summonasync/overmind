@@ -299,7 +299,7 @@ public sealed class PlanningApiTests : IDisposable
         var feature = JsonDocument.Parse(raw).RootElement;
         feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
             ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks"]);
-        feature.GetProperty("body").GetString().ShouldContain("UNIQUE_FEATURE_MARKER");
+        feature.GetProperty("body").GetString()!.ShouldContain("UNIQUE_FEATURE_MARKER");
 
         var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();
         artifacts.Length.ShouldBe(2);
@@ -961,26 +961,6 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task SetCurrent_Pin_ReturnsCompactFeatureEcho()
-    {
-        var project = await CreateProjectAsync();
-        await CreateFeature(project.Id, "feat-a", "Feature A");
-
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/feat-a/current",
-            new { IsCurrent = true });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var raw = await response.Content.ReadAsStringAsync();
-        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
-            .ShouldBe(["slug", "status", "version", "lastLogLine"]);
-        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
-        echo!.Slug.ShouldBe("feat-a");
-        echo.Status.ShouldBe("draft");
-        echo.Version.ShouldBe(1);
-    }
-
-    [Fact]
     public async Task AppendLog_HttpDoor_WritesTheUiMarker()
     {
         var project = await CreateProjectAsync();
@@ -1105,84 +1085,6 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task SetCurrent_Pin_Returns200AndBoardShowsIsCurrent()
-    {
-        var project = await CreateProjectAsync();
-        await CreateFeature(project.Id, "feat-a", "Feature A");
-
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/feat-a/current",
-            new { IsCurrent = true });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
-        echo!.Slug.ShouldBe("feat-a");
-
-        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
-            $"/api/projects/{project.Id}/planning/features", JsonOptions);
-        board.ShouldNotBeNull();
-        board!.Single().IsCurrent.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task SetCurrent_PinSecondFeature_UnpinsFirst()
-    {
-        var project = await CreateProjectAsync();
-        await CreateFeature(project.Id, "feat-a", "Feature A");
-        await CreateFeature(project.Id, "feat-b", "Feature B");
-
-        await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/feat-a/current",
-            new { IsCurrent = true });
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/feat-b/current",
-            new { IsCurrent = true });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
-            $"/api/projects/{project.Id}/planning/features", JsonOptions);
-        board.ShouldNotBeNull();
-        board!.Single(f => f.Slug == "feat-a").IsCurrent.ShouldBeFalse();
-        board.Single(f => f.Slug == "feat-b").IsCurrent.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task SetCurrent_Unpin_ClearsBoardFlag()
-    {
-        var project = await CreateProjectAsync();
-        await CreateFeature(project.Id, "feat-a", "Feature A");
-
-        await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/feat-a/current",
-            new { IsCurrent = true });
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/feat-a/current",
-            new { IsCurrent = false });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
-            $"/api/projects/{project.Id}/planning/features", JsonOptions);
-        board.ShouldNotBeNull();
-        board!.Single().IsCurrent.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task SetCurrent_UnknownSlug_Returns404()
-    {
-        var project = await CreateProjectAsync();
-
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{project.Id}/planning/features/nonexistent/current",
-            new { IsCurrent = true });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Title.ShouldBe("Not Found");
-    }
-
-    [Fact]
     public async Task DeleteFeature_Returns204Then404()
     {
         var project = await CreateProjectAsync();
@@ -1268,8 +1170,7 @@ public sealed class PlanningApiTests : IDisposable
 
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
-        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt,
-        bool IsCurrent);
+        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt);
 
     public sealed record FeatureJson(
         string Slug, string Title, string Body, string Status, string Priority,

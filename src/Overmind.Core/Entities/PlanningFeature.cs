@@ -13,8 +13,11 @@ public sealed class PlanningFeature
     public string Body { get; private set; } = string.Empty;
     public PlanningFeatureStatus Status { get; private set; }
     public FeaturePriority Priority { get; private set; } = FeaturePriority.P2;
-    public bool IsCurrent { get; private set; }
     public int QueuePosition { get; private set; }
+    public string? ClaimedByAlias { get; private set; }
+    public string? ClaimedByVendor { get; private set; }
+    public DateTime? ClaimedAt { get; private set; }
+    public Guid? ClaimSessionId { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -54,7 +57,6 @@ public sealed class PlanningFeature
         int version,
         DateTime createdAt,
         DateTime updatedAt,
-        bool isCurrent,
         FeaturePriority priority = FeaturePriority.P2)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
@@ -68,7 +70,6 @@ public sealed class PlanningFeature
             Title = title.Trim(),
             Body = body,
             Status = status,
-            IsCurrent = isCurrent,
             Priority = priority,
             Version = version,
             CreatedAt = createdAt,
@@ -142,9 +143,34 @@ public sealed class PlanningFeature
         SetStatus(status);
     }
 
-    public void SetCurrent(bool isCurrent)
+    public void Claim(string alias, string vendor, Guid sessionId, DateTime now)
     {
-        IsCurrent = isCurrent;
+        if (Status == PlanningFeatureStatus.Done)
+        {
+            throw PlanningException.FeatureClaimRefused(Slug);
+        }
+
+        ClaimedByAlias = NormalizeIdentity(alias);
+        ClaimedByVendor = NormalizeIdentity(vendor);
+        ClaimedAt = now;
+        ClaimSessionId = sessionId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Release()
+    {
+        ClaimedByAlias = null;
+        ClaimedByVendor = null;
+        ClaimedAt = null;
+        ClaimSessionId = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AppendLog(string note, PlanningLogSource source)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(note);
+
+        Body = PlanningLog.Append(Body, note, source: source);
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -205,5 +231,22 @@ public sealed class PlanningFeature
         return projectFeatures
             .Where(f => f.BlockedBy.Any(d => d.BlockedByFeatureId == Id))
             .ToList();
+    }
+
+    private static string NormalizeIdentity(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("Claim identity must not be empty.");
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Length > AgentSession.MaxIdentityLength)
+        {
+            throw new ArgumentException(
+                $"Claim identity '{trimmed}' exceeds the {AgentSession.MaxIdentityLength} character cap.");
+        }
+
+        return trimmed;
     }
 }

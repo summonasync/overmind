@@ -35,5 +35,7 @@ public enum PlanningFailureCode
     BlockedByOrderUnknown,
     BlockedBySelfReference,
     BlockedByDuplicateOrder,
-    BlockedByNotAllowedForKind
+    BlockedByNotAllowedForKind,
+    FeatureClaimHeld,
+    FeatureClaimRefused
 }

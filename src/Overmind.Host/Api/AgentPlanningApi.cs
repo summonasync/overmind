@@ -32,6 +32,9 @@ public static class AgentPlanningApi
         CancellationToken ct) =>
         PlanningArtifactsApi.AppendLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
 
+    private static RouteHandlerBuilder LockToClaim(this RouteHandlerBuilder builder) =>
+        builder.AddEndpointFilter(ClaimLockFilter.Instance);
+
     public static RouteGroupBuilder MapAgentPlanningApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/agent");
@@ -41,23 +44,22 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
         group.MapGet("/projects/{projectId:guid}/planning/task-queue", PlanningQueueApi.QueueRead);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/current", SetCurrent);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove).LockToClaim();
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add);
-        group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", CreateArtifact);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add).LockToClaim();
+        group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", CreateArtifact).LockToClaim();
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningFeaturesApi.ListArtifacts);
-        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts/tasks", PlanningArtifactsApi.CreateTasks);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts/tasks", PlanningArtifactsApi.CreateTasks).LockToClaim();
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
-        group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus);
-        group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog);
-        group.MapPost("/planning/artifacts/{id:guid}/patch", Patch);
+        group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus).LockToClaim();
+        group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog).LockToClaim();
+        group.MapPost("/planning/artifacts/{id:guid}/patch", Patch).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/import", ImportFeature);
         group.MapGet("/projects/{projectId:guid}/planning/materialization-status", MaterializationStatus);
-        group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
+        group.MapPost("/planning/artifacts/{id:guid}/validate", Validate).LockToClaim();
 
         return group;
     }
@@ -360,35 +362,6 @@ public static class AgentPlanningApi
         {
             return PlanningErrors.Map(ex);
         }
-    }
-
-    internal static async Task<IResult> SetCurrent(
-        Guid projectId,
-        string slug,
-        SetPlanningFeatureCurrentRequest request,
-        PlanningFeatureService service,
-        FeatureDependencyService dependencies,
-        OvermindDbContext db,
-        CancellationToken ct)
-    {
-        if (request.IsCurrent)
-        {
-            try
-            {
-                var openBlockers = await dependencies.OpenBlockersAsync(projectId, slug, ct);
-                if (openBlockers.Count > 0)
-                {
-                    return PlanningErrors.Map(PlanningException.FeatureBlocked(
-                        slug, [.. openBlockers.Select(FormatBlocker)]));
-                }
-            }
-            catch (PlanningException ex)
-            {
-                return PlanningErrors.Map(ex);
-            }
-        }
-
-        return await PlanningFeaturesApi.SetCurrent(projectId, slug, request, service, db, ct);
     }
 
     internal static async Task<IResult> Current(

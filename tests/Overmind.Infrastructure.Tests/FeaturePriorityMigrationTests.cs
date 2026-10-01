@@ -25,7 +25,7 @@ public sealed class FeaturePriorityMigrationTests : IDisposable
                 var slug = $"legacy-{i}";
                 var title = $"Legacy {i}";
                 db.Database.ExecuteSql(
-                    $"INSERT INTO PlanningFeatures (Id, ProjectId, Slug, Title, Body, Status, IsCurrent, Version, CreatedAt, UpdatedAt) VALUES ({Guid.NewGuid()}, {projectId}, {slug}, {title}, 'body', 0, 0, 1, {DateTime.UtcNow}, {DateTime.UtcNow})");
+                    $"INSERT INTO PlanningFeatures (Id, ProjectId, Slug, Title, Body, Status, Version, CreatedAt, UpdatedAt) VALUES ({Guid.NewGuid()}, {projectId}, {slug}, {title}, 'body', 0, 1, {DateTime.UtcNow}, {DateTime.UtcNow})");
             }
 
             db.Database.Migrate();

@@ -45,6 +45,20 @@ catch (Exception ex)
     return 2;
 }
 
+var lifecycle = new AgentSessionLifecycle(http);
+Guid adapterSessionId = Guid.Empty;
+try
+{
+    adapterSessionId = await lifecycle.RegisterAsync(
+        AgentIdentity.ResolveAlias(), AgentIdentity.ResolveVendor(), CancellationToken.None);
+    AdapterSession.Id = adapterSessionId;
+    Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[overmind-mcp] WARN: session registration failed, claims will be refused: {ex.Message}");
+}
+
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
 // source-generated JsonContext with its own options snapshot; the default HTML-safe encoder
 // bloats Cyrillic payloads ~4x (FEATURELIST/overmind-features-2026-09-23.md OM-1). The read-only
@@ -112,5 +126,9 @@ builder.Services
     .WithResources<OvermindPlanningResources>()
     .WithPrompts<SessionBootstrapPrompt>();
 
-await builder.Build().RunAsync();
+var app = builder.Build();
+app.Services.GetRequiredService<IHostApplicationLifetime>()
+    .ApplicationStopping.Register(() => lifecycle.MarkEnded(AdapterSession.Id));
+
+await app.RunAsync();
 return 0;

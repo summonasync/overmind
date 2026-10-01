@@ -102,7 +102,7 @@ public sealed class PlanningFeatureQueuePositionMigrationTests : IDisposable
         OvermindDbContext db, Guid projectId, string slug, FeaturePriority priority, DateTime createdAt)
     {
         db.Database.ExecuteSql(
-            $"INSERT INTO PlanningFeatures (Id, ProjectId, Slug, Title, Body, Status, Priority, IsCurrent, Version, CreatedAt, UpdatedAt) VALUES ({Guid.NewGuid()}, {projectId}, {slug}, {slug}, 'body', 0, {(int)priority}, 0, 1, {createdAt}, {createdAt})");
+            $"INSERT INTO PlanningFeatures (Id, ProjectId, Slug, Title, Body, Status, Priority, Version, CreatedAt, UpdatedAt) VALUES ({Guid.NewGuid()}, {projectId}, {slug}, {slug}, 'body', 0, {(int)priority}, 1, {createdAt}, {createdAt})");
     }
 
     private OvermindDbContext CreateContext()

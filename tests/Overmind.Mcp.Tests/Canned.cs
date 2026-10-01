@@ -199,9 +199,6 @@ public static class Canned
         {"state":"stop","feature":{"slug":"tasks-gated","title":"Tasks gated","status":"inProgress"},"artifact":null,"reason":"STOP: every actionable task is blocked by unclosed tasks: task 3 blocked by [1, 2]. Reads stay open; task issuance stops until every blocker closes (done or review)."}
         """;
 
-    public const string PlanningSetCurrentBlockedJson =
-        """{"title":"FeatureBlocked","detail":"STOP: feature 'blocked-feature' is blocked by unclosed features: gate-locked (ready), draft-one (draft). Pinning is refused — work a blocker first or ask the user to clear the link.","status":409}""";
-
     public const string PlanningDependenciesJson =
         """
         {"slug":"demo-feature","blockedBy":[{"slug":"gate-locked","status":"ready","closed":false},{"slug":"shipped-one","status":"done","closed":true}],"blocks":[{"slug":"waiting-on-demo","status":"draft","closed":false}]}

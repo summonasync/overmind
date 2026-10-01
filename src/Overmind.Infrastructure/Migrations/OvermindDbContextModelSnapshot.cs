@@ -66,6 +66,36 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("AgentNotifications");
                 });
 
+            modelBuilder.Entity("Overmind.Core.AgentSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Vendor")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AgentSessions");
+                });
+
             modelBuilder.Entity("Overmind.Core.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -273,13 +303,22 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<Guid?>("ClaimSessionId")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsCurrent")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClaimedByAlias")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClaimedByVendor")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Priority")
                         .ValueGeneratedOnAdd()
@@ -387,6 +426,14 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentNamingRules")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ClaimStaleThresholdMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(15);
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");

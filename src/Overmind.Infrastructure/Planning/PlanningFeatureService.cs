@@ -95,6 +95,7 @@ public sealed partial class PlanningFeatureService
                 status.Value,
                 $"status moved to '{StatusText(status.Value)}' via ui",
                 PlanningLogSource.Ui);
+            ReleaseClaimOnDone(feature, PlanningLogSource.Ui);
         }
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -180,11 +181,23 @@ public sealed partial class PlanningFeatureService
             }
 
             feature.SetStatus(status, logNote, PlanningLogSource.Agent);
+            ReleaseClaimOnDone(feature, PlanningLogSource.Agent);
         }
 
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
         return feature;
+    }
+
+    private static void ReleaseClaimOnDone(PlanningFeature feature, PlanningLogSource source)
+    {
+        if (feature.Status != PlanningFeatureStatus.Done || feature.ClaimSessionId is null)
+        {
+            return;
+        }
+
+        feature.Release();
+        feature.AppendLog("claim released on done-close", source);
     }
 
     public async Task DeleteAsync(Guid projectId, string slug, CancellationToken ct = default)
@@ -209,42 +222,6 @@ public sealed partial class PlanningFeatureService
         _db.PlanningFeatures.Remove(feature);
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
-    }
-
-    public async Task<PlanningFeature> SetCurrentAsync(
-        Guid projectId, string slug, bool isCurrent, CancellationToken ct = default)
-    {
-        var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);
-        if (!projectExists)
-        {
-            throw PlanningException.MissingProject(projectId);
-        }
-
-        var feature = await _db.PlanningFeatures
-            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
-
-        if (feature is null)
-        {
-            throw PlanningException.MissingFeature(slug);
-        }
-
-        if (isCurrent)
-        {
-            var previouslyCurrent = await _db.PlanningFeatures
-                .Where(f => f.ProjectId == projectId && f.Id != feature.Id && f.IsCurrent)
-                .ToListAsync(ct);
-
-            foreach (var other in previouslyCurrent)
-            {
-                other.SetCurrent(false);
-            }
-        }
-
-        feature.SetCurrent(isCurrent);
-
-        await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
-        return feature;
     }
 
     public async Task<BacklogFeatureImportResult> ImportAsync(
@@ -273,7 +250,7 @@ public sealed partial class PlanningFeatureService
         {
             feature = PlanningFeature.Restore(
                 projectId, import.Slug, import.Title, import.Body,
-                import.Status, import.Version, import.CreatedAt, import.CreatedAt, isCurrent: false,
+                import.Status, import.Version, import.CreatedAt, import.CreatedAt,
                 priority: import.Priority);
             _db.PlanningFeatures.Add(feature);
             await AssignQueueTailAsync(feature, ct);

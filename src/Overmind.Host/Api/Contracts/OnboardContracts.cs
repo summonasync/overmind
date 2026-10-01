@@ -5,8 +5,7 @@ namespace Overmind.Host.Api.Contracts;
 public sealed record OnboardRequest(string Cwd, Guid? ProjectId);
 
 public sealed record OnboardBoardSummary(
-    IReadOnlyDictionary<PlanningFeatureStatus, int> CountsByStatus,
-    string? CurrentSlug);
+    IReadOnlyDictionary<PlanningFeatureStatus, int> CountsByStatus);
 
 public sealed record OnboardMaterializationBlock(
     string Strategy,

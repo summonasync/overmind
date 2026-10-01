@@ -34,7 +34,6 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_append_log",
             "planning_patch_artifact",
             "planning_validate",
-            "planning_set_current",
             "planning_set_feature_status",
             "planning_task_queue",
             "planning_update_feature",
@@ -72,8 +71,6 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
-        tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unpins");
-        tools["planning_set_current"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
         tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("logNote is mandatory");
@@ -1214,77 +1211,6 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task PlanningSetCurrent_PostsIsCurrentToAgentRoute()
-    {
-        var response = await Driver.CallToolAsync("planning_set_current", new JsonObject
-        {
-            ["projectId"] = Canned.ProjectId.ToString(),
-            ["slug"] = Canned.PlanningSlug,
-            ["isCurrent"] = true
-        });
-
-        var request = Stub.Requests.Single(r =>
-            r.Method == "POST" && r.Path.EndsWith("/current", StringComparison.Ordinal));
-        request.Path.ShouldBe(
-            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current");
-        JsonNode.Parse(request.Body)!["isCurrent"]!.GetValue<bool>().ShouldBeTrue();
-
-        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
-        echo.AsObject().Select(p => p.Key).ToArray()
-            .ShouldBe(["id", "version", "status", "lastLogLine"]);
-        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
-        echo["version"]!.GetValue<int>().ShouldBe(5);
-        echo["status"]!.GetValue<string>().ShouldBe("inProgress");
-        echo["lastLogLine"]!.GetValue<string>().ShouldBe("feature mutation recorded on the board");
-    }
-
-    [Fact]
-    public async Task PlanningSetCurrent_UnknownFeature_ApiErrorSurfacesAsToolError()
-    {
-        Stub.Route(
-            "POST",
-            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current",
-            404,
-            Canned.PlanningFeatureNotFoundJson);
-
-        var response = await Driver.CallToolAsync("planning_set_current", new JsonObject
-        {
-            ["projectId"] = Canned.ProjectId.ToString(),
-            ["slug"] = Canned.PlanningSlug,
-            ["isCurrent"] = true
-        });
-
-        var text = ToolErrorText(response);
-        text.ShouldContain("Feature 'demo-feature' was not found");
-        Driver.HasExited.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task PlanningSetCurrent_BlockedFeature_RefusedWithStopDiagnosticsNamingBlockers()
-    {
-        Stub.Route(
-            "POST",
-            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current",
-            409,
-            Canned.PlanningSetCurrentBlockedJson);
-
-        var response = await Driver.CallToolAsync("planning_set_current", new JsonObject
-        {
-            ["projectId"] = Canned.ProjectId.ToString(),
-            ["slug"] = Canned.PlanningSlug,
-            ["isCurrent"] = true
-        });
-
-        var text = ToolErrorText(response);
-        text.ShouldStartWith("STOP:");
-        text.ShouldContain("is blocked by unclosed features");
-        text.ShouldContain("gate-locked (ready)");
-        text.ShouldContain("Pinning is refused");
-        text.ShouldNotContain("overmind API returned");
-        Driver.HasExited.ShouldBeFalse();
-    }
-
-    [Fact]
     public async Task PlanningCurrentTask_BlockedFeature_StopStateLeadsWithReasonNamingUnclosedBlockers()
     {
         var response = await Driver.CallToolAsync("planning_current_task", new JsonObject
@@ -2091,15 +2017,6 @@ public class PlanningToolContractTests : McpSessionTestBase
         })))!.AsObject();
         validate.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
 
-        var setCurrent = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_set_current", new JsonObject
-        {
-            ["projectId"] = Canned.ProjectId.ToString(),
-            ["slug"] = Canned.PlanningSlug,
-            ["isCurrent"] = true
-        })))!.AsObject();
-        setCurrent.Select(p => p.Key).ToArray().ShouldBe(["id", "version", "status", "lastLogLine"]);
-        setCurrent["id"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
-
         var setFeatureStatus = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync("planning_set_feature_status", new JsonObject
         {
             ["projectId"] = Canned.ProjectId.ToString(),
@@ -2273,7 +2190,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("awaits human validation");
         text.ShouldContain("approve it in the Overmind UI");
 
-        Stub.Requests.Count(r => r.Path.StartsWith("/api/agent/", StringComparison.Ordinal)).ShouldBe(1);
+        Stub.Requests.Count(r => r.Path.StartsWith("/api/agent/", StringComparison.Ordinal)
+                && !r.Path.StartsWith("/api/agent/sessions", StringComparison.Ordinal))
+            .ShouldBe(1);
         Driver.HasExited.ShouldBeFalse();
     }
 

@@ -86,7 +86,6 @@ public sealed class PlanningQueueApiTests : IDisposable
         await CreateTaskAsync(project.Id, "q-decorated");
 
         await AddDependencyAsync(project.Id, "q-decorated", "q-blocker");
-        await SetCurrentAsync(project.Id, "q-decorated");
 
         var queue = await GetQueueAsync(project.Id);
         var decorated = queue!.Items.Single(i => i.Slug == "q-decorated");
@@ -95,7 +94,6 @@ public sealed class PlanningQueueApiTests : IDisposable
         decorated.TaskDone.ShouldBe(0);
         decorated.BlockedBy.ShouldBe(["q-blocker"]);
         decorated.IsBlocked.ShouldBeTrue();
-        decorated.IsCurrent.ShouldBeTrue();
 
         var blocker = queue.Items.Single(i => i.Slug == "q-blocker");
         blocker.BlockedBy.ShouldNotBeNull();
@@ -500,14 +498,6 @@ public sealed class PlanningQueueApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private async Task SetCurrentAsync(Guid projectId, string slug)
-    {
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/planning/features/{slug}/current",
-            new { IsCurrent = true });
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
     private async Task BringToStatusAsync(Guid projectId, string slug, string target)
     {
         string[] path = target switch
@@ -566,14 +556,14 @@ public sealed class PlanningQueueApiTests : IDisposable
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
         string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt,
-        bool IsCurrent, bool IsBlocked, int QueuePosition);
+        bool IsBlocked, int QueuePosition);
 
     public sealed record QueueResponseJson(QueueItemJson[] Items);
 
     public sealed record QueueItemJson(
         string Slug, string? Number, string Title, string Priority, string Status, int QueuePosition,
         string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal, int Readiness,
-        string[] BlockedBy, bool IsBlocked, bool IsCurrent);
+        string[] BlockedBy, bool IsBlocked);
 
     public sealed record ArtifactJson(Guid Id);
 

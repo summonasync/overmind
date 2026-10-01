@@ -36,6 +36,45 @@ public class ProjectTests
     {
         Should.Throw<ArgumentException>(() => Project.Create("n", diskPath));
     }
+
+    [Fact]
+    public void Create_ClaimSettings_DefaultToFifteenMinutesAndNoNamingRules()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.ClaimStaleThresholdMinutes.ShouldBe(Project.DefaultClaimStaleThresholdMinutes);
+        project.AgentNamingRules.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetClaimSettings_StoresThresholdAndTrimsNamingRules()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetClaimSettings(30, "  aliases are crew names  ");
+
+        project.ClaimStaleThresholdMinutes.ShouldBe(30);
+        project.AgentNamingRules.ShouldBe("aliases are crew names");
+    }
+
+    [Fact]
+    public void SetClaimSettings_ZeroThresholdAndBlankRules_AreStoredAsOffAndNull()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetClaimSettings(0, "   ");
+
+        project.ClaimStaleThresholdMinutes.ShouldBe(0);
+        project.AgentNamingRules.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetClaimSettings_NegativeThreshold_Throws()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        Should.Throw<ArgumentOutOfRangeException>(() => project.SetClaimSettings(-1, null));
+    }
 }
 
 public class SkillFileTests

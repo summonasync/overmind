@@ -14,7 +14,6 @@ public sealed record PlanningFeatureBoardItem(
     int TaskTotal,
     int TaskDone,
     DateTime UpdatedAt,
-    bool IsCurrent,
     bool IsBlocked,
     int QueuePosition);
 
@@ -31,8 +30,7 @@ public sealed record PlanningQueueItem(
     int TaskTotal,
     int Readiness,
     string[] BlockedBy,
-    bool IsBlocked,
-    bool IsCurrent);
+    bool IsBlocked);
 
 public sealed record PlanningQueueResponse(PlanningQueueItem[] Items);
 
@@ -47,8 +45,6 @@ public sealed record UpdatePlanningFeatureRequest(
 
 public sealed record UpdatePlanningFeatureByAgentRequest(
     string? Title, string? Body, string? Priority, string LogNote);
-
-public sealed record SetPlanningFeatureCurrentRequest(bool IsCurrent);
 
 public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
 

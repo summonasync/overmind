@@ -101,6 +101,8 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
 
     var app = builder.Build();
 
+    app.UseMiddleware<SessionTouchMiddleware>();
+
     var webRootOverride = Environment.GetEnvironmentVariable("OVERMIND_WEB_ROOT");
     var webRoot = webRootOverride is { Length: > 0 } ? webRootOverride : ResolveWebRoot();
 
@@ -162,6 +164,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapPlanningWorkflowApi();
     app.MapPlanningMaterializationApi();
     app.MapAgentPlanningApi();
+    app.MapAgentSessionsApi();
     app.MapFrontmatterKeysApi();
     app.MapOnboardApi();
     app.MapTagsApi();

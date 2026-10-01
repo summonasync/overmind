@@ -4,6 +4,7 @@ public sealed class Project
 {
     private const int MaxMaterializationErrorLength = 512;
     private const int MaxMaterializationSkipHead = 5;
+    public const int DefaultClaimStaleThresholdMinutes = 15;
 
     private Project()
     {
@@ -23,6 +24,8 @@ public sealed class Project
     public string? LastMaterializationRun { get; private set; }
     public int? LastMaterializationSkipCount { get; private set; }
     public string? LastMaterializationSkipHead { get; private set; }
+    public int ClaimStaleThresholdMinutes { get; private set; } = DefaultClaimStaleThresholdMinutes;
+    public string? AgentNamingRules { get; private set; }
 
     public static Project Create(string name, string diskPath, string description = "")
     {
@@ -45,6 +48,13 @@ public sealed class Project
     {
         PlanningMaterialization = materialization;
         RequireHumanValidation = validation;
+    }
+
+    public void SetClaimSettings(int staleThresholdMinutes, string? namingRules)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(staleThresholdMinutes);
+        ClaimStaleThresholdMinutes = staleThresholdMinutes;
+        AgentNamingRules = string.IsNullOrWhiteSpace(namingRules) ? null : namingRules.Trim();
     }
 
     public void MarkMaterialized(IReadOnlyList<PlanningMaterializationSkip> skips)

@@ -22,7 +22,7 @@ public sealed class PlanningFeatureDependencyMigrationTests : IDisposable
             db.Database.ExecuteSql(
                 $"INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt) VALUES ({projectId}, 'legacy', '/tmp/legacy', '', {DateTime.UtcNow})");
             db.Database.ExecuteSql(
-                $"INSERT INTO PlanningFeatures (Id, ProjectId, Slug, Title, Body, Status, IsCurrent, Version, CreatedAt, UpdatedAt) VALUES ({legacyFeatureId}, {projectId}, '001-legacy', 'Legacy', 'body', 0, 0, 1, {DateTime.UtcNow}, {DateTime.UtcNow})");
+                $"INSERT INTO PlanningFeatures (Id, ProjectId, Slug, Title, Body, Status, Version, CreatedAt, UpdatedAt) VALUES ({legacyFeatureId}, {projectId}, '001-legacy', 'Legacy', 'body', 0, 1, {DateTime.UtcNow}, {DateTime.UtcNow})");
 
             db.Database.Migrate();
         }

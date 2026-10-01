@@ -186,15 +186,14 @@ public class PlanningFeatureTests
             PlanningFeatureStatus.Ready,
             version: 3,
             createdAt: createdAt,
-            updatedAt: updatedAt,
-            isCurrent: false);
+            updatedAt: updatedAt);
 
         feature.ProjectId.ShouldBe(ProjectId);
         feature.Slug.ShouldBe("001-auth");
         feature.Title.ShouldBe("Auth flow");
         feature.Body.ShouldBe("imported body");
         feature.Status.ShouldBe(PlanningFeatureStatus.Ready);
-        feature.IsCurrent.ShouldBeFalse();
+        feature.ClaimSessionId.ShouldBeNull();
         feature.Priority.ShouldBe(FeaturePriority.P2);
         feature.Version.ShouldBe(3);
         feature.CreatedAt.ShouldBe(createdAt);
@@ -202,47 +201,84 @@ public class PlanningFeatureTests
     }
 
     [Fact]
-    public void Restore_PinnedFeature_RoundTripsCurrentFlag()
-    {
-        var createdAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        var feature = PlanningFeature.Restore(
-            ProjectId,
-            "001-auth",
-            "Auth flow",
-            "imported body",
-            PlanningFeatureStatus.InProgress,
-            version: 2,
-            createdAt: createdAt,
-            updatedAt: createdAt,
-            isCurrent: true);
-
-        feature.IsCurrent.ShouldBeTrue();
-        feature.Status.ShouldBe(PlanningFeatureStatus.InProgress);
-    }
-
-    [Fact]
-    public void SetCurrent_Pin_SetsFlagAndTouchesUpdatedAt()
+    public void Claim_SetsClaimFieldsAndTouchesUpdatedAt()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
         var before = feature.UpdatedAt;
+        var sessionId = Guid.NewGuid();
+        var now = new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
 
-        feature.SetCurrent(true);
+        feature.Claim("Dan", "qwen", sessionId, now);
 
-        feature.IsCurrent.ShouldBeTrue();
+        feature.ClaimedByAlias.ShouldBe("Dan");
+        feature.ClaimedByVendor.ShouldBe("qwen");
+        feature.ClaimSessionId.ShouldBe(sessionId);
+        feature.ClaimedAt.ShouldBe(now);
+        feature.Status.ShouldBe(PlanningFeatureStatus.Draft);
         feature.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
     }
 
     [Fact]
-    public void SetCurrent_Unpin_ClearsFlagAndLeavesStatusUntouched()
+    public void Claim_DoneFeature_Throws()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
-        feature.SetCurrent(true);
+        feature.SetStatus(PlanningFeatureStatus.Done);
 
-        feature.SetCurrent(false);
+        var ex = Should.Throw<PlanningException>(() =>
+            feature.Claim("Dan", "qwen", Guid.NewGuid(), DateTime.UtcNow));
 
-        feature.IsCurrent.ShouldBeFalse();
-        feature.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimRefused);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void Claim_EmptyAlias_Throws(string? alias)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        Should.Throw<ArgumentException>(() =>
+            feature.Claim(alias!, "qwen", Guid.NewGuid(), DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Claim_IdentityOverCap_Throws()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        Should.Throw<ArgumentException>(() =>
+            feature.Claim(new string('a', 33), "qwen", Guid.NewGuid(), DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Release_ClearsClaimFields()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("Dan", "qwen", Guid.NewGuid(), DateTime.UtcNow);
+
+        feature.Release();
+
+        feature.ClaimedByAlias.ShouldBeNull();
+        feature.ClaimedByVendor.ShouldBeNull();
+        feature.ClaimedAt.ShouldBeNull();
+        feature.ClaimSessionId.ShouldBeNull();
+    }
+
+    [Fact]
+    public void AppendLog_AppendsLineWithoutBumpingVersion()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetStatus(PlanningFeatureStatus.Ready);
+
+        feature.AppendLog("claim recorded", PlanningLogSource.Agent);
+
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.ShouldHaveSingleItem();
+        lines[0].Text.ShouldBe("claim recorded");
+        lines[0].Source.ShouldBe(PlanningLogSource.Agent);
+        feature.Version.ShouldBe(1);
     }
 
     [Fact]

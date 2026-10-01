@@ -170,6 +170,17 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BlockedByNotAllowedForKind,
             $"blockedBy is only allowed on task artifacts; kind '{kind}' cannot carry one.");
 
+    public static PlanningException FeatureClaimHeld(
+        string slug, string alias, string vendor, AgentSessionLiveness liveness) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureClaimHeld,
+            $"Feature '{slug}': claim held by {alias} by {vendor} ({liveness.ToString().ToLowerInvariant()}). " +
+            "The claim acts as a mutation lock: reads stay open, mutations and unclaims belong to the holder session — " +
+            "the human door in the Overmind UI is never locked.");
+
+    public static PlanningException FeatureClaimRefused(string slug) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureClaimRefused,
+            $"Feature '{slug}' is done; claims are refused — reopen it first if work resumes.");
+
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
 }

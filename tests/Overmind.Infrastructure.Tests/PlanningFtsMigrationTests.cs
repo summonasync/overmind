@@ -9,6 +9,15 @@ namespace Overmind.Infrastructure.Tests;
 public sealed class PlanningFtsMigrationTests : IDisposable
 {
     private const string PreFtsHead = "20260924143916_AddProjectLastMaterializationSkips";
+    private const string PreAgentClaims = "20260929000000_AddNotificationHiddenAt";
+
+    private const string FtsTriggersInSchema =
+        """
+        SELECT COUNT(*) FROM sqlite_master
+        WHERE type = 'trigger' AND name IN (
+            'trg_feature_fts_insert', 'trg_feature_fts_update', 'trg_feature_fts_delete',
+            'trg_artifact_fts_insert', 'trg_artifact_fts_update', 'trg_artifact_fts_delete')
+        """;
 
     private const string TwinObjectsInSchema =
         """
@@ -75,6 +84,27 @@ public sealed class PlanningFtsMigrationTests : IDisposable
         await db.SaveChangesAsync();
         (await PlanningFtsProbe.CountAsync(
             db, "SELECT COUNT(*) FROM feature_fts WHERE feature_fts MATCH $term", "quokka")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Migrate_AgentClaimsDownUp_FtsTriggersSurvive()
+    {
+        using var db = CreateContext();
+        db.Database.Migrate();
+        SeedLegacyShape(db);
+
+        db.Database.Migrate(PreAgentClaims);
+        (await PlanningFtsProbe.CountAsync(db, FtsTriggersInSchema)).ShouldBe(6);
+
+        db.Database.Migrate();
+        (await PlanningFtsProbe.CountAsync(db, FtsTriggersInSchema)).ShouldBe(6);
+
+        var project = await db.Projects.SingleAsync();
+        db.PlanningFeatures.Add(PlanningFeature.Create(
+            project.Id, "claims-roundtrip-probe", "Claims roundtrip probe", "rearmed capybara body"));
+        await db.SaveChangesAsync();
+        (await PlanningFtsProbe.CountAsync(
+            db, "SELECT COUNT(*) FROM feature_fts WHERE feature_fts MATCH $term", "capybara")).ShouldBe(1);
     }
 
     private static void SeedLegacyShape(OvermindDbContext db)

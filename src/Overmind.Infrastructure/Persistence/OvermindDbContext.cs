@@ -30,6 +30,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningMaterializedFile> PlanningMaterializedFiles => Set<PlanningMaterializedFile>();
     public DbSet<FrontmatterKey> FrontmatterKeys => Set<FrontmatterKey>();
     public DbSet<AgentNotification> AgentNotifications => Set<AgentNotification>();
+    public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -52,6 +53,10 @@ public sealed class OvermindDbContext : DbContext
         modelBuilder.Entity<Project>(builder =>
         {
             builder.HasIndex(p => p.Name).IsUnique();
+
+            builder.Property(p => p.ClaimStaleThresholdMinutes)
+                .HasDefaultValue(Project.DefaultClaimStaleThresholdMinutes)
+                .HasSentinel(Project.DefaultClaimStaleThresholdMinutes);
         });
 
         modelBuilder.Entity<ContextEntry>(builder =>
@@ -163,7 +168,8 @@ public sealed class OvermindDbContext : DbContext
 
             builder.HasIndex(f => new { f.ProjectId, f.Slug }).IsUnique();
 
-            builder.Property(f => f.IsCurrent).HasDefaultValue(false);
+            builder.Property(f => f.ClaimedByAlias).HasMaxLength(AgentSession.MaxIdentityLength);
+            builder.Property(f => f.ClaimedByVendor).HasMaxLength(AgentSession.MaxIdentityLength);
             builder.Property(f => f.Priority).HasDefaultValue(FeaturePriority.P2).HasSentinel(FeaturePriority.P2);
             builder.Property(f => f.QueuePosition).HasDefaultValue(0);
         });
@@ -252,6 +258,12 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(n => n.Text).HasMaxLength(2000);
 
             builder.HasIndex(n => new { n.ProjectId, n.CreatedAt });
+        });
+
+        modelBuilder.Entity<AgentSession>(builder =>
+        {
+            builder.Property(s => s.Alias).HasMaxLength(AgentSession.MaxIdentityLength);
+            builder.Property(s => s.Vendor).HasMaxLength(AgentSession.MaxIdentityLength);
         });
     }
 }
