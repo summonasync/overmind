@@ -84,4 +84,5 @@ Replace the single global `current` pin with a claim model: N agents work the sa
 <log>
 - 2026-09-30 [agent] — spec drafted from Socratic gate: pin death + filter rename, hard mutation lock, session-liveness binding (stdio EOF → auto-release, stale threshold fallback, restart auto-adopt), stale threshold as per-project setting.
 - 2026-09-30 [agent] — validated with human proof: notification 131bb170-5144-42b5-991d-d33ef5a4966a replied 2026-09-30 20:59:07 UTC
+- 2026-10-01 [agent] — 2026-10-02 [agent] — user-approved spec addition (AskUserDecision, «Лочим import»): the agent-door planning_import becomes lock-aware — an import that would mutate any feature claimed by a foreign session is rejected 409 atomically (all-or-nothing, holder named in the error); imports touching only unclaimed/own-claimed features are unaffected. Rationale: ImportAsync rewrites Title/Body/Status/Priority of existing features, so an unlocked import was a lock bypass. Found by review 099/02 WARNING; the "Not locked" list keeps materialize/notifications/entries/search as before.
 </log>
