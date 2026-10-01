@@ -1769,7 +1769,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task PlanningSetFeaturePriority_PutsPriorityThroughTheHumanDoor()
+    public async Task PlanningSetFeaturePriority_PostsPriorityThroughTheAgentDoor()
     {
         var response = await Driver.CallToolAsync("planning_set_feature_priority", new JsonObject
         {
@@ -1778,9 +1778,10 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["priority"] = "P0"
         });
 
-        var request = Stub.Requests.Single(r => r.Method == "PUT");
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/priority", StringComparison.Ordinal));
         request.Path.ShouldBe(
-            $"/api/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}");
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/priority");
         var body = JsonNode.Parse(request.Body)!;
         body["priority"]!.GetValue<string>().ShouldBe("p0");
         body.AsObject().Count.ShouldBe(1);
@@ -1806,7 +1807,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         });
 
         ToolErrorText(response).ShouldContain($"Invalid feature priority '{priority}'");
-        Stub.Requests.ShouldNotContain(r => r.Method == "PUT");
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/priority", StringComparison.Ordinal));
         Driver.HasExited.ShouldBeFalse();
     }
 

@@ -65,30 +65,17 @@ public sealed class BacklogImporter
             : null;
     }
 
+    public async Task<BacklogFeatureImport> ParseFeatureAsync(
+        Guid projectId, string projectRoot, string featurePath, CancellationToken ct = default)
+    {
+        var (import, _) = await ParseImportAsync(projectId, projectRoot, featurePath, ct);
+        return import;
+    }
+
     public async Task<BacklogFeatureImportReport> ImportFeatureAsync(
         Guid projectId, string projectRoot, string featurePath, CancellationToken ct = default)
     {
-        var folder = ResolveFeatureFolder(projectRoot, featurePath);
-        var folderName = Path.GetFileName(
-            folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var repoRoot = Path.GetFullPath(projectRoot);
-        var relative = Rel(repoRoot, folder);
-        var notes = new BacklogImportNotes();
-
-        BacklogFeatureImport? import;
-        try
-        {
-            import = await ParseFeatureFolderAsync(folder, folderName, repoRoot, notes, ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw PlanningException.ImportFailed(relative, ex);
-        }
-
-        if (import is null)
-        {
-            throw PlanningException.ImportFailed(relative, new IOException("feature.md could not be read"));
-        }
+        var (import, notes) = await ParseImportAsync(projectId, projectRoot, featurePath, ct);
 
         var outcome = await _features.ImportAsync(projectId, import, ct);
 
@@ -140,6 +127,34 @@ public sealed class BacklogImporter
         {
             throw PlanningException.ImportFailed(featurePath, ex);
         }
+    }
+
+    private async Task<(BacklogFeatureImport Import, BacklogImportNotes Notes)> ParseImportAsync(
+        Guid projectId, string projectRoot, string featurePath, CancellationToken ct)
+    {
+        var folder = ResolveFeatureFolder(projectRoot, featurePath);
+        var folderName = Path.GetFileName(
+            folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var repoRoot = Path.GetFullPath(projectRoot);
+        var relative = Rel(repoRoot, folder);
+        var notes = new BacklogImportNotes();
+
+        BacklogFeatureImport? import;
+        try
+        {
+            import = await ParseFeatureFolderAsync(folder, folderName, repoRoot, notes, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw PlanningException.ImportFailed(relative, ex);
+        }
+
+        if (import is null)
+        {
+            throw PlanningException.ImportFailed(relative, new IOException("feature.md could not be read"));
+        }
+
+        return (import, notes);
     }
 
     public async Task<BacklogImportReport> ImportAsync(BacklogImportRequest request, CancellationToken ct = default)

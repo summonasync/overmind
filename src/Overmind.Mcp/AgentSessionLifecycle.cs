@@ -21,7 +21,7 @@ public sealed class AgentSessionLifecycle(HttpClient http)
     // purpose: a dead host API must never hang the adapter's shutdown past EndTimeout.
     public void MarkEnded(Guid? sessionId)
     {
-        if (sessionId is not { } id)
+        if (sessionId is not { } id || id == Guid.Empty)
         {
             return;
         }

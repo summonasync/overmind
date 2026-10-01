@@ -24,7 +24,7 @@ public sealed class ClaimLockFilter : IEndpointFilter
             {
                 if (route["id"] is { } rawArtifact && Guid.TryParse(rawArtifact.ToString(), out var artifactId))
                 {
-                    await claims.EnsureHolderForArtifactAsync(sessionId, artifactId, http.RequestAborted);
+                    await claims.EnsureHolderForArtifactAsync(artifactId, sessionId, http.RequestAborted);
                 }
                 else if (Guid.TryParse(route["projectId"]?.ToString(), out var projectId)
                          && route["slug"] is { } rawSlug)

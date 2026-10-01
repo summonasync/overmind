@@ -94,8 +94,8 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             200,
             Canned.PlanningQueueItemJson);
         stub.Route(
-            "PUT",
-            $"/api/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/priority",
             200,
             Canned.PlanningFeaturePriorityJson);
         stub.Route("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/features", 201, Canned.PlanningFeatureJson);

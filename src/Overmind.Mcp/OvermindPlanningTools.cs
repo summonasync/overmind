@@ -547,8 +547,8 @@ public sealed class OvermindPlanningTools
         CancellationToken ct = default)
     {
         var normalized = NormalizePriority(priority);
-        var feature = await Guarded(() => _api.PutAsync(
-            $"/api/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}",
+        var feature = await Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/priority",
             new { priority = normalized },
             ct));
         return CompactFeature(feature);

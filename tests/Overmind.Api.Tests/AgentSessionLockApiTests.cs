@@ -251,8 +251,8 @@ public sealed class AgentSessionLockApiTests : IDisposable
                 (object)new { Status = "done", LogNote = "closing" }),
             "update_feature" => (HttpMethod.Post, $"{featureUrl}/update",
                 new { Title = "Renamed", LogNote = "rename" }),
-            "set_feature_priority" => (HttpMethod.Post, $"{featureUrl}/queue-move",
-                new { Move = "down" }),
+            "set_feature_priority" => (HttpMethod.Post, $"{featureUrl}/priority",
+                new { Priority = "p1" }),
             "move_feature" => (HttpMethod.Post, $"{featureUrl}/queue-move",
                 new { Move = "last" }),
             "add_feature_dependency" => (HttpMethod.Post, $"{featureUrl}/dependencies",
@@ -340,6 +340,76 @@ public sealed class AgentSessionLockApiTests : IDisposable
         feature.StatusCode.ShouldBe(HttpStatusCode.OK);
         artifacts.StatusCode.ShouldBe(HttpStatusCode.OK);
         artifact.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Import_ForeignClaimedFeature_Returns409AndWritesNothing()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "import-locked");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "import-locked");
+        WriteImportFolder(project.DiskPath, "import-locked");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/import",
+            new { Path = Path.Combine(project.DiskPath, "BACKLOG", "import-locked") }, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureClaimHeld");
+        problem.Detail!.ShouldContain($"claim held by {HolderIdentity}");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE ProjectId = '{project.Id.ToString().ToUpperInvariant()}' AND Slug = 'import-locked'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Import_OwnClaimedFeature_Passes()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "import-own");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "import-own");
+        WriteImportFolder(project.DiskPath, "import-own");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/import",
+            new { Path = Path.Combine(project.DiskPath, "BACKLOG", "import-own") }, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Import_UnclaimedFeature_Passes()
+    {
+        var project = await CreateProjectAsync();
+        WriteImportFolder(project.DiskPath, "import-free");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/import",
+            new { Path = Path.Combine(project.DiskPath, "BACKLOG", "import-free") }, ForeignSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static void WriteImportFolder(string projectDiskPath, string slug)
+    {
+        var folder = Path.Combine(projectDiskPath, "BACKLOG", slug);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "feature.md"), $"""
+            ---
+            feature: {slug.Split('-')[0]}
+            slug: {slug}
+            status: draft
+            version: 1
+            created: {DateTime.UtcNow:yyyy-MM-dd}
+            ---
+
+            # {slug}
+
+            Imported body.
+            """);
     }
 
     [Fact]

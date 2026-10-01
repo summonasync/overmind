@@ -225,7 +225,7 @@ public static class PlanningFeaturesApi
         return Results.NoContent();
     }
 
-    private static async Task<PlanningFeature?> LoadFeatureWithArtifacts(
+    internal static async Task<PlanningFeature?> LoadFeatureWithArtifacts(
         OvermindDbContext db, Guid projectId, string slug, CancellationToken ct)
     {
         return await db.PlanningFeatures
@@ -234,7 +234,7 @@ public static class PlanningFeaturesApi
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
     }
 
-    private static async Task<IReadOnlyDictionary<int, TaskBlockedState>> BlockedStatesAsync(
+    internal static async Task<IReadOnlyDictionary<int, TaskBlockedState>> BlockedStatesAsync(
         TaskDependencyService taskDependencies, PlanningFeature feature, CancellationToken ct) =>
         (await taskDependencies.BlockedOrdersAsync(feature.Id, ct)).ToDictionary(s => s.Order);
 

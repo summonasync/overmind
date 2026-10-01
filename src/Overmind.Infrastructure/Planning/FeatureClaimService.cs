@@ -113,7 +113,7 @@ public sealed class FeatureClaimService
     }
 
     public async Task EnsureHolderForArtifactAsync(
-        Guid? sessionId, Guid artifactId, CancellationToken ct = default)
+        Guid artifactId, Guid? sessionId, CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -128,6 +128,24 @@ public sealed class FeatureClaimService
         if (feature is null)
         {
             throw PlanningException.MissingArtifact(artifactId);
+        }
+
+        await EnsureHolderCoreAsync(feature, sessionId, ct);
+    }
+
+    public async Task EnsureImportAllowedAsync(
+        Guid projectId, Guid? sessionId, string slug, CancellationToken ct = default)
+    {
+        if (sessionId is null)
+        {
+            return;
+        }
+
+        var feature = await _db.PlanningFeatures
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
+        if (feature is null)
+        {
+            return;
         }
 
         await EnsureHolderCoreAsync(feature, sessionId, ct);

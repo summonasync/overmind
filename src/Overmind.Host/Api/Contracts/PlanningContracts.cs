@@ -46,6 +46,8 @@ public sealed record UpdatePlanningFeatureRequest(
 public sealed record UpdatePlanningFeatureByAgentRequest(
     string? Title, string? Body, string? Priority, string LogNote);
 
+public sealed record SetPlanningFeaturePriorityRequest(string Priority);
+
 public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
 
 public sealed record PlanningFeatureResponse(

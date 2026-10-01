@@ -47,6 +47,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/priority", SetFeaturePriority).LockToClaim();
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add).LockToClaim();
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove).LockToClaim();
@@ -64,12 +65,46 @@ public static class AgentPlanningApi
         return group;
     }
 
+    internal static async Task<IResult> SetFeaturePriority(
+        Guid projectId,
+        string slug,
+        SetPlanningFeaturePriorityRequest request,
+        PlanningFeatureService service,
+        FeatureDependencyService dependencies,
+        TaskDependencyService taskDependencies,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        if (!PlanningFeaturesApi.TryParseEnum(request.Priority, out FeaturePriority parsed))
+        {
+            return HttpErrors.BadRequest(
+                $"Unknown priority '{request.Priority}'. Allowed values: p0, p1, p2, p3.");
+        }
+
+        try
+        {
+            await service.UpdateAsync(projectId, slug, null, null, null, parsed, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        var feature = await PlanningFeaturesApi.LoadFeatureWithArtifacts(db, projectId, slug, ct);
+        return Results.Ok(PlanningMapper.ToFeatureResponse(
+            feature!,
+            await dependencies.ListDependenciesAsync(projectId, slug, ct),
+            await PlanningFeaturesApi.BlockedStatesAsync(taskDependencies, feature!, ct)));
+    }
+
     internal static async Task<IResult> ImportFeature(
         Guid projectId,
         ImportPlanningFeatureRequest request,
         IValidator<ImportPlanningFeatureRequest> validator,
         BacklogImporter importer,
+        FeatureClaimService claims,
         OvermindDbContext db,
+        HttpRequest http,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -86,6 +121,11 @@ public static class AgentPlanningApi
 
         try
         {
+            SessionHeader.TryRead(http, out var sessionId);
+            var imported = await importer.ParseFeatureAsync(
+                projectId, project.DiskPath, request.Path.Trim(), ct);
+            await claims.EnsureImportAllowedAsync(projectId, sessionId, imported.Slug, ct);
+
             var report = await importer.ImportFeatureAsync(projectId, project.DiskPath, request.Path.Trim(), ct);
             return Results.Ok(new PlanningFeatureImportResponse(
                 report.Slug,
