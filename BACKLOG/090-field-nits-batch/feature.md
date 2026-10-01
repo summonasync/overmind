@@ -1,7 +1,7 @@
 ---
 feature: 090
 slug: field-nits-batch
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-26
@@ -32,4 +32,6 @@ Close the small items left after the BobHouse 020 and MindlashStudio intake wave
 
 <log>
 - 2026-09-29 [auto] — artifact created → inProgress
+- 2026-09-30 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-30 [agent] — [agent] by user request in-session («я всё аппрувнул» + явный ok в AskUserQuestion, 2026-09-30): result b586c749 validated (пруф b1c48a86), 4/4 тасок, ревью 3×PASS-WITH-NITS + architect APPROVED-WITH-WARNINGS, 1688/1688, dogfood 5/5.
 </log>

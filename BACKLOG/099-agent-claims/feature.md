@@ -1,7 +1,7 @@
 ---
 feature: 099
 slug: agent-claims
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-29
@@ -34,3 +34,7 @@ Unit of claim: the FEATURE (orchestrator holds the feature and distributes tasks
 - 063-worktree-feature-binding — sibling; claims identify WHO, worktrees identify WHERE.
 - 084 deadTarget TTL indicator — the ghost-age pattern to reuse.
 </refs>
+
+<log>
+- 2026-09-30 [auto] — artifact created → inProgress
+</log>

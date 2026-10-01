@@ -2,11 +2,11 @@
 feature: 090
 task: 04
 slug: field-nits-batch
-status: inprogress
+status: done
 review: light
 created: 2026-09-29
 depends_on: 03
-brief: Closeout: live MCP dogfood of the alias brief-patch on the isolated fresh build (scratch copy of the prod board)
+brief: Closeout: live MCP dogfood on feature 090 + full dotnet test + architect light → audits/architect-review-2026-09-29-090.md + result draft
 ---
 
 # Task 4 — closeout: live dogfood + architect light + result
@@ -32,10 +32,10 @@ Prove the batch end-to-end on the live system, run the structural review, and wr
 </constraints>
 
 <acceptance-criteria>
-- [ ] Live dogfood transcript recorded: brief-patch (no version move), includeArtifacts=false read, alias read 090/T1 — all through MCP.
-- [ ] Full dotnet test suite green (count recorded).
-- [ ] Architect light review written to audits/architect-review-2026-09-29-090.md, blockers fixed or waived with rationale.
-- [ ] Result artifact drafted with evidence and deviations.
+- [x] Live dogfood transcript recorded: brief-patch (no version move), includeArtifacts=false read, alias read 090/T1 — all through MCP.
+- [x] Full dotnet test suite green (count recorded).
+- [x] Architect light review written to audits/architect-review-2026-09-29-090.md, blockers fixed or waived with rationale.
+- [x] Result artifact drafted with evidence and deviations.
 </acceptance-criteria>
 
 <refs>
@@ -48,4 +48,5 @@ Prove the batch end-to-end on the live system, run the structural review, and wr
 <log>
 - 2026-09-29 [agent] — task cut from validated plan.
 - 2026-09-30 [agent] — [agent] taken into work; closeout run by the orchestrator (live dogfood via real MCP + full tests + architect light sub-agent + result).
+- 2026-09-30 [agent] — [agent] done: closeout complete — live MCP dogfood 5/5 on isolated fresh build (scratch prod-board copy, port 4799, kill by PID, prod untouched), full suite 1688/1688 sequential, architect light APPROVED-WITH-WARNINGS (audits/architect-review-2026-09-30-090.md, 0 blockers), result b586c749 drafted.
 </log>
