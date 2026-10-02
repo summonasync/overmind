@@ -48,6 +48,8 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/priority", SetFeaturePriority).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/claim", Claim);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/unclaim", Unclaim);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.Add).LockToClaim();
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}/dependencies/{blockedBySlug}", PlanningDependenciesApi.Remove).LockToClaim();
@@ -65,11 +67,67 @@ public static class AgentPlanningApi
         return group;
     }
 
+    // The lock's entry point: claim and unclaim reach FeatureClaimService unfiltered so the
+    // take-over/adopt matrix decides, not the generic mutation lock.
+    internal static async Task<IResult> Claim(
+        Guid projectId,
+        string slug,
+        ClaimPlanningFeatureRequest request,
+        FeatureClaimService claims,
+        HttpRequest http,
+        CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var sessionId))
+        {
+            return HttpErrors.BadRequest(
+                $"Claiming requires the {SessionHeader.Name} header — a claim binds to the adapter session.");
+        }
+
+        try
+        {
+            var feature = await claims.ClaimAsync(projectId, slug, request.Alias, request.Vendor, sessionId, ct);
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+        catch (ArgumentException ex)
+        {
+            return HttpErrors.BadRequest(ex.Message);
+        }
+    }
+
+    internal static async Task<IResult> Unclaim(
+        Guid projectId,
+        string slug,
+        FeatureClaimService claims,
+        HttpRequest http,
+        CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var sessionId))
+        {
+            return HttpErrors.BadRequest(
+                $"Unclaiming requires the {SessionHeader.Name} header — only the holder session releases a claim through this door.");
+        }
+
+        try
+        {
+            var feature = await claims.UnclaimAsync(projectId, slug, sessionId, ct);
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
     internal static async Task<IResult> SetFeaturePriority(
         Guid projectId,
         string slug,
         SetPlanningFeaturePriorityRequest request,
         PlanningFeatureService service,
+        FeatureClaimService claims,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
         OvermindDbContext db,
@@ -94,7 +152,8 @@ public static class AgentPlanningApi
         return Results.Ok(PlanningMapper.ToFeatureResponse(
             feature!,
             await dependencies.ListDependenciesAsync(projectId, slug, ct),
-            await PlanningFeaturesApi.BlockedStatesAsync(taskDependencies, feature!, ct)));
+            await PlanningFeaturesApi.BlockedStatesAsync(taskDependencies, feature!, ct),
+            (await claims.ClaimLivenessAsync(projectId, [feature!], ct)).GetValueOrDefault(feature!.Id)));
     }
 
     internal static async Task<IResult> ImportFeature(

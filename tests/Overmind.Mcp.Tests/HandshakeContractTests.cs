@@ -62,6 +62,7 @@ public class HandshakeContractTests : McpSessionTestBase
             "delete_entry", "list_entries", "list_projects", "overmind_notify", "overmind_onboard",
             "overmind_replies", "planning_add_feature_dependency",
             "planning_append_log",
+            "planning_claim_feature",
             "planning_create_feature", "planning_current_task", "planning_import_feature",
             "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features",
             "planning_materialize", "planning_materialize_status", "planning_move_feature",
@@ -69,7 +70,8 @@ public class HandshakeContractTests : McpSessionTestBase
             "planning_read_artifact", "planning_read_feature",
             "planning_remove_feature_dependency",
             "planning_set_feature_priority", "planning_set_feature_status", "planning_set_status",
-            "planning_task_queue", "planning_update_feature", "planning_upsert_artifact",
+            "planning_task_queue", "planning_unclaim_feature", "planning_update_feature",
+            "planning_upsert_artifact",
             "planning_upsert_tasks", "planning_validate",
             "read_entry", "search", "update_entry", "write_entry"
         ]);

@@ -98,6 +98,16 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/priority",
             200,
             Canned.PlanningFeaturePriorityJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/claim",
+            200,
+            Canned.PlanningClaimedJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/unclaim",
+            200,
+            Canned.PlanningUnclaimedJson);
         stub.Route("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/features", 201, Canned.PlanningFeatureJson);
         stub.Route(
             "POST",

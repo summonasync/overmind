@@ -58,13 +58,14 @@ export const HUMAN_VALIDATION_OVERRIDES: readonly HumanValidationOverride[] = [
   "off",
 ];
 
+export type PlanningClaimState = "alive" | "stale" | "ended";
+
 export interface PlanningFeatureBoardItem {
   slug: string;
   title: string;
   status: PlanningFeatureStatus;
   priority: PlanningFeaturePriority;
   queuePosition: number;
-  isCurrent: boolean;
   isBlocked: boolean;
   version: number;
   specStatus: PlanningArtifactStatus | null;
@@ -72,6 +73,11 @@ export interface PlanningFeatureBoardItem {
   taskTotal: number;
   taskDone: number;
   updatedAt: string;
+  claimedByAlias: string | null;
+  claimedByVendor: string | null;
+  claimedAt: string | null;
+  claimState: PlanningClaimState | null;
+  claimedByHuman: boolean;
 }
 
 export interface ReorderPlanningQueueValues {
@@ -126,6 +132,20 @@ export interface PlanningFeatureResponse {
   isBlocked: boolean;
   blockedBy: PlanningFeatureDependencyEntry[];
   blocks: PlanningFeatureDependencyEntry[];
+  claimedByAlias: string | null;
+  claimedByVendor: string | null;
+  claimedAt: string | null;
+  claimState: PlanningClaimState | null;
+  claimedByHuman: boolean;
+}
+
+export interface PlanningFeatureClaimResponse {
+  slug: string;
+  claimedByAlias: string | null;
+  claimedByVendor: string | null;
+  claimedAt: string | null;
+  claimState: PlanningClaimState | null;
+  claimedByHuman: boolean;
 }
 
 export interface PlanningArtifactVersionResponse {
@@ -139,19 +159,6 @@ export interface PlanningWorkflowResponse {
   requireHumanValidation: HumanValidationOverride;
   effectiveMaterialization: PlanningMaterialization;
   effectiveRequireHumanValidation: boolean;
-}
-
-export interface PlanningCurrentFeature {
-  slug: string;
-  title: string;
-  status: PlanningFeatureStatus;
-}
-
-export interface PlanningCurrentResponse {
-  state: string;
-  feature: PlanningCurrentFeature;
-  artifact: PlanningArtifactResponse | null;
-  reason: string | null;
 }
 
 export interface PlanningDriftItem {

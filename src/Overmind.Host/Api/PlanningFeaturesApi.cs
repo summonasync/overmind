@@ -18,6 +18,8 @@ public static class PlanningFeaturesApi
         group.MapPost("/projects/{projectId:guid}/planning/features", CreateFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", GetFeature);
         group.MapPut("/projects/{projectId:guid}/planning/features/{slug}", UpdateFeature);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/claim", Claim);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/unclaim", Unclaim);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}", DeleteFeature);
         group.MapPost("/projects/{projectId:guid}/planning/queue/reorder", PlanningQueueApi.Reorder);
 
@@ -25,7 +27,7 @@ public static class PlanningFeaturesApi
     }
 
     internal static async Task<IResult> Board(
-        Guid projectId, OvermindDbContext db, CancellationToken ct)
+        Guid projectId, OvermindDbContext db, FeatureClaimService claims, CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
         if (!projectExists)
@@ -41,8 +43,10 @@ public static class PlanningFeaturesApi
             .ToListAsync(ct);
 
         var projectFeatures = features.ToDictionary(f => f.Id);
+        var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         return Results.Ok(features
-            .Select(f => PlanningMapper.ToBoardItem(f, PlanningMapper.HasOpenBlocker(f, projectFeatures)))
+            .Select(f => PlanningMapper.ToBoardItem(
+                f, PlanningMapper.HasOpenBlocker(f, projectFeatures), claimLiveness.GetValueOrDefault(f.Id)))
             .ToArray());
     }
 
@@ -95,6 +99,7 @@ public static class PlanningFeaturesApi
         string slug,
         bool? includeArtifacts,
         OvermindDbContext db,
+        FeatureClaimService claims,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
         CancellationToken ct)
@@ -111,16 +116,19 @@ public static class PlanningFeaturesApi
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
         }
 
+        var claimState = (await claims.ClaimLivenessAsync(projectId, [feature], ct))
+            .GetValueOrDefault(feature.Id);
+
         if (includeArtifacts == false)
         {
             return Results.Ok(PlanningMapper.ToFeatureRosterResponse(
                 feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
-                await BlockedStatesAsync(taskDependencies, feature, ct)));
+                await BlockedStatesAsync(taskDependencies, feature, ct), claimState));
         }
 
         return Results.Ok(PlanningMapper.ToFeatureResponse(
             feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
-            await BlockedStatesAsync(taskDependencies, feature, ct)));
+            await BlockedStatesAsync(taskDependencies, feature, ct), claimState));
     }
 
     internal static async Task<IResult> ListArtifacts(
@@ -167,12 +175,53 @@ public static class PlanningFeaturesApi
         return Results.Ok(new PlanningArtifactRosterResponse(artifacts));
     }
 
+    // Human door: no session header, no lock — the board claims and releases anything.
+    internal static async Task<IResult> Claim(
+        Guid projectId,
+        string slug,
+        ClaimPlanningFeatureRequest request,
+        FeatureClaimService claims,
+        CancellationToken ct)
+    {
+        try
+        {
+            var feature = await claims.ClaimAsync(projectId, slug, request.Alias, request.Vendor, null, ct);
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+        catch (ArgumentException ex)
+        {
+            return HttpErrors.BadRequest(ex.Message);
+        }
+    }
+
+    internal static async Task<IResult> Unclaim(
+        Guid projectId,
+        string slug,
+        FeatureClaimService claims,
+        CancellationToken ct)
+    {
+        try
+        {
+            var feature = await claims.UnclaimAsync(projectId, slug, null, ct);
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
     internal static async Task<IResult> UpdateFeature(
         Guid projectId,
         string slug,
         UpdatePlanningFeatureRequest request,
         IValidator<UpdatePlanningFeatureRequest> validator,
         PlanningFeatureService service,
+        FeatureClaimService claims,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
         OvermindDbContext db,
@@ -207,7 +256,8 @@ public static class PlanningFeaturesApi
         var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
         return Results.Ok(PlanningMapper.ToFeatureResponse(
             feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct),
-            await BlockedStatesAsync(taskDependencies, feature!, ct)));
+            await BlockedStatesAsync(taskDependencies, feature!, ct),
+            (await claims.ClaimLivenessAsync(projectId, [feature!], ct)).GetValueOrDefault(feature!.Id)));
     }
 
     internal static async Task<IResult> DeleteFeature(

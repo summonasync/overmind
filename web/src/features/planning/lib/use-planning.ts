@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addPlanningFeatureDependency,
   appendPlanningLog,
+  claimPlanningFeature,
   createPlanningArtifact,
   createPlanningFeature,
   deletePlanningArtifact,
@@ -11,7 +12,7 @@ import {
   materializePlanning,
   removePlanningFeatureDependency,
   setPlanningArtifactStatus,
-  setPlanningFeatureCurrent,
+  unclaimPlanningFeature,
   updatePlanningArtifact,
   updatePlanningFeature,
   updatePlanningWorkflow,
@@ -69,9 +70,17 @@ export function usePlanningMutations(projectId: string) {
     onSuccess: () => invalidate(),
   });
 
-  const setFeatureCurrent = useMutation({
-    mutationFn: (input: { slug: string; isCurrent: boolean }) =>
-      setPlanningFeatureCurrent(projectId, input.slug, input.isCurrent),
+  const claimFeature = useMutation({
+    mutationFn: (input: { slug: string; alias: string; vendor: string }) =>
+      claimPlanningFeature(projectId, input.slug, input.alias, input.vendor),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
+      queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, variables.slug) });
+    },
+  });
+
+  const unclaimFeature = useMutation({
+    mutationFn: (input: { slug: string }) => unclaimPlanningFeature(projectId, input.slug),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
       queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, variables.slug) });
@@ -141,7 +150,8 @@ export function usePlanningMutations(projectId: string) {
     createFeature,
     updateFeature,
     deleteFeature,
-    setFeatureCurrent,
+    claimFeature,
+    unclaimFeature,
     addFeatureDependency,
     removeFeatureDependency,
     createArtifact,

@@ -343,6 +343,244 @@ public sealed class AgentSessionLockApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Claim_AgentDoor_ClaimsAndReturnsEcho()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = "Bobby", Vendor = "claude" }, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        echo!.Slug.ShouldBe("claimable");
+        echo.ClaimedByAlias.ShouldBe("Bobby");
+        echo.ClaimedByVendor.ShouldBe("claude");
+        echo.ClaimState.ShouldBe("alive");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{HolderSessionId.ToString().ToUpperInvariant()}'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Claim_AgentDoor_WithoutHeader_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = "Bobby", Vendor = "claude" }, null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Claim_AgentDoor_IdentityOverCap_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = new string('a', 33), Vendor = "claude" }, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Claim_AgentDoor_LiveForeignHolder_Returns409NamingHolder()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = "Bobby", Vendor = "claude" }, ForeignSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureClaimHeld");
+        problem.Detail!.ShouldContain($"claim held by {HolderIdentity}");
+    }
+
+    [Fact]
+    public async Task Claim_AgentDoor_StaleForeignHolder_TakesOver()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow.AddHours(-2));
+        await ClaimFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = "Bobby", Vendor = "claude" }, ForeignSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        echo!.ClaimedByAlias.ShouldBe("Bobby");
+        echo.ClaimState.ShouldBe("alive");
+    }
+
+    [Fact]
+    public async Task Unclaim_AgentDoor_ByHolder_Releases()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/unclaim",
+            null, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        echo!.ClaimedByAlias.ShouldBeNull();
+        echo.ClaimState.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Unclaim_AgentDoor_ForeignSession_Returns409()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/unclaim",
+            null, ForeignSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain($"claim held by {HolderIdentity}");
+    }
+
+    [Fact]
+    public async Task HumanDoor_Claim_OnLiveAgentClaim_TakesOver()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "claimable");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = "Dana", Vendor = "human" }, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        echo!.ClaimedByAlias.ShouldBe("Dana");
+        echo.ClaimedByVendor.ShouldBe("human");
+        echo.ClaimState.ShouldBe("alive");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/claimable", JsonOptions);
+        feature!.Body.ShouldContain("took over alive claim of Dan by qwen");
+    }
+
+    [Fact]
+    public async Task HumanDoor_ClaimAndUnclaim_WorkWithoutSessionHeaders()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+
+        var claim = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/claimable/claim",
+            new { Alias = "Dan", Vendor = "qwen" }, JsonOptions);
+        claim.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var claimEcho = await claim.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        claimEcho!.ClaimedByAlias.ShouldBe("Dan");
+        claimEcho.ClaimState.ShouldBe("alive");
+        claimEcho.ClaimedByHuman.ShouldBeTrue();
+
+        var unclaim = await _client.PostAsync(
+            $"/api/projects/{project.Id}/planning/features/claimable/unclaim", null);
+        unclaim.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var unclaimEcho = await unclaim.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        unclaimEcho!.ClaimedByAlias.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ReadPayloads_CarryClaimFields()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "read-claims");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "read-claims");
+
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/projects/{project.Id}/planning/features", JsonOptions);
+        var boarded = board!.Single(i => i.Slug == "read-claims");
+        boarded.ClaimedByAlias.ShouldBe("Dan");
+        boarded.ClaimedByVendor.ShouldBe("qwen");
+        boarded.ClaimState.ShouldBe("alive");
+        boarded.ClaimedByHuman.ShouldBeFalse();
+
+        var queue = await SendAsync(HttpMethod.Get,
+            $"/api/agent/projects/{project.Id}/planning/task-queue", null, HolderSessionId);
+        var queueBody = await queue.Content.ReadFromJsonAsync<QueueResponseJson>(JsonOptions);
+        var queued = queueBody!.Items.Single(i => i.Slug == "read-claims");
+        queued.ClaimedByAlias.ShouldBe("Dan");
+        queued.ClaimState.ShouldBe("alive");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/read-claims", JsonOptions);
+        feature!.ClaimedByAlias.ShouldBe("Dan");
+        feature.ClaimState.ShouldBe("alive");
+    }
+
+    [Fact]
+    public async Task Reorder_Echo_CarriesClaimFieldsForClaimedFeature()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "reorder-claimed");
+        await CreateAgentFeatureAsync(project.Id, "reorder-other");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "reorder-claimed");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/projects/{project.Id}/planning/queue/reorder",
+            new { Priority = "p2", Slugs = new[] { "reorder-claimed", "reorder-other" } }, ForeignSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<QueueResponseJson>(JsonOptions);
+        var claimed = body!.Items.Single(i => i.Slug == "reorder-claimed");
+        claimed.ClaimedByAlias.ShouldBe("Dan");
+        claimed.ClaimState.ShouldBe("alive");
+        var other = body.Items.Single(i => i.Slug == "reorder-other");
+        other.ClaimedByAlias.ShouldBeNull();
+        other.ClaimState.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Onboard_NamingRules_ProjectValueAndGenericHint()
+    {
+        var project = await CreateProjectAsync();
+
+        var generic = await _client.PostAsJsonAsync(
+            "/api/onboard", new { Cwd = project.DiskPath }, JsonOptions);
+        var genericBody = await generic.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        genericBody.GetProperty("agentIdentity").GetProperty("namingRules").GetString()!
+            .ShouldContain("invent an alias");
+        genericBody.GetProperty("agentIdentity").GetProperty("alias").GetString()!.ShouldBe("agent");
+
+        await ExecuteAsync(
+            $"UPDATE Projects SET AgentNamingRules = 'aliases are crew names, vendor is the runtime' WHERE Id = '{project.Id.ToString().ToUpperInvariant()}'");
+
+        var custom = await _client.PostAsJsonAsync(
+            "/api/onboard", new { Cwd = project.DiskPath }, JsonOptions);
+        var customBody = await custom.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        customBody.GetProperty("agentIdentity").GetProperty("namingRules").GetString()!
+            .ShouldBe("aliases are crew names, vendor is the runtime");
+    }
+
+    [Fact]
     public async Task Import_ForeignClaimedFeature_Returns409AndWritesNothing()
     {
         var project = await CreateProjectAsync();
@@ -434,6 +672,31 @@ public sealed class AgentSessionLockApiTests : IDisposable
 
     private sealed record AgentSessionJson(
         Guid Id, string Alias, string Vendor, DateTime StartedAt, DateTime LastSeenAt, DateTime? EndedAt);
+
+    private sealed record ClaimJson(
+        string Slug, string? ClaimedByAlias, string? ClaimedByVendor,
+        DateTime? ClaimedAt, string? ClaimState, bool ClaimedByHuman);
+
+    private sealed record BoardItemJson(
+        string Slug, string Title, string Status, string Priority, int Version,
+        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt,
+        bool IsBlocked, int QueuePosition,
+        string? ClaimedByAlias, string? ClaimedByVendor, DateTime? ClaimedAt, string? ClaimState,
+        bool ClaimedByHuman);
+
+    private sealed record QueueResponseJson(QueueItemJson[] Items);
+
+    private sealed record QueueItemJson(
+        string Slug, string? Number, string Title, string Priority, string Status, int QueuePosition,
+        string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal, int Readiness,
+        string[] BlockedBy, bool IsBlocked,
+        string? ClaimedByAlias, string? ClaimedByVendor, DateTime? ClaimedAt, string? ClaimState);
+
+    private sealed record FeatureJson(
+        string Slug, string Title, string Body, string Status, string Priority, int Version,
+        DateTime CreatedAt, DateTime UpdatedAt, JsonElement[] Artifacts, bool IsBlocked,
+        JsonElement[] BlockedBy, JsonElement[] Blocks,
+        string? ClaimedByAlias, string? ClaimedByVendor, DateTime? ClaimedAt, string? ClaimState);
 
     private sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

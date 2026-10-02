@@ -13,7 +13,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ContainsTheTwentyFourPlanningTools()
+    public async Task ToolsList_ContainsAllPlanningTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -22,8 +22,10 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         string[] expected =
         [
+            "planning_claim_feature",
             "planning_list_features",
             "planning_read_feature",
+            "planning_unclaim_feature",
             "planning_list_artifacts",
             "planning_read_artifact",
             "planning_current_task",
@@ -52,6 +54,12 @@ public class PlanningToolContractTests : McpSessionTestBase
             tools[name]!["description"]!.GetValue<string>().ShouldNotBeNullOrWhiteSpace();
         }
 
+        tools["planning_claim_feature"]!["description"]!.GetValue<string>().ShouldContain("names the holder");
+        tools["planning_claim_feature"]!["description"]!.GetValue<string>().ShouldContain("auto-adopt");
+        tools["planning_claim_feature"]!["description"]!.GetValue<string>().ShouldContain("human door");
+        tools["planning_unclaim_feature"]!["description"]!.GetValue<string>().ShouldContain("holder session only");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("claimState");
+        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("claimedByAlias");
         tools["planning_list_features"]!["description"]!.GetValue<string>().ShouldContain("board");
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
@@ -550,8 +558,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldBe(
-            "Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.");
+        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("claimedByAlias");
+        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("most expensive read");
     }
 
     [Fact]
@@ -1765,6 +1773,99 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("Position 9 is outside the queue band of 'demo-feature'");
         text.ShouldContain("the band holds 3 non-done features, so the valid range is 1..3.");
         text.ShouldNotContain("One or more validation errors");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningClaimFeature_PostsIdentityToTheAgentDoor()
+    {
+        var response = await Driver.CallToolAsync("planning_claim_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["alias"] = "  Dan  ",
+            ["vendor"] = "qwen"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/claim", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/claim");
+        var body = JsonNode.Parse(request.Body)!;
+        body["alias"]!.GetValue<string>().ShouldBe("Dan");
+        body["vendor"]!.GetValue<string>().ShouldBe("qwen");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["slug", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState"]);
+        echo["claimedByAlias"]!.GetValue<string>().ShouldBe("Dan");
+        echo["claimState"]!.GetValue<string>().ShouldBe("alive");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("alias", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("vendor", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public async Task PlanningClaimFeature_IdentityOverCap_RejectedWithoutHttpCall(
+        string field, string value)
+    {
+        var call = new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["alias"] = "Dan",
+            ["vendor"] = "qwen"
+        };
+        call[field] = value;
+
+        var response = await Driver.CallToolAsync("planning_claim_feature", call);
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("exceeds the 32-character cap");
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/claim", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningClaimFeature_HeldByLiveForeignSession_NamesTheHolder()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/claim",
+            409,
+            Canned.PlanningClaimHeldJson);
+
+        var response = await Driver.CallToolAsync("planning_claim_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["alias"] = "Bobby",
+            ["vendor"] = "claude"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Feature 'demo-feature': claim held by Dan by qwen (alive)");
+        text.ShouldContain("the human door in the Overmind UI is never locked");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningUnclaimFeature_PostsToTheAgentDoor()
+    {
+        var response = await Driver.CallToolAsync("planning_unclaim_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/unclaim", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/unclaim");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["claimedByAlias"]!.ShouldBeNull();
+        echo["claimState"]!.ShouldBeNull();
         Driver.HasExited.ShouldBeFalse();
     }
 

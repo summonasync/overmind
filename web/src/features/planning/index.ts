@@ -68,8 +68,6 @@ export type {
   PlanningArtifactResponse,
   PlanningArtifactStatus,
   PlanningArtifactVersionResponse,
-  PlanningCurrentFeature,
-  PlanningCurrentResponse,
   PlanningDocumentKind,
   PlanningDriftItem,
   PlanningDriftKind,

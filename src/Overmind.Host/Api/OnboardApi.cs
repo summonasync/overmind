@@ -96,6 +96,10 @@ public static class OnboardApi
                 SkipHeadLines(project.LastMaterializationSkipHead)),
             new OnboardValidationBlock(humanGate),
             new OnboardSemanticBlock(vectorHealth.Up, SemanticUnavailableReason(vectorHealth)),
+            new OnboardAgentIdentityBlock(
+                AgentIdentityDefaults.Alias,
+                AgentIdentityDefaults.Vendor,
+                project.AgentNamingRules ?? AgentIdentityDefaults.GenericNamingHint),
             OnboardQuickstart.Text));
     }
 

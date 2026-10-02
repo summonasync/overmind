@@ -41,7 +41,8 @@ function PlanningPageContent() {
   const { data: features, loading, error } = usePlanningBoard(projectId);
   const boardFilters = useBoardFilters();
   const boardSearch = useBoardSearch();
-  const { createFeature, updateFeature, deleteFeature, setFeatureCurrent } = usePlanningMutations(projectId);
+  const { createFeature, updateFeature, deleteFeature, claimFeature, unclaimFeature } =
+    usePlanningMutations(projectId);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlanningFeatureBoardItem | null>(null);
@@ -59,11 +60,20 @@ function PlanningPageContent() {
     (createFeature.error as Error | null) ??
     (updateFeature.error as Error | null) ??
     (deleteFeature.error as Error | null) ??
-    (setFeatureCurrent.error as Error | null) ??
+    (claimFeature.error as Error | null) ??
+    (unclaimFeature.error as Error | null) ??
     error;
 
-  const handleSetCurrent = (item: PlanningFeatureBoardItem, isCurrent: boolean) => {
-    setFeatureCurrent.mutate({ slug: item.slug, isCurrent });
+  const handleClaim = (item: PlanningFeatureBoardItem) => {
+    claimFeature.mutate({
+      slug: item.slug,
+      alias: "board",
+      vendor: "human",
+    });
+  };
+
+  const handleUnclaim = (item: PlanningFeatureBoardItem) => {
+    unclaimFeature.mutate({ slug: item.slug });
   };
 
   const openCreate = () => {
@@ -165,7 +175,9 @@ function PlanningPageContent() {
               onCreate={openCreate}
               onEdit={openEdit}
               onDelete={setDeleting}
-              onSetCurrent={handleSetCurrent}
+              onClaim={handleClaim}
+              onUnclaim={handleUnclaim}
+              claimPending={claimFeature.isPending || unclaimFeature.isPending}
             />
           )}
         </>

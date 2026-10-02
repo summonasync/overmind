@@ -18,6 +18,7 @@ public sealed class PlanningFeature
     public string? ClaimedByVendor { get; private set; }
     public DateTime? ClaimedAt { get; private set; }
     public Guid? ClaimSessionId { get; private set; }
+    public bool ClaimedByHuman { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -143,7 +144,7 @@ public sealed class PlanningFeature
         SetStatus(status);
     }
 
-    public void Claim(string alias, string vendor, Guid sessionId, DateTime now)
+    public void Claim(string alias, string vendor, Guid sessionId, DateTime now, bool byHuman = false)
     {
         if (Status == PlanningFeatureStatus.Done)
         {
@@ -154,6 +155,7 @@ public sealed class PlanningFeature
         ClaimedByVendor = NormalizeIdentity(vendor);
         ClaimedAt = now;
         ClaimSessionId = sessionId;
+        ClaimedByHuman = byHuman;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -163,6 +165,7 @@ public sealed class PlanningFeature
         ClaimedByVendor = null;
         ClaimedAt = null;
         ClaimSessionId = null;
+        ClaimedByHuman = false;
         UpdatedAt = DateTime.UtcNow;
     }
 

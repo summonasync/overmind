@@ -21,13 +21,18 @@ public sealed class FeatureClaimService
         _logger = logger;
     }
 
+    // sessionId null = the web human door: no session restrictions, the claim is bound to a fresh
+    // session row that goes stale like any other, and the log lands with the Ui source.
     public async Task<PlanningFeature> ClaimAsync(
-        Guid projectId, string slug, string alias, string vendor, Guid sessionId,
+        Guid projectId, string slug, string alias, string vendor, Guid? sessionId = null,
         CancellationToken ct = default)
     {
         var project = await RequireProjectAsync(projectId, ct);
         var feature = await RequireFeatureAsync(projectId, slug, ct);
         var now = DateTime.UtcNow;
+        var isHuman = sessionId is null;
+        var source = isHuman ? PlanningLogSource.Ui : PlanningLogSource.Agent;
+        var effectiveSessionId = sessionId ?? Guid.NewGuid();
 
         if (feature.ClaimSessionId is { } holderId)
         {
@@ -42,18 +47,18 @@ public sealed class FeatureClaimService
                     return feature;
                 }
 
-                feature.Claim(alias, vendor, sessionId, now);
-                await PersistAsync(projectId, alias, vendor, sessionId, now, ct);
+                feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
+                await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
                 return feature;
             }
 
-            if (liveness == AgentSessionLiveness.Alive)
+            if (liveness == AgentSessionLiveness.Alive && !isHuman)
             {
                 throw PlanningException.FeatureClaimHeld(
                     slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
             }
 
-            var adopted = liveness == AgentSessionLiveness.Ended
+            var adopted = !isHuman && liveness == AgentSessionLiveness.Ended
                           && string.Equals(feature.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal)
                           && string.Equals(feature.ClaimedByVendor, vendor.Trim(), StringComparison.Ordinal);
             var note = adopted
@@ -61,20 +66,20 @@ public sealed class FeatureClaimService
                 : $"{alias} by {vendor} took over {liveness.ToString().ToLowerInvariant()} claim " +
                   $"of {feature.ClaimedByAlias} by {feature.ClaimedByVendor}";
 
-            feature.Claim(alias, vendor, sessionId, now);
-            feature.AppendLog(note, PlanningLogSource.Agent);
-            await PersistAsync(projectId, alias, vendor, sessionId, now, ct);
+            feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
+            feature.AppendLog(note, source);
+            await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
             return feature;
         }
 
-        feature.Claim(alias, vendor, sessionId, now);
-        feature.AppendLog($"{alias} by {vendor} claimed the feature", PlanningLogSource.Agent);
-        await PersistAsync(projectId, alias, vendor, sessionId, now, ct);
+        feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
+        feature.AppendLog($"{alias} by {vendor} claimed the feature", source);
+        await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
         return feature;
     }
 
     public async Task<PlanningFeature> UnclaimAsync(
-        Guid projectId, string slug, Guid sessionId, CancellationToken ct = default)
+        Guid projectId, string slug, Guid? sessionId = null, CancellationToken ct = default)
     {
         var project = await RequireProjectAsync(projectId, ct);
         var feature = await RequireFeatureAsync(projectId, slug, ct);
@@ -84,12 +89,21 @@ public sealed class FeatureClaimService
             return feature;
         }
 
-        if (holderId != sessionId)
+        if (sessionId is not { } callerId)
+        {
+            feature.Release();
+            feature.AppendLog("claim released via the human door", PlanningLogSource.Ui);
+            await _db.SaveChangesAsync(ct);
+            await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+            return feature;
+        }
+
+        if (holderId != callerId)
         {
             throw await ClaimHeldAsync(feature, project, holderId, ct);
         }
 
-        var session = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        var session = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == callerId, ct);
         session?.Touch();
         feature.Release();
         feature.AppendLog(
@@ -98,6 +112,29 @@ public sealed class FeatureClaimService
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
         return feature;
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, AgentSessionLiveness>> ClaimLivenessAsync(
+        Guid projectId, IReadOnlyCollection<PlanningFeature> features, CancellationToken ct = default)
+    {
+        var claimed = features.Where(f => f.ClaimSessionId is not null).ToList();
+        if (claimed.Count == 0)
+        {
+            return new Dictionary<Guid, AgentSessionLiveness>();
+        }
+
+        var project = await RequireProjectAsync(projectId, ct);
+        var sessionIds = claimed.Select(f => f.ClaimSessionId!.Value).Distinct().ToList();
+        var sessions = await _db.AgentSessions
+            .Where(s => sessionIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, ct);
+        var now = DateTime.UtcNow;
+
+        return claimed.ToDictionary(
+            f => f.Id,
+            f => sessions.TryGetValue(f.ClaimSessionId!.Value, out var session)
+                ? session.Liveness(now, project.ClaimStaleThresholdMinutes)
+                : AgentSessionLiveness.Ended);
     }
 
     public async Task EnsureHolderAsync(

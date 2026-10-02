@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { Pencil, Trash2, UserPlus, UserX } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -16,6 +16,7 @@ import { allowedTransitions, featureStatusOptions } from "@/features/planning/li
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
+import { FeatureClaimChip } from "@/features/planning/components/feature-claim-chip";
 import { useDragAutoscroll } from "@/features/planning/lib/use-drag-autoscroll";
 import { useQueueReorder } from "@/features/planning/lib/use-queue-reorder";
 import { planningKeys } from "@/features/planning/queries";
@@ -32,7 +33,9 @@ interface FeatureBoardProps {
   onCreate: () => void;
   onEdit: (item: PlanningFeatureBoardItem) => void;
   onDelete: (item: PlanningFeatureBoardItem) => void;
-  onSetCurrent: (item: PlanningFeatureBoardItem, isCurrent: boolean) => void;
+  onClaim: (item: PlanningFeatureBoardItem) => void;
+  onUnclaim: (item: PlanningFeatureBoardItem) => void;
+  claimPending: boolean;
 }
 
 function artifactChip(label: string, status: PlanningArtifactStatus | null) {
@@ -123,7 +126,9 @@ export function FeatureBoard({
   onCreate,
   onEdit,
   onDelete,
-  onSetCurrent,
+  onClaim,
+  onUnclaim,
+  claimPending,
 }: FeatureBoardProps) {
   const [drag, setDrag] = useState<CardDrag | null>(null);
   const [dropTargetSlug, setDropTargetSlug] = useState<string | null>(null);
@@ -198,8 +203,7 @@ export function FeatureBoard({
               }}
               onDragEnd={clearDrag}
               className={cn(
-                "flex flex-col gap-3 rounded-lg border bg-surface p-4 transition-colors",
-                item.isCurrent ? "border-primary" : "border-border hover:border-border-strong",
+                "flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong",
                 draggable && "cursor-grab",
                 drag?.slug === item.slug && "opacity-50",
                 isDropTarget && "ring-2 ring-primary/40",
@@ -219,7 +223,6 @@ export function FeatureBoard({
                   <span className="block truncate font-mono text-xs text-muted">{item.slug}</span>
                 </a>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  {item.isCurrent ? <Badge tone="info">current</Badge> : null}
                   {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
                   <FeatureStatusSelect projectId={projectId} item={item} />
                 </div>
@@ -236,6 +239,7 @@ export function FeatureBoard({
                 <Badge>v{item.version}</Badge>
                 {artifactChip("spec", item.specStatus)}
                 {artifactChip("plan", item.planStatus)}
+                <FeatureClaimChip item={item} />
               </div>
 
               {item.taskTotal > 0 ? (
@@ -267,11 +271,15 @@ export function FeatureBoard({
                   <Button
                     variant="ghost"
                     className="px-2 py-1 text-xs"
-                    aria-pressed={item.isCurrent}
-                    onClick={() => onSetCurrent(item, !item.isCurrent)}
+                    disabled={claimPending}
+                    onClick={() => (item.claimedByAlias === null ? onClaim(item) : onUnclaim(item))}
                   >
-                    {item.isCurrent ? <PinOff size={12} aria-hidden /> : <Pin size={12} aria-hidden />}
-                    {item.isCurrent ? "Unpin" : "Pin"}
+                    {item.claimedByAlias === null ? (
+                      <UserPlus size={12} aria-hidden />
+                    ) : (
+                      <UserX size={12} aria-hidden />
+                    )}
+                    {item.claimedByAlias === null ? "Claim" : "Unclaim"}
                   </Button>
                   <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onEdit(item)}>
                     <Pencil size={12} aria-hidden />

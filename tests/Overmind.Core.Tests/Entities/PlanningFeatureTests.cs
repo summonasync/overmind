@@ -253,6 +253,19 @@ public class PlanningFeatureTests
     }
 
     [Fact]
+    public void Claim_HumanClaim_MarksAndReleaseClearsTheFlag()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.ClaimedByHuman.ShouldBeFalse();
+
+        feature.Claim("Dana", "human", Guid.NewGuid(), DateTime.UtcNow, byHuman: true);
+        feature.ClaimedByHuman.ShouldBeTrue();
+
+        feature.Release();
+        feature.ClaimedByHuman.ShouldBeFalse();
+    }
+
+    [Fact]
     public void Release_ClearsClaimFields()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");

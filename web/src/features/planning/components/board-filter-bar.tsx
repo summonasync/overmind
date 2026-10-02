@@ -143,12 +143,12 @@ export function BoardFilterBar({ search }: BoardFilterBarProps) {
 
       <button
         type="button"
-        aria-pressed={filters.currentOnly}
-        onClick={() => setFilters({ ...filters, currentOnly: !filters.currentOnly })}
-        className={cn(chipBase, filters.currentOnly ? chipActive : chipInactive)}
+        aria-pressed={filters.pinnedOnly}
+        onClick={() => setFilters({ ...filters, pinnedOnly: !filters.pinnedOnly })}
+        className={cn(chipBase, filters.pinnedOnly ? chipActive : chipInactive)}
       >
         <Pin size={12} aria-hidden />
-        Current only
+        Pinned only
       </button>
 
       <button

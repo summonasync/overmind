@@ -6,6 +6,7 @@ import type {
   PlanningArtifactVersionResponse,
   PlanningDriftItem,
   PlanningFeatureBoardItem,
+  PlanningFeatureClaimResponse,
   PlanningFeatureDependenciesResponse,
   PlanningFeatureFormValues,
   PlanningFeatureResponse,
@@ -64,14 +65,26 @@ export function reorderPlanningQueue(
   });
 }
 
-export function setPlanningFeatureCurrent(
+export function claimPlanningFeature(
   projectId: string,
   slug: string,
-  isCurrent: boolean,
-): Promise<PlanningFeatureResponse> {
-  return apiPost<PlanningFeatureResponse>(`/projects/${projectId}/planning/features/${slug}/current`, {
-    isCurrent,
-  });
+  alias: string,
+  vendor: string,
+): Promise<PlanningFeatureClaimResponse> {
+  return apiPost<PlanningFeatureClaimResponse>(
+    `/projects/${projectId}/planning/features/${slug}/claim`,
+    { alias, vendor },
+  );
+}
+
+export function unclaimPlanningFeature(
+  projectId: string,
+  slug: string,
+): Promise<PlanningFeatureClaimResponse> {
+  return apiPost<PlanningFeatureClaimResponse>(
+    `/projects/${projectId}/planning/features/${slug}/unclaim`,
+    {},
+  );
 }
 
 export function addPlanningFeatureDependency(

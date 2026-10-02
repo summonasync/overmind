@@ -9,7 +9,8 @@ public static class PlanningMapper
 {
     private static readonly Regex FeatureNumberPattern = new(@"^([0-9]+[a-z]?)(?:-|$)", RegexOptions.Compiled);
 
-    public static PlanningFeatureBoardItem ToBoardItem(PlanningFeature feature, bool isBlocked)
+    public static PlanningFeatureBoardItem ToBoardItem(
+        PlanningFeature feature, bool isBlocked, AgentSessionLiveness? claimState = null)
     {
         var artifacts = feature.Artifacts;
 
@@ -25,11 +26,17 @@ public static class PlanningMapper
             TaskDone(artifacts),
             feature.UpdatedAt,
             isBlocked,
-            feature.QueuePosition);
+            feature.QueuePosition,
+            feature.ClaimedByAlias,
+            feature.ClaimedByVendor,
+            feature.ClaimedAt,
+            feature.ClaimSessionId is null ? null : claimState,
+            feature.ClaimedByHuman);
     }
 
     public static PlanningQueueItem ToQueueItem(
-        PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures)
+        PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures,
+        AgentSessionLiveness? claimState = null)
     {
         var blockers = OpenBlockerSlugs(feature, projectFeatures);
         var artifacts = feature.Artifacts;
@@ -47,7 +54,12 @@ public static class PlanningMapper
             TaskTotal(artifacts),
             Readiness(feature),
             blockers,
-            blockers.Length > 0);
+            blockers.Length > 0,
+            feature.ClaimedByAlias,
+            feature.ClaimedByVendor,
+            feature.ClaimedAt,
+            feature.ClaimSessionId is null ? null : claimState,
+            feature.ClaimedByHuman);
     }
 
     public static int Readiness(PlanningFeature feature) =>
@@ -87,7 +99,8 @@ public static class PlanningMapper
 
     public static PlanningFeatureResponse ToFeatureResponse(
         PlanningFeature feature, FeatureDependencies dependencies,
-        IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
+        IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null,
+        AgentSessionLiveness? claimState = null)
     {
         return new PlanningFeatureResponse(
             feature.Slug,
@@ -105,12 +118,18 @@ public static class PlanningMapper
                 .ToArray(),
             dependencies.BlockedBy.Any(entry => !entry.Closed),
             [.. dependencies.BlockedBy.Select(ToDependencyEntryResponse)],
-            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)]);
+            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)],
+            feature.ClaimedByAlias,
+            feature.ClaimedByVendor,
+            feature.ClaimedAt,
+            feature.ClaimSessionId is null ? null : claimState,
+            feature.ClaimedByHuman);
     }
 
     public static PlanningFeatureRosterResponse ToFeatureRosterResponse(
         PlanningFeature feature, FeatureDependencies dependencies,
-        IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
+        IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null,
+        AgentSessionLiveness? claimState = null)
     {
         return new PlanningFeatureRosterResponse(
             feature.Slug,
@@ -128,7 +147,12 @@ public static class PlanningMapper
                 .ToArray(),
             dependencies.BlockedBy.Any(entry => !entry.Closed),
             [.. dependencies.BlockedBy.Select(ToDependencyEntryResponse)],
-            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)]);
+            [.. dependencies.Blocks.Select(ToDependencyEntryResponse)],
+            feature.ClaimedByAlias,
+            feature.ClaimedByVendor,
+            feature.ClaimedAt,
+            feature.ClaimSessionId is null ? null : claimState,
+            feature.ClaimedByHuman);
     }
 
     public static PlanningFeatureDependenciesResponse ToDependenciesResponse(FeatureDependencies dependencies)

@@ -242,6 +242,30 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task HumanClaim_ThenAgentTakeOver_ClearsHumanFlag()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+
+        await service.ClaimAsync(_projectId, "feat-a", "board", "human", null);
+        var humanClaimed = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "feat-a");
+        humanClaimed.ClaimedByHuman.ShouldBeTrue();
+
+        var humanSessionId = humanClaimed.ClaimSessionId!.Value;
+        var humanSession = await _context.AgentSessions.SingleAsync(s => s.Id == humanSessionId);
+        _context.AgentSessions.Remove(humanSession);
+        _context.AgentSessions.Add(AgentSession.Restore(
+            humanSessionId, "board", "human",
+            DateTime.UtcNow.AddHours(-3), DateTime.UtcNow.AddHours(-2)));
+        await _context.SaveChangesAsync();
+
+        var taken = await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+
+        taken.ClaimedByAlias.ShouldBe("Dan");
+        taken.ClaimedByHuman.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Unclaim_ByHolder_ReleasesAndLogs()
     {
         await CreateFeatureAsync();

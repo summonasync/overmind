@@ -16,7 +16,7 @@ export interface PlanningBoardFilters {
   priorities: PlanningFeaturePriority[];
   spec: PlanningBoardArtifactFilter;
   plan: PlanningBoardArtifactFilter;
-  currentOnly: boolean;
+  pinnedOnly: boolean;
   hideDone: boolean;
   blockedOnly: boolean;
 }
@@ -37,7 +37,7 @@ export const EMPTY_BOARD_FILTERS: PlanningBoardFilters = {
   priorities: [],
   spec: "any",
   plan: "any",
-  currentOnly: false,
+  pinnedOnly: false,
   hideDone: true,
   blockedOnly: false,
 };
@@ -60,7 +60,7 @@ export function parseBoardFilters(searchParams: BoardFilterSearchParams): Planni
     priorities,
     spec: parseArtifactFilter(searchParams.get("spec")),
     plan: parseArtifactFilter(searchParams.get("plan")),
-    currentOnly: searchParams.get("current") === "1",
+    pinnedOnly: searchParams.get("pinned") === "1",
     hideDone: searchParams.get("hidedone") !== "0",
     blockedOnly: searchParams.get("blocked") === "1",
   };
@@ -84,7 +84,7 @@ export function coerceBoardFilters(value: unknown): PlanningBoardFilters | null 
       : [],
     spec: parseArtifactFilter(typeof record.spec === "string" ? record.spec : null),
     plan: parseArtifactFilter(typeof record.plan === "string" ? record.plan : null),
-    currentOnly: record.currentOnly === true,
+    pinnedOnly: record.pinnedOnly === true,
     hideDone: record.hideDone !== false,
     blockedOnly: record.blockedOnly === true,
   };
@@ -96,7 +96,7 @@ export function isBoardFilterActive(filters: PlanningBoardFilters): boolean {
     filters.priorities.length > 0 ||
     filters.spec !== "any" ||
     filters.plan !== "any" ||
-    filters.currentOnly ||
+    filters.pinnedOnly ||
     !filters.hideDone ||
     filters.blockedOnly
   );
@@ -114,7 +114,7 @@ export function filterBoardItems(
       (filters.priorities.length === 0 || filters.priorities.includes(item.priority)) &&
       matchesArtifactFilter(item.specStatus, filters.spec) &&
       matchesArtifactFilter(item.planStatus, filters.plan) &&
-      (!filters.currentOnly || item.isCurrent) &&
+      (!filters.pinnedOnly || item.claimedByAlias !== null) &&
       (!filters.blockedOnly || item.isBlocked),
   );
 }

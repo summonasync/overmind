@@ -62,6 +62,7 @@ public sealed class OvermindPlanningTools
     private const string DoorSource = "agent";
 
     private const int SkipHeadLimit = 5;
+    private const int ClaimIdentityCap = 32;
 
     private const string ArtifactAliasDescription =
         "Optional alias instead of artifactId: '<slug>/T<order>' addresses a task by its order, " +
@@ -85,14 +86,14 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_list_features", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection.")]
+    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress, plus claim state (claimedByAlias, claimedByVendor, claimedAt, claimState alive|stale|ended) on claimed entries — a stale or ended claim can be taken over via planning_claim_feature. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection.")]
     public Task<JsonElement> ListFeatures(
         [Description("Id of the project whose feature board to read.")] Guid projectId,
         CancellationToken ct) =>
         Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
+    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
     public async Task<JsonElement> ReadFeature(
         [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
@@ -482,7 +483,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
-    [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The board order IS the queue: first on the board is next in the queue, and the dashboard board shows exactly this order. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, readiness 0-3, blockedBy, isBlocked, isCurrent. limit truncates to the first N entries; omit it for the full queue.")]
+    [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The board order IS the queue: first on the board is next in the queue, and the dashboard board shows exactly this order. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, readiness 0-3, blockedBy, isBlocked, plus claim state when claimed: claimedByAlias, claimedByVendor, claimedAt and claimState (alive | stale | ended — stale claims are take-over-able via planning_claim_feature). limit truncates to the first N entries; omit it for the full queue.")]
     public Task<JsonElement> TaskQueue(
         [Description("Id of the project whose queue to read.")] Guid projectId,
         [Description("Optional positive int; truncates the queue to the first N entries.")] int? limit = null,
@@ -536,6 +537,66 @@ public sealed class OvermindPlanningTools
                 }
             ]
         };
+    }
+
+    [McpServerTool(Name = "planning_claim_feature", Destructive = false, Idempotent = false)]
+    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
+    public async Task<CallToolResult> ClaimFeature(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to claim, as shown on the board.")] string slug,
+        [Description("Your display alias, max 32 chars (e.g. Dan).")] string alias,
+        [Description("Your vendor string, max 32 chars (e.g. qwen, claude).")] string vendor,
+        CancellationToken ct = default)
+    {
+        if (alias.Trim().Length > ClaimIdentityCap)
+        {
+            throw new McpException(
+                $"Alias '{alias.Trim()}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
+        }
+
+        if (vendor.Trim().Length > ClaimIdentityCap)
+        {
+            throw new McpException(
+                $"Vendor '{vendor.Trim()}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
+        }
+
+        var echo = await Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/claim",
+            new { alias = alias.Trim(), vendor = vendor.Trim() },
+            ct));
+
+        var claim = new JsonObject
+        {
+            ["slug"] = echo.GetProperty("slug").GetString(),
+            ["claimedByAlias"] = echo.GetProperty("claimedByAlias").GetString(),
+            ["claimedByVendor"] = echo.GetProperty("claimedByVendor").GetString(),
+            ["claimedAt"] = echo.GetProperty("claimedAt").GetString(),
+            ["claimState"] = echo.GetProperty("claimState").GetString()
+        };
+        return EchoResult(claim.Deserialize<JsonElement>());
+    }
+
+    [McpServerTool(Name = "planning_unclaim_feature", Destructive = false, Idempotent = true)]
+    [Description("Releases your claim on the feature — holder session only; any other session gets a 409 naming the holder. The human door in the Overmind UI can release any claim without session restrictions. Unclaiming an unclaimed feature is a no-op, and a claim released itself when the holder closed the feature done.")]
+    public async Task<CallToolResult> UnclaimFeature(
+        [Description("Id of the project the feature belongs to.")] Guid projectId,
+        [Description("Slug of the feature to unclaim, as shown on the board.")] string slug,
+        CancellationToken ct = default)
+    {
+        var echo = await Guarded(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/unclaim",
+            new { },
+            ct));
+
+        var claim = new JsonObject
+        {
+            ["slug"] = echo.GetProperty("slug").GetString(),
+            ["claimedByAlias"] = echo.GetProperty("claimedByAlias").GetString(),
+            ["claimedByVendor"] = echo.GetProperty("claimedByVendor").GetString(),
+            ["claimedAt"] = echo.GetProperty("claimedAt").GetString(),
+            ["claimState"] = echo.GetProperty("claimState").GetString()
+        };
+        return EchoResult(claim.Deserialize<JsonElement>());
     }
 
     [McpServerTool(Name = "planning_set_feature_priority", Destructive = false, Idempotent = false)]

@@ -227,6 +227,21 @@ public static class Canned
     public const string PlanningQueueOutOfRangeJson =
         """{"title":"InvalidQueuePosition","detail":"Position 9 is outside the queue band of 'demo-feature': the band holds 3 non-done features, so the valid range is 1..3.","status":400}""";
 
+    public const string PlanningClaimedJson =
+        """
+        {"slug":"demo-feature","claimedByAlias":"Dan","claimedByVendor":"qwen","claimedAt":"2026-10-02T10:00:00Z","claimState":"alive"}
+        """;
+
+    public const string PlanningUnclaimedJson =
+        """
+        {"slug":"demo-feature","claimedByAlias":null,"claimedByVendor":null,"claimedAt":null,"claimState":null}
+        """;
+
+    public const string PlanningClaimHeldJson =
+        """
+        {"title":"FeatureClaimHeld","detail":"Feature 'demo-feature': claim held by Dan by qwen (alive). The claim acts as a mutation lock: reads stay open, mutations and unclaims belong to the holder session — the human door in the Overmind UI is never locked.","status":409}
+        """;
+
     public const string PlanningFeaturePriorityJson =
         """
         {"slug":"demo-feature","title":"Demo feature","body":"<goal>\nShip the demo.\n</goal>","status":"inProgress","priority":"p0","version":5,"createdAt":"2026-09-08T10:00:00Z","updatedAt":"2026-09-25T09:00:00Z","artifacts":[],"isBlocked":false,"blockedBy":[],"blocks":[]}

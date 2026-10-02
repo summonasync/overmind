@@ -22,6 +22,8 @@ public sealed record OnboardValidationBlock(bool HumanGate);
 
 public sealed record OnboardSemanticBlock(bool Available, string? Reason);
 
+public sealed record OnboardAgentIdentityBlock(string Alias, string Vendor, string NamingRules);
+
 public sealed record OnboardResponse(
     Guid ProjectId,
     string ProjectName,
@@ -30,4 +32,5 @@ public sealed record OnboardResponse(
     OnboardMaterializationBlock Materialization,
     OnboardValidationBlock Validation,
     OnboardSemanticBlock Semantic,
+    OnboardAgentIdentityBlock AgentIdentity,
     string Quickstart);

@@ -15,7 +15,12 @@ public sealed record PlanningFeatureBoardItem(
     int TaskDone,
     DateTime UpdatedAt,
     bool IsBlocked,
-    int QueuePosition);
+    int QueuePosition,
+    string? ClaimedByAlias,
+    string? ClaimedByVendor,
+    DateTime? ClaimedAt,
+    AgentSessionLiveness? ClaimState,
+    bool ClaimedByHuman);
 
 public sealed record PlanningQueueItem(
     string Slug,
@@ -30,7 +35,12 @@ public sealed record PlanningQueueItem(
     int TaskTotal,
     int Readiness,
     string[] BlockedBy,
-    bool IsBlocked);
+    bool IsBlocked,
+    string? ClaimedByAlias,
+    string? ClaimedByVendor,
+    DateTime? ClaimedAt,
+    AgentSessionLiveness? ClaimState,
+    bool ClaimedByHuman);
 
 public sealed record PlanningQueueResponse(PlanningQueueItem[] Items);
 
@@ -48,6 +58,16 @@ public sealed record UpdatePlanningFeatureByAgentRequest(
 
 public sealed record SetPlanningFeaturePriorityRequest(string Priority);
 
+public sealed record ClaimPlanningFeatureRequest(string Alias, string Vendor);
+
+public sealed record PlanningFeatureClaimResponse(
+    string Slug,
+    string? ClaimedByAlias,
+    string? ClaimedByVendor,
+    DateTime? ClaimedAt,
+    AgentSessionLiveness? ClaimState,
+    bool ClaimedByHuman);
+
 public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
 
 public sealed record PlanningFeatureResponse(
@@ -62,7 +82,12 @@ public sealed record PlanningFeatureResponse(
     PlanningArtifactResponse[] Artifacts,
     bool IsBlocked,
     PlanningFeatureDependencyEntryResponse[] BlockedBy,
-    PlanningFeatureDependencyEntryResponse[] Blocks);
+    PlanningFeatureDependencyEntryResponse[] Blocks,
+    string? ClaimedByAlias,
+    string? ClaimedByVendor,
+    DateTime? ClaimedAt,
+    AgentSessionLiveness? ClaimState,
+    bool ClaimedByHuman);
 
 public sealed record PlanningFeatureRosterResponse(
     string Slug,
@@ -76,7 +101,12 @@ public sealed record PlanningFeatureRosterResponse(
     PlanningArtifactRosterItemResponse[] Artifacts,
     bool IsBlocked,
     PlanningFeatureDependencyEntryResponse[] BlockedBy,
-    PlanningFeatureDependencyEntryResponse[] Blocks);
+    PlanningFeatureDependencyEntryResponse[] Blocks,
+    string? ClaimedByAlias,
+    string? ClaimedByVendor,
+    DateTime? ClaimedAt,
+    AgentSessionLiveness? ClaimState,
+    bool ClaimedByHuman);
 
 public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
 

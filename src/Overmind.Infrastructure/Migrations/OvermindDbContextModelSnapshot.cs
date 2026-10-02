@@ -313,6 +313,11 @@ namespace Overmind.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("ClaimedByHuman")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("ClaimedByVendor")
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");

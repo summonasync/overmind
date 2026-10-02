@@ -3,7 +3,11 @@
 import { CircleHelp, ClipboardList } from "lucide-react";
 import { Markdown } from "@/shared/lib/markdown";
 import { Badge } from "@/shared/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { ErrorText } from "@/shared/ui/error-text";
 import { InfoPanelSection } from "@/widgets/app-shell";
+import { FeatureClaimChip } from "@/features/planning/components/feature-claim-chip";
+import { usePlanningMutations } from "@/features/planning/lib/use-planning";
 import {
   artifactStatusTone,
   extractOpenQuestions,
@@ -24,6 +28,7 @@ interface FeatureOverviewPanelProps {
 export function FeatureOverviewPanel({ projectId, slug }: FeatureOverviewPanelProps) {
   const { data: feature } = usePlanningFeature(projectId, slug);
   const { data: board } = usePlanningBoard(projectId);
+  const { claimFeature, unclaimFeature } = usePlanningMutations(projectId);
 
   if (feature === null) {
     return null;
@@ -48,9 +53,27 @@ export function FeatureOverviewPanel({ projectId, slug }: FeatureOverviewPanelPr
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
             <Badge>v{feature.version}</Badge>
-            {boardItem?.isCurrent ? <Badge tone="info">current</Badge> : null}
+            {boardItem !== undefined ? <FeatureClaimChip item={boardItem} /> : null}
             {feature.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
           </div>
+
+          {boardItem !== undefined ? (
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                className="px-2 py-1 text-xs"
+                disabled={claimFeature.isPending || unclaimFeature.isPending}
+                onClick={() =>
+                  boardItem.claimedByAlias === null
+                    ? claimFeature.mutate({ slug: boardItem.slug, alias: "board", vendor: "human" })
+                    : unclaimFeature.mutate({ slug: boardItem.slug })
+                }
+              >
+                {boardItem.claimedByAlias === null ? "Claim" : "Unclaim"}
+              </Button>
+              <ErrorText error={(claimFeature.error ?? unclaimFeature.error) as Error | null} />
+            </div>
+          ) : null}
 
           {tasksTotal > 0 ? (
             <div className="space-y-1">
