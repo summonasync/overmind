@@ -1,7 +1,7 @@
 ---
 feature: 099
 slug: agent-claims
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-29
@@ -37,4 +37,6 @@ Unit of claim: the FEATURE (orchestrator holds the feature and distributes tasks
 
 <log>
 - 2026-09-30 [auto] — artifact created → inProgress
+- 2026-10-02 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-02 [agent] — done by user request in-session: result 35613fc8 validated (notification proof 2ed16b94 «approved» 13:17), chat mandate «коммит, пуш, берём следующую таску»; 5/5 tasks done with full review cycles, architect APPROVED-WITH-WARNINGS (0 blockers, warnings closed), dogfood 6/6, suite 1795/1795
 </log>

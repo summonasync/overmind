@@ -2,7 +2,7 @@
 feature: 099
 task: 02
 slug: agent-claims
-status: review
+status: done
 review: light
 created: 2026-09-30
 depends_on: 01
@@ -68,4 +68,6 @@ English-only, no comments by default, no auto-commits. Lock check lives server-s
 - 2026-10-01 [agent] — task 02 executed to review: build 0/0, full suite 1773 passed / 0 failed, all 5 ACs ticked; lock at agent door via ClaimLockFilter (human door exempt per spec), touch middleware, sessions register/end, adapter lifecycle inside CreateHttpClient per orchestrator recon; ready for dotnet-code-reviewer (light review per plan)
 - 2026-10-01 [agent] — 2026-10-02 [agent] — reviewed by dotnet-code-reviewer: FAIL — 1 BLOCKER (planning_set_feature_priority rides the unlocked human-door PUT; test matrix pins the wrong route), 1 WARNING (agent import mutates claimed features, outside the 12-list — needs spec decision), 3 nits; rest clean, build 0/0, 1773/0 re-verified; report audits/review-099-02.md. Fix loop dispatched to the coder.
 - 2026-10-01 [agent] — Fix round for review 099-02: (1) BLOCKER — new locked agent-door route POST /api/agent/projects/{projectId}/planning/features/{slug}/priority (.LockToClaim), MCP planning_set_feature_priority re-pointed off the human PUT, matrix row + Mcp driver test now pin the real route; (2) user-approved spec addition — agent import is claim-aware: BacklogImporter split into ParseFeatureAsync/ImportFeatureAsync over shared ParseImportAsync, FeatureClaimService.EnsureImportAllowedAsync 409s foreign-claimed imports before any write, own-claimed/unclaimed pass, headerless never locked; (3) nits — MarkEnded Guid.Empty guard, EnsureHolderForArtifactAsync parameter order (artifactId, sessionId). For task 03 coordination: the priority tool now calls POST .../priority (route owned by task 02), import route stays claim-checked server-side. Gates: build 0/0, full suite 1776 passed / 0 failed (Core 251, Infra 552, Api 559, Mcp 414).
+- 2026-10-02 [agent] — 2026-10-02 [agent] — re-reviewed fix round 1 (956c96b) by dotnet-code-reviewer: PASS — priority blocker closed on the real locked route, import lock atomic per approved spec v2, both nits applied; build 0/0, lock suite 48/48 re-run; report audits/review-099-02.md.
+- 2026-10-02 [agent] — delta review PASS (audits/review-099-02.md, fix round 1 in 956c96b): 12/12 lock matrix on real routes, import lock atomic check-before-write, nits applied; AC 5/5; 1776/1776. Closing as done.
 </log>
