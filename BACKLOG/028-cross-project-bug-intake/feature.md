@@ -1,7 +1,7 @@
 ---
 feature: 028
 slug: cross-project-bug-intake
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-09-20
@@ -27,3 +27,9 @@ Mindlash Studio догфудит Overmind и как доску, и как зав
 <status>
 Draft до спеки; спека после brainstorm с юзером (паттерн 007). Очередь: после 027-догфуда. Скоординировать с 020 (notifications) при проектировании.
 </status>
+
+<log>
+- 2026-10-02 [auto] — artifact created → inProgress
+- 2026-10-03 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-03 [agent] — done by user request in-session: result c909e954 validated (notification proof da5f1f33 «approved» 2026-10-03T21:04), chat mandate «Флип, коммит, пуш»; 5/5 tasks done with full review cycles (4 blockers caught and closed), architect APPROVED-WITH-WARNINGS (W1 promote-lock + W2 404s closed), final tree 1857/1857 + web 52/52
+</log>
