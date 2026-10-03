@@ -1,7 +1,7 @@
 ---
 feature: 102
 slug: project-header-on-feature-page
-status: draft
+status: done
 priority: p1
 version: 1
 created: 2026-10-03
@@ -30,3 +30,7 @@ Permanent project identity on the main content pages: the feature page, dashboar
 - 101-approval-project-prominence (sibling: project prominence on approval surfaces — same UX problem, notification-side).
 - 093-approval-deep-link-toast / 028 Issues Board deep-links (the "lands with zero context" trigger).
 </refs>
+
+<log>
+- 2026-10-03 [agent] — tombstone-done by user request in-session: merged into 101-approval-project-prominence (user ordered the merge 2026-10-04, 060/061→062 precedent — both were unstarted drafts, no code lost); the merged feature carries both scopes (approval-surface prominence + persistent project header on content pages) and sits at the head of the p1 band.
+</log>

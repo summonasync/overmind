@@ -2,7 +2,7 @@
 feature: 085
 slug: board-search-filters-layout
 status: draft
-priority: p1
+priority: p2
 version: 1
 created: 2026-09-26
 ---

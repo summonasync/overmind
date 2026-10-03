@@ -1,7 +1,7 @@
 ---
 feature: 091
 slug: board-card-brief-phase-status
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-27
@@ -29,3 +29,7 @@ The board card answers "what is this feature and where is it in the ceremony" on
 - 072-planning-task-queue readiness ordinal (0-3) — existing derived decorator.
 - 083-feature-body-update (in flight) — its title/body edit tool will keep the brief source fresh.
 </refs>
+
+<log>
+- 2026-10-03 [auto] — artifact created → inProgress
+</log>

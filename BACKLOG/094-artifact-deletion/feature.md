@@ -1,7 +1,7 @@
 ---
 feature: 094
 slug: artifact-deletion
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-27
@@ -19,3 +19,7 @@ Artifact deletion: ни одна дверь не умеет удалять ар�
 - Гварды: validated-доки / done-таски / история лога — блок или явный force.
 - Материализация: снос файла vs tombstone-файл — координация с 029/051.
 </body>
+
+<log>
+- 2026-10-03 [auto] — artifact created → inProgress
+</log>
