@@ -10,6 +10,7 @@ import {
   Package,
   Search,
   Settings,
+  SquareKanban,
   type LucideIcon,
 } from "lucide-react";
 import logoMark from "@/shared/assets/brand/logo-mark.png";
@@ -40,6 +41,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
+  { href: "/issues", label: "Issues Board", icon: SquareKanban },
   { href: "/attention", label: "Attention", icon: BellRing },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },

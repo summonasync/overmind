@@ -1,6 +1,6 @@
 export type NotificationKind = "approval" | "question" | "info";
 
-export type NotificationTab = "spec" | "plan" | "tasks" | "result";
+export type NotificationTab = "spec" | "plan" | "tasks" | "result" | "issues";
 
 export interface NotificationItem {
   id: string;

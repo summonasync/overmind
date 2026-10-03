@@ -28,5 +28,6 @@ public static class OnboardQuickstart
         Artifact statuses — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the documents' terminal; result has no done.
         Before working, read notes/decisions/guards with list_entries (type=note|decision|gate|guard) and read_entry.
         Claims: a claimed feature is locked to the holder session — other sessions get 409 naming the holder on feature mutations; claims release themselves when the holder session ends or goes stale past the project threshold, stale/ended claims are take-over-able, and planning_unclaim_feature hands the feature back. Unclaim when you hand off.
+        Foreign projects: need a fix in code you do not own? Do not touch their repo — file an issue on their board: list_projects → issues_create(projectId=theirs, authorProjectId=yours). Follow-ups = issues_append; the owner team triages/promotes (issues_promote moves it into a task on their board). The owner is notified automatically on your create.
         """;
 }

@@ -181,6 +181,16 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureClaimRefused,
             $"Feature '{slug}' is done; claims are refused — reopen it first if work resumes.");
 
+    public static PlanningException MissingIssue(Guid issueId) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingIssue,
+            $"Issue '{issueId}' was not found.");
+
+    public static PlanningException IssueInvalidTransition(IssueStatus current, IssueStatus target) =>
+        new(PlanningFailureKind.InvalidStatus, PlanningFailureCode.IssueInvalidTransition,
+            $"Issue cannot move from '{current.ToString().ToLowerInvariant()}' to '{target.ToString().ToLowerInvariant()}'. " +
+            "The forward chain is open → triaged → promoted → closed; closed is reachable from any non-closed state; " +
+            "promoted is reached only through issues_promote; there is no reopen.");
+
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
 }

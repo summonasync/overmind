@@ -22,7 +22,7 @@ public sealed class AgentNotification
     public DateTime? HiddenAt { get; private set; }
 
     public static IReadOnlySet<string> AllowedTabs { get; } =
-        new HashSet<string>(["spec", "plan", "tasks", "result"], StringComparer.Ordinal);
+        new HashSet<string>(["spec", "plan", "tasks", "result", "issues"], StringComparer.Ordinal);
 
     public static AgentNotification Create(
         NotificationKind kind,

@@ -108,6 +108,7 @@ public static class DependencyInjection
             OvermindPaths.DataDirectory));
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<FeatureClaimService>();
+        services.AddScoped<IssueService>();
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<FeatureDependencyService>();
         services.AddScoped<FeatureQueueService>();

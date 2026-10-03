@@ -216,6 +216,76 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("FrontmatterKeys");
                 });
 
+            modelBuilder.Entity("Overmind.Core.Issue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AuthorProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PromotedToArtifactId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StatusSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorProjectId");
+
+                    b.HasIndex("ProjectId", "Status");
+
+                    b.ToTable("Issues");
+                });
+
+            modelBuilder.Entity("Overmind.Core.IssueAppend", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AuthorProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("IssueId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IssueId", "CreatedAt");
+
+                    b.ToTable("IssueAppends");
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningArtifact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -685,6 +755,30 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasOne("Overmind.Core.ContextEntry", null)
                         .WithMany("Versions")
                         .HasForeignKey("EntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.Issue", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.IssueAppend", b =>
+                {
+                    b.HasOne("Overmind.Core.Issue", null)
+                        .WithMany()
+                        .HasForeignKey("IssueId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -165,6 +165,8 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapPlanningMaterializationApi();
     app.MapAgentPlanningApi();
     app.MapAgentSessionsApi();
+    app.MapAgentIssuesApi();
+    app.MapIssuesApi();
     app.MapFrontmatterKeysApi();
     app.MapOnboardApi();
     app.MapTagsApi();

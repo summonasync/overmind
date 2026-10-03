@@ -15,6 +15,9 @@ public static class Canned
     public static readonly Guid PlanningTaskTwoId = Guid.Parse("99999999-9999-9999-9999-999999999999");
     public static readonly Guid NotificationId = Guid.Parse("13131313-1313-1313-1313-131313131313");
 
+    public static readonly Guid IssueId = Guid.Parse("14141414-1414-1414-1414-141414141414");
+    public static readonly Guid IssueAuthorProjectId = Guid.Parse("15151515-1515-1515-1515-151515151515");
+
     public const string PlanningSlug = "demo-feature";
     public const string PlanningStopSlug = "gate-locked";
 
@@ -226,6 +229,41 @@ public static class Canned
 
     public const string PlanningQueueOutOfRangeJson =
         """{"title":"InvalidQueuePosition","detail":"Position 9 is outside the queue band of 'demo-feature': the band holds 3 non-done features, so the valid range is 1..3.","status":400}""";
+
+    public const string IssueCreatedJson =
+        """
+        {"id":"14141414-1414-1414-1414-141414141414","status":"open","title":"Crash on save"}
+        """;
+
+    public const string IssuesListJson =
+        """
+        [{"id":"14141414-1414-1414-1414-141414141414","title":"Crash on save","status":"open","authorProjectId":"15151515-1515-1515-1515-151515151515","createdAt":"2026-10-03T10:00:00Z","closedAt":null,"promotedToArtifactId":null,"appendCount":1}]
+        """;
+
+    public const string IssueCardJson =
+        """
+        {"id":"14141414-1414-1414-1414-141414141414","title":"Crash on save","body":"## Repro\nOpen the file.\n\n## Expected\nNo crash.","status":"open","authorProjectId":"15151515-1515-1515-1515-151515151515","createdAt":"2026-10-03T10:00:00Z","closedAt":null,"promotedToArtifactId":null,"appends":[{"id":"16161616-1616-1616-1616-161616161616","authorProjectId":"15151515-1515-1515-1515-151515151515","text":"still reproducible","createdAt":"2026-10-03T11:00:00Z"}]}
+        """;
+
+    public const string IssueAppendEchoJson =
+        """
+        {"id":"17171717-1717-1717-1717-171717171717","authorProjectId":"15151515-1515-1515-1515-151515151515","text":"still reproducible","createdAt":"2026-10-03T11:00:00Z"}
+        """;
+
+    public const string IssueStatusEchoJson =
+        """
+        {"id":"14141414-1414-1414-1414-141414141414","status":"triaged","source":"Agent","closedAt":null}
+        """;
+
+    public const string IssuePromoteEchoJson =
+        """
+        {"id":"14141414-1414-1414-1414-141414141414","status":"promoted","artifactId":"9e4i5j6k-0000-0000-0000-000000000000","featureId":"b0c1d2e3-0000-0000-0000-000000000000","artifactVersion":1}
+        """;
+
+    public const string IssuePromoteGatedJson =
+        """
+        {"title":"IssueInvalidTransition","detail":"Issue cannot move from 'promoted' to 'promoted'. The forward chain is open \u2192 triaged \u2192 promoted \u2192 closed; closed is reachable from any non-closed state; promoted is reached only through issues_promote; there is no reopen.","status":400}
+        """;
 
     public const string PlanningClaimedJson =
         """

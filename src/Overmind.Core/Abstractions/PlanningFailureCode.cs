@@ -37,5 +37,7 @@ public enum PlanningFailureCode
     BlockedByDuplicateOrder,
     BlockedByNotAllowedForKind,
     FeatureClaimHeld,
-    FeatureClaimRefused
+    FeatureClaimRefused,
+    IssueInvalidTransition,
+    MissingIssue
 }

@@ -1,7 +1,15 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { BellRing, Folder, Package, Search, Settings, type LucideIcon } from "lucide-react";
+import {
+  BellRing,
+  Folder,
+  Package,
+  Search,
+  Settings,
+  SquareKanban,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/shared/lib/cn";
 import { AttentionBadge } from "@/widgets/app-shell/ui/attention-badge";
 
@@ -13,6 +21,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
+  { href: "/issues", label: "Issues Board", icon: SquareKanban },
   { href: "/attention", label: "Attention", icon: BellRing },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },

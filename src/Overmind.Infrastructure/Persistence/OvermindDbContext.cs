@@ -31,6 +31,8 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<FrontmatterKey> FrontmatterKeys => Set<FrontmatterKey>();
     public DbSet<AgentNotification> AgentNotifications => Set<AgentNotification>();
     public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
+    public DbSet<Issue> Issues => Set<Issue>();
+    public DbSet<IssueAppend> IssueAppends => Set<IssueAppend>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -265,6 +267,32 @@ public sealed class OvermindDbContext : DbContext
         {
             builder.Property(s => s.Alias).HasMaxLength(AgentSession.MaxIdentityLength);
             builder.Property(s => s.Vendor).HasMaxLength(AgentSession.MaxIdentityLength);
+        });
+
+        modelBuilder.Entity<Issue>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(i => i.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(i => i.AuthorProjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasIndex(i => new { i.ProjectId, i.Status });
+            builder.HasIndex(i => i.AuthorProjectId);
+        });
+
+        modelBuilder.Entity<IssueAppend>(builder =>
+        {
+            builder.HasOne<Issue>()
+                .WithMany()
+                .HasForeignKey(a => a.IssueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(a => new { a.IssueId, a.CreatedAt });
         });
     }
 }
