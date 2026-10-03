@@ -1,7 +1,10 @@
 export { ProjectDetail } from "./components/project-detail";
 export { ProjectForm } from "./components/project-form";
+export { ProjectHeader } from "./components/project-header";
 export { ProjectList } from "./components/project-list";
+export { ProjectNameBadge } from "./components/project-name-badge";
 export { ProjectTree } from "./components/project-tree";
 export { useProjectList, useProjectMutations } from "./lib/use-projects";
+export { useProjectName } from "./lib/use-project-name";
 export { projectKeys, projectListQueryOptions, projectDetailQueryOptions } from "./queries";
 export type { ProjectFormValues, ProjectResponse } from "./types";

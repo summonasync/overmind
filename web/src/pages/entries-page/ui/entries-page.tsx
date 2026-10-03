@@ -9,16 +9,13 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { EntryEditor, EntryFilters, EntryList, TagManager, useEntryList, useEntryMutations } from "@/features/entries";
 import type { EntryFormValues, EntryListFilters, EntryResponse } from "@/features/entries";
-import { useProjectList } from "@/features/projects";
+import { ProjectHeader } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { EntriesInfoPanel } from "@/pages/entries-page/ui/entries-info-panel";
 
 function EntriesPageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project") ?? "";
-
-  const { data: projects } = useProjectList();
-  const project = projects.find((item) => item.id === projectId) ?? null;
 
   const [filters, setFilters] = useState<EntryListFilters>({ type: "", tag: "" });
   const { data: entries, loading, error } = useEntryList(projectId, filters);
@@ -60,8 +57,9 @@ function EntriesPageContent() {
 
   return (
     <div className="space-y-4">
+      <ProjectHeader projectId={projectId} />
       <PageHeader
-        title={project ? `Entries — ${project.name}` : "Entries"}
+        title="Entries"
         description="Capture knowledge, decisions, skills and more. Turn experience into a lasting advantage."
         actions={
           <>

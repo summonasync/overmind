@@ -23,7 +23,7 @@ import {
   usePlanningMutations,
 } from "@/features/planning";
 import type { PlanningFeatureBoardItem, PlanningFeatureFormValues } from "@/features/planning";
-import { useProjectList } from "@/features/projects";
+import { ProjectHeader } from "@/features/projects";
 import { PlanningInfoPanel } from "@/pages/planning-page/ui/planning-info-panel";
 import { EmptyState } from "@/shared/ui/empty-state";
 
@@ -34,9 +34,6 @@ function PlanningPageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project") ?? "";
   const featureSlug = searchParams?.get("feature") ?? "";
-
-  const { data: projects } = useProjectList();
-  const project = projects.find((item) => item.id === projectId) ?? null;
 
   const { data: features, loading, error } = usePlanningBoard(projectId);
   const boardFilters = useBoardFilters();
@@ -114,6 +111,7 @@ function PlanningPageContent() {
   if (featureSlug) {
     return (
       <div className="space-y-4">
+        <ProjectHeader projectId={projectId} />
         <FeatureWorkspace projectId={projectId} slug={featureSlug} />
         <DriftPanel projectId={projectId} />
       </div>
@@ -131,8 +129,9 @@ function PlanningPageContent() {
 
   return (
     <div className="space-y-4">
+      <ProjectHeader projectId={projectId} />
       <PageHeader
-        title={project ? `Dashboard — ${project.name}` : "Dashboard"}
+        title="Dashboard"
         description={PLANNING_DESCRIPTION}
         actions={
           <>

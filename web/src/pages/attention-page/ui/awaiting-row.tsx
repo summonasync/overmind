@@ -4,9 +4,11 @@ import {
   FeatureSlugLabel,
   NOTIFICATION_KIND_META,
   notificationHref,
+  notificationProjectId,
   NotificationActions,
 } from "@/features/notifications";
 import type { NotificationItem } from "@/features/notifications";
+import { ProjectNameBadge } from "@/features/projects";
 import { cn } from "@/shared/lib/cn";
 import { formatNotificationTime } from "@/shared/lib/relative-time";
 
@@ -26,8 +28,9 @@ export function AwaitingRow({ item }: AwaitingRowProps) {
       )}
     >
       <div className="flex items-center gap-2">
+        <ProjectNameBadge projectId={notificationProjectId(item)} className="text-sm!" />
         <KindIcon size={14} aria-hidden className={cn("shrink-0", meta.iconClass)} />
-        <span className="text-xs font-medium text-foreground">{item.agent}</span>
+        <span className="text-xs text-muted">{item.agent}</span>
         {item.featureSlug ? (
           <span className="text-xs text-muted">
             <FeatureSlugLabel slug={item.featureSlug} />

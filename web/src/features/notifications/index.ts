@@ -11,6 +11,7 @@ export { isAwaitingNotification } from "./lib/awaiting";
 export { unreadNotifications } from "./lib/bell-preview";
 export { NOTIFICATION_KIND_META } from "./lib/notification-kind-meta";
 export { notificationHref } from "./lib/notification-href";
+export { notificationProjectId } from "./lib/notification-project-id";
 export { isHiddenNotification, repliedConversationsCount } from "./lib/conversation-archive";
 export { NotificationActions } from "./components/notification-actions";
 export { FeatureSlugLabel } from "./components/feature-slug-label";

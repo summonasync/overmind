@@ -6,10 +6,12 @@ import {
   isHiddenNotification,
   NOTIFICATION_KIND_META,
   notificationHref,
+  notificationProjectId,
   NotificationActions,
   useNotificationMutations,
 } from "@/features/notifications";
 import type { NotificationItem } from "@/features/notifications";
+import { ProjectNameBadge } from "@/features/projects";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -44,11 +46,11 @@ export function NotificationRow({ item }: NotificationRowProps) {
     >
       <div className="flex items-center gap-2">
         {archived ? <span className="sr-only">Archived</span> : null}
+        <ProjectNameBadge projectId={notificationProjectId(item)} className="text-sm!" />
         <Badge tone={meta.tone}>
           <KindIcon size={12} aria-hidden />
           {item.kind}
         </Badge>
-        <span className="text-xs font-medium text-foreground">{item.agent}</span>
         <span className="ml-auto shrink-0 text-xs text-muted">
           {formatNotificationTime(item.createdAt)}
         </span>
@@ -66,6 +68,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
       </div>
       <p className="mt-2 text-sm text-foreground">{item.text}</p>
       <div className="mt-2 flex items-center gap-2">
+        <span className="text-xs text-muted">{item.agent}</span>
         {item.featureSlug ? (
           <a
             href={notificationHref(item)}

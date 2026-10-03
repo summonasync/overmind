@@ -6,10 +6,12 @@ import {
   isAwaitingApproval,
   NOTIFICATION_KIND_META,
   notificationHref,
+  notificationProjectId,
   unreadNotifications,
   useNotifications,
 } from "@/features/notifications";
 import type { NotificationItem } from "@/features/notifications";
+import { ProjectNameBadge } from "@/features/projects";
 import { Badge } from "@/shared/ui/badge";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { Modal } from "@/shared/ui/modal";
@@ -25,6 +27,7 @@ function BellPreviewRow({ item }: { item: NotificationItem }) {
 
   const content = (
     <>
+      <ProjectNameBadge projectId={notificationProjectId(item)} />
       <KindIcon size={14} aria-hidden className={cn("shrink-0", meta.iconClass)} />
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.text}</span>
       <span className="shrink-0 text-xs text-muted">{formatNotificationTime(item.createdAt)}</span>

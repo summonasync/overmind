@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { Check, X } from "lucide-react";
-import { APPROVAL_REPLY, useNotificationMutations } from "@/features/notifications";
+import {
+  APPROVAL_REPLY,
+  notificationProjectId,
+  useNotificationMutations,
+} from "@/features/notifications";
+import { ProjectNameBadge } from "@/features/projects";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Modal } from "@/shared/ui/modal";
@@ -54,11 +59,7 @@ export function ApprovalBubble() {
             <Zerling pose="menacing" size={40} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span
-                  className={cn("truncate text-xs font-medium text-foreground", deadTarget && "opacity-60")}
-                >
-                  {item.agent}
-                </span>
+                <ProjectNameBadge projectId={notificationProjectId(item)} className="text-sm!" />
                 {deadTarget ? (
                   <span className="shrink-0 text-[10px] uppercase tracking-wide text-warning">
                     target gone
@@ -73,6 +74,11 @@ export function ApprovalBubble() {
                   <X size={14} aria-hidden />
                 </button>
               </div>
+              <p
+                className={cn("mt-1 truncate text-xs text-muted", deadTarget && "opacity-60")}
+              >
+                {item.agent}
+              </p>
               <p
                 title={item.text}
                 className={cn("mt-1.5 line-clamp-4 text-sm text-foreground", deadTarget && "opacity-60")}
