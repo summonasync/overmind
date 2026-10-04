@@ -28,7 +28,7 @@ For **coding challenges / тестовые задания** (any task marked as 
 Before proposing ANY changes, read documentation in this exact order:
 1. **`AGENTS.md`** — Tech stack, build commands, conventions
 2. **`CONTEXT.md`** — System design, architecture decisions, current phase, service boundaries (Russian)
-3. **Overmind board** — `overmind_onboard` (projectId, materialization + validation blocks) → `planning_list_features` (prefer the pinned current feature). The board is the source of truth for what's done, planned, blocked.
+3. **Overmind board** — `overmind_onboard` (projectId, materialization + validation blocks) → `planning_list_features` / `planning_task_queue` (queue = what's next; claim your pick per Claims workflow). The board is the source of truth for what's done, planned, blocked.
 4. **`STRUCTURE.md`** — Project structure, code style, Do/Don't (English)
 5. **`TECHNICAL-SOLUTIONS.md`** — Architecture Decision Records, trade-offs, historical context (English)
 6. **`SKILLFLOW.md`** — workflow graph: valid transitions and alternative routes; used for every «next step» suggestion.
@@ -41,7 +41,7 @@ After reading documentation, determine the working mode:
 
 **IF the board has features:**
 - We are **LOCKED to the board scope**. No new features, no scope changes, no "while we're at it" suggestions.
-- Work the pinned current feature; if none — ask the user which feature to pin (`planning_set_current`).
+- Work the next feature from `planning_task_queue` (board order IS the queue) or the one the user names. Claim it the moment work starts — `planning_claim_feature` (full practice: `overmind-ceremony`, Claims workflow); unclaim at wave close.
 - `planning_current_task` returns the next task or a stop/empty reason. A **STOP line is authoritative** — report to the user verbatim, never work around it: "Задача заблокирована: [причина]. Требуется решение человека."
 - The task artifact's `<anti-scope>` section is hard constraints — do NOT touch anything listed there. `<acceptance-criteria>` + spec-compliance becomes the Phase 3 review checklist.
 - **Never rewrite validated spec/plan artifacts without explicit user re-validation.** Routine writes are only: `planning_set_status` (with logNote), `planning_append_log`, `planning_patch_artifact` (sections, AC ticks). Never hand-edit materialized files under `BACKLOG/` — they belong to the materializer.
@@ -98,6 +98,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 - Coder MUST output list of changed files.
 - Coder receives ONLY its task artifact reference (projectId + featureSlug + artifactId) as primary input — reads it via `planning_read_artifact`, NEVER from disk when MCP is available (spec/plan stay with orchestrator and reviewer; the feature body is readable by all). Coder MUST patch discovered workarounds, quirks, and environment issues into the task artifact's `<obstacles>` section (`planning_patch_artifact`), append a one-line entry to `<log>` (`planning_append_log`), and move statuses (`planning_set_status` with logNote). Full contract: `overmind-ceremony`.
 - **Parallel execution** → independent task artifacts with disjoint file sets may be dispatched concurrently per `overmind-ceremony` (Parallel dispatch): one spawn batch, one briefing per coder, all results collected before the next ceremony move.
+- **Feature claim** — the orchestrator session holds the feature claim (`planning_claim_feature` at takeover, per `overmind-ceremony` Claims workflow). Sub-agents inherit the lock through the shared adapter session — they never claim or unclaim themselves.
 - **Before adding/upgrading any third-party NuGet dependency** → consult `nuget-licensing-guard`.
 - **`.NET` coders load `dotnet-best-practices` with the task artifact** — BP-rules are constraints; reviewers cite violations by BP-ID.
 - **Decomposition style** → `overmind-ceremony` plan decomposition (small tasks, exact file paths, verification steps per task).
@@ -144,6 +145,10 @@ Review output must include:
 - Run ONLY after completing a sprint phase or large refactoring.
 - Verify: Clean Architecture layers intact, no dependency inversions, service boundaries respected.
 - Output: `TECHNICAL-SOLUTIONS.md` update (new ADR entry) if structural changes occurred.
+
+### Wave Closeout (every feature)
+After the result artifact lands and the feature reaches review/done: `planning_unclaim_feature` —
+the claim is a per-session lock, and a held claim 409s other sessions until the session ends.
 
 ---
 
