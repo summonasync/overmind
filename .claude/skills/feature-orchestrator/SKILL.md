@@ -28,7 +28,7 @@ For **coding challenges / тестовые задания** (any task marked as 
 Before proposing ANY changes, read documentation in this exact order:
 1. **`AGENTS.md`** — Tech stack, build commands, conventions
 2. **`CONTEXT.md`** — System design, architecture decisions, current phase, service boundaries (Russian)
-3. **Overmind board** — `overmind_onboard` (projectId, materialization + validation blocks) → `planning_list_features` (prefer the pinned current feature). The board is the source of truth for what's done, planned, blocked.
+3. **Overmind board** — `overmind_onboard` (projectId, materialization + validation blocks) → `planning_list_features` / `planning_task_queue` (queue = what's next; claim your pick per Claims workflow). The board is the source of truth for what's done, planned, blocked.
 4. **`STRUCTURE.md`** — Project structure, code style, Do/Don't (English)
 5. **`TECHNICAL-SOLUTIONS.md`** — Architecture Decision Records, trade-offs, historical context (English)
 6. **`SKILLFLOW.md`** — workflow graph: valid transitions and alternative routes; used for every «next step» suggestion.

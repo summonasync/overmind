@@ -46,7 +46,7 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 | Capability | Tools | Board proof |
 |---|---|---|
 | Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043 |
-| Claims + session lock (claim/unclaim, `X-Overmind-Session` on 12 feature mutations, EOF auto-release, stale take-over) | `planning_claim_feature`, `planning_unclaim_feature` | 099; live dogfood 6/6 |
+| Claims + session lock (claim/unclaim, `X-Overmind-Session` on 13 feature mutations, EOF auto-release, stale take-over) | `planning_claim_feature`, `planning_unclaim_feature` | 099; live dogfood 6/6 |
 | Artifact deletion (agent: draft-only; human: unrestricted; blockedBy edges refuse first) | `planning_delete_artifact` | 094 |
 | Spec/plan/task/result artifacts with XML sections | `planning_upsert_artifact` | 006 |
 | Validation gate (humanGate off by default; chat approval → validate) | `planning_validate` | 055 |
