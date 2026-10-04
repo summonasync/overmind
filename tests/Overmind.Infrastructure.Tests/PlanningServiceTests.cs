@@ -1245,19 +1245,31 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteArtifact_RemovesFromDb()
+    public async Task DeleteArtifact_SoftDeletesAndKeepsRowAuditable()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
 
         var artifactService = CreateArtifactService();
         var artifact = await artifactService.UpsertAsync(
-            feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+            feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, null, default);
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v2", null, null, "rework", default);
 
-        await artifactService.DeleteAsync(artifact.Id, default);
+        await artifactService.DeleteAsync(artifact.Id, byHuman: true, default);
 
-        var exists = await _context.PlanningArtifacts.AnyAsync(a => a.Id == artifact.Id);
-        exists.ShouldBeFalse();
+        var visible = await _context.PlanningArtifacts.AnyAsync(a => a.Id == artifact.Id);
+        visible.ShouldBeFalse();
+
+        var row = await _context.PlanningArtifacts
+            .IgnoreQueryFilters()
+            .SingleAsync(a => a.Id == artifact.Id);
+        row.DeletedAt.ShouldNotBeNull();
+        row.DeletedBy.ShouldBe(PlanningArtifact.HumanDeletionMarker);
+        row.Body.ShouldContain("spec v2");
+
+        (await _context.PlanningArtifactVersions.CountAsync(v => v.ArtifactId == artifact.Id))
+            .ShouldBe(1);
     }
 
     [Fact]

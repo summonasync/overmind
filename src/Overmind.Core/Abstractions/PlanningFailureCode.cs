@@ -39,5 +39,7 @@ public enum PlanningFailureCode
     FeatureClaimHeld,
     FeatureClaimRefused,
     IssueInvalidTransition,
-    MissingIssue
+    MissingIssue,
+    ArtifactDeletionRefused,
+    DeletionBlockedByDependents
 }

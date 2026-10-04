@@ -5,6 +5,7 @@ using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
+using Overmind.Infrastructure.Search;
 using Shouldly;
 using Xunit;
 
@@ -112,6 +113,30 @@ public sealed class PlanningFtsSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task ArtifactSoftDelete_ExcludedFromSearchHits()
+    {
+        var featureId = await SeedFeatureAsync("artifact host delta", "host body");
+        var artifactId = await SeedArtifactAsync(featureId, PlanningArtifactKind.Spec, "soft doomed body ibex");
+        var materializer = Substitute.For<IPlanningMaterializer>();
+        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
+
+        (await ArtifactUnionHitsAsync("ibex")).ShouldBe(1);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var artifacts = new PlanningArtifactService(
+                ctx,
+                materializer,
+                NullLogger<PlanningArtifactService>.Instance,
+                new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance));
+            await artifacts.DeleteAsync(artifactId, byHuman: true);
+        }
+
+        (await ArtifactUnionHitsAsync("ibex")).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task ImportThroughFeatureService_InsertsBecomeSearchable()
     {
         using var ctx = _db.CreateContext();
@@ -189,5 +214,13 @@ public sealed class PlanningFtsSyncTests : IDisposable
         using var ctx = _db.CreateContext();
         return await PlanningFtsProbe.CountAsync(
             ctx, "SELECT COUNT(*) FROM artifact_fts WHERE artifact_fts MATCH $term", term);
+    }
+
+    private async Task<int> ArtifactUnionHitsAsync(string term)
+    {
+        await using var ctx = _db.CreateContext();
+        var search = new FtsSearchService(ctx);
+        var hits = await search.SearchUnionAsync(null, term, 10, CancellationToken.None);
+        return hits.Count(h => h is ArtifactFulltextHit);
     }
 }

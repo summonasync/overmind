@@ -201,7 +201,11 @@ public sealed class OvermindDbContext : DbContext
                 .HasForeignKey(v => v.ArtifactId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            builder.HasIndex(a => new { a.FeatureId, a.Kind, a.Order }).IsUnique();
+            builder.HasQueryFilter(a => a.DeletedAt == null);
+
+            builder.HasIndex(a => new { a.FeatureId, a.Kind, a.Order })
+                .IsUnique()
+                .HasFilter("\"DeletedAt\" IS NULL");
         });
 
         modelBuilder.Entity<PlanningArtifactVersion>(builder =>

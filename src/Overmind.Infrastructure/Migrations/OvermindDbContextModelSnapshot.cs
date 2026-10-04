@@ -302,6 +302,12 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("FeatureId")
                         .HasColumnType("TEXT");
 
@@ -332,7 +338,8 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FeatureId", "Kind", "Order")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
 
                     b.ToTable("PlanningArtifacts");
                 });

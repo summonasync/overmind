@@ -1001,4 +1001,75 @@ ship the guard
                 DateTime.UtcNow,
                 DateTime.UtcNow));
     }
+
+    [Theory]
+    [InlineData(PlanningArtifactKind.Spec, PlanningArtifactStatus.Draft)]
+    [InlineData(PlanningArtifactKind.Plan, PlanningArtifactStatus.Draft)]
+    [InlineData(PlanningArtifactKind.Result, PlanningArtifactStatus.Draft)]
+    [InlineData(PlanningArtifactKind.Task, PlanningArtifactStatus.Todo)]
+    [InlineData(PlanningArtifactKind.Task, PlanningArtifactStatus.InProgress)]
+    [InlineData(PlanningArtifactKind.Task, PlanningArtifactStatus.Review)]
+    [InlineData(PlanningArtifactKind.Task, PlanningArtifactStatus.Blocked)]
+    public void Delete_AgentDoor_DraftStatuses_StampMarker(PlanningArtifactKind kind, PlanningArtifactStatus status)
+    {
+        var artifact = PlanArtifact(kind, status);
+        var before = DateTime.UtcNow;
+
+        artifact.Delete(byHuman: false);
+
+        artifact.IsDeleted.ShouldBeTrue();
+        artifact.DeletedAt.ShouldNotBeNull();
+        artifact.DeletedAt!.Value.ShouldBeGreaterThanOrEqualTo(before);
+        artifact.DeletedBy.ShouldBe(PlanningArtifact.AgentDeletionMarker);
+    }
+
+    [Theory]
+    [InlineData(PlanningArtifactKind.Spec, PlanningArtifactStatus.Validated)]
+    [InlineData(PlanningArtifactKind.Plan, PlanningArtifactStatus.Validated)]
+    [InlineData(PlanningArtifactKind.Result, PlanningArtifactStatus.Validated)]
+    [InlineData(PlanningArtifactKind.Task, PlanningArtifactStatus.Done)]
+    public void Delete_AgentDoor_ValidatedOrDone_ThrowsNamingTheReason(
+        PlanningArtifactKind kind, PlanningArtifactStatus status)
+    {
+        var artifact = PlanArtifact(kind, status);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.Delete(byHuman: false));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.ArtifactDeletionRefused);
+        ex.Message.ShouldContain("human door");
+        artifact.IsDeleted.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(PlanningArtifactKind.Spec, PlanningArtifactStatus.Validated)]
+    [InlineData(PlanningArtifactKind.Plan, PlanningArtifactStatus.Validated)]
+    [InlineData(PlanningArtifactKind.Result, PlanningArtifactStatus.Draft)]
+    [InlineData(PlanningArtifactKind.Task, PlanningArtifactStatus.Done)]
+    public void Delete_HumanDoor_Unrestricted_StampMarker(PlanningArtifactKind kind, PlanningArtifactStatus status)
+    {
+        var artifact = PlanArtifact(kind, status);
+
+        artifact.Delete(byHuman: true);
+
+        artifact.IsDeleted.ShouldBeTrue();
+        artifact.DeletedBy.ShouldBe(PlanningArtifact.HumanDeletionMarker);
+    }
+
+    private static PlanningArtifact PlanArtifact(PlanningArtifactKind kind, PlanningArtifactStatus status)
+    {
+        var artifact = PlanningArtifact.Create(Guid.NewGuid(), kind, "body content");
+
+        if (status == PlanningArtifactStatus.Validated)
+        {
+            artifact.Validate();
+        }
+        else if (status != PlanningArtifactStatus.Draft)
+        {
+            artifact.SetStatus(status);
+        }
+
+        artifact.Status.ShouldBe(status);
+        return artifact;
+    }
 }

@@ -209,7 +209,7 @@ public static class PlanningArtifactsApi
     {
         try
         {
-            await service.DeleteAsync(id, ct);
+            await service.DeleteAsync(id, byHuman: true, ct: ct);
         }
         catch (PlanningException ex)
         {

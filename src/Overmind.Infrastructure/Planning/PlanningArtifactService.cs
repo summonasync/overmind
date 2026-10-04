@@ -465,10 +465,11 @@ public sealed class PlanningArtifactService
         return artifact;
     }
 
-    public async Task DeleteAsync(Guid artifactId, CancellationToken ct = default)
+    public async Task<PlanningArtifact> DeleteAsync(
+        Guid artifactId, bool byHuman, string? logNote = null, CancellationToken ct = default)
     {
         var artifact = await _db.PlanningArtifacts
-            .Include(a => a.Versions)
+            .Include(a => a.BlockedBy)
             .FirstOrDefaultAsync(a => a.Id == artifactId, ct);
 
         if (artifact is null)
@@ -476,11 +477,85 @@ public sealed class PlanningArtifactService
             throw PlanningException.MissingArtifact(artifactId);
         }
 
-        var projectId = await GetProjectIdAsync(artifact.FeatureId, ct);
-        _db.PlanningArtifacts.Remove(artifact);
+        var dependents = await DependentOrdersAsync(artifactId, ct);
+        if (dependents.Count > 0)
+        {
+            throw PlanningException.DeletionBlockedByDependents(
+                [.. dependents.Select(o => $"task {o:D2}")]);
+        }
+
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+
+        artifact.Delete(byHuman);
+
+        _db.PlanningTaskDependencies.RemoveRange(artifact.BlockedBy);
+
+        if (feature.Status == PlanningFeatureStatus.Review)
+        {
+            ReopenFeatureAfterDeletion(feature, artifact);
+        }
+
+        feature.AppendLog(DeletionAuditLine(artifact, byHuman, logNote), DeletionSource(byHuman));
+
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+
+        return artifact;
     }
+
+    private async Task<List<int>> DependentOrdersAsync(Guid artifactId, CancellationToken ct)
+    {
+        var dependentIds = await _db.PlanningTaskDependencies
+            .Where(d => d.BlockingId == artifactId)
+            .Select(d => d.BlockedById)
+            .ToListAsync(ct);
+
+        if (dependentIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await _db.PlanningArtifacts
+            .Where(a => dependentIds.Contains(a.Id))
+            .OrderBy(a => a.Order)
+            .Select(a => a.Order)
+            .ToListAsync(ct);
+    }
+
+    private static void ReopenFeatureAfterDeletion(PlanningFeature feature, PlanningArtifact artifact)
+    {
+        if (artifact.Kind == PlanningArtifactKind.Task)
+        {
+            feature.SetStatus(
+                PlanningFeatureStatus.InProgress,
+                "task deleted while in review — reopened",
+                PlanningLogSource.Auto);
+            return;
+        }
+
+        if (artifact.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan)
+        {
+            feature.SetStatus(
+                PlanningFeatureStatus.InProgress,
+                $"feature demoted: review → inProgress ({artifact.Kind.ToString().ToLowerInvariant()} deleted)",
+                PlanningLogSource.Auto);
+        }
+    }
+
+    private static string DeletionAuditLine(PlanningArtifact artifact, bool byHuman, string? logNote)
+    {
+        var label = artifact.Kind == PlanningArtifactKind.Task
+            ? $"task {artifact.Order:D2}"
+            : artifact.Kind.ToString().ToLowerInvariant();
+        var marker = byHuman ? PlanningArtifact.HumanDeletionMarker : PlanningArtifact.AgentDeletionMarker;
+
+        return string.IsNullOrWhiteSpace(logNote)
+            ? $"artifact {label} deleted by {marker}"
+            : $"artifact {label} deleted by {marker}, {logNote.Trim()}";
+    }
+
+    private static PlanningLogSource DeletionSource(bool byHuman) =>
+        byHuman ? PlanningLogSource.Ui : PlanningLogSource.Agent;
 
     private async Task<PlanningArtifact> LoadArtifactOrThrow(Guid artifactId, CancellationToken ct)
     {
@@ -491,14 +566,6 @@ public sealed class PlanningArtifactService
         }
 
         return artifact;
-    }
-
-    private async Task<Guid> GetProjectIdAsync(Guid featureId, CancellationToken ct)
-    {
-        return await _db.PlanningFeatures
-            .Where(f => f.Id == featureId)
-            .Select(f => f.ProjectId)
-            .FirstAsync(ct);
     }
 
     private static void TransitionOnArtifactCreate(PlanningFeature feature, PlanningArtifactKind kind)

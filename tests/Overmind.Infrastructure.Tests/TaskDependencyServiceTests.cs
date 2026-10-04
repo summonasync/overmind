@@ -260,7 +260,7 @@ public sealed class TaskDependencyServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteArtifact_CascadesEdgesInBothDirections()
+    public async Task DeleteArtifact_RefusedWhileDependentsHoldEdges()
     {
         var middle = SeedTask(0);
         var waiter = SeedTask(1);
@@ -271,7 +271,29 @@ public sealed class TaskDependencyServiceTests : IDisposable
         await service.ReplaceEdgesAsync(waiter.Id, [0]);
         await service.ReplaceEdgesAsync(middle.Id, [2]);
 
-        await artifactService.DeleteAsync(middle.Id);
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.DeleteAsync(middle.Id, byHuman: true));
+
+        ex.Code.ShouldBe(PlanningFailureCode.DeletionBlockedByDependents);
+        ex.Message.ShouldContain("Clean up dependencies first");
+        ex.Message.ShouldContain("task 01");
+        _context.PlanningTaskDependencies.Count().ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task DeleteArtifact_DependentLeafDropsItsOwnEdgesFirst()
+    {
+        var middle = SeedTask(0);
+        var waiter = SeedTask(1);
+        var blocker = SeedTask(2);
+        var service = CreateService();
+        var artifactService = new PlanningArtifactService(
+            _context, _materializer, NullLogger<PlanningArtifactService>.Instance, service);
+        await service.ReplaceEdgesAsync(waiter.Id, [0]);
+        await service.ReplaceEdgesAsync(middle.Id, [2]);
+
+        await artifactService.DeleteAsync(waiter.Id, byHuman: true);
+        await artifactService.DeleteAsync(middle.Id, byHuman: true);
 
         _context.PlanningTaskDependencies.ShouldBeEmpty();
     }

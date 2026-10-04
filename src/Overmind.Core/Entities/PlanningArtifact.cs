@@ -11,6 +11,10 @@ public sealed class PlanningArtifact
 
     public const string FeatureDemotedStatusEcho = "review → inProgress";
 
+    public const string AgentDeletionMarker = "agent";
+
+    public const string HumanDeletionMarker = "human";
+
     private static readonly FrozenSet<PlanningArtifactStatus> SpecPlanResultStatuses =
         new HashSet<PlanningArtifactStatus>
         {
@@ -45,11 +49,15 @@ public sealed class PlanningArtifact
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public string? PreservedFrontmatter { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
+    public string? DeletedBy { get; private set; }
 
     public List<PlanningArtifactVersion> Versions { get; private set; } = [];
     public List<PlanningTaskDependency> BlockedBy { get; private set; } = [];
 
     public bool IsFrozen => Status == PlanningArtifactStatus.Validated;
+
+    public bool IsDeleted => DeletedAt is not null;
 
     [NotMapped]
     public string? StatusChanged { get; private set; }
@@ -277,6 +285,22 @@ public sealed class PlanningArtifact
         FrozenAt = now;
         UpdatedAt = now;
     }
+
+    public void Delete(bool byHuman)
+    {
+        if (!byHuman && !IsAgentDeletable)
+        {
+            throw PlanningException.AgentDeletionRefused(Kind, Status);
+        }
+
+        DeletedAt = DateTime.UtcNow;
+        DeletedBy = byHuman ? HumanDeletionMarker : AgentDeletionMarker;
+    }
+
+    public bool IsAgentDeletable =>
+        Kind == PlanningArtifactKind.Task
+            ? Status != PlanningArtifactStatus.Done
+            : Status == PlanningArtifactStatus.Draft;
 
     public void AppendLog(string note, PlanningLogSource? source = null)
     {

@@ -1407,4 +1407,134 @@ public sealed class PlanningMaterializerTests : IDisposable
 
     private PlanningMaterializer CreateMaterializer(OvermindDbContext ctx) =>
         new(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)), _dataDir);
+
+    [Fact]
+    public async Task Sync_DeletedArtifact_RemovesItsFileOnTheNextPassWithoutTombstone()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        using (var seed = _db.CreateContext())
+        {
+            var feature = PlanningFeature.Create(projectId, "006-demo", "Demo Feature", "body");
+            var task = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "# Doomed Task\n\n<goal>\nDie.\n</goal>", 0);
+            seed.PlanningFeatures.Add(feature);
+            seed.PlanningArtifacts.Add(task);
+            await seed.SaveChangesAsync();
+        }
+
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "00-doomed-task.md");
+        using (var sync = _db.CreateContext())
+        {
+            await CreateMaterializer(sync).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        File.Exists(taskPath).ShouldBeTrue();
+
+        using (var delete = _db.CreateContext())
+        {
+            var task = await delete.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
+            task.Delete(byHuman: false);
+            await delete.SaveChangesAsync();
+        }
+
+        using (var resync = _db.CreateContext())
+        {
+            var report = await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
+
+            report.Warnings.ShouldBeEmpty();
+            report.Refused.ShouldBeEmpty();
+        }
+
+        File.Exists(taskPath).ShouldBeFalse();
+        Directory.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks")).ShouldBeFalse();
+
+        using (var verify = _db.CreateContext())
+        {
+            var rows = await verify.PlanningMaterializedFiles
+                .Where(m => m.ProjectId == projectId && m.RelativePath.Contains("00-doomed-task"))
+                .ToListAsync();
+            rows.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Sync_DeletedArtifactWithHandEdits_RefusesThePassAndKeepsTheFile()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "00-doomed-task.md");
+        using (var seed = _db.CreateContext())
+        {
+            var feature = PlanningFeature.Create(projectId, "006-demo", "Demo Feature", "body");
+            var task = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "# Doomed Task\n\n<goal>\nDie.\n</goal>", 0);
+            seed.PlanningFeatures.Add(feature);
+            seed.PlanningArtifacts.Add(task);
+            await seed.SaveChangesAsync();
+        }
+
+        using (var sync = _db.CreateContext())
+        {
+            await CreateMaterializer(sync).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        using (var delete = _db.CreateContext())
+        {
+            var task = await delete.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
+            task.Delete(byHuman: true);
+            await delete.SaveChangesAsync();
+        }
+
+        await File.WriteAllTextAsync(taskPath, "# Hand edited after the sync\n");
+
+        using (var refuse = _db.CreateContext())
+        {
+            var ex = await Should.ThrowAsync<MaterializationException>(() =>
+                CreateMaterializer(refuse).SyncAsync(projectId, ct: CancellationToken.None));
+            ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
+        }
+
+        File.Exists(taskPath).ShouldBeTrue();
+
+        using (var forced = _db.CreateContext())
+        {
+            var report = await CreateMaterializer(forced).SyncAsync(projectId, force: true, ct: CancellationToken.None);
+
+            report.Warnings.ShouldContain(w => w.Contains("00-doomed-task.md"));
+        }
+
+        File.Exists(taskPath).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Sync_DeletedDocument_SpecFileLeavesFeatureFolderIntact()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        using (var seed = _db.CreateContext())
+        {
+            var feature = PlanningFeature.Create(projectId, "006-demo", "Demo Feature", "body");
+            var spec = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<scope>\nbody\n</scope>");
+            seed.PlanningFeatures.Add(feature);
+            seed.PlanningArtifacts.Add(spec);
+            await seed.SaveChangesAsync();
+        }
+
+        using (var sync = _db.CreateContext())
+        {
+            await CreateMaterializer(sync).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        using (var delete = _db.CreateContext())
+        {
+            var spec = await delete.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Spec);
+            spec.Delete(byHuman: true);
+            await delete.SaveChangesAsync();
+        }
+
+        using (var resync = _db.CreateContext())
+        {
+            await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "spec.md")).ShouldBeFalse();
+        File.Exists(Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(_projectDir, "BACKLOG.md")).ShouldBeTrue();
+    }
 }

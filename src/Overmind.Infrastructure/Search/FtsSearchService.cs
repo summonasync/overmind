@@ -177,6 +177,7 @@ public sealed class FtsSearchService
             JOIN "PlanningArtifacts" a ON a.rowid = artifact_fts.rowid
             JOIN "PlanningFeatures" f ON f."Id" = a."FeatureId"
             WHERE artifact_fts MATCH $query
+              AND a."DeletedAt" IS NULL
               AND ($projectId IS NULL OR f."ProjectId" = $projectId)
             ORDER BY bm25(artifact_fts)
             LIMIT $limit

@@ -191,6 +191,17 @@ public sealed class PlanningException : Exception
             "The forward chain is open → triaged → promoted → closed; closed is reachable from any non-closed state; " +
             "promoted is reached only through issues_promote; there is no reopen.");
 
+    public static PlanningException AgentDeletionRefused(PlanningArtifactKind kind, PlanningArtifactStatus status) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ArtifactDeletionRefused,
+            $"The agent door deletes draft artifacts only: this {kind.ToString().ToLowerInvariant()} sits in status " +
+            $"'{status.ToString().ToLowerInvariant()}'. Validated and done artifacts are deletable through the " +
+            "human door in the Overmind UI.");
+
+    public static PlanningException DeletionBlockedByDependents(IReadOnlyList<string> dependents) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DeletionBlockedByDependents,
+            "Clean up dependencies first: " +
+            $"these tasks still depend on it: {string.Join(", ", dependents)}.");
+
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
 }

@@ -65,9 +65,13 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         plans.Add(BuildBacklogPlan(root, features));
 
+        // Captured before GuardLocalEdits prunes byte-stable plans: those rows stay tracked, not stale.
+        var plannedPaths = plans.Select(p => p.RelativePath).ToHashSet(PathGuard.PathComparer);
+
         if (strategy == PlanningMaterialization.On)
         {
             await GuardLocalEditsAsync(plans, rows, force, warnings, skipped, refused, ct);
+            await GuardStaleTrackedFilesAsync(root, rows, plannedPaths, force, refused, ct);
         }
 
         if (refused.Count > 0)
@@ -84,6 +88,9 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         {
             await ClearOtherRootAsync(
                 project, droppedRows, keptForeignRows, strategy, otherRoot, warnings, rows, ct);
+
+            await RemoveStaleTrackedFilesAsync(
+                root, strategy == PlanningMaterialization.On, rows, plannedPaths, warnings, ct);
 
             await WritePlansAsync(projectId, plans, rows, ct);
         }
@@ -556,6 +563,43 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 plan.RelativePath, "tracked file has local edits that are not on the board"));
         }
     }
+
+    // A tracked row whose path dropped out of the plan means its board artifact is gone: the
+    // file leaves on the next pass, no tombstone. A drifted copy refuses the run exactly like
+    // a planned one would; force passes with the file kept foreign instead of destroyed.
+    private static async Task GuardStaleTrackedFilesAsync(
+        string root, List<PlanningMaterializedFile> rows, ISet<string> plannedPaths, bool force,
+        List<PlanningMaterializationSkip> refused, CancellationToken ct)
+    {
+        foreach (var row in StaleRows(rows, plannedPaths))
+        {
+            if (!force &&
+                await InspectTrackedCopyAsync(root, row, ct) == TrackedCopyRemoval.KeptForeign)
+            {
+                refused.Add(new PlanningMaterializationSkip(
+                    row.RelativePath, "tracked file has local edits that are not on the board"));
+            }
+        }
+    }
+
+    private async Task RemoveStaleTrackedFilesAsync(
+        string root, bool rootIsRepo, List<PlanningMaterializedFile> rows,
+        ISet<string> plannedPaths, List<string> warnings, CancellationToken ct)
+    {
+        foreach (var row in StaleRows(rows, plannedPaths))
+        {
+            var outcome = await RemoveTrackedCopyAsync(root, rootIsRepo, row, warnings, ct);
+            if (outcome is TrackedCopyRemoval.NotFound or TrackedCopyRemoval.Removed)
+            {
+                rows.Remove(row);
+                _db.PlanningMaterializedFiles.Remove(row);
+            }
+        }
+    }
+
+    private static List<PlanningMaterializedFile> StaleRows(
+        List<PlanningMaterializedFile> rows, ISet<string> plannedPaths) =>
+        rows.Where(r => !plannedPaths.Contains(r.RelativePath)).ToList();
 
     // Markers gone reads as null: the whole index is hand-written territory then and Merge only
     // re-appends the block, so nothing on disk is lost and the guard stays out of it.

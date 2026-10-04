@@ -794,6 +794,29 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_HumanDoor_DeletedTaskVanishesFromCurrentAndRoster()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var doomed = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "doomed", Order = 1 });
+        var kept = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "kept", Order = 2 });
+
+        var delete = await _client.DeleteAsync($"/api/planning/artifacts/{doomed.Id}");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var current = await GetCurrentAsync(project.Id, "feat");
+        current.State.ShouldBe("task");
+        current.Artifact!.Id.ShouldBe(kept.Id);
+
+        var roster = await _client.GetFromJsonAsync<RosterJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat/artifacts", JsonOptions);
+        roster!.Artifacts.Select(a => a.ArtifactId).ShouldBe([kept.Id]);
+
+        var gone = await _client.GetAsync($"/api/agent/planning/artifacts/{doomed.Id}");
+        gone.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Current_ReviewAndBlockedLeft_ReturnsHeldNamingReviewCount()
     {
         var project = await CreateProjectAsync();
@@ -2323,6 +2346,10 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record LogLineJson(string? Date, string Text);
 
     public sealed record VersionJson(int Version, string Body, DateTime CreatedAt);
+
+    public sealed record RosterJson(RosterItemJson[] Artifacts);
+
+    public sealed record RosterItemJson(Guid ArtifactId, string Kind, int Order);
 
     public sealed record CurrentJson(
         string State, CurrentFeatureJson Feature, ArtifactJson? Artifact, string? Reason,
