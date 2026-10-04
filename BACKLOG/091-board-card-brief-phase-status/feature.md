@@ -1,7 +1,7 @@
 ---
 feature: 091
 slug: board-card-brief-phase-status
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-27
@@ -32,4 +32,6 @@ The board card answers "what is this feature and where is it in the ceremony" on
 
 <log>
 - 2026-10-03 [auto] — artifact created → inProgress
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — by user request in-session: result a3e120e9 validated on notification ef9f49dd reply (approved, 2026-10-04 11:30 UTC); user said «аппрувлено, го коммит пуш» — closing the wave done
 </log>

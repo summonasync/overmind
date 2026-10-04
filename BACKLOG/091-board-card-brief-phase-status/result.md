@@ -1,8 +1,9 @@
 ---
 feature: 091
 slug: board-card-brief-phase-status
-status: draft
+status: validated
 created: 2026-10-03
+validated: 2026-10-04
 ---
 
 # Result 091 — Board card: feature brief excerpt + ceremony phase status (spec/plan progress visible on the card)
@@ -16,7 +17,7 @@ Per task:
 - **01 Backend derivation** — CeremonyPhasePlanner (static, Infrastructure/Planning): DeriveLabel per the spec's 7-state table with a specific-to-general order (done → review → in progress with tasks in flight → drafting → writing spec → planning → plan validated), so the 037-era validated-but-draft quirk lands on «plan validated» while the lifecycle status column stays the source of truth; BriefExcerpt — first non-empty `<goal>` paragraph via the existing PlanningSections.Find, lines joined, StringInfo 150-text-element cap (surrogate pairs never split), «…» on overflow, null on absent goal/body/blank goal.
 - **02 Web board card** — brief line between the priority/version row and the task counter, phase label next to the status column; done cards keep the existing treatment (no second done representation); bodyless features render no brief line.
 - **03 MCP queue context** — planning_task_queue entries carry phase + briefExcerpt (thin passthrough; the tool description documents both fields and the derivation's source of truth); OvermindPlanningTools untouched.
-- **04 Closeout** — this artifact; consistency check board↔queue; web fixture nit (isCurrent → live contract mirror).
+- **04 Closeout** — this artifact; consistency check board↔queue; web fixture nit (isCurrent → live contract mirror); queue-item fixture mirrored too (architect W1).
 
 ## Authorized deviations / decisions
 
@@ -29,7 +30,9 @@ Per task:
 
 Per-task review cycles: 01 — executed to review, all 5 AC ticked (19 planner tests pin the matrix); 02 web — executed (parallel coder, disjoint lane), reviewed in its lane; 03 — executed to review (16 contract tests; caught and fixed pre-dispatch: the first draft mis-pinned the queue field as phaseLabel and leaned on stale canned payloads — refreshed to the live contract); 04 closeout — this round: consistency test BoardAndQueue_AgreeOnPhaseAndExcerpt + bodyless/null parity (Api-level, both surfaces through the real HTTP doors) + board fixture mirrored onto the live PlanningFeatureBoardItem contract in the MCP proxy test (isCurrent gone).
 
-Final tree: dotnet build 0 warnings 0 errors; full suite **1863 passed / 0 failed** (Core 274, Infra 588, Api 584, Mcp 435) — sequential per-project run. Web (task 02, parallel lane): gates verified by the web coder in its own closeout — lint/tsc/build/test green.
+Final tree: dotnet build 0 warnings 0 errors; full suite **1881 passed / 0 failed** (Core 274, Infra 588, Api 584, Mcp 435) — sequential per-project run, confirmed independently twice by the architect pass. Web (task 02, parallel lane): gates verified by the web coder in its own closeout — lint/tsc/build/test green.
+
+Architect light (audits/architect-review-2026-10-04-091.md): **APPROVED-WITH-WARNINGS, 0 blockers**; W1 (stale PlanningQueueItemJson fixture — the sibling of the fixture the closeout already mirrored) fixed at closeout: isCurrent removed, phase/briefExcerpt + claim fields mirrored onto the live shape; N3 (stale suite total) fixed here.
 
 ## Post-release click-check list
 
@@ -41,12 +44,16 @@ Final tree: dotnet build 0 warnings 0 errors; full suite **1863 passed / 0 faile
 
 ## Follow-ups (microbatch queue)
 
-- None new from this wave. (Wave 099/028 carryovers remain queued separately.)
+- N1: the 4-line derivation wiring is duplicated in ToBoardItem/ToQueueItem — the THIRD surface must extract a mapper helper, not copy (parity is pinned meanwhile).
+- N2: CeremonyPhasePlanner is pure Core-only derivation living in Infrastructure — promote to Core if a second consumer appears.
+- Wave 099/028 carryovers remain queued separately.
 
 ## Status
 
-Feature ready for user validation; result stays draft until the architect pass and user validation. No live dogfood in this wave.
+Feature ready for user validation; result stays draft until user validation (architect pass complete). No live dogfood in this wave — the 5-scenario click-check rides the release.
 
 <log>
 - 2026-10-04 [agent] — drafted by dotnet-coder at the wave close: outcome per task, decisions (phase field name, static planner, null-vs-empty excerpt, cap semantics), verification evidence (consistency test both surfaces + final suite 1863/0 sequential), post-release click-check list (5 cards/scenarios).
+- 2026-10-04 [agent] — architect closeout: suite total corrected 1863→1881 (N3), W1 fixture fix recorded (PlanningQueueItemJson mirrored onto the live shape), architect verdict APPROVED-WITH-WARNINGS (0 blockers) + N1/N2 nits moved to the microbatch ledger.
+- 2026-10-04 [agent] — architect closeout: suite total corrected 1863→1881 (N3), W1 fixture fix recorded, architect verdict + N1/N2 nits moved to the microbatch ledger
 </log>

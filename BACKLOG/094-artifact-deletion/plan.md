@@ -1,8 +1,9 @@
 ---
 feature: 094
 slug: artifact-deletion
-status: draft
+status: validated
 created: 2026-10-03
+validated: 2026-10-04
 ---
 
 # Plan 094 — Artifact deletion: human door (HTTP+UI) + agent door (MCP) для сноса артефактов — дубли/мусор сейчас нечистимы
@@ -21,4 +22,5 @@ created: 2026-10-03
 
 <log>
 - 2026-10-04 [agent] — plan pre-flown: 3 tasks linear, closeout folds the architect.
+- 2026-10-04 [agent] — validated with human proof: notification 698077d9-1bd7-49b4-9d5f-d41a4c4e4cca replied 2026-10-03 21:40:23 UTC
 </log>

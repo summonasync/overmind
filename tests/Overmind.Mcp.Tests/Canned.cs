@@ -214,7 +214,7 @@ public static class Canned
 
     public const string PlanningQueueItemJson =
         """
-        {"slug":"demo-feature","number":null,"title":"Demo feature","priority":"p1","status":"inProgress","queuePosition":2,"specStatus":"validated","planStatus":"draft","taskDone":1,"taskTotal":2,"readiness":2,"blockedBy":[],"isBlocked":false,"isCurrent":true}
+        {"slug":"demo-feature","number":null,"title":"Demo feature","priority":"p1","status":"inProgress","queuePosition":2,"specStatus":"validated","planStatus":"draft","taskDone":1,"taskTotal":2,"readiness":2,"blockedBy":[],"isBlocked":false,"phase":"in progress","briefExcerpt":"Crash on save when the workspace file is read-only.","claimedByAlias":"Dan","claimedByVendor":"qwen","claimedAt":"2026-10-03T10:00:00Z","claimState":"alive","claimedByHuman":false}
         """;
 
     public const string PlanningQueueJson =
