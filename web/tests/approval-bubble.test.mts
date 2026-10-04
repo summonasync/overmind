@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   APPROVAL_NAG_TTL_MS,
@@ -91,4 +92,15 @@ test("no eligible approval hides the surface in every mode", () => {
 test("ttl aging re-admits nothing once the shown approval leaves the gate", () => {
   const dismissed = dismissBubble(["gone"], NOW, 10);
   assert.equal(bubbleSurface(dismissed, "quiet", [candidate("gone", APPROVAL_NAG_TTL_MS + 1)], NOW), "hidden");
+});
+
+test("bubble renders the sliced text without a line clamp", () => {
+  const source = readFileSync(
+    new URL("../src/widgets/app-shell/ui/approval-bubble.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(!source.includes("line-clamp-4"));
+  assert.ok(source.includes("line-clamp-none"));
+  assert.ok(source.includes("bubbleText(item.text)"));
+  assert.ok(source.includes("sm:w-80"));
 });

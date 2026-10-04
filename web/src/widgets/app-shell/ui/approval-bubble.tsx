@@ -13,6 +13,7 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Modal } from "@/shared/ui/modal";
 import { Zerling } from "@/shared/ui/zerling";
 import { cn } from "@/shared/lib/cn";
+import { bubbleText } from "@/widgets/app-shell/lib/bubble-text";
 import { notificationHref } from "@/widgets/app-shell/lib/notification-href";
 import { useApprovalBubble } from "@/widgets/app-shell/lib/use-approval-bubble";
 import { useTabTitle } from "@/widgets/app-shell/lib/use-tab-title";
@@ -53,7 +54,7 @@ export function ApprovalBubble() {
       <div className="pointer-events-none fixed left-1/2 top-[100px] z-30 -translate-x-1/2">
         <div
           role="status"
-          className="pointer-events-auto w-72 animate-bubble-pop rounded-lg border border-warning/40 bg-surface-raised p-3 shadow-xl"
+          className="pointer-events-auto w-72 animate-bubble-pop rounded-lg border border-warning/40 bg-surface-raised p-3 shadow-xl sm:w-80"
         >
           <div className="flex items-start gap-2.5">
             <Zerling pose="menacing" size={40} />
@@ -81,9 +82,9 @@ export function ApprovalBubble() {
               </p>
               <p
                 title={item.text}
-                className={cn("mt-1.5 line-clamp-4 text-sm text-foreground", deadTarget && "opacity-60")}
+                className={cn("mt-1.5 line-clamp-none text-sm text-foreground", deadTarget && "opacity-60")}
               >
-                {item.text}
+                {bubbleText(item.text)}
               </p>
             </div>
           </div>
