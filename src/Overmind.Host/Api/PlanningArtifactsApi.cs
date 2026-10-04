@@ -23,6 +23,7 @@ public static class PlanningArtifactsApi
         group.MapPost("/planning/artifacts/{id:guid}/status", SetStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
+        group.MapPost("/planning/artifacts/{id:guid}/decline", Decline);
 
         return group;
     }
@@ -300,6 +301,32 @@ public static class PlanningArtifactsApi
         try
         {
             var artifact = await service.ValidateAsync(id, "validated via UI", PlanningLogSource.Ui, ct: ct);
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    internal static async Task<IResult> Decline(
+        Guid id,
+        [FromBody] DeclinePlanningArtifactRequest? request,
+        IValidator<DeclinePlanningArtifactRequest> validator,
+        PlanningArtifactService service,
+        CancellationToken ct)
+    {
+        var body = request ?? new DeclinePlanningArtifactRequest();
+
+        var validation = await validator.ValidateAsync(body, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        try
+        {
+            var artifact = await service.DeclineAsync(id, body.Reason, ct);
             return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
         }
         catch (PlanningException ex)

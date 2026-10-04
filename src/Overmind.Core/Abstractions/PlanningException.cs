@@ -50,6 +50,10 @@ public sealed class PlanningException : Exception
     public static PlanningException CannotValidateTask() =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.CannotValidateTask, "Task artifacts cannot be validated.");
 
+    public static PlanningException CannotDeclineTask() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.CannotDeclineTask,
+            "Decline does not apply to task artifacts; tasks carry their own status flow.");
+
     public static PlanningException InvalidStatusForKind(PlanningArtifactKind kind, PlanningArtifactStatus status) =>
         new(PlanningFailureKind.InvalidStatus, PlanningFailureCode.InvalidStatusForKind, $"Status '{status}' is not allowed for artifact kind '{kind}'.");
 

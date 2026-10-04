@@ -126,6 +126,16 @@ public sealed class AppendPlanningLogRequestValidator : AbstractValidator<Append
     }
 }
 
+public sealed class DeclinePlanningArtifactRequestValidator : AbstractValidator<DeclinePlanningArtifactRequest>
+{
+    public DeclinePlanningArtifactRequestValidator()
+    {
+        RuleFor(x => x.Reason).MaximumLength(500).Must(r => !r!.Contains('\r') && !r.Contains('\n'))
+            .WithMessage("Decline reason must be a single line.")
+            .When(x => x.Reason is not null);
+    }
+}
+
 public sealed class ImportPlanningFeatureRequestValidator : AbstractValidator<ImportPlanningFeatureRequest>
 {
     public ImportPlanningFeatureRequestValidator()

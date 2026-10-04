@@ -15,6 +15,7 @@ public enum PlanningFailureCode
     FeatureLogNoteRequired,
     FeatureStatusNotAllowedForAgent,
     CannotValidateTask,
+    CannotDeclineTask,
     HumanValidationRequired,
     MigratedNoteRequired,
     ImportFailed,

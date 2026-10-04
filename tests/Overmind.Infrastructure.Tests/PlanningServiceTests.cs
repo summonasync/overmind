@@ -405,6 +405,74 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DeclineAsync_WithReason_AppendsTheUiMarkedLine()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var versionBeforeDecline = spec.Version;
+
+        var declined = await artifactService.DeclineAsync(spec.Id, "  shaky ground  ", default);
+
+        declined.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        declined.Version.ShouldBe(versionBeforeDecline + 1);
+        declined.Body.ShouldContain("[ui] — declined by human: shaky ground");
+    }
+
+    [Fact]
+    public async Task DeclineAsync_BlankReason_AppendsTheBareLine()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var declined = await artifactService.DeclineAsync(spec.Id, "   ", default);
+
+        declined.Body.ShouldContain("[ui] — declined by human\n");
+        declined.Body.ShouldNotContain("declined by human:");
+    }
+
+    [Fact]
+    public async Task DeclineAsync_Task_ThrowsCannotDeclineTask()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.DeclineAsync(task.Id, "nope", default));
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Code.ShouldBe(PlanningFailureCode.CannotDeclineTask);
+    }
+
+    [Fact]
+    public async Task DeclineAsync_FrozenSpec_LogsWithoutDemotion()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var declined = await artifactService.DeclineAsync(spec.Id, "wave veto", default);
+
+        declined.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        declined.FrozenAt.ShouldNotBeNull();
+        declined.Body.ShouldContain("[ui] — declined by human: wave veto");
+    }
+
+    [Fact]
     public async Task SetStatusAsync_InvalidStatus_ThrowsInvalidStatusForKind()
     {
         var featureService = CreateFeatureService();

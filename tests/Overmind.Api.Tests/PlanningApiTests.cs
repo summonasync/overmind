@@ -935,6 +935,182 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task DeclineSpec_WithReason_AppendsTheUiMarkedLineAndKeepsDraft()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/decline",
+            new { Reason = "  too speculative for v1  " });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await declineResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Status.ShouldBe("draft");
+        echo.Version.ShouldBe(created.Version + 1);
+        echo.LastLogLine.ShouldBe("declined by human: too speculative for v1");
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Status.ShouldBe("draft");
+        getResponse.FrozenAt.ShouldBeNull();
+        getResponse.Body.ShouldContain("[ui] — declined by human: too speculative for v1");
+    }
+
+    [Fact]
+    public async Task DeclineSpec_EmptyReason_AppendsTheBareLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "plan", Body = "# Plan" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/decline",
+            new { Reason = "   " });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await declineResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.LastLogLine.ShouldBe("declined by human");
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[ui] — declined by human");
+        getResponse.Body.ShouldNotContain("declined by human:");
+    }
+
+    [Fact]
+    public async Task DeclineSpec_AbsentBody_AppendsTheBareLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "plan", Body = "# Plan" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var declineResponse = await _client.PostAsync(
+            $"/api/planning/artifacts/{created!.Id}/decline", null);
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await declineResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.LastLogLine.ShouldBe("declined by human");
+    }
+
+    [Fact]
+    public async Task DeclineTask_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "task" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/decline",
+            new { Reason = "nope" });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await declineResponse.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("CannotDeclineTask");
+    }
+
+    [Fact]
+    public async Task DeclineSpec_ReasonOverCap_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/decline",
+            new { Reason = new string('x', 501) });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await declineResponse.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.Keys.ShouldContain("Reason");
+    }
+
+    [Fact]
+    public async Task DeclineSpec_MultilineReason_Returns400()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/decline",
+            new { Reason = "first line\nsecond line" });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await declineResponse.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.Keys.ShouldContain("Reason");
+    }
+
+    [Fact]
+    public async Task Decline_FrozenSpec_LogsWithoutDemotion()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "result", Body = "# Result" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        await _client.PostAsync($"/api/planning/artifacts/{created!.Id}/validate", null);
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/decline",
+            new { Reason = "wave veto" });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Status.ShouldBe("validated");
+        getResponse.FrozenAt.ShouldNotBeNull();
+        getResponse.Body.ShouldContain("[ui] — declined by human: wave veto");
+        getResponse.Body.ShouldNotContain("validated → draft");
+    }
+
+    [Fact]
+    public async Task Decline_DeletedArtifact_Returns404()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "# Spec" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        await _client.DeleteAsync($"/api/planning/artifacts/{created!.Id}");
+
+        var declineResponse = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/decline",
+            new { Reason = "late veto" });
+
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task SetStatus_ReturnsCompactEchoKeySet()
     {
         var project = await CreateProjectAsync();

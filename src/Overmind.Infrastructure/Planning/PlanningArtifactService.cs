@@ -457,6 +457,27 @@ public sealed class PlanningArtifactService
         return $"validated with human proof: notification {proof.Id} replied {proof.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
     }
 
+    public async Task<PlanningArtifact> DeclineAsync(Guid artifactId, string? reason, CancellationToken ct = default)
+    {
+        var artifact = await LoadArtifactOrThrow(artifactId, ct);
+
+        if (artifact.Kind == PlanningArtifactKind.Task)
+        {
+            throw PlanningException.CannotDeclineTask();
+        }
+
+        return await AppendLogAsync(artifactId, DeclineNote(reason), ct, PlanningLogSource.Ui);
+    }
+
+    private static string DeclineNote(string? reason)
+    {
+        var trimmed = reason?.Trim();
+
+        return string.IsNullOrEmpty(trimmed)
+            ? "declined by human"
+            : $"declined by human: {trimmed}";
+    }
+
     public async Task<PlanningArtifact> AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default,
         PlanningLogSource? source = null)
     {
