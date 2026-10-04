@@ -1,8 +1,9 @@
 ---
 feature: 107
 slug: project-tab-title
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 107 — Tab title shows the open project («{Project} — Overmind»)

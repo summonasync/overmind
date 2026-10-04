@@ -1,8 +1,9 @@
 ---
 feature: 111
 slug: brief-cap-500
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 111 — Board card brief cap: 150 → 500 text elements (user dogfood feedback)
@@ -27,4 +28,5 @@ A feature with a long goal (>500 chars) shows a ~500-char brief with «…» on 
 
 <log>
 - 2026-10-04 [agent] — executed by the orchestrator (one-constant change): cap 150→500, matrix re-pinned at 500/501, tool description updated; planner matrix 19/0, Api parity 2/0.
+- 2026-10-04 [agent] — [orchestrator] Light review PASS-WITH-NITS (0 blockers): cap 500 confirmed in all spots (constant, tool description, tests, web clean), 091 safety intact, gates re-run independently (build 0/0, planner 19/0, Api parity 2/0). Nits → microbatch #176 (exactly-at-cap case missing), #177 (CappedAt500 asserts 499-prefix instead of 500), #178 (commit message should name riders — 111 rode 1548c2a unnamed).
 </log>

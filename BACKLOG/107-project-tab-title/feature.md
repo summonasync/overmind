@@ -1,7 +1,7 @@
 ---
 feature: 107
 slug: project-tab-title
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -24,4 +24,5 @@ None blocking: single title owner (one hook computing title = f(projectName, awa
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — [agent] done by user approval — reply on result notification 01d45dd5 (2026-10-04 17:15:23 UTC); result f44d3dca validated, light review PASS-WITH-NITS 0 blockers.
 </log>

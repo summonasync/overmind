@@ -1,8 +1,8 @@
 ---
 feature: 114
 slug: claims-onboarding-docs
-status: draft
-priority: p1
+status: inProgress
+priority: p0
 version: 1
 created: 2026-10-04
 ---
@@ -16,3 +16,7 @@ Agents (and their humans) need practical onboarding for the 099 claim workflow �
 <context>
 User requests 2026-10-04 (two mid-session messages). Claims replaced pins in 099: planning_claim_feature / planning_unclaim_feature, X-Overmind-Session lock on 12 feature mutations, adapter-session liveness (EOF auto-release), stale take-over. Agents in the field still ask how to use them — the workflow rules (claim on take, release on handoff) need to be spelled out where agents actually read.
 </context>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

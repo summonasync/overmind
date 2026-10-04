@@ -1,7 +1,7 @@
 ---
 feature: 112
 slug: approval-bubble-roomier
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -19,4 +19,6 @@ approval-bubble.tsx:84 clamps the text with line-clamp-4; the server allows up t
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — [agent] done by user approval — reply on result notification b17b3cc8 (2026-10-04 17:20:24 UTC); result 45852d7d validated, light review PASS-WITH-NITS 0 blockers.
 </log>

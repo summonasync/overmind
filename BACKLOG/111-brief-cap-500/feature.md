@@ -1,7 +1,7 @@
 ---
 feature: 111
 slug: brief-cap-500
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -19,4 +19,6 @@ The 150-cap came from spec 091 (grapheme-safe StringInfo cap, «…» on overflo
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — [agent] done by user approval — reply on result notification d1840abd (2026-10-04 17:20:22 UTC); result 9f442f45 validated, light review PASS-WITH-NITS 0 blockers.
 </log>

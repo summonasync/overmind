@@ -1,8 +1,9 @@
 ---
 feature: 113
 slug: attention-row-polish
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Spec 113 — Attention rows: dashboard number style + clickable hover-highlighted title
@@ -27,4 +28,5 @@ Ceremony rows match the dashboard's visual language and open like the dashboard 
 - 2026-10-04 [agent] — user dogfood feedback in session: dashboard-style number, hover-highlighted clickable title; payload unchanged.
 - 2026-10-04 [agent] — [review caveat, spec body untouched] The scan's «no writes» means the BOARD: ParseFeatureAsync side effect — unknown frontmatter keys get registered in the DB (FrontmatterKeys) on first sight, same as the agent import door; recorded at review 071/01 (WARNING 1) and carried into the 071/03 result.
 - 2026-10-04 [agent] — [CORRECTION] previous log line is misfiled — it belongs to the 071-backlog-import-ui spec, not this feature; appended there properly. Nothing about 113 changed by it.
+- 2026-10-04 [agent] — validated with human proof: notification 14289b51-7b48-4145-a508-1faf2b1b2bb7 replied 2026-10-04 17:12:18 UTC
 </log>
