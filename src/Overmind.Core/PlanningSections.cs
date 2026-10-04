@@ -95,7 +95,7 @@ public static partial class PlanningSections
             bool? isChecked = rawText.StartsWith("[ ]") ? false
                 : rawText.StartsWith("[x]") || rawText.StartsWith("[X]") ? true
                 : null;
-            items.Add(new PlanningAcItem(items.Count, isChecked, rawText));
+            items.Add(new PlanningAcItem(items.Count + 1, isChecked, rawText));
         }
 
         return items;

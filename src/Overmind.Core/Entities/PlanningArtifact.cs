@@ -181,62 +181,11 @@ public sealed class PlanningArtifact
         ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote, source);
     }
 
-    public bool TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null)
-    {
-        if (index is null && text is null)
-        {
-            throw new ArgumentException("Specify the acceptance-criteria item by index or by text.");
-        }
+    public PlanningAcTickResult TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null) =>
+        FlipAc(index, text, checking: true, logNote, source);
 
-        if (index is not null && text is not null)
-        {
-            throw new ArgumentException("Specify either index or text, not both.");
-        }
-
-        var items = PlanningSections.ParseAcceptanceCriteria(Body);
-        PlanningAcItem target;
-
-        if (index is { } i)
-        {
-            target = i >= 0 && i < items.Count
-                ? items[i]
-                : throw PlanningException.TickItemNotFoundByIndex(i, items);
-        }
-        else
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(text);
-
-            var matches = new List<int>();
-            for (var j = 0; j < items.Count; j++)
-            {
-                if (string.Equals(BareAcText(items[j]), text, StringComparison.Ordinal))
-                {
-                    matches.Add(j);
-                }
-            }
-
-            target = matches.Count switch
-            {
-                0 => throw PlanningException.TickItemNotFoundByText(text!, items),
-                1 => items[matches[0]],
-                _ => throw PlanningException.TickTextAmbiguous(text!, matches)
-            };
-        }
-
-        if (target.Checked is true)
-        {
-            return false;
-        }
-
-        if (target.Checked is null)
-        {
-            throw PlanningException.TickItemNotCheckable(target.Index, target.RawText);
-        }
-
-        RequireChangeNoteWhenFrozen(logNote);
-        ApplyBodyMutation(FlipAcMarker(Body, target.Index), logNote, source);
-        return true;
-    }
+    public PlanningAcTickResult UntickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null) =>
+        FlipAc(index, text, checking: false, logNote, source);
 
     public void SetStatus(PlanningArtifactStatus status, string? logNote = null, PlanningLogSource? source = null)
     {
@@ -414,7 +363,66 @@ public sealed class PlanningArtifact
         }
     }
 
-    private string FlipAcMarker(string body, int itemIndex)
+    private PlanningAcTickResult FlipAc(int? index, string? text, bool checking, string? logNote, PlanningLogSource? source)
+    {
+        var target = ResolveAcTarget(index, text);
+
+        if (target.Checked == checking)
+        {
+            return new PlanningAcTickResult(target.Index, BareAcText(target), Changed: false);
+        }
+
+        if (target.Checked is null)
+        {
+            throw PlanningException.TickItemNotCheckable(target.Index, target.RawText);
+        }
+
+        RequireChangeNoteWhenFrozen(logNote);
+        ApplyBodyMutation(FlipAcMarker(Body, target.Index, checking), logNote, source);
+        return new PlanningAcTickResult(target.Index, BareAcText(target), Changed: true);
+    }
+
+    private PlanningAcItem ResolveAcTarget(int? index, string? text)
+    {
+        if (index is null && text is null)
+        {
+            throw new ArgumentException("Specify the acceptance-criteria item by index or by text.");
+        }
+
+        if (index is not null && text is not null)
+        {
+            throw new ArgumentException("Specify either index or text, not both.");
+        }
+
+        var items = PlanningSections.ParseAcceptanceCriteria(Body);
+
+        if (index is { } i)
+        {
+            return i >= 1 && i <= items.Count
+                ? items[i - 1]
+                : throw PlanningException.TickItemNotFoundByIndex(i, items);
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        var matches = new List<int>();
+        for (var j = 0; j < items.Count; j++)
+        {
+            if (string.Equals(BareAcText(items[j]), text, StringComparison.Ordinal))
+            {
+                matches.Add(items[j].Index);
+            }
+        }
+
+        return matches.Count switch
+        {
+            0 => throw PlanningException.TickItemNotFoundByText(text!, items),
+            1 => items[matches[0] - 1],
+            _ => throw PlanningException.TickTextAmbiguous(text!, matches)
+        };
+    }
+
+    private string FlipAcMarker(string body, int itemNumber, bool checking)
     {
         var section = PlanningSections.Find("acceptance-criteria", body)
             ?? throw PlanningException.PatchSectionNotFound("acceptance-criteria", PlanningSections.List(body));
@@ -429,17 +437,25 @@ public sealed class PlanningArtifact
                 continue;
             }
 
-            if (seen == itemIndex)
+            if (++seen == itemNumber)
             {
-                var markerAt = lines[i].IndexOf("[ ]", StringComparison.Ordinal);
-                lines[i] = string.Concat(lines[i].AsSpan(0, markerAt), "[x]", lines[i].AsSpan(markerAt + 3));
+                lines[i] = SwapAcMarker(lines[i], checking);
                 break;
             }
-
-            seen++;
         }
 
         return PlanningSections.Replace("acceptance-criteria", body, string.Join('\n', lines));
+    }
+
+    private static string SwapAcMarker(string line, bool checking)
+    {
+        var markerAt = line.IndexOf(checking ? "[ ]" : "[x]", StringComparison.Ordinal);
+        if (!checking && markerAt < 0)
+        {
+            markerAt = line.IndexOf("[X]", StringComparison.Ordinal);
+        }
+
+        return string.Concat(line.AsSpan(0, markerAt), checking ? "[x]" : "[ ]", line.AsSpan(markerAt + 3));
     }
 
     private static string BareAcText(PlanningAcItem item)

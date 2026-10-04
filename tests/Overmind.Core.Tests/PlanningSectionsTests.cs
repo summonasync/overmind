@@ -336,10 +336,10 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
         var items = PlanningSections.ParseAcceptanceCriteria(body);
 
         items.Count.ShouldBe(4);
-        items[0].ShouldBe(new PlanningAcItem(0, false, "[ ] first todo"));
-        items[1].ShouldBe(new PlanningAcItem(1, true, "[x] done one"));
-        items[2].ShouldBe(new PlanningAcItem(2, null, "plain bullet"));
-        items[3].ShouldBe(new PlanningAcItem(3, true, "[X] upper x"));
+        items[0].ShouldBe(new PlanningAcItem(1, false, "[ ] first todo"));
+        items[1].ShouldBe(new PlanningAcItem(2, true, "[x] done one"));
+        items[2].ShouldBe(new PlanningAcItem(3, null, "plain bullet"));
+        items[3].ShouldBe(new PlanningAcItem(4, true, "[X] upper x"));
     }
 
     [Fact]

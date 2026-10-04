@@ -6,4 +6,5 @@ public sealed record PlanningArtifactPatch(
     int? TickIndex = null,
     string? TickText = null,
     string? Brief = null,
-    string? LogNote = null);
+    string? LogNote = null,
+    bool Untick = false);

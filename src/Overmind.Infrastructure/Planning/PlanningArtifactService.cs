@@ -352,6 +352,8 @@ public sealed class PlanningArtifactService
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
         var alreadyTicked = false;
+        int? tickedIndex = null;
+        string? tickedText = null;
 
         try
         {
@@ -370,7 +372,12 @@ public sealed class PlanningArtifactService
             }
             else
             {
-                alreadyTicked = !artifact.TickAc(patch.TickIndex, patch.TickText, patch.LogNote, source);
+                var flip = patch.Untick
+                    ? artifact.UntickAc(patch.TickIndex, patch.TickText, patch.LogNote, source)
+                    : artifact.TickAc(patch.TickIndex, patch.TickText, patch.LogNote, source);
+                alreadyTicked = !flip.Changed;
+                tickedIndex = flip.Index;
+                tickedText = flip.Text;
             }
 
             if (artifact.StatusChanged is not null)
@@ -391,7 +398,7 @@ public sealed class PlanningArtifactService
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
 
-        return new PlanningArtifactPatchResult(artifact, alreadyTicked);
+        return new PlanningArtifactPatchResult(artifact, alreadyTicked, tickedIndex, tickedText);
     }
 
     public async Task<PlanningArtifact> ValidateAsync(

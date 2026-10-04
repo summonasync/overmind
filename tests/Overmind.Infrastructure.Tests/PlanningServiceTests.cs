@@ -1535,7 +1535,7 @@ public sealed class PlanningServiceTests : IDisposable
 
         await artifactService.PatchAsync(
             task.Id,
-            new PlanningArtifactPatch(TickIndex: 0),
+            new PlanningArtifactPatch(TickIndex: 1),
             source: PlanningLogSource.Agent);
 
         await _context.Entry(inReview).ReloadAsync();
@@ -1755,8 +1755,10 @@ public sealed class PlanningServiceTests : IDisposable
             null, null, null, default);
 
         var patched = await artifactService.PatchAsync(
-            artifact.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+            artifact.Id, new PlanningArtifactPatch(TickIndex: 1), default);
 
+        patched.TickedIndex.ShouldBe(1);
+        patched.TickedText.ShouldBe("write the parser");
         patched.Artifact.Version.ShouldBe(2);
         patched.Artifact.Body.ShouldContain("[x] write the parser");
 
@@ -1843,13 +1845,103 @@ public sealed class PlanningServiceTests : IDisposable
             null, null, null, default);
 
         var patched = await artifactService.PatchAsync(
-            artifact.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+            artifact.Id, new PlanningArtifactPatch(TickIndex: 1), default);
 
         patched.AlreadyTicked.ShouldBeTrue();
+        patched.TickedIndex.ShouldBe(1);
+        patched.TickedText.ShouldBe("already done");
         patched.Artifact.Version.ShouldBe(1);
 
         var snapshots = await _context.PlanningArtifactVersions.CountAsync(v => v.ArtifactId == artifact.Id);
         snapshots.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task PatchAsync_UntickPatch_ClearsItem_AndEchoesResolvedItem()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "<acceptance-criteria>\n- [x] mistaken tick\n- [ ] keep me\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(TickText: "mistaken tick", Untick: true), default);
+
+        patched.AlreadyTicked.ShouldBeFalse();
+        patched.TickedIndex.ShouldBe(1);
+        patched.TickedText.ShouldBe("mistaken tick");
+        patched.Artifact.Version.ShouldBe(2);
+        patched.Artifact.Body.ShouldContain("[ ] mistaken tick");
+        patched.Artifact.Body.ShouldContain("[ ] keep me");
+
+        var persisted = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
+        persisted.Body.ShouldContain("[x] mistaken tick");
+    }
+
+    [Fact]
+    public async Task PatchAsync_UntickAlreadyUnticked_IsNoOp_EchoingResolvedItem()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "<acceptance-criteria>\n- [ ] untouched item\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(TickIndex: 1, Untick: true), default);
+
+        patched.AlreadyTicked.ShouldBeTrue();
+        patched.TickedIndex.ShouldBe(1);
+        patched.TickedText.ShouldBe("untouched item");
+        patched.Artifact.Version.ShouldBe(1);
+
+        var snapshots = await _context.PlanningArtifactVersions.CountAsync(v => v.ArtifactId == artifact.Id);
+        snapshots.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task PatchAsync_UntickMarkerlessItem_ThrowsTickItemNotCheckable()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            "<acceptance-criteria>\n- plain bullet\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id, new PlanningArtifactPatch(TickIndex: 1, Untick: true), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotCheckable);
+    }
+
+    [Fact]
+    public async Task PatchAsync_UntickWithoutSelector_ThrowsInvalidPatchRequest()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(artifact.Id, new PlanningArtifactPatch(Untick: true), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
     }
 
     [Fact]
@@ -1904,14 +1996,14 @@ public sealed class PlanningServiceTests : IDisposable
         updatedAtAfterLog.ShouldBeGreaterThan(updatedAtAfterCreate);
 
         var flip = await artifactService.PatchAsync(
-            task.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+            task.Id, new PlanningArtifactPatch(TickIndex: 1), default);
         flip.AlreadyTicked.ShouldBeFalse();
         await _context.Entry(feature).ReloadAsync();
         var updatedAtAfterTick = feature.UpdatedAt;
         updatedAtAfterTick.ShouldBeGreaterThan(updatedAtAfterLog);
 
         await artifactService.PatchAsync(
-            task.Id, new PlanningArtifactPatch(TickIndex: 0), default);
+            task.Id, new PlanningArtifactPatch(TickIndex: 1), default);
         await _context.Entry(feature).ReloadAsync();
         feature.UpdatedAt.ShouldBe(updatedAtAfterTick);
     }
@@ -1986,7 +2078,7 @@ public sealed class PlanningServiceTests : IDisposable
         var ex = await Should.ThrowAsync<PlanningException>(
             () => artifactService.PatchAsync(
                 artifact.Id,
-                new PlanningArtifactPatch(Section: "goal", Content: "new", TickIndex: 0),
+                new PlanningArtifactPatch(Section: "goal", Content: "new", TickIndex: 1),
                 default));
 
         ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);

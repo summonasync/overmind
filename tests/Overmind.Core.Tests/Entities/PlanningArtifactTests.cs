@@ -634,8 +634,11 @@ ship the guard
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         var original = artifact.Body;
 
-        artifact.TickAc(0, null).ShouldBeTrue();
+        var ticked = artifact.TickAc(1, null);
 
+        ticked.Changed.ShouldBeTrue();
+        ticked.Index.ShouldBe(1);
+        ticked.Text.ShouldBe("write the parser");
         artifact.Body.ShouldContain("[x] write the parser");
         artifact.Body.ShouldNotContain("[ ] write the parser");
         artifact.Body.ShouldContain("[ ] indented criterion with trailing note");
@@ -650,7 +653,7 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, AmbiguousAcBody);
 
-        artifact.TickAc(0, null);
+        artifact.TickAc(1, null);
 
         artifact.Body.ShouldContain("[x] deploy the service");
         artifact.Body.ShouldContain("[ ] deploy the service");
@@ -661,7 +664,7 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
 
-        artifact.TickAc(1, null);
+        artifact.TickAc(2, null);
 
         artifact.Body.ShouldContain("\n  - [x] indented criterion with trailing note\n");
     }
@@ -671,8 +674,11 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
 
-        artifact.TickAc(null, "write the parser");
+        var ticked = artifact.TickAc(null, "write the parser");
 
+        ticked.Changed.ShouldBeTrue();
+        ticked.Index.ShouldBe(1);
+        ticked.Text.ShouldBe("write the parser");
         artifact.Body.ShouldContain("[x] write the parser");
         artifact.Version.ShouldBe(2);
     }
@@ -688,14 +694,17 @@ ship the guard
     }
 
     [Fact]
-    public void TickAc_AlreadyTicked_IsTrueNoOp()
+    public void TickAc_AlreadyTicked_IsNoOp_EchoingResolvedItem()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         var original = artifact.Body;
         var updatedAtBefore = artifact.UpdatedAt;
 
-        artifact.TickAc(2, null).ShouldBeFalse();
+        var ticked = artifact.TickAc(3, null);
 
+        ticked.Changed.ShouldBeFalse();
+        ticked.Index.ShouldBe(3);
+        ticked.Text.ShouldBe("ship the docs");
         artifact.Body.ShouldBe(original);
         artifact.Version.ShouldBe(1);
         artifact.Versions.ShouldBeEmpty();
@@ -719,7 +728,7 @@ ship the guard
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         artifact.Validate();
 
-        artifact.TickAc(2, null);
+        artifact.TickAc(3, null);
 
         artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
         artifact.Version.ShouldBe(1);
@@ -727,9 +736,10 @@ ship the guard
     }
 
     [Theory]
-    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(0)]
     [InlineData(-1)]
-    public void TickAc_IndexOutOfRange_ThrowsListingVisibleItems(int index)
+    public void TickAc_IndexOutOfRange_ThrowsListingVisibleItemsOneBased(int index)
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
 
@@ -739,7 +749,8 @@ ship the guard
         ex.Message.ShouldContain(index.ToString());
         ex.Message.ShouldContain("write the parser");
         ex.Message.ShouldContain("plain bullet");
-        ex.Message.ShouldContain("2: [x] ship the docs");
+        ex.Message.ShouldContain("3: [x] ship the docs");
+        ex.Message.ShouldContain("4: plain bullet");
     }
 
     [Fact]
@@ -751,7 +762,7 @@ ship the guard
 
         ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
         ex.Message.ShouldContain("nonexistent criterion");
-        ex.Message.ShouldContain("1: [ ] indented criterion with trailing note");
+        ex.Message.ShouldContain("2: [ ] indented criterion with trailing note");
     }
 
     [Fact]
@@ -763,7 +774,7 @@ ship the guard
 
         ex.Code.ShouldBe(PlanningFailureCode.TickTextAmbiguous);
         ex.Message.ShouldContain("deploy the service");
-        ex.Message.ShouldContain("indices 0, 1");
+        ex.Message.ShouldContain("indices 1, 2");
     }
 
     [Fact]
@@ -771,7 +782,7 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
 
-        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(3, null));
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(4, null));
 
         ex.Code.ShouldBe(PlanningFailureCode.TickItemNotCheckable);
         ex.Message.ShouldContain("plain bullet");
@@ -783,7 +794,7 @@ ship the guard
         var artifact = PlanningArtifact.Create(
             FeatureId, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nno AC here\n</goal>\n");
 
-        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(0, null));
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(1, null));
 
         ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
         ex.Message.ShouldContain("no acceptance-criteria items");
@@ -795,7 +806,7 @@ ship the guard
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         artifact.Validate();
 
-        Should.Throw<InvalidOperationException>(() => artifact.TickAc(0, null));
+        Should.Throw<InvalidOperationException>(() => artifact.TickAc(1, null));
 
         artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
         artifact.Version.ShouldBe(1);
@@ -809,7 +820,7 @@ ship the guard
         artifact.Validate();
         var frozenBody = artifact.Body;
 
-        artifact.TickAc(0, null, "tick after reopening");
+        artifact.TickAc(1, null, "tick after reopening");
 
         artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
         artifact.FrozenAt.ShouldBeNull();
@@ -825,7 +836,7 @@ ship the guard
         var body = "# Task\r\n\r\n<acceptance-criteria>\r\n- [ ] first item\r\n- [x] done item\r\n</acceptance-criteria>\r\n";
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, body);
 
-        artifact.TickAc(0, null);
+        artifact.TickAc(1, null);
 
         artifact.Body.ShouldBe("# Task\r\n\r\n<acceptance-criteria>\r\n- [x] first item\r\n- [x] done item\r\n</acceptance-criteria>\r\n");
     }
@@ -835,7 +846,7 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
 
-        Should.Throw<ArgumentException>(() => artifact.TickAc(0, "write the parser"));
+        Should.Throw<ArgumentException>(() => artifact.TickAc(1, "write the parser"));
     }
 
     [Fact]
@@ -851,11 +862,152 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
 
-        artifact.TickAc(0, null, "criterion met");
+        artifact.TickAc(1, null, "criterion met");
 
         artifact.Version.ShouldBe(2);
         artifact.Body.ShouldContain("criterion met");
         artifact.Status.ShouldBe(PlanningArtifactStatus.Todo);
+    }
+
+    [Fact]
+    public void UntickAc_ByIndex_ClearsMarker_SnapshotsPreviousBody()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.TickAc(1, null);
+        var tickedBody = artifact.Body;
+
+        var unticked = artifact.UntickAc(1, null);
+
+        unticked.Changed.ShouldBeTrue();
+        unticked.Index.ShouldBe(1);
+        unticked.Text.ShouldBe("write the parser");
+        artifact.Body.ShouldContain("[ ] write the parser");
+        artifact.Body.ShouldContain("[x] ship the docs");
+        artifact.Version.ShouldBe(3);
+        artifact.Versions.Count.ShouldBe(2);
+        artifact.Versions.Last().Body.ShouldBe(tickedBody);
+    }
+
+    [Fact]
+    public void UntickAc_ByIndex_AmongDuplicateTexts_FlipsOnlyTheTargetedLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, AmbiguousAcBody);
+
+        artifact.TickAc(2, null);
+        artifact.UntickAc(2, null);
+
+        artifact.Body.ShouldNotContain("[x]");
+    }
+
+    [Fact]
+    public void UntickAc_ByText_ClearsTickedItem()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var unticked = artifact.UntickAc(null, "ship the docs");
+
+        unticked.Changed.ShouldBeTrue();
+        unticked.Index.ShouldBe(3);
+        unticked.Text.ShouldBe("ship the docs");
+        artifact.Body.ShouldContain("[ ] ship the docs");
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UntickAc_AlreadyUnticked_IsNoOp_EchoingResolvedItem()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        var original = artifact.Body;
+        var updatedAtBefore = artifact.UpdatedAt;
+
+        var unticked = artifact.UntickAc(1, null);
+
+        unticked.Changed.ShouldBeFalse();
+        unticked.Index.ShouldBe(1);
+        unticked.Text.ShouldBe("write the parser");
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+        artifact.UpdatedAt.ShouldBe(updatedAtBefore);
+    }
+
+    [Fact]
+    public void UntickAc_AlreadyUnticked_OnFrozenArtifactWithoutNote_IsNoOp()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+
+        artifact.UntickAc(1, null);
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void UntickAc_UpperCaseMarker_ClearsToEmptyBox()
+    {
+        var body = "<acceptance-criteria>\n- [X] done in a hurry\n</acceptance-criteria>\n";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, body);
+
+        var unticked = artifact.UntickAc(1, null);
+
+        unticked.Changed.ShouldBeTrue();
+        artifact.Body.ShouldContain("[ ] done in a hurry");
+        artifact.Body.ShouldNotContain("[X]");
+    }
+
+    [Fact]
+    public void UntickAc_ItemWithoutCheckboxMarker_ThrowsNotCheckable()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UntickAc(4, null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotCheckable);
+        ex.Message.ShouldContain("plain bullet");
+    }
+
+    [Fact]
+    public void UntickAc_IndexOutOfRange_ThrowsListingVisibleItemsOneBased()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UntickAc(9, null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+        ex.Message.ShouldContain("9");
+        ex.Message.ShouldContain("1: [ ] write the parser");
+        ex.Message.ShouldContain("4: plain bullet");
+    }
+
+    [Fact]
+    public void UntickAc_FrozenWithoutNote_Throws_AndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        artifact.Validate();
+
+        Should.Throw<InvalidOperationException>(() => artifact.UntickAc(3, null));
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void UntickAc_IndexAndTextTogether_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        Should.Throw<ArgumentException>(() => artifact.UntickAc(1, "ship the docs"));
+    }
+
+    [Fact]
+    public void UntickAc_NeitherIndexNorText_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        Should.Throw<ArgumentException>(() => artifact.UntickAc(null, null));
     }
 
     [Theory]

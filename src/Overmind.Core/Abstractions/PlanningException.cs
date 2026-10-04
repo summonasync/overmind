@@ -95,7 +95,7 @@ public sealed class PlanningException : Exception
     public static PlanningException TickItemNotFoundByIndex(int index, IReadOnlyList<PlanningAcItem> visibleItems) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotFound,
             visibleItems.Count == 0
-                ? $"The artifact body contains no acceptance-criteria items; there is no item {index} to tick."
+                ? $"The artifact body contains no acceptance-criteria items; there is no item {index}."
                 : $"Acceptance-criteria item {index} was not found. Visible items: {FormatAcItems(visibleItems)}.");
 
     public static PlanningException TickItemNotFoundByText(string text, IReadOnlyList<PlanningAcItem> visibleItems) =>
@@ -110,11 +110,11 @@ public sealed class PlanningException : Exception
 
     public static PlanningException TickItemNotCheckable(int index, string rawText) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotCheckable,
-            $"Acceptance-criteria item {index} has no checkbox marker and cannot be ticked: '{rawText}'.");
+            $"Acceptance-criteria item {index} has no checkbox marker and cannot be ticked or unticked: '{rawText}'.");
 
     public static PlanningException InvalidPatchRequest() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidPatchRequest,
-            "A patch must carry exactly one of: a section with its replacement content, an acceptance-criteria tick (index or exact text), or a brief — combinations are rejected.");
+            "A patch must carry exactly one of: a section with its replacement content, an acceptance-criteria tick or un-tick (index or exact text), or a brief — combinations are rejected.");
 
     public static PlanningException PatchLogSectionNotReplaceable() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchLogSectionNotReplaceable,

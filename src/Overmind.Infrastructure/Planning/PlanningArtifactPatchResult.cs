@@ -2,4 +2,8 @@ using Overmind.Core;
 
 namespace Overmind.Infrastructure.Planning;
 
-public sealed record PlanningArtifactPatchResult(PlanningArtifact Artifact, bool AlreadyTicked);
+public sealed record PlanningArtifactPatchResult(
+    PlanningArtifact Artifact,
+    bool AlreadyTicked,
+    int? TickedIndex,
+    string? TickedText);
