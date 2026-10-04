@@ -87,6 +87,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("priority asc");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("dragging");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("readiness 0-3");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("briefExcerpt");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("plan validated");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("band-scoped");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("toPosition");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("planning_set_feature_priority");
@@ -116,7 +118,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         request.Path.ShouldBe($"/api/agent/projects/{Canned.ProjectId}/planning/features");
 
         Canned.ToolResultText(response).ShouldContain("demo-feature");
-        Canned.ToolResultText(response).ShouldContain("\"isCurrent\":true");
+        Canned.ToolResultText(response).ShouldContain("\"phase\":\"in progress\"");
+        Canned.ToolResultText(response).ShouldContain("\"briefExcerpt\":\"Crash on save when the workspace file is read-only.\"");
+        Canned.ToolResultText(response).ShouldNotContain("isCurrent");
         Canned.ToolResultText(response).ShouldContain("\"priority\":\"p1\"");
     }
 
@@ -1619,6 +1623,14 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("\"queuePosition\":2");
         text.ShouldContain("\"blockedBy\":[\"demo-feature\"]");
         text.ShouldContain("\"readiness\":2");
+
+        var rows = JsonNode.Parse(text)!["items"]!.AsArray();
+        var claimed = rows.Single(r => r!["slug"]!.GetValue<string>() == "demo-feature")!;
+        claimed["phase"]!.GetValue<string>().ShouldBe("in progress");
+        claimed["briefExcerpt"]!.GetValue<string?>().ShouldBe("Crash on save when the workspace file is read-only.");
+        var draft = rows.Single(r => r!["slug"]!.GetValue<string>() == "draft-one")!;
+        draft["phase"]!.GetValue<string>().ShouldBe("drafting");
+        draft["briefExcerpt"].ShouldBeNull();
     }
 
     [Fact]

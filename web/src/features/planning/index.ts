@@ -40,6 +40,7 @@ export {
   isBoardFilterActive,
   parseBoardFilters,
 } from "./lib/board-filters";
+export { cardBriefLine, cardPhaseLabel } from "./lib/board-card-context";
 export { boardItemMatchesSearch } from "./lib/board-search";
 export type {
   BoardFilterSearchParams,

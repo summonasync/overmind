@@ -31,7 +31,13 @@ public static class PlanningMapper
             feature.ClaimedByVendor,
             feature.ClaimedAt,
             feature.ClaimSessionId is null ? null : claimState,
-            feature.ClaimedByHuman);
+            feature.ClaimedByHuman,
+            CeremonyPhasePlanner.DeriveLabel(
+                feature.Status,
+                ArtifactStatus(artifacts, PlanningArtifactKind.Spec),
+                ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
+                TaskTotal(artifacts)),
+            CeremonyPhasePlanner.BriefExcerpt(feature.Body));
     }
 
     public static PlanningQueueItem ToQueueItem(
@@ -59,7 +65,13 @@ public static class PlanningMapper
             feature.ClaimedByVendor,
             feature.ClaimedAt,
             feature.ClaimSessionId is null ? null : claimState,
-            feature.ClaimedByHuman);
+            feature.ClaimedByHuman,
+            CeremonyPhasePlanner.DeriveLabel(
+                feature.Status,
+                ArtifactStatus(artifacts, PlanningArtifactKind.Spec),
+                ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
+                TaskTotal(artifacts)),
+            CeremonyPhasePlanner.BriefExcerpt(feature.Body));
     }
 
     public static int Readiness(PlanningFeature feature) =>

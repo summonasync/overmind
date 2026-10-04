@@ -12,6 +12,7 @@ import { updatePlanningFeature } from "@/features/planning/api";
 import { FeatureNumberBadge } from "@/features/planning/components/feature-number-badge";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
 import { compareBoardItems } from "@/features/planning/lib/board-order";
+import { cardBriefLine, cardPhaseLabel } from "@/features/planning/lib/board-card-context";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
@@ -168,6 +169,7 @@ export function FeatureBoard({
           const taskPercent = item.taskTotal > 0 ? Math.round((item.taskDone / item.taskTotal) * 100) : 0;
           const draggable = item.status !== "done" && !reorderQueue.isPending;
           const isDropTarget = drag !== null && dropTargetSlug === item.slug;
+          const brief = cardBriefLine(item);
           return (
             <li
               key={item.slug}
@@ -224,6 +226,12 @@ export function FeatureBoard({
                 </a>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
+                  <span
+                    className="shrink-0 text-[10px] uppercase tracking-wide text-muted"
+                    title={`Ceremony phase: ${cardPhaseLabel(item)}`}
+                  >
+                    {cardPhaseLabel(item)}
+                  </span>
                   <FeatureStatusSelect projectId={projectId} item={item} />
                 </div>
               </div>
@@ -241,6 +249,8 @@ export function FeatureBoard({
                 {artifactChip("plan", item.planStatus)}
                 <FeatureClaimChip item={item} />
               </div>
+
+              {brief !== null ? <p className="text-xs text-muted">{brief}</p> : null}
 
               {item.taskTotal > 0 ? (
                 <div className="space-y-1">

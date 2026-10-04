@@ -63,7 +63,9 @@ export type PlanningClaimState = "alive" | "stale" | "ended";
 export interface PlanningFeatureBoardItem {
   slug: string;
   title: string;
+  briefExcerpt: string | null;
   status: PlanningFeatureStatus;
+  phase: string;
   priority: PlanningFeaturePriority;
   queuePosition: number;
   isBlocked: boolean;

@@ -20,7 +20,9 @@ public sealed record PlanningFeatureBoardItem(
     string? ClaimedByVendor,
     DateTime? ClaimedAt,
     AgentSessionLiveness? ClaimState,
-    bool ClaimedByHuman);
+    bool ClaimedByHuman,
+    string Phase,
+    string? BriefExcerpt);
 
 public sealed record PlanningQueueItem(
     string Slug,
@@ -40,7 +42,9 @@ public sealed record PlanningQueueItem(
     string? ClaimedByVendor,
     DateTime? ClaimedAt,
     AgentSessionLiveness? ClaimState,
-    bool ClaimedByHuman);
+    bool ClaimedByHuman,
+    string Phase,
+    string? BriefExcerpt);
 
 public sealed record PlanningQueueResponse(PlanningQueueItem[] Items);
 
