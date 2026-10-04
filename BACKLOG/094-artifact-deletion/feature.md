@@ -1,7 +1,7 @@
 ---
 feature: 094
 slug: artifact-deletion
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-27
@@ -23,4 +23,5 @@ Artifact deletion: ни одна дверь не умеет удалять ар�
 <log>
 - 2026-10-03 [auto] — artifact created → inProgress
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — by user request in-session: result 0728e1ad validated on notification ddcaffca reply («я тапнул»); user confirmed the no-tap p1 pipeline mandate — closing 094 done, then push + batch release per the standing order
 </log>

@@ -1,8 +1,9 @@
 ---
 feature: 094
 slug: artifact-deletion
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 094 — Artifact deletion: human door (HTTP+UI) + agent door (MCP) для сноса артефактов — дубли/мусор сейчас нечистимы
