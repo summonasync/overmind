@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
-public sealed class PlanningServiceTests : IDisposable
+public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 {
     private readonly TempDatabase _db = new();
     private readonly OvermindDbContext _context;
@@ -37,6 +37,11 @@ public sealed class PlanningServiceTests : IDisposable
         _projectId = project.Id;
     }
 
+    public async Task InitializeAsync() =>
+        await TestPlanningDispatcher.EnableSyncModeAsync(_context);
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
     public void Dispose()
     {
         _context.Dispose();
@@ -48,16 +53,16 @@ public sealed class PlanningServiceTests : IDisposable
             _context,
             _materializer,
             new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
-            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
+            new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer)),
+            TestPlanningDispatcher.Create(_context, _materializer),
             NullLogger<PlanningFeatureService>.Instance);
 
     private PlanningArtifactService CreateArtifactService() =>
         new(
             _context,
-            _materializer,
-            NullLogger<PlanningArtifactService>.Instance,
+            TestPlanningDispatcher.Create(_context, _materializer),
             new TaskDependencyService(
-                _context, _materializer, NullLogger<TaskDependencyService>.Instance));
+                _context, TestPlanningDispatcher.Create(_context, _materializer)));
 
     [Fact]
     public async Task CreateFeature_ValidSlug_Succeeds()
@@ -874,7 +879,7 @@ public sealed class PlanningServiceTests : IDisposable
     }
 
     private TaskDependencyService CreateDependencyReader() =>
-        new(_context, _materializer, NullLogger<TaskDependencyService>.Instance);
+        new(_context, TestPlanningDispatcher.Create(_context, _materializer));
 
     [Fact]
     public async Task UpsertTasks_RewrittenStoredLogLine_ThrowsWrappedAsBatchItemAndRollsBack()
@@ -925,8 +930,9 @@ public sealed class PlanningServiceTests : IDisposable
             });
         using var context = _db.CreateContext(interceptor);
         var artifactService = new PlanningArtifactService(
-            context, _materializer, NullLogger<PlanningArtifactService>.Instance,
-            new TaskDependencyService(context, _materializer, NullLogger<TaskDependencyService>.Instance));
+            context,
+            TestPlanningDispatcher.Create(context, _materializer),
+            new TaskDependencyService(context, TestPlanningDispatcher.Create(context, _materializer)));
 
         _materializer.ClearReceivedCalls();
         armed = true;

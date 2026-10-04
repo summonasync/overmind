@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
-public sealed class TaskDependencyServiceTests : IDisposable
+public sealed class TaskDependencyServiceTests : IDisposable, IAsyncLifetime
 {
     private readonly TempDatabase _db = new();
     private readonly OvermindDbContext _context;
@@ -38,6 +38,12 @@ public sealed class TaskDependencyServiceTests : IDisposable
         _featureId = feature.Id;
     }
 
+
+    public async Task InitializeAsync() =>
+        await TestPlanningDispatcher.EnableSyncModeAsync(_context);
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
     public void Dispose()
     {
         _context.Dispose();
@@ -45,7 +51,7 @@ public sealed class TaskDependencyServiceTests : IDisposable
     }
 
     private TaskDependencyService CreateService() =>
-        new(_context, _materializer, NullLogger<TaskDependencyService>.Instance);
+        new(_context, TestPlanningDispatcher.Create(_context, _materializer));
 
     private PlanningArtifact SeedTask(int order)
     {
@@ -267,7 +273,7 @@ public sealed class TaskDependencyServiceTests : IDisposable
         var blocker = SeedTask(2);
         var service = CreateService();
         var artifactService = new PlanningArtifactService(
-            _context, _materializer, NullLogger<PlanningArtifactService>.Instance, service);
+            _context, TestPlanningDispatcher.Create(_context, _materializer), service);
         await service.ReplaceEdgesAsync(waiter.Id, [0]);
         await service.ReplaceEdgesAsync(middle.Id, [2]);
 
@@ -288,7 +294,7 @@ public sealed class TaskDependencyServiceTests : IDisposable
         var blocker = SeedTask(2);
         var service = CreateService();
         var artifactService = new PlanningArtifactService(
-            _context, _materializer, NullLogger<PlanningArtifactService>.Instance, service);
+            _context, TestPlanningDispatcher.Create(_context, _materializer), service);
         await service.ReplaceEdgesAsync(waiter.Id, [0]);
         await service.ReplaceEdgesAsync(middle.Id, [2]);
 

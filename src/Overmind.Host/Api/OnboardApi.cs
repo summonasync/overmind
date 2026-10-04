@@ -132,7 +132,7 @@ public static class OnboardApi
     private static string TriggerText(PlanningMaterialization strategy) =>
         strategy == PlanningMaterialization.Off
             ? "Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override."
-            : "Event-driven: runs automatically after every planning mutation.";
+            : "Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.";
 
     private static IReadOnlyList<string>? SkipHeadLines(string? skipHead) =>
         skipHead is null

@@ -54,13 +54,11 @@ public sealed class IssueServiceTests : IDisposable
             _context,
             new PlanningArtifactService(
                 _context,
-                _materializer,
-                NullLogger<PlanningArtifactService>.Instance,
-                new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance)),
+                TestPlanningDispatcher.Create(_context, _materializer),
+                new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer))),
             new NotificationsService(_context),
-            new FeatureClaimService(_context, _materializer, NullLogger<FeatureClaimService>.Instance),
-            _materializer,
-            NullLogger<IssueService>.Instance);
+            new FeatureClaimService(_context, TestPlanningDispatcher.Create(_context, _materializer)),
+            TestPlanningDispatcher.Create(_context, _materializer));
 
     private async Task<object?> ScalarRawAsync(string sql)
     {
@@ -268,7 +266,7 @@ public sealed class IssueServiceTests : IDisposable
         SeedFeature("050-crash-fix");
         await _context.IssueAppends.AddAsync(IssueAppend.Create(issue.Id, _authorProjectId, "trail entry"));
         await _context.SaveChangesAsync();
-        var claims = new FeatureClaimService(_context, _materializer, NullLogger<FeatureClaimService>.Instance);
+        var claims = new FeatureClaimService(_context, TestPlanningDispatcher.Create(_context, _materializer));
         await claims.ClaimAsync(_boardProjectId, "050-crash-fix", "Dot", "coder", HolderSessionId);
         var artifactsBefore = await ScalarAsync("SELECT COUNT(*) FROM PlanningArtifacts");
 
@@ -289,7 +287,7 @@ public sealed class IssueServiceTests : IDisposable
     {
         var issue = await SeedIssueAsync();
         SeedFeature("050-crash-fix");
-        var claims = new FeatureClaimService(_context, _materializer, NullLogger<FeatureClaimService>.Instance);
+        var claims = new FeatureClaimService(_context, TestPlanningDispatcher.Create(_context, _materializer));
         await claims.ClaimAsync(_boardProjectId, "050-crash-fix", "Dan", "qwen", HolderSessionId);
 
         var (promoted, artifact) = await CreateIssueService()
@@ -304,7 +302,7 @@ public sealed class IssueServiceTests : IDisposable
     {
         var issue = await SeedIssueAsync();
         SeedFeature("050-crash-fix");
-        var claims = new FeatureClaimService(_context, _materializer, NullLogger<FeatureClaimService>.Instance);
+        var claims = new FeatureClaimService(_context, TestPlanningDispatcher.Create(_context, _materializer));
         await claims.ClaimAsync(_boardProjectId, "050-crash-fix", "Dan", "qwen", HolderSessionId);
         await claims.UnclaimAsync(_boardProjectId, "050-crash-fix", HolderSessionId);
         await claims.ClaimAsync(_boardProjectId, "050-crash-fix", "Dan", "qwen", HolderSessionId);

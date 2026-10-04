@@ -706,7 +706,8 @@ public sealed class PlanningRoundTripTests : IDisposable
                 ctx,
                 CreateMaterializer(ctx),
                 new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
-                new TaskDependencyService(ctx, CreateMaterializer(ctx), NullLogger<TaskDependencyService>.Instance),
+                new TaskDependencyService(ctx, TestPlanningDispatcher.Create(ctx, CreateMaterializer(ctx))),
+                TestPlanningDispatcher.Create(ctx, CreateMaterializer(ctx)),
                 NullLogger<PlanningFeatureService>.Instance),
             new FrontmatterKeyRegistry(ctx, NullLogger<FrontmatterKeyRegistry>.Instance));
 

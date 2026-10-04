@@ -13,6 +13,7 @@ public sealed partial class PlanningFeatureService
     private readonly IPlanningMaterializer _materializer;
     private readonly BacklogImportSeeder _seeder;
     private readonly TaskDependencyService _taskDependencies;
+    private readonly PlanningMaterializationDispatcher _materialization;
     private readonly ILogger<PlanningFeatureService> _logger;
 
     public PlanningFeatureService(
@@ -20,12 +21,14 @@ public sealed partial class PlanningFeatureService
         IPlanningMaterializer materializer,
         BacklogImportSeeder seeder,
         TaskDependencyService taskDependencies,
+        PlanningMaterializationDispatcher materialization,
         ILogger<PlanningFeatureService> logger)
     {
         _db = db;
         _materializer = materializer;
         _seeder = seeder;
         _taskDependencies = taskDependencies;
+        _materialization = materialization;
         _logger = logger;
     }
 
@@ -60,7 +63,7 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.DuplicateSlug(slug);
         }
 
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
 
@@ -108,7 +111,7 @@ public sealed partial class PlanningFeatureService
 
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
 
@@ -147,7 +150,7 @@ public sealed partial class PlanningFeatureService
 
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
 
@@ -185,7 +188,7 @@ public sealed partial class PlanningFeatureService
         }
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
 
@@ -221,7 +224,7 @@ public sealed partial class PlanningFeatureService
 
         _db.PlanningFeatures.Remove(feature);
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
     }
 
     public async Task<BacklogFeatureImportResult> ImportAsync(
@@ -410,7 +413,7 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.DuplicateSlug(import.Slug);
         }
 
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchInlineAsync(projectId, ct);
         return new BacklogFeatureImportResult(
             featureCreated, artifactsCreated, artifactsUpdated, kept, seed.Tracked, seed.Strategy);
     }

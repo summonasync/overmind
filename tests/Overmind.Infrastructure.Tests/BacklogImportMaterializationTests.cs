@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
-public sealed class BacklogImportMaterializationTests : IDisposable
+public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifetime
 {
     private readonly TempDatabase _db = new();
     private readonly string _sandboxDir;
@@ -26,6 +26,15 @@ public sealed class BacklogImportMaterializationTests : IDisposable
         _backlogDir = Path.Combine(_projectDir, "BACKLOG");
         Directory.CreateDirectory(_backlogDir);
     }
+
+
+    public async Task InitializeAsync()
+    {
+        await using var ctx = _db.CreateContext();
+        await TestPlanningDispatcher.EnableSyncModeAsync(ctx);
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
     {
@@ -371,7 +380,8 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             ctx,
             CreateMaterializer(ctx),
             new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
-            new TaskDependencyService(ctx, CreateMaterializer(ctx), NullLogger<TaskDependencyService>.Instance),
+            new TaskDependencyService(ctx, TestPlanningDispatcher.Create(ctx, CreateMaterializer(ctx))),
+            TestPlanningDispatcher.Create(ctx, CreateMaterializer(ctx)),
             NullLogger<PlanningFeatureService>.Instance);
         await features.UpdateAsync(projectId, "010-demo", title: "Demo feature retitled", body: null, status: null);
         await features.CreateAsync(projectId, "020-second", "Second feature", "Fresh body");
@@ -405,7 +415,8 @@ public sealed class BacklogImportMaterializationTests : IDisposable
             ctx,
             materializer,
             seeder,
-            new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance),
+            new TaskDependencyService(ctx, TestPlanningDispatcher.Create(ctx, materializer)),
+            TestPlanningDispatcher.Create(ctx, materializer),
             NullLogger<PlanningFeatureService>.Instance);
         var keys = new FrontmatterKeyRegistry(ctx, NullLogger<FrontmatterKeyRegistry>.Instance);
         return new BacklogImporter(features, keys);

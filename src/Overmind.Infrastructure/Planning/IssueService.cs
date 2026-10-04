@@ -9,10 +9,9 @@ namespace Overmind.Infrastructure.Planning;
 public sealed class IssueService
 {
     private readonly OvermindDbContext _db;
+    private readonly PlanningMaterializationDispatcher _materialization;
     private readonly PlanningArtifactService _artifacts;
     private readonly NotificationsService _notifications;
-    private readonly IPlanningMaterializer _materializer;
-    private readonly ILogger<IssueService> _logger;
 
     private readonly FeatureClaimService _claims;
 
@@ -21,15 +20,13 @@ public sealed class IssueService
         PlanningArtifactService artifacts,
         NotificationsService notifications,
         FeatureClaimService claims,
-        IPlanningMaterializer materializer,
-        ILogger<IssueService> logger)
+        PlanningMaterializationDispatcher materialization)
     {
         _db = db;
         _artifacts = artifacts;
         _notifications = notifications;
         _claims = claims;
-        _materializer = materializer;
-        _logger = logger;
+        _materialization = materialization;
     }
 
     public async Task<Issue> CreateAsync(
@@ -150,7 +147,7 @@ public sealed class IssueService
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, issue.ProjectId, ct);
+        await _materialization.DispatchAsync(issue.ProjectId, ct);
         return (issue, artifact);
     }
 

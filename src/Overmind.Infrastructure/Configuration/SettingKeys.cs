@@ -10,6 +10,7 @@ public static class SettingKeys
     public const string QdrantEndpoint = "qdrant.endpoint";
     public const string TreeRoots = "treeRoots";
     public const string PlanningMaterializationDefault = "planning.materializationDefault";
+    public const string PlanningMaterializationSync = "planning.materializationSync";
     public const string PlanningRequireHumanValidationDefault = "planning.requireHumanValidationDefault";
     public const string NotificationNudgeMode = "notification.nudgeMode";
     public const string NotificationNudgeIntervalMinutes = "notification.nudgeIntervalMinutes";

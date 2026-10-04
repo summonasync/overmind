@@ -46,6 +46,21 @@ public sealed class SettingsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Put_PlanningMaterializationSync_PersistsOnAndRejectsUnknownValues()
+    {
+        using var bad = await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = "banana" });
+        bad.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        using var put = await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = "on" });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var get = await _client.GetAsync("/api/settings");
+        get.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningMaterializationSync").GetString().ShouldBe("on");
+    }
+
+    [Fact]
     public async Task Put_PersistsValues_AndApiKeyStaysWriteOnly()
     {
         using var put = await _client.PutAsJsonAsync("/api/settings", new

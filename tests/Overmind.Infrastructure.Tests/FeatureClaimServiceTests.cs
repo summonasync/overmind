@@ -41,14 +41,15 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     private FeatureClaimService CreateClaimService() =>
-        new(_context, _materializer, NullLogger<FeatureClaimService>.Instance);
+        new(_context, TestPlanningDispatcher.Create(_context, _materializer));
 
     private PlanningFeatureService CreateFeatureService() =>
         new(
             _context,
             _materializer,
             new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
-            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
+            new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer)),
+            TestPlanningDispatcher.Create(_context, _materializer),
             NullLogger<PlanningFeatureService>.Instance);
 
     private async Task<PlanningFeature> CreateFeatureAsync(string slug = "feat-a") =>

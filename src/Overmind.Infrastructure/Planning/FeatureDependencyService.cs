@@ -9,17 +9,14 @@ namespace Overmind.Infrastructure.Planning;
 public sealed class FeatureDependencyService
 {
     private readonly OvermindDbContext _db;
-    private readonly IPlanningMaterializer _materializer;
-    private readonly ILogger<FeatureDependencyService> _logger;
+    private readonly PlanningMaterializationDispatcher _materialization;
 
     public FeatureDependencyService(
         OvermindDbContext db,
-        IPlanningMaterializer materializer,
-        ILogger<FeatureDependencyService> logger)
+        PlanningMaterializationDispatcher materialization)
     {
         _db = db;
-        _materializer = materializer;
-        _logger = logger;
+        _materialization = materialization;
     }
 
     public async Task<FeatureDependencies> AddDependencyAsync(
@@ -37,7 +34,7 @@ public sealed class FeatureDependencyService
 
         feature.AddBlockedBy(blocker);
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return BuildView(feature, graph);
     }
 
@@ -50,7 +47,7 @@ public sealed class FeatureDependencyService
 
         feature.RemoveBlockedBy(blocker);
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return BuildView(feature, graph);
     }
 

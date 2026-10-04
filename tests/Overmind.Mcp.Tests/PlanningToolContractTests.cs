@@ -2738,7 +2738,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             "any guarded file (untracked at a planned path, or tracked with local edits not on the board) " +
             "aborts the whole run with a 409 listing every refusal, and nothing is written that run. " +
             "Skips in the report are byte-identical no-ops (content already matches the board), not guarded files. " +
-            "A normal board mutation already triggers a pass automatically; call this after an import, " +
+            "A normal board mutation already enqueues a pass that runs shortly after in the background; " +
+            "this tool runs the pass inline and waits for the report — call it after an import, " +
             "a strategy switch, or when onboard reports a failed attempt or stale mirror state. " +
             "force adopts guarded files with per-file warnings instead of refusing; transcribe hand edits to the board before forcing.");
     }

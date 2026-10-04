@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Overmind.Api.Tests;
 
-public sealed class PlanningMaterializationTests : IDisposable
+public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
 {
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
@@ -22,6 +22,14 @@ public sealed class PlanningMaterializationTests : IDisposable
         _projectDir = Path.Combine(_sandboxDir, "project");
         Directory.CreateDirectory(_projectDir);
     }
+
+    public async Task InitializeAsync()
+    {
+        var put = await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = "on" });
+        put.EnsureSuccessStatusCode();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
     {

@@ -103,6 +103,10 @@ public static class DependencyInjection
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<PlanningPolicy>(),
             OvermindPaths.DataDirectory));
+        services.AddSingleton<PlanningMaterializationQueue>();
+        services.AddSingleton<PlanningMaterializationWorker>();
+        services.AddHostedService<PlanningMaterializationHostedService>();
+        services.AddScoped<PlanningMaterializationDispatcher>();
         services.AddScoped<PlanningMaterializationStatusReader>(provider => new PlanningMaterializationStatusReader(
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<PlanningPolicy>(),

@@ -9,17 +9,14 @@ namespace Overmind.Infrastructure.Planning;
 public sealed class TaskDependencyService
 {
     private readonly OvermindDbContext _db;
-    private readonly IPlanningMaterializer _materializer;
-    private readonly ILogger<TaskDependencyService> _logger;
+    private readonly PlanningMaterializationDispatcher _materialization;
 
     public TaskDependencyService(
         OvermindDbContext db,
-        IPlanningMaterializer materializer,
-        ILogger<TaskDependencyService> logger)
+        PlanningMaterializationDispatcher materialization)
     {
         _db = db;
-        _materializer = materializer;
-        _logger = logger;
+        _materialization = materialization;
     }
 
     public async Task<IReadOnlyList<TaskDependencyEntry>> ReplaceEdgesAsync(
@@ -34,7 +31,7 @@ public sealed class TaskDependencyService
         {
             await _db.SaveChangesAsync(ct);
             var projectId = await GetProjectIdAsync(task.FeatureId, ct);
-            await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+            await _materialization.DispatchAsync(projectId, ct);
         }
 
         return View(task, siblings);

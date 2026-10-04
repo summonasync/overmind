@@ -230,9 +230,8 @@ public sealed class PlanningArtifactDeletionTests : IDisposable
     private PlanningArtifactService CreateService() =>
         new(
             _context,
-            _materializer,
-            NullLogger<PlanningArtifactService>.Instance,
-            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance));
+            TestPlanningDispatcher.Create(_context, _materializer),
+            new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer)));
 
     private async Task<PlanningFeature> SeedFeatureAsync()
     {

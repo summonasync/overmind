@@ -340,7 +340,7 @@ public static class Canned
 
     public const string OnboardSkippedMaterializationJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":"2026-09-24T09:00:00Z","lastAttempt":"2026-09-24T09:00:00Z","error":null,"failedAt":null,"skippedCount":2,"skipped":["BACKLOG/foreign/feature.md: content already matches the board","BACKLOG/demo-feature/tasks/01-build.md: content already matches the board"]},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-24T09:00:00Z","lastAttempt":"2026-09-24T09:00:00Z","error":null,"failedAt":null,"skippedCount":2,"skipped":["BACKLOG/foreign/feature.md: content already matches the board","BACKLOG/demo-feature/tasks/01-build.md: content already matches the board"]},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardQuickstartText = "Onboarding quickstart from the host — verbatim payload text.";
@@ -359,12 +359,12 @@ public static class Canned
 
     public const string OnboardJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T10:15:00Z"},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T10:15:00Z"},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardSemanticUnavailableJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":false,"reason":"model 'all-minilm-l6-v2' not found, HTTP 404"},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":false,"reason":"model 'all-minilm-l6-v2' not found, HTTP 404"},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardOffStrategyJson =
@@ -374,12 +374,12 @@ public static class Canned
 
     public const string OnboardFailedMaterializationJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T18:00:00Z","error":"Refusing to overwrite locally modified tracked files:\n- /repo/BACKLOG/006-demo/tasks/01-first-task.md","failedAt":"2026-09-23T18:00:00Z"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T18:00:00Z","error":"Refusing to overwrite locally modified tracked files:\n- /repo/BACKLOG/006-demo/tasks/01-first-task.md","failedAt":"2026-09-23T18:00:00Z"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardCyrillicJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"кириллический проект","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: runs automatically after every planning mutation.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"quickstart":"Быстрый старт — кириллица едет литералом, включая тег <goal> и стрелку →."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"кириллический проект","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"quickstart":"Быстрый старт — кириллица едет литералом, включая тег <goal> и стрелку →."}
         """;
 
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";

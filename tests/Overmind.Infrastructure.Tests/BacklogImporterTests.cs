@@ -45,7 +45,8 @@ public sealed class BacklogImporterTests : IDisposable
                 _context,
                 _materializer,
                 new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
-                new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
+                new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer)),
+                TestPlanningDispatcher.Create(_context, _materializer),
                 NullLogger<PlanningFeatureService>.Instance),
             new FrontmatterKeyRegistry(_context, NullLogger<FrontmatterKeyRegistry>.Instance));
 
@@ -1290,13 +1291,13 @@ public sealed class BacklogImporterTests : IDisposable
             _context,
             _materializer,
             new BacklogImportSeeder(_context, new PlanningPolicy(_context, new AppSettingsService(_context))),
-            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance),
+            new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer)),
+            TestPlanningDispatcher.Create(_context, _materializer),
             NullLogger<PlanningFeatureService>.Instance);
         var artifactService = new PlanningArtifactService(
             _context,
-            _materializer,
-            NullLogger<PlanningArtifactService>.Instance,
-            new TaskDependencyService(_context, _materializer, NullLogger<TaskDependencyService>.Instance));
+            TestPlanningDispatcher.Create(_context, _materializer),
+            new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer)));
         var created = await featureService.CreateAsync(_projectId, "010-demo", "Old title", "old body");
         await artifactService.UpsertAsync(
             created.Id, PlanningArtifactKind.Task, "ui-created task", 5, null, null, CancellationToken.None);

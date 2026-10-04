@@ -5,7 +5,7 @@ public static class OnboardQuickstart
     public const string Text = """
         Overmind onboarding quickstart — run the MCP tools in this order:
 
-        Materialization: the BACKLOG/ tree under the project root is rewritten after every planning mutation when the resolved strategy is on; the materialization block of this response carries the resolved strategy, targetDir, lastSuccess (null = never materialized) and lastAttempt (null = never attempted). When the validation block's humanGate is on, planning_validate returns STOP until the user approves the artifact in the Overmind UI.
+        Materialization: the BACKLOG/ tree under the project root catches up shortly after each planning mutation when the resolved strategy is on — a mutation only enqueues the pass and returns once the board (the database) is updated, so the mirror is eventually consistent; planning_materialize runs the pass synchronously whenever you need to wait for its report. The materialization block of this response carries the resolved strategy, targetDir, lastSuccess (null = never materialized) and lastAttempt (null = never attempted). When the validation block's humanGate is on, planning_validate returns STOP until the user approves the artifact in the Overmind UI.
 
         1. overmind_onboard — resolves your project from the reported cwd and returns the project id, board summary, and this quickstart.
         2. planning_list_features — the full board view; pick the feature to work on from planning_task_queue: the board order IS the queue, first on the board = next in the queue. Claim the pick with planning_claim_feature (your alias+vendor bind the claim to your adapter session — the agentIdentity block of this response carries the project's naming rules; follow them).

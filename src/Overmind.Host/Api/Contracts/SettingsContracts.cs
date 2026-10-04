@@ -9,6 +9,7 @@ public sealed record SettingsResponse(
     bool OpenAiApiKeyConfigured,
     string PlanningMaterializationDefault,
     string PlanningRequireHumanValidationDefault,
+    string PlanningMaterializationSync,
     string NotificationNudgeMode,
     int NotificationNudgeIntervalMinutes);
 
@@ -21,6 +22,7 @@ public sealed record UpdateSettingsResponse(
     bool OpenAiApiKeyConfigured,
     string PlanningMaterializationDefault,
     string PlanningRequireHumanValidationDefault,
+    string PlanningMaterializationSync,
     string NotificationNudgeMode,
     int NotificationNudgeIntervalMinutes,
     bool ReindexRecommended);
@@ -34,6 +36,7 @@ public sealed record UpdateSettingsRequest(
     string? QdrantEndpoint,
     string? PlanningMaterializationDefault,
     string? PlanningRequireHumanValidationDefault,
+    string? PlanningMaterializationSync,
     string? NotificationNudgeMode,
     int? NotificationNudgeIntervalMinutes);
 

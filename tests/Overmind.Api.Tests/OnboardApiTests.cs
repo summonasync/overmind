@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Overmind.Api.Tests;
 
-public sealed class OnboardApiTests : IDisposable
+public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 {
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
@@ -19,6 +19,14 @@ public sealed class OnboardApiTests : IDisposable
     {
         _client = _factory.CreateClient();
     }
+
+    public async Task InitializeAsync()
+    {
+        var put = await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = "on" });
+        put.EnsureSuccessStatusCode();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
     {
@@ -219,7 +227,8 @@ public sealed class OnboardApiTests : IDisposable
 
         var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
 
-        onboard.Quickstart.ShouldContain("Materialization: the BACKLOG/ tree under the project root is rewritten after every planning mutation");
+        onboard.Quickstart.ShouldContain("the BACKLOG/ tree under the project root catches up shortly after each planning mutation");
+        onboard.Quickstart.ShouldContain("the mirror is eventually consistent");
         onboard.Quickstart.ShouldContain("lastSuccess (null = never materialized) and lastAttempt (null = never attempted)");
         onboard.Quickstart.ShouldContain("humanGate is on, planning_validate returns STOP");
     }
@@ -310,7 +319,7 @@ public sealed class OnboardApiTests : IDisposable
         var onboard = await OnboardAsync(new { Cwd = diskPath });
 
         onboard.Materialization.Strategy.ShouldBe("on");
-        onboard.Materialization.Trigger.ShouldContain("automatically after every planning mutation");
+        onboard.Materialization.Trigger.ShouldContain("enqueued after every planning mutation, runs shortly after in the background");
         onboard.Validation.HumanGate.ShouldBeFalse();
     }
 

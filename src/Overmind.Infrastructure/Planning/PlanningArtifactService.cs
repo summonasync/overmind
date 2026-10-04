@@ -8,19 +8,16 @@ namespace Overmind.Infrastructure.Planning;
 public sealed class PlanningArtifactService
 {
     private readonly OvermindDbContext _db;
-    private readonly IPlanningMaterializer _materializer;
-    private readonly ILogger<PlanningArtifactService> _logger;
+    private readonly PlanningMaterializationDispatcher _materialization;
     private readonly TaskDependencyService _taskDependencies;
 
     public PlanningArtifactService(
         OvermindDbContext db,
-        IPlanningMaterializer materializer,
-        ILogger<PlanningArtifactService> logger,
+        PlanningMaterializationDispatcher materialization,
         TaskDependencyService taskDependencies)
     {
         _db = db;
-        _materializer = materializer;
-        _logger = logger;
+        _materialization = materialization;
         _taskDependencies = taskDependencies;
     }
 
@@ -146,7 +143,7 @@ public sealed class PlanningArtifactService
             ?? await _db.PlanningArtifacts
                 .FirstAsync(a => a.FeatureId == featureId && a.Kind == kind && a.Order == resolvedOrder, ct);
 
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return artifact;
     }
@@ -229,7 +226,7 @@ public sealed class PlanningArtifactService
             throw PlanningException.TaskBatchConcurrentWrite();
         }
 
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return new PlanningTaskBatchResult(staged, created, staged.Count - created);
     }
@@ -312,7 +309,7 @@ public sealed class PlanningArtifactService
         feature.Touch();
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return new PlanningArtifactStatusResult(
             artifact.Id, artifact.Status, artifact.Version, artifact.LastLogLine,
@@ -396,7 +393,7 @@ public sealed class PlanningArtifactService
         }
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return new PlanningArtifactPatchResult(artifact, noChange, tickedIndex, tickedText);
     }
@@ -425,7 +422,7 @@ public sealed class PlanningArtifactService
         feature.Touch();
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return artifact;
     }
@@ -488,7 +485,7 @@ public sealed class PlanningArtifactService
         feature.Touch();
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return artifact;
     }
@@ -530,7 +527,7 @@ public sealed class PlanningArtifactService
         feature.AppendLog(DeletionAuditLine(artifact, byHuman, logNote), source ?? DeletionSource(byHuman));
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return artifact;
     }

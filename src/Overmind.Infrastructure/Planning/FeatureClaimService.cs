@@ -8,17 +8,14 @@ namespace Overmind.Infrastructure.Planning;
 public sealed class FeatureClaimService
 {
     private readonly OvermindDbContext _db;
-    private readonly IPlanningMaterializer _materializer;
-    private readonly ILogger<FeatureClaimService> _logger;
+    private readonly PlanningMaterializationDispatcher _materialization;
 
     public FeatureClaimService(
         OvermindDbContext db,
-        IPlanningMaterializer materializer,
-        ILogger<FeatureClaimService> logger)
+        PlanningMaterializationDispatcher materialization)
     {
         _db = db;
-        _materializer = materializer;
-        _logger = logger;
+        _materialization = materialization;
     }
 
     // sessionId null = the web human door: no session restrictions, the claim is bound to a fresh
@@ -94,7 +91,7 @@ public sealed class FeatureClaimService
             feature.Release();
             feature.AppendLog("claim released via the human door", PlanningLogSource.Ui);
             await _db.SaveChangesAsync(ct);
-            await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+            await _materialization.DispatchAsync(projectId, ct);
             return feature;
         }
 
@@ -110,7 +107,7 @@ public sealed class FeatureClaimService
             $"{session?.Alias ?? "unknown"} by {session?.Vendor ?? "unknown"} released the claim",
             PlanningLogSource.Agent);
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
 
@@ -223,7 +220,7 @@ public sealed class FeatureClaimService
         }
 
         await _db.SaveChangesAsync(ct);
-        await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, projectId, ct);
+        await _materialization.DispatchAsync(projectId, ct);
     }
 
     private async Task<Project> RequireProjectAsync(Guid projectId, CancellationToken ct) =>

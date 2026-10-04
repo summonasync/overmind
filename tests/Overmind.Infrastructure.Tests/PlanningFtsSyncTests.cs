@@ -127,9 +127,8 @@ public sealed class PlanningFtsSyncTests : IDisposable
         {
             var artifacts = new PlanningArtifactService(
                 ctx,
-                materializer,
-                NullLogger<PlanningArtifactService>.Instance,
-                new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance));
+                TestPlanningDispatcher.Create(ctx, materializer),
+                new TaskDependencyService(ctx, TestPlanningDispatcher.Create(ctx, materializer)));
             await artifacts.DeleteAsync(artifactId, byHuman: true);
         }
 
@@ -150,7 +149,8 @@ public sealed class PlanningFtsSyncTests : IDisposable
             ctx,
             materializer,
             new BacklogImportSeeder(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx))),
-            new TaskDependencyService(ctx, materializer, NullLogger<TaskDependencyService>.Instance),
+            new TaskDependencyService(ctx, TestPlanningDispatcher.Create(ctx, materializer)),
+            TestPlanningDispatcher.Create(ctx, materializer),
             NullLogger<PlanningFeatureService>.Instance);
 
         var now = DateTime.UtcNow;

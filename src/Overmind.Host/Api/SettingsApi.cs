@@ -77,6 +77,15 @@ public static class SettingsApi
                 $"Must be one of: {string.Join(", ", SettingDefaults.PlanningRequireHumanValidationDefaults)}.");
         }
 
+        if (request.PlanningMaterializationSync is not null &&
+            !SettingDefaults.PlanningMaterializationSyncModes.Contains(
+                request.PlanningMaterializationSync, StringComparer.OrdinalIgnoreCase))
+        {
+            return InvalidSetting(
+                nameof(request.PlanningMaterializationSync),
+                $"Must be one of: {string.Join(", ", SettingDefaults.PlanningMaterializationSyncModes)}.");
+        }
+
         if (request.NotificationNudgeMode is not null &&
             !SettingDefaults.NotificationNudgeModes.Contains(
                 request.NotificationNudgeMode, StringComparer.OrdinalIgnoreCase))
@@ -140,6 +149,13 @@ public static class SettingsApi
                 request.PlanningRequireHumanValidationDefault.ToLowerInvariant(), ct);
         }
 
+        if (request.PlanningMaterializationSync is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.PlanningMaterializationSync,
+                request.PlanningMaterializationSync.ToLowerInvariant(), ct);
+        }
+
         if (request.NotificationNudgeMode is not null)
         {
             await settings.SetAsync(
@@ -164,6 +180,7 @@ public static class SettingsApi
             updated.OpenAiApiKeyConfigured,
             updated.PlanningMaterializationDefault,
             updated.PlanningRequireHumanValidationDefault,
+            updated.PlanningMaterializationSync,
             updated.NotificationNudgeMode,
             updated.NotificationNudgeIntervalMinutes,
             reindexRecommended));
@@ -236,6 +253,8 @@ public static class SettingsApi
             SettingKeys.PlanningMaterializationDefault, SettingDefaults.PlanningMaterializationDefault, ct);
         var planningRequireHumanValidationDefault = await settings.GetOrDefaultAsync(
             SettingKeys.PlanningRequireHumanValidationDefault, SettingDefaults.PlanningRequireHumanValidationDefault, ct);
+        var planningMaterializationSync = await settings.GetOrDefaultAsync(
+            SettingKeys.PlanningMaterializationSync, SettingDefaults.PlanningMaterializationSync, ct);
         var notificationNudgeMode = await settings.GetOrDefaultAsync(
             SettingKeys.NotificationNudgeMode, SettingDefaults.NotificationNudgeMode, ct);
         var notificationNudgeIntervalRaw = await settings.GetOrDefaultAsync(
@@ -248,7 +267,7 @@ public static class SettingsApi
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
-            planningMaterializationDefault, planningRequireHumanValidationDefault,
+            planningMaterializationDefault, planningRequireHumanValidationDefault, planningMaterializationSync,
             notificationNudgeMode, notificationNudgeIntervalMinutes);
     }
 

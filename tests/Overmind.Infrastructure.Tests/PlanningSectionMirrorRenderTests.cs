@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
-public sealed class PlanningSectionMirrorRenderTests : IDisposable
+public sealed class PlanningSectionMirrorRenderTests : IDisposable, IAsyncLifetime
 {
     private readonly TempDatabase _db = new();
     private readonly string _sandboxDir;
@@ -23,6 +23,14 @@ public sealed class PlanningSectionMirrorRenderTests : IDisposable
         _dataDir = Path.Combine(_sandboxDir, "data");
         Directory.CreateDirectory(_projectDir);
     }
+
+    public async Task InitializeAsync()
+    {
+        await using var ctx = _db.CreateContext();
+        await TestPlanningDispatcher.EnableSyncModeAsync(ctx);
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
     {
@@ -176,9 +184,8 @@ public sealed class PlanningSectionMirrorRenderTests : IDisposable
     private PlanningArtifactService CreateArtifactService(OvermindDbContext ctx) =>
         new(
             ctx,
-            CreateMaterializer(ctx),
-            NullLogger<PlanningArtifactService>.Instance,
-            new TaskDependencyService(ctx, CreateMaterializer(ctx), NullLogger<TaskDependencyService>.Instance));
+            TestPlanningDispatcher.Create(ctx, CreateMaterializer(ctx)),
+            new TaskDependencyService(ctx, TestPlanningDispatcher.Create(ctx, CreateMaterializer(ctx))));
 
     private PlanningMaterializer CreateMaterializer(OvermindDbContext ctx) =>
         new(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)), _dataDir);
