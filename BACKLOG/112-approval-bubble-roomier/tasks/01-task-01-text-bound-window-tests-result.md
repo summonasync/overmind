@@ -25,7 +25,7 @@ The approval bubble carries up to 800 characters and stops being a 4-line teaser
 </anti-scope>
 
 <acceptance-criteria>
-- [ ] Slice ≤800 + ellipsis pinned; clamp removed within the bound — pinned.
+- [x] Slice ≤800 + ellipsis pinned; clamp removed within the bound — pinned.
 - [ ] Gates green (lint/tsc/node test); result drafted.
 </acceptance-criteria>
 
@@ -35,4 +35,5 @@ The approval bubble carries up to 800 characters and stops being a 4-line teaser
 
 <log>
 - 2026-10-04 [agent] — taken into work by the autonomous pipeline
+- 2026-10-04 [agent] — execution complete, awaiting orchestrator review dispatch. Implementation: pure helper bubbleText at widgets/app-shell/lib/bubble-text.ts (BUBBLE_TEXT_LIMIT=800, «…» appended past the bound); bubble text renders through it with line-clamp-4 → line-clamp-none, title keeps the full text. Width w-72 → sm:w-80 (one step up from sm, phones keep today's width — spec asked for both the bump and untouched mobile behavior). Notification center untouched. Tests: tests/bubble-text.test.mts (slice ≤800+ellipsis, short passthrough, exact-bound edge) + source pin in tests/approval-bubble.test.mts (no line-clamp-4, line-clamp-none present, bubbleText wired, sm:w-80). Gates green: eslint 0 errors, tsc clean, node --test 103/103. No obstacles section on this artifact — width interpretation recorded here. AC2 result-drafting left open on purpose: per plan Simple path the result artifact lands after review.
 </log>

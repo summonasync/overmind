@@ -2,7 +2,7 @@
 feature: 107
 task: 01
 slug: project-tab-title
-status: inprogress
+status: done
 review: light
 created: 2026-10-04
 brief: Web: single title owner f(project, awaiting) + tests + result (Simple path)
@@ -38,4 +38,6 @@ document.title shows the open project; awaiting composes on top.
 <log>
 - 2026-10-04 [agent] — taken into work by the autonomous pipeline
 - 2026-10-04 [agent] — execution complete, awaiting orchestrator review dispatch
+- 2026-10-04 [agent] — [orchestrator] Light review PASS-WITH-NITS (0 blockers, 2 cosmetic nits): single writer confirmed (document.title only in use-tab-title.ts), #134 closed by design, all gates re-run green by reviewer (lint 0e/6 pre-existing w, tsc clean, 99/99, build 12/12). Report: audits/review-107-01.md. Nits → microbatch #174 (tab-title.test final test re-asserts pairs, no new matrix cell), #175 (BASE_TITLE duplicates SSR metadata title — deliberate FSD trade-off, note for product rename).
+- 2026-10-04 [agent] — [orchestrator] Light review passed (PASS-WITH-NITS, 0 blockers — audits/review-107-01.md), all 3 AC confirmed by reviewer. Closing task; result stays draft per pipeline mandate (human tap batched at validation).
 </log>
