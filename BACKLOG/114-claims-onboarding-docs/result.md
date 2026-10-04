@@ -1,8 +1,9 @@
 ---
 feature: 114
 slug: claims-onboarding-docs
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 114 — Claims onboarding: teach the claim workflow in MCP quickstart + crew skills

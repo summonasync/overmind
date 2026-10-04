@@ -1,7 +1,7 @@
 ---
 feature: 114
 slug: claims-onboarding-docs
-status: inProgress
+status: done
 priority: p0
 version: 5
 created: 2026-10-04
@@ -20,4 +20,6 @@ User requests 2026-10-04 (two mid-session messages). Claims replaced pins in 099
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [agent] — Claude by anthropic claimed the feature
+- 2026-10-04 [agent] — [agent] done by user approval — reply on result notification ac274894 (2026-10-04 18:01:18 UTC); result 621d44bf validated, both-lane light review PASS-WITH-NITS 0 blockers, review fixes landed (1fa80d9 repo, 78737d3 kit pushed).
+- 2026-10-04 [agent] — claim released on done-close
 </log>

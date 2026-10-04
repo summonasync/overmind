@@ -1,8 +1,9 @@
 ---
 feature: 114
 slug: claims-onboarding-docs
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Spec 114 — Claims onboarding: teach the claim workflow in MCP quickstart + crew skills
@@ -54,4 +55,5 @@ The 099 claim workflow (claim/unclaim, session lock, EOF auto-release, stale tak
 - 2026-10-04 [agent] — validated with human proof: notification 301c2149-8561-4a63-a22b-c7abee0deb4e replied 2026-10-04 17:29:01 UTC
 - 2026-10-04 [agent] — Review B2: lock count corrected 12 -> 13 (delete_artifact added the 13th locked route in 094); same fix landed in ceremony matrix (crew kit 78737d3).
 - 2026-10-04 [auto] — artifact demoted: validated → draft
+- 2026-10-04 [agent] — validated with human proof: notification ac274894-a919-4986-903c-2498ffbffb31 replied 2026-10-04 18:01:18 UTC
 </log>
