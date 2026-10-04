@@ -2,7 +2,7 @@
 feature: 113
 task: 01
 slug: attention-row-polish
-status: todo
+status: done
 review: light
 created: 2026-10-04
 brief: Web: dashboard-style number + linked title on attention rows (Simple path)
@@ -25,9 +25,9 @@ Ceremony rows on /attention read like the dashboard: the feature number uses the
 </anti-scope>
 
 <acceptance-criteria>
-- [ ] Feature number rendered via FeatureNumberBadge (dashboard parity), not a raw span.
-- [ ] Title is a link to the feature url with hover emphasis; «Open →» unchanged.
-- [ ] Gates green (lint/tsc/node test); result drafted.
+- [x] Feature number rendered via FeatureNumberBadge (dashboard parity), not a raw span.
+- [x] Title is a link to the feature url with hover emphasis; «Open →» unchanged.
+- [x] Gates green (lint/tsc/node test); result drafted.
 </acceptance-criteria>
 
 <refs>
@@ -36,4 +36,6 @@ Ceremony rows on /attention read like the dashboard: the feature number uses the
 
 <log>
 - 2026-10-04 [agent] — task cut after spec+plan validated (human proof 14289b51).
+- 2026-10-04 [agent] — [agent] Claimed by Van (claude), taken by orchestrator — dispatching web-coder (sonnet).
+- 2026-10-04 [agent] — [agent] Light review passed (PASS-WITH-NITS, 0 blockers — N1 barrel fix landed pre-commit 6a3bec3, N2 → microbatch #184), all 3 AC ticked, result eca3d5c1 drafted. Closing task; result stays draft per pipeline mandate (user taps on return).
 </log>

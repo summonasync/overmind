@@ -1,7 +1,7 @@
 ---
 feature: 113
 slug: attention-row-polish
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-10-04
@@ -19,4 +19,7 @@ ceremonies-section.tsx renders the feature number as a raw mono span (not the da
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [agent] — Van by claude claimed the feature
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — agent by unknown released the claim
 </log>

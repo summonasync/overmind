@@ -1,7 +1,7 @@
 ---
 feature: 116
 slug: crewkit-in-repo
-status: draft
+status: inProgress
 priority: p0
 version: 1
 created: 2026-10-04
@@ -16,3 +16,7 @@ Crew kit (src/OvermindCrewKit, embedded clone of dotNET-Coding-Agents-Crew) beco
 <context>
 User moved the crew kit in-repo 2026-10-04 («теперь я перенёс сюда crewKit... он должен быть базовым китом overmind'а — любые изменения в нашем MCP отлетают в него, и после релиза он раскатывается»). Today pack.sh has DEFAULT_CREW_KIT=/home/johan-boolman/.claude — the bundle stages whatever happens to be deployed in home, which can drift from the repo.
 </context>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>
