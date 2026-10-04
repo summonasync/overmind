@@ -15,7 +15,7 @@ import { Zerling } from "@/shared/ui/zerling";
 import { cn } from "@/shared/lib/cn";
 import { notificationHref } from "@/widgets/app-shell/lib/notification-href";
 import { useApprovalBubble } from "@/widgets/app-shell/lib/use-approval-bubble";
-import { useAwaitingTitle } from "@/widgets/app-shell/lib/use-awaiting-title";
+import { useTabTitle } from "@/widgets/app-shell/lib/use-tab-title";
 import { NotificationCenter } from "@/widgets/app-shell/ui/notification-center";
 
 export function ApprovalBubble() {
@@ -24,7 +24,7 @@ export function ApprovalBubble() {
   const { reply } = useNotificationMutations();
   const [centerOpen, setCenterOpen] = useState(false);
 
-  useAwaitingTitle(awaitingCount);
+  useTabTitle(awaitingCount);
 
   if (surface === "hidden" || item === null) {
     return null;

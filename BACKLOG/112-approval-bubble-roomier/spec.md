@@ -1,8 +1,9 @@
 ---
 feature: 112
 slug: approval-bubble-roomier
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Spec 112 — Approval bubble: up to 800 chars of text, bigger window
@@ -26,4 +27,5 @@ The approval bubble stops being a 4-line teaser: text up to 800 characters is re
 
 <log>
 - 2026-10-04 [agent] — user dogfood feedback in session: 800-char text bound, bigger window, clamp removed within the bound; notification center untouched.
+- 2026-10-04 [agent] — validated with human proof: notification a134cf29-0827-4727-bd45-a0cfbce2b4e7 replied 2026-10-04 16:55:29 UTC
 </log>

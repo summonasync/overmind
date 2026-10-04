@@ -5,6 +5,16 @@ export interface ProjectRef {
 
 export const PROJECT_NAME_FALLBACK = "Unknown project";
 
+export function resolvedProjectName(projects: ProjectRef[], projectId: string | null): string | null {
+  const id = projectId?.trim() ?? "";
+  if (id.length === 0) {
+    return null;
+  }
+
+  const name = projects.find((project) => project.id === id)?.name.trim() ?? "";
+  return name.length > 0 ? name : null;
+}
+
 export function projectDisplayName(projects: ProjectRef[], projectId: string): string {
   const id = projectId.trim();
   if (id.length === 0) {

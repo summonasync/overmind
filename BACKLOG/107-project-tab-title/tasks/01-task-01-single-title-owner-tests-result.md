@@ -2,7 +2,7 @@
 feature: 107
 task: 01
 slug: project-tab-title
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 brief: Web: single title owner f(project, awaiting) + tests + result (Simple path)
@@ -26,11 +26,16 @@ document.title shows the open project; awaiting composes on top.
 </anti-scope>
 
 <acceptance-criteria>
-- [ ] Title computation pinned (project/unresolvable/none × awaiting 0/N).
-- [ ] Single writer (old capture removed) — verified by grep/test.
-- [ ] Gates green; result drafted.
+- [x] Title computation pinned (project/unresolvable/none × awaiting 0/N).
+- [x] Single writer (old capture removed) — verified by grep/test.
+- [x] Gates green; result drafted.
 </acceptance-criteria>
 
 <refs>
 - Spec da92c2fe; plan 71028822; use-awaiting-title (087); #134 microbatch note.
 </refs>
+
+<log>
+- 2026-10-04 [agent] — taken into work by the autonomous pipeline
+- 2026-10-04 [agent] — execution complete, awaiting orchestrator review dispatch
+</log>

@@ -27,4 +27,5 @@ A button on the project settings page: scan the project's `BACKLOG/` tree → pr
 <log>
 - 2026-10-04 [agent] — groomed with the user in session: scan on ParseFeatureAsync (no writes), per-folder import, UI on project settings; bulk-import deferred.
 - 2026-10-04 [agent] — validated with human proof: notification 35bc0a33-190c-4146-ad46-829d44bdd835 replied 2026-10-04 11:48:55 UTC
+- 2026-10-04 [agent] — [review caveat from 071/01, spec body untouched — kept frozen] «No writes» in this spec means the BOARD: ParseFeatureAsync carries one DB side effect — unknown frontmatter keys get registered (FrontmatterKeys) on first sight, identical to the agent import door's behavior; declared in task 01's log, recorded as review WARNING 1 (audits/review-071-01.md), rides the 071/03 result.
 </log>

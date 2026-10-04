@@ -7,6 +7,13 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Select } from "@/shared/ui/select";
+import {
+  blockerChipClasses,
+  CLEARED_BY_HEADING,
+  splitBlockersByClosure,
+  WAITS_FOR_HEADING,
+  waitsForPlaceholder,
+} from "@/features/planning/lib/feature-blocker-groups";
 import { usePlanningBoard, usePlanningMutations } from "@/features/planning/lib/use-planning";
 import type {
   PlanningFeatureDependencyEntry,
@@ -25,7 +32,7 @@ function BlockerChip({ projectId, entry, pending, onRemove }: BlockerChipProps) 
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-xs font-medium",
-        entry.closed ? "border-border/50 text-muted/70" : "border-danger/40 bg-danger/10 text-danger",
+        blockerChipClasses(entry.closed),
       )}
     >
       <a
@@ -60,7 +67,8 @@ export function FeatureDependenciesPanel({ projectId, feature }: FeatureDependen
   const { data: board } = usePlanningBoard(projectId);
   const { addFeatureDependency, removeFeatureDependency } = usePlanningMutations(projectId);
 
-  const openBlockers = feature.blockedBy.filter((entry) => !entry.closed);
+  const { waiting, cleared } = splitBlockersByClosure(feature.blockedBy);
+  const placeholder = waitsForPlaceholder(feature.blockedBy.length, waiting.length);
   const candidates = board
     .filter(
       (item) =>
@@ -80,26 +88,28 @@ export function FeatureDependenciesPanel({ projectId, feature }: FeatureDependen
     );
   };
 
+  const removeBlocker = (blockedBySlug: string) => {
+    removeFeatureDependency.mutate({ slug: feature.slug, blockedBy: blockedBySlug });
+  };
+
   return (
     <section className="space-y-2 rounded-lg border border-border bg-surface p-4" aria-label="Dependencies">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Waits for</h3>
-          {openBlockers.length > 0 ? (
-            <Badge tone="danger">{openBlockers.length} open</Badge>
-          ) : null}
-          {feature.blockedBy.length === 0 ? (
-            <span className="text-xs text-muted">nothing yet</span>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+            {WAITS_FOR_HEADING}
+          </h3>
+          {waiting.length > 0 ? <Badge tone="danger">{waiting.length} open</Badge> : null}
+          {placeholder !== null ? (
+            <span className="text-xs text-muted">{placeholder}</span>
           ) : (
-            feature.blockedBy.map((entry) => (
+            waiting.map((entry) => (
               <BlockerChip
                 key={entry.slug}
                 projectId={projectId}
                 entry={entry}
                 pending={pending}
-                onRemove={(blockedBySlug) =>
-                  removeFeatureDependency.mutate({ slug: feature.slug, blockedBy: blockedBySlug })
-                }
+                onRemove={removeBlocker}
               />
             ))
           )}
@@ -130,6 +140,23 @@ export function FeatureDependenciesPanel({ projectId, feature }: FeatureDependen
             </span>
           ) : null}
         </div>
+
+        {cleared.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {CLEARED_BY_HEADING}
+            </h3>
+            {cleared.map((entry) => (
+              <BlockerChip
+                key={entry.slug}
+                projectId={projectId}
+                entry={entry}
+                pending={pending}
+                onRemove={removeBlocker}
+              />
+            ))}
+          </div>
+        ) : null}
 
         {feature.blocks.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useState, type ReactNode } from "react";
 import background from "@/shared/assets/brand/background.png";
 import { InfoPanelProvider } from "@/widgets/app-shell/lib/info-panel-context";
 import { ApprovalBubble } from "@/widgets/app-shell/ui/approval-bubble";
@@ -50,7 +50,9 @@ export function AppShell({ children }: AppShellProps) {
             <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />
           </div>
         </div>
-        <ApprovalBubble />
+        <Suspense fallback={null}>
+          <ApprovalBubble />
+        </Suspense>
       </div>
     </InfoPanelProvider>
   );

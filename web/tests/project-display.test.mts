@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   PROJECT_NAME_FALLBACK,
   projectDisplayName,
+  resolvedProjectName,
 } from "../src/shared/lib/project-display.ts";
 
 const OVERMIND_ID = "11111111-1111-1111-1111-111111111111";
@@ -48,4 +49,24 @@ test("fallback keeps whitespace trimmed around a known name", () => {
     projectDisplayName([{ id: "abc", name: "  Mindlash Studio " }], "abc"),
     "Mindlash Studio",
   );
+});
+
+test("resolved name returns the project name for a known id", () => {
+  assert.equal(resolvedProjectName(projects, OVERMIND_ID), "Overmind");
+  assert.equal(resolvedProjectName(projects, `  ${OVERMIND_ID}  `), "Overmind");
+});
+
+test("resolved name returns null without a usable id", () => {
+  assert.equal(resolvedProjectName(projects, null), null);
+  assert.equal(resolvedProjectName(projects, ""), null);
+  assert.equal(resolvedProjectName(projects, "   "), null);
+});
+
+test("resolved name returns null for an id outside the loaded list", () => {
+  assert.equal(resolvedProjectName(projects, "99999999-aaaa-bbbb-cccc-dddddddddddd"), null);
+});
+
+test("resolved name returns null when the stored name is blank", () => {
+  assert.equal(resolvedProjectName(projects, BLANK_NAME_ID), null);
+  assert.equal(resolvedProjectName([], OVERMIND_ID), null);
 });

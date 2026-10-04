@@ -1,8 +1,9 @@
 ---
 feature: 112
 slug: approval-bubble-roomier
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Plan 112 — Approval bubble: up to 800 chars of text, bigger window
@@ -19,4 +20,5 @@ created: 2026-10-04
 
 <log>
 - 2026-10-04 [agent] — plan groomed: single task, one component.
+- 2026-10-04 [agent] — validated with human proof: notification a134cf29-0827-4727-bd45-a0cfbce2b4e7 replied 2026-10-04 16:55:29 UTC
 </log>
