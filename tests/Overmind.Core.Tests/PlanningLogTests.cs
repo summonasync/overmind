@@ -87,6 +87,60 @@ Files: web/src/features/planning/components/feature-board.tsx (card metadata row
     }
 
     [Fact]
+    public void Append_InlineWrapperOnly_SplicesInsideInsteadOfSecondBlock()
+    {
+        var body = "# Task\n\n<log>- 2026-10-04 [controller] filed as a task per crew rule</log>\n";
+
+        var result = PlanningLog.Append(body, "claimed by Van", new DateTime(2026, 10, 4));
+
+        CountTokens(result, "<log>").ShouldBe(1);
+        CountTokens(result, "</log>").ShouldBe(1);
+        result.ShouldContain("- 2026-10-04 [controller] filed as a task per crew rule");
+        result.ShouldContain("- 2026-10-04 \u2014 claimed by Van");
+        result.IndexOf("- 2026-10-04 \u2014 claimed by Van", StringComparison.Ordinal)
+            .ShouldBeLessThan(result.IndexOf("</log>", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Append_InlineWrapper_RepeatedAppendsStayInSingleWrapper()
+    {
+        var body = "# Task\n\n<log>- 2026-10-04 [controller] filed</log>\n";
+
+        var once = PlanningLog.Append(body, "first", new DateTime(2026, 10, 4));
+        var twice = PlanningLog.Append(once, "second", new DateTime(2026, 10, 5));
+
+        CountTokens(twice, "<log>").ShouldBe(1);
+        CountTokens(twice, "</log>").ShouldBe(1);
+        twice.ShouldContain("- 2026-10-04 \u2014 first");
+        twice.ShouldContain("- 2026-10-05 \u2014 second");
+    }
+
+    [Fact]
+    public void Append_ProseLogMentionWithoutClose_CreatesBlockSection()
+    {
+        var body = "# Task\n\n- recorded in this artifact's <log> on the board";
+
+        var result = PlanningLog.Append(body, "note", new DateTime(2026, 10, 4));
+
+        CountTokens(result, "</log>").ShouldBe(1);
+        result.ShouldContain("- 2026-10-04 \u2014 note");
+        result.ShouldContain("recorded in this artifact's <log> on the board");
+    }
+
+    private static int CountTokens(string content, string token)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = content.IndexOf(token, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += token.Length;
+        }
+
+        return count;
+    }
+
+    [Fact]
     public void Append_EmptyBody_CreatesSection()
     {
         var result = PlanningLog.Append("", "note", new DateTime(2026, 9, 8));

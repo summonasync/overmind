@@ -722,7 +722,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         builder.Append("---\n\n");
         builder.Append($"# Feature {featurePart} — {feature.Title}\n\n");
-        builder.Append(BacklogMarkdown.StripLeadingHeadings(feature.Body));
+        builder.Append(BacklogMarkdown.StripLeadingHeadings(PlanningSections.Normalize(feature.Body)));
         return builder.ToString();
     }
 
@@ -743,7 +743,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         AppendPreservedFrontmatter(builder, artifact.PreservedFrontmatter);
         builder.Append("---\n\n");
         builder.Append($"# {artifact.Kind} {featurePart} — {featureTitle}\n\n");
-        builder.Append(BacklogMarkdown.StripLeadingHeadings(artifact.Body));
+        builder.Append(BacklogMarkdown.StripLeadingHeadings(PlanningSections.Normalize(artifact.Body)));
         return builder.ToString();
     }
 
@@ -798,7 +798,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         AppendPreservedFrontmatter(builder, task.PreservedFrontmatter);
         builder.Append("---\n\n");
-        builder.Append(BacklogMarkdown.CollapseLeadingHeadings(task.Body));
+        builder.Append(BacklogMarkdown.CollapseLeadingHeadings(PlanningSections.Normalize(task.Body)));
         return builder.ToString();
     }
 

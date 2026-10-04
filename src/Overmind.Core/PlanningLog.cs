@@ -15,6 +15,12 @@ public static class PlanningLog
 
         if (!PlanningSections.TryFind("log", body, out var section))
         {
+            var inlineClose = FindLastInlineLogClose(body);
+            if (inlineClose >= 0)
+            {
+                return body[..inlineClose] + "\n" + line + "\n" + body[inlineClose..];
+            }
+
             var separator = body.Length > 0 && !body.EndsWith('\n') ? "\n\n" : (body.Length > 0 ? "\n" : "");
             return body + $"{separator}<log>\n{line}\n</log>\n";
         }
@@ -71,6 +77,70 @@ public static class PlanningLog
         }
 
         return result;
+    }
+
+    // Bodies seeded with a one-line log wrapper carry no anchored pair, yet appending a block
+    // wrapper next to it splits the journal in two on render; the line joins that wrapper
+    // instead. Prose mentions never qualify: the open must start a line, the close must end one.
+    private static int FindLastInlineLogClose(string body)
+    {
+        var candidate = -1;
+        var cursor = 0;
+
+        while (cursor < body.Length)
+        {
+            var open = IndexOfLineStartToken(body, "<log>", cursor);
+            if (open < 0)
+            {
+                break;
+            }
+
+            var close = IndexOfLineEndToken(body, "</log>", open + "<log>".Length);
+            if (close < 0)
+            {
+                cursor = open + "<log>".Length;
+                continue;
+            }
+
+            candidate = close;
+            cursor = close + "</log>".Length;
+        }
+
+        return candidate;
+    }
+
+    private static int IndexOfLineStartToken(string body, string token, int start)
+    {
+        var index = start;
+        while ((index = body.IndexOf(token, index, StringComparison.Ordinal)) >= 0)
+        {
+            if (index == 0 || body[index - 1] == '\n')
+            {
+                return index;
+            }
+
+            index += token.Length;
+        }
+
+        return -1;
+    }
+
+    private static int IndexOfLineEndToken(string body, string token, int start)
+    {
+        var index = start;
+        while ((index = body.IndexOf(token, index, StringComparison.Ordinal)) >= 0)
+        {
+            var end = index + token.Length;
+            if (end == body.Length || body[end] == '\n' ||
+                (body[end] == '\r' && end + 1 < body.Length && body[end + 1] == '\n'))
+            {
+                return index;
+            }
+
+            index = end;
+        }
+
+        return -1;
     }
 
     private static PlanningLogSource? ParseSourceMarker(string textPart, int separatorIdx)

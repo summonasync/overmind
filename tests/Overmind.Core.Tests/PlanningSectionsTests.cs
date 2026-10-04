@@ -420,6 +420,133 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
     }
 
     [Fact]
+    public void Replace_ContentCarryingWholeLineWrappers_StripsThemBeforeSplicing()
+    {
+        var body = "<obstacles>\n- (empty — fill during work)\n</obstacles>";
+
+        var result = PlanningSections.Replace(
+            "obstacles", body, "<obstacles>\n- patched bullet <round-1 B1>\n</obstacles>");
+
+        result.ShouldBe("<obstacles>\n- patched bullet <round-1 B1>\n</obstacles>");
+    }
+
+    [Fact]
+    public void Replace_ContentCarryingOnlyCloseTag_StripsItBeforeSplicing()
+    {
+        var body = "<goal>\nold\n</goal>";
+
+        var result = PlanningSections.Replace("goal", body, "next\n</goal>");
+
+        result.ShouldBe("<goal>\nnext\n</goal>");
+    }
+
+    [Fact]
+    public void Replace_ContentCarryingOnlyOpenTag_RendersEmptySection()
+    {
+        var body = "<goal>\nold\n</goal>";
+
+        var result = PlanningSections.Replace("goal", body, "<goal>");
+
+        result.ShouldBe("<goal>\n</goal>");
+    }
+
+    [Fact]
+    public void Replace_InlineTagMentionsInContent_ArePreserved()
+    {
+        var body = "<obstacles>\nold\n</obstacles>";
+
+        var result = PlanningSections.Replace(
+            "obstacles", body, "- note <round-1 B1, CLOSED> stays\n- tail mentions <obstacles> inline");
+
+        result.ShouldBe("<obstacles>\n- note <round-1 B1, CLOSED> stays\n- tail mentions <obstacles> inline\n</obstacles>");
+    }
+
+    [Fact]
+    public void Normalize_DuplicateOpeningTags_CollapsesToSingleWrapper()
+    {
+        var normalized = PlanningSections.Normalize("<obstacles>\n<obstacles>\n- a\n</obstacles>");
+
+        normalized.ShouldBe("<obstacles>\n- a\n</obstacles>");
+    }
+
+    [Fact]
+    public void Normalize_DuplicateClosingTags_CollapsesToSingleWrapper()
+    {
+        var normalized = PlanningSections.Normalize("<goal>\nx\n</goal>\n</goal>\n");
+
+        normalized.ShouldBe("<goal>\nx\n</goal>\n");
+    }
+
+    [Fact]
+    public void Normalize_TrappedBulletOutsideCanonicalPair_DoesNotSurvive()
+    {
+        var corrupted =
+            "<obstacles>\n" +
+            "<obstacles>\n" +
+            "- kept bullet <round-1 B1>\n" +
+            "</obstacles>\n" +
+            "- evicted addendum bullet\n" +
+            "</obstacles>\n\n" +
+            "<log>\n- 2026-10-04 [agent] seeded\n</log>\n";
+
+        var normalized = PlanningSections.Normalize(corrupted);
+
+        normalized.ShouldBe(
+            "<obstacles>\n" +
+            "- kept bullet <round-1 B1>\n" +
+            "</obstacles>\n\n" +
+            "<log>\n- 2026-10-04 [agent] seeded\n</log>\n");
+        PlanningSections.Find("obstacles", normalized)!.Content.ShouldContain("kept bullet");
+        normalized.ShouldNotContain("evicted addendum bullet");
+    }
+
+    [Fact]
+    public void Normalize_StrayCloseAfterForeignSection_LogSurvivesAndStrayLeaves()
+    {
+        var corrupted =
+            "<obstacles>\n- only\n</obstacles>\n\n<log>\n- entry\n</log>\n</obstacles>\n";
+
+        var normalized = PlanningSections.Normalize(corrupted);
+
+        normalized.ShouldBe("<obstacles>\n- only\n</obstacles>\n\n<log>\n- entry\n</log>\n");
+    }
+
+    [Fact]
+    public void Normalize_DuplicatePairs_KeepsCanonicalLastPairContent()
+    {
+        var normalized = PlanningSections.Normalize(
+            "<goal>\nfirst\n</goal>\n\nmiddle prose\n\n<goal>\nsecond\n</goal>");
+
+        normalized.ShouldBe("<goal>\nsecond\n</goal>");
+        normalized.ShouldNotContain("first");
+        normalized.ShouldNotContain("middle prose");
+    }
+
+    [Fact]
+    public void Normalize_CleanBody_ReturnsIdenticalText()
+    {
+        var body = "# Task\n\n<goal>\nDo it.\n</goal>\n\n<obstacles>\n- a <tag> inline\n</obstacles>\n\n<log>\n- 2026-10-04 — note\n</log>\n";
+
+        PlanningSections.Normalize(body).ShouldBe(body);
+    }
+
+    [Fact]
+    public void Normalize_UnpairedTagLines_AreLeftAlone()
+    {
+        var body = "<goal>\nno close here\n\n<scope>\nreal\n</scope>\n";
+
+        PlanningSections.Normalize(body).ShouldBe(body);
+    }
+
+    [Fact]
+    public void Normalize_ProseMentionsInline_AreUntouched()
+    {
+        var body = "# Plan\n\nUse `<goal>` tags inline, never on their own line.";
+
+        PlanningSections.Normalize(body).ShouldBe(body);
+    }
+
+    [Fact]
     public void Find_RealTaskBody_00206_MultiParagraphObstaclesStayIntact()
     {
         var section = PlanningSections.Find("obstacles", Task00206Body);

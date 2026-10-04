@@ -48,9 +48,41 @@ public static partial class PlanningSections
         }
 
         var newLine = body[openEnd] == '\r' ? "\r\n" : "\n";
-        var wrapped = content.Length == 0 ? newLine : string.Concat(newLine, content, newLine);
+        var sanitized = StripWrapperTags(name, content);
+        var wrapped = sanitized.Length == 0 ? newLine : string.Concat(newLine, sanitized, newLine);
 
         return string.Concat(body.AsSpan(0, openEnd), wrapped, body.AsSpan(section.CloseIndex));
+    }
+
+    public static string Normalize(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+
+        var tokens = CollectTagTokens(body);
+        if (tokens.Count == 0)
+        {
+            return body;
+        }
+
+        var drops = new List<(int Start, int End)>();
+        foreach (var name in tokens.Select(t => t.Name).Distinct())
+        {
+            CollectWrapperDrops(body, name, tokens, drops);
+        }
+
+        if (drops.Count == 0)
+        {
+            return body;
+        }
+
+        drops.Sort((left, right) => right.Start.CompareTo(left.Start));
+        var result = body;
+        foreach (var (start, end) in drops)
+        {
+            result = string.Concat(result.AsSpan(0, start), result.AsSpan(end));
+        }
+
+        return result;
     }
 
     public static IReadOnlyList<string> List(string body)
@@ -158,6 +190,144 @@ public static partial class PlanningSections
 
         return start <= end ? body[start..end] : string.Empty;
     }
+
+    // A patch payload is section CONTENT, but callers routinely paste the rendered wrapper
+    // along with it; splicing those tags verbatim inside the real wrapper breeds stray
+    // duplicates that board reads (last anchored pair) never see again.
+    private static string StripWrapperTags(string name, string content)
+    {
+        var openTag = string.Concat("<", name, ">");
+        var closeTag = string.Concat("</", name, ">");
+        var kept = new List<string>();
+
+        foreach (var line in content.Split('\n'))
+        {
+            var trimmed = line.Trim(' ', '\t');
+            if (trimmed.EndsWith('\r'))
+            {
+                trimmed = trimmed[..^1];
+            }
+
+            if (trimmed == openTag || trimmed == closeTag)
+            {
+                continue;
+            }
+
+            kept.Add(line);
+        }
+
+        while (kept.Count > 0 && kept[0].Trim().Length == 0)
+        {
+            kept.RemoveAt(0);
+        }
+
+        while (kept.Count > 0 && kept[^1].Trim().Length == 0)
+        {
+            kept.RemoveAt(kept.Count - 1);
+        }
+
+        return string.Join('\n', kept);
+    }
+
+    // Renders the body the way the board reads it: one wrapper per section (the last open with
+    // the first close after it), text a section read cannot see inside duplicated wrappers
+    // dropped with them. Zones holding other sections are left intact.
+    private static void CollectWrapperDrops(
+        string body, string name, List<SectionTag> tokens, List<(int Start, int End)> drops)
+    {
+        if (FindRenderPair(body, name) is not { } canonical)
+        {
+            return;
+        }
+
+        var (openIndex, closeIndex) = canonical;
+        var sameName = tokens.Where(t => t.Name == name).ToList();
+
+        for (var i = 0; i < sameName.Count; i++)
+        {
+            var token = sameName[i];
+            if (token.LineStart != openIndex && token.LineStart != closeIndex)
+            {
+                drops.Add((token.LineStart, token.NextLineStart));
+            }
+
+            if (i == sameName.Count - 1)
+            {
+                continue;
+            }
+
+            var next = sameName[i + 1];
+            if (token.LineStart == openIndex && next.LineStart == closeIndex)
+            {
+                continue;
+            }
+
+            var zoneStart = token.NextLineStart;
+            var zoneEnd = next.LineStart;
+            if (zoneEnd <= zoneStart || ContainsAnyTag(tokens, zoneStart, zoneEnd))
+            {
+                continue;
+            }
+
+            drops.Add((zoneStart, zoneEnd));
+        }
+    }
+
+    private static (int OpenIndex, int CloseIndex)? FindRenderPair(string body, string name)
+    {
+        var opens = OpenTagPattern().Matches(body);
+        var closes = CloseTagPattern().Matches(body);
+
+        for (var i = opens.Count - 1; i >= 0; i--)
+        {
+            var open = opens[i];
+            if (open.Groups["name"].Value != name)
+            {
+                continue;
+            }
+
+            foreach (Match close in closes)
+            {
+                if (close.Index > open.Index && close.Groups["name"].Value == name)
+                {
+                    return (open.Index, close.Index);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static List<SectionTag> CollectTagTokens(string body)
+    {
+        var opens = OpenTagPattern().Matches(body);
+        var closes = CloseTagPattern().Matches(body);
+        var tokens = new List<SectionTag>(opens.Count + closes.Count);
+
+        foreach (Match open in opens)
+        {
+            tokens.Add(TagFromMatch(body, open, open.Groups["name"].Value));
+        }
+
+        foreach (Match close in closes)
+        {
+            tokens.Add(TagFromMatch(body, close, close.Groups["name"].Value));
+        }
+
+        return tokens.OrderBy(t => t.LineStart).ToList();
+    }
+
+    private static SectionTag TagFromMatch(string body, Match match, string name)
+    {
+        var lineEnd = match.Index + match.Length;
+        var nextLineStart = lineEnd < body.Length && body[lineEnd] == '\n' ? lineEnd + 1 : lineEnd;
+        return new SectionTag(name, match.Index, lineEnd, nextLineStart);
+    }
+
+    private static bool ContainsAnyTag(List<SectionTag> tokens, int start, int end) =>
+        tokens.Any(t => t.LineStart >= start && t.LineStart < end);
+
+    private sealed record SectionTag(string Name, int LineStart, int LineEnd, int NextLineStart);
 }
 
 public sealed record PlanningSection(string Name, string Content, int OpenIndex, int OpenLength, int CloseIndex);
