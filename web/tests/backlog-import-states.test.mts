@@ -63,6 +63,18 @@ test("new folder imports without a confirm", () => {
   assert.equal(importConfirmText(entry({})), null);
 });
 
+test("a folder imported this session keeps requiring the confirm even before the rescan flips its badge", () => {
+  const stale = entry({});
+  assert.equal(importConfirmText(stale), null);
+  const text = importConfirmText(stale, new Set(["042-demo"]));
+  assert.ok(text !== null);
+  assert.ok(text.includes("already imported"));
+});
+
+test("session-local confirm only applies to folders actually imported this session", () => {
+  assert.equal(importConfirmText(entry({}), new Set(["099-other"])), null);
+});
+
 test("error folder imports without a confirm (button is disabled instead)", () => {
   assert.equal(importConfirmText(entry({ error: "feature.md is missing" })), null);
 });

@@ -24,6 +24,7 @@ export function BacklogImportSection({ projectId }: BacklogImportSectionProps) {
   const folderImport = usePlanningFolderImport(projectId);
   const [confirmEntry, setConfirmEntry] = useState<PlanningImportScanEntry | null>(null);
   const [reports, setReports] = useState<PlanningFeatureImportReport[]>([]);
+  const [importedFolders, setImportedFolders] = useState<ReadonlySet<string>>(new Set());
 
   const report = scan.report;
   const entries = report?.entries ?? [];
@@ -32,12 +33,13 @@ export function BacklogImportSection({ projectId }: BacklogImportSectionProps) {
     folderImport.importFolder(entry.folder, (imported) => {
       setConfirmEntry(null);
       setReports((previous) => [...previous, imported]);
+      setImportedFolders((previous) => new Set(previous).add(entry.folder));
       scan.scan();
     });
   };
 
   const handleImportClick = (entry: PlanningImportScanEntry) => {
-    if (importConfirmText(entry) !== null) {
+    if (importConfirmText(entry, importedFolders) !== null) {
       setConfirmEntry(entry);
       return;
     }
@@ -54,7 +56,10 @@ export function BacklogImportSection({ projectId }: BacklogImportSectionProps) {
           variant="secondary"
           className="px-2.5 py-1 text-xs"
           disabled={scan.scanning}
-          onClick={() => scan.scan()}
+          onClick={() => {
+            setConfirmEntry(null);
+            scan.scan();
+          }}
         >
           <RefreshCw size={12} aria-hidden />
           {scan.scanning ? "Scanning…" : "Scan BACKLOG"}

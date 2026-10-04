@@ -33,8 +33,12 @@ export function importFolderStateTone(state: ImportFolderState): BadgeTone {
   return STATE_TONES[state];
 }
 
-export function importConfirmText(entry: PlanningImportScanEntry): string | null {
-  if (importFolderState(entry) !== "imported") {
+export function importConfirmText(
+  entry: PlanningImportScanEntry,
+  importedFolders?: ReadonlySet<string>,
+): string | null {
+  const reimport = importFolderState(entry) === "imported" || importedFolders?.has(entry.folder) === true;
+  if (!reimport) {
     return null;
   }
   const feature = entry.slug ?? entry.folder;

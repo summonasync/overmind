@@ -35,12 +35,24 @@ test("section drives the list through the shared scan and import mutations", () 
 
 test("re-import goes through an inline confirm, fresh folders import directly", () => {
   const source = section();
-  assert.ok(source.includes(`importConfirmText(entry) !== null`));
+  assert.ok(source.includes(`importConfirmText(entry, importedFolders) !== null`));
   assert.ok(source.includes(`setConfirmEntry(entry)`));
   assert.ok(source.includes(`{importConfirmText(confirmEntry)}`));
   assert.ok(source.includes("Import again"));
   assert.ok(source.includes(`runImport(entry)`));
   assert.ok(!source.includes("<Modal"));
+});
+
+test("a session-local import keeps the confirm armed across the rescan lag", () => {
+  const source = section();
+  assert.ok(source.includes(`setImportedFolders((previous) => new Set(previous).add(entry.folder))`));
+});
+
+test("a manual rescan drops a stale confirm strip", () => {
+  const source = section();
+  const scanHandler = source.slice(source.indexOf(`onClick={() => {`), source.indexOf(`}}`, source.indexOf("setConfirmEntry(null);")));
+  assert.ok(scanHandler.includes("setConfirmEntry(null);"));
+  assert.ok(scanHandler.includes("scan.scan();"));
 });
 
 test("a finished import refreshes the scan so row states flip", () => {
