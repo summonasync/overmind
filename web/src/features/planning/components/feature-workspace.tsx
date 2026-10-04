@@ -17,6 +17,7 @@ import { Select } from "@/shared/ui/select";
 import { ArtifactEditor } from "@/features/planning/components/artifact-editor";
 import { ArtifactLog } from "@/features/planning/components/artifact-log";
 import { CeremonyStepper } from "@/features/planning/components/ceremony-stepper";
+import { DeleteArtifactDialog } from "@/features/planning/components/delete-artifact-dialog";
 import { FeatureDependenciesPanel } from "@/features/planning/components/feature-dependencies-panel";
 import { FeatureForm } from "@/features/planning/components/feature-form";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
@@ -65,6 +66,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [documentModal, setDocumentModal] = useState<PlanningDocumentKind | null>(null);
   const [taskModal, setTaskModal] = useState<"new" | PlanningArtifactResponse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PlanningArtifactResponse | null>(null);
 
   const { data: feature, loading, error } = usePlanningFeature(projectId, slug);
   const {
@@ -72,6 +74,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
     deleteFeature,
     createArtifact,
     updateArtifact,
+    deleteArtifact,
     setArtifactStatus,
     appendArtifactLog,
     validateArtifact,
@@ -121,6 +124,11 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
     .sort((left, right) => left.order - right.order);
 
   const openDocumentEditor = (kind: PlanningDocumentKind) => setDocumentModal(kind);
+
+  const openArtifactDelete = (artifact: PlanningArtifactResponse) => {
+    deleteArtifact.reset();
+    setDeleteTarget(artifact);
+  };
 
   return (
     <div className="space-y-4">
@@ -244,6 +252,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
             onMove={({ artifact, status, logNote }) =>
               setArtifactStatus.mutate({ artifactId: artifact.id, slug, status, logNote })
             }
+            onDelete={openArtifactDelete}
           />
         )
       ) : documentArtifact === undefined ? (
@@ -253,7 +262,11 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
           action={<Button onClick={() => openDocumentEditor(tab)}>Create {tab}</Button>}
         />
       ) : (
-        <DocumentPanel artifact={documentArtifact} onEdit={() => openDocumentEditor(tab)} />
+        <DocumentPanel
+          artifact={documentArtifact}
+          onEdit={() => openDocumentEditor(tab)}
+          onDelete={() => openArtifactDelete(documentArtifact)}
+        />
       )}
 
       <Modal
@@ -353,6 +366,21 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
         />
       </Modal>
 
+      <DeleteArtifactDialog
+        artifact={deleteTarget}
+        siblings={feature.artifacts}
+        featureSlug={slug}
+        pending={deleteArtifact.isPending}
+        error={deleteArtifact.error as Error | null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={(artifact) =>
+          deleteArtifact.mutate(
+            { artifactId: artifact.id, slug },
+            { onSuccess: () => setDeleteTarget(null) },
+          )
+        }
+      />
+
       <Modal title="Delete feature" open={deleteOpen} onClose={() => setDeleteOpen(false)}>
         <div className="space-y-4">
           <p className="text-sm text-foreground">
@@ -385,7 +413,15 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
   );
 }
 
-function DocumentPanel({ artifact, onEdit }: { artifact: PlanningArtifactResponse; onEdit: () => void }) {
+function DocumentPanel({
+  artifact,
+  onEdit,
+  onDelete,
+}: {
+  artifact: PlanningArtifactResponse;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -400,6 +436,14 @@ function DocumentPanel({ artifact, onEdit }: { artifact: PlanningArtifactRespons
         <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={onEdit}>
           <Pencil size={12} aria-hidden />
           Edit
+        </Button>
+        <Button
+          variant="ghost"
+          className="px-2.5 py-1 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+          onClick={onDelete}
+        >
+          <Trash2 size={12} aria-hidden />
+          Delete
         </Button>
       </div>
       <div className="max-h-[55vh] overflow-y-auto">

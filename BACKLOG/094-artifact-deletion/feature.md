@@ -1,7 +1,7 @@
 ---
 feature: 094
 slug: artifact-deletion
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-09-27
@@ -22,4 +22,5 @@ Artifact deletion: ни одна дверь не умеет удалять ар�
 
 <log>
 - 2026-10-03 [auto] — artifact created → inProgress
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
 </log>

@@ -2,7 +2,7 @@
 feature: 094
 task: 03
 slug: artifact-deletion
-status: todo
+status: done
 review: light
 created: 2026-10-04
 depends_on: 02
@@ -30,11 +30,11 @@ Give the human door a UI affordance for deletion and close the wave out (consist
 </constraints>
 
 <acceptance-criteria>
-- [ ] Delete affordance with confirm on roster row / artifact detail; confirm lists consequences.
-- [ ] Deleted artifact disappears from lists after mutation (invalidation pinned in web tests where cheap).
-- [ ] Consistency pass across doors recorded.
-- [ ] Architect light dispatched and verdict recorded.
-- [ ] Result artifact drafted with the post-release click-check item.
+- [x] Delete affordance with confirm on roster row / artifact detail; confirm lists consequences.
+- [x] Deleted artifact disappears from lists after mutation (invalidation pinned in web tests where cheap).
+- [x] Consistency pass across doors recorded.
+- [x] Architect light dispatched and verdict recorded.
+- [x] Result artifact drafted with the post-release click-check item.
 </acceptance-criteria>
 
 <refs>
@@ -46,4 +46,9 @@ Give the human door a UI affordance for deletion and close the wave out (consist
 
 <log>
 - 2026-10-04 [agent] — task cut from validated plan.
+- 2026-10-04 [agent] — taken into work
+- 2026-10-04 [agent] — web lane: delete affordance on task roster rows (trash action in TaskCard strip) and document detail panel (Delete next to Edit); DeleteArtifactDialog confirm lists consequences (artifact + log, version history stays in DB, materialized BACKLOG file removed next pass) and pre-warns on blocked dependents (mirrors the server 409 "Clean up dependencies first") and on validated artifacts; 409 detail surfaces via ErrorText inside the dialog, dialog stays open on failure; success goes through the existing deleteArtifact mutation (planningKeys.lists() + feature invalidation). No feature-body delete added (anti-scope). Files: web/src/features/planning/lib/artifact-deletion.ts, components/delete-artifact-dialog.tsx, task-board.tsx, feature-workspace.tsx, index.ts barrel, tests/artifact-delete.test.mts (4 tests). Gates: eslint 0 errors (6 pre-existing warnings elsewhere), tsc --noEmit clean, node --test 71/71, npm run build green.
+- 2026-10-04 [agent] — web lane complete, closeout follows by orchestrator
+- 2026-10-04 [agent] — web lane review returned PASS (audits/review-094-03-web.md): 0 blockers, 0 warnings, 1 suggestion (close-guard pending during Escape — v1.1 polish, mirrors the delete-feature dialog behavior); error path end-to-end verified (409 detail reaches ErrorText inside the dialog), pessimistic mutation justified for irreversible soft delete, BFF/a11y/AI-trace clean, gates green (lint 0, tsc 0, node --test 71/71).
+- 2026-10-04 [agent] — closeout complete: consistency verified by the architect pass (guard matrix single-owner, filter covers every read path, doors thin over the same service); architect light APPROVED-WITH-WARNINGS 0 blockers (audits/architect-review-2026-10-04-094.md), W1 CONTEXT.md roster fixed in closeout, N1-N3 to the microbatch ledger; result 0728e1ad drafted with the 5-scenario click-check. Gates: 1937/0 sequential + web 71/0.
 </log>

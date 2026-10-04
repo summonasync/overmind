@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ComponentType } from "react";
-import { Ban, CheckCircle2, Eye, Play, Undo2 } from "lucide-react";
+import { Ban, CheckCircle2, Eye, Play, Trash2, Undo2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -52,9 +52,18 @@ interface TaskBoardProps {
   error: Error | null;
   onOpen: (artifact: PlanningArtifactResponse) => void;
   onMove: (input: TaskMoveInput) => void;
+  onDelete: (artifact: PlanningArtifactResponse) => void;
 }
 
-export function TaskBoard({ tasks, featureSlug, pending, error, onOpen, onMove }: TaskBoardProps) {
+export function TaskBoard({
+  tasks,
+  featureSlug,
+  pending,
+  error,
+  onOpen,
+  onMove,
+  onDelete,
+}: TaskBoardProps) {
   const [moving, setMoving] = useState<{ artifact: PlanningArtifactResponse; status: PlanningArtifactStatus } | null>(
     null,
   );
@@ -97,6 +106,7 @@ export function TaskBoard({ tasks, featureSlug, pending, error, onOpen, onMove }
                       featureSlug={featureSlug}
                       onOpen={onOpen}
                       onMove={openMove}
+                      onDelete={onDelete}
                     />
                   ))}
                 </ul>
@@ -145,9 +155,10 @@ interface TaskCardProps {
   featureSlug: string;
   onOpen: (artifact: PlanningArtifactResponse) => void;
   onMove: (artifact: PlanningArtifactResponse, status: PlanningArtifactStatus) => void;
+  onDelete: (artifact: PlanningArtifactResponse) => void;
 }
 
-function TaskCard({ task, siblings, featureSlug, onOpen, onMove }: TaskCardProps) {
+function TaskCard({ task, siblings, featureSlug, onOpen, onMove, onDelete }: TaskCardProps) {
   const blockers = task.blocked ? taskBlockers(task, siblings) : [];
   return (
     <li className="rounded-md border border-border bg-surface p-2.5">
@@ -194,6 +205,15 @@ function TaskCard({ task, siblings, featureSlug, onOpen, onMove }: TaskCardProps
             </button>
           );
         })}
+        <button
+          type="button"
+          aria-label="Delete task"
+          title="Delete task"
+          onClick={() => onDelete(task)}
+          className="ml-auto rounded p-1 text-muted hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <Trash2 size={13} aria-hidden />
+        </button>
       </div>
     </li>
   );

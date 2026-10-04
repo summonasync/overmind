@@ -4,6 +4,7 @@ export { ArtifactLog } from "./components/artifact-log";
 export { BoardFilterBar } from "./components/board-filter-bar";
 export { BoardSearchInput } from "./components/board-search-input";
 export { CeremonyStepper } from "./components/ceremony-stepper";
+export { DeleteArtifactDialog } from "./components/delete-artifact-dialog";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
 export { FeatureDependenciesPanel } from "./components/feature-dependencies-panel";
@@ -42,6 +43,12 @@ export {
 } from "./lib/board-filters";
 export { cardBriefLine, cardPhaseLabel } from "./lib/board-card-context";
 export { boardItemMatchesSearch } from "./lib/board-search";
+export {
+  artifactDeleteLabel,
+  artifactDeletePreview,
+  artifactDependentLabels,
+} from "./lib/artifact-deletion";
+export type { ArtifactDeletePreview } from "./lib/artifact-deletion";
 export type {
   BoardFilterSearchParams,
   PlanningBoardArtifactFilter,
