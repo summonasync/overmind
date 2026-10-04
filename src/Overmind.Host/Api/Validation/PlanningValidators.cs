@@ -137,6 +137,23 @@ public sealed class ImportPlanningFeatureRequestValidator : AbstractValidator<Im
     }
 }
 
+public sealed class PlanningImportFolderRequestValidator : AbstractValidator<PlanningImportFolderRequest>
+{
+    public PlanningImportFolderRequestValidator()
+    {
+        RuleFor(x => x.Folder).NotEmpty();
+        RuleFor(x => x.Folder).Must(BeASingleFolderName)
+            .When(x => !string.IsNullOrWhiteSpace(x.Folder))
+            .WithMessage("Folder must be a single BACKLOG folder name, e.g. 058-agent-side-import.");
+    }
+
+    private static bool BeASingleFolderName(string folder) =>
+        folder.Trim() is { Length: > 0 } name &&
+        !name.Contains('/') &&
+        !name.Contains('\\') &&
+        name is not ("." or "..");
+}
+
 public sealed class AddPlanningFeatureDependencyRequestValidator : AbstractValidator<AddPlanningFeatureDependencyRequest>
 {
     public AddPlanningFeatureDependencyRequestValidator()

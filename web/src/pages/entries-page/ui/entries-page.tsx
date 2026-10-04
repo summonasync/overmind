@@ -7,7 +7,7 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
-import { EntryEditor, EntryFilters, EntryList, TagManager, useEntryList, useEntryMutations } from "@/features/entries";
+import { EntryEditor, EntryFilters, EntryList, EntryReadModal, TagManager, useEntryList, useEntryMutations } from "@/features/entries";
 import type { EntryFormValues, EntryListFilters, EntryResponse } from "@/features/entries";
 import { ProjectHeader } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
@@ -26,6 +26,7 @@ function EntriesPageContent() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EntryResponse | null>(null);
   const [deleting, setDeleting] = useState<EntryResponse | null>(null);
+  const [reading, setReading] = useState<EntryResponse | null>(null);
 
   const activeError =
     (create.error as Error | null) ??
@@ -87,8 +88,15 @@ function EntriesPageContent() {
           entries={entries}
           onEdit={(entry) => { setEditing(entry); setFormOpen(true); }}
           onDelete={setDeleting}
+          onRead={setReading}
         />
       )}
+
+      <EntryReadModal
+        entry={reading}
+        onClose={() => setReading(null)}
+        onEdit={(entry) => { setReading(null); setEditing(entry); setFormOpen(true); }}
+      />
 
       <Modal
         title={editing ? "Edit entry" : "New entry"}

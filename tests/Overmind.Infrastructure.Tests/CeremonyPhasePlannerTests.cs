@@ -100,22 +100,22 @@ public class CeremonyPhasePlannerTests
     }
 
     [Fact]
-    public void BriefExcerpt_FirstGoalParagraph_CappedAt150()
+    public void BriefExcerpt_FirstGoalParagraph_CappedAt500()
     {
         var body = $"""
             # feature
 
             <goal>
-            {new string('а', 160)}
+            {new string('а', 510)}
             </goal>
             """;
 
         var excerpt = CeremonyPhasePlanner.BriefExcerpt(body);
 
         excerpt.ShouldNotBeNull();
-        excerpt.Length.ShouldBe(151);
+        excerpt.Length.ShouldBe(501);
         excerpt.ShouldEndWith("…");
-        excerpt.ShouldStartWith(new string('а', 149));
+        excerpt.ShouldStartWith(new string('а', 499));
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class CeremonyPhasePlannerTests
     [Fact]
     public void BriefExcerpt_CjkAtCapBoundary_DoesNotSplitSurrogatePairs()
     {
-        var cjk = new string('写', 150) + "🗿";
+        var cjk = new string('写', 500) + "🗿";
         var body = $"<goal>\n{cjk}\n</goal>";
 
         var excerpt = CeremonyPhasePlanner.BriefExcerpt(body);
@@ -194,19 +194,19 @@ public class CeremonyPhasePlannerTests
         excerpt.ShouldNotBeNull();
         excerpt.ShouldEndWith("…");
         excerpt.ShouldNotContain("\uD83D"); // high surrogate never travels alone
-        new StringInfo(excerpt).LengthInTextElements.ShouldBe(151); // 150 ideographs + ellipsis
+        new StringInfo(excerpt).LengthInTextElements.ShouldBe(501); // 500 ideographs + ellipsis
     }
 
     [Fact]
     public void BriefExcerpt_CyrillicOverCap_TruncatesAtCap()
     {
-        var body = $"<goal>\n{new string('ж', 200)}\n</goal>";
+        var body = $"<goal>\n{new string('ж', 550)}\n</goal>";
 
         var excerpt = CeremonyPhasePlanner.BriefExcerpt(body);
 
         excerpt.ShouldNotBeNull();
-        excerpt.Length.ShouldBe(151);
+        excerpt.Length.ShouldBe(501);
         excerpt.EndsWith("…").ShouldBeTrue();
-        excerpt.TrimEnd('…').Length.ShouldBe(150);
+        excerpt.TrimEnd('…').Length.ShouldBe(500);
     }
 }

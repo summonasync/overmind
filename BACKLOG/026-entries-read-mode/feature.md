@@ -1,7 +1,7 @@
 ---
 feature: 026
 slug: entries-read-mode
-status: inProgress
+status: review
 priority: p1
 version: 2
 created: 2026-09-20
@@ -30,4 +30,5 @@ Read-модель для Entries (user request 2026-09-20, визуальный 
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
 </log>

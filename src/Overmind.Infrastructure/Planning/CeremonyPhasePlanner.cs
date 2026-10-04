@@ -5,7 +5,7 @@ namespace Overmind.Infrastructure.Planning;
 
 public static class CeremonyPhasePlanner
 {
-    public const int ExcerptCap = 150;
+    public const int ExcerptCap = 500;
     public const string Ellipsis = "…";
 
     public static string DeriveLabel(

@@ -71,6 +71,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<ImportPlanningFeatureRequest>, ImportPlanningFeatureRequestValidator>();
+        services.AddSingleton<IValidator<PlanningImportFolderRequest>, PlanningImportFolderRequestValidator>();
         services.AddSingleton<IValidator<AddPlanningFeatureDependencyRequest>, AddPlanningFeatureDependencyRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueMoveRequest>, PlanningQueueMoveRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
@@ -115,6 +116,7 @@ public static class DependencyInjection
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();
+        services.AddScoped<BacklogFeatureScanner>();
 
         return services;
     }

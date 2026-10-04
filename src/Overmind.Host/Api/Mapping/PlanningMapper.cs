@@ -259,4 +259,41 @@ public static class PlanningMapper
         return new PlanningFeatureMutationResponse(
             feature.Slug, feature.Status, feature.Version, feature.LastLogLine);
     }
+
+    public static PlanningFeatureImportResponse ToImportResponse(BacklogFeatureImportReport report)
+    {
+        return new PlanningFeatureImportResponse(
+            report.Slug,
+            report.Title,
+            report.Status,
+            report.Created,
+            report.ArtifactsCreated,
+            report.ArtifactsUpdated,
+            [.. report.Notes],
+            report.TrackedFiles,
+            report.Materialization,
+            report.NextStep);
+    }
+
+    public static PlanningImportScanResponse ToScanResponse(BacklogFeatureScanReport report)
+    {
+        return new PlanningImportScanResponse(
+            report.Root,
+            [.. report.Entries.Select(ToScanEntryResponse)]);
+    }
+
+    private static PlanningImportScanEntryResponse ToScanEntryResponse(BacklogFeatureScanEntry entry)
+    {
+        return new PlanningImportScanEntryResponse(
+            entry.Folder,
+            entry.Slug,
+            entry.Title,
+            entry.Status,
+            entry.Specs,
+            entry.Plans,
+            entry.Results,
+            entry.Tasks,
+            entry.AlreadyImported,
+            entry.Error);
+    }
 }

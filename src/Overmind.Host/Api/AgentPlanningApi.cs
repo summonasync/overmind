@@ -188,17 +188,7 @@ public static class AgentPlanningApi
             await claims.EnsureImportAllowedAsync(projectId, sessionId, imported.Slug, ct);
 
             var report = await importer.ImportFeatureAsync(projectId, project.DiskPath, request.Path.Trim(), ct);
-            return Results.Ok(new PlanningFeatureImportResponse(
-                report.Slug,
-                report.Title,
-                report.Status,
-                report.Created,
-                report.ArtifactsCreated,
-                report.ArtifactsUpdated,
-                [.. report.Notes],
-                report.TrackedFiles,
-                report.Materialization,
-                report.NextStep));
+            return Results.Ok(PlanningMapper.ToImportResponse(report));
         }
         catch (PlanningException ex)
         {

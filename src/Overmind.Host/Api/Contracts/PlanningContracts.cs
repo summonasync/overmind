@@ -306,6 +306,24 @@ public sealed record PlanningFeatureImportResponse(
     PlanningMaterialization Materialization,
     string? NextStep);
 
+public sealed record PlanningImportFolderRequest(string Folder);
+
+public sealed record PlanningImportScanRequest(string? SubPath);
+
+public sealed record PlanningImportScanEntryResponse(
+    string Folder,
+    string? Slug,
+    string? Title,
+    PlanningFeatureStatus? Status,
+    int Specs,
+    int Plans,
+    int Results,
+    int Tasks,
+    bool AlreadyImported,
+    string? Error);
+
+public sealed record PlanningImportScanResponse(string Root, PlanningImportScanEntryResponse[] Entries);
+
 public sealed record PlanningMaterializedFileResponse(string RelativePath, string Sha256);
 
 public sealed record PlanningMaterializationSkipResponse(string RelativePath, string Reason);

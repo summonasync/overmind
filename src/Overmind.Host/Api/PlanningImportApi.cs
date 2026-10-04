@@ -1,0 +1,106 @@
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Overmind.Core;
+using Overmind.Host.Api.Contracts;
+using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
+
+namespace Overmind.Host.Api;
+
+public static class PlanningImportApi
+{
+    public static RouteGroupBuilder MapPlanningImportApi(this IEndpointRouteBuilder routes)
+    {
+        var group = routes.MapGroup("/api");
+
+        group.MapPost("/projects/{projectId:guid}/planning/import/scan", Scan);
+        group.MapPost("/projects/{projectId:guid}/planning/import", Import);
+
+        return group;
+    }
+
+    internal static async Task<IResult> Scan(
+        Guid projectId,
+        PlanningImportScanRequest request,
+        BacklogFeatureScanner scanner,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
+        if (project is null)
+        {
+            return HttpErrors.NotFound($"Project '{projectId}' was not found.");
+        }
+
+        var importedSlugs = await db.PlanningFeatures
+            .Where(f => f.ProjectId == projectId)
+            .Select(f => f.Slug)
+            .ToListAsync(ct);
+
+        BacklogFeatureScanReport report;
+        try
+        {
+            report = await scanner.ScanAsync(projectId, project.DiskPath, request.SubPath, importedSlugs, ct);
+        }
+        catch (MaterializationException ex)
+        {
+            return MaterializationError(ex);
+        }
+
+        return Results.Ok(PlanningMapper.ToScanResponse(report));
+    }
+
+    internal static async Task<IResult> Import(
+        Guid projectId,
+        PlanningImportFolderRequest request,
+        IValidator<PlanningImportFolderRequest> validator,
+        BacklogImporter importer,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
+        if (project is null)
+        {
+            return HttpErrors.NotFound($"Project '{projectId}' was not found.");
+        }
+
+        var folder = Path.Combine(project.DiskPath, "BACKLOG", request.Folder.Trim());
+        try
+        {
+            var report = await importer.ImportFeatureAsync(projectId, project.DiskPath, folder, ct);
+            return Results.Ok(PlanningMapper.ToImportResponse(report));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    private static IResult MaterializationError(MaterializationException ex)
+    {
+        return ex.Kind switch
+        {
+            MaterializationFailureKind.NotFound => HttpErrors.NotFound(ex.Message),
+            MaterializationFailureKind.PathTraversal or MaterializationFailureKind.InvalidTarget =>
+                Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid materialization target",
+                    detail: ex.Message),
+            MaterializationFailureKind.OverwriteBlocked or MaterializationFailureKind.LocalEditsBlocked
+                or MaterializationFailureKind.Refused =>
+                HttpErrors.Conflict(ex.Message),
+            _ => Results.Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Materialization failed",
+                detail: ex.Message),
+        };
+    }
+}
