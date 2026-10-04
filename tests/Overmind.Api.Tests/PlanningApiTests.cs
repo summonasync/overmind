@@ -1085,6 +1085,26 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteArtifact_WithBody_Returns204()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "spec" });
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/planning/artifacts/{created!.Id}")
+        {
+            Content = JsonContent.Create(new { LogNote = "duplicate cleanup", Source = "ui" }, options: JsonOptions)
+        };
+        var deleteResponse = await _client.SendAsync(request);
+
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
     public async Task DeleteFeature_Returns204Then404()
     {
         var project = await CreateProjectAsync();

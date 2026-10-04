@@ -188,6 +188,15 @@ public sealed record PlanningFeatureAgentUpdateResponse(
 
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 
+public sealed record DeletePlanningArtifactRequest(
+    string? LogNote = null,
+    string? Source = null);
+
+public sealed record PlanningArtifactDeleteResponse(
+    Guid Id,
+    PlanningArtifactKind Kind,
+    string FeatureLogLine);
+
 public sealed record PatchPlanningArtifactRequest(
     string? Op,
     string? Section,

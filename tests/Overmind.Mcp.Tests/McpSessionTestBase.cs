@@ -264,6 +264,23 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                 return new StubOvermindApi.Response(200, result.ToJsonString());
             });
         stub.Route(
+            "DELETE",
+            "/api/agent/planning/artifacts/[^/]+",
+            req =>
+            {
+                var submitted = JsonNode.Parse(req.Body)!;
+                var note = submitted["logNote"]?.GetValue<string>();
+                var echo = new JsonObject
+                {
+                    ["id"] = req.Path.Split('/').Last(),
+                    ["kind"] = "task",
+                    ["featureLogLine"] = note is null
+                        ? "artifact task 02 deleted by agent"
+                        : $"artifact task 02 deleted by agent, {note}"
+                };
+                return new StubOvermindApi.Response(200, echo.ToJsonString());
+            });
+        stub.Route(
             "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/current",
             200,

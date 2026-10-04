@@ -466,7 +466,11 @@ public sealed class PlanningArtifactService
     }
 
     public async Task<PlanningArtifact> DeleteAsync(
-        Guid artifactId, bool byHuman, string? logNote = null, CancellationToken ct = default)
+        Guid artifactId,
+        bool byHuman,
+        string? logNote = null,
+        PlanningLogSource? source = null,
+        CancellationToken ct = default)
     {
         var artifact = await _db.PlanningArtifacts
             .Include(a => a.BlockedBy)
@@ -495,7 +499,7 @@ public sealed class PlanningArtifactService
             ReopenFeatureAfterDeletion(feature, artifact);
         }
 
-        feature.AppendLog(DeletionAuditLine(artifact, byHuman, logNote), DeletionSource(byHuman));
+        feature.AppendLog(DeletionAuditLine(artifact, byHuman, logNote), source ?? DeletionSource(byHuman));
 
         await _db.SaveChangesAsync(ct);
         await PlanningServiceGuard.SyncMaterializationAsync(_materializer, _logger, feature.ProjectId, ct);

@@ -1,5 +1,6 @@
 using System.Text;
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
@@ -60,6 +61,7 @@ public static class AgentPlanningApi
         group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus).LockToClaim();
         group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog).LockToClaim();
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch).LockToClaim();
+        group.MapDelete("/planning/artifacts/{id:guid}", DeleteArtifact).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/import", ImportFeature);
         group.MapGet("/projects/{projectId:guid}/planning/materialization-status", MaterializationStatus);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate).LockToClaim();
@@ -632,6 +634,32 @@ public static class AgentPlanningApi
         }
 
         return warnings.Count == 0 ? null : [.. warnings];
+    }
+
+    internal static async Task<IResult> DeleteArtifact(
+        Guid id,
+        [FromBody] DeletePlanningArtifactRequest? request,
+        PlanningArtifactService service,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        PlanningArtifact artifact;
+        try
+        {
+            artifact = await service.DeleteAsync(
+                id,
+                byHuman: false,
+                request?.LogNote,
+                PlanningDoorSource.Resolve(request?.Source, PlanningLogSource.Agent),
+                ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        var feature = await db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        return Results.Ok(new PlanningArtifactDeleteResponse(artifact.Id, artifact.Kind, feature.LastLogLine));
     }
 
     internal static async Task<IResult> Patch(

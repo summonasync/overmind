@@ -35,6 +35,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_set_status",
             "planning_append_log",
             "planning_patch_artifact",
+            "planning_delete_artifact",
             "planning_validate",
             "planning_set_feature_status",
             "planning_task_queue",
@@ -99,6 +100,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_add_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("cycle");
         tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
+        tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "agents can delete draft artifacts only; validated/done deletion is the human's door in the UI");
+        tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain("clean up dependencies first");
+        tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain("soft delete");
         tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldContain("board mutation");
         tools["planning_materialize_status"]!["description"]!.GetValue<string>().ShouldContain("stalePaths");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("all-or-nothing");
@@ -428,6 +433,137 @@ public class PlanningToolContractTests : McpSessionTestBase
         var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
         request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/patch");
         response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_DraftTask_DeletesAndEchoesTheFeatureAuditLine()
+    {
+        var response = await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["logNote"] = "duplicate from upsert without order"
+        });
+
+        var request = FindRequest("DELETE", $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}");
+        var body = JsonNode.Parse(request.Body)!;
+        body["logNote"]!.GetValue<string>().ShouldBe("duplicate from upsert without order");
+        body["source"]!.GetValue<string>().ShouldBe("agent");
+
+        response["result"]!["isError"].ShouldBeNull();
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!;
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        echo["kind"]!.GetValue<string>().ShouldBe("task");
+        echo["featureLogLine"]!.GetValue<string>().ShouldBe(
+            "artifact task 02 deleted by agent, duplicate from upsert without order");
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_TaskAlias_ResolvesThroughTheRoster()
+    {
+        var response = await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2",
+            ["logNote"] = "aliased cleanup"
+        });
+
+        FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features/demo-feature/artifacts");
+        FindRequest("DELETE", $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_Source_TrimmedAndFallsBackToDoorSource()
+    {
+        await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["logNote"] = "marked run",
+            ["source"] = " ops-bot "
+        });
+
+        var marked = JsonNode.Parse(FindRequest("DELETE", $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}").Body)!;
+        marked["source"]!.GetValue<string>().ShouldBe("ops-bot");
+
+        await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskOneId.ToString(),
+            ["logNote"] = "blank source",
+            ["source"] = "   "
+        });
+
+        var fallback = JsonNode.Parse(FindRequest("DELETE", $"/api/agent/planning/artifacts/{Canned.PlanningTaskOneId}").Body)!;
+        fallback["source"]!.GetValue<string>().ShouldBe("agent");
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_ValidatedDocument_RefusedByTheGuard()
+    {
+        Stub.Route(
+            "DELETE",
+            $"/api/agent/planning/artifacts/{Canned.PlanningSpecArtifactId}",
+            409,
+            Canned.PlanningArtifactDeletionRefusedJson);
+
+        var response = await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString()
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("deletes draft artifacts only");
+        text.ShouldContain("human door in the Overmind UI");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_TaskWithDependents_RefusedNamingTheCleanup()
+    {
+        Stub.Route(
+            "DELETE",
+            $"/api/agent/planning/artifacts/{Canned.PlanningTaskOneId}",
+            409,
+            Canned.PlanningArtifactDeletionBlockedJson);
+
+        var response = await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskOneId.ToString()
+        });
+
+        ToolErrorText(response).ShouldContain("Clean up dependencies first");
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_UnknownArtifact_404CarriesTheAliasHint()
+    {
+        Stub.Route(
+            "DELETE",
+            $"/api/agent/planning/artifacts/{Canned.MissingEntryId}",
+            404,
+            Canned.PlanningArtifactNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.MissingEntryId.ToString()
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("artifact aliases");
+        text.ShouldContain("planning_list_artifacts");
+    }
+
+    [Fact]
+    public async Task PlanningDeleteArtifact_AliasWithArtifactId_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_delete_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        ToolErrorText(response).ShouldContain("not both");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
     }
 
     [Fact]

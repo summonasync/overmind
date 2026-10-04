@@ -817,6 +817,123 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_AgentDoor_DraftTask_LandsTheAuditLineInTheFeatureLog()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var doomed = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "doomed", Order = 1 });
+
+        var delete = await DeleteArtifactAsync(doomed.Id, new { LogNote = "duplicate from upsert" }, agentDoor: true);
+        delete.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var echo = await delete.Content.ReadFromJsonAsync<DeleteJson>(JsonOptions);
+        echo!.Id.ShouldBe(doomed.Id);
+        echo.Kind.ShouldBe("task");
+        echo.FeatureLogLine.ShouldBe("artifact task 01 deleted by agent, duplicate from upsert");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldContain("artifact task 01 deleted by agent, duplicate from upsert");
+
+        var roster = await _client.GetFromJsonAsync<RosterJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat/artifacts", JsonOptions);
+        roster!.Artifacts.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Delete_AgentDoor_ValidatedSpec_Returns409NamingTheHumanDoor()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "# Spec" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+
+        var delete = await DeleteArtifactAsync(spec.Id, agentDoor: true);
+
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ArtifactDeletionRefused");
+        problem.Detail!.ShouldContain("deletes draft artifacts only");
+        problem.Detail!.ShouldContain("human door in the Overmind UI");
+
+        var kept = await _client.GetAsync(AgentReadUrl(spec.Id));
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Delete_AgentDoor_DoneTask_Returns409()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "settled", Order = 1 });
+        await SetTaskStatusAsync(task.Id, "done");
+
+        var delete = await DeleteArtifactAsync(task.Id, agentDoor: true);
+
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ArtifactDeletionRefused");
+    }
+
+    [Fact]
+    public async Task Delete_HumanDoor_ValidatedSpec_PullsTheFeatureOutOfReview()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "# Spec" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "review");
+
+        var delete = await DeleteArtifactAsync(spec.Id, new { LogNote = "spec superseded" });
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.ShouldContain("artifact spec deleted by human, spec superseded");
+        feature.Body.ShouldContain("feature demoted: review → inProgress (spec deleted)");
+
+        var gone = await _client.GetAsync(AgentReadUrl(spec.Id));
+        gone.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Delete_TaskWithDependents_Returns409NamingTheCleanup()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await _client.PostAsJsonAsync(AgentTasksUrl(project.Id, "feat"), new
+        {
+            Tasks = new object[]
+            {
+                new { Body = "blocker", Order = 1 },
+                new { Body = "dependent", Order = 2, BlockedBy = new[] { 1 } }
+            }
+        });
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        var blocker = feature!.Artifacts.Single(a => a.Order == 1);
+
+        var delete = await DeleteArtifactAsync(blocker.Id, agentDoor: true);
+
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("DeletionBlockedByDependents");
+        problem.Detail!.ShouldContain("Clean up dependencies first");
+        problem.Detail!.ShouldContain("task 02");
+
+        var kept = await _client.GetAsync(AgentReadUrl(blocker.Id));
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Delete_UnknownArtifact_404CarriesTheAliasHint()
+    {
+        var response = await _client.DeleteAsync($"/api/planning/artifacts/{Guid.NewGuid()}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain("artifact aliases");
+    }
+
+    [Fact]
     public async Task Current_ReviewAndBlockedLeft_ReturnsHeldNamingReviewCount()
     {
         var project = await CreateProjectAsync();
@@ -2128,6 +2245,23 @@ public sealed class AgentPlanningApiTests : IDisposable
     private static string AgentReadUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}";
 
+    private static string AgentDeleteUrl(Guid artifactId) =>
+        $"/api/agent/planning/artifacts/{artifactId}";
+
+    private async Task<HttpResponseMessage> DeleteArtifactAsync(Guid artifactId, object? body = null, bool agentDoor = false)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, agentDoor
+            ? AgentDeleteUrl(artifactId)
+            : $"/api/planning/artifacts/{artifactId}");
+
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+
+        return await _client.SendAsync(request);
+    }
+
     private static string AgentImportUrl(Guid projectId) =>
         $"/api/agent/projects/{projectId}/planning/import";
 
@@ -2371,6 +2505,8 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record ArtifactReadJson(
         Guid Id, string Kind, string Status, int Version, int Order,
         DateTime UpdatedAt, string? Brief, string Body, string[]? MissingSections = null);
+
+    public sealed record DeleteJson(Guid Id, string Kind, string FeatureLogLine);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

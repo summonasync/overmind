@@ -224,7 +224,7 @@ public sealed class AgentSessionLockApiTests : IDisposable
     [
         "set_feature_status", "update_feature", "set_feature_priority", "move_feature",
         "add_feature_dependency", "remove_feature_dependency", "upsert_artifact", "upsert_tasks",
-        "set_status", "append_log", "patch_artifact", "validate",
+        "set_status", "append_log", "patch_artifact", "validate", "delete_artifact",
     ]);
 
     private async Task<(HttpResponseMessage Response, Guid SpecId, Guid TaskId, string BlockerSlug)> SendMutationAsync(
@@ -270,6 +270,8 @@ public sealed class AgentSessionLockApiTests : IDisposable
                 new { Brief = "expedited" }),
             "validate" => (HttpMethod.Post, $"/api/agent/planning/artifacts/{spec}/validate",
                 new { }),
+            "delete_artifact" => (HttpMethod.Delete, $"/api/agent/planning/artifacts/{task}",
+                new { LogNote = "removing" }),
             _ => throw new ArgumentException($"Unknown mutation '{mutation}'.", nameof(mutation)),
         };
 

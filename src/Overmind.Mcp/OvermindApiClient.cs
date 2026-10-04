@@ -77,8 +77,22 @@ public sealed class OvermindApiClient
     public Task<JsonElement> DeleteAsync(string path, CancellationToken ct) =>
         SendAsync(() => _http.DeleteAsync(path, ct), "DELETE " + path, ct);
 
+    public Task<JsonElement> DeleteAsync(string path, object body, CancellationToken ct) =>
+        SendAsync(() => SendJsonAsync(HttpMethod.Delete, path, body, ct), "DELETE " + path, ct);
+
     public Task<JsonElement> PutAsync(string path, object body, CancellationToken ct) =>
         SendAsync(() => _http.PutAsJsonAsync(path, body, JsonOptions, ct), "PUT " + path, ct);
+
+    private async Task<HttpResponseMessage> SendJsonAsync(
+        HttpMethod method, string path, object body, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(method, path)
+        {
+            Content = JsonContent.Create(body, options: JsonOptions)
+        };
+
+        return await _http.SendAsync(request, ct);
+    }
 
     private static async Task<JsonElement> SendAsync(
         Func<Task<HttpResponseMessage>> send,

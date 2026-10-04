@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
@@ -205,11 +206,19 @@ public static class PlanningArtifactsApi
     }
 
     internal static async Task<IResult> DeleteArtifact(
-        Guid id, PlanningArtifactService service, CancellationToken ct)
+        Guid id,
+        [FromBody] DeletePlanningArtifactRequest? request,
+        PlanningArtifactService service,
+        CancellationToken ct)
     {
         try
         {
-            await service.DeleteAsync(id, byHuman: true, ct: ct);
+            await service.DeleteAsync(
+                id,
+                byHuman: true,
+                request?.LogNote,
+                PlanningDoorSource.Resolve(request?.Source, PlanningLogSource.Ui),
+                ct);
         }
         catch (PlanningException ex)
         {

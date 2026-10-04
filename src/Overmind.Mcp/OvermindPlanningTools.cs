@@ -739,6 +739,33 @@ public sealed class OvermindPlanningTools
         };
     }
 
+    [McpServerTool(Name = "planning_delete_artifact", Destructive = true, Idempotent = false)]
+    [Description("Deletes one artifact as a soft delete: the body and version history stay in the database, the materialized file is removed on the next pass, and an audit line lands in the FEATURE's log (the feature log outlives the artifact; logNote is the reason carried in that line). Guard matrix: agents can delete draft artifacts only; validated/done deletion is the human's door in the UI — a refused attempt comes back as a 409 naming the reason. A task with incoming blockedBy edges is refused with 409 too ('clean up dependencies first') — deletion never orphans dependents. No restore and no force flag in v1.")]
+    public async Task<CallToolResult> DeleteArtifact(
+        [Description("Id of the artifact to delete; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
+        [Description("Reason carried in the feature-log audit line.")] string? logNote = null,
+        [Description("Door-source marker for the audit line; defaults to agent on this door.")] string? source = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
+        CancellationToken ct = default)
+    {
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
+        var echo = await Guarded(() => _api.DeleteAsync(
+            $"/api/agent/planning/artifacts/{id}",
+            new { logNote, source = string.IsNullOrWhiteSpace(source) ? DoorSource : source.Trim() },
+            ct));
+
+        return new CallToolResult
+        {
+            Content = [new TextContentBlock { Text = new JsonObject
+            {
+                ["id"] = echo.GetProperty("id").GetString(),
+                ["kind"] = echo.GetProperty("kind").GetString(),
+                ["featureLogLine"] = echo.GetProperty("featureLogLine").GetString()
+            }.ToJsonString() }]
+        };
+    }
+
     [McpServerTool(Name = "planning_validate", Destructive = false, Idempotent = false)]
     [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying. Validating a spec or plan here requires human-approval proof: send overmind_notify(kind=approval, featureSlug=<the feature's slug>), wait for the human's reply in the notification center, then validate (notify → reply → validate). The reply must be newer than the artifact's last update — every edit voids it, and re-validation needs a fresh reply; without proof the call fails with a ValidationProofRequired 409. The human door (UI) needs no proof, and neither does asMigrated — the migration escape hatch for artifacts pre-approved before import (e.g. already validated on disk): it skips the human gate, requires a logNote carrying the provenance, and leaves a 'validated as migrated — pre-approved on disk' marker line in the artifact log.")]
     public async Task<CallToolResult> Validate(

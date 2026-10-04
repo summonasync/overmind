@@ -174,6 +174,12 @@ public static class Canned
     public const string PlanningArtifactNotFoundJson =
         """{"title":"Not Found","detail":"Artifact '99999999-9999-9999-9999-999999999999' was not found. Addressing by slug? The MCP tools accept artifact aliases: '<slug>/T<order>' for a task, '<slug>/S', '<slug>/P', '<slug>/R' for the single spec, plan or result — planning_list_artifacts lists the feature's actual kind/order pairs.","status":404}""";
 
+    public const string PlanningArtifactDeletionRefusedJson =
+        """{"title":"ArtifactDeletionRefused","detail":"The agent door deletes draft artifacts only: this spec sits in status 'validated'. Validated and done artifacts are deletable through the human door in the Overmind UI.","status":409}""";
+
+    public const string PlanningArtifactDeletionBlockedJson =
+        """{"title":"DeletionBlockedByDependents","detail":"Clean up dependencies first: these tasks still depend on it: task 02.","status":409}""";
+
     public const string PlanningArtifactDemotedJson =
         """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"draft","review":"light","order":0,"body":"# Demo spec\n\n<goal>\nReworked after review.\n</goal>","frozenAt":null,"version":3,"createdAt":"2026-09-08T10:05:00Z","updatedAt":"2026-09-26T09:00:00Z","log":[{"date":"2026-09-26","text":"artifact demoted: validated → draft"}],"statusChanged":"validated → draft","featureStatusChanged":"review → inProgress"}""";
 
