@@ -1,7 +1,7 @@
 ---
 feature: 073
 slug: project-manifest
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-24
@@ -31,3 +31,7 @@ Every project carries a full markdown manifest in Overmind — what the project 
 - User idea 2026-09-24 ("описание проекта в overmind — аналог agents.md, менять на странице проект-конфига, при миграции импортировать agents/claude/qwen.md").
 - list_projects (the discovery surface today); 041 (metadata-vs-deep-read discipline); 066/071 (the config page host); BacklogImporter (the import hook); 052-briefing (start-of-session sibling — briefing is per-session state, the manifest is per-project identity).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

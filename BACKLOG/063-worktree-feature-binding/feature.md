@@ -1,7 +1,7 @@
 ---
 feature: 063
 slug: worktree-feature-binding
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-23
@@ -20,3 +20,7 @@ V1 sketch (read-only discovery):
 V2 (structured link): store the binding on the feature (branch field), kept in sync by the agent that creates the worktree — only if convention-based discovery proves insufficient.
 
 Value: agent gets task artifact + spec context + exact code location + git status in one hop; status collection ("what's the state of 043") becomes a single call.
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

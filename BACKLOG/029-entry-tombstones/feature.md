@@ -1,7 +1,7 @@
 ---
 feature: 029
 slug: entry-tombstones
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-20
@@ -34,3 +34,7 @@ Tombstone — новый тип записи (рядом с note/decision/gate/g
 <status>
 Draft; спека после короткого брейншторма с юзером. Очередь: после 023-хвоста и 026, до/вместе с 027-догфудом (там же UX-проход по entries).
 </status>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

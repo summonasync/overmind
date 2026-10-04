@@ -1,7 +1,7 @@
 ---
 feature: 105
 slug: register-all-task-sections
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-10-03
@@ -27,3 +27,7 @@ Task artifacts ride in with partial section registration (Qwen friction log item
 - Bug note 6ee3be0f (original report, dotNetCrew find).
 - Friction log entry 500f8197 (item 4).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

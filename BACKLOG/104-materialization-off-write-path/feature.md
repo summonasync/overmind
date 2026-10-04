@@ -1,7 +1,7 @@
 ---
 feature: 104
 slug: materialization-off-write-path
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-10-03
@@ -27,3 +27,7 @@ A write that times out but still commits is the worst failure mode for agent tru
 - Friction log entry 500f8197 (item 3).
 - 074-materialization-run-diagnostics (status/lastAttempt infra).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

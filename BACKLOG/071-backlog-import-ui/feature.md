@@ -1,7 +1,7 @@
 ---
 feature: 071
 slug: backlog-import-ui
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-24
@@ -28,3 +28,7 @@ A human can import a BACKLOG/ tree into a project from the web UI — an Import 
 - User request 2026-09-24 ("импорт бэклога через ui на странице конфига проекта — для этого у нас уже есть фича" → the 066 settings tab).
 - OM-7 (round 3); BacklogImportCli/BacklogImportCommand (the CLI pipeline being wrapped); 016 (import hardening lineage); 067 (tracking); 050 (folder picker).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

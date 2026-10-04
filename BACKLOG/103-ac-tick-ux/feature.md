@@ -1,7 +1,7 @@
 ---
 feature: 103
 slug: ac-tick-ux
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-10-03
@@ -28,3 +28,7 @@ AC ticking is silently wrong-prone and unrecoverable (Qwen Code friction log, it
 - Friction log entry 500f8197 (item 2, observed payload included).
 - 090 R1 (acText already exists).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

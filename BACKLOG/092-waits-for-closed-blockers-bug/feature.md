@@ -1,7 +1,7 @@
 ---
 feature: 092
 slug: waits-for-closed-blockers-bug
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-27
@@ -28,3 +28,7 @@ Expected: the feature page dependency block "waits for" shows only blockers the 
 - Bug report by user 2026-09-27 ("на странице фичи есть WAITS for — blocker, и там в списке есть даже done/review — залёт-воин").
 - 030-feature-dependencies — closure semantics (closed = done|review), web Dependencies panel.
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

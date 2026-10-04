@@ -1,7 +1,7 @@
 ---
 feature: 066
 slug: feature-number-styles
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-24
@@ -31,3 +31,7 @@ Each project can choose how its feature numbers render: `KEY-039` (Jira-style wi
 - 065-feature-number-badge-on-card (the formatter extraction + the badge); 062 (task-board numbers); 038/022 (chip surfaces).
 - Per-project override storage pattern: PlanningPolicy.ResolveValidationGateAsync (Project.RequireHumanValidation).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

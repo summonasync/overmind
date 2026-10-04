@@ -1,7 +1,7 @@
 ---
 feature: 051
 slug: entries-materialization
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-09-22
@@ -36,3 +36,7 @@ Entries (notes/decisions/gates/guards) живут только в БД: `Plannin
 - FEATURELIST/08-migration-field-report.md — внешний ревьюер читает контракты в репо, не в борде.
 - Полевой контекст: юзер поднял 2026-09-22 («у нас не материализуются наши entries»).
 </refs>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

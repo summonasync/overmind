@@ -1,7 +1,7 @@
 ---
 feature: 026
 slug: entries-read-mode
-status: draft
+status: inProgress
 priority: p1
 version: 2
 created: 2026-09-20
@@ -27,3 +27,7 @@ Read-модель для Entries (user request 2026-09-20, визуальный 
 - Изменения бэкенда (всё в entry response уже есть)
 - Совместное редактирование/realtime
 </non-goals>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>
