@@ -7,6 +7,7 @@ import {
   claimPlanningFeature,
   createPlanningArtifact,
   createPlanningFeature,
+  declinePlanningArtifact,
   deletePlanningArtifact,
   deletePlanningFeature,
   materializePlanning,
@@ -146,6 +147,12 @@ export function usePlanningMutations(projectId: string) {
     onSuccess: (_result, variables) => invalidate(variables.slug),
   });
 
+  const declineArtifact = useMutation({
+    mutationFn: (input: { artifactId: string; slug: string; reason?: string }) =>
+      declinePlanningArtifact(input.artifactId, input.reason),
+    onSuccess: (_result, variables) => invalidate(variables.slug),
+  });
+
   return {
     createFeature,
     updateFeature,
@@ -160,6 +167,7 @@ export function usePlanningMutations(projectId: string) {
     setArtifactStatus,
     appendArtifactLog,
     validateArtifact,
+    declineArtifact,
   };
 }
 

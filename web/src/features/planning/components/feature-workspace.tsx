@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Markdown } from "@/shared/lib/markdown";
 import { cn } from "@/shared/lib/cn";
 import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
@@ -14,6 +14,7 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { Modal } from "@/shared/ui/modal";
 import { PageHeader } from "@/shared/ui/page-header";
 import { Select } from "@/shared/ui/select";
+import { ArtifactDeclineDialog } from "@/features/planning/components/artifact-decline-dialog";
 import { ArtifactEditor } from "@/features/planning/components/artifact-editor";
 import { ArtifactLog } from "@/features/planning/components/artifact-log";
 import { CeremonyStepper } from "@/features/planning/components/ceremony-stepper";
@@ -67,6 +68,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
   const [documentModal, setDocumentModal] = useState<PlanningDocumentKind | null>(null);
   const [taskModal, setTaskModal] = useState<"new" | PlanningArtifactResponse | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PlanningArtifactResponse | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<PlanningArtifactResponse | null>(null);
 
   const { data: feature, loading, error } = usePlanningFeature(projectId, slug);
   const {
@@ -78,6 +80,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
     setArtifactStatus,
     appendArtifactLog,
     validateArtifact,
+    declineArtifact,
   } = usePlanningMutations(projectId);
 
   const setTab = (next: PlanningTab) => {
@@ -128,6 +131,11 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
   const openArtifactDelete = (artifact: PlanningArtifactResponse) => {
     deleteArtifact.reset();
     setDeleteTarget(artifact);
+  };
+
+  const openArtifactDecline = (artifact: PlanningArtifactResponse) => {
+    declineArtifact.reset();
+    setDeclineTarget(artifact);
   };
 
   return (
@@ -264,7 +272,14 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
       ) : (
         <DocumentPanel
           artifact={documentArtifact}
+          approvePending={validateArtifact.isPending}
+          approveError={validateArtifact.error as Error | null}
+          declinePending={declineArtifact.isPending}
           onEdit={() => openDocumentEditor(tab)}
+          onApprove={() =>
+            validateArtifact.mutate({ artifactId: documentArtifact.id, slug })
+          }
+          onDecline={() => openArtifactDecline(documentArtifact)}
           onDelete={() => openArtifactDelete(documentArtifact)}
         />
       )}
@@ -351,6 +366,27 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
         ) : null}
       </Modal>
 
+      <Modal
+        title={declineTarget !== null ? `Decline ${declineTarget.kind}` : ""}
+        open={declineTarget !== null}
+        onClose={() => setDeclineTarget(null)}
+      >
+        {declineTarget !== null ? (
+          <ArtifactDeclineDialog
+            kind={declineTarget.kind}
+            pending={declineArtifact.isPending}
+            error={declineArtifact.error as Error | null}
+            onClose={() => setDeclineTarget(null)}
+            onConfirm={(reason) =>
+              declineArtifact.mutate(
+                { artifactId: declineTarget.id, slug, reason },
+                { onSuccess: () => setDeclineTarget(null) },
+              )
+            }
+          />
+        ) : null}
+      </Modal>
+
       <Modal title="Edit feature" open={editOpen} onClose={() => setEditOpen(false)} size="xl">
         <FeatureForm
           initial={feature}
@@ -415,13 +451,25 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
 
 function DocumentPanel({
   artifact,
+  approvePending,
+  approveError,
+  declinePending,
   onEdit,
+  onApprove,
+  onDecline,
   onDelete,
 }: {
   artifact: PlanningArtifactResponse;
+  approvePending: boolean;
+  approveError: Error | null;
+  declinePending: boolean;
   onEdit: () => void;
+  onApprove: () => void;
+  onDecline: () => void;
   onDelete: () => void;
 }) {
+  const frozen = artifact.status === "validated";
+
   return (
     <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -433,6 +481,23 @@ function DocumentPanel({
         <span className="ml-auto font-mono text-xs text-muted">
           v{artifact.version} · updated {formatRelativeTime(artifact.updatedAt)}
         </span>
+        {!frozen ? (
+          <>
+            <Button
+              variant="accent"
+              className="px-2.5 py-1 text-xs"
+              disabled={approvePending}
+              onClick={onApprove}
+            >
+              <Check size={12} aria-hidden />
+              {approvePending ? "Approving…" : "Approve"}
+            </Button>
+            <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={declinePending} onClick={onDecline}>
+              <X size={12} aria-hidden />
+              {declinePending ? "Declining…" : "Decline"}
+            </Button>
+          </>
+        ) : null}
         <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={onEdit}>
           <Pencil size={12} aria-hidden />
           Edit
@@ -446,6 +511,7 @@ function DocumentPanel({
           Delete
         </Button>
       </div>
+      <ErrorText error={approveError} />
       <div className="max-h-[55vh] overflow-y-auto">
         <Markdown content={artifact.body} />
       </div>

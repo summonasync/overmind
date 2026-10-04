@@ -168,6 +168,12 @@ export function validatePlanningArtifact(artifactId: string): Promise<void> {
   return apiPost<void>(`/planning/artifacts/${artifactId}/validate`);
 }
 
+export function declinePlanningArtifact(artifactId: string, reason?: string): Promise<void> {
+  return apiPost<void>(`/planning/artifacts/${artifactId}/decline`, {
+    reason: reason ?? null,
+  });
+}
+
 export function getPlanningWorkflow(projectId: string): Promise<PlanningWorkflowResponse> {
   return apiGet<PlanningWorkflowResponse>(`/projects/${projectId}/planning/workflow`);
 }
