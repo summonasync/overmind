@@ -1,6 +1,7 @@
 "use client";
 
 import { useCeremonies } from "@/features/attention";
+import { FeatureNumberBadge } from "@/features/planning";
 import { Badge } from "@/shared/ui/badge";
 import { ErrorText } from "@/shared/ui/error-text";
 
@@ -25,10 +26,17 @@ export function CeremoniesSection() {
           <ul className="divide-y divide-border">
             {group.features.map((feature) => (
               <li key={feature.featureSlug} className="flex flex-wrap items-center gap-2 px-3 py-2">
-                {feature.number ? (
-                  <span className="font-mono text-xs font-semibold text-foreground">{feature.number}</span>
-                ) : null}
-                <span className="text-sm text-foreground">{feature.title}</span>
+                <FeatureNumberBadge slug={feature.featureSlug} />
+                {feature.url ? (
+                  <a
+                    href={feature.url}
+                    className="group rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <span className="text-sm text-foreground group-hover:text-primary">{feature.title}</span>
+                  </a>
+                ) : (
+                  <span className="text-sm text-foreground">{feature.title}</span>
+                )}
                 <span className="ml-auto flex flex-wrap items-center gap-1">
                   {feature.reasons.map((reason) => (
                     <Badge key={reason} tone="warning">
