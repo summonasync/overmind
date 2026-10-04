@@ -1,9 +1,9 @@
 ---
 feature: 007
 slug: product-strategist
-status: review
+status: done
 priority: p1
-version: 1
+version: 2
 created: 2026-09-29
 ---
 
@@ -31,4 +31,5 @@ The crew has executors (coders), reviewers, architects, a delivery planner (`spr
 <log>
 - 2026-09-29 [auto] — artifact created → inProgress
 - 2026-09-29 [auto] — all tasks done + spec + plan validated → review
+- 2026-09-29 [ui] — status moved to 'done' via ui
 </log>

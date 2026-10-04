@@ -1,9 +1,9 @@
 ---
 feature: 008
 slug: ceremony-matrix-sync
-status: inProgress
+status: done
 priority: p2
-version: 1
+version: 2
 created: 2026-09-29
 ---
 
@@ -32,4 +32,5 @@ Stale rows make future agents loop single calls where one atomic batch exists, a
 
 <log>
 - 2026-09-29 [auto] — artifact created → inProgress
+- 2026-09-29 [ui] — status moved to 'done' via ui
 </log>
