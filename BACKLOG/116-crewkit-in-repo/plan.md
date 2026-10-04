@@ -1,8 +1,9 @@
 ---
 feature: 116
 slug: crewkit-in-repo
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Plan 116 — Crew kit in-repo: pack from repo, sync repo → home
@@ -29,4 +30,5 @@ Pack from the repo kit, document the one-way flow, keep the parent repo clean.
 
 <log>
 - 2026-10-04 [agent] — plan draft, pre-flown.
+- 2026-10-04 [agent] — validated with human proof: notification 07333013-b954-4918-abc1-c30567161d00 replied 2026-10-04 18:45:33 UTC
 </log>

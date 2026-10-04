@@ -31,4 +31,5 @@ AC ticking is silently wrong-prone and unrecoverable (Qwen Code friction log, it
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [agent] — Van by claude claimed the feature
 </log>

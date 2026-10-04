@@ -1607,16 +1607,23 @@ public sealed class AgentPlanningApiTests : IDisposable
             new { Op = "tick_ac", AcIndex = 1 });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["artifactId", "kind", "section", "version", "bodyChars", "status", "lastLogLine",
+                       "tickedIndex", "tickedText", "noChange"]);
         var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
         patch!.ArtifactId.ShouldBe(task.Id);
         patch.Kind.ShouldBe("task");
         patch.Section.ShouldBe("acceptance-criteria");
         patch.Version.ShouldBe(2);
+        patch.TickedIndex.ShouldBe(1);
+        patch.TickedText.ShouldBe("first thing");
+        patch.NoChange.ShouldBe(false);
 
         var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
             $"/api/planning/artifacts/{task.Id}", JsonOptions);
-        artifact!.Body.ShouldContain("- [ ] first thing");
-        artifact.Body.ShouldContain("- [x] second thing");
+        artifact!.Body.ShouldContain("- [x] first thing");
+        artifact.Body.ShouldContain("- [ ] second thing");
     }
 
     [Fact]
@@ -1705,7 +1712,7 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Patch_RetickSurfacesAlreadyTicked_AndLeavesVersionUntouched()
+    public async Task Patch_RetickSurfacesNoChange_AndLeavesVersionUntouched()
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
@@ -1716,22 +1723,77 @@ public sealed class AgentPlanningApiTests : IDisposable
         });
 
         var first = await _client.PostAsJsonAsync(
-            AgentPatchUrl(task.Id), new { Op = "tick_ac", AcIndex = 0 });
+            AgentPatchUrl(task.Id), new { Op = "tick_ac", AcIndex = 1 });
         first.StatusCode.ShouldBe(HttpStatusCode.OK);
         var firstEcho = await first.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
-        firstEcho!.AlreadyTicked.ShouldBe(false);
+        firstEcho!.NoChange.ShouldBe(false);
+        firstEcho.TickedIndex.ShouldBe(1);
+        firstEcho.TickedText.ShouldBe("first thing");
         firstEcho.Version.ShouldBe(2);
 
         var second = await _client.PostAsJsonAsync(
-            AgentPatchUrl(task.Id), new { Op = "tick_ac", AcIndex = 0 });
+            AgentPatchUrl(task.Id), new { Op = "tick_ac", AcIndex = 1 });
         second.StatusCode.ShouldBe(HttpStatusCode.OK);
         var secondEcho = await second.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
-        secondEcho!.AlreadyTicked.ShouldBe(true);
+        secondEcho!.NoChange.ShouldBe(true);
+        secondEcho.TickedIndex.ShouldBe(1);
+        secondEcho.TickedText.ShouldBe("first thing");
         secondEcho.Version.ShouldBe(2);
     }
 
     [Fact]
-    public async Task Patch_SectionReplace_OmitsAlreadyTicked_AndMovesFeatureUpdatedAt()
+    public async Task Patch_UntickAcByText_ClearsTheMarkerAndEchoesTheResolvedItem()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [x] mistaken tick\n- [ ] keep me\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "untick_ac", AcText = "mistaken tick" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        patch!.Section.ShouldBe("acceptance-criteria");
+        patch.TickedIndex.ShouldBe(1);
+        patch.TickedText.ShouldBe("mistaken tick");
+        patch.NoChange.ShouldBe(false);
+        patch.Version.ShouldBe(2);
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("- [ ] mistaken tick");
+        artifact.Body.ShouldContain("- [ ] keep me");
+    }
+
+    [Fact]
+    public async Task Patch_UntickAlreadyUnticked_SurfacesNoChange_AndLeavesVersionUntouched()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<acceptance-criteria>\n- [ ] untouched item\n</acceptance-criteria>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id), new { Op = "untick_ac", AcIndex = 1 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        patch!.NoChange.ShouldBe(true);
+        patch.TickedIndex.ShouldBe(1);
+        patch.TickedText.ShouldBe("untouched item");
+        patch.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Patch_SectionReplace_OmitsTickEcho_AndMovesFeatureUpdatedAt()
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
@@ -1828,8 +1890,8 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("TickItemNotFound");
-        problem.Detail!.ShouldContain("0: [ ] first thing");
-        problem.Detail!.ShouldContain("1: [ ] second thing");
+        problem.Detail!.ShouldContain("1: [ ] first thing");
+        problem.Detail!.ShouldContain("2: [ ] second thing");
     }
 
     [Fact]
@@ -1866,7 +1928,7 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         var response = await _client.PostAsJsonAsync(
             AgentPatchUrl(task.Id),
-            new { Op = "tick_ac", AcIndex = 0 });
+            new { Op = "tick_ac", AcIndex = 1 });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
@@ -1881,7 +1943,10 @@ public sealed class AgentPlanningApiTests : IDisposable
     [InlineData("tick_ac", null, null, null, "")]
     [InlineData("tick_ac", null, null, null, "   ")]
     [InlineData("tick_ac", null, null, null, null)]
-    [InlineData("tick_ac", null, null, 0, "first thing")]
+    [InlineData("tick_ac", null, null, 1, "first thing")]
+    [InlineData("untick_ac", null, null, null, null)]
+    [InlineData("untick_ac", null, null, 1, "first thing")]
+    [InlineData("untick_ac", "goal", "content", null, null)]
     [InlineData("tick_ac", "goal", "content", null, null)]
     [InlineData("banana", "goal", "content", null, null)]
     [InlineData(null, "goal", "content", null, null)]
@@ -1963,7 +2028,8 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     [Theory]
     [InlineData("replace_section", "goal", "New goal.", null)]
-    [InlineData("tick_ac", null, null, 0)]
+    [InlineData("tick_ac", null, null, 1)]
+    [InlineData("untick_ac", null, null, 1)]
     public async Task Patch_BriefCombinedWithAnotherAction_Returns400InvalidPatchRequest(
         string op, string? section, string? content, int? acIndex)
     {
@@ -2494,7 +2560,8 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record PatchResultJson(
         Guid ArtifactId, string Kind, string Section, int Version, int BodyChars,
         string Status, string? LastLogLine,
-        string? StatusChanged = null, string? FeatureStatusChanged = null, bool? AlreadyTicked = null);
+        string? StatusChanged = null, string? FeatureStatusChanged = null,
+        int? TickedIndex = null, string? TickedText = null, bool? NoChange = null);
 
     public sealed record FeatureMutationJson(string Slug, string Status, int Version, string LastLogLine);
 

@@ -1,8 +1,9 @@
 ---
 feature: 115
 slug: issues-board-navigation
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Spec 115 — Issues Board: third project tab + cross-project sidebar view (new/unread first)
@@ -41,4 +42,5 @@ Issues Board navigation matches where the work lives: a project's issues are a t
 
 <log>
 - 2026-10-04 [agent] — spec drafted; «unread» semantics marked challengeable (no read-state on issues; v1 = open-first sort).
+- 2026-10-04 [agent] — validated with human proof: notification 807f7db6-d5b2-4288-8f00-291986dfab83 replied 2026-10-04 18:51:13 UTC
 </log>

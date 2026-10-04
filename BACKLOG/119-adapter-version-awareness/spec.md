@@ -1,8 +1,9 @@
 ---
 feature: 119
 slug: adapter-version-awareness
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Spec 119 — Adapter version awareness: onboard reports stale adapter + tool drift
@@ -41,4 +42,5 @@ A field agent on a stale MCP adapter finds out IMMEDIATELY, not after hammering 
 
 <log>
 - 2026-10-04 [agent] — spec drafted from the field incident; comparison and drift-list decisions challengeable/non-goal marked.
+- 2026-10-04 [agent] — validated with human proof: notification 8c9c0ee7-ad01-4813-82e9-31942768ec2e replied 2026-10-04 18:50:33 UTC
 </log>

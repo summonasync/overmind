@@ -100,6 +100,11 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_add_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("cycle");
         tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "acIndex is 1-based; numbering matches the materialized mirror; acText is the recommended selector");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("untick=true");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("already unticked — no change");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("tickedIndex + tickedText");
         tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain(
             "agents can delete draft artifacts only; validated/done deletion is the human's door in the UI");
         tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain("clean up dependencies first");
@@ -2135,6 +2140,51 @@ public class PlanningToolContractTests : McpSessionTestBase
         var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
         echo["section"]!.GetValue<string>().ShouldBe("acceptance-criteria");
         echo["lastLogLine"]!.GetValue<string>().ShouldBe("patch recorded on the board");
+        echo["tickedIndex"]!.GetValue<int>().ShouldBe(1);
+        echo["tickedText"]!.GetValue<string>().ShouldBe("expose the endpoints");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_UnticksByText_PostsUntickOp()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["acText"] = "Expose the endpoints.",
+            ["untick"] = true
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("untick_ac");
+        body["acText"]!.GetValue<string>().ShouldBe("Expose the endpoints.");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["section"]!.GetValue<string>().ShouldBe("acceptance-criteria");
+        echo["tickedIndex"]!.GetValue<int>().ShouldBe(1);
+        echo["tickedText"]!.GetValue<string>().ShouldBe("expose the endpoints");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_AlreadyUnticked_RendersTheHonestNoOpText()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            200,
+            """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","section":"acceptance-criteria","version":2,"bodyChars":380,"status":"inProgress","lastLogLine":"patch recorded on the board","tickedIndex":2,"tickedText":"still open","noChange":true}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["acIndex"] = 2,
+            ["untick"] = true
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        Canned.ToolResultText(response).ShouldBe("already unticked — no change");
     }
 
     [Fact]
@@ -2216,7 +2266,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
         {
             ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
-            ["acIndex"] = 0
+            ["acIndex"] = 1
         });
 
         response["result"]!["isError"].ShouldBeNull();
@@ -2300,6 +2350,30 @@ public class PlanningToolContractTests : McpSessionTestBase
         confirmation["status"]!.GetValue<string>().ShouldBe("draft");
         confirmation["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
         confirmation["featureStatusChanged"]!.GetValue<string>().ShouldBe("review → inProgress");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_UntickWithSectionOrAlone_RejectedWithoutHttpCall()
+    {
+        var withSection = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "goal",
+            ["content"] = "<goal>\nReworked.\n</goal>",
+            ["untick"] = true
+        });
+
+        ToolErrorText(withSection).ShouldContain("not both and not neither");
+
+        var alone = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["untick"] = true
+        });
+
+        ToolErrorText(alone).ShouldContain("not both and not neither");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
     }
 
     [Theory]

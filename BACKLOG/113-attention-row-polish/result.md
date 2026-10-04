@@ -1,8 +1,9 @@
 ---
 feature: 113
 slug: attention-row-polish
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 113 — Attention rows: dashboard number style + clickable hover-highlighted title

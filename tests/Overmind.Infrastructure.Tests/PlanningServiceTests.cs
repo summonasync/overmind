@@ -1847,7 +1847,7 @@ public sealed class PlanningServiceTests : IDisposable
         var patched = await artifactService.PatchAsync(
             artifact.Id, new PlanningArtifactPatch(TickIndex: 1), default);
 
-        patched.AlreadyTicked.ShouldBeTrue();
+        patched.NoChange.ShouldBeTrue();
         patched.TickedIndex.ShouldBe(1);
         patched.TickedText.ShouldBe("already done");
         patched.Artifact.Version.ShouldBe(1);
@@ -1872,7 +1872,7 @@ public sealed class PlanningServiceTests : IDisposable
         var patched = await artifactService.PatchAsync(
             artifact.Id, new PlanningArtifactPatch(TickText: "mistaken tick", Untick: true), default);
 
-        patched.AlreadyTicked.ShouldBeFalse();
+        patched.NoChange.ShouldBeFalse();
         patched.TickedIndex.ShouldBe(1);
         patched.TickedText.ShouldBe("mistaken tick");
         patched.Artifact.Version.ShouldBe(2);
@@ -1899,7 +1899,7 @@ public sealed class PlanningServiceTests : IDisposable
         var patched = await artifactService.PatchAsync(
             artifact.Id, new PlanningArtifactPatch(TickIndex: 1, Untick: true), default);
 
-        patched.AlreadyTicked.ShouldBeTrue();
+        patched.NoChange.ShouldBeTrue();
         patched.TickedIndex.ShouldBe(1);
         patched.TickedText.ShouldBe("untouched item");
         patched.Artifact.Version.ShouldBe(1);
@@ -1997,7 +1997,7 @@ public sealed class PlanningServiceTests : IDisposable
 
         var flip = await artifactService.PatchAsync(
             task.Id, new PlanningArtifactPatch(TickIndex: 1), default);
-        flip.AlreadyTicked.ShouldBeFalse();
+        flip.NoChange.ShouldBeFalse();
         await _context.Entry(feature).ReloadAsync();
         var updatedAtAfterTick = feature.UpdatedAt;
         updatedAtAfterTick.ShouldBeGreaterThan(updatedAtAfterLog);

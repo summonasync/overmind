@@ -1,8 +1,9 @@
 ---
 feature: 116
 slug: crewkit-in-repo
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Spec 116 — Crew kit in-repo: pack from repo, sync repo → home
@@ -45,4 +46,5 @@ Overmind releases stage the crew kit from the in-repo clone (src/OvermindCrewKit
 
 <log>
 - 2026-10-04 [agent] — spec pre-flown draft (user away; conservative defaults, challengeable items marked). Priority p0 per user order.
+- 2026-10-04 [agent] — validated with human proof: notification 07333013-b954-4918-abc1-c30567161d00 replied 2026-10-04 18:45:33 UTC
 </log>

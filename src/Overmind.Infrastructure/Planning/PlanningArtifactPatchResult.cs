@@ -4,6 +4,6 @@ namespace Overmind.Infrastructure.Planning;
 
 public sealed record PlanningArtifactPatchResult(
     PlanningArtifact Artifact,
-    bool AlreadyTicked,
+    bool NoChange,
     int? TickedIndex,
     string? TickedText);

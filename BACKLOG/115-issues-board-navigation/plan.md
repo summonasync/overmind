@@ -1,8 +1,9 @@
 ---
 feature: 115
 slug: issues-board-navigation
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Plan 115 — Issues Board: third project tab + cross-project sidebar view (new/unread first)
@@ -29,4 +30,5 @@ Backend aggregate first, both web surfaces second.
 
 <log>
 - 2026-10-04 [agent] — plan draft.
+- 2026-10-04 [agent] — validated with human proof: notification 807f7db6-d5b2-4288-8f00-291986dfab83 replied 2026-10-04 18:51:13 UTC
 </log>

@@ -160,7 +160,7 @@ public static class Canned
         """{"slug":"demo-feature","status":"inProgress","version":6,"updatedAt":"2026-09-26T12:00:00Z","bodyChars":512}""";
 
     public const string PlanningPatchRetickEchoJson =
-        """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","section":"acceptance-criteria","version":3,"bodyChars":412,"status":"inProgress","lastLogLine":"patch recorded on the board","alreadyTicked":true}""";
+        """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","section":"acceptance-criteria","version":3,"bodyChars":412,"status":"inProgress","lastLogLine":"patch recorded on the board","tickedIndex":1,"tickedText":"first thing","noChange":true}""";
 
     public const string PlanningArtifactReadJson =
         """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"}""";

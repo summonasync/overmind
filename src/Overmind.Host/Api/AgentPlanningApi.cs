@@ -666,11 +666,13 @@ public static class AgentPlanningApi
         try
         {
             var op = request.Op!.Trim();
+            var flipsAc = op is "tick_ac" or "untick_ac";
             var result = await service.PatchAsync(
                 id,
                 new PlanningArtifactPatch(
                     request.Section, request.Content, request.AcIndex, request.AcText,
-                    request.Brief, request.LogNote),
+                    request.Brief, request.LogNote,
+                    Untick: op == "untick_ac"),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
             var artifact = result.Artifact;
@@ -678,14 +680,16 @@ public static class AgentPlanningApi
             return Results.Ok(new PlanningArtifactPatchResponse(
                 artifact.Id,
                 artifact.Kind,
-                op == "tick_ac" ? "acceptance-criteria" : op == "set_brief" ? "brief" : request.Section!,
+                flipsAc ? "acceptance-criteria" : op == "set_brief" ? "brief" : request.Section!,
                 artifact.Version,
                 artifact.Body.Length,
                 artifact.Status,
                 artifact.LastLogLine,
                 artifact.StatusChanged,
                 artifact.FeatureStatusChanged,
-                op == "tick_ac" ? result.AlreadyTicked : null));
+                flipsAc ? result.TickedIndex : null,
+                flipsAc ? result.TickedText : null,
+                flipsAc ? result.NoChange : null));
         }
         catch (PlanningException ex)
         {
@@ -721,7 +725,7 @@ public static class AgentPlanningApi
                    request.AcText is null;
         }
 
-        if (op == "tick_ac")
+        if (op is "tick_ac" or "untick_ac")
         {
             return request.Brief is null &&
                    request.Section is null &&

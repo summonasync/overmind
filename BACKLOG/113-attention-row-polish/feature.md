@@ -1,7 +1,7 @@
 ---
 feature: 113
 slug: attention-row-polish
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -22,4 +22,5 @@ ceremonies-section.tsx renders the feature number as a raw mono span (not the da
 - 2026-10-04 [agent] — Van by claude claimed the feature
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
 - 2026-10-04 [agent] — agent by unknown released the claim
+- 2026-10-04 [agent] — [agent] done by user approval — reply on result notification 231f7d76 (2026-10-04 18:42:32 UTC); result eca3d5c1 validated, light review PASS-WITH-NITS 0 blockers.
 </log>

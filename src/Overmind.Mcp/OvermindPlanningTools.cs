@@ -54,7 +54,10 @@ public sealed class OvermindPlanningTools
         "logNote is required for feature status moves: the note is recorded as a dated line in the feature log and carries the provenance (who asked for the move).";
 
     private const string PatchShapeError =
-        "A patch carries exactly one of: a section with its replacement content, an acceptance-criteria tick (acIndex or exact acText), or a task brief — not both and not neither.";
+        "A patch carries exactly one of: a section with its replacement content, an acceptance-criteria tick or un-tick (acIndex or exact acText), or a task brief — not both and not neither.";
+
+    private const string AcIndexBasisLine =
+        "acIndex is 1-based; numbering matches the materialized mirror; acText is the recommended selector";
 
     private const string MigratedNoteRequired =
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
@@ -681,33 +684,39 @@ public sealed class OvermindPlanningTools
 
     private const string AlreadyTickedNoChangeText = "already ticked — no change";
 
+    private const string AlreadyUntickedNoChangeText = "already unticked — no change";
+
     [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
-    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or ticks one acceptance item, rest of the body untouched. Give section plus content to replace one section, acIndex/acText to tick one acceptance-criteria item, or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. A missing section or item is a 400 that lists what is available. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Ticking an already-ticked item is a successful no-op rendering 'already ticked — no change'; a replaced section is a real change every time. Editing a validated artifact requires a logNote.")]
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section, flips one acceptance item, or sets the task brief; rest of the body untouched. Give section plus content to replace one section, acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. A missing section or item is a 400 that lists what is available with the same 1-based numbering. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote.")]
     public async Task<CallToolResult> PatchArtifact(
         [Description("Id of the artifact to patch; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Name of the XML section to replace, e.g. goal.")] string? section = null,
         [Description("Full replacement content of the section.")] string? content = null,
-        [Description("Index of the acceptance-criteria item to tick, as listed by the 400 diagnostics.")] int? acIndex = null,
-        [Description("Exact text of the acceptance-criteria item to tick, without the checkbox marker.")] string? acText = null,
+        [Description("1-based index of the acceptance-criteria item; numbering matches the materialized mirror and the 400 diagnostics.")] int? acIndex = null,
+        [Description("Exact text of the acceptance-criteria item, without the checkbox marker — the recommended selector.")] string? acText = null,
+        [Description("Set true together with acIndex or acText to clear the checkbox ([x] to [ ]) instead of ticking it.")] bool untick = false,
         [Description("One-line brief to set on a task artifact, max 500 chars; task-only — spec/plan/result reject it; no version bump.")] string? brief = null,
         [Description("Change note recorded in the artifact log; required when the artifact is validated.")] string? logNote = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)
     {
-        var op = PatchOpOf(section, content, acIndex, acText, brief);
+        var op = PatchOpOf(section, content, acIndex, acText, brief, untick);
         var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
         var patch = await Guarded(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/patch",
             new { op, section, content, acIndex, acText, brief, logNote, source = DoorSource },
             ct));
 
-        if (patch.TryGetProperty("alreadyTicked", out var alreadyTicked) &&
-            alreadyTicked.ValueKind == JsonValueKind.True)
+        if (patch.TryGetProperty("noChange", out var noChange) &&
+            noChange.ValueKind == JsonValueKind.True)
         {
             return new CallToolResult
             {
-                Content = [new TextContentBlock { Text = AlreadyTickedNoChangeText }]
+                Content = [new TextContentBlock
+                {
+                    Text = op == "untick_ac" ? AlreadyUntickedNoChangeText : AlreadyTickedNoChangeText
+                }]
             };
         }
 
@@ -720,6 +729,18 @@ public sealed class OvermindPlanningTools
             ["section"] = patch.GetProperty("section").GetString(),
             ["bodyChars"] = patch.GetProperty("bodyChars").GetInt32()
         };
+
+        if (patch.TryGetProperty("tickedIndex", out var tickedIndex) &&
+            tickedIndex.ValueKind == JsonValueKind.Number)
+        {
+            echo["tickedIndex"] = tickedIndex.GetInt32();
+        }
+
+        if (patch.TryGetProperty("tickedText", out var tickedText) &&
+            tickedText.ValueKind == JsonValueKind.String)
+        {
+            echo["tickedText"] = tickedText.GetString();
+        }
 
         if (patch.TryGetProperty("statusChanged", out var statusChanged) &&
             statusChanged.ValueKind == JsonValueKind.String)
@@ -1237,14 +1258,14 @@ public sealed class OvermindPlanningTools
         $"Invalid artifact alias '{alias}'. Expected '<slug>/T<order>' for a task by order, " +
         "or '<slug>/S', '<slug>/P', '<slug>/R' for the single spec, plan or result.";
 
-    private static string PatchOpOf(string? section, string? content, int? acIndex, string? acText, string? brief)
+    private static string PatchOpOf(string? section, string? content, int? acIndex, string? acText, string? brief, bool untick)
     {
         var wantsSection = section is not null || content is not null;
-        var wantsTick = acIndex is not null || acText is not null;
+        var wantsAc = acIndex is not null || acText is not null;
 
         if (brief is not null)
         {
-            if (wantsSection || wantsTick)
+            if (wantsSection || wantsAc || untick)
             {
                 throw new McpException(PatchShapeError);
             }
@@ -1257,13 +1278,18 @@ public sealed class OvermindPlanningTools
             return "set_brief";
         }
 
-        if (wantsSection == wantsTick)
+        if (wantsSection == wantsAc)
         {
             throw new McpException(PatchShapeError);
         }
 
         if (wantsSection)
         {
+            if (untick)
+            {
+                throw new McpException(PatchShapeError);
+            }
+
             if (string.IsNullOrWhiteSpace(section) || string.IsNullOrWhiteSpace(content))
             {
                 throw new McpException("Replacing a section needs a non-blank section and its full replacement content.");
@@ -1274,14 +1300,14 @@ public sealed class OvermindPlanningTools
 
         if (acIndex is not null && acText is not null)
         {
-            throw new McpException("Tick one acceptance-criteria item by acIndex or by exact acText, not both.");
+            throw new McpException("Flip one acceptance-criteria item by acIndex or by exact acText, not both.");
         }
 
         if (acText is not null && string.IsNullOrWhiteSpace(acText))
         {
-            throw new McpException("Ticking needs acIndex or the exact non-blank acText of the item.");
+            throw new McpException("Ticking or un-ticking needs acIndex or the exact non-blank acText of the item.");
         }
 
-        return "tick_ac";
+        return untick ? "untick_ac" : "tick_ac";
     }
 }

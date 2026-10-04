@@ -261,6 +261,13 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                     ["status"] = "inProgress",
                     ["lastLogLine"] = "patch recorded on the board"
                 };
+                if (submitted["op"]?.GetValue<string>() is "tick_ac" or "untick_ac")
+                {
+                    result["tickedIndex"] = 1;
+                    result["tickedText"] = "expose the endpoints";
+                    result["noChange"] = false;
+                }
+
                 return new StubOvermindApi.Response(200, result.ToJsonString());
             });
         stub.Route(
