@@ -401,4 +401,8 @@ FodyWeavers.xsd
 
 # Portable distribution output (build/pack.sh)
 dist/
+
+# Embedded crew kit checkout (separate repo, staged into bundles by build/pack.sh)
+src/OvermindCrewKit/
+
 .idea/

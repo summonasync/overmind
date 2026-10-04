@@ -10,8 +10,10 @@
 
 set -euo pipefail
 
-DEFAULT_CREW_KIT=/home/johan-boolman/.claude
 DEFAULT_RIDS=win-x64,linux-x64,osx-x64,osx-arm64
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd "$script_dir/.." && pwd)
 
 usage() {
     sed -n '3,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -25,7 +27,7 @@ die() {
 
 version=""
 bundle_version=""
-crew_kit=$DEFAULT_CREW_KIT
+crew_kit=""
 rids=$DEFAULT_RIDS
 
 while [[ $# -gt 0 ]]; do
@@ -41,10 +43,12 @@ done
 
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "--version must look like x.y.z"
 [[ $bundle_version =~ ^[1-9][0-9]*$ ]] || die "--bundle-version must be a positive integer"
+crew_kit=${crew_kit:-$repo_root/src/OvermindCrewKit}
 [[ -d $crew_kit ]] || die "crew kit source not found: $crew_kit"
+if kit_dirty=$(git -C "$crew_kit" status --porcelain 2>/dev/null) && [[ -n $kit_dirty ]]; then
+    echo "pack.sh: WARNING: kit working tree has uncommitted changes; bundling as-is: $crew_kit" >&2
+fi
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd "$script_dir/.." && pwd)
 dist_dir=$repo_root/dist
 stage_root=$dist_dir/stage
 
@@ -59,7 +63,7 @@ read -ra CREW_EXCLUDE_LIST <<<"${CREW_EXCLUDES:-}"
 for item in "${CREW_ITEM_LIST[@]}"; do
     [[ -e $crew_kit/$item ]] || die "crew kit item not found: $crew_kit/$item"
 done
-skill_count=$(find "$crew_kit/skills" "$crew_kit/agents" -name SKILL.md 2>/dev/null | wc -l)
+skill_count=$(find "$crew_kit/.claude/skills" "$crew_kit/.claude/agents" -name SKILL.md 2>/dev/null | wc -l)
 [[ $skill_count -ge 1 ]] || die "no SKILL.md found under $crew_kit; refusing to ship an empty crew kit"
 
 for tool in dotnet npm sha256sum; do
