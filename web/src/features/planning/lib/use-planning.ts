@@ -217,9 +217,10 @@ export function usePlanningFolderImport(projectId: string) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (folder: string) => importPlanningFeature(projectId, folder),
-    onSuccess: () => {
+    onSuccess: (report) => {
       queryClient.invalidateQueries({ queryKey: planningKeys.lists() });
       queryClient.invalidateQueries({ queryKey: planningKeys.drift(projectId) });
+      queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, report.slug) });
     },
   });
 
