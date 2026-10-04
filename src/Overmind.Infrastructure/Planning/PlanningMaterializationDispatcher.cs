@@ -12,9 +12,16 @@ public sealed class PlanningMaterializationDispatcher(
 {
     public async Task DispatchAsync(Guid projectId, CancellationToken ct = default)
     {
-        if (await IsInlineAsync(ct) || !queue.TryEnqueue(projectId))
+        if (await IsInlineAsync(ct))
         {
             await DispatchInlineAsync(projectId, ct);
+        }
+        else if (!queue.TryEnqueue(projectId))
+        {
+            // Queue-full fallback: the request token would abort a half-run pass with no
+            // 074 trace and no queued retry — the exact silent-staleness this queue exists
+            // to prevent. The pass must survive the client walking away.
+            await DispatchInlineAsync(projectId, CancellationToken.None);
         }
     }
 
