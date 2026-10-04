@@ -2,7 +2,7 @@
 feature: 114
 task: 01
 slug: claims-onboarding-docs
-status: inprogress
+status: done
 review: light
 created: 2026-10-04
 brief: Repo lane: quickstart five-point claims block + instructions line + pin tests
@@ -30,9 +30,9 @@ The MCP surface teaches the claim practice: quickstart carries the five-point wo
 </constraints>
 
 <acceptance-criteria>
-- [ ] Quickstart carries all five practice points in readable prose.
-- [ ] Server instructions mention claiming and point to the quickstart.
-- [ ] Pin tests assert the practice phrases; dotnet build + affected suites green.
+- [x] Quickstart carries all five practice points in readable prose.
+- [x] Server instructions mention claiming and point to the quickstart.
+- [x] Pin tests assert the practice phrases; dotnet build + affected suites green.
 </acceptance-criteria>
 
 <refs>
@@ -42,4 +42,5 @@ The MCP surface teaches the claim practice: quickstart carries the five-point wo
 <log>
 - 2026-10-04 [agent] — task cut post-validation (human proof 301c2149).
 - 2026-10-04 [agent] — [agent] taken by orchestrator, dispatched to dotnet-coder (sonnet).
+- 2026-10-04 [agent] — [agent] Light review PASS-WITH-NITS (0 blockers — review A: warn A1 set_current leak in quickstart fixed on the spot in 1fa80d9 with its pin; suggestions A2 identity pin / A3 dup pin-set → microbatch). Gates re-run by reviewer: build 0/0, Api 608/0, Mcp 443/0. Closing task; result stays draft per pipeline mandate.
 </log>

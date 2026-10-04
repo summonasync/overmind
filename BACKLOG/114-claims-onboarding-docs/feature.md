@@ -3,7 +3,7 @@ feature: 114
 slug: claims-onboarding-docs
 status: inProgress
 priority: p0
-version: 1
+version: 5
 created: 2026-10-04
 ---
 
@@ -19,4 +19,5 @@ User requests 2026-10-04 (two mid-session messages). Claims replaced pins in 099
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [agent] — Claude by anthropic claimed the feature
 </log>

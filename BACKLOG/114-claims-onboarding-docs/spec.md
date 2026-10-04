@@ -1,9 +1,8 @@
 ---
 feature: 114
 slug: claims-onboarding-docs
-status: validated
+status: draft
 created: 2026-10-04
-validated: 2026-10-04
 ---
 
 # Spec 114 — Claims onboarding: teach the claim workflow in MCP quickstart + crew skills
@@ -27,11 +26,7 @@ The 099 claim workflow (claim/unclaim, session lock, EOF auto-release, stale tak
 </scope>
 
 <anti-scope>
-- No claim mechanics changes: the 12-mutation lock list, thresholds, take-over rules and lock filter are 099 territory and stay untouched.
-- No UI changes (claim chips exist from 099/04).
-- No other crew skills (node-coder, dotnet-coder, ...) — claiming is an orchestrator-level concern; executors inherit the lock.
-- No kit install/pack plumbing (crew-kit home relocation, pack.sh default) — that is feature 116.
-- CONTEXT.md stays as the 099 wave left it.
+- No claim mechanics changes: the 13-mutation lock list (099 + delete_artifact from 094), thresholds, take-over rules and lock filter are 099 territory and stay untouched.
 </anti-scope>
 
 <constraints>
@@ -57,4 +52,6 @@ The 099 claim workflow (claim/unclaim, session lock, EOF auto-release, stale tak
 - 2026-10-04 [agent] — v2: skill targets moved to src/OvermindCrewKit (user moved the crew kit in-repo mid-session); constraint "outside any git repo" replaced by separate-repo commit discipline; kit plumbing split to 116.
 - 2026-10-04 [agent] — v2: crew kit now lives in-repo (src/OvermindCrewKit) — skill targets and commit discipline rewritten; kit plumbing moved to 116.
 - 2026-10-04 [agent] — validated with human proof: notification 301c2149-8561-4a63-a22b-c7abee0deb4e replied 2026-10-04 17:29:01 UTC
+- 2026-10-04 [agent] — Review B2: lock count corrected 12 -> 13 (delete_artifact added the 13th locked route in 094); same fix landed in ceremony matrix (crew kit 78737d3).
+- 2026-10-04 [auto] — artifact demoted: validated → draft
 </log>
