@@ -35,6 +35,21 @@ public class StatusModelContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public void Quickstart_CoversTheClaimsWorkflow()
+    {
+        var text = OnboardQuickstart.Text;
+
+        text.ShouldContain("planning_claim_feature the moment you take it into active work");
+        text.ShouldContain("before the first feature mutation");
+        text.ShouldContain("sub-agents inherit the lock through the shared adapter session");
+        text.ShouldContain("must not claim or unclaim themselves");
+        text.ShouldContain("the error names the holder");
+        text.ShouldContain("stale or ended → take-over is legitimate");
+        text.ShouldContain("Claims release themselves — a dead adapter process");
+        text.ShouldContain("unclaim when you hand off or close the wave");
+    }
+
+    [Fact]
     public async Task MachineSurfaces_NeverSayFrozen()
     {
         var tools = await Driver.ListToolsAsync();

@@ -113,6 +113,7 @@ builder.Services
         options.ServerInfo = new Implementation { Name = "overmind", Title = "Overmind", Version = adapterVersion };
         options.ServerInstructions =
             "Overmind shared-context adapter. Call overmind_onboard first — it resolves your project and returns the onboarding quickstart. " +
+            "Working a feature? Claim it first with planning_claim_feature — the onboarding quickstart explains the workflow. " +
             "Project gates, guards, notes, decisions and skills live as entries: list them with list_entries (type=gate|guard|note|decision|skill) " +
             "and read them with read_entry — the onboard payload names the active project. " +
             "Use tools for project/entry CRUD and fulltext or semantic search. " +

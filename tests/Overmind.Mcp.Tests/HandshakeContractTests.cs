@@ -37,6 +37,8 @@ public class HandshakeContractTests : McpSessionTestBase
         instructions.ShouldNotContain("overmind://resources");
         instructions.ShouldContain("list_entries");
         instructions.ShouldContain("overmind_onboard");
+        instructions.ShouldContain("Claim it first with planning_claim_feature");
+        instructions.ShouldContain("onboarding quickstart explains the workflow");
         instructions.ShouldContain("quote the url in chat when asking for an approval");
     }
 

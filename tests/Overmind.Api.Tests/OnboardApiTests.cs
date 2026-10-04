@@ -225,6 +225,25 @@ public sealed class OnboardApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Onboard_Quickstart_CoversTheClaimsWorkflow()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Quickstart.ShouldContain("planning_claim_feature the moment you take it into active work");
+        onboard.Quickstart.ShouldContain("before the first feature mutation (set_current, artifact upsert, status move)");
+        onboard.Quickstart.ShouldContain("sub-agents inherit the lock through the shared adapter session");
+        onboard.Quickstart.ShouldContain("must not claim or unclaim themselves");
+        onboard.Quickstart.ShouldContain("the error names the holder");
+        onboard.Quickstart.ShouldContain("ask the user before taking over");
+        onboard.Quickstart.ShouldContain("stale or ended → take-over is legitimate");
+        onboard.Quickstart.ShouldContain("Claims release themselves — a dead adapter process");
+        onboard.Quickstart.ShouldContain("unclaim when you hand off or close the wave");
+    }
+
+    [Fact]
     public async Task Onboard_MaterializationBlock_OnStrategy_ResolvesWithTargetDirAndNeverSplit()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
