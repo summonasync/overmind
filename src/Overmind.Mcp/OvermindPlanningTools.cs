@@ -82,10 +82,12 @@ public sealed class OvermindPlanningTools
         "Provide artifactId, or alias together with projectId — nothing addresses the artifact.";
 
     private readonly OvermindApiClient _api;
+    private readonly MutationGuard _mutations;
 
-    public OvermindPlanningTools(OvermindApiClient api)
+    public OvermindPlanningTools(OvermindApiClient api, MutationGuard mutations)
     {
         _api = api;
+        _mutations = mutations;
     }
 
     [McpServerTool(Name = "planning_list_features", ReadOnly = true, Idempotent = true)]
@@ -218,10 +220,10 @@ public sealed class OvermindPlanningTools
             payload["priority"] = NormalizePriority(priority);
         }
 
-        var feature = await Guarded(() => _api.PostAsync(
+        var feature = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features",
             payload,
-            ct));
+            ct), readback: null, ct);
         return CompactFeature(feature);
     }
 
@@ -259,10 +261,10 @@ public sealed class OvermindPlanningTools
             payload["blockedBy"] = new JsonArray([.. blockedBy.Select(o => JsonValue.Create(o))]);
         }
 
-        var artifact = await Guarded(() => _api.PostAsync(
+        var artifact = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
             payload,
-            ct));
+            ct), readback: null, ct);
         return CompactArtifact(artifact);
     }
 
@@ -279,10 +281,10 @@ public sealed class OvermindPlanningTools
             ["tasks"] = BuildTaskItems(tasks)
         };
 
-        var batch = await Guarded(() => _api.PostAsync(
+        var batch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts/tasks",
             payload,
-            ct));
+            ct), readback: null, ct);
         return CompactTaskBatch(batch);
     }
 
@@ -421,10 +423,10 @@ public sealed class OvermindPlanningTools
 
         var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
         var normalized = NormalizeStatus(status);
-        var payload = await Guarded(() => _api.PostAsync(
+        var payload = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/status",
             new { status = normalized, logNote },
-            ct));
+            ct), ArtifactLogReadback(id, logNote), ct);
 
         return MutationEcho(payload, "id");
     }
@@ -444,10 +446,10 @@ public sealed class OvermindPlanningTools
         }
 
         var normalized = NormalizeFeatureStatus(status);
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/status",
             new { status = normalized, logNote },
-            ct));
+            ct), FeatureLogReadback(projectId, slug, logNote), ct);
         return MutationEcho(echo, "slug");
     }
 
@@ -479,10 +481,10 @@ public sealed class OvermindPlanningTools
             payload["priority"] = priority;
         }
 
-        return Guarded(() => _api.PostAsync(
+        return _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/update",
             payload,
-            ct));
+            ct), FeatureLogReadback(projectId, slug, logNote), ct);
     }
 
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
@@ -519,14 +521,14 @@ public sealed class OvermindPlanningTools
         JsonElement moved;
         try
         {
-            moved = await Guarded(() => _api.PostAsync(
+            moved = await _mutations.SendAsync(() => _api.PostAsync(
                 $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/queue-move",
                 new { move = move.Trim().ToLowerInvariant(), position },
-                ct));
+                ct), readback: null, ct);
         }
         catch (McpException ex)
         {
-            return ContractViolation(DetailAfterOperationMark(ex.Message) ?? ex.Message);
+            return ContractViolation(MutationGuard.DetailAfterOperationMark(ex.Message) ?? ex.Message);
         }
 
         return new CallToolResult
@@ -563,10 +565,10 @@ public sealed class OvermindPlanningTools
                 $"Vendor '{vendor.Trim()}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
         }
 
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/claim",
             new { alias = alias.Trim(), vendor = vendor.Trim() },
-            ct));
+            ct), readback: null, ct);
 
         var claim = new JsonObject
         {
@@ -586,10 +588,10 @@ public sealed class OvermindPlanningTools
         [Description("Slug of the feature to unclaim, as shown on the board.")] string slug,
         CancellationToken ct = default)
     {
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/unclaim",
             new { },
-            ct));
+            ct), readback: null, ct);
 
         var claim = new JsonObject
         {
@@ -611,10 +613,10 @@ public sealed class OvermindPlanningTools
         CancellationToken ct = default)
     {
         var normalized = NormalizePriority(priority);
-        var feature = await Guarded(() => _api.PostAsync(
+        var feature = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/priority",
             new { priority = normalized },
-            ct));
+            ct), readback: null, ct);
         return CompactFeature(feature);
     }
 
@@ -640,10 +642,10 @@ public sealed class OvermindPlanningTools
             throw new McpException("blockedBySlug is required: the feature slug of the blocker, as shown on the board.");
         }
 
-        return Guarded(() => _api.PostAsync(
+        return _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/dependencies",
             new { blockedBy = blockedBySlug.Trim() },
-            ct));
+            ct), readback: null, ct);
     }
 
     [McpServerTool(Name = "planning_remove_feature_dependency", Destructive = false, Idempotent = false)]
@@ -659,10 +661,10 @@ public sealed class OvermindPlanningTools
             throw new McpException("blockedBySlug is required: the feature slug of the blocker to remove.");
         }
 
-        return Guarded(() => _api.DeleteAsync(
+        return _mutations.SendAsync(() => _api.DeleteAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/dependencies" +
             $"/{Uri.EscapeDataString(blockedBySlug.Trim())}",
-            ct));
+            ct), readback: null, ct);
     }
 
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
@@ -675,10 +677,10 @@ public sealed class OvermindPlanningTools
         CancellationToken ct = default)
     {
         var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/log",
             new { note, source = DoorSource },
-            ct));
+            ct), ArtifactLogReadback(id, note), ct);
         return MutationEcho(echo, "id");
     }
 
@@ -703,10 +705,10 @@ public sealed class OvermindPlanningTools
     {
         var op = PatchOpOf(section, content, acIndex, acText, brief, untick);
         var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
-        var patch = await Guarded(() => _api.PostAsync(
+        var patch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/patch",
             new { op, section, content, acIndex, acText, brief, logNote, source = DoorSource },
-            ct));
+            ct), PatchReadback(id, logNote), ct);
 
         if (patch.TryGetProperty("noChange", out var noChange) &&
             noChange.ValueKind == JsonValueKind.True)
@@ -771,10 +773,10 @@ public sealed class OvermindPlanningTools
         CancellationToken ct = default)
     {
         var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
-        var echo = await Guarded(() => _api.DeleteAsync(
+        var echo = await _mutations.SendAsync(() => _api.DeleteAsync(
             $"/api/agent/planning/artifacts/{id}",
             new { logNote, source = string.IsNullOrWhiteSpace(source) ? DoorSource : source.Trim() },
-            ct));
+            ct), readback: null, ct);
 
         return new CallToolResult
         {
@@ -802,10 +804,10 @@ public sealed class OvermindPlanningTools
 
         try
         {
-            var echo = await Guarded(() => _api.PostAsync(
+            var echo = await _mutations.SendAsync(() => _api.PostAsync(
                 $"/api/agent/planning/artifacts/{artifactId}/validate",
                 new { asMigrated, logNote },
-                ct));
+                ct), ValidateReadback(artifactId, logNote), ct);
             return EchoResult(MutationEcho(echo, "id"));
         }
         catch (McpException ex) when (ex.Message.StartsWith("STOP:", StringComparison.Ordinal))
@@ -830,10 +832,10 @@ public sealed class OvermindPlanningTools
             throw new McpException("path is required: the feature folder to import, e.g. /repo/BACKLOG/058-agent-side-import.");
         }
 
-        return Guarded(() => _api.PostAsync(
+        return _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/import",
             new { path = path.Trim() },
-            ct));
+            ct), readback: null, ct);
     }
 
     [McpServerTool(Name = "planning_materialize", Destructive = false, Idempotent = false)]
@@ -843,10 +845,10 @@ public sealed class OvermindPlanningTools
         [Description("True to overwrite guarded files with per-file warnings instead of refusing them; transcribe hand edits to the board before forcing.")] bool force = false,
         CancellationToken ct = default)
     {
-        var report = await Guarded(() => _api.PostAsync(
+        var report = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/projects/{projectId}/planning/materialize",
             new { force },
-            ct));
+            ct), readback: null, ct);
         return CompactMaterialization(report, force);
     }
 
@@ -867,7 +869,7 @@ public sealed class OvermindPlanningTools
         }
         catch (ApiStatusException ex)
         {
-            throw new McpException(StopDetailOf(ex) ?? ex.Message);
+            throw new McpException(MutationGuard.StopDetailOf(ex) ?? ex.Message);
         }
         catch (Exception ex) when (ex is ApiNotFoundException or ApiUnreachableException)
         {
@@ -875,18 +877,20 @@ public sealed class OvermindPlanningTools
         }
     }
 
-    // OvermindApiClient packs the ProblemDetails detail behind "): "; the gate's STOP text must lead the agent-visible error.
-    private static string? StopDetailOf(ApiStatusException ex)
-    {
-        var detail = DetailAfterOperationMark(ex.Message);
-        return detail is not null && detail.StartsWith("STOP:", StringComparison.Ordinal) ? detail : null;
-    }
+    private static MutationReadback ArtifactLogReadback(Guid id, string marker) =>
+        new($"/api/agent/planning/artifacts/{id}?sections=log", marker, $"artifact {id}");
 
-    private static string? DetailAfterOperationMark(string message)
-    {
-        var boundary = message.IndexOf("): ", StringComparison.Ordinal);
-        return boundary < 0 ? null : message[(boundary + 3)..];
-    }
+    private static MutationReadback FeatureLogReadback(Guid projectId, string slug, string marker) =>
+        new(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}?includeArtifacts=false",
+            marker,
+            $"feature '{slug}'");
+
+    private static MutationReadback? PatchReadback(Guid id, string? logNote) =>
+        string.IsNullOrWhiteSpace(logNote) ? null : ArtifactLogReadback(id, logNote);
+
+    private static MutationReadback? ValidateReadback(Guid artifactId, string? logNote) =>
+        string.IsNullOrWhiteSpace(logNote) ? null : ArtifactLogReadback(artifactId, logNote);
 
     private static CallToolResult ContractViolation(string text) => new()
     {

@@ -1,0 +1,89 @@
+using System.Text.Json;
+using ModelContextProtocol;
+
+namespace Overmind.Mcp;
+
+public sealed class MutationGuard(OvermindApiClient api)
+{
+    public async Task<JsonElement> SendAsync(
+        Func<Task<JsonElement>> mutation,
+        MutationReadback? readback,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await mutation();
+        }
+        catch (ApiStatusException ex)
+        {
+            throw new McpException(StopDetailOf(ex) ?? ex.Message);
+        }
+        catch (ApiNotFoundException ex)
+        {
+            throw new McpException(ex.Message);
+        }
+        catch (ApiUnreachableException)
+        {
+            throw new McpException(await SettleAsync(readback, ct));
+        }
+    }
+
+    private async Task<string> SettleAsync(MutationReadback? readback, CancellationToken ct)
+    {
+        if (readback is null)
+        {
+            return UnknownOutcome(
+                "the adapter has no verify probe for this mutation — no addressable artifact identity " +
+                "or logNote marker to verify against");
+        }
+
+        try
+        {
+            var payload = await api.GetAsync(readback.Path, ct);
+            var lastEntry = LogSectionReader.LastEntryText(ReadBody(payload));
+            if (lastEntry is null || !lastEntry.EndsWith(readback.Marker.Trim(), StringComparison.Ordinal))
+            {
+                return $"the API connection died mid-mutation, but no trace — resend safe. " +
+                    $"Read-back of {readback.Target}: the last log line does not end with this mutation's logNote.";
+            }
+
+            return $"the API connection died mid-mutation, but the write committed at v{ReadVersion(payload)} — do not resend. " +
+                $"Read-back of {readback.Target}: the last log line ends with this mutation's logNote.";
+        }
+        catch (Exception probeFailure) when (!ct.IsCancellationRequested)
+        {
+            return UnknownOutcome(
+                $"the verify read-back of {readback.Target} failed ({ProbeFailureReason(probeFailure)})");
+        }
+    }
+
+    private static string UnknownOutcome(string reason) =>
+        $"the API connection died mid-mutation and the outcome is unknown — read before resending ({reason}).";
+
+    private static string ReadBody(JsonElement payload) =>
+        payload.GetProperty("body").GetString() ?? string.Empty;
+
+    private static int ReadVersion(JsonElement payload) =>
+        payload.GetProperty("version").GetInt32();
+
+    private static string ProbeFailureReason(Exception failure) => failure switch
+    {
+        ApiUnreachableException => "host unreachable",
+        ApiNotFoundException => "the read-back address no longer exists",
+        ApiStatusException ex => $"host returned status {(int)ex.StatusCode}",
+        _ => "read-back payload was unusable"
+    };
+
+    // OvermindApiClient packs the ProblemDetails detail behind "): "; the gate's STOP text must lead the agent-visible error.
+    internal static string? StopDetailOf(ApiStatusException ex)
+    {
+        var detail = DetailAfterOperationMark(ex.Message);
+        return detail is not null && detail.StartsWith("STOP:", StringComparison.Ordinal) ? detail : null;
+    }
+
+    internal static string? DetailAfterOperationMark(string message)
+    {
+        var boundary = message.IndexOf("): ", StringComparison.Ordinal);
+        return boundary < 0 ? null : message[(boundary + 3)..];
+    }
+}

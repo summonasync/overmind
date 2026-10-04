@@ -14,10 +14,12 @@ public sealed class IssuesTools
         "Recommended body sections: '## Repro', '## Expected', '## Actual' — free-form markdown is accepted.";
 
     private readonly OvermindApiClient _api;
+    private readonly MutationGuard _mutations;
 
-    public IssuesTools(OvermindApiClient api)
+    public IssuesTools(OvermindApiClient api, MutationGuard mutations)
     {
         _api = api;
+        _mutations = mutations;
     }
 
     [McpServerTool(Name = "issues_create", Destructive = false, Idempotent = false)]
@@ -40,10 +42,10 @@ public sealed class IssuesTools
                 "body is required — a bug report without a description helps nobody. " + BodyTemplateRecommendation);
         }
 
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/issues",
             new { authorProjectId, title = title.Trim(), body = body.Trim() },
-            ct));
+            ct), readback: null, ct);
 
         var compact = new JsonObject
         {
@@ -108,10 +110,10 @@ public sealed class IssuesTools
             throw new McpException("text is required and cannot be blank.");
         }
 
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/issues/{issueId}/append",
             new { authorProjectId, text = text.Trim() },
-            ct));
+            ct), readback: null, ct);
 
         var compact = new JsonObject
         {
@@ -135,10 +137,10 @@ public sealed class IssuesTools
         var normalizedStatus = NormalizeStatus(status);
         var normalizedSource = NormalizeSource(source);
 
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/issues/{issueId}/status",
             new { status = normalizedStatus, source = normalizedSource },
-            ct));
+            ct), readback: null, ct);
 
         var compact = new JsonObject
         {
@@ -163,10 +165,10 @@ public sealed class IssuesTools
             throw new McpException("featureSlug is required — issues promote into tasks on an existing feature of this board.");
         }
 
-        var echo = await Guarded(() => _api.PostAsync(
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/issues/{issueId}/promote",
             new { featureSlug = featureSlug.Trim(), source = NormalizeSource(source) },
-            ct));
+            ct), readback: null, ct);
 
         var compact = new JsonObject
         {

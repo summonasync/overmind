@@ -94,6 +94,7 @@ var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 builder.Logging.ClearProviders();
 
 builder.Services.AddSingleton(new OvermindApiClient(http));
+builder.Services.AddSingleton<MutationGuard>();
 builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindPlanningTools>();
 builder.Services.AddSingleton<IssuesTools>();
