@@ -1,7 +1,7 @@
 ---
 feature: 116
 slug: crewkit-in-repo
-status: inProgress
+status: review
 priority: p0
 version: 1
 created: 2026-10-04
@@ -19,4 +19,7 @@ User moved the crew kit in-repo 2026-10-04 («теперь я перенёс с�
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [agent] — Van by claude claimed the feature
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — agent by unknown released the claim
 </log>

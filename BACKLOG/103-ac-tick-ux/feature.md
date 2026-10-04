@@ -1,7 +1,7 @@
 ---
 feature: 103
 slug: ac-tick-ux
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-10-03
@@ -32,4 +32,6 @@ AC ticking is silently wrong-prone and unrecoverable (Qwen Code friction log, it
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [agent] — Van by claude claimed the feature
+- 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-04 [agent] — agent by unknown released the claim
 </log>

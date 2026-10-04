@@ -29,4 +29,5 @@ Kill the silent wrong-tick class (Qwen friction #2, entry 500f8197): `acIndex` i
 <log>
 - 2026-10-04 [agent] — groomed with the user in session: 1-based everywhere (user decision), tick echo, un-tick op, acText-primary teaching. Breaking change accepted and made loud.
 - 2026-10-04 [agent] — validated with human proof: notification d9415511-7925-4205-b641-02524360c2e3 replied 2026-10-04 11:48:51 UTC
+- 2026-10-04 [agent] — [orchestrator] Review-нота 2026-10-04: спека упоминала «the existing alreadyTicked flag» — wire-поле переименовано в noChange в 09b947f (нейтральное имя, санкционировано light review таска 02; rename обоснован тем, что alreadyTicked для untick-no-op ложь по имени). Формулировка оставлена как историческая — тело не патчилось, чтобы не демотировать validated-артефакт.
 </log>
