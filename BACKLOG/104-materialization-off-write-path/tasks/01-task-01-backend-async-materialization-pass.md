@@ -2,7 +2,7 @@
 feature: 104
 task: 01
 slug: materialization-off-write-path
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 brief: Backend: Channel+BackgroundService async pass, materializationSync flag, failure surfaces in lastAttempt
@@ -32,3 +32,7 @@ Mutations stop waiting for the mirror: materialization moves to an in-host async
 <refs>
 - Spec 9d4e5c9b; plan 6b287810 (task 1); 074 diagnostics infra; 033 guard semantics.
 </refs>
+
+<log>
+- 2026-10-04 [agent] — [agent] Claimed by Van (claude), taken by orchestrator — dispatching dotnet-coder (sonnet). Task 04 (render-corruption fix) already done ahead of this one per user's live repro.
+</log>

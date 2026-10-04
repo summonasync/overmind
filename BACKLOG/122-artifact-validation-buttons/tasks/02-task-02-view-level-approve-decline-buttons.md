@@ -2,7 +2,7 @@
 feature: 122
 task: 02
 slug: artifact-validation-buttons
-status: todo
+status: done
 review: light
 created: 2026-10-04
 depends_on: 01
@@ -25,8 +25,8 @@ Validation happens where the user reads: Approve and Decline on the spec/plan/re
 </anti-scope>
 
 <acceptance-criteria>
-- [ ] Draft views show Approve (works without the editor) and Decline (reason → log line); frozen views show neither; post-edit return pinned.
-- [ ] lint/tsc/test/build green.
+- [x] Draft views show Approve (works without the editor) and Decline (reason → log line); frozen views show neither; post-edit return pinned.
+- [x] lint/tsc/test/build green.
 </acceptance-criteria>
 
 <refs>
@@ -35,4 +35,5 @@ Validation happens where the user reads: Approve and Decline on the spec/plan/re
 
 <log>
 - 2026-10-04 [agent] — task cut post-validation; waits on task 01 (decline route).
+- 2026-10-04 [agent] — [agent] Light review passed (PASS-WITH-NITS, 0 blockers — report audits/review-122-02-web.md; low-nit stale approveError + 2 info → microbatch #195/#196). Gates confirmed by reviewer: lint 0e, tsc 0, 113/113, build ok. Code in 7c43e67. Both AC ticked; wave closing.
 </log>
