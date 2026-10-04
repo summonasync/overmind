@@ -2,27 +2,26 @@
 
 #nullable disable
 
-namespace Overmind.Infrastructure.Migrations
+namespace Overmind.Infrastructure.Migrations;
+
+/// <inheritdoc />
+public partial class AddArtifactPreservedFrontmatter : Migration
 {
     /// <inheritdoc />
-    public partial class AddArtifactPreservedFrontmatter : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "PreservedFrontmatter",
-                table: "PlanningArtifacts",
-                type: "TEXT",
-                nullable: true);
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "PreservedFrontmatter",
+            table: "PlanningArtifacts",
+            type: "TEXT",
+            nullable: true);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "PreservedFrontmatter",
-                table: "PlanningArtifacts");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "PreservedFrontmatter",
+            table: "PlanningArtifacts");
     }
 }

@@ -3,27 +3,26 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Overmind.Infrastructure.Migrations
+namespace Overmind.Infrastructure.Migrations;
+
+/// <inheritdoc />
+public partial class AddProjectLastMaterializedAt : Migration
 {
     /// <inheritdoc />
-    public partial class AddProjectLastMaterializedAt : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<DateTime>(
-                name: "LastMaterializedAt",
-                table: "Projects",
-                type: "TEXT",
-                nullable: true);
-        }
+        migrationBuilder.AddColumn<DateTime>(
+            name: "LastMaterializedAt",
+            table: "Projects",
+            type: "TEXT",
+            nullable: true);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "LastMaterializedAt",
-                table: "Projects");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "LastMaterializedAt",
+            table: "Projects");
     }
 }

@@ -2,27 +2,26 @@
 
 #nullable disable
 
-namespace Overmind.Infrastructure.Migrations
+namespace Overmind.Infrastructure.Migrations;
+
+/// <inheritdoc />
+public partial class SkillKitEntryRelativePath : Migration
 {
     /// <inheritdoc />
-    public partial class SkillKitEntryRelativePath : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "RelativePath",
-                table: "SkillKitEntries",
-                type: "TEXT",
-                nullable: true);
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "RelativePath",
+            table: "SkillKitEntries",
+            type: "TEXT",
+            nullable: true);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "RelativePath",
-                table: "SkillKitEntries");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "RelativePath",
+            table: "SkillKitEntries");
     }
 }

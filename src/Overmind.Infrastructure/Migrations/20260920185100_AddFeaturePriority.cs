@@ -2,28 +2,27 @@
 
 #nullable disable
 
-namespace Overmind.Infrastructure.Migrations
+namespace Overmind.Infrastructure.Migrations;
+
+/// <inheritdoc />
+public partial class AddFeaturePriority : Migration
 {
     /// <inheritdoc />
-    public partial class AddFeaturePriority : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<int>(
-                name: "Priority",
-                table: "PlanningFeatures",
-                type: "INTEGER",
-                nullable: false,
-                defaultValue: 2);
-        }
+        migrationBuilder.AddColumn<int>(
+            name: "Priority",
+            table: "PlanningFeatures",
+            type: "INTEGER",
+            nullable: false,
+            defaultValue: 2);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "Priority",
-                table: "PlanningFeatures");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "Priority",
+            table: "PlanningFeatures");
     }
 }
