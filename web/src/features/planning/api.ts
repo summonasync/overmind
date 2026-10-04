@@ -9,7 +9,9 @@ import type {
   PlanningFeatureClaimResponse,
   PlanningFeatureDependenciesResponse,
   PlanningFeatureFormValues,
+  PlanningFeatureImportReport,
   PlanningFeatureResponse,
+  PlanningImportScanReport,
   PlanningMaterializationReport,
   PlanningWorkflowResponse,
   ReorderPlanningQueueValues,
@@ -195,5 +197,20 @@ export function listPlanningDrift(projectId: string): Promise<PlanningDriftItem[
 export function materializePlanning(projectId: string, force: boolean): Promise<PlanningMaterializationReport> {
   return apiPost<PlanningMaterializationReport>(`/projects/${projectId}/planning/materialize`, {
     force,
+  });
+}
+
+export function scanPlanningBacklog(projectId: string, subPath?: string): Promise<PlanningImportScanReport> {
+  return apiPost<PlanningImportScanReport>(`/projects/${projectId}/planning/import/scan`, {
+    subPath: subPath ?? null,
+  });
+}
+
+export function importPlanningFeature(
+  projectId: string,
+  folder: string,
+): Promise<PlanningFeatureImportReport> {
+  return apiPost<PlanningFeatureImportReport>(`/projects/${projectId}/planning/import`, {
+    folder,
   });
 }

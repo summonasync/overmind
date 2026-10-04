@@ -10,8 +10,10 @@ import {
   declinePlanningArtifact,
   deletePlanningArtifact,
   deletePlanningFeature,
+  importPlanningFeature,
   materializePlanning,
   removePlanningFeatureDependency,
+  scanPlanningBacklog,
   setPlanningArtifactStatus,
   unclaimPlanningFeature,
   updatePlanningArtifact,
@@ -30,6 +32,7 @@ import type {
   CreatePlanningArtifactValues,
   PlanningArtifactStatus,
   PlanningFeatureFormValues,
+  PlanningFeatureImportReport,
   UpdatePlanningArtifactValues,
   UpdatePlanningFeatureValues,
   UpdatePlanningWorkflowValues,
@@ -194,6 +197,38 @@ export function usePlanningDrift(projectId: string) {
     loading: query.isPending,
     error: query.error,
     refetch: query.refetch,
+  };
+}
+
+export function usePlanningImportScan(projectId: string) {
+  const scan = useMutation({
+    mutationFn: (subPath?: string) => scanPlanningBacklog(projectId, subPath),
+  });
+
+  return {
+    report: scan.data ?? null,
+    scanning: scan.isPending,
+    error: scan.error as Error | null,
+    scan: (subPath?: string) => scan.mutate(subPath),
+  };
+}
+
+export function usePlanningFolderImport(projectId: string) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (folder: string) => importPlanningFeature(projectId, folder),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: planningKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: planningKeys.drift(projectId) });
+    },
+  });
+
+  return {
+    importFolder: (folder: string, onSuccess: (report: PlanningFeatureImportReport) => void) =>
+      mutation.mutate(folder, { onSuccess }),
+    importingFolder: mutation.isPending ? mutation.variables ?? null : null,
+    pending: mutation.isPending,
+    error: mutation.error as Error | null,
   };
 }
 

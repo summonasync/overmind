@@ -1,6 +1,8 @@
 export { ArtifactEditor } from "./components/artifact-editor";
 export type { ArtifactEditorValues } from "./components/artifact-editor";
 export { ArtifactLog } from "./components/artifact-log";
+export { BacklogImportSection } from "./components/backlog-import-section";
+export { ImportFolderList } from "./components/import-folder-list";
 export { BoardFilterBar } from "./components/board-filter-bar";
 export { BoardSearchInput } from "./components/board-search-input";
 export { CeremonyStepper } from "./components/ceremony-stepper";
@@ -22,6 +24,8 @@ export {
   usePlanningBoard,
   usePlanningDrift,
   usePlanningFeature,
+  usePlanningFolderImport,
+  usePlanningImportScan,
   usePlanningMutations,
   usePlanningWorkflow,
   useWorkflowMutations,
@@ -42,6 +46,14 @@ export {
   parseBoardFilters,
 } from "./lib/board-filters";
 export { cardBriefLine, cardPhaseLabel } from "./lib/board-card-context";
+export {
+  importConfirmText,
+  importFolderState,
+  importFolderStateLabel,
+  importFolderStateTone,
+  importReportLine,
+} from "./lib/import-folder-state";
+export type { ImportFolderState } from "./lib/import-folder-state";
 export { boardItemMatchesSearch } from "./lib/board-search";
 export {
   artifactDeleteLabel,
@@ -83,9 +95,12 @@ export type {
   PlanningFeatureDependencyEntry,
   PlanningFeatureDependenciesResponse,
   PlanningFeatureFormValues,
+  PlanningFeatureImportReport,
   PlanningFeaturePriority,
   PlanningFeatureResponse,
   PlanningFeatureStatus,
+  PlanningImportScanEntry,
+  PlanningImportScanReport,
   PlanningLogLine,
   PlanningMaterialization,
   PlanningMaterializationReport,

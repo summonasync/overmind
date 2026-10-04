@@ -16,7 +16,7 @@ import {
   useProjectMutations,
 } from "@/features/projects";
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects";
-import { PlanningWorkflowSettings } from "@/features/planning";
+import { PlanningWorkflowSettings, BacklogImportSection } from "@/features/planning";
 import { ProjectsInfoPanel } from "@/pages/projects-page/ui/projects-info-panel";
 
 function ProjectsPageContent() {
@@ -94,6 +94,10 @@ function ProjectsPageContent() {
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
               <PlanningWorkflowSettings projectId={detail.id} />
+            </div>
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Backlog import</h3>
+              <BacklogImportSection projectId={detail.id} />
             </div>
           </>
         ) : null}

@@ -215,3 +215,34 @@ export interface UpdatePlanningWorkflowValues {
   materialization?: PlanningMaterialization;
   requireHumanValidation?: HumanValidationOverride;
 }
+
+export interface PlanningImportScanEntry {
+  folder: string;
+  slug: string | null;
+  title: string | null;
+  status: PlanningFeatureStatus | null;
+  specs: number;
+  plans: number;
+  results: number;
+  tasks: number;
+  alreadyImported: boolean;
+  error: string | null;
+}
+
+export interface PlanningImportScanReport {
+  root: string;
+  entries: PlanningImportScanEntry[];
+}
+
+export interface PlanningFeatureImportReport {
+  slug: string;
+  title: string;
+  status: PlanningFeatureStatus;
+  created: boolean;
+  artifactsCreated: number;
+  artifactsUpdated: number;
+  notes: string[];
+  trackedFiles: number;
+  materialization: PlanningMaterialization;
+  nextStep: string | null;
+}
