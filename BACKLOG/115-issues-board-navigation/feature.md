@@ -1,7 +1,7 @@
 ---
 feature: 115
 slug: issues-board-navigation
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-10-04
@@ -16,3 +16,7 @@ Issues Board navigation per user dogfood feedback 2026-10-04: (1) the project pa
 <context>
 User mid-session message: «issues board - оно в левом меню, прикольно, НО - оно отправляет к проектам, открываешь проект - у него 2 табы - dashboard, entries - логично, что третья таба должна быть - issues board. А вот слева в меню issues board - можно оставить, НО - без проекта там показывать заведённые issues на все проекты (новые/непрочитанные)».
 </context>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>

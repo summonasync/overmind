@@ -1,7 +1,7 @@
 ---
 feature: 119
 slug: adapter-version-awareness
-status: draft
+status: inProgress
 priority: p1
 version: 1
 created: 2026-10-04
@@ -16,3 +16,7 @@ Agents running stale MCP adapters silently break against the current host: new t
 <context>
 Field incident 2026-10-04: an orchestrator session on a pre-099 adapter tried to claim a feature, found no claim tool in its toolset, and hammered planning_set_feature_priority five times (harmless but noisy) before diagnosing the real cause. User verdict: «Заводи фичей». The host knows what the adapter's toolset should be (ListTools round-trip or session handshake); the onboard/agentIdentity payload could carry adapter version + drift list («tool X is missing from your adapter — restart the session; tool Y was removed — stop calling it»).
 </context>
+
+<log>
+- 2026-10-04 [auto] — artifact created → inProgress
+</log>
