@@ -1,8 +1,9 @@
 ---
 feature: 122
 slug: artifact-validation-buttons
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Plan 122 — Approve/Decline buttons on artifact views (human validation door)
@@ -29,4 +30,5 @@ Small backend route first, web surface second.
 
 <log>
 - 2026-10-04 [agent] — plan draft.
+- 2026-10-04 [agent] — validated with human proof: notification a7103fb2-9391-401f-822f-58204271149c replied 2026-10-04 19:12:42 UTC
 </log>
