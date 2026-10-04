@@ -1,8 +1,9 @@
 ---
 feature: 122
 slug: artifact-validation-buttons
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 122 — Approve/Decline buttons on artifact views (human validation door)

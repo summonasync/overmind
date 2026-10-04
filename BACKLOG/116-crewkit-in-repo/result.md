@@ -1,8 +1,9 @@
 ---
 feature: 116
 slug: crewkit-in-repo
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 116 — Crew kit in-repo: pack from repo, sync repo → home

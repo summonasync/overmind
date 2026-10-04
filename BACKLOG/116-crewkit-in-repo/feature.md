@@ -1,7 +1,7 @@
 ---
 feature: 116
 slug: crewkit-in-repo
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-10-04
@@ -22,4 +22,5 @@ User moved the crew kit in-repo 2026-10-04 («теперь я перенёс с�
 - 2026-10-04 [agent] — Van by claude claimed the feature
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
 - 2026-10-04 [agent] — agent by unknown released the claim
+- 2026-10-04 [agent] — by user request in-session — result 69d9e977 validated on the user's notification tap (reply 2026-10-04T20:04Z), p0 wave closed
 </log>

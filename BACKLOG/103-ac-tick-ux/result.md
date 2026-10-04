@@ -1,8 +1,9 @@
 ---
 feature: 103
 slug: ac-tick-ux
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-04
 ---
 
 # Result 103 — AC tick UX: echo what was ticked, un-tick op, index-base consistency (Qwen friction #2)

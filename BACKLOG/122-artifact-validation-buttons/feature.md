@@ -1,7 +1,7 @@
 ---
 feature: 122
 slug: artifact-validation-buttons
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -22,4 +22,5 @@ User intake 2026-10-04: «у меня нет в ui на spec и plan возмо�
 - 2026-10-04 [agent] — Van by claude claimed the feature
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
 - 2026-10-04 [agent] — agent by unknown released the claim
+- 2026-10-04 [agent] — by user request in-session — result 22cafda3 validated on the user's notification tap (reply 2026-10-04T20:44Z), wave closed
 </log>
