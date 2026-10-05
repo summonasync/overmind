@@ -12,6 +12,7 @@ import {
   ProjectDetail,
   ProjectForm,
   ProjectList,
+  ProjectManifestSection,
   useProjectList,
   useProjectMutations,
 } from "@/features/projects";
@@ -91,6 +92,10 @@ function ProjectsPageContent() {
         {detail ? (
           <>
             <ProjectDetail project={detail} />
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Manifest</h3>
+              <ProjectManifestSection project={detail} />
+            </div>
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
               <PlanningWorkflowSettings projectId={detail.id} />

@@ -4,10 +4,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createProject,
   deleteProject,
+  importProjectManifest,
   updateProject,
 } from "@/features/projects/api";
 import { projectKeys, projectListQueryOptions } from "@/features/projects/queries";
-import type { ProjectFormValues } from "@/features/projects/types";
+import type {
+  ProjectFormValues,
+  ProjectManifestImportResponse,
+  ProjectUpdateValues,
+} from "@/features/projects/types";
 
 export function useProjectList() {
   const query = useQuery(projectListQueryOptions());
@@ -28,7 +33,7 @@ export function useProjectMutations() {
   });
 
   const update = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: ProjectFormValues }) =>
+    mutationFn: ({ id, values }: { id: string; values: ProjectUpdateValues }) =>
       updateProject(id, values),
     onSuccess: invalidate,
   });
@@ -39,4 +44,23 @@ export function useProjectMutations() {
   });
 
   return { create, update, remove };
+}
+
+export function useProjectManifestImport() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (id: string) => importProjectManifest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
+  });
+
+  return {
+    importManifest: (id: string, onSuccess: (result: ProjectManifestImportResponse) => void) =>
+      mutation.mutate(id, { onSuccess }),
+    sourceFile: mutation.data?.sourceFile ?? null,
+    pending: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
 }

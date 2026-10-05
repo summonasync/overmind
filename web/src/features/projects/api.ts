@@ -1,5 +1,10 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
-import type { ProjectFormValues, ProjectResponse } from "@/features/projects/types";
+import type {
+  ProjectFormValues,
+  ProjectManifestImportResponse,
+  ProjectResponse,
+  ProjectUpdateValues,
+} from "@/features/projects/types";
 
 export function listProjects(): Promise<ProjectResponse[]> {
   return apiGet<ProjectResponse[]>("/projects/");
@@ -17,12 +22,17 @@ export function createProject(values: ProjectFormValues): Promise<ProjectRespons
   });
 }
 
-export function updateProject(id: string, values: ProjectFormValues): Promise<ProjectResponse> {
+export function updateProject(id: string, values: ProjectUpdateValues): Promise<ProjectResponse> {
   return apiPut<ProjectResponse>(`/projects/${id}`, {
     name: values.name,
     diskPath: values.diskPath,
     description: values.description || null,
+    ...(values.setManifest ? { manifest: values.manifest ?? null, setManifest: true } : {}),
   });
+}
+
+export function importProjectManifest(id: string): Promise<ProjectManifestImportResponse> {
+  return apiPost<ProjectManifestImportResponse>(`/projects/${id}/manifest/import`);
 }
 
 export function deleteProject(id: string): Promise<void> {
