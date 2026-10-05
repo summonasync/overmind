@@ -1,7 +1,7 @@
 ---
 feature: 071
 slug: backlog-import-ui
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -31,4 +31,9 @@ A human can import a BACKLOG/ tree into a project from the web UI — an Import 
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-04 [agent] — Van by claude claimed the feature
+- 2026-10-05 [agent] — Van by claude took over stale claim of Van by claude
+- 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — by user request in-session — result 2444a25f validated on the user's notification tap (reply 2026-10-05T05:52Z); wave closed, user departing — pipeline continues autonomously per standing instruction (results accumulate in review until return)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

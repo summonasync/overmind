@@ -1,8 +1,9 @@
 ---
 feature: 026
 slug: entries-read-mode
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-05
 ---
 
 # Result 026 — Entries read mode: inline expand/collapse + fullscreen view by title click

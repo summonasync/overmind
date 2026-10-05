@@ -1,7 +1,7 @@
 ---
 feature: 092
 slug: waits-for-closed-blockers-bug
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-27
@@ -32,4 +32,5 @@ Expected: the feature page dependency block "waits for" shows only blockers the 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — by user request in-session — result 0dbbc7db validated on the user's notification tap (reply 2026-10-04T22:35Z, found buried in replies inventory); bug wave closed
 </log>

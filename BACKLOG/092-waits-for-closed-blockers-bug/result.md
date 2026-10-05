@@ -1,8 +1,9 @@
 ---
 feature: 092
 slug: waits-for-closed-blockers-bug
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-05
 ---
 
 # Result 092 — Bug: "waits for" shows done/review blockers as waiting (feature page)

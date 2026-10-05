@@ -1,7 +1,7 @@
 ---
 feature: 026
 slug: entries-read-mode
-status: review
+status: done
 priority: p1
 version: 2
 created: 2026-09-20
@@ -31,4 +31,5 @@ Read-модель для Entries (user request 2026-09-20, визуальный 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — by user request in-session — result a1a4f60f validated on the user's notification tap (reply 2026-10-04T22:35Z, found buried in replies inventory); wave closed
 </log>

@@ -2,7 +2,7 @@
 feature: 104
 task: 02
 slug: materialization-off-write-path
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 depends_on: 01
@@ -29,3 +29,7 @@ A mutation timeout becomes a committed/not-committed answer, not silence.
 <refs>
 - Spec 9d4e5c9b; plan 6b287810 (task 2).
 </refs>
+
+<log>
+- 2026-10-04 [agent] — [agent] Taken by orchestrator after task 01 closed (review PASS-WITH-NITS, W1 fixed in 7366ff1) — dispatching dotnet-coder (sonnet).
+</log>
