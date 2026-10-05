@@ -1,7 +1,7 @@
 ---
 feature: 051
 slug: entries-materialization
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-09-22
@@ -40,4 +40,5 @@ Entries (notes/decisions/gates/guards) живут только в БД: `Plannin
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-05 [auto] — all tasks done + spec + plan validated → review
 </log>
