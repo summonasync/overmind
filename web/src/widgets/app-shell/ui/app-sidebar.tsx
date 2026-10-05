@@ -52,6 +52,8 @@ export function AppSidebar() {
   const pathname = usePathname() ?? "/";
   const [kerrigan, setKerrigan] = useState<string | null>(null);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const [routeHasProject, setRouteHasProject] = useState(false);
   const [registerPath, setRegisterPath] = useState<string | null>(null);
   const { create } = useProjectMutations();
 
@@ -59,16 +61,21 @@ export function AppSidebar() {
     const frame = requestAnimationFrame(() => {
       setKerrigan(KERRIGAN_VARIANTS[Math.floor(Math.random() * KERRIGAN_VARIANTS.length)].src);
       setProjectsOpen(isProjectsSectionOpen());
+      setRouteHasProject(new URLSearchParams(window.location.search).has("project"));
     });
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  const projectsVisible = openOverride ?? (routeHasProject || projectsOpen);
+
   const handleProjectsToggle = () => {
-    setProjectsOpen((value) => {
-      const next = !value;
-      saveProjectsSectionOpen(next);
-      return next;
-    });
+    const next = !projectsVisible;
+    if (routeHasProject) {
+      setOpenOverride(next);
+      return;
+    }
+    setProjectsOpen(next);
+    saveProjectsSectionOpen(next);
   };
 
   return (
@@ -98,35 +105,31 @@ export function AppSidebar() {
               <div key={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-1 rounded-md border-l-2 pr-3 transition-colors",
+                    "flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition-colors",
                     active
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
                   )}
                 >
-                  <button
-                    type="button"
-                    onClick={handleProjectsToggle}
-                    aria-expanded={projectsOpen}
-                    aria-label={projectsOpen ? "Collapse projects tree" : "Expand projects tree"}
-                    className="shrink-0 rounded p-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  >
-                    {projectsOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                  </button>
                   <a
                     href="/"
                     aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-2 text-sm font-medium transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                      active ? "text-primary" : "hover:text-foreground",
-                    )}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <Icon size={16} aria-hidden />
                     {item.label}
                   </a>
+                  <button
+                    type="button"
+                    onClick={handleProjectsToggle}
+                    aria-expanded={projectsVisible}
+                    aria-label={projectsVisible ? "Collapse projects tree" : "Expand projects tree"}
+                    className="shrink-0 rounded p-0.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    {projectsVisible ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                  </button>
                 </div>
-                {projectsOpen ? (
+                {projectsVisible ? (
                   <div className="mt-1 max-h-[50vh] overflow-y-auto p-1">
                     <ProjectTree onRegister={setRegisterPath} />
                   </div>

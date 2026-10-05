@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -22,11 +21,13 @@ import {
   useRemoveTreeRoot,
   useTreeRoots,
 } from "@/features/projects/lib/use-project-tree";
+import { useProjectList } from "@/features/projects/lib/use-projects";
 import {
   getExpandedPaths,
   saveExpandedPaths,
   saveLastActiveProjectId,
 } from "@/features/projects/lib/tree-session";
+import { projectAncestorPaths } from "@/features/projects/lib/tree-paths";
 import type { DirectoryEntry, TreeRoot } from "@/shared/api/types";
 
 interface ProjectTreeProps {
@@ -35,17 +36,18 @@ interface ProjectTreeProps {
 
 export function ProjectTree({ onRegister }: ProjectTreeProps) {
   const { data, isPending, error, refetch } = useTreeRoots();
+  const { data: projects } = useProjectList();
   const addRoot = useAddTreeRoot();
-  const pathname = usePathname() ?? "";
   const [addError, setAddError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<string[]>([]);
+  const [routeCollapsed, setRouteCollapsed] = useState<string[]>([]);
   const [sessionReady, setSessionReady] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setExpandedPaths(getExpandedPaths());
-      setActiveProjectId(new URLSearchParams(window.location.search).get("project"));
+      setActiveProjectId(new URLSearchParams(window.location.search).get("project") || null);
       setSessionReady(true);
     });
     return () => cancelAnimationFrame(frame);
@@ -57,13 +59,45 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
     }
   }, [sessionReady, expandedPaths]);
 
-  const toggleExpanded = (path: string) => {
-    setExpandedPaths((paths) =>
-      paths.includes(path) ? paths.filter((value) => value !== path) : [...paths, path],
+  const routeProjectPath = useMemo(() => {
+    if (activeProjectId === null) {
+      return null;
+    }
+    return projects.find((project) => project.id === activeProjectId)?.diskPath ?? null;
+  }, [projects, activeProjectId]);
+
+  const autoExpandedPaths = useMemo(() => {
+    if (routeProjectPath === null) {
+      return [];
+    }
+    return projectAncestorPaths(
+      (data?.roots ?? []).map((root) => root.path),
+      routeProjectPath,
     );
+  }, [data, routeProjectPath]);
+
+  const isExpanded = (path: string) => {
+    if (routeCollapsed.includes(path)) {
+      return false;
+    }
+    return expandedPaths.includes(path) || autoExpandedPaths.includes(path);
   };
 
-  const treeActiveProjectId = pathname === "/entries" || pathname === "/dashboard" ? activeProjectId : null;
+  const toggleExpanded = (path: string) => {
+    if (isExpanded(path)) {
+      if (autoExpandedPaths.includes(path)) {
+        setRouteCollapsed((paths) => [...paths, path]);
+      } else {
+        setExpandedPaths((paths) => paths.filter((value) => value !== path));
+      }
+      return;
+    }
+    if (routeCollapsed.includes(path)) {
+      setRouteCollapsed((paths) => paths.filter((value) => value !== path));
+      return;
+    }
+    setExpandedPaths((paths) => [...paths, path]);
+  };
 
   const handleAddRoot = async () => {
     setAddError(null);
@@ -137,8 +171,8 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
           depth={0}
           onRegister={onRegister}
           onToggleExpanded={toggleExpanded}
-          isExpanded={(path) => expandedPaths.includes(path)}
-          activeProjectId={treeActiveProjectId}
+          isExpanded={isExpanded}
+          activeProjectId={activeProjectId}
           actions={<RootRemoveButton root={root} />}
         />
       ))}
@@ -246,9 +280,11 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
           aria-current={active ? "page" : undefined}
           onClick={() => saveLastActiveProjectId(entry.projectId)}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-1.5 rounded border-l-2 px-1 py-1 text-xs font-medium text-primary",
-            "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-            active ? "border-primary bg-primary/10" : "border-transparent hover:bg-primary/10",
+            "flex min-w-0 flex-1 items-center gap-1.5 rounded-md border-l-2 px-1 py-1 text-xs font-medium transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            active
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
           )}
         >
           <FolderOpen size={14} aria-hidden className="shrink-0" />
