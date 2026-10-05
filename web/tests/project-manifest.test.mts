@@ -96,6 +96,6 @@ test("a finished import invalidates the project list", () => {
 
 test("the project settings surface renders the manifest section", () => {
   const source = page();
-  assert.ok(source.includes(`<ProjectManifestSection project={detail} />`));
+  assert.ok(source.includes(`<ProjectManifestSection key={detail.id} project={detail} />`));
   assert.ok(source.includes("Manifest"));
 });
