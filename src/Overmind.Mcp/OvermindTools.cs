@@ -157,7 +157,7 @@ public sealed class OvermindTools
     [Description("Deletes one entry — notes, decisions, gates, guards and tombstones. Deletion is permanent: the row and its version history are gone, and a tombstone entry is born in its place carrying the original title with ' (deleted)' appended, the original type, the deletion date, door+actor provenance, the optional reason from this call, and the final content preserved in a fenced block. Deleting a tombstone is a plain delete — no second tombstone. Tombstones stay discoverable: list them via list_entries with type=tombstone; they ride search like every other entry. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
     public async Task<JsonElement> DeleteEntry(
         [Description("Id of the entry to delete.")] Guid entryId,
-        [Description("Optional reason recorded on the tombstone — why the entry died.")] string? reason = null,
+        [Description("Optional reason recorded on the tombstone — why the entry died. Ignored when the entry is itself a tombstone (plain delete).")] string? reason = null,
         [Description("Id of the project the entry belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
