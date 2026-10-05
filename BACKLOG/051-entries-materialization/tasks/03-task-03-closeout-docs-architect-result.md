@@ -2,7 +2,7 @@
 feature: 051
 task: 03
 slug: entries-materialization
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 depends_on: 02
@@ -27,3 +27,7 @@ Close the wave: docs, architect, result.
 <refs>
 - Spec a87863c1; plan 46b7e368 (task 3).
 </refs>
+
+<log>
+- 2026-10-05 [agent] — [agent] Taken by orchestrator (tasks 01+02 done). Docs landed by orchestrator (f972ead): ENTRIES/ in STRUCTURE.md repository layout (tracked rows, 033 refusal discipline) + CONTEXT.md materialization paragraph (file shape, plan-level flattening, tombstone pass-through, skill duplication as deliberate v1, colon/quote rendering caveat per review-051-02 N2). Dispatching architect light.
+</log>
