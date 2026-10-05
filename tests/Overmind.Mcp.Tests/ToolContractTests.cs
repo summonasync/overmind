@@ -36,6 +36,26 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ListEntries_TombstoneType_PassesThroughAndProjectsLikeAnyEntry()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "tombstone"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        ParseQuery(request.Query)["type"].ShouldBe("tombstone");
+
+        var entry = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray().Single()!.AsObject();
+        entry["type"]!.GetValue<string>().ShouldBe("tombstone");
+        entry["title"]!.GetValue<string>().ShouldBe("Decision One (deleted)");
+        entry["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["buried"]);
+    }
+
+    [Fact]
     public async Task ListEntries_Default_ProjectsMetadataAndDropsBodies()
     {
         var response = await Driver.CallToolAsync("list_entries", new JsonObject
@@ -131,7 +151,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
             "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill), tag and q (fulltext). " +
+            "Optional filters: type (note, decision, gate, guard, skill, tombstone), tag and q (fulltext). " +
             "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
 
         var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
@@ -401,6 +421,7 @@ public class ToolContractTests : McpSessionTestBase
     [InlineData("decision")]
     [InlineData("gate")]
     [InlineData("guard")]
+    [InlineData("tombstone")]
     public async Task WriteEntry_AllowedTypes_ProxyToApi(string type)
     {
         var response = await Driver.CallToolAsync("write_entry", new JsonObject
@@ -498,6 +519,35 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task DeleteEntry_Reason_RidesTheUpstreamQueryEscaped()
+    {
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["reason"] = "superseded by the pivot to embeddings"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var request = FindRequest("DELETE", $"/api/entries/{Canned.EntryId}");
+        ParseQuery(request.Query)["reason"].ShouldBe("superseded by the pivot to embeddings");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_BlankReason_LeavesTheQueryOff()
+    {
+        await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["reason"] = "   "
+        });
+
+        FindRequest("DELETE", $"/api/entries/{Canned.EntryId}").Query.ShouldBe("");
+    }
+
+    [Fact]
     public async Task DeleteEntry_KitLinkedEntry_RefusedWithKitOwnedEntryVerbatim()
     {
         Stub.RouteGet("/api/kits", Canned.KitsJson);
@@ -587,7 +637,7 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task DeleteEntry_Description_PinsPermanenceAndTheGuards()
+    public async Task DeleteEntry_Description_PinsTheTombstoneTruthAndTheGuards()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -596,11 +646,21 @@ public class ToolContractTests : McpSessionTestBase
         var description = tools["delete_entry"]!["description"]!.GetValue<string>();
 
         description.ShouldContain("permanent");
-        description.ShouldContain("no tombstones");
-        description.ShouldContain("no undo");
+        description.ShouldContain("version history are gone");
+        description.ShouldContain("' (deleted)'");
+        description.ShouldContain("provenance");
+        description.ShouldContain("reason");
+        description.ShouldContain("fenced block");
+        description.ShouldContain("no second tombstone");
+        description.ShouldContain("type=tombstone");
+        description.ShouldNotContain("no tombstones");
+        description.ShouldNotContain("no undo");
         description.ShouldContain("KitOwnedEntry");
         description.ShouldContain("the kit reimport or the UI owns it");
         description.ShouldContain("OVERMIND_PROJECT_ID");
+
+        var properties = tools["delete_entry"]!["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("reason");
     }
 
     [Fact]

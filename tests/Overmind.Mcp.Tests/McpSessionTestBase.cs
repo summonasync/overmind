@@ -51,6 +51,7 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                 "note" => Canned.NotesJson,
                 "decision" => Canned.DecisionsJson,
                 "skill" => Canned.SkillsJson,
+                "tombstone" => Canned.TombstonesJson,
                 _ => "[]"
             };
             return new StubOvermindApi.Response(200, body);

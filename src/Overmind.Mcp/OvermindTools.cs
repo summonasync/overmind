@@ -11,16 +11,16 @@ public sealed class OvermindTools
 {
     private static readonly HashSet<string> ReadableEntryTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "note", "decision", "gate", "guard", "skill"
+        "note", "decision", "gate", "guard", "skill", "tombstone"
     };
 
     private static readonly HashSet<string> WritableEntryTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "note", "decision", "gate", "guard"
+        "note", "decision", "gate", "guard", "tombstone"
     };
 
     private const string SkillManagedElsewhere =
-        "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. Supported types: note, decision, gate, guard.";
+        "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. Supported types: note, decision, gate, guard, tombstone.";
 
     private const string SkillDeleteRefused =
         "SkillEntryDeleteRefused: skill entries are managed via the Overmind UI — they carry skill files and a kit lifecycle, so delete_entry refuses them.";
@@ -34,7 +34,7 @@ public sealed class OvermindTools
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-        "Optional filters: type (note, decision, gate, guard, skill), tag and q (fulltext). " +
+        "Optional filters: type (note, decision, gate, guard, skill, tombstone), tag and q (fulltext). " +
         "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
 
     private const string SearchDescription =
@@ -59,7 +59,7 @@ public sealed class OvermindTools
     [Description(ListEntriesDescription)]
     public async Task<JsonElement> ListEntries(
         Guid projectId,
-        [Description("Optional entry type filter: note, decision, gate, guard or skill.")] string? type = null,
+        [Description("Optional entry type filter: note, decision, gate, guard, skill or tombstone.")] string? type = null,
         [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
         [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
         [Description("Set true to include full entry bodies; by default only metadata is returned.")] bool include_content = false,
@@ -110,10 +110,10 @@ public sealed class OvermindTools
         Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
 
     [McpServerTool(Name = "write_entry", Destructive = false, Idempotent = false)]
-    [Description("Creates a new entry (note, decision, gate or guard) in a project. Skills are managed via the Overmind UI.")]
+    [Description("Creates a new entry (note, decision, gate, guard or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI.")]
     public async Task<JsonElement> WriteEntry(
         [Description("Id of the project to write into.")] Guid projectId,
-        [Description("Entry type: note, decision, gate or guard.")] string type,
+        [Description("Entry type: note, decision, gate, guard or tombstone.")] string type,
         [Description("Entry title.")] string title,
         [Description("Markdown body of the entry.")] string content,
         [Description("Optional tags attached to the entry.")] string[]? tags = null,
@@ -154,9 +154,10 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "delete_entry", Destructive = true, Idempotent = true)]
-    [Description("Deletes one entry permanently — notes, decisions, gates and guards only. Deletion is permanent and immediate: entries have no tombstones and there is no undo, the content is gone. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
+    [Description("Deletes one entry — notes, decisions, gates, guards and tombstones. Deletion is permanent: the row and its version history are gone, and a tombstone entry is born in its place carrying the original title with ' (deleted)' appended, the original type, the deletion date, door+actor provenance, the optional reason from this call, and the final content preserved in a fenced block. Deleting a tombstone is a plain delete — no second tombstone. Tombstones stay discoverable: list them via list_entries with type=tombstone; they ride search like every other entry. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
     public async Task<JsonElement> DeleteEntry(
         [Description("Id of the entry to delete.")] Guid entryId,
+        [Description("Optional reason recorded on the tombstone — why the entry died.")] string? reason = null,
         [Description("Id of the project the entry belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
@@ -190,7 +191,13 @@ public sealed class OvermindTools
             }
         }
 
-        await Guarded(() => _api.DeleteAsync($"/api/entries/{entryId}", ct));
+        var path = $"/api/entries/{entryId}";
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            path += $"?reason={Uri.EscapeDataString(reason.Trim())}";
+        }
+
+        await Guarded(() => _api.DeleteAsync(path, ct));
 
         var echo = new JsonObject
         {
@@ -366,7 +373,7 @@ public sealed class OvermindTools
         if (!ReadableEntryTypes.Contains(normalized))
         {
             throw new McpException(
-                $"Invalid entry type '{type}'. Expected one of: note, decision, gate, guard, skill.");
+                $"Invalid entry type '{type}'. Expected one of: note, decision, gate, guard, skill, tombstone.");
         }
 
         return normalized;
@@ -383,7 +390,7 @@ public sealed class OvermindTools
         if (!WritableEntryTypes.Contains(normalized))
         {
             throw new McpException(
-                $"Invalid entry type '{type}'. Expected one of: note, decision, gate, guard.");
+                $"Invalid entry type '{type}'. Expected one of: note, decision, gate, guard, tombstone.");
         }
 
         return normalized;
