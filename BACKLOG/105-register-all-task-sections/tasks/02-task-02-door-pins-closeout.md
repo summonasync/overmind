@@ -2,7 +2,7 @@
 feature: 105
 task: 02
 slug: register-all-task-sections
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 depends_on: 01
@@ -28,3 +28,7 @@ Pin the behavior on both doors and close the wave.
 <refs>
 - Spec 110bcde0; plan 7eecf2c9 (task 2).
 </refs>
+
+<log>
+- 2026-10-05 [agent] — [agent] Taken by orchestrator (task 01 done). Door pins: HTTP door pinned in AgentPlanningApiTests (Patch_InlineSectionAfterUpsert_SucceedsWithoutResend), import round-trip pinned in PlanningRoundTripTests, MCP door pin added by orchestrator (6deadff, PlanningPatchArtifact_InlineSectionHint_SurfacesThroughTheDoor — Mcp 455). Consistency decision: tool descriptions deliberately not extended — the 400 hint IS the just-in-time documentation ("re-send the body once"), firing exactly when an agent hits the case; spec's three-entrance scope honored (feature bodies excluded by design). Dispatching architect light.
+</log>
