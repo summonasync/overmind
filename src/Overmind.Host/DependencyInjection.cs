@@ -7,6 +7,7 @@ using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Kits;
+using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
@@ -51,6 +52,7 @@ public static class DependencyInjection
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<NotificationsService>();
         services.AddScoped<CeremoniesService>();
+        services.AddScoped<ManifestImporter>();
         services.AddSingleton<BrowserOrigin>();
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();

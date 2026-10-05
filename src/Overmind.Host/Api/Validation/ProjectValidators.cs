@@ -1,4 +1,5 @@
 using FluentValidation;
+using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 
 namespace Overmind.Host.Api.Validation;
@@ -26,5 +27,6 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
             .Must(path => Path.IsPathFullyQualified(path))
             .WithMessage("DiskPath must be an absolute path.");
         RuleFor(x => x.Description).MaximumLength(2000);
+        RuleFor(x => x.Manifest).MaximumLength(Project.MaxManifestLength);
     }
 }

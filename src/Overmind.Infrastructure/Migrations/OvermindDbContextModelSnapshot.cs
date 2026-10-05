@@ -549,6 +549,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime?>("LastMaterializedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Manifest")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");

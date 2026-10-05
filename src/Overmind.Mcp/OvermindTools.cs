@@ -43,6 +43,12 @@ public sealed class OvermindTools
         "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
         "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.";
 
+    private const string ReadProjectManifestDescription =
+        "Reads the project's manifest — the full markdown describing what the project is, its stack, build/test commands and conventions; the deep read that complements the one-line description in list_projects. " +
+        "Returns the manifest markdown verbatim. When no manifest is set the tool says so instead of failing — " +
+        "set one on the project config page in the Overmind UI or import it from AGENTS.md/CLAUDE.md/QWEN.md. " +
+        "projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.";
+
     private readonly OvermindApiClient _api;
 
     public OvermindTools(OvermindApiClient api)
@@ -238,6 +244,25 @@ public sealed class OvermindTools
         }
 
         return hits.Deserialize<JsonElement>();
+    }
+
+    [McpServerTool(Name = "read_project_manifest", ReadOnly = true, Idempotent = true)]
+    [Description(ReadProjectManifestDescription)]
+    public async Task<string> ReadProjectManifest(
+        [Description("Id of the project whose manifest to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        var resolvedProjectId = await ResolveProjectIdAsync(projectId, ct);
+        var project = await Guarded(() => _api.GetAsync($"/api/projects/{resolvedProjectId}", ct));
+
+        var manifest = project.ValueKind == JsonValueKind.Object &&
+            project.TryGetProperty("manifest", out var value) &&
+            value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+
+        return manifest ??
+            $"No manifest is set for project '{resolvedProjectId}'. Set one on the project config page in the Overmind UI, or import it from AGENTS.md/CLAUDE.md/QWEN.md.";
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)

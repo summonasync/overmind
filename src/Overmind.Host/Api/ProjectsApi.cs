@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Host.Api;
@@ -18,6 +19,7 @@ public static class ProjectsApi
         group.MapGet("/{id:guid}", GetById);
         group.MapPut("/{id:guid}", Update);
         group.MapDelete("/{id:guid}", Delete);
+        group.MapPost("/{id:guid}/manifest/import", ImportManifest);
 
         return group;
     }
@@ -110,6 +112,10 @@ public static class ProjectsApi
         tracked.Property(p => p.Name).CurrentValue = name;
         tracked.Property(p => p.DiskPath).CurrentValue = request.DiskPath.Trim();
         tracked.Property(p => p.Description).CurrentValue = request.Description?.Trim() ?? string.Empty;
+        if (request.SetManifest)
+        {
+            project.SetManifest(request.Manifest);
+        }
 
         await db.SaveChangesAsync(ct);
         return Results.Ok(ProjectMapper.ToResponse(project));
@@ -134,5 +140,45 @@ public static class ProjectsApi
         db.Projects.Remove(project);
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ImportManifest(
+        Guid id,
+        ManifestImporter importer,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (project is null)
+        {
+            return HttpErrors.NotFound($"Project '{id}' was not found.");
+        }
+
+        ProjectManifestImport? import;
+        try
+        {
+            import = await importer.ImportAsync(project.DiskPath, ct);
+        }
+        catch (MaterializationException ex)
+        {
+            return MaterializationErrors.Map(ex);
+        }
+
+        if (import is null)
+        {
+            return HttpErrors.NotFound(
+                $"No AGENTS.md, CLAUDE.md or QWEN.md file was found in '{project.DiskPath}'; there is nothing to import.");
+        }
+
+        if (import.Body.Length > Project.MaxManifestLength)
+        {
+            return HttpErrors.BadRequest(
+                $"The imported manifest exceeds the {Project.MaxManifestLength} character limit; trim it before importing.");
+        }
+
+        project.SetManifest(import.Body);
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new ProjectManifestImportResponse(import.SourceFile, project.Manifest!));
     }
 }

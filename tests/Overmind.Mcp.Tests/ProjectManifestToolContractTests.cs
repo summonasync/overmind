@@ -1,0 +1,82 @@
+using System.Text.Json.Nodes;
+using Shouldly;
+using Xunit;
+
+namespace Overmind.Mcp.Tests;
+
+public class ProjectManifestToolContractTests : McpSessionTestBase
+{
+    protected override void RegisterRoutes(StubOvermindApi stub) => RegisterDefaultRoutes(stub);
+
+    [Fact]
+    public async Task ReadProjectManifest_ReturnsTheMarkdownVerbatim()
+    {
+        Stub.RouteGet($"/api/projects/{Canned.ProjectId}", Canned.ProjectWithManifestJson);
+
+        var response = await Driver.CallToolAsync("read_project_manifest", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        Canned.ToolResultText(response).ShouldBe(Canned.ProjectManifestText);
+    }
+
+    [Fact]
+    public async Task ReadProjectManifest_NotSet_SaysSoInsteadOfFailing()
+    {
+        var response = await Driver.CallToolAsync("read_project_manifest", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("No manifest is set");
+        text.ShouldContain("AGENTS.md");
+    }
+
+    [Fact]
+    public async Task ReadProjectManifest_NoExplicitProject_ResolvesThroughTheOnboardCwd()
+    {
+        await Driver.CallToolAsync("read_project_manifest", new JsonObject());
+
+        var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        JsonNode.Parse(onboard.Body)!["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        FindRequest("GET", $"/api/projects/{Canned.ProjectId}");
+    }
+
+    [Fact]
+    public async Task ReadProjectManifest_Description_PinsDeepReadAndResolution()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["read_project_manifest"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("list_projects");
+        description.ShouldContain("verbatim");
+        description.ShouldContain("says so instead of failing");
+        description.ShouldContain("AGENTS.md/CLAUDE.md/QWEN.md");
+        description.ShouldContain("OVERMIND_PROJECT_ID");
+
+        var properties = tools["read_project_manifest"]!["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("projectId");
+    }
+
+    [Fact]
+    public async Task ReadProjectManifest_MissingProject_MapsToToolError()
+    {
+        Stub.Route("GET", $"/api/projects/{Canned.ProjectId}", 404, Canned.NotFoundJson);
+
+        var response = await Driver.CallToolAsync("read_project_manifest", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        Canned.ToolResultText(response).ShouldContain("was not found");
+    }
+}

@@ -75,6 +75,49 @@ public class ProjectTests
 
         Should.Throw<ArgumentOutOfRangeException>(() => project.SetClaimSettings(-1, null));
     }
+
+    [Fact]
+    public void SetManifest_TrimsAndStores()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetManifest("\n# Overmind\n\nBuild: dotnet build.\n");
+
+        project.Manifest.ShouldBe("# Overmind\n\nBuild: dotnet build.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetManifest_BlankContent_ClearsToNull(string manifest)
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        project.SetManifest("# existing");
+
+        project.SetManifest(manifest);
+
+        project.Manifest.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetManifest_Null_ClearsExisting()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        project.SetManifest("# existing");
+
+        project.SetManifest(null);
+
+        project.Manifest.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetManifest_OverLimit_Throws()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            project.SetManifest(new string('x', Project.MaxManifestLength + 1)));
+    }
 }
 
 public class SkillFileTests

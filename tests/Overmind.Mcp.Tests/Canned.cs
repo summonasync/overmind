@@ -31,13 +31,19 @@ public static class Canned
     public const string ProjectsJson =
         """
         [
-          {"id":"11111111-1111-1111-1111-111111111111","name":"alpha","diskPath":"E:\\work\\alpha","description":"first project","createdAt":"2026-09-01T10:00:00Z"},
-          {"id":"22222222-2222-2222-2222-222222222222","name":"beta","diskPath":"E:\\work\\beta","description":"","createdAt":"2026-09-02T10:00:00Z"}
+          {"id":"11111111-1111-1111-1111-111111111111","name":"alpha","diskPath":"E:\\work\\alpha","description":"first project","manifest":null,"createdAt":"2026-09-01T10:00:00Z"},
+          {"id":"22222222-2222-2222-2222-222222222222","name":"beta","diskPath":"E:\\work\\beta","description":"","manifest":null,"createdAt":"2026-09-02T10:00:00Z"}
         ]
         """;
 
     public const string ProjectJson =
-        """{"id":"11111111-1111-1111-1111-111111111111","name":"alpha","diskPath":"E:\\work\\alpha","description":"first project","createdAt":"2026-09-01T10:00:00Z"}""";
+        """{"id":"11111111-1111-1111-1111-111111111111","name":"alpha","diskPath":"E:\\work\\alpha","description":"first project","manifest":null,"createdAt":"2026-09-01T10:00:00Z"}""";
+
+    public const string ProjectWithManifestJson =
+        """{"id":"11111111-1111-1111-1111-111111111111","name":"alpha","diskPath":"E:\\work\\alpha","description":"first project","manifest":"<!-- imported from AGENTS.md -->\n\n# Alpha project\n\nBuild: dotnet build.","createdAt":"2026-09-01T10:00:00Z"}""";
+
+    public const string ProjectManifestText =
+        "<!-- imported from AGENTS.md -->\n\n# Alpha project\n\nBuild: dotnet build.";
 
     public const string EntryJson =
         """{"id":"33333333-3333-3333-3333-333333333333","projectId":"11111111-1111-1111-1111-111111111111","type":"note","title":"Entry One","content":"Entry body here.","currentVersion":3,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-09-03T10:00:00Z","tags":["core"],"skillFiles":[]}""";
