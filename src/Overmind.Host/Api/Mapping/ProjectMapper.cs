@@ -6,5 +6,6 @@ namespace Overmind.Host.Api.Mapping;
 public static class ProjectMapper
 {
     public static ProjectResponse ToResponse(Project project) =>
-        new(project.Id, project.Name, project.DiskPath, project.Description, project.Manifest, project.CreatedAt);
+        new(project.Id, project.Name, project.DiskPath, project.Description, project.Manifest,
+            project.NumberStyle, project.NumberPrefix, project.CreatedAt);
 }

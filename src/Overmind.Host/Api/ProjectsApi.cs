@@ -117,9 +117,54 @@ public static class ProjectsApi
             project.SetManifest(request.Manifest);
         }
 
+        if (request.NumberStyle is not null || request.NumberPrefix is not null)
+        {
+            if (!TryParseNumberStyle(request.NumberStyle, out var style))
+            {
+                return InvalidValue(nameof(request.NumberStyle),
+                    $"Must be one of: {string.Join(", ", Enum.GetNames<ProjectNumberStyle>().Select(n => n.ToLowerInvariant()))}.");
+            }
+
+            var targetStyle = style ?? project.NumberStyle;
+            if (request.NumberPrefix is not null && targetStyle != ProjectNumberStyle.Key)
+            {
+                return InvalidValue(nameof(request.NumberPrefix),
+                    "A number prefix is only used with numberStyle 'key'.");
+            }
+
+            var targetPrefix = targetStyle == ProjectNumberStyle.Key
+                ? request.NumberPrefix?.Trim() ?? project.NumberPrefix
+                : null;
+            if (targetStyle == ProjectNumberStyle.Key && targetPrefix is null)
+            {
+                return InvalidValue(nameof(request.NumberPrefix),
+                    "A number prefix is required for numberStyle 'key'.");
+            }
+
+            project.SetNumbering(targetStyle, targetPrefix);
+        }
+
         await db.SaveChangesAsync(ct);
         return Results.Ok(ProjectMapper.ToResponse(project));
     }
+
+    private static bool TryParseNumberStyle(string? value, out ProjectNumberStyle? style)
+    {
+        if (value is null)
+        {
+            style = null;
+            return true;
+        }
+
+        style = Enum.TryParse<ProjectNumberStyle>(value, ignoreCase: true, out var parsed)
+            && Enum.IsDefined(parsed)
+                ? parsed
+                : null;
+        return style is not null;
+    }
+
+    private static IResult InvalidValue(string field, string message) =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [message] });
 
     private static async Task<IResult> Delete(Guid id, OvermindDbContext db, CancellationToken ct)
     {

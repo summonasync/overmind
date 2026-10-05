@@ -1,11 +1,17 @@
+using System.Text.RegularExpressions;
+
 namespace Overmind.Core;
 
-public sealed class Project
+public sealed partial class Project
 {
     private const int MaxMaterializationErrorLength = 512;
     private const int MaxMaterializationSkipHead = 5;
     public const int DefaultClaimStaleThresholdMinutes = 15;
     public const int MaxManifestLength = 200_000;
+    public const int NumberPrefixMaxLength = 16;
+
+    [GeneratedRegex("^[A-Z][A-Z0-9_]{1,15}$")]
+    public static partial Regex NumberPrefixRegex { get; }
 
     private Project()
     {
@@ -28,6 +34,8 @@ public sealed class Project
     public int ClaimStaleThresholdMinutes { get; private set; } = DefaultClaimStaleThresholdMinutes;
     public string? AgentNamingRules { get; private set; }
     public string? Manifest { get; private set; }
+    public ProjectNumberStyle NumberStyle { get; private set; } = ProjectNumberStyle.Hash;
+    public string? NumberPrefix { get; private set; }
 
     public static Project Create(string name, string diskPath, string description = "")
     {
@@ -42,6 +50,7 @@ public sealed class Project
             Description = description.Trim(),
             PlanningMaterialization = PlanningMaterialization.Inherit,
             RequireHumanValidation = HumanValidationOverride.Unset,
+            NumberStyle = ProjectNumberStyle.Hash,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -69,6 +78,29 @@ public sealed class Project
 
         ArgumentOutOfRangeException.ThrowIfGreaterThan(manifest.Length, MaxManifestLength);
         Manifest = string.IsNullOrWhiteSpace(manifest) ? null : manifest.Trim();
+    }
+
+    public void SetNumbering(ProjectNumberStyle style, string? numberPrefix)
+    {
+        if (style == ProjectNumberStyle.Key)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(numberPrefix);
+            var prefix = numberPrefix.Trim();
+            if (!NumberPrefixRegex.IsMatch(prefix))
+            {
+                throw new ArgumentException(
+                    $"Number prefix '{prefix}' must be {NumberPrefixMaxLength} characters or fewer: an uppercase letter followed by uppercase letters, digits or underscores.",
+                    nameof(numberPrefix));
+            }
+
+            NumberPrefix = prefix;
+        }
+        else
+        {
+            NumberPrefix = null;
+        }
+
+        NumberStyle = style;
     }
 
     public void MarkMaterialized(IReadOnlyList<PlanningMaterializationSkip> skips)

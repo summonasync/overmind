@@ -116,6 +116,126 @@ public sealed class ProjectApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Create_Numbering_DefaultsToHashWithoutPrefix()
+    {
+        var created = await CreateProjectAsync("numbering-default", TestPaths.DiskPath("numbering-default"));
+
+        created.NumberStyle.ShouldBe("hash");
+        created.NumberPrefix.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Update_NumberStyleKeyWithPrefix_RoundTripsAndClearsOnStyleChange()
+    {
+        var created = await CreateProjectAsync("numbered", TestPaths.DiskPath("numbered"));
+
+        var keyResponse = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "numbered",
+            DiskPath = TestPaths.DiskPath("numbered"),
+            NumberStyle = "key",
+            NumberPrefix = "OM",
+        });
+        keyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var keyed = await keyResponse.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        keyed!.NumberStyle.ShouldBe("key");
+        keyed.NumberPrefix.ShouldBe("OM");
+
+        var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{created.Id}", JsonOptions);
+        fetched!.NumberStyle.ShouldBe("key");
+        fetched.NumberPrefix.ShouldBe("OM");
+
+        var plainResponse = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "numbered",
+            DiskPath = TestPaths.DiskPath("numbered"),
+            NumberStyle = "plain",
+        });
+        plainResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var plain = await plainResponse.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        plain!.NumberStyle.ShouldBe("plain");
+        plain.NumberPrefix.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Update_KeyStyleWithoutPrefix_Returns400()
+    {
+        var created = await CreateProjectAsync("prefixless", TestPaths.DiskPath("prefixless"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "prefixless",
+            DiskPath = TestPaths.DiskPath("prefixless"),
+            NumberStyle = "key",
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Errors.ShouldNotBeNull();
+        problem.Errors!.ContainsKey("NumberPrefix").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Update_PrefixWithoutKeyStyle_Returns400()
+    {
+        var created = await CreateProjectAsync("stray-prefix", TestPaths.DiskPath("stray-prefix"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "stray-prefix",
+            DiskPath = TestPaths.DiskPath("stray-prefix"),
+            NumberPrefix = "OM",
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Errors.ShouldNotBeNull();
+        problem.Errors!.ContainsKey("NumberPrefix").ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("om")]
+    [InlineData("O")]
+    [InlineData("ABCDEFGHIJKLMNOPQ")]
+    public async Task Update_InvalidPrefix_Returns400(string prefix)
+    {
+        var created = await CreateProjectAsync("bad-prefix", TestPaths.DiskPath("bad-prefix"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "bad-prefix",
+            DiskPath = TestPaths.DiskPath("bad-prefix"),
+            NumberStyle = "key",
+            NumberPrefix = prefix,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Errors.ShouldNotBeNull();
+        problem.Errors!.ContainsKey("NumberPrefix").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Update_UnknownNumberStyle_Returns400NamingAllowedValues()
+    {
+        var created = await CreateProjectAsync("bad-style", TestPaths.DiskPath("bad-style"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "bad-style",
+            DiskPath = TestPaths.DiskPath("bad-style"),
+            NumberStyle = "banana",
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Errors.ShouldNotBeNull();
+        problem.Errors!["NumberStyle"][0].ShouldContain("hash");
+        problem.Errors["NumberStyle"][0].ShouldContain("key");
+        problem.Errors["NumberStyle"][0].ShouldContain("plain");
+    }
+
     private async Task<ProjectJson> CreateProjectAsync(string name, string diskPath)
     {
         var response = await _client.PostAsJsonAsync("/api/projects", new
@@ -136,6 +256,8 @@ public sealed class ProjectApiTests : IDisposable
         string Name,
         string DiskPath,
         string Description,
+        string NumberStyle,
+        string? NumberPrefix,
         DateTime CreatedAt);
 
     public sealed record ProblemJson(

@@ -118,6 +118,87 @@ public class ProjectTests
         Should.Throw<ArgumentOutOfRangeException>(() =>
             project.SetManifest(new string('x', Project.MaxManifestLength + 1)));
     }
+
+    [Fact]
+    public void Create_Numbering_DefaultsToHashWithoutPrefix()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.NumberStyle.ShouldBe(ProjectNumberStyle.Hash);
+        project.NumberPrefix.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetNumbering_KeyStyle_StoresPrefix()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetNumbering(ProjectNumberStyle.Key, "OM");
+
+        project.NumberStyle.ShouldBe(ProjectNumberStyle.Key);
+        project.NumberPrefix.ShouldBe("OM");
+    }
+
+    [Fact]
+    public void SetNumbering_KeyStyle_TrimsPrefix()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetNumbering(ProjectNumberStyle.Key, " OVERMIND ");
+
+        project.NumberPrefix.ShouldBe("OVERMIND");
+    }
+
+    [Theory]
+    [InlineData(ProjectNumberStyle.Hash)]
+    [InlineData(ProjectNumberStyle.Plain)]
+    public void SetNumbering_NonKeyStyle_ClearsPrefix(ProjectNumberStyle style)
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        project.SetNumbering(ProjectNumberStyle.Key, "OM");
+
+        project.SetNumbering(style, "OM");
+
+        project.NumberStyle.ShouldBe(style);
+        project.NumberPrefix.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetNumbering_KeyStyle_MissingPrefix_Throws(string? prefix)
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        Should.Throw<ArgumentException>(() => project.SetNumbering(ProjectNumberStyle.Key, prefix));
+    }
+
+    [Theory]
+    [InlineData("om")]
+    [InlineData("1OM")]
+    [InlineData("_OM")]
+    [InlineData("O")]
+    [InlineData("SEVENTEEN_CHARS_X")]
+    [InlineData("OM-2")]
+    public void SetNumbering_KeyStyle_InvalidPrefix_Throws(string prefix)
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        Should.Throw<ArgumentException>(() => project.SetNumbering(ProjectNumberStyle.Key, prefix));
+    }
+
+    [Fact]
+    public void SetNumbering_KeyStyle_InvalidPrefix_KeepsCurrentNumbering()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        project.SetNumbering(ProjectNumberStyle.Key, "OM");
+
+        Should.Throw<ArgumentException>(() => project.SetNumbering(ProjectNumberStyle.Key, "bad-prefix"));
+
+        project.NumberStyle.ShouldBe(ProjectNumberStyle.Key);
+        project.NumberPrefix.ShouldBe("OM");
+    }
 }
 
 public class SkillFileTests

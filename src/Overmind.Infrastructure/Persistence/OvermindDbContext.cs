@@ -59,6 +59,13 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(p => p.ClaimStaleThresholdMinutes)
                 .HasDefaultValue(Project.DefaultClaimStaleThresholdMinutes)
                 .HasSentinel(Project.DefaultClaimStaleThresholdMinutes);
+
+            builder.Property(p => p.NumberStyle)
+                .HasDefaultValue(ProjectNumberStyle.Hash)
+                .HasSentinel(ProjectNumberStyle.Hash);
+
+            builder.Property(p => p.NumberPrefix)
+                .HasMaxLength(Project.NumberPrefixMaxLength);
         });
 
         modelBuilder.Entity<ContextEntry>(builder =>
