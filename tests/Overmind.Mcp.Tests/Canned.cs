@@ -88,7 +88,7 @@ public static class Canned
     public const string TombstonesJson =
         """
         [
-          {"id":"1a1a1a1a-1a1a-1a1a-1a1a-1a1a1a1a1a1a","projectId":"11111111-1111-1111-1111-111111111111","type":"tombstone","title":"Decision One (deleted)","content":"Deleted 2026-10-04 12:00:00 UTC via agent door by qwen.\nReason: superseded by the pivot to embeddings\n\nOriginal type: decision\n\nFinal content:\n\n```\nUse SQLite for storage.\n```","currentVersion":1,"createdAt":"2026-10-04T12:00:00Z","updatedAt":"2026-10-04T12:00:00Z","tags":["buried"],"skillFiles":[]}
+          {"id":"1a1a1a1a-1a1a-1a1a-1a1a-1a1a1a1a1a1a","projectId":"11111111-1111-1111-1111-111111111111","type":"tombstone","title":"Decision One (deleted)","content":"Deleted 2026-10-04 12:00:00 UTC via agent door by qwen.\nReason: superseded by the pivot to embeddings\nOriginal type: decision\n\nFinal content:\n\n```\nUse SQLite for storage.\n```","currentVersion":1,"createdAt":"2026-10-04T12:00:00Z","updatedAt":"2026-10-04T12:00:00Z","tags":["buried"],"skillFiles":[]}
         ]
         """;
 

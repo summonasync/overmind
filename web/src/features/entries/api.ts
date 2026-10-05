@@ -59,8 +59,10 @@ export function updateEntry(id: string, values: EntryFormValues): Promise<EntryR
   });
 }
 
-export function deleteEntry(id: string): Promise<EntryResponse | undefined> {
-  return apiDelete<EntryResponse | undefined>(`/entries/${id}`);
+export function deleteEntry(id: string, reason?: string): Promise<EntryResponse | undefined> {
+  const trimmed = reason?.trim();
+  const query = trimmed ? `?reason=${encodeURIComponent(trimmed)}` : "";
+  return apiDelete<EntryResponse | undefined>(`/entries/${id}${query}`);
 }
 
 export function listTags(): Promise<TagResponse[]> {

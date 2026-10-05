@@ -115,8 +115,16 @@ test("delete still tolerates the 204 of a tombstone plain delete", async () => {
 
 test("the entries api exposes the delete response as an optional tombstone", () => {
   const api = source("../src/features/entries/api.ts");
-  assert.ok(api.includes("export function deleteEntry(id: string): Promise<EntryResponse | undefined> {"));
-  assert.ok(api.includes("apiDelete<EntryResponse | undefined>(`/entries/${id}`)"));
+  assert.ok(api.includes("export function deleteEntry(id: string, reason?: string)"));
+  assert.ok(api.includes("apiDelete<EntryResponse | undefined>(`/entries/${id}${query}`)"));
+});
+
+test("the delete dialog offers the optional reason for live entries only", () => {
+  const page = source("../src/pages/entries-page/ui/entries-page.tsx");
+  const api = source("../src/features/entries/api.ts");
+  assert.ok(page.includes(`placeholder="Reason (optional) — recorded on the tombstone"`));
+  assert.ok(page.includes(`deleting.type !== "tombstone"`));
+  assert.ok(api.includes("encodeURIComponent(trimmed)"));
 });
 
 test("the delete dialog names the burial and the grave-removal paths", () => {

@@ -30,7 +30,7 @@ export function useEntryMutations(projectId: string) {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => deleteEntry(id),
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => deleteEntry(id, reason),
     onSuccess: invalidate,
   });
 

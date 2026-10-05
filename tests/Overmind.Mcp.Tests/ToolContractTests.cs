@@ -525,13 +525,13 @@ public class ToolContractTests : McpSessionTestBase
         {
             ["entryId"] = Canned.EntryId.ToString(),
             ["projectId"] = Canned.ProjectId.ToString(),
-            ["reason"] = "superseded by the pivot to embeddings"
+            ["reason"] = "dead & buried — 100% superseded #graves"
         });
 
         response["result"]!["isError"].ShouldBeNull();
 
         var request = FindRequest("DELETE", $"/api/entries/{Canned.EntryId}");
-        ParseQuery(request.Query)["reason"].ShouldBe("superseded by the pivot to embeddings");
+        ParseQuery(request.Query)["reason"].ShouldBe("dead & buried — 100% superseded #graves");
     }
 
     [Fact]

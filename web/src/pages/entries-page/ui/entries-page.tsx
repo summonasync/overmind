@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
@@ -26,6 +27,7 @@ function EntriesPageContent() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EntryResponse | null>(null);
   const [deleting, setDeleting] = useState<EntryResponse | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
   const [reading, setReading] = useState<EntryResponse | null>(null);
 
   const activeError =
@@ -113,7 +115,14 @@ function EntriesPageContent() {
         />
       </Modal>
 
-      <Modal title="Delete entry" open={deleting !== null} onClose={() => setDeleting(null)}>
+      <Modal
+        title="Delete entry"
+        open={deleting !== null}
+        onClose={() => {
+          setDeleting(null);
+          setDeleteReason("");
+        }}
+      >
         {deleting ? (
           <div className="space-y-4">
             <p className="text-sm text-foreground">
@@ -129,14 +138,36 @@ function EntriesPageContent() {
                 </>
               )}
             </p>
+            {deleting.type !== "tombstone" ? (
+              <Input
+                value={deleteReason}
+                onChange={(event) => setDeleteReason(event.target.value)}
+                placeholder="Reason (optional) — recorded on the tombstone"
+                maxLength={500}
+              />
+            ) : null}
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setDeleting(null)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setDeleting(null);
+                  setDeleteReason("");
+                }}
+              >
                 Cancel
               </Button>
               <Button
                 variant="danger"
                 disabled={remove.isPending}
-                onClick={() => remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })}
+                onClick={() =>
+                  remove.mutate(
+                    { id: deleting.id, reason: deleting.type === "tombstone" ? undefined : deleteReason },
+                    { onSuccess: () => {
+                      setDeleting(null);
+                      setDeleteReason("");
+                    } },
+                  )
+                }
               >
                 {remove.isPending ? "Deleting…" : "Delete"}
               </Button>
