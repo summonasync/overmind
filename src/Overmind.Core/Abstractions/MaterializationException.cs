@@ -83,6 +83,9 @@ public sealed class MaterializationException : Exception
             $"The kit maps more than one file to '{absolutePath}'.",
             absolutePath);
 
+    public static MaterializationException InvalidTarget(string absolutePath, string message) =>
+        new(MaterializationFailureKind.InvalidTarget, message, absolutePath);
+
     public static MaterializationException IoFailure(string path, Exception inner) =>
         new(
             MaterializationFailureKind.IoError,

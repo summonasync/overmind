@@ -27,6 +27,16 @@ public sealed class ManifestImporter
             string content;
             try
             {
+                if (new FileInfo(path).Length > 4L * Project.MaxManifestLength)
+                {
+                    // UTF-8 needs at most 4 bytes per character; anything past this bound cannot
+                    // fit under the stored-manifest cap. Fail loud instead of silently importing
+                    // a lower-priority candidate's manifest.
+                    throw MaterializationException.InvalidTarget(
+                        path,
+                        $"{candidate} exceeds the {Project.MaxManifestLength} character manifest limit; trim it before importing.");
+                }
+
                 content = await File.ReadAllTextAsync(path, ct);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
