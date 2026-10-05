@@ -227,6 +227,22 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_NullTagElement_Returns400Not500()
+    {
+        var response = await _client.PostAsJsonAsync("/api/entries", new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "null tag element",
+            Content = "body",
+            Tags = new string?[] { null },
+            SkillFiles = (object[]?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Update_CommaInTagName_Returns400AndKeepsExistingTags()
     {
         var entry = await CreateEntryAsync(new

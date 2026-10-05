@@ -15,7 +15,7 @@ public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryR
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Content).NotEmpty();
         RuleFor(x => x.Tags)
-            .ForEach(tag => tag.NotEmpty().Must(name => !name.Contains(',')).WithMessage(CommaRule))
+            .ForEach(tag => tag.NotEmpty().Must(name => name is null || !name.Contains(',')).WithMessage(CommaRule))
             .When(x => x.Tags is not null);
         RuleFor(x => x.SkillFiles)
             .NotEmpty()
