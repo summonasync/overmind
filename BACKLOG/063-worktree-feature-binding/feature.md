@@ -23,4 +23,5 @@ Value: agent gets task artifact + spec context + exact code location + git statu
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-05 [agent] — Van by claude claimed the feature
 </log>

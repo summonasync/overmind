@@ -34,4 +34,5 @@ Every project carries a full markdown manifest in Overmind — what the project 
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-05 [agent] — Van by claude claimed the feature
 </log>
