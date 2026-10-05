@@ -1,7 +1,7 @@
 ---
 feature: 115
 slug: issues-board-navigation
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-10-04
@@ -20,4 +20,5 @@ User mid-session message: «issues board - оно в левом меню, при
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-05 [auto] — all tasks done + spec + plan validated → review
 </log>

@@ -1,4 +1,5 @@
 import { formatBacklogAge } from "@/shared/lib/relative-time";
+import { issueHref } from "@/features/issues/lib/issue-href";
 import { IssueStatusChip } from "@/features/issues/components/issue-status-chip";
 import type { IssueRow } from "@/features/issues/types";
 
@@ -15,7 +16,7 @@ function shortProjectId(id: string): string {
 export function IssueListRow({ projectId, issue, authorName }: IssueListRowProps) {
   return (
     <a
-      href={`/issues?project=${encodeURIComponent(projectId)}&issue=${encodeURIComponent(issue.id)}`}
+      href={issueHref(projectId, issue.id)}
       className="flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-border-strong hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <div className="min-w-0 flex-1">

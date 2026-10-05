@@ -2,11 +2,21 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { appendToIssue, promoteIssue, setIssueStatus } from "@/features/issues/api";
-import { issueCardQueryOptions, issueKeys, issueListQueryOptions } from "@/features/issues/queries";
+import {
+  crossProjectIssueListQueryOptions,
+  issueCardQueryOptions,
+  issueKeys,
+  issueListQueryOptions,
+} from "@/features/issues/queries";
 import type { IssueListFilter, PromoteIssueValues } from "@/features/issues/types";
 
 export function useIssueList(projectId: string, filter: IssueListFilter) {
   const query = useQuery(issueListQueryOptions(projectId, filter));
+  return { data: query.data ?? [], loading: query.isPending, error: query.error };
+}
+
+export function useCrossProjectIssues() {
+  const query = useQuery(crossProjectIssueListQueryOptions());
   return { data: query.data ?? [], loading: query.isPending, error: query.error };
 }
 

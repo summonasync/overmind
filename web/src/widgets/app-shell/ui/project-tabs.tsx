@@ -10,6 +10,7 @@ const NO_PROJECT_HINT = "Select a project first";
 const PROJECT_TAB_ROUTES = [
   { key: "dashboard", label: "Dashboard", pathname: "/dashboard" },
   { key: "entries", label: "Entries", pathname: "/entries" },
+  { key: "issues", label: "Issues", pathname: "/issues" },
 ] as const;
 
 type ProjectTabKey = (typeof PROJECT_TAB_ROUTES)[number]["key"];

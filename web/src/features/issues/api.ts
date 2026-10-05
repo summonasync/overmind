@@ -1,6 +1,7 @@
 import { apiGet, apiPost } from "@/shared/api/client";
 import type {
   AppendIssueValues,
+  CrossProjectIssueRow,
   IssueCard,
   IssueListFilter,
   IssueRow,
@@ -22,6 +23,10 @@ function listPath(projectId: string, filter: IssueListFilter): string {
 
 export function listIssues(projectId: string, filter: IssueListFilter): Promise<IssueRow[]> {
   return apiGet<IssueRow[]>(listPath(projectId, filter));
+}
+
+export function listAllIssues(): Promise<CrossProjectIssueRow[]> {
+  return apiGet<CrossProjectIssueRow[]>("/issues");
 }
 
 export function getIssueCard(projectId: string, issueId: string): Promise<IssueCard> {

@@ -11,6 +11,7 @@ import { useProjectList } from "@/features/projects";
 import { usePlanningBoard } from "@/features/planning";
 import { IssueDetail, IssueFilters, IssueListRow, useIssueList } from "@/features/issues";
 import type { IssueListFilter } from "@/features/issues";
+import { GlobalIssueList } from "@/pages/issues-page/ui/global-issue-list";
 
 const ISSUES_DESCRIPTION =
   "Cross-project bug intake. Agents file issues from any project; triage, append follow-ups, close, or promote them to a task on this board.";
@@ -44,15 +45,7 @@ function IssuesPageContent() {
     return (
       <div className="space-y-4">
         <PageHeader title="Issues Board" description={ISSUES_DESCRIPTION} />
-        <p className="text-sm text-muted">
-          Select a project first.{" "}
-          <a
-            href="/"
-            className="text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            Go to Projects
-          </a>
-        </p>
+        <GlobalIssueList />
       </div>
     );
   }

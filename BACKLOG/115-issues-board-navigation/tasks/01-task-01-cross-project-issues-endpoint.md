@@ -2,7 +2,7 @@
 feature: 115
 task: 01
 slug: issues-board-navigation
-status: inprogress
+status: done
 review: light
 created: 2026-10-04
 brief: API: cross-project issues list (aggregate, filter, open-first sort)
@@ -43,4 +43,5 @@ One read-only endpoint returns every issue from every project, ready for the glo
 - 2026-10-05 [agent] — taken by orchestrator — dispatching dotnet-coder (sonnet) for cross-project issues endpoint
 - 2026-10-05 [agent] — dotnet-coder: cross-project endpoint landed — GET /api/issues (IssueService.ListAllAsync, single SQL query: join Issues×Projects + status filter + enum-order open-first sort + correlated append-count subquery, query count pinned by interceptor test). Gates: dotnet build 0w/0e; IssueServiceTests 21/21; CrossProjectIssuesApiTests+IssueDoorApiTests 13/13; dotnet format clean on 4 touched projects.
 - 2026-10-05 [agent] — obstacles filled: enum-order sort coupling, tripled status-parse block (microbatch candidate), SQLite async interceptor quirk.
+- 2026-10-05 [agent] — light review PASS-WITH-NITS 0 blockers (single query verified honestly incl. correlated scalar subquery + interceptor pin + no split-query in prod options; inner join safe by cascade/restrict model; /api/issues namespace clean vs 028 routes; open-first sort pinned both layers). Nits -> microbatch #240 (BP-33 unbounded list, consistent with 028) + #241 (status-parse block x3). Gates re-run by orchestrator: Infra 689, Api 658, build 0/0.
 </log>

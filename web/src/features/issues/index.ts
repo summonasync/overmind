@@ -8,13 +8,20 @@ export type {
 } from "./components/issue-actions";
 export { IssueDetail } from "./components/issue-detail";
 export { IssueTrail } from "./components/issue-trail";
-export { useIssueCard, useIssueList, useIssueMutations } from "./lib/use-issues";
+export { useIssueCard, useIssueList, useIssueMutations, useCrossProjectIssues } from "./lib/use-issues";
 export { issueActionAvailability } from "./lib/issue-actions";
+export { issueHref } from "./lib/issue-href";
 export { issueStatusTone } from "./lib/status-tone";
-export { issueKeys, issueCardQueryOptions, issueListQueryOptions } from "./queries";
+export {
+  issueKeys,
+  issueCardQueryOptions,
+  issueListQueryOptions,
+  crossProjectIssueListQueryOptions,
+} from "./queries";
 export {
   appendToIssue,
   getIssueCard,
+  listAllIssues,
   listIssues,
   promoteIssue,
   setIssueStatus,
@@ -22,6 +29,7 @@ export {
 export { ISSUE_STATUSES } from "./types";
 export type {
   AppendIssueValues,
+  CrossProjectIssueRow,
   IssueAppendItem,
   IssueCard,
   IssueListFilter,

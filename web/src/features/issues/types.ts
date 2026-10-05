@@ -25,6 +25,19 @@ export interface IssueCard extends IssueRow {
   appends: IssueAppendItem[];
 }
 
+export interface CrossProjectIssueRow {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  status: IssueStatus;
+  authorProjectId: string;
+  createdAt: string;
+  closedAt: string | null;
+  promotedToArtifactId: string | null;
+  appendCount: number;
+}
+
 export interface IssueListFilter {
   status: IssueStatus | null;
   authorProjectId: string | null;

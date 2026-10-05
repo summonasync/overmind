@@ -2,7 +2,7 @@
 feature: 115
 task: 02
 slug: issues-board-navigation
-status: todo
+status: done
 review: light
 created: 2026-10-04
 depends_on: 01
@@ -26,9 +26,9 @@ Issues reachable where the user looks: third project tab, and the global /issues
 </anti-scope>
 
 <acceptance-criteria>
-- [ ] ?tab=issues deep link renders the tab; per-project list intact.
-- [ ] Global /issues renders cross-project rows (project badge, deep link) from the task-01 endpoint.
-- [ ] lint/tsc/test/build green.
+- [x] ?tab=issues deep link renders the tab; per-project list intact.
+- [x] Global /issues renders cross-project rows (project badge, deep link) from the task-01 endpoint.
+- [x] lint/tsc/test/build green.
 </acceptance-criteria>
 
 <refs>
@@ -37,4 +37,9 @@ Issues reachable where the user looks: third project tab, and the global /issues
 
 <log>
 - 2026-10-04 [agent] — task cut post-validation; waits on task 01 (API).
+- 2026-10-05 [agent] — taken by orchestrator — dispatching web-coder (sonnet) for issues tab + global cross-project board
+- 2026-10-05 [agent] — web surface landed: third project tab (issues) + global cross-project board on /issues; lint 0 errors / tsc clean / 207 tests pass (7 new) / build green
+- 2026-10-05 [agent] — scope notes: no status-filter UI on the global list (API supports ?status=, server sort rendered as-is); /issues?issue= without ?project= lands on the global list — card endpoint needs projectId, no cross-project card route exists; global row/section named GlobalIssue* to avoid clashing with the CrossProjectIssueRow contract type
+- 2026-10-05 [agent] — review round: light PASS-WITH-NITS 0 blockers (hooks order verified, invalidation prefix-match covers both lists, FSD clean). Spec-deviation note per reviewer: the tab deep link is the pathname route /issues?project=X — NOT ?tab=issues as the spec text loosely said; pathname is the existing ProjectTabs canon (dashboard/entries live on pathname routes), so the mechanic matches the spec's intent while the literal query-param wording does not apply. Nits: CrossProjectIssueRow.projectName unused client-side (badge resolves via useProjectName) -> microbatch #242; crossProject() key collision — theoretical only.
+- 2026-10-05 [agent] — closeout complete: review PASS-WITH-NITS 0 blockers, spec-deviation note recorded (pathname canon), result 361a7601 drafted with click-check, nits #240-242 to microbatch. Feature goes to review; done-flip waits on the human tap.
 </log>
