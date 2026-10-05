@@ -2,7 +2,7 @@
 feature: 029
 task: 03
 slug: entry-tombstones
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 depends_on: 02
@@ -27,3 +27,7 @@ Close the wave: discovery line, architect, result.
 <refs>
 - Spec 9a3cef1f; plan 241a8ad0 (task 3).
 </refs>
+
+<log>
+- 2026-10-05 [agent] — [agent] Taken by orchestrator (tasks 01+02 done). Closeout items landed by orchestrator (8445289): quickstart tombstone line (pinned, Api 631) + honest update_entry description (review-029-02-mcp N2). Dispatching architect light over the whole wave.
+</log>
