@@ -7,6 +7,8 @@ How the repo is organized and the rules for writing code in it. System design li
 ```
 ├── CONTEXT.md / STRUCTURE.md / TECHNICAL-SOLUTIONS.md / BACKLOG.md
 ├── BACKLOG/                  # feature folders (nnn-slug/): feature.md, spec.md, plan.md, tasks/
+│   └── ENTRIES/              # entry projection (051): {type}/{kebab-title}-{id8}.md, one file per entry,
+│                             #   tracked rows like the planning tree — hand edits refuse (033), force warns
 ├── audits/                   # skill-produced reports, named <skill>-*.md
 ├── FEATURELIST/              # field feedback from agents on other projects, materialized from Overmind notes;
 │                              #   raw input for BACKLOG.md, not a decision record (README.md is the index)
