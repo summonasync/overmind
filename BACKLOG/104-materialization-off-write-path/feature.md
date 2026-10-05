@@ -31,4 +31,5 @@ A write that times out but still commits is the worst failure mode for agent tru
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [agent] — Van by claude claimed the feature
+- 2026-10-05 [agent] — Van by claude took over stale claim of Van by claude
 </log>

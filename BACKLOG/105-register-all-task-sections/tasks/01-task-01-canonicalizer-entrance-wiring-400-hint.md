@@ -2,7 +2,7 @@
 feature: 105
 task: 01
 slug: register-all-task-sections
-status: todo
+status: inprogress
 review: light
 created: 2026-10-04
 brief: Canonicalizer + upsert/import wiring + friction characterization + 400 hint
@@ -35,3 +35,7 @@ Every section present in an artifact body becomes patchable: canonicalize one-li
 <refs>
 - Spec 110bcde0 (root cause verified by probe); plan 7eecf2c9 (task 1).
 </refs>
+
+<log>
+- 2026-10-05 [agent] — [agent] Claimed by Van (claude), taken by orchestrator — dispatching dotnet-coder (sonnet). Root cause pre-verified by the grooming probe (anchored regex blind to one-line sections).
+</log>

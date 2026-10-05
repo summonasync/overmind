@@ -30,4 +30,5 @@ Task artifacts ride in with partial section registration (Qwen friction log item
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-05 [agent] — Van by claude claimed the feature
 </log>
