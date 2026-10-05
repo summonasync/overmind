@@ -404,6 +404,11 @@ public sealed class PlanningArtifact
 
         var items = PlanningSections.ParseAcceptanceCriteria(Body);
 
+        if (items.Count == 0 && PlanningSectionCanonicalizer.HasInlineSection("acceptance-criteria", Body))
+        {
+            throw SectionNotFound("acceptance-criteria");
+        }
+
         if (index is { } i)
         {
             return i >= 1 && i <= items.Count
