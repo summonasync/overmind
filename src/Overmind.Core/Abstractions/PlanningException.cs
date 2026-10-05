@@ -89,12 +89,20 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ImportFailed,
             $"Importing '{source}' failed: {inner?.Message ?? "unknown error"}", inner);
 
-    public static PlanningException PatchSectionNotFound(string section, IEnumerable<string> presentSections)
+    public static PlanningException PatchSectionNotFound(
+        string section, IEnumerable<string> presentSections, string? hint = null)
     {
         var present = string.Join(", ", presentSections.Distinct());
+        var message =
+            $"Section '{section}' was not found in the artifact body. Sections present: {(present.Length == 0 ? "(none)" : present)}.";
+
         return new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchSectionNotFound,
-            $"Section '{section}' was not found in the artifact body. Sections present: {(present.Length == 0 ? "(none)" : present)}.");
+            hint is null ? message : $"{message} {hint}");
     }
+
+    public static string InlineSectionHint(string section) =>
+        $"A one-line '<{section}>…</{section}>' section exists in the body — one-line sections need " +
+        "the canonical multi-line form; re-send the body once (any upsert canonicalizes it).";
 
     public static PlanningException TickItemNotFoundByIndex(int index, IReadOnlyList<PlanningAcItem> visibleItems) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotFound,

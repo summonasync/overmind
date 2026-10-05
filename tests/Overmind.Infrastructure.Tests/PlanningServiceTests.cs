@@ -1860,6 +1860,99 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpsertArtifact_InlineSections_CanonicalizeOnStore()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifact = await CreateArtifactService().UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\nShip.\n</goal>\n\n<anti-scope>No parser changes.</anti-scope>\n",
+            null, null, null, default);
+
+        artifact.Body.ShouldBe(
+            "# Spec\n\n<goal>\nShip.\n</goal>\n\n<anti-scope>\nNo parser changes.\n</anti-scope>\n");
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_FrictionPayload_InlineSectionsPatchableWithoutResend()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifact = await CreateArtifactService().UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Task,
+            """
+            # Task 01
+
+            <goal>
+            Every section in a body becomes patchable.
+            </goal>
+
+            <scope>
+            - canonicalize at the entrances
+            </scope>
+
+            <anti-scope>Parser stays anchored.</anti-scope>
+
+            <constraints>No new packages.</constraints>
+
+            <acceptance-criteria>
+            - [ ] friction payload pinned
+            </acceptance-criteria>
+            """,
+            0, null, null, default);
+
+        var antiScope = await CreateArtifactService().PatchAsync(
+            artifact.Id,
+            new PlanningArtifactPatch(Section: "anti-scope", Content: "Parser stays anchored, entries canonicalize."),
+            default);
+        antiScope.Artifact.Body
+            .ShouldContain("<anti-scope>\nParser stays anchored, entries canonicalize.\n</anti-scope>");
+
+        var constraints = await CreateArtifactService().PatchAsync(
+            artifact.Id,
+            new PlanningArtifactPatch(Section: "constraints", Content: "- english only"),
+            default);
+        constraints.Artifact.Body.ShouldContain("<constraints>\n- english only\n</constraints>");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_InlineSections_CanonicalizeOnStore()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var batch = await CreateArtifactService().UpsertTasksAsync(
+            feature.Id, [new PlanningTaskUpsert("# T\n\n<goal>Ship.</goal>")], default);
+
+        batch.Artifacts.ShouldHaveSingleItem().Body.ShouldBe("# T\n\n<goal>\nShip.\n</goal>");
+    }
+
+    [Fact]
+    public async Task Patch_StoredInlineSection_ReturnsCanonicalizationHint()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var stored = PlanningArtifact.Create(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\nOld.\n</goal>\n\n<anti-scope>None.</anti-scope>\n");
+        _context.PlanningArtifacts.Add(stored);
+        await _context.SaveChangesAsync();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => CreateArtifactService().PatchAsync(
+                stored.Id, new PlanningArtifactPatch(Section: "anti-scope", Content: "x"), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("A one-line '<anti-scope>…</anti-scope>' section exists");
+        ex.Message.ShouldContain("re-send the body once");
+    }
+
+    [Fact]
     public async Task PatchAsync_FrozenArtifact_PatchWithoutNote_ThrowsChangeNoteRequired()
     {
         var featureService = CreateFeatureService();

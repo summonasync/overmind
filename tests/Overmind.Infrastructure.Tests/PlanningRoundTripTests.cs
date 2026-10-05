@@ -567,6 +567,77 @@ public sealed class PlanningRoundTripTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_InlineSections_CanonicalizeOnStore_AndReImportStaysNoOp()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteRaw("010-demo/feature.md",
+            "---\n" +
+            "feature: 010\n" +
+            "slug: demo\n" +
+            "status: ready\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 010 — Demo feature title\n\n" +
+            "<goal>Build the demo.</goal>\n");
+        WriteRaw("010-demo/spec.md",
+            "---\n" +
+            "feature: 010\n" +
+            "slug: demo\n" +
+            "status: draft\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Spec 010 — Demo feature title\n\n" +
+            "<scope>\nSpec body.\n</scope>\n\n" +
+            "<anti-scope>No parser changes.</anti-scope>\n");
+        WriteRaw("010-demo/tasks/01-only-task.md",
+            "---\n" +
+            "feature: 010\n" +
+            "task: 01\n" +
+            "slug: demo\n" +
+            "status: todo\n" +
+            "review: light\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Only task\n\n" +
+            "<goal>Do the thing.</goal>\n");
+
+        var report = await ImportAsync(projectId);
+
+        report.FeaturesCreated.ShouldBe(1);
+        report.ArtifactsCreated.ShouldBe(2);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var feature = await ctx.PlanningFeatures
+                .Include(f => f.Artifacts)
+                .FirstAsync(f => f.ProjectId == projectId && f.Slug == "010-demo");
+            feature.Body.ShouldContain("<goal>\nBuild the demo.\n</goal>");
+            feature.Body.ShouldNotContain("<goal>Build");
+            var spec = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Spec);
+            spec.Body.ShouldContain("<anti-scope>\nNo parser changes.\n</anti-scope>");
+            var task = feature.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task);
+            task.Body.ShouldContain("<goal>\nDo the thing.\n</goal>");
+        }
+
+        var reimportBeforeMaterialize = await ImportAsync(projectId);
+        reimportBeforeMaterialize.ArtifactsCreated.ShouldBe(0);
+        reimportBeforeMaterialize.ArtifactsUpdated.ShouldBe(0);
+
+        await SyncAsync(projectId, force: true);
+
+        var first = await SnapshotAsync();
+        (await File.ReadAllTextAsync(Path.Combine(BacklogDir, "010-demo", "spec.md")))
+            .ShouldContain("<anti-scope>\nNo parser changes.\n</anti-scope>");
+
+        var reimport = await ImportAsync(projectId);
+        reimport.ArtifactsCreated.ShouldBe(0);
+        reimport.ArtifactsUpdated.ShouldBe(0);
+
+        (await SnapshotAsync()).ShouldBe(first);
+    }
+
+    [Fact]
     public async Task Import_FeatureWithDuplicatedHeadings_HealsToSingleHeading()
     {
         var projectId = await SeedProjectAsync();

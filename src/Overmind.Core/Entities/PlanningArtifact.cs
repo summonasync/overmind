@@ -174,7 +174,7 @@ public sealed class PlanningArtifact
 
         if (!PlanningSections.TryFind(section, Body, out _))
         {
-            throw PlanningException.PatchSectionNotFound(section, PlanningSections.List(Body));
+            throw SectionNotFound(section);
         }
 
         RequireChangeNoteWhenFrozen(logNote);
@@ -303,6 +303,14 @@ public sealed class PlanningArtifact
         }
     }
 
+    private PlanningException SectionNotFound(string section) =>
+        PlanningException.PatchSectionNotFound(
+            section,
+            PlanningSections.List(Body),
+            PlanningSectionCanonicalizer.HasInlineSection(section, Body)
+                ? PlanningException.InlineSectionHint(section)
+                : null);
+
     private void RequireLogHistoryAppendable(string incomingBody)
     {
         var stored = PlanningLog.Parse(Body);
@@ -425,7 +433,7 @@ public sealed class PlanningArtifact
     private string FlipAcMarker(string body, int itemNumber, bool checking)
     {
         var section = PlanningSections.Find("acceptance-criteria", body)
-            ?? throw PlanningException.PatchSectionNotFound("acceptance-criteria", PlanningSections.List(body));
+            ?? throw SectionNotFound("acceptance-criteria");
 
         var lines = section.Content.Split('\n');
         var seen = 0;

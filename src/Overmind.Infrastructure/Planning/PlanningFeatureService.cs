@@ -230,6 +230,8 @@ public sealed partial class PlanningFeatureService
     public async Task<BacklogFeatureImportResult> ImportAsync(
         Guid projectId, BacklogFeatureImport import, CancellationToken ct = default)
     {
+        import = CanonicalizeInlineSections(import);
+
         if (!IsValidSlug(import.Slug))
         {
             throw PlanningException.InvalidSlug(import.Slug);
@@ -471,6 +473,15 @@ public sealed partial class PlanningFeatureService
 
         feature.SetQueuePosition((bandMax ?? 0) + 1);
     }
+
+    private static BacklogFeatureImport CanonicalizeInlineSections(BacklogFeatureImport import) => import with
+    {
+        Body = PlanningSectionCanonicalizer.Canonicalize(import.Body),
+        Artifacts =
+        [
+            .. import.Artifacts.Select(a => a with { Body = PlanningSectionCanonicalizer.Canonicalize(a.Body) })
+        ],
+    };
 
     private static string ContentKey(string body) =>
         ContentHash.Normalize(StripLogSections(body).TrimEnd());

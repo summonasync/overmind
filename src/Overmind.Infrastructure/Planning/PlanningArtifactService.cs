@@ -27,6 +27,8 @@ public sealed class PlanningArtifactService
         string? brief = null, PlanningLogSource? source = null,
         IReadOnlyList<int>? blockedBy = null)
     {
+        body = PlanningSectionCanonicalizer.Canonicalize(body);
+
         if (brief is not null && kind != PlanningArtifactKind.Task)
         {
             throw PlanningException.BriefNotAllowedForKind(kind);
@@ -169,9 +171,10 @@ public sealed class PlanningArtifactService
 
         for (var i = 0; i < tasks.Count; i++)
         {
+            var task = tasks[i] with { Body = PlanningSectionCanonicalizer.Canonicalize(tasks[i].Body) };
             try
             {
-                var (artifact, isNew, changed) = StageTask(featureId, tasks[i], siblings, source);
+                var (artifact, isNew, changed) = StageTask(featureId, task, siblings, source);
                 staged.Add(artifact);
                 mutated |= changed;
                 if (isNew)

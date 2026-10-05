@@ -485,6 +485,36 @@ ship the guard
         ex.Message.ShouldContain("scope");
         ex.Message.ShouldContain("acceptance-criteria");
         ex.Message.ShouldContain("log");
+        ex.Message.ShouldNotContain("one-line");
+    }
+
+    [Fact]
+    public void PatchSection_MissingSectionWithInlineCandidate_ThrowsWithCanonicalizationHint()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId,
+            PlanningArtifactKind.Plan,
+            "<goal>\nShip.\n</goal>\n\n<anti-scope>Parser stays anchored.</anti-scope>");
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("anti-scope", "content"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("A one-line '<anti-scope>…</anti-scope>' section exists");
+        ex.Message.ShouldContain("re-send the body once");
+    }
+
+    [Fact]
+    public void TickAc_InlineAcceptanceCriteria_ThrowsWithCanonicalizationHint()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId,
+            PlanningArtifactKind.Task,
+            "<goal>\nShip.\n</goal>\n\n<acceptance-criteria>- [ ] ship it</acceptance-criteria>");
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(1, null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("A one-line '<acceptance-criteria>…</acceptance-criteria>' section exists");
     }
 
     [Theory]

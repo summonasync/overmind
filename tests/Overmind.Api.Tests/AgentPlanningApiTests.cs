@@ -1844,6 +1844,27 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_InlineSectionAfterUpsert_SucceedsWithoutResend()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n\n<anti-scope>No parser changes.</anti-scope>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "anti-scope", Content = "Parser stays anchored." });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("<anti-scope>\nParser stays anchored.\n</anti-scope>");
+    }
+
+    [Fact]
     public async Task Patch_LogSection_Returns400PointingAtAppendLog()
     {
         var project = await CreateProjectAsync();
