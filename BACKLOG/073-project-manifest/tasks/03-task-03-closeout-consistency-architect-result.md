@@ -21,7 +21,7 @@ Close the wave.
 </scope>
 
 <acceptance-criteria>
-- [ ] Consistency recorded; architect verdict recorded; result drafted with click-check.
+- [x] Consistency recorded; architect verdict recorded; result drafted with click-check.
 </acceptance-criteria>
 
 <refs>
