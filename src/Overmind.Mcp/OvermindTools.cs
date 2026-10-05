@@ -133,7 +133,7 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "update_entry", Destructive = false, Idempotent = false)]
-    [Description("Replaces the content of an existing note, decision, gate or guard, keeping its title and tags. Skills are managed via the Overmind UI.")]
+    [Description("Replaces the content of an existing note, decision, gate, guard or tombstone, keeping its title and tags. Skills are managed via the Overmind UI.")]
     public async Task<JsonElement> UpdateEntry(
         [Description("Id of the entry to update.")] Guid entryId,
         [Description("New markdown body of the entry.")] string content,
