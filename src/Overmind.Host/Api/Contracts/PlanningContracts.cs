@@ -326,7 +326,7 @@ public sealed record PlanningImportScanEntryResponse(
     bool AlreadyImported,
     string? Error);
 
-public sealed record PlanningImportScanResponse(string Root, PlanningImportScanEntryResponse[] Entries);
+public sealed record PlanningImportScanResponse(string Root, PlanningImportScanEntryResponse[] Entries, string? ManifestHint);
 
 public sealed record PlanningMaterializedFileResponse(string RelativePath, string Sha256);
 

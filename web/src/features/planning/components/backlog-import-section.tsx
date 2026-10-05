@@ -94,6 +94,11 @@ export function BacklogImportSection({ projectId }: BacklogImportSectionProps) {
             <p className="truncate font-mono text-xs text-muted" title={report.root}>
               {report.root}
             </p>
+            {report.manifestHint ? (
+              <p className="text-xs text-muted" role="note">
+                {report.manifestHint}
+              </p>
+            ) : null}
             <ImportFolderList
               entries={entries}
               importingFolder={folderImport.importingFolder}

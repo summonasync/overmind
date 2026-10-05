@@ -49,7 +49,24 @@ public static class PlanningImportApi
             return MaterializationErrors.Map(ex);
         }
 
-        return Results.Ok(PlanningMapper.ToScanResponse(report));
+        return Results.Ok(PlanningMapper.ToScanResponse(report) with
+        {
+            ManifestHint = ManifestHint(project.DiskPath)
+        });
+    }
+
+    private static string? ManifestHint(string diskPath)
+    {
+        var root = Path.GetFullPath(diskPath);
+        foreach (var candidate in new[] { "AGENTS.md", "CLAUDE.md", "QWEN.md" })
+        {
+            if (File.Exists(Path.Combine(root, candidate)))
+            {
+                return $"{candidate} found in the project root — import it as the project manifest from the config page (readable by agents via read_project_manifest).";
+            }
+        }
+
+        return null;
     }
 
     internal static async Task<IResult> Import(

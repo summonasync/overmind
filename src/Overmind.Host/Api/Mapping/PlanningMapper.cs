@@ -279,7 +279,8 @@ public static class PlanningMapper
     {
         return new PlanningImportScanResponse(
             report.Root,
-            [.. report.Entries.Select(ToScanEntryResponse)]);
+            [.. report.Entries.Select(ToScanEntryResponse)],
+            null);
     }
 
     private static PlanningImportScanEntryResponse ToScanEntryResponse(BacklogFeatureScanEntry entry)

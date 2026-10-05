@@ -26,6 +26,12 @@ const page = () =>
     "utf8",
   );
 
+const types = () =>
+  readFileSync(
+    new URL("../src/features/planning/types.ts", import.meta.url),
+    "utf8",
+  );
+
 test("section drives the list through the shared scan and import mutations", () => {
   const source = section();
   assert.ok(source.includes(`usePlanningImportScan(projectId)`));
@@ -101,4 +107,12 @@ test("no bulk import-all exists in the import flow", () => {
   for (const source of [section(), list(), row()]) {
     assert.ok(!source.toLowerCase().includes("import all"));
   }
+});
+
+test("the scan manifest hint renders as a note when the report carries one", () => {
+  const sectionSource = section();
+  assert.ok(sectionSource.includes(`report.manifestHint`));
+  assert.ok(sectionSource.includes(`role="note"`));
+  const typesSource = types();
+  assert.ok(typesSource.includes("manifestHint?: string | null"));
 });

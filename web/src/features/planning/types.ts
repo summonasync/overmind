@@ -232,6 +232,7 @@ export interface PlanningImportScanEntry {
 export interface PlanningImportScanReport {
   root: string;
   entries: PlanningImportScanEntry[];
+  manifestHint?: string | null;
 }
 
 export interface PlanningFeatureImportReport {
