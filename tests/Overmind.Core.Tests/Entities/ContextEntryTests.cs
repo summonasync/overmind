@@ -158,6 +158,18 @@ public class ContextEntryTests
     }
 
     [Fact]
+    public void CreateTombstone_ReasonWithBackticks_SizesTheFencePastBothTexts()
+    {
+        var original = ContextEntry.Create(ProjectId, EntryType.Note, "plain", "body");
+        var reason = "why ```` not — demo grave";
+
+        var tombstone = ContextEntry.CreateTombstone(original, PlanningLogSource.Agent, "Van (claude)", reason);
+
+        var fence = new string('`', 5);
+        tombstone.Content.ShouldContain($"{fence}\nbody\n{fence}");
+    }
+
+    [Fact]
     public void CreateTombstone_HumanDoor_OmitsActor()
     {
         var original = ContextEntry.Create(ProjectId, EntryType.Gate, "deploy gate", "body");

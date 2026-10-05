@@ -100,11 +100,11 @@ public sealed class ContextEntry
         body.AppendLine();
         body.AppendLine("Final content:");
         body.AppendLine();
-        body.Append(Fenced(original.Content));
+        body.Append(Fenced(original.Content, reason));
         return body.ToString();
     }
 
-    private static string Fenced(string content)
+    private static string Fenced(string content, string? reason)
     {
         var longestRun = 0;
         var run = 0;
@@ -112,6 +112,18 @@ public sealed class ContextEntry
         {
             run = character == '`' ? run + 1 : 0;
             longestRun = Math.Max(longestRun, run);
+        }
+
+        // The reason line renders right above the fence; backticks in it would pair with the
+        // fence and visually collapse the grave — size the fence past both texts.
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            run = 0;
+            foreach (var character in reason)
+            {
+                run = character == '`' ? run + 1 : 0;
+                longestRun = Math.Max(longestRun, run);
+            }
         }
 
         var fence = new string('`', Math.Max(3, longestRun + 1));
