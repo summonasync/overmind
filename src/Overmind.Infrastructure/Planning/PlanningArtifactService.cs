@@ -309,6 +309,12 @@ public sealed class PlanningArtifactService
             await TryPromoteToReviewAsync(feature, ct);
         }
 
+        if (artifact.Kind == PlanningArtifactKind.Task &&
+            artifact.Status is PlanningArtifactStatus.InProgress or PlanningArtifactStatus.Review or PlanningArtifactStatus.Done)
+        {
+            PromoteFeatureOnTaskTake(feature, artifact);
+        }
+
         feature.Touch();
 
         await _db.SaveChangesAsync(ct);
@@ -604,8 +610,12 @@ public sealed class PlanningArtifactService
     {
         if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready)
         {
-            feature.SetStatus(
-                PlanningFeatureStatus.InProgress, "artifact created → inProgress", PlanningLogSource.Auto);
+            if (feature.Status == PlanningFeatureStatus.Draft)
+            {
+                feature.SetStatus(
+                    PlanningFeatureStatus.Ready, "artifact created → ready", PlanningLogSource.Auto);
+            }
+
             return;
         }
 
@@ -632,6 +642,19 @@ public sealed class PlanningArtifactService
             $"feature demoted: review → inProgress ({artifact.Kind.ToString().ToLowerInvariant()} no longer validated)",
             PlanningLogSource.Auto);
         artifact.RecordFeatureDemotion();
+    }
+
+    private static void PromoteFeatureOnTaskTake(PlanningFeature feature, PlanningArtifact artifact)
+    {
+        if (feature.Status is not (PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready))
+        {
+            return;
+        }
+
+        feature.SetStatus(
+            PlanningFeatureStatus.InProgress,
+            $"task {artifact.Order:D2} taken → inProgress",
+            PlanningLogSource.Auto);
     }
 
     private async Task TryPromoteToReviewAsync(PlanningFeature feature, CancellationToken ct)

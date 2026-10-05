@@ -5,6 +5,7 @@ using Overmind.Host;
 using Overmind.Host.Api;
 using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 using Serilog;
 
 if (OperatingSystem.IsWindows())
@@ -182,6 +183,8 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
         await scope.ServiceProvider.GetRequiredService<BundledSeedService>()
             .RunAsync(app.Lifetime.ApplicationStopping);
         await BacklogImportCommand.TryRunAsync(scope.ServiceProvider, args, app.Lifetime.ApplicationStopping);
+        await scope.ServiceProvider.GetRequiredService<PlanningStatusBackfill>()
+            .RunAsync(app.Lifetime.ApplicationStopping);
     }
 
     await app.StartAsync();

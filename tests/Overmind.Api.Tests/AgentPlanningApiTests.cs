@@ -435,8 +435,8 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         var feature = await _client.GetFromJsonAsync<FeatureJson>(
             $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
-        feature!.Status.ShouldBe("inProgress");
-        feature.Body.Split('\n').Count(line => line.Contains("artifact created → inProgress")).ShouldBe(1);
+        feature!.Status.ShouldBe("ready");
+        feature.Body.Split('\n').Count(line => line.Contains("artifact created → ready")).ShouldBe(1);
         feature.Artifacts.Where(a => a.Kind == "task").Select(a => a.Order).ToArray()
             .ShouldBe([0, 1, 2, 3, 4]);
     }
@@ -1819,6 +1819,29 @@ public sealed class AgentPlanningApiTests : IDisposable
         echo.Status.ShouldBe("inProgress");
         echo.Version.ShouldBe(1);
         echo.LastLogLine.ShouldBe("started");
+    }
+
+    [Fact]
+    public async Task SetArtifactStatus_TaskTaken_PromotesReadyFeatureToInProgress()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task" });
+
+        var ceremony = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        ceremony!.Status.ShouldBe("ready");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(task.Id), new { Status = "inProgress", LogNote = "started" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Status.ShouldBe("inProgress");
+        feature.Body.ShouldContain("[auto] — task 00 taken → inProgress");
     }
 
     [Fact]

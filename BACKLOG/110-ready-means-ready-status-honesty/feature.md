@@ -1,7 +1,7 @@
 ---
 feature: 110
 slug: ready-means-ready-status-honesty
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-10-04
@@ -23,4 +23,6 @@ Data-fix at deploy: features currently inProgress with NO task beyond todo (or n
 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-05 [auto] — all tasks done + spec + plan validated → review
 </log>

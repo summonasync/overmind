@@ -510,7 +510,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpsertArtifact_CreateSpec_OnDraftFeature_PromotesToInProgress()
+    public async Task UpsertArtifact_CreateSpec_OnDraftFeature_MakesFeatureReady()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -519,12 +519,12 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "# Spec", null, null, null, default);
 
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
-        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Ready);
         persisted.Version.ShouldBe(1);
     }
 
     [Fact]
-    public async Task UpsertArtifact_CreatePlan_OnReadyFeature_PromotesToInProgress()
+    public async Task UpsertArtifact_CreatePlan_OnReadyFeature_StaysReady()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -534,8 +534,9 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "# Plan", null, null, null, default);
 
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
-        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
-        persisted.Version.ShouldBe(1);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        PlanningLog.Parse(persisted.Body)
+            .ShouldNotContain(l => l.Text.StartsWith("artifact created"));
     }
 
     [Fact]
@@ -617,11 +618,12 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var reopened = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         reopened.Status.ShouldBe(PlanningFeatureStatus.InProgress);
         var reopenLines = PlanningLog.Parse(reopened.Body);
-        reopenLines.Count.ShouldBe(3);
+        reopenLines.Count.ShouldBe(4);
         var reopenLine = reopenLines
             .Single(l => l.Text == "task created while in review — reopened for the new work");
         reopenLine.Source.ShouldBe(PlanningLogSource.Auto);
         reopenLines.Count(l => l.Text == "all tasks done + spec + plan validated → review").ShouldBe(1);
+        reopenLines.Count(l => l.Text == "task 00 taken → inProgress").ShouldBe(1);
 
         await artifactService.SetStatusAsync(
             fifth.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 5 closed", default);
@@ -629,11 +631,12 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var backInReview = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         backInReview.Status.ShouldBe(PlanningFeatureStatus.Review);
         var transitionTexts = PlanningLog.Parse(backInReview.Body).Select(l => l.Text).ToList();
-        transitionTexts.Count.ShouldBe(4);
-        transitionTexts[0].ShouldBe("artifact created → inProgress");
-        transitionTexts[1].ShouldBe("all tasks done + spec + plan validated → review");
-        transitionTexts[2].ShouldBe("task created while in review — reopened for the new work");
-        transitionTexts[3].ShouldBe("all tasks done + spec + plan validated → review");
+        transitionTexts.Count.ShouldBe(5);
+        transitionTexts[0].ShouldBe("artifact created → ready");
+        transitionTexts[1].ShouldBe("task 00 taken → inProgress");
+        transitionTexts[2].ShouldBe("all tasks done + spec + plan validated → review");
+        transitionTexts[3].ShouldBe("task created while in review — reopened for the new work");
+        transitionTexts[4].ShouldBe("all tasks done + spec + plan validated → review");
     }
 
     [Fact]
@@ -703,9 +706,9 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         batch.Artifacts.ShouldAllBe(a => a.Status == PlanningArtifactStatus.Todo);
 
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
-        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Ready);
         PlanningLog.Parse(persisted.Body)
-            .Count(l => l.Text == "artifact created → inProgress")
+            .Count(l => l.Text == "artifact created → ready")
             .ShouldBe(1);
 
         await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
@@ -957,7 +960,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var persistedFeature = await verified.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         persistedFeature.Status.ShouldBe(PlanningFeatureStatus.Draft);
         PlanningLog.Parse(persistedFeature.Body)
-            .ShouldNotContain(l => l.Text == "artifact created → inProgress");
+            .ShouldNotContain(l => l.Text == "artifact created → ready");
 
         await _materializer.DidNotReceive().SyncAsync(
             Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
@@ -1008,7 +1011,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task SetStatusAsync_LastTaskDone_MissingPlan_StaysInProgress()
+    public async Task SetStatusAsync_LastTaskDone_MissingPlan_NoReviewPromotion()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -1025,6 +1028,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        persisted.Status.ShouldNotBe(PlanningFeatureStatus.Review);
     }
 
     [Fact]
@@ -1111,7 +1115,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task SetStatusAsync_ManualValidatedToDraft_OnSpecOfInProgressFeature_FeatureUntouched()
+    public async Task SetStatusAsync_ManualValidatedToDraft_OnSpecOfReadyFeature_FeatureUntouched()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -1120,15 +1124,15 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
         await artifactService.ValidateAsync(spec.Id, default);
 
-        var inProgress = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
-        var logLinesBefore = PlanningLog.Parse(inProgress.Body).Count;
+        var ready = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        var logLinesBefore = PlanningLog.Parse(ready.Body).Count;
 
         var result = await artifactService.SetStatusAsync(
             spec.Id, PlanningArtifactStatus.Draft, PlanningLogSource.Agent, "reopening the spec", default);
 
-        await _context.Entry(inProgress).ReloadAsync();
-        inProgress.Status.ShouldBe(PlanningFeatureStatus.InProgress);
-        PlanningLog.Parse(inProgress.Body).Count.ShouldBe(logLinesBefore);
+        await _context.Entry(ready).ReloadAsync();
+        ready.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        PlanningLog.Parse(ready.Body).Count.ShouldBe(logLinesBefore);
         result.FeatureStatusChanged.ShouldBeNull();
     }
 
@@ -1176,6 +1180,8 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
 
         await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
+        await artifactService.SetStatusAsync(
+            task2.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "starting task 2", default);
         await featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Review, default);
         await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
         var closed = await featureService.UpdateAsync(
@@ -1228,7 +1234,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         var line = PlanningLog.Parse(persisted.Body).Single();
         line.Source.ShouldBe(PlanningLogSource.Auto);
-        line.Text.ShouldBe("artifact created → inProgress");
+        line.Text.ShouldBe("artifact created → ready");
     }
 
     [Fact]
@@ -1290,6 +1296,110 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var line = PlanningLog.Parse(persisted.Body).Single();
         line.Source.ShouldBe(PlanningLogSource.Ui);
         line.Text.ShouldBe("closed from the board");
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_TaskTaken_OnReadyFeature_PromotesFeatureToInProgress()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+
+        var beforeTake = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        beforeTake.Status.ShouldBe(PlanningFeatureStatus.Ready);
+
+        await artifactService.SetStatusAsync(
+            task.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "starting work", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        persisted.Version.ShouldBe(1);
+        var line = PlanningLog.Parse(persisted.Body)
+            .Single(l => l.Text == "task 00 taken → inProgress");
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_TaskTaken_OnDraftFeature_PromotesFeatureToInProgress()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat-draft-take", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task = _context.PlanningArtifacts
+            .Single(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Task);
+
+        var imported = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        imported.SetStatus(
+            PlanningFeatureStatus.Draft,
+            "status restored from imported file",
+            PlanningLogSource.Import);
+        await _context.SaveChangesAsync(default);
+
+        await artifactService.SetStatusAsync(
+            task.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "starting work", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        PlanningLog.Parse(persisted.Body)
+            .ShouldContain(l => l.Text == "task 00 taken → inProgress" && l.Source == PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_TaskTaken_OnInProgressFeature_NoSecondPromotionLine()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var first = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var second = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
+
+        await artifactService.SetStatusAsync(
+            first.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "starting work", default);
+        await artifactService.SetStatusAsync(
+            second.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Ui, "picking up task 2", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        PlanningLog.Parse(persisted.Body)
+            .Count(l => l.Text == "task 00 taken → inProgress" || l.Text == "task 01 taken → inProgress")
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_TaskTaken_OnReviewFeature_FeatureStaysInReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.ValidateAsync(plan.Id, default);
+        var task1 = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
+
+        var inReview = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        inReview.Status.ShouldBe(PlanningFeatureStatus.Review);
+
+        await artifactService.SetStatusAsync(
+            task1.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "reopening task 1", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        PlanningLog.Parse(persisted.Body)
+            .ShouldNotContain(l => l.Text.EndsWith("taken → inProgress"));
     }
 
     [Fact]
@@ -1538,7 +1648,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task PatchAsync_DemotingValidatedSpec_OnInProgressFeature_FeatureUntouched()
+    public async Task PatchAsync_DemotingValidatedSpec_OnReadyFeature_FeatureUntouched()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -1549,17 +1659,17 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             null, null, null, default);
         await artifactService.ValidateAsync(spec.Id, default);
 
-        var inProgress = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
-        var logLinesBefore = PlanningLog.Parse(inProgress.Body).Count;
+        var ready = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        var logLinesBefore = PlanningLog.Parse(ready.Body).Count;
 
         await artifactService.PatchAsync(
             spec.Id,
             new PlanningArtifactPatch(Section: "goal", Content: "new", LogNote: "reopened for rework"),
             source: PlanningLogSource.Agent);
 
-        await _context.Entry(inProgress).ReloadAsync();
-        inProgress.Status.ShouldBe(PlanningFeatureStatus.InProgress);
-        PlanningLog.Parse(inProgress.Body).Count.ShouldBe(logLinesBefore);
+        await _context.Entry(ready).ReloadAsync();
+        ready.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        PlanningLog.Parse(ready.Body).Count.ShouldBe(logLinesBefore);
     }
 
     [Fact]

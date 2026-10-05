@@ -17,12 +17,12 @@ public static class OnboardQuickstart
 
         Feature lifecycle: draft → ready → inProgress → review → done.
         Review invariant: review ⟺ spec+plan validated AND all tasks done.
-        Auto-transitions: artifact create → inProgress; all tasks done + spec + plan validated → review; task create on review → back to inProgress.
+        Auto-transitions: artifact create → ready (grooming never fakes inProgress); taking a task (any door) → inProgress; all tasks done + spec + plan validated → review; task create on review → back to inProgress.
         Editing a validated spec or plan demotes it to draft and pulls a review feature back to inProgress in the same write ([auto] line records it); done features are never resurrected.
         planning_set_feature_status reaches done from ANY non-done status; done is terminal.
         A done feature receiving a new artifact stays done — no transition fires.
         Without a plan there is no auto-promotion to review, even when all tasks are done — spec AND plan are required.
-        Import restores statuses verbatim from the materialized files — an imported done feature was not auto-closed.
+        Import restores statuses verbatim from the materialized files — an imported done feature was not auto-closed. The deploy-time honesty backfill (inProgress without a taken task → ready) runs once; a mirror materialized before it can restore such a feature on re-import, so check a stale mirror's taken tasks before trusting its statuses.
         planning_import_feature imports one materialized feature folder from disk in a single call — give its absolute path under the project root.
         Log lines carry [agent]/[ui]/[auto]/[import] markers saying who moved a status.
         Artifact statuses — spec/plan/result: draft, validated; task: todo, inProgress, review, done, blocked. Validated is the documents' terminal; result has no done.
