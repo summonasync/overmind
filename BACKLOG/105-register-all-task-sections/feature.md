@@ -1,7 +1,7 @@
 ---
 feature: 105
 slug: register-all-task-sections
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-10-03
@@ -31,4 +31,5 @@ Task artifacts ride in with partial section registration (Qwen friction log item
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-05 [auto] — all tasks done + spec + plan validated → review
 </log>
