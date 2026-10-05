@@ -59,8 +59,8 @@ export function updateEntry(id: string, values: EntryFormValues): Promise<EntryR
   });
 }
 
-export function deleteEntry(id: string): Promise<void> {
-  return apiDelete(`/entries/${id}`);
+export function deleteEntry(id: string): Promise<EntryResponse | undefined> {
+  return apiDelete<EntryResponse | undefined>(`/entries/${id}`);
 }
 
 export function listTags(): Promise<TagResponse[]> {

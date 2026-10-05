@@ -11,7 +11,9 @@ import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import { entryTagsQueryOptions } from "@/features/entries/queries";
 import {
   entryReadBody,
+  entryRowClasses,
   entryTagChipStyle,
+  entryTitleClasses,
   toggleEntryExpanded,
   type ExpandedEntries,
 } from "@/features/entries/lib/entry-read";
@@ -47,7 +49,7 @@ export function EntryList({ entries, onEdit, onDelete, onRead }: EntryListProps)
         const isExpanded = expanded.has(entry.id);
         const body = entryReadBody(entry.content);
         return (
-          <li key={entry.id} className="px-4 py-3 transition-colors hover:bg-surface-raised">
+          <li key={entry.id} className={entryRowClasses(entry.type)}>
             <div
               className="flex cursor-pointer items-center justify-between gap-4"
               onClick={() => toggle(entry.id)}
@@ -74,7 +76,7 @@ export function EntryList({ entries, onEdit, onDelete, onRead }: EntryListProps)
                     event.stopPropagation();
                     onRead(entry);
                   }}
-                  className="truncate text-left text-sm font-semibold text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className={`truncate text-left text-sm font-semibold ${entryTitleClasses(entry.type)} underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40`}
                 >
                   {entry.title}
                 </button>

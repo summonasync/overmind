@@ -117,7 +117,17 @@ function EntriesPageContent() {
         {deleting ? (
           <div className="space-y-4">
             <p className="text-sm text-foreground">
-              Delete entry &quot;{deleting.title}&quot;? This cannot be undone.
+              {deleting.type === "tombstone" ? (
+                <>
+                  Delete the tombstone &quot;{deleting.title}&quot;? This removes the grave for good — no
+                  second tombstone is created.
+                </>
+              ) : (
+                <>
+                  Delete entry &quot;{deleting.title}&quot;? A tombstone entry will keep the memory of it —
+                  title, date, provenance and final content. This cannot be undone.
+                </>
+              )}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setDeleting(null)}>

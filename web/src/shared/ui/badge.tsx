@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/shared/lib/cn";
 import type { EntryTone } from "@/shared/lib/entry-type";
 
-export type BadgeTone = "neutral" | "muted" | EntryTone;
+export type BadgeTone = "neutral" | EntryTone;
 
 interface BadgeProps {
   tone?: BadgeTone;
