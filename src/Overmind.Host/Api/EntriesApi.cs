@@ -213,6 +213,8 @@ public static class EntriesApi
 
     private static async Task<IResult> Delete(
         Guid id,
+        string? reason,
+        HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
         CancellationToken ct)
@@ -223,12 +225,47 @@ public static class EntriesApi
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
         }
 
+        ContextEntry? tombstone = null;
+        if (entry.Type != EntryType.Tombstone)
+        {
+            tombstone = ContextEntry.CreateTombstone(
+                entry,
+                ResolveDoor(http),
+                await ResolveActorAsync(db, http, ct),
+                reason);
+            db.ContextEntries.Add(tombstone);
+        }
+
         db.ContextEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
 
         await indexing.RemoveAsync(id, ct);
+        if (tombstone is not null)
+        {
+            await indexing.IndexAsync(tombstone, ct);
+        }
 
-        return Results.NoContent();
+        return tombstone is null
+            ? Results.NoContent()
+            : Results.Ok(EntryMapper.ToResponse(tombstone));
+    }
+
+    private static PlanningLogSource ResolveDoor(HttpRequest http) =>
+        SessionHeader.TryRead(http, out _)
+            ? PlanningLogSource.Agent
+            : PlanningLogSource.Ui;
+
+    private static async Task<string?> ResolveActorAsync(OvermindDbContext db, HttpRequest http, CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var sessionId))
+        {
+            return null;
+        }
+
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        return session is null
+            ? sessionId.ToString()
+            : $"{session.Alias} ({session.Vendor})";
     }
 
     private static async Task<IResult> ListVersions(Guid id, OvermindDbContext db, CancellationToken ct)

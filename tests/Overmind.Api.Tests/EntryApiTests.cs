@@ -58,7 +58,10 @@ public sealed class EntryApiTests : IDisposable
         updated.Tags.ShouldBe(["gamma"]);
 
         var deleteResponse = await _client.DeleteAsync($"/api/entries/{created.Id}");
-        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var tombstone = await deleteResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        tombstone.ShouldNotBeNull();
+        tombstone!.Type.ShouldBe("tombstone");
 
         var missing = await _client.GetAsync($"/api/entries/{created.Id}");
         missing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -202,6 +205,153 @@ public sealed class EntryApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task Delete_WithReason_ConvertsToTombstoneCarryingMemory()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Decision",
+            Title = "buried decision",
+            Content = "the old way",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        var deleteResponse = await _client.DeleteAsync($"/api/entries/{created.Id}?reason=superseded%20by%20the%20new%20flow");
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var tombstone = await deleteResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        tombstone.ShouldNotBeNull();
+        tombstone!.Id.ShouldNotBe(created.Id);
+        tombstone.Type.ShouldBe("tombstone");
+        tombstone.Title.ShouldBe("buried decision (deleted)");
+        tombstone.CurrentVersion.ShouldBe(0);
+        tombstone.Content.ShouldContain("Reason: superseded by the new flow");
+        tombstone.Content.ShouldContain("Original type: decision");
+        tombstone.Content.ShouldContain("via human door.");
+        tombstone.Content.ShouldContain("the old way");
+
+        (await _client.GetAsync($"/api/entries/{created.Id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await _client.GetAsync($"/api/entries/{created.Id}/versions")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await _client.GetAsync($"/api/entries/{tombstone.Id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Delete_WithoutReason_OmitsReasonLine()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "quiet burial",
+            Content = "plain body",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        var deleteResponse = await _client.DeleteAsync($"/api/entries/{created.Id}");
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var tombstone = await deleteResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        tombstone.ShouldNotBeNull();
+        tombstone!.Content.ShouldNotContain("Reason:");
+        tombstone.Content.ShouldContain("Original type: note");
+    }
+
+    [Fact]
+    public async Task Delete_AgentDoor_RecordsSessionActor()
+    {
+        var sessionResponse = await _client.PostAsJsonAsync("/api/agent/sessions", new { Alias = "Van", Vendor = "claude" });
+        sessionResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var session = await sessionResponse.Content.ReadFromJsonAsync<SessionJson>(JsonOptions);
+
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Guard",
+            Title = "doomed guard",
+            Content = "guard body",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/entries/{created.Id}?reason=cleanup");
+        request.Headers.Add("X-Overmind-Session", session!.Id.ToString());
+        var deleteResponse = await _client.SendAsync(request);
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var tombstone = await deleteResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        tombstone.ShouldNotBeNull();
+        tombstone!.Content.ShouldContain("via agent door by Van (claude).");
+        tombstone.Content.ShouldNotContain("human door");
+    }
+
+    [Fact]
+    public async Task Delete_ConvertedTombstone_IsFilterableAndSearchable()
+    {
+        await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "kept note",
+            Content = "stays alive",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        var buried = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Gate",
+            Title = "buried gate",
+            Content = "wombats prefer dusk",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+        var deleteResponse = await _client.DeleteAsync($"/api/entries/{buried.Id}");
+        var tombstone = await deleteResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+
+        var filtered = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=tombstone", JsonOptions);
+        filtered.ShouldNotBeNull();
+        filtered!.Count.ShouldBe(1);
+        filtered[0].Id.ShouldBe(tombstone!.Id);
+        filtered[0].Title.ShouldBe("buried gate (deleted)");
+
+        var searched = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=tombstone&q=wombats", JsonOptions);
+        searched.ShouldNotBeNull();
+        searched!.Count.ShouldBe(1);
+        searched[0].Id.ShouldBe(tombstone.Id);
+    }
+
+    [Fact]
+    public async Task Delete_Tombstone_DeletesCleanlyWithoutSecondTombstone()
+    {
+        var buried = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "twice buried",
+            Content = "first the note, then the stone",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+        var firstDelete = await _client.DeleteAsync($"/api/entries/{buried.Id}");
+        var tombstone = await firstDelete.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+
+        var secondDelete = await _client.DeleteAsync($"/api/entries/{tombstone!.Id}");
+        secondDelete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await _client.GetAsync($"/api/entries/{tombstone.Id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var remaining = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=tombstone", JsonOptions);
+        remaining.ShouldNotBeNull();
+        remaining!.ShouldBeEmpty();
+    }
+
     private Guid CreateProject(string name)
     {
         var response = _client.PostAsJsonAsync("/api/projects", new
@@ -225,6 +375,8 @@ public sealed class EntryApiTests : IDisposable
     }
 
     public sealed record ProjectJson(Guid Id);
+
+    public sealed record SessionJson(Guid Id);
 
     public sealed record SkillFileJson(string Platform, string RelativePath, string Content);
 

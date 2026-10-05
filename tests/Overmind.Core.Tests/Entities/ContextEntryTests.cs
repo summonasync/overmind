@@ -13,6 +13,7 @@ public class ContextEntryTests
     [InlineData(EntryType.Decision)]
     [InlineData(EntryType.Gate)]
     [InlineData(EntryType.Guard)]
+    [InlineData(EntryType.Tombstone)]
     public void Create_SetsTypeAndTimestamps(EntryType type)
     {
         var before = DateTime.UtcNow;
@@ -119,5 +120,70 @@ public class ContextEntryTests
         entry.EntryTags.Count.ShouldBe(1);
         entry.EntryTags[0].TagId.ShouldBe(tag.Id);
         entry.EntryTags[0].EntryId.ShouldBe(entry.Id);
+    }
+
+    [Fact]
+    public void CreateTombstone_BuriesOriginalWithFencedMemory()
+    {
+        var original = ContextEntry.Create(
+            ProjectId, EntryType.Decision, "pick zebra", "first take\n```text\nv1\n```");
+        original.UpdateContent("final take\n```csharp\nvar x = 1;\n```\nend");
+
+        var tombstone = ContextEntry.CreateTombstone(
+            original, PlanningLogSource.Ui, null, "superseded by the yak decision");
+
+        tombstone.ProjectId.ShouldBe(ProjectId);
+        tombstone.Type.ShouldBe(EntryType.Tombstone);
+        tombstone.Title.ShouldBe("pick zebra (deleted)");
+        tombstone.Versions.ShouldBeEmpty();
+        tombstone.Content.ShouldStartWith("Deleted ");
+        tombstone.Content.ShouldContain("via human door.");
+        tombstone.Content.ShouldContain("Reason: superseded by the yak decision");
+        tombstone.Content.ShouldContain("Original type: decision");
+        tombstone.Content.ShouldContain(original.Content);
+        tombstone.Content.ShouldNotContain("first take");
+        tombstone.Content.ShouldEndWith("end\n````");
+    }
+
+    [Fact]
+    public void CreateTombstone_WithoutReason_OmitsReasonLine()
+    {
+        var original = ContextEntry.Create(ProjectId, EntryType.Note, "plain", "body");
+
+        var tombstone = ContextEntry.CreateTombstone(original, PlanningLogSource.Agent, "Van (claude)");
+
+        tombstone.Content.ShouldNotContain("Reason:");
+        tombstone.Content.ShouldContain("via agent door by Van (claude).");
+        tombstone.Content.ShouldContain("Original type: note");
+    }
+
+    [Fact]
+    public void CreateTombstone_HumanDoor_OmitsActor()
+    {
+        var original = ContextEntry.Create(ProjectId, EntryType.Gate, "deploy gate", "body");
+
+        var tombstone = ContextEntry.CreateTombstone(original, PlanningLogSource.Ui, null);
+
+        tombstone.Content.ShouldContain("via human door.");
+        tombstone.Content.ShouldNotContain(" by ");
+    }
+
+    [Fact]
+    public void CreateTombstone_AutoSource_IsRefused()
+    {
+        var original = ContextEntry.Create(ProjectId, EntryType.Note, "plain", "body");
+
+        Should.Throw<ArgumentException>(() =>
+            ContextEntry.CreateTombstone(original, PlanningLogSource.Auto, null));
+    }
+
+    [Fact]
+    public void CreateTombstone_OnTombstone_Throws()
+    {
+        var original = ContextEntry.Create(ProjectId, EntryType.Note, "plain", "body");
+        var tombstone = ContextEntry.CreateTombstone(original, PlanningLogSource.Agent, "Van");
+
+        Should.Throw<InvalidOperationException>(() =>
+            ContextEntry.CreateTombstone(tombstone, PlanningLogSource.Agent, "Van"));
     }
 }

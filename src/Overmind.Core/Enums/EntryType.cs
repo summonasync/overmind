@@ -6,5 +6,6 @@ public enum EntryType
     Decision,
     Gate,
     Guard,
-    Skill
+    Skill,
+    Tombstone
 }

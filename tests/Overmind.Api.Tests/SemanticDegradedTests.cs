@@ -105,7 +105,10 @@ public sealed class SemanticDegradedTests : IDisposable
 
         var deleted = await _client.DeleteAsync($"/api/entries/{entryId}");
 
-        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        deleted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var tombstone = await deleted.Content.ReadFromJsonAsync<TombstoneJson>(JsonOptions);
+        tombstone.ShouldNotBeNull();
+        tombstone!.Type.ShouldBe("tombstone");
     }
 
     [Fact]
@@ -163,6 +166,8 @@ public sealed class SemanticDegradedTests : IDisposable
     public sealed record ProjectJson(Guid Id);
 
     public sealed record EntryJson(Guid Id);
+
+    public sealed record TombstoneJson(Guid Id, string Type);
 
     public sealed record HealthJson(string Status, VectorSearchHealthReport VectorSearch, string Version);
 
