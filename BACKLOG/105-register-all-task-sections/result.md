@@ -1,8 +1,9 @@
 ---
 feature: 105
 slug: register-all-task-sections
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 105 — Register all task sections on upsert (patch without full re-send) — Qwen friction #4 / bug 6ee3be0f

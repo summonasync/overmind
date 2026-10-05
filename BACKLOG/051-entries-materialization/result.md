@@ -1,8 +1,9 @@
 ---
 feature: 051
 slug: entries-materialization
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 051 — Entries materialization: notes/decisions/gates/guards на диск (+ tombstone-файлы, не молчаливый снос)

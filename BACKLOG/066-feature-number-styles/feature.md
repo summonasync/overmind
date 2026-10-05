@@ -1,7 +1,7 @@
 ---
 feature: 066
 slug: feature-number-styles
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -36,4 +36,6 @@ Each project can choose how its feature numbers render: `KEY-039` (Jira-style wi
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — done via agent review — approved by human tap (notification reply 17:19:56 on result 56a746ab)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

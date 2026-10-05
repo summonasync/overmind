@@ -1,7 +1,7 @@
 ---
 feature: 073
 slug: project-manifest
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-09-24
@@ -35,4 +35,6 @@ Every project carries a full markdown manifest in Overmind — what the project 
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-05 [agent] — done via agent review — approved by human tap (consolidated stack approval bb929195, reply 2026-10-05 17:36:12 UTC)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

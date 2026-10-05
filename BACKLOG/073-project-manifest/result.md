@@ -1,8 +1,9 @@
 ---
 feature: 073
 slug: project-manifest
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 073 — Project manifest: AGENTS.md-аналог внутри Overmind — MCP-чтение для любого агента, UI-редактор на project-config, импорт agents/claude/qwen.md

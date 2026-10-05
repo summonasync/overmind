@@ -1,7 +1,7 @@
 ---
 feature: 063
 slug: worktree-feature-binding
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-23
@@ -25,4 +25,6 @@ Value: agent gets task artifact + spec context + exact code location + git statu
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — done via agent review — approved by human tap (consolidated stack approval bb929195, reply 2026-10-05 17:36:12 UTC)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

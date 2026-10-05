@@ -1,7 +1,7 @@
 ---
 feature: 104
 slug: materialization-off-write-path
-status: inProgress
+status: done
 priority: p1
 version: 1
 created: 2026-10-03
@@ -32,4 +32,6 @@ A write that times out but still commits is the worst failure mode for agent tru
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-04 [agent] — Van by claude claimed the feature
 - 2026-10-05 [agent] — Van by claude took over stale claim of Van by claude
+- 2026-10-05 [agent] — done via agent review — approved by human tap (consolidated stack approval bb929195, reply 2026-10-05 17:36:12 UTC)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

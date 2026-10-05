@@ -1,8 +1,9 @@
 ---
 feature: 104
 slug: materialization-off-write-path
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 104 — Materialization off the write path + honest timeout errors (Qwen friction #3)

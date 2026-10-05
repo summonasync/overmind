@@ -1,8 +1,9 @@
 ---
 feature: 104
 slug: materialization-off-write-path
-status: draft
+status: validated
 created: 2026-10-04
+validated: 2026-10-05
 ---
 
 # Spec 104 — Materialization off the write path + honest timeout errors (Qwen friction #3)
@@ -30,4 +31,5 @@ created: 2026-10-04
 - 2026-10-05 [agent] — architect-104 N1 honesty pass: escape hatch is GLOBAL v1 (original «per project» wording was wrong — no per-project override shipped); probe wording aligned with the implemented log-tail match and unknown-for-section-less reads (review-104-02 W1/W2); worker re-runs shutdown-cancelled passes (architect-104 W1). Frozen artifact demoted to draft per the editing rule; re-validation rides the user's return tap.
 - 2026-10-05 [agent] — architect-104 honesty pass (N1 + wording alignment): escape hatch documented as global v1, probe semantics match the implemented log-tail match and unknown-for-section-less behavior, shutdown re-run recorded. Demoted from validated per the frozen-artifact editing rule — re-validation rides the user's return tap together with the result.
 - 2026-10-05 [auto] — artifact demoted: validated → draft
+- 2026-10-05 [agent] — validated with human proof: notification bb929195-1cd2-41d0-9fc3-c469ea993676 replied 2026-10-05 17:36:12 UTC
 </log>

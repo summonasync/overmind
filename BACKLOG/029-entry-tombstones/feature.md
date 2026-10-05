@@ -1,7 +1,7 @@
 ---
 feature: 029
 slug: entry-tombstones
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-20
@@ -39,4 +39,6 @@ Draft; спека после короткого брейншторма с юзе
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — done via agent review — approved by human tap (consolidated stack approval bb929195, reply 2026-10-05 17:36:12 UTC)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

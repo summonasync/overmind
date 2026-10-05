@@ -1,8 +1,9 @@
 ---
 feature: 066
 slug: feature-number-styles
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 066 — Feature-number styles per project (KEY-039 / #039 / plain) + вкладка project settings — один форматер для всех поверхностей

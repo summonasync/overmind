@@ -1,8 +1,9 @@
 ---
 feature: 063
 slug: worktree-feature-binding
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 063 — Worktree/branch ↔ feature binding: agents locate task code and status super fast

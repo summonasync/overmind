@@ -1,8 +1,9 @@
 ---
 feature: 029
 slug: entry-tombstones
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 029 — Entry tombstones: тип записи + автозахват при удалении + список для агентов перед работой
