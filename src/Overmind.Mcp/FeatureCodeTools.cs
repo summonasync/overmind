@@ -67,7 +67,7 @@ public sealed class FeatureCodeTools
         var listing = await RunAsync(workspace, "worktree list --porcelain", ct);
         var branchList = await RunAsync(workspace, BranchListArguments, ct);
         var heads = GitBranchListParser.Parse(branchList.StandardOutput)
-            .ToDictionary(head => head.Name, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(head => head.Name, StringComparer.Ordinal);
 
         var candidates = new List<FeatureCodeCandidate>();
         foreach (var worktree in GitWorktreeListParser.Parse(listing.StandardOutput))

@@ -42,10 +42,16 @@ public sealed class GitCli : IGitCli
             await process.WaitForExitAsync(timeout.Token);
             return new GitCommandResult(process.ExitCode, await output, await error);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Kill on every cancellation path — the external client token must not orphan git.
             TryKill(process);
-            throw new McpException($"git {arguments} timed out after {Timeout.TotalSeconds:0}s in {workingDirectory}.");
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                throw new McpException($"git {arguments} timed out after {Timeout.TotalSeconds:0}s in {workingDirectory}.");
+            }
+
+            throw;
         }
     }
 
