@@ -57,7 +57,7 @@ public sealed class FeatureCodeTools
             ["matches"] = await MatchesJsonAsync(matches, heads, workspace, ct),
             ["hint"] = matches.Count == 0 ? NoMatchHint : null
         };
-        await AppendFeatureAsync(payload, resolved, trimmed, ct);
+        await AppendFeatureAsync(payload, resolved, trimmed, workspace, ct);
         return JsonSerializer.SerializeToElement(payload);
     }
 
@@ -165,10 +165,12 @@ public sealed class FeatureCodeTools
         return result;
     }
 
-    private async Task AppendFeatureAsync(JsonObject payload, Guid projectId, string slug, CancellationToken ct)
+    private async Task AppendFeatureAsync(JsonObject payload, Guid projectId, string slug, string workspace, CancellationToken ct)
     {
         try
         {
+            var project = await _api.GetAsync($"/api/projects/{projectId}", ct);
+            payload["workspaceMatchesProject"] = WorkspaceMatchesProject(workspace, StringOf(project, "diskPath"));
             var feature = await _api.GetAsync(
                 $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}?includeArtifacts=false", ct);
             payload["feature"] = new JsonObject
@@ -185,6 +187,19 @@ public sealed class FeatureCodeTools
             payload["feature"] = null;
             payload["featureError"] = $"the host feature read failed, so only the discovery half is answered: {ex.Message}";
         }
+    }
+
+    private static bool WorkspaceMatchesProject(string workspace, string? diskPath)
+    {
+        if (diskPath is null)
+        {
+            return false;
+        }
+
+        return string.Equals(
+            Path.GetFullPath(workspace).TrimEnd(Path.DirectorySeparatorChar),
+            Path.GetFullPath(diskPath).TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? StringOf(JsonElement element, string property) =>

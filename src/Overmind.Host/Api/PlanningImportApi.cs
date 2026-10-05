@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 
@@ -58,9 +59,11 @@ public static class PlanningImportApi
     private static string? ManifestHint(string diskPath)
     {
         var root = Path.GetFullPath(diskPath);
-        foreach (var candidate in new[] { "AGENTS.md", "CLAUDE.md", "QWEN.md" })
+        foreach (var candidate in ManifestImporter.Candidates)
         {
-            if (File.Exists(Path.Combine(root, candidate)))
+            // Same empty-file skip as the importer — a hint naming an empty AGENTS.md would lie
+            // about what an import actually picks up.
+            if (File.Exists(Path.Combine(root, candidate)) && new FileInfo(Path.Combine(root, candidate)).Length > 0)
             {
                 return $"{candidate} found in the project root — import it as the project manifest from the config page (readable by agents via read_project_manifest).";
             }

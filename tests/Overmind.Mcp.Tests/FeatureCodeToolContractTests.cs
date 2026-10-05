@@ -44,12 +44,16 @@ public sealed class FeatureCodeToolContractTests : IAsyncLifetime
                 "main\tf67669f\t2026-10-05T10:15:00+03:00\n" +
                 "feat/063-worktree-feature-binding\tcceb4fe\t2026-10-04T18:40:00Z\n");
             _stub.RouteGet(
+                $"/api/projects/{Canned.ProjectId}",
+                Canned.ProjectJson.Replace("E:\\\\work\\\\alpha", Directory.GetCurrentDirectory().Replace("\\", "\\\\")));
+            _stub.RouteGet(
                 $"/api/agent/projects/{Canned.ProjectId}/planning/features/063-worktree-feature-binding",
                 Canned.PlanningFeatureJson);
 
             var result = await Tool(git).FeatureCode("063-worktree-feature-binding", Canned.ProjectId);
 
             result.GetProperty("hint").ValueKind.ShouldBe(JsonValueKind.Null);
+            result.GetProperty("workspaceMatchesProject").GetBoolean().ShouldBeTrue();
             var matches = result.GetProperty("matches");
             matches.GetArrayLength().ShouldBe(2);
 

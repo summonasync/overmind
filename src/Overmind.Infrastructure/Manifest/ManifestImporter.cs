@@ -5,7 +5,7 @@ namespace Overmind.Infrastructure.Manifest;
 
 public sealed class ManifestImporter
 {
-    private static readonly string[] Candidates = ["AGENTS.md", "CLAUDE.md", "QWEN.md"];
+    public static readonly string[] Candidates = ["AGENTS.md", "CLAUDE.md", "QWEN.md"];
 
     public async Task<ProjectManifestImport?> ImportAsync(string projectRoot, CancellationToken ct)
     {
