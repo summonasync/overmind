@@ -1111,6 +1111,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         var first = await CreateAgentArtifactAsync(project.Id, "feat-a", new { Kind = "task", Body = "task 1", Order = 1 });
         await CreateAgentArtifactAsync(project.Id, "feat-a", new { Kind = "task", Body = "task 2", Order = 2 });
         await SetTaskStatusAsync(first.Id, "done");
+        await CreateAgentArtifactAsync(project.Id, "feat-b", new { Kind = "result", Body = "close-out" });
         await BringToStatusViaHumanDoorAsync(project.Id, "feat-b", "done");
 
         var current = await GetCurrentAsync(project.Id, "feat-a");
@@ -1220,10 +1221,12 @@ public sealed class AgentPlanningApiTests : IDisposable
     [InlineData("ready")]
     [InlineData("inProgress")]
     [InlineData("review")]
-    public async Task SetFeatureStatus_DoneFromNonDoneStatus_AppliesAndLogsProvenance(string start)
+    public async Task SetFeatureStatus_DoneWithResultAndFreshTap_AppliesAndLogsProvenance(string start)
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "close-out" });
+        await NotifyAndReplyAsync(project.Id, "feat");
         await BringToStatusViaHumanDoorAsync(project.Id, "feat", start);
 
         var response = await _client.PostAsJsonAsync(
@@ -1237,11 +1240,117 @@ public sealed class AgentPlanningApiTests : IDisposable
         var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
         echo!.Slug.ShouldBe("feat");
         echo.Status.ShouldBe("done");
-        echo.LastLogLine.ShouldBe("by user request in-session");
+        echo.LastLogLine.ShouldStartWith("done via agent review, approved by human tap ");
 
         var feature = await _client.GetFromJsonAsync<FeatureJson>(
             AgentFeatureUrl(project.Id, "feat"), JsonOptions);
         feature!.Body.ShouldContain("by user request in-session");
+        feature.Body.ShouldContain("done via agent review, approved by human tap ");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_DoneWithClaim_ProvenanceCarriesClaimIdentity()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var session = Guid.NewGuid().ToString();
+        _client.DefaultRequestHeaders.Add("X-Overmind-Session", session);
+        var claim = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/feat/claim",
+            new { Alias = "Dan", Vendor = "qwen" });
+        claim.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "close-out" });
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "done", LogNote = "review cycle closed it" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<FeatureMutationJson>(JsonOptions);
+        echo!.LastLogLine.ShouldBe("claim released on done-close");
+
+        var closed = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        closed!.Body.ShouldContain(
+            $"done via agent review by Dan (qwen), approved by human tap {DateTime.UtcNow:yyyy-MM-dd}");
+        closed.Body.ShouldContain("claim released on done-close");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_DoneWithoutResult_Returns409NamingResult()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "done", LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureResultRequired");
+        problem.Detail!.ShouldContain("result artifact is missing");
+        problem.Detail!.ShouldContain("kind=result");
+    }
+
+    [Fact]
+    public async Task SetFeatureStatus_DoneWithResultButNoTap_Returns409TeachingNotifyReply()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "close-out" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeatureStatusUrl(project.Id, "feat"),
+            new { Status = "done", LogNote = "by user request in-session" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureDoneTapRequired");
+        problem.Detail!.ShouldContain("overmind_notify(kind=approval, featureSlug=feat)");
+        problem.Detail!.ShouldContain("newer than the result's last update");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Status.ShouldNotBe("done");
+    }
+
+    [Fact]
+    public async Task HumanDoor_DoneWithoutResult_Returns409WithExplanation()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "review");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Status = "done" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureResultRequired");
+        problem.Detail!.ShouldContain("result artifact is missing");
+    }
+
+    [Fact]
+    public async Task HumanDoor_DoneWithResult_NeedsNoTap()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "close-out" });
+        await BringToStatusViaHumanDoorAsync(project.Id, "feat", "review");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat",
+            new { Status = "done" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Status.ShouldBe("done");
     }
 
     [Fact]
@@ -1333,6 +1442,7 @@ public sealed class AgentPlanningApiTests : IDisposable
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "result", Body = "close-out" });
         await BringToStatusViaHumanDoorAsync(project.Id, "feat", "done");
 
         var response = await _client.PostAsJsonAsync(

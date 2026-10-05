@@ -81,6 +81,18 @@ public sealed class PlanningException : Exception
             "Human approval required: send overmind_notify(kind=approval, featureSlug=" + featureSlug +
             ") and wait for the human's reply in the notification center, or validate via the UI.");
 
+    public static PlanningException FeatureResultRequired(string slug) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureResultRequired,
+            $"Feature '{slug}' cannot close as done: the result artifact is missing — write the result " +
+            "first via planning_upsert_artifact(kind=result), or in the UI; the result is the readable " +
+            "close-out a done flip requires.");
+
+    public static PlanningException FeatureDoneTapRequired(string slug) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureDoneTapRequired,
+            $"done on '{slug}' needs the human's tap: send overmind_notify(kind=approval, featureSlug=" +
+            slug + ") and wait for the reply in the notification center — the reply must be newer than " +
+            "the result's last update; or let the human close the feature in the UI.");
+
     public static PlanningException MigratedNoteRequired() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.MigratedNoteRequired,
             "asMigrated requires a logNote: the marker line must record where the pre-approval came from, e.g. 'validated v9 on disk, user-approved before migration'.");

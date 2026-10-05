@@ -357,14 +357,18 @@ public sealed class FeatureClaimServiceTests : IDisposable
         var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "feat-a");
         feature.SetStatus(PlanningFeatureStatus.InProgress);
         await _context.SaveChangesAsync();
+        await SeedResultWithTapAsync("feat-a");
         await CreateFeatureService().SetStatusAsync(
-            _projectId, "feat-a", PlanningFeatureStatus.Done, "closed by user request", default);
+            _projectId, "feat-a", PlanningFeatureStatus.Done, "closed by user request",
+            requireHumanTap: true, ct: default);
 
         var closed = await _context.PlanningFeatures.AsNoTracking()
             .SingleAsync(f => f.Slug == "feat-a");
         closed.ClaimSessionId.ShouldBeNull();
         closed.ClaimedByAlias.ShouldBeNull();
-        PlanningLog.Parse(closed.Body).Last().Text.ShouldBe("claim released on done-close");
+        var log = PlanningLog.Parse(closed.Body).Select(l => l.Text).ToList();
+        log.ShouldContain(t => t.StartsWith("done via agent review by Dan (qwen), approved by human tap "));
+        log.Last().ShouldBe("claim released on done-close");
     }
 
     [Fact]
@@ -376,6 +380,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
         var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "feat-a");
         feature.SetStatus(PlanningFeatureStatus.InProgress);
         await _context.SaveChangesAsync();
+        await SeedResultWithTapAsync("feat-a");
 
         await CreateFeatureService().UpdateAsync(
             _projectId, "feat-a", null, null, PlanningFeatureStatus.Done, default);
@@ -384,5 +389,17 @@ public sealed class FeatureClaimServiceTests : IDisposable
             .SingleAsync(f => f.Slug == "feat-a");
         closed.ClaimSessionId.ShouldBeNull();
         PlanningLog.Parse(closed.Body).Last().Text.ShouldBe("claim released on done-close");
+    }
+
+    private async Task SeedResultWithTapAsync(string slug)
+    {
+        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == slug);
+        _context.PlanningArtifacts.Add(
+            PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Result, "close-out"));
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, slug);
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
     }
 }

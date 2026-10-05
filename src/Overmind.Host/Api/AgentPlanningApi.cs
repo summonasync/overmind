@@ -410,7 +410,8 @@ public static class AgentPlanningApi
 
         try
         {
-            await service.SetStatusAsync(projectId, slug, request.Status, request.LogNote, ct);
+            await service.SetStatusAsync(
+                projectId, slug, request.Status, request.LogNote, requireHumanTap: true, ct);
         }
         catch (PlanningException ex)
         {

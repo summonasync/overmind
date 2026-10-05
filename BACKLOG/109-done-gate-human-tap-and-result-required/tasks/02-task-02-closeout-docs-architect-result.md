@@ -2,7 +2,7 @@
 feature: 109
 task: 02
 slug: done-gate-human-tap-and-result-required
-status: todo
+status: done
 review: light
 created: 2026-10-04
 depends_on: 01
@@ -21,9 +21,14 @@ Close the wave: the flow change is documented everywhere the old flow is describ
 </scope>
 
 <acceptance-criteria>
-- [ ] Docs updated (skill/CLAUDE.md/server text); architect verdict recorded; result drafted with click-check.
+- [x] Docs updated (skill/CLAUDE.md/server text); architect verdict recorded; result drafted with click-check.
 </acceptance-criteria>
 
 <refs>
 - Spec 931c87a5 (v2); plan ed1bec3e (task 2).
 </refs>
+
+<log>
+- 2026-10-05 [agent] — taken by orchestrator — docs wave + architect light + result
+- 2026-10-05 [agent] — closeout complete: docs wave done (ceremony Gates §3 + matrix row, orchestrator closeout step, MCP description — kit CLAUDE.md had no done-flow text to edit, architect I1), architect light APPROVED 0 blockers 0 warnings (audits/architect-109.md), result 9ae30013 drafted with click-check. S1 (shared approval-reply helper) -> microbatch #239. Feature goes to review; done-flip waits on the human tap.
+</log>

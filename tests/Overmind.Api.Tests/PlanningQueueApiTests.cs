@@ -508,6 +508,14 @@ public sealed class PlanningQueueApiTests : IDisposable
             _ => throw new ArgumentException($"unknown status '{target}'"),
         };
 
+        if (target == "done")
+        {
+            var seed = await _client.PostAsJsonAsync(
+                $"/api/projects/{projectId}/planning/features/{slug}/artifacts",
+                new { Kind = "result", Body = "close-out" });
+            seed.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.OK);
+        }
+
         foreach (var step in path)
         {
             var response = await _client.PutAsJsonAsync(

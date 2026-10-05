@@ -671,6 +671,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var task1 = await artifactService.UpsertAsync(
             feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
         await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
         var closed = await featureService.UpdateAsync(
             _projectId, "feat", null, null, PlanningFeatureStatus.Done, default);
 
@@ -1097,7 +1098,9 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         await artifactService.ValidateAsync(plan.Id, default);
         await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
         await artifactService.SetStatusAsync(task2.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 2 done", default);
-        await featureService.SetStatusAsync(_projectId, "feat", PlanningFeatureStatus.Done, "closing the feature", default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "closing the feature", ct: default);
 
         var result = await artifactService.SetStatusAsync(
             spec.Id, PlanningArtifactStatus.Draft, PlanningLogSource.Agent, "late reopen", default);
@@ -1174,6 +1177,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
         await featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Review, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
         var closed = await featureService.UpdateAsync(
             _projectId, "feat", null, null, PlanningFeatureStatus.Done, default);
 
@@ -1514,7 +1518,9 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         await artifactService.ValidateAsync(spec.Id, default);
         await artifactService.ValidateAsync(plan.Id, default);
         await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
-        await featureService.SetStatusAsync(_projectId, "feat", PlanningFeatureStatus.Done, "closing the feature", default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "closing the feature", ct: default);
 
         var done = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         var logLinesBefore = PlanningLog.Parse(done.Body).Count;
@@ -1784,6 +1790,189 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var line = PlanningLog.Parse(spec.Body).ShouldHaveSingleItem();
         line.Source.ShouldBe(PlanningLogSource.Agent);
         line.Text.ShouldBe("validated as migrated — pre-approved on disk: x");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SetStatusAsync_DoneWithoutResult_ThrowsFeatureResultRequired(bool requireHumanTap)
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            featureService.SetStatusAsync(
+                _projectId, "feat", PlanningFeatureStatus.Done, "closing the feature",
+                requireHumanTap, default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureResultRequired);
+        ex.Message.ShouldContain("result artifact is missing");
+        ex.Message.ShouldContain("kind=result");
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_DoneWithResult_NoTap_ThrowsFeatureDoneTapRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            featureService.SetStatusAsync(
+                _projectId, "feat", PlanningFeatureStatus.Done, "closing the feature",
+                requireHumanTap: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureDoneTapRequired);
+        ex.Message.ShouldContain("overmind_notify(kind=approval, featureSlug=feat)");
+        ex.Message.ShouldContain("newer than the result's last update");
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_DoneWithReplyOlderThanResultUpdate_ThrowsFeatureDoneTapRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out v2", null, null, "edited after the reply", default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            featureService.SetStatusAsync(
+                _projectId, "feat", PlanningFeatureStatus.Done, "closing the feature",
+                requireHumanTap: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureDoneTapRequired);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_DoneWithFreshTap_AppendsProvenanceLine()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var claimed = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "feat");
+        claimed.Claim("Dan", "qwen", Guid.NewGuid(), DateTime.UtcNow);
+        await _context.SaveChangesAsync();
+
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "review cycle closed it",
+            requireHumanTap: true, ct: default);
+
+        var closed = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        var log = PlanningLog.Parse(closed.Body).ToList();
+        log.ShouldContain(l => l.Source == PlanningLogSource.Agent &&
+            l.Text == $"done via agent review by Dan (qwen), approved by human tap {notification.RepliedAt:yyyy-MM-dd}");
+        log.ShouldContain(l => l.Text == "review cycle closed it");
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_DoneWithFreshTap_NoClaim_ProvenanceOmitsReviewer()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "review cycle closed it",
+            requireHumanTap: true, ct: default);
+
+        var closed = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        var line = PlanningLog.Parse(closed.Body)
+            .Single(l => l.Text.StartsWith("done via agent review"));
+        line.Text.ShouldBe($"done via agent review, approved by human tap {notification.RepliedAt:yyyy-MM-dd}");
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_Done_HiddenApprovalReplyStillCountsAsProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        notification.Hide();
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "review cycle closed it",
+            requireHumanTap: true, ct: default);
+
+        var closed = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        closed.Status.ShouldBe(PlanningFeatureStatus.Done);
+        PlanningLog.Parse(closed.Body).ShouldContain(l => l.Text.StartsWith("done via agent review"));
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_NonDoneTarget_NeedsNoResultOrTap()
+    {
+        var featureService = CreateFeatureService();
+        await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var moved = await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.InProgress, "picking up the feature", default);
+
+        moved.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DoneWithoutResult_ThrowsFeatureResultRequired()
+    {
+        var featureService = CreateFeatureService();
+        await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Done, default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureResultRequired);
+
+        var untouched = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        untouched.Status.ShouldBe(PlanningFeatureStatus.Draft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DoneWithResult_NeedsNoTap()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+
+        var closed = await featureService.UpdateAsync(
+            _projectId, "feat", null, null, PlanningFeatureStatus.Done, default);
+
+        closed.Status.ShouldBe(PlanningFeatureStatus.Done);
+        var log = PlanningLog.Parse(closed.Body).ToList();
+        log.ShouldNotContain(l => l.Text.Contains("done via agent review"));
+        log.Last().Source.ShouldBe(PlanningLogSource.Ui);
     }
 
     [Fact]

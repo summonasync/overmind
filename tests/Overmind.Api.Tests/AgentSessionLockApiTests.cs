@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using Overmind.Host.Api;
 using Shouldly;
@@ -131,6 +132,25 @@ public sealed class AgentSessionLockApiTests : IDisposable
         return raw.GetProperty("id").GetGuid();
     }
 
+    private async Task SeedCloseWithTapAsync(Guid projectId, string slug)
+    {
+        await CreateArtifactAsync(projectId, slug, new { Kind = "result", Body = "close-out" });
+
+        var create = await _client.PostAsJsonAsync("/api/agent/notifications", new
+        {
+            Kind = "approval",
+            Text = $"please approve {slug}",
+            ProjectId = projectId,
+            FeatureSlug = slug
+        }, JsonOptions);
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var notificationId = JsonNode.Parse(await create.Content.ReadAsStringAsync())!["id"]!.GetValue<string>();
+
+        var reply = await _client.PostAsJsonAsync(
+            $"/api/notifications/{notificationId}/reply", new { Text = "lgtm" });
+        reply.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task Register_CreatesSessionRow()
     {
@@ -243,6 +263,7 @@ public sealed class AgentSessionLockApiTests : IDisposable
             Body = $"# {slug}\n\n<goal>do the thing</goal>",
         });
         await ClaimFeatureAsync(projectId, slug);
+        await SeedCloseWithTapAsync(projectId, slug);
 
         var featureUrl = $"/api/agent/projects/{projectId}/planning/features/{slug}";
         var (method, url, body) = mutation switch
@@ -659,6 +680,7 @@ public sealed class AgentSessionLockApiTests : IDisposable
         await SeedHolderSessionAsync(DateTime.UtcNow);
         await CreateAgentFeatureAsync(project.Id, "closable");
         await ClaimFeatureAsync(project.Id, "closable");
+        await SeedCloseWithTapAsync(project.Id, "closable");
 
         var response = await SendAsync(HttpMethod.Post,
             $"/api/agent/projects/{project.Id}/planning/features/closable/status",

@@ -55,6 +55,13 @@ public sealed class FeatureDependencyServiceTests : IDisposable
     {
         var service = CreateFeatureService();
         var feature = await service.CreateAsync(_projectId, slug, slug, string.Empty);
+        if (status == PlanningFeatureStatus.Done)
+        {
+            _context.PlanningArtifacts.Add(
+                PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Result, "close-out"));
+            await _context.SaveChangesAsync();
+        }
+
         if (status.HasValue && status.Value != PlanningFeatureStatus.Draft)
         {
             foreach (var step in PathTo(status.Value))

@@ -85,6 +85,11 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.MissingFeature(slug);
         }
 
+        if (status.HasValue && status.Value == PlanningFeatureStatus.Done && status.Value != feature.Status)
+        {
+            await FeatureDoneGate.RequireResultAsync(_db, feature, ct);
+        }
+
         feature.Update(title, body);
 
         if (status.HasValue && status.Value != feature.Status)
@@ -155,7 +160,8 @@ public sealed partial class PlanningFeatureService
     }
 
     public async Task<PlanningFeature> SetStatusAsync(
-        Guid projectId, string slug, PlanningFeatureStatus status, string logNote, CancellationToken ct = default)
+        Guid projectId, string slug, PlanningFeatureStatus status, string logNote,
+        bool requireHumanTap = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(logNote))
         {
@@ -183,7 +189,22 @@ public sealed partial class PlanningFeatureService
                 throw PlanningException.InvalidFeatureTransition(slug, feature.Status, status);
             }
 
+            DateTime? humanTap = null;
+            if (status == PlanningFeatureStatus.Done)
+            {
+                var resultUpdatedAt = await FeatureDoneGate.RequireResultAsync(_db, feature, ct);
+                if (requireHumanTap)
+                {
+                    humanTap = await FeatureDoneGate.RequireHumanTapAsync(_db, feature, resultUpdatedAt, ct);
+                }
+            }
+
             feature.SetStatus(status, logNote, PlanningLogSource.Agent);
+            if (humanTap is { } tappedAt)
+            {
+                feature.AppendLog(FeatureDoneGate.ProvenanceLine(feature, tappedAt), PlanningLogSource.Agent);
+            }
+
             ReleaseClaimOnDone(feature, PlanningLogSource.Agent);
         }
 

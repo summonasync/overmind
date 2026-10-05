@@ -32,6 +32,8 @@ public enum PlanningFailureCode
     InvalidQueuePosition,
     InvalidQueueReorder,
     ValidationProofRequired,
+    FeatureResultRequired,
+    FeatureDoneTapRequired,
     TaskDependencyCycle,
     BlockedByOrderUnknown,
     BlockedBySelfReference,

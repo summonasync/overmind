@@ -58,6 +58,11 @@ public sealed class FeatureQueueServiceTests : IDisposable
     {
         var service = CreateFeatureService();
         await service.CreateAsync(_projectId, slug, slug, string.Empty, priority);
+        if (status == PlanningFeatureStatus.Done)
+        {
+            await SeedResultAsync(slug);
+        }
+
         if (status.HasValue && status.Value != PlanningFeatureStatus.Draft)
         {
             foreach (var step in PathTo(status.Value))
@@ -65,6 +70,14 @@ public sealed class FeatureQueueServiceTests : IDisposable
                 await service.SetStatusAsync(_projectId, slug, step, "test move");
             }
         }
+    }
+
+    private async Task SeedResultAsync(string slug)
+    {
+        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == slug);
+        _context.PlanningArtifacts.Add(
+            PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Result, "close-out"));
+        await _context.SaveChangesAsync();
     }
 
     private static IEnumerable<PlanningFeatureStatus> PathTo(PlanningFeatureStatus target)
@@ -321,6 +334,7 @@ public sealed class FeatureQueueServiceTests : IDisposable
         await CreateFeatureAsync("alpha");
         await CreateFeatureAsync("beta");
         await CreateFeatureAsync("gamma");
+        await SeedResultAsync("alpha");
         await CreateFeatureService().SetStatusAsync(_projectId, "alpha", PlanningFeatureStatus.Done, "shipped");
 
         await CreateQueueService().MoveUpAsync(_projectId, "gamma");
@@ -333,6 +347,7 @@ public sealed class FeatureQueueServiceTests : IDisposable
     {
         await CreateFeatureAsync("alpha");
         await CreateFeatureAsync("beta");
+        await SeedResultAsync("beta");
         await CreateFeatureService().SetStatusAsync(_projectId, "beta", PlanningFeatureStatus.Done, "shipped");
 
         var ex = await Should.ThrowAsync<PlanningException>(

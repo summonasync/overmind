@@ -417,6 +417,13 @@ public sealed class PlanningApiTests : IDisposable
         var project = await CreateProjectAsync();
         await CreateFeature(project.Id, "feat", "Feature");
         await BringToStatusAsync(project.Id, "feat", start);
+        if (target == "done")
+        {
+            var seed = await _client.PostAsJsonAsync(
+                $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+                new { Kind = "result", Body = "close-out" });
+            seed.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.OK);
+        }
 
         var response = await _client.PutAsJsonAsync(
             $"/api/projects/{project.Id}/planning/features/feat",
@@ -1340,6 +1347,14 @@ public sealed class PlanningApiTests : IDisposable
             "done" => ["inProgress", "review", "done"],
             _ => throw new ArgumentException($"unknown status '{target}'"),
         };
+
+        if (target == "done")
+        {
+            var seed = await _client.PostAsJsonAsync(
+                $"/api/projects/{projectId}/planning/features/{slug}/artifacts",
+                new { Kind = "result", Body = "close-out" });
+            seed.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.OK);
+        }
 
         foreach (var step in path)
         {
