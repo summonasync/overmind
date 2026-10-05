@@ -1,7 +1,7 @@
 ---
 feature: 108
 slug: sidebar-projects-style-and-auto-expand
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -25,4 +25,6 @@ Expand-on-navigation semantics: auto-expand overrides the saved collapsed state 
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — done via agent review — approved by human tap (notification dddf1026, reply 2026-10-05 19:14:55 UTC)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

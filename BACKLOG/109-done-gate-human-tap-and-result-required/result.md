@@ -1,8 +1,9 @@
 ---
 feature: 109
 slug: done-gate-human-tap-and-result-required
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 109 — Done gate: agent-side review→done needs a human tap; done (any door) requires a result artifact

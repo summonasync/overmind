@@ -1,7 +1,7 @@
 ---
 feature: 109
 slug: done-gate-human-tap-and-result-required
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -25,4 +25,6 @@ Does the HUMAN door (UI click) also require the result artifact? Default: yes �
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-05 [agent] — done via agent review — approved by human tap (notification f3ebfdf9, reply 2026-10-05 19:18:17 UTC)
+- 2026-10-05 [agent] — claim released on done-close
 </log>

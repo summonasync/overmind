@@ -1,8 +1,9 @@
 ---
 feature: 108
 slug: sidebar-projects-style-and-auto-expand
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-05
 ---
 
 # Result 108 — Sidebar: Projects row/tree in the nav row style + auto-expand to the open project
