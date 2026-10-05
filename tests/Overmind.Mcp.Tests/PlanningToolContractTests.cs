@@ -2879,6 +2879,27 @@ public class PlanningToolContractTests : McpSessionTestBase
         Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path.EndsWith("/status", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task PlanningPatchArtifact_InlineSectionHint_SurfacesThroughTheDoor()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            400,
+            """{"title":"PatchSectionNotFound","detail":"Section 'anti-scope' was not found. Sections present: goal, scope. A one-line '<anti-scope>…</anti-scope>' section exists in the body — one-line sections need the canonical multi-line form; re-send the body once (any upsert canonicalizes it).","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "anti-scope",
+            ["content"] = "<anti-scope>\nNo parser changes.\n</anti-scope>"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("one-line");
+        text.ShouldContain("re-send the body once");
+    }
+
     private static string ToolErrorText(JsonNode response)
     {
         var result = response["result"];
