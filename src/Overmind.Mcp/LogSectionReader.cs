@@ -2,27 +2,27 @@ namespace Overmind.Mcp;
 
 internal static class LogSectionReader
 {
-    internal static string? LastEntryText(string body)
+    internal static string? SectionContentText(string body)
     {
         var lines = body.Split('\n');
         var close = LastIndexOfToken(lines, "</log>");
-        if (close < 0)
+        if (close >= 0)
         {
-            return null;
-        }
-
-        var open = LastIndexOfToken(lines, close - 1, "<log>");
-        if (open < 0)
-        {
-            return null;
-        }
-
-        for (var i = close - 1; i > open; i--)
-        {
-            var line = lines[i].Trim();
-            if (line.StartsWith("- ", StringComparison.Ordinal))
+            var open = LastIndexOfToken(lines, close - 1, "<log>");
+            if (open >= 0)
             {
-                return line[2..].TrimEnd();
+                return string.Join('\n', lines[(open + 1)..close]).Trim();
+            }
+        }
+
+        for (var i = lines.Length - 1; i >= 0; i--)
+        {
+            var line = lines[i];
+            var closeAt = line.IndexOf("</log>", StringComparison.Ordinal);
+            var openAt = closeAt >= 0 ? line.LastIndexOf("<log>", closeAt, StringComparison.Ordinal) : -1;
+            if (openAt >= 0)
+            {
+                return line[(openAt + 5)..closeAt].Trim();
             }
         }
 

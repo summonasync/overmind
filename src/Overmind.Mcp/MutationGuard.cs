@@ -40,15 +40,23 @@ public sealed class MutationGuard(OvermindApiClient api)
         try
         {
             var payload = await api.GetAsync(readback.Path, ct);
-            var lastEntry = LogSectionReader.LastEntryText(ReadBody(payload));
-            if (lastEntry is null || !lastEntry.EndsWith(readback.Marker.Trim(), StringComparison.Ordinal))
+            var logContent = LogSectionReader.SectionContentText(ReadBody(payload));
+            if (logContent is null)
+            {
+                // A body whose log lives in an inline wrapper renders as no section through the
+                // anchored-pair read path; declaring "no trace" there would clear a resend that
+                // may have committed — unknown keeps the agent on the safe side.
+                return UnknownOutcome($"the read-back of {readback.Target} carries no readable log section");
+            }
+
+            if (!logContent.TrimEnd().EndsWith(readback.Marker.Trim(), StringComparison.Ordinal))
             {
                 return $"the API connection died mid-mutation, but no trace — resend safe. " +
-                    $"Read-back of {readback.Target}: the last log line does not end with this mutation's logNote.";
+                    $"Read-back of {readback.Target}: the log does not end with this mutation's logNote.";
             }
 
             return $"the API connection died mid-mutation, but the write committed at v{ReadVersion(payload)} — do not resend. " +
-                $"Read-back of {readback.Target}: the last log line ends with this mutation's logNote.";
+                $"Read-back of {readback.Target}: the log ends with this mutation's logNote.";
         }
         catch (Exception probeFailure) when (!ct.IsCancellationRequested)
         {

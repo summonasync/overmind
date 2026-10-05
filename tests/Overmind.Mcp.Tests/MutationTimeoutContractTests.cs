@@ -70,6 +70,83 @@ public class MutationTimeoutContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task SetStatus_Timeout_MultilineLogNote_AnswersCommittedAtVersion()
+    {
+        HangPost("/api/agent/planning/artifacts/[^/]+/status");
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+",
+            req => req.Query.Contains("sections=log")
+                ? new StubOvermindApi.Response(200, SectionedArtifact(
+                    7,
+                    "- 2026-10-01 [agent] — some earlier note",
+                    "- 2026-10-05 [agent] — multiline note line one",
+                    "line two of the note"))
+                : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
+
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["status"] = "review",
+            ["logNote"] = "multiline note line one\nline two of the note",
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        Canned.ToolResultText(response).ShouldContain("committed at v7 — do not resend");
+    }
+
+    [Fact]
+    public async Task SetStatus_Timeout_ReadBackHasNoLogSection_AnswersUnknownInsteadOfNoTrace()
+    {
+        HangPost("/api/agent/planning/artifacts/[^/]+/status");
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+",
+            req => req.Query.Contains("sections=log")
+                ? new StubOvermindApi.Response(200, EmptyBodyArtifact(7))
+                : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
+
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["status"] = "review",
+            ["logNote"] = "review pass recorded after the timeout drill",
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("unknown — read before resending");
+        text.ShouldContain("no readable log section");
+    }
+
+    [Fact]
+    public async Task SetStatus_Timeout_InlineLogWrapper_AnswersCommittedAtVersion()
+    {
+        HangPost("/api/agent/planning/artifacts/[^/]+/status");
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+",
+            req => req.Query.Contains("sections=log")
+                ? new StubOvermindApi.Response(200, InlineLogArtifact(
+                    7,
+                    "<log>- 2026-10-05 [agent] — inline wrapper drill note</log>"))
+                : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
+
+        var response = await Driver.CallToolAsync("planning_set_status", new JsonObject
+        {
+            ["status"] = "review",
+            ["logNote"] = "inline wrapper drill note",
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        Canned.ToolResultText(response).ShouldContain("committed at v7 — do not resend");
+    }
+
+    [Fact]
     public async Task SetStatus_Timeout_ProbeReadFails_AnswersUnknown()
     {
         HangPost("/api/agent/planning/artifacts/[^/]+/status");
@@ -153,6 +230,28 @@ public class MutationTimeoutContractTests : McpSessionTestBase
 
     private static string SectionedArtifact(int version, params string[] logLines) =>
         LogPayload(logLines, version, ("kind", "task"), ("status", "review"));
+
+    private static string InlineLogArtifact(int version, string bodyLine)
+    {
+        var payload = new JsonObject
+        {
+            ["id"] = Canned.PlanningTaskTwoId.ToString(),
+            ["version"] = version,
+            ["body"] = bodyLine
+        };
+        return payload.ToJsonString();
+    }
+
+    private static string EmptyBodyArtifact(int version)
+    {
+        var payload = new JsonObject
+        {
+            ["id"] = Canned.PlanningTaskTwoId.ToString(),
+            ["version"] = version,
+            ["body"] = string.Empty
+        };
+        return payload.ToJsonString();
+    }
 
     private static string FeatureWithLog(int version, params string[] logLines) =>
         LogPayload(logLines, version, ("slug", Canned.PlanningSlug), ("status", "inProgress"));
