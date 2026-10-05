@@ -259,6 +259,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         var diskPath = TestPaths.DiskPath(name);
         var project = await CreateProjectAsync(name, diskPath);
         await SetWorkflowAsync(project.Id, materialization: "on", validation: "on");
+        await SetMaterializationSyncAsync("off");
 
         var onboard = await OnboardAsync(new { Cwd = diskPath });
 
@@ -278,6 +279,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         var diskPath = TestPaths.DiskPath(name);
         var project = await CreateProjectAsync(name, diskPath);
         await SetWorkflowAsync(project.Id, materialization: "archive");
+        await SetMaterializationSyncAsync("off");
 
         var onboard = await OnboardAsync(new { Cwd = diskPath });
 
@@ -315,11 +317,28 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         var name = $"onboard-{Guid.NewGuid():N}";
         var diskPath = TestPaths.DiskPath(name);
         await CreateProjectAsync(name, diskPath);
+        await SetMaterializationSyncAsync("off");
 
         var onboard = await OnboardAsync(new { Cwd = diskPath });
 
         onboard.Materialization.Strategy.ShouldBe("on");
         onboard.Materialization.Trigger.ShouldContain("enqueued after every planning mutation, runs shortly after in the background");
+        onboard.Validation.HumanGate.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Onboard_MaterializationBlock_SyncFlagOn_TriggerSaysInline()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var diskPath = TestPaths.DiskPath(name);
+        await CreateProjectAsync(name, diskPath);
+        await SetMaterializationSyncAsync("on");
+
+        var onboard = await OnboardAsync(new { Cwd = diskPath });
+
+        onboard.Materialization.Strategy.ShouldBe("on");
+        onboard.Materialization.Trigger.ShouldContain("runs the mirror pass inline before returning");
+        onboard.Materialization.Trigger.ShouldContain("planning.materializationSync=on");
         onboard.Validation.HumanGate.ShouldBeFalse();
     }
 
@@ -542,6 +561,13 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         var response = await _client.PutAsJsonAsync(
             $"/api/projects/{projectId}/planning/workflow",
             new { Materialization = materialization, RequireHumanValidation = validation });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task SetMaterializationSyncAsync(string value)
+    {
+        var response = await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = value });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }

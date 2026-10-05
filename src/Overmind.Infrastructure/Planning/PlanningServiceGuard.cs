@@ -26,6 +26,27 @@ internal static class PlanningServiceGuard
         }
     }
 
+    public static async Task<bool> TrySyncMaterializationAsync(
+        IPlanningMaterializer materializer, ILogger logger, Guid projectId, CancellationToken ct)
+    {
+        try
+        {
+            await materializer.SyncAsync(projectId, force: false, ct);
+            return false;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Planning materialization sync for project {ProjectId} was cancelled", projectId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Planning materialization sync failed for project {ProjectId}", projectId);
+            await TryRecordFailureAsync(materializer, logger, projectId, ex.Message, ct);
+            return false;
+        }
+    }
+
     public static async Task ClearMaterializationAsync(
         IPlanningMaterializer materializer, ILogger logger, Guid projectId, Guid featureId, CancellationToken ct)
     {

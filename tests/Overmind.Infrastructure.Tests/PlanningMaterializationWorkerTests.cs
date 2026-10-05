@@ -119,6 +119,62 @@ public sealed class PlanningMaterializationWorkerTests
     }
 
     [Fact]
+    public async Task Execute_PassCancelledMidFlight_ShutdownReRunsItBeforeDraining()
+    {
+        var (worker, queue, materializer) = BuildWorker();
+        var cancelledProject = Guid.NewGuid();
+        var pending = Guid.NewGuid();
+        var pendingDone = new TaskCompletionSource();
+        var calls = new List<(Guid Project, CancellationToken Token)>();
+
+        using var cts = new CancellationTokenSource();
+        materializer
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []))
+            .AndDoes(call =>
+            {
+                var project = call.ArgAt<Guid>(0);
+                var token = call.ArgAt<CancellationToken>(2);
+                lock (calls)
+                {
+                    calls.Add((project, token));
+                    if (calls.Count == 1)
+                    {
+                        cts.Cancel();
+                    }
+                }
+
+                if (token.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(token);
+                }
+
+                if (project == pending)
+                {
+                    pendingDone.TrySetResult();
+                }
+            });
+
+        queue.TryEnqueue(cancelledProject).ShouldBeTrue();
+        queue.TryEnqueue(pending).ShouldBeTrue();
+
+        var run = Task.Run(() => worker.ExecuteAsync(cts.Token));
+        await pendingDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await run;
+
+        lock (calls)
+        {
+            var uncancelled = calls
+                .Where(c => !c.Token.IsCancellationRequested)
+                .Select(c => c.Project)
+                .ToList();
+            uncancelled.Count.ShouldBe(2);
+            uncancelled.ShouldContain(cancelledProject);
+            uncancelled.ShouldContain(pending);
+        }
+    }
+
+    [Fact]
     public async Task Execute_EmptyQueue_Cancelled_ReturnsPromptly()
     {
         var (worker, _, _) = BuildWorker();

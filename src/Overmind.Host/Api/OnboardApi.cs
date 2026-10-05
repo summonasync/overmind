@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 
@@ -24,6 +25,7 @@ public static class OnboardApi
         OvermindDbContext db,
         PlanningPolicy policy,
         ISemanticSearch semanticSearch,
+        AppSettingsService settings,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -78,6 +80,11 @@ public static class OnboardApi
         var strategy = await policy.ResolveMaterializationAsync(project.Id, ct);
         var humanGate = await policy.ResolveValidationGateAsync(project.Id, ct);
         var vectorHealth = await semanticSearch.HealthReportAsync(ct);
+        var inlinePass = string.Equals(
+            await settings.GetOrDefaultAsync(
+                SettingKeys.PlanningMaterializationSync,
+                SettingDefaults.PlanningMaterializationSync, ct),
+            "on", StringComparison.OrdinalIgnoreCase);
 
         return Results.Ok(new OnboardResponse(
             project.Id,
@@ -87,7 +94,7 @@ public static class OnboardApi
             new OnboardMaterializationBlock(
                 StrategyText(strategy),
                 TargetDir(project, strategy),
-                TriggerText(strategy),
+                TriggerText(strategy, inlinePass),
                 project.LastMaterializedAt,
                 project.LastMaterializationAttemptAt,
                 project.LastMaterializationError,
@@ -129,10 +136,12 @@ public static class OnboardApi
             ? PlanningArchive.Root(OvermindPaths.DataDirectory, project)
             : Path.Combine(project.DiskPath, "BACKLOG");
 
-    private static string TriggerText(PlanningMaterialization strategy) =>
+    private static string TriggerText(PlanningMaterialization strategy, bool inline) =>
         strategy == PlanningMaterialization.Off
             ? "Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override."
-            : "Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.";
+            : inline
+                ? "Event-driven: every planning mutation runs the mirror pass inline before returning (planning.materializationSync=on) — the manual planning_materialize tool does the same and waits for its report."
+                : "Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.";
 
     private static IReadOnlyList<string>? SkipHeadLines(string? skipHead) =>
         skipHead is null

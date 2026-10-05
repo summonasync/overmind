@@ -11,15 +11,24 @@ public sealed class PlanningMaterializationWorker(
 {
     public async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        List<Guid> interrupted = [];
         try
         {
             await foreach (var projectId in queue.Reader.ReadAllAsync(stoppingToken))
             {
-                await RunPassAsync(projectId, stoppingToken);
+                if (await RunPassAsync(projectId, stoppingToken))
+                {
+                    interrupted.Add(projectId);
+                }
             }
         }
         catch (OperationCanceledException)
         {
+        }
+
+        foreach (var projectId in interrupted)
+        {
+            await RunPassAsync(projectId, CancellationToken.None);
         }
 
         while (queue.Reader.TryRead(out var pending))
@@ -28,10 +37,10 @@ public sealed class PlanningMaterializationWorker(
         }
     }
 
-    private async Task RunPassAsync(Guid projectId, CancellationToken ct)
+    private async Task<bool> RunPassAsync(Guid projectId, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var materializer = scope.ServiceProvider.GetRequiredService<IPlanningMaterializer>();
-        await PlanningServiceGuard.SyncMaterializationAsync(materializer, logger, projectId, ct);
+        return await PlanningServiceGuard.TrySyncMaterializationAsync(materializer, logger, projectId, ct);
     }
 }
