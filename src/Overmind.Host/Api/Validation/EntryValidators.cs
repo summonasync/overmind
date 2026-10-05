@@ -6,6 +6,8 @@ namespace Overmind.Host.Api.Validation;
 
 public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryRequest>
 {
+    internal const string CommaRule = "Tag names cannot contain commas: entry files list tags comma-separated.";
+
     public CreateEntryRequestValidator()
     {
         RuleFor(x => x.ProjectId).NotEmpty();
@@ -13,7 +15,7 @@ public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryR
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Content).NotEmpty();
         RuleFor(x => x.Tags)
-            .ForEach(tag => tag.NotEmpty())
+            .ForEach(tag => tag.NotEmpty().Must(name => !name.Contains(',')).WithMessage(CommaRule))
             .When(x => x.Tags is not null);
         RuleFor(x => x.SkillFiles)
             .NotEmpty()
@@ -34,7 +36,7 @@ public sealed class UpdateEntryRequestValidator : AbstractValidator<UpdateEntryR
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Content).NotEmpty();
         RuleFor(x => x.Tags)
-            .ForEach(tag => tag.NotEmpty())
+            .ForEach(tag => tag.NotEmpty().Must(name => !name.Contains(',')).WithMessage(CreateEntryRequestValidator.CommaRule))
             .When(x => x.Tags is not null);
         RuleForEach(x => x.SkillFiles)
             .ChildRules(files =>

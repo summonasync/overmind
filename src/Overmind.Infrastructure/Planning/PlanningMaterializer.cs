@@ -495,20 +495,26 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         return plans;
     }
 
+    // Board values render verbatim, so line breaks inside a title or tag would split the
+    // frontmatter line; they flatten here instead of a write-time refusal because rows stored
+    // before any validator would still reach this projection.
+    private static string FrontmatterLine(string value) =>
+        value.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');
+
     private static string EntryDocument(ContextEntry entry)
     {
         var builder = new StringBuilder();
         builder.Append("---\n");
         builder.Append($"id: {entry.Id}\n");
         builder.Append($"type: {entry.Type.ToString().ToLowerInvariant()}\n");
-        builder.Append($"title: {entry.Title}\n");
+        builder.Append($"title: {FrontmatterLine(entry.Title)}\n");
         var tags = entry.EntryTags
             .Select(t => t.Tag.Name)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToList();
         if (tags.Count > 0)
         {
-            builder.Append($"tags: {string.Join(", ", tags)}\n");
+            builder.Append($"tags: {string.Join(", ", tags.Select(FrontmatterLine))}\n");
         }
 
         builder.Append($"createdAt: {entry.CreatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n");

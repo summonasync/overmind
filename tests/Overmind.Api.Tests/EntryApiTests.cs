@@ -206,6 +206,54 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_CommaInTagName_Returns400WithoutCreatingEntry()
+    {
+        var response = await _client.PostAsJsonAsync("/api/entries", new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "comma tag",
+            Content = "body",
+            Tags = new[] { "alpha", "beta,gamma" },
+            SkillFiles = (object[]?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var listed = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries", JsonOptions);
+        listed.ShouldNotBeNull();
+        listed!.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Update_CommaInTagName_Returns400AndKeepsExistingTags()
+    {
+        var entry = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "comma update target",
+            Content = "before",
+            Tags = new[] { "alpha" },
+            SkillFiles = (object[]?)null,
+        });
+
+        var putResponse = await _client.PutAsJsonAsync($"/api/entries/{entry.Id}", new
+        {
+            Title = "comma update target",
+            Content = "after",
+            Tags = new[] { "alpha", "beta,gamma" },
+        });
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var unchanged = await _client.GetFromJsonAsync<EntryJson>($"/api/entries/{entry.Id}", JsonOptions);
+        unchanged.ShouldNotBeNull();
+        unchanged!.Tags.ShouldBe(["alpha"]);
+        unchanged.Content.ShouldBe("before");
+    }
+
+    [Fact]
     public async Task Delete_WithReason_ConvertsToTombstoneCarryingMemory()
     {
         var created = await CreateEntryAsync(new

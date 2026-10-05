@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
@@ -242,6 +243,212 @@ public sealed class EntryMaterializationTests : IDisposable
         ctx.PlanningMaterializedFiles.Count(m => m.ProjectId == projectId).ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Sync_HandEditedTrackedEntryFile_RefusesAndWritesNothing()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var relative = await SeedSyncedEntryAsync(projectId, EntryType.Note, "Guard Me");
+
+        var entryPath = Path.Combine(_projectDir, relative.Replace('/', Path.DirectorySeparatorChar));
+        await File.AppendAllTextAsync(entryPath, "\nhand note\n");
+        var before = await SnapshotTreeAsync(_projectDir);
+
+        using var ctx = _db.CreateContext();
+        var ex = await Should.ThrowAsync<MaterializationException>(
+            () => CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None));
+
+        ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
+        ex.OffendingPath.ShouldBe(relative);
+        ex.Message.ShouldContain(relative);
+        ex.Message.ShouldContain("local edits");
+
+        (await SnapshotTreeAsync(_projectDir)).ShouldBe(before);
+
+        using var verify = _db.CreateContext();
+        var project = await verify.Projects.SingleAsync(p => p.Id == projectId);
+        project.LastMaterializationError.ShouldNotBeNull();
+        project.LastMaterializationError!.ShouldContain("local edits");
+
+        var run = MaterializationRunJson.Deserialize(project.LastMaterializationRun);
+        run.ShouldNotBeNull();
+        run!.Atomic.ShouldBeFalse();
+        run.Written.ShouldBeEmpty();
+        var refusal = run.Refused.ShouldHaveSingleItem();
+        refusal.RelativePath.ShouldBe(relative);
+        refusal.Reason.ShouldContain("local edits");
+        run.Skipped.ShouldContain(s => s.RelativePath == "BACKLOG.md");
+    }
+
+    [Fact]
+    public async Task Sync_HandEditedTrackedEntryFile_ForceOverwritesAndWarns()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var relative = await SeedSyncedEntryAsync(projectId, EntryType.Note, "Guard Me");
+
+        var entryPath = Path.Combine(_projectDir, relative.Replace('/', Path.DirectorySeparatorChar));
+        await File.AppendAllTextAsync(entryPath, "\nhand note\n");
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        var report = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
+
+        report.Refused.ShouldBeEmpty();
+        report.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote locally modified file: {entryPath}");
+        var content = await File.ReadAllTextAsync(entryPath);
+        content.ShouldNotContain("hand note");
+        content.ShouldContain("title: Guard Me\n");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_ForeignFileAtEntryPath_RefusesThenForceAdopts()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var relative = await SeedEntryAsync(projectId, EntryType.Note, "Adopted Note");
+
+        var foreign = Path.Combine(_projectDir, relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(foreign)!);
+        await File.WriteAllTextAsync(foreign, "user data");
+        var before = await SnapshotTreeAsync(_projectDir);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var ex = await Should.ThrowAsync<MaterializationException>(
+                () => CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None));
+
+            ex.Kind.ShouldBe(MaterializationFailureKind.Refused);
+            ex.OffendingPath.ShouldBe(relative);
+            ex.Message.ShouldContain("not tracked by Overmind");
+        }
+
+        (await SnapshotTreeAsync(_projectDir)).ShouldBe(before);
+        using (var verify = _db.CreateContext())
+        {
+            (await verify.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(0);
+        }
+
+        using var adopt = _db.CreateContext();
+        var materializer = CreateMaterializer(adopt);
+        var report = await materializer.SyncAsync(projectId, force: true, ct: CancellationToken.None);
+
+        report.Warnings.ShouldHaveSingleItem().ShouldBe($"Overwrote untracked file: {foreign}");
+        (await File.ReadAllTextAsync(foreign)).ShouldContain("title: Adopted Note\n");
+        (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sync_LineBreaksInTitleOrTags_FlattenToFrontmatterSafeValues()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        Guid entryId;
+        DateTime createdAt;
+        DateTime updatedAt;
+        using (var seed = _db.CreateContext())
+        {
+            var entry = ContextEntry.Create(projectId, EntryType.Note, "Use\r\nSQLite", "Body survives verbatim.");
+            var tag = Tag.Create("multi\nline");
+            entry.AddTag(tag);
+            seed.Tags.Add(tag);
+            seed.ContextEntries.Add(entry);
+            await seed.SaveChangesAsync();
+            entryId = entry.Id;
+            createdAt = entry.CreatedAt;
+            updatedAt = entry.UpdatedAt;
+        }
+
+        var relative = $"ENTRIES/note/use-sqlite-{entryId.ToString("N")[..8]}.md";
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var doc = await File.ReadAllTextAsync(Path.Combine(_projectDir, relative.Replace('/', Path.DirectorySeparatorChar)));
+        doc.ShouldBe(
+            "---\n" +
+            $"id: {entryId}\n" +
+            "type: note\n" +
+            "title: Use SQLite\n" +
+            "tags: multi line\n" +
+            $"createdAt: {createdAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
+            $"updatedAt: {updatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
+            "---\n\n" +
+            "Body survives verbatim.");
+
+        using var verify = _db.CreateContext();
+        var stored = await verify.ContextEntries.SingleAsync(e => e.Id == entryId);
+        stored.Title.ShouldBe("Use\r\nSQLite");
+
+        var resync = await CreateMaterializer(verify).SyncAsync(projectId, ct: CancellationToken.None);
+        resync.Refused.ShouldBeEmpty();
+        resync.Skipped.ShouldContain(s =>
+            s.RelativePath == relative &&
+            s.Reason.Contains("already matches", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Sync_EntryTitleRename_ReplacesFileInOnePass()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var entryId = await SeedEntryIdAsync(projectId, EntryType.Note, "Old Title");
+
+        var id8 = entryId.ToString("N")[..8];
+        var oldPath = Path.Combine(_projectDir, "ENTRIES", "note", $"old-title-{id8}.md");
+        var newPath = Path.Combine(_projectDir, "ENTRIES", "note", $"new-title-{id8}.md");
+
+        using (var ctx = _db.CreateContext())
+        {
+            await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        File.Exists(oldPath).ShouldBeTrue();
+
+        using (var rename = _db.CreateContext())
+        {
+            var entry = await rename.ContextEntries.SingleAsync(e => e.Id == entryId);
+            rename.Entry(entry).Property(e => e.Title).CurrentValue = "New Title";
+            await rename.SaveChangesAsync();
+        }
+
+        using var resync = _db.CreateContext();
+        var report = await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Warnings.ShouldBeEmpty();
+        report.Refused.ShouldBeEmpty();
+        File.Exists(oldPath).ShouldBeFalse();
+        File.Exists(newPath).ShouldBeTrue();
+        (await File.ReadAllTextAsync(newPath)).ShouldContain("title: New Title\n");
+        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "note"))
+            .ShouldHaveSingleItem()
+            .ShouldBe(newPath);
+
+        var rows = await resync.PlanningMaterializedFiles
+            .Where(m => m.ProjectId == projectId)
+            .Select(m => m.RelativePath)
+            .ToListAsync();
+        rows.Where(p => p.StartsWith("ENTRIES/", StringComparison.Ordinal))
+            .ShouldHaveSingleItem()
+            .ShouldBe($"ENTRIES/note/new-title-{id8}.md");
+    }
+
+    [Fact]
+    public async Task Sync_ArchiveStrategy_WritesEntriesUnderArchiveRoot()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.Archive);
+        var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Archived Decision");
+
+        var relative = $"ENTRIES/decision/archived-decision-{entryId.ToString("N")[..8]}.md";
+        using var ctx = _db.CreateContext();
+        var report = await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var archiveRoot = Path.Combine(_dataDir, "projects", "demo", "backlog");
+        File.Exists(Path.Combine(archiveRoot, relative.Replace('/', Path.DirectorySeparatorChar))).ShouldBeTrue();
+        Directory.Exists(Path.Combine(_projectDir, "ENTRIES")).ShouldBeFalse();
+        report.Strategy.ShouldBe(PlanningMaterialization.Archive);
+        report.Files.ShouldContain(f => f.RelativePath == relative);
+
+        var row = await ctx.PlanningMaterializedFiles
+            .SingleAsync(m => m.ProjectId == projectId && m.RelativePath == relative);
+        row.FeatureId.ShouldBeNull();
+    }
+
     private async Task<Guid> SeedProjectAsync(PlanningMaterialization strategy)
     {
         using var ctx = _db.CreateContext();
@@ -254,6 +461,32 @@ public sealed class EntryMaterializationTests : IDisposable
 
     private PlanningMaterializer CreateMaterializer(OvermindDbContext ctx) =>
         new(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)), _dataDir);
+
+    private static string EntryRelativePath(EntryType type, string title, Guid entryId) =>
+        $"ENTRIES/{type.ToString().ToLowerInvariant()}/{Slug.From(title, "entry")}-{entryId.ToString("N")[..8]}.md";
+
+    private async Task<Guid> SeedEntryIdAsync(Guid projectId, EntryType type, string title)
+    {
+        using var seed = _db.CreateContext();
+        var entry = ContextEntry.Create(projectId, type, title, $"{title} body.");
+        seed.ContextEntries.Add(entry);
+        await seed.SaveChangesAsync();
+        return entry.Id;
+    }
+
+    private async Task<string> SeedEntryAsync(Guid projectId, EntryType type, string title)
+    {
+        var entryId = await SeedEntryIdAsync(projectId, type, title);
+        return EntryRelativePath(type, title, entryId);
+    }
+
+    private async Task<string> SeedSyncedEntryAsync(Guid projectId, EntryType type, string title)
+    {
+        var relative = await SeedEntryAsync(projectId, type, title);
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+        return relative;
+    }
 
     private static async Task<Dictionary<string, string>> SnapshotTreeAsync(string root)
     {
