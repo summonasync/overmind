@@ -2,7 +2,7 @@
 feature: 029
 task: 03
 slug: entry-tombstones
-status: inprogress
+status: done
 review: light
 created: 2026-10-04
 depends_on: 02
@@ -21,7 +21,7 @@ Close the wave: discovery line, architect, result.
 </scope>
 
 <acceptance-criteria>
-- [ ] Quickstart line pinned; architect verdict recorded; result drafted with click-check.
+- [x] Quickstart line pinned; architect verdict recorded; result drafted with click-check.
 </acceptance-criteria>
 
 <refs>
@@ -30,4 +30,5 @@ Close the wave: discovery line, architect, result.
 
 <log>
 - 2026-10-05 [agent] — [agent] Taken by orchestrator (tasks 01+02 done). Closeout items landed by orchestrator (8445289): quickstart tombstone line (pinned, Api 631) + honest update_entry description (review-029-02-mcp N2). Dispatching architect light over the whole wave.
+- 2026-10-05 [agent] — [agent] Closeout complete: quickstart line pinned (8445289), update_entry description honest, architect light APPROVED-WITH-WARNINGS with W1 (ServerInstructions knew the old type set) + N1 (reason param honesty on tombstone targets) fixed in 95ce4c1; bury-not-erase verified across every reachable delete path. Result 8e3df13b drafted with click-check. AC ticked. Closing task.
 </log>

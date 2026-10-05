@@ -1,7 +1,7 @@
 ---
 feature: 029
 slug: entry-tombstones
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-09-20
@@ -38,4 +38,5 @@ Draft; спека после короткого брейншторма с юзе
 <log>
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-05 [auto] — all tasks done + spec + plan validated → review
 </log>
