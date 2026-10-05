@@ -28,6 +28,18 @@ public sealed record IssueRow(
     Guid? PromotedToArtifactId,
     int AppendCount);
 
+public sealed record CrossProjectIssueRow(
+    Guid Id,
+    Guid ProjectId,
+    string ProjectName,
+    string Title,
+    IssueStatus Status,
+    Guid AuthorProjectId,
+    DateTime CreatedAt,
+    DateTime? ClosedAt,
+    Guid? PromotedToArtifactId,
+    int AppendCount);
+
 public sealed record IssueAppendItem(
     Guid Id,
     Guid AuthorProjectId,

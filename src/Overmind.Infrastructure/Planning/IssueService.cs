@@ -74,6 +74,35 @@ public sealed class IssueService
             .ToListAsync(ct);
     }
 
+    // Cross-project board order: IssueStatus is declared open → triaged → promoted → closed,
+    // so the numeric sort is the open-first order the 115 spec pins.
+    public async Task<IReadOnlyList<IssueBoardRow>> ListAllAsync(
+        IssueStatus? status, CancellationToken ct = default)
+    {
+        var issues = _db.Issues.AsNoTracking();
+        if (status.HasValue)
+        {
+            issues = issues.Where(i => i.Status == status.Value);
+        }
+
+        return await
+            (from issue in issues
+             join project in _db.Projects.AsNoTracking() on issue.ProjectId equals project.Id
+             orderby issue.Status, issue.CreatedAt descending
+             select new IssueBoardRow(
+                 issue.Id,
+                 issue.ProjectId,
+                 project.Name,
+                 issue.Title,
+                 issue.Status,
+                 issue.AuthorProjectId,
+                 issue.CreatedAt,
+                 issue.ClosedAt,
+                 issue.PromotedToArtifactId,
+                 _db.IssueAppends.Count(a => a.IssueId == issue.Id)))
+            .ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, int>> AppendCountsAsync(
         IReadOnlyCollection<Guid> issueIds, CancellationToken ct = default)
     {

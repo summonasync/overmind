@@ -1,4 +1,6 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
@@ -20,8 +22,10 @@ public sealed class IssueServiceTests : IDisposable
     private static readonly Guid ForeignSessionId = Guid.NewGuid();
 
     private readonly Guid _boardProjectId;
+    private readonly string _boardProjectName;
     private readonly Guid _authorProjectId;
     private readonly Guid _foreignProjectId;
+    private readonly string _foreignProjectName;
 
     public IssueServiceTests()
     {
@@ -39,8 +43,10 @@ public sealed class IssueServiceTests : IDisposable
         _context.Projects.Add(foreign);
         _context.SaveChanges();
         _boardProjectId = board.Id;
+        _boardProjectName = board.Name;
         _authorProjectId = author.Id;
         _foreignProjectId = foreign.Id;
+        _foreignProjectName = foreign.Name;
     }
 
     public void Dispose()
@@ -49,16 +55,18 @@ public sealed class IssueServiceTests : IDisposable
         _db.Dispose();
     }
 
-    private IssueService CreateIssueService() =>
+    private IssueService CreateIssueService() => CreateIssueService(_context);
+
+    private IssueService CreateIssueService(OvermindDbContext context) =>
         new(
-            _context,
+            context,
             new PlanningArtifactService(
-                _context,
-                TestPlanningDispatcher.Create(_context, _materializer),
-                new TaskDependencyService(_context, TestPlanningDispatcher.Create(_context, _materializer))),
-            new NotificationsService(_context),
-            new FeatureClaimService(_context, TestPlanningDispatcher.Create(_context, _materializer)),
-            TestPlanningDispatcher.Create(_context, _materializer));
+                context,
+                TestPlanningDispatcher.Create(context, _materializer),
+                new TaskDependencyService(context, TestPlanningDispatcher.Create(context, _materializer))),
+            new NotificationsService(context),
+            new FeatureClaimService(context, TestPlanningDispatcher.Create(context, _materializer)),
+            TestPlanningDispatcher.Create(context, _materializer));
 
     private async Task<object?> ScalarRawAsync(string sql)
     {
@@ -330,6 +338,99 @@ public sealed class IssueServiceTests : IDisposable
 
         ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
         ex.Code.ShouldBe(PlanningFailureCode.MissingFeature);
+    }
+
+    [Fact]
+    public async Task ListAll_AggregatesAcrossProjects_AndResolvesProjectNames()
+    {
+        var service = CreateIssueService();
+        var onBoard = await service.CreateAsync(_boardProjectId, _authorProjectId, "Board crash", "body");
+        var onForeign = await CreateIssueService()
+            .CreateAsync(_foreignProjectId, _authorProjectId, "Foreign crash", "body");
+        await service.AppendAsync(onBoard.Id, _authorProjectId, "one follow-up");
+
+        var rows = await CreateIssueService().ListAllAsync(null);
+
+        rows.Select(r => r.Id).ShouldBe([onForeign.Id, onBoard.Id]);
+        var boardRow = rows.Single(r => r.Id == onBoard.Id);
+        boardRow.ProjectId.ShouldBe(_boardProjectId);
+        boardRow.ProjectName.ShouldBe(_boardProjectName);
+        boardRow.AppendCount.ShouldBe(1);
+        var foreignRow = rows.Single(r => r.Id == onForeign.Id);
+        foreignRow.ProjectId.ShouldBe(_foreignProjectId);
+        foreignRow.ProjectName.ShouldBe(_foreignProjectName);
+    }
+
+    [Fact]
+    public async Task ListAll_OpenFirstNewestWithinGroup_PinsBoardOrder()
+    {
+        var service = CreateIssueService();
+        await service.CreateAsync(_boardProjectId, _authorProjectId, "oldest open", "body");
+        var triaged = await service.CreateAsync(_boardProjectId, _authorProjectId, "triaged one", "body");
+        var newestOpen = await service.CreateAsync(_boardProjectId, _authorProjectId, "newest open", "body");
+        var newestClosed = await service.CreateAsync(_boardProjectId, _authorProjectId, "closed newest", "body");
+        await service.SetStatusAsync(triaged.Id, IssueStatus.Triaged, PlanningLogSource.Agent);
+        await service.SetStatusAsync(newestClosed.Id, IssueStatus.Closed, PlanningLogSource.Agent);
+
+        var rows = await CreateIssueService().ListAllAsync(null);
+
+        rows.Select(r => r.Title).ShouldBe(
+            ["newest open", "oldest open", "triaged one", "closed newest"]);
+        rows.Single(r => r.Title == "closed newest").Status.ShouldBe(IssueStatus.Closed);
+    }
+
+    [Fact]
+    public async Task ListAll_StatusFilter_ReturnsOnlyMatchingStatus()
+    {
+        var service = CreateIssueService();
+        await service.CreateAsync(_boardProjectId, _authorProjectId, "first open", "body");
+        var triaged = await service.CreateAsync(_boardProjectId, _authorProjectId, "triaged one", "body");
+        var closed = await service.CreateAsync(_boardProjectId, _authorProjectId, "closed one", "body");
+        await service.CreateAsync(_boardProjectId, _authorProjectId, "second open", "body");
+        await service.SetStatusAsync(triaged.Id, IssueStatus.Triaged, PlanningLogSource.Agent);
+        await service.SetStatusAsync(closed.Id, IssueStatus.Closed, PlanningLogSource.Agent);
+
+        var open = await CreateIssueService().ListAllAsync(IssueStatus.Open);
+        open.Select(r => r.Title).ShouldBe(["second open", "first open"]);
+        var closedRows = await CreateIssueService().ListAllAsync(IssueStatus.Closed);
+        closedRows.Select(r => r.Title).ShouldBe(["closed one"]);
+    }
+
+    [Fact]
+    public async Task ListAll_NoIssues_ReturnsEmpty()
+    {
+        (await CreateIssueService().ListAllAsync(null)).ShouldBeEmpty();
+        (await CreateIssueService().ListAllAsync(IssueStatus.Open)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ListAll_RunsAsSingleQuery_NoRowWiseProjectLookups()
+    {
+        var service = CreateIssueService();
+        await service.CreateAsync(_boardProjectId, _authorProjectId, "Crash on save", "body");
+        await service.CreateAsync(_foreignProjectId, _authorProjectId, "Foreign crash", "body");
+
+        var counter = new CommandCounter();
+        await using var context = _db.CreateContext(counter);
+        var rows = await CreateIssueService(context).ListAllAsync(null);
+
+        rows.Count.ShouldBe(2);
+        counter.Queries.ShouldBe(1);
+    }
+
+    private sealed class CommandCounter : DbCommandInterceptor
+    {
+        public int Queries { get; private set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Queries++;
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     [Fact]
