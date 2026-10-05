@@ -48,10 +48,18 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             .OrderBy(f => f.Slug)
             .ToListAsync(ct);
 
+        var entries = await _db.ContextEntries
+            .Include(e => e.EntryTags)
+            .ThenInclude(t => t.Tag)
+            .Where(e => e.ProjectId == projectId)
+            .OrderBy(e => e.Id)
+            .ToListAsync(ct);
+
         var warnings = new List<string>();
         var skipped = new List<PlanningMaterializationSkip>();
         var refused = new List<PlanningMaterializationSkip>();
         var plans = BuildPlans(root, features, rows);
+        plans.AddRange(BuildEntryPlans(root, entries));
         var otherRoot = OtherRoot(project, strategy);
 
         if (strategy == PlanningMaterialization.On)
@@ -463,6 +471,51 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             r.RelativePath.EndsWith(".md", StringComparison.Ordinal));
 
         return row?.RelativePath;
+    }
+
+    private static List<FilePlan> BuildEntryPlans(string root, List<ContextEntry> entries)
+    {
+        var plans = new List<FilePlan>(entries.Count);
+        foreach (var entry in entries)
+        {
+            var id8 = entry.Id.ToString("N")[..8];
+            var relative =
+                $"ENTRIES/{entry.Type.ToString().ToLowerInvariant()}/{Slug.From(entry.Title, "entry")}-{id8}.md";
+            plans.Add(FilePlan.Create(root, featureId: null, relative, EntryDocument(entry)));
+        }
+
+        var duplicate = plans
+            .GroupBy(p => p.AbsolutePath, PathGuard.PathComparer)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            throw MaterializationException.DuplicateTarget(duplicate.Key);
+        }
+
+        return plans;
+    }
+
+    private static string EntryDocument(ContextEntry entry)
+    {
+        var builder = new StringBuilder();
+        builder.Append("---\n");
+        builder.Append($"id: {entry.Id}\n");
+        builder.Append($"type: {entry.Type.ToString().ToLowerInvariant()}\n");
+        builder.Append($"title: {entry.Title}\n");
+        var tags = entry.EntryTags
+            .Select(t => t.Tag.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+        if (tags.Count > 0)
+        {
+            builder.Append($"tags: {string.Join(", ", tags)}\n");
+        }
+
+        builder.Append($"createdAt: {entry.CreatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n");
+        builder.Append($"updatedAt: {entry.UpdatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n");
+        builder.Append("---\n\n");
+        builder.Append(entry.Content);
+        return builder.ToString();
     }
 
     private FilePlan BuildBacklogPlan(string root, List<PlanningFeature> features)
