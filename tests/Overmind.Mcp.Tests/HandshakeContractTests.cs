@@ -51,6 +51,18 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public void StartupCalls_CarryAdapterVersionHeader_OnEveryHostRequest()
+    {
+        Stub.Requests.ShouldNotBeEmpty();
+        foreach (var request in Stub.Requests)
+        {
+            request.Headers.TryGetValue(AdapterVersion.HeaderName, out var value)
+                .ShouldBeTrue($"{request.Method} {request.Path} is missing the adapter version header");
+            value.ShouldBe(AdapterVersion.Current);
+        }
+    }
+
+    [Fact]
     public async Task ToolsList_ExposesExactlyTheFortyThreeTools()
     {
         var response = await Driver.ListToolsAsync();

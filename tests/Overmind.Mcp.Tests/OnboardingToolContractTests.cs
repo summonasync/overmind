@@ -120,6 +120,19 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ToolsList_OnboardDescription_MentionsAdapterBlock()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain(
+            "adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting)");
+    }
+
+    [Fact]
     public async Task Onboard_HealthySemanticBlock_ShowsAvailableAfterValidation()
     {
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
@@ -186,6 +199,39 @@ public class OnboardingToolContractTests : McpSessionTestBase
         text.ShouldContain("- BACKLOG/foreign/feature.md: content already matches the board");
         text.ShouldContain("- BACKLOG/demo-feature/tasks/01-build.md: content already matches the board");
         text.ShouldNotContain("failed");
+    }
+
+    [Fact]
+    public async Task Onboard_MismatchedAdapterBlock_ShowsVersionsAndRestartWarning()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAdapterMismatchJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Adapter: 1.0.0+stalebuild vs host 1.0.0+freshbuild: tools may be missing from your toolset; restart your MCP session");
+    }
+
+    [Fact]
+    public async Task Onboard_PredatesAdapterBlock_ShowsUnknownAdapterVersionAndPredatesWarning()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAdapterPredatesJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Adapter: unknown vs host 1.0.0+freshbuild: adapter predates version reporting; restart recommended");
+    }
+
+    [Fact]
+    public async Task Onboard_MissingAdapterBlock_RendersNothing()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldNotContain("Adapter:");
     }
 
     [Fact]

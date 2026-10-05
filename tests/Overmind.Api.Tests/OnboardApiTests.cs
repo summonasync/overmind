@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Overmind.Host;
+using Overmind.Host.Api;
 using Shouldly;
 using Xunit;
 
@@ -526,9 +528,64 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    private async Task<OnboardJson> OnboardAsync(object request)
+    [Fact]
+    public async Task Onboard_AdapterVersionMatchesHost_ReportsVersionsWithoutWarning()
     {
-        var response = await _client.PostAsJsonAsync("/api/onboard", request);
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) }, HostInformationalVersion());
+
+        onboard.Adapter.ShouldNotBeNull();
+        onboard.Adapter.AdapterVersion.ShouldBe(HostInformationalVersion());
+        onboard.Adapter.HostVersion.ShouldBe(HostInformationalVersion());
+        onboard.Adapter.Warning.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Onboard_AdapterVersionDiffers_WarnsRestartPinned()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) }, "0.0.0+stale-adapter");
+
+        onboard.Adapter.ShouldNotBeNull();
+        onboard.Adapter.AdapterVersion.ShouldBe("0.0.0+stale-adapter");
+        onboard.Adapter.HostVersion.ShouldBe(HostInformationalVersion());
+        onboard.Adapter.Warning.ShouldBe("tools may be missing from your toolset; restart your MCP session");
+    }
+
+    [Fact]
+    public async Task Onboard_AdapterVersionHeaderMissing_WarnsPredatesPinned()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Adapter.ShouldNotBeNull();
+        onboard.Adapter.AdapterVersion.ShouldBeNull();
+        onboard.Adapter.HostVersion.ShouldBe(HostInformationalVersion());
+        onboard.Adapter.Warning.ShouldBe("adapter predates version reporting; restart recommended");
+    }
+
+    private static string HostInformationalVersion() =>
+        typeof(OnboardApi).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+
+    private async Task<OnboardJson> OnboardAsync(object request, string? adapterVersion = null)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/onboard")
+        {
+            Content = JsonContent.Create(request, options: JsonOptions),
+        };
+        if (adapterVersion is not null)
+        {
+            message.Headers.Add(AdapterVersionHeader.Name, adapterVersion);
+        }
+
+        var response = await _client.SendAsync(message);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var onboard = await response.Content.ReadFromJsonAsync<OnboardJson>(JsonOptions);
         onboard.ShouldNotBeNull();
@@ -588,7 +645,10 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 
     public sealed record OnboardJson(
         Guid ProjectId, string ProjectName, bool Created, OnboardBoardJson Board,
-        OnboardMaterializationJson Materialization, OnboardValidationJson Validation, string Quickstart);
+        OnboardMaterializationJson Materialization, OnboardValidationJson Validation,
+        OnboardAdapterJson Adapter, string Quickstart);
+
+    public sealed record OnboardAdapterJson(string? AdapterVersion, string HostVersion, string? Warning);
 
     public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus);
 

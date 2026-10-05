@@ -5,6 +5,8 @@ public sealed class AdapterSessionHandler(HttpMessageHandler inner) : Delegating
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        request.Headers.Add(AdapterVersion.HeaderName, AdapterVersion.Current);
+
         if (AdapterSession.Id is { } id)
         {
             request.Headers.Add(AdapterSession.HeaderName, id.ToString());

@@ -19,7 +19,7 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate) and a semantic search block (availability, with the verbatim probe reason when down). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
     public async Task<string> Onboard(CancellationToken ct)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));
@@ -81,10 +81,35 @@ public sealed class OvermindOnboardingTools
         AppendMaterialization(payload, output);
         AppendValidation(payload, output);
         AppendSemantic(payload, output);
+        AppendAdapter(payload, output);
 
         output.AppendLine();
         output.Append(payload.GetProperty("quickstart").GetString());
         return output.ToString();
+    }
+
+    private static void AppendAdapter(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("adapter", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("warning", out var warning) ||
+            warning.ValueKind != JsonValueKind.String ||
+            warning.GetString() is not { Length: > 0 } warningText)
+        {
+            return;
+        }
+
+        var adapterVersion = block.TryGetProperty("adapterVersion", out var version) &&
+                             version.ValueKind == JsonValueKind.String
+            ? version.GetString()
+            : null;
+
+        var hostVersion = block.TryGetProperty("hostVersion", out var host) &&
+                          host.ValueKind == JsonValueKind.String
+            ? host.GetString()
+            : null;
+
+        output.AppendLine($"Adapter: {adapterVersion ?? "unknown"} vs host {hostVersion ?? "unknown"}: {warningText}");
     }
 
     private static void AppendMaterialization(JsonElement payload, StringBuilder output)

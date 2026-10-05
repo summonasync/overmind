@@ -106,14 +106,10 @@ builder.Services.AddSingleton<OvermindResources>();
 builder.Services.AddSingleton<OvermindPlanningResources>();
 builder.Services.AddSingleton<SessionBootstrapPrompt>();
 
-var adapterVersion = typeof(ApiBaseUrl).Assembly
-                         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-                     ?? "0.0.0";
-
 builder.Services
     .AddMcpServer(options =>
     {
-        options.ServerInfo = new Implementation { Name = "overmind", Title = "Overmind", Version = adapterVersion };
+        options.ServerInfo = new Implementation { Name = "overmind", Title = "Overmind", Version = AdapterVersion.Current };
         options.ServerInstructions =
             "Overmind shared-context adapter. Call overmind_onboard first — it resolves your project and returns the onboarding quickstart. " +
             "Working a feature? Claim it first with planning_claim_feature — the onboarding quickstart explains the workflow. " +

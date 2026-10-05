@@ -7,7 +7,7 @@ namespace Overmind.Mcp.Tests;
 
 public sealed class StubOvermindApi : IAsyncDisposable
 {
-    public sealed record Request(string Method, string Path, string Query, string Body);
+    public sealed record Request(string Method, string Path, string Query, string Body, IReadOnlyDictionary<string, string> Headers);
 
     public sealed record Response(int Status, string JsonBody);
 
@@ -110,11 +110,21 @@ public sealed class StubOvermindApi : IAsyncDisposable
                 body = await reader.ReadToEndAsync();
             }
 
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var key in context.Request.Headers.AllKeys)
+            {
+                if (key is not null)
+                {
+                    headers[key] = string.Join(", ", context.Request.Headers.GetValues(key) ?? []);
+                }
+            }
+
             var request = new Request(
                 context.Request.HttpMethod,
                 context.Request.Url?.AbsolutePath ?? string.Empty,
                 context.Request.Url?.Query.TrimStart('?') ?? string.Empty,
-                body);
+                body,
+                headers);
 
             Requests.Enqueue(request);
 

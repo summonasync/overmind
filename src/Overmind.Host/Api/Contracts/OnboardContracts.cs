@@ -24,6 +24,8 @@ public sealed record OnboardSemanticBlock(bool Available, string? Reason);
 
 public sealed record OnboardAgentIdentityBlock(string Alias, string Vendor, string NamingRules);
 
+public sealed record OnboardAdapterBlock(string? AdapterVersion, string HostVersion, string? Warning);
+
 public sealed record OnboardResponse(
     Guid ProjectId,
     string ProjectName,
@@ -33,4 +35,5 @@ public sealed record OnboardResponse(
     OnboardValidationBlock Validation,
     OnboardSemanticBlock Semantic,
     OnboardAgentIdentityBlock AgentIdentity,
+    OnboardAdapterBlock Adapter,
     string Quickstart);

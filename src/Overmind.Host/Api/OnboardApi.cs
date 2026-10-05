@@ -21,6 +21,7 @@ public static class OnboardApi
 
     internal static async Task<IResult> Onboard(
         OnboardRequest request,
+        HttpRequest http,
         IValidator<OnboardRequest> validator,
         OvermindDbContext db,
         PlanningPolicy policy,
@@ -107,7 +108,17 @@ public static class OnboardApi
                 AgentIdentityDefaults.Alias,
                 AgentIdentityDefaults.Vendor,
                 project.AgentNamingRules ?? AgentIdentityDefaults.GenericNamingHint),
+            BuildAdapterBlock(http),
             OnboardQuickstart.Text));
+    }
+
+    private static OnboardAdapterBlock BuildAdapterBlock(HttpRequest http)
+    {
+        var adapterVersion = AdapterVersionHeader.Read(http);
+        return new OnboardAdapterBlock(
+            adapterVersion,
+            AdapterVersionCheck.HostVersion,
+            AdapterVersionCheck.Warning(adapterVersion, AdapterVersionCheck.HostVersion));
     }
 
     private static string? SemanticUnavailableReason(VectorSearchHealthReport report)
