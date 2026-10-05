@@ -232,4 +232,23 @@ public class PlanningSectionCanonicalizerTests
         PlanningSectionCanonicalizer.HasInlineSection("goal", fenced).ShouldBeFalse();
         PlanningSectionCanonicalizer.HasInlineSection("goal", prose).ShouldBeFalse();
     }
+
+    [Fact]
+    public void Canonicalize_NestedBeyondDepthCap_ConvergesOnTheSecondPass()
+    {
+        var leaf = "<constraints>deep.</constraints>";
+        var body = leaf;
+        for (var i = 0; i < 9; i++)
+        {
+            body = $"<scope>{body}</scope>";
+        }
+
+        var first = PlanningSectionCanonicalizer.Canonicalize(body);
+        PlanningSectionCanonicalizer.HasInlineSection("scope", first).ShouldBeFalse();
+        PlanningSectionCanonicalizer.HasInlineSection("constraints", first).ShouldBeTrue();
+
+        var second = PlanningSectionCanonicalizer.Canonicalize(first);
+        PlanningSectionCanonicalizer.HasInlineSection("constraints", second).ShouldBeFalse();
+        second.ShouldBe(PlanningSectionCanonicalizer.Canonicalize(second));
+    }
 }
