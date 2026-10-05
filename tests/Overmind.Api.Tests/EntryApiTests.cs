@@ -270,6 +270,29 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_NullTagElement_Returns400Not500()
+    {
+        var entry = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "Note",
+            Title = "null tag update target",
+            Content = "before",
+            Tags = new[] { "alpha" },
+            SkillFiles = (object[]?)null,
+        });
+
+        var putResponse = await _client.PutAsJsonAsync($"/api/entries/{entry.Id}", new
+        {
+            Title = "null tag update target",
+            Content = "after",
+            Tags = new string?[] { null },
+        });
+
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Delete_WithReason_ConvertsToTombstoneCarryingMemory()
     {
         var created = await CreateEntryAsync(new

@@ -36,7 +36,7 @@ public sealed class UpdateEntryRequestValidator : AbstractValidator<UpdateEntryR
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Content).NotEmpty();
         RuleFor(x => x.Tags)
-            .ForEach(tag => tag.NotEmpty().Must(name => !name.Contains(',')).WithMessage(CreateEntryRequestValidator.CommaRule))
+            .ForEach(tag => tag.NotEmpty().Must(name => name is null || !name.Contains(',')).WithMessage(CreateEntryRequestValidator.CommaRule))
             .When(x => x.Tags is not null);
         RuleForEach(x => x.SkillFiles)
             .ChildRules(files =>
