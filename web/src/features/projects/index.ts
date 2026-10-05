@@ -1,4 +1,5 @@
 export { ProjectDetail } from "./components/project-detail";
+export { FeatureNumberSettings } from "./components/feature-number-settings";
 export { ProjectForm } from "./components/project-form";
 export { ProjectHeader } from "./components/project-header";
 export { ProjectList } from "./components/project-list";
@@ -11,6 +12,7 @@ export {
   useProjectMutations,
 } from "./lib/use-projects";
 export { useProjectName } from "./lib/use-project-name";
+export { useProjectNumbering } from "./lib/use-project-numbering";
 export { projectKeys, projectListQueryOptions, projectDetailQueryOptions } from "./queries";
 export type {
   ProjectFormValues,

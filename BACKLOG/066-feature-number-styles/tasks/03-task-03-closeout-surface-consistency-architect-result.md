@@ -2,7 +2,7 @@
 feature: 066
 task: 03
 slug: feature-number-styles
-status: todo
+status: done
 review: light
 created: 2026-10-04
 depends_on: 02
@@ -21,9 +21,14 @@ Close the wave: no surface left behind, architect light, result.
 </scope>
 
 <acceptance-criteria>
-- [ ] Grep pass clean; architect verdict recorded; result drafted with click-check.
+- [x] Grep pass clean; architect verdict recorded; result drafted with click-check.
 </acceptance-criteria>
 
 <refs>
 - Spec e3f93cc8; plan 29745c88 (task 3).
 </refs>
+
+<log>
+- 2026-10-05 [agent] — taken by orchestrator — closeout: architect light over the wave, then result draft
+- 2026-10-05 [agent] — closeout complete: grep pass clean (task-order #N declared non-scope per architect I-1), architect light APPROVED 0 blockers (audits/architect-066.md), result 56a746ab drafted with click-check + decisions. Feature goes to review; done-flip waits on the human tap.
+</log>

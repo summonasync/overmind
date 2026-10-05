@@ -11,6 +11,7 @@ import { FeatureNumber } from "@/features/planning/components/feature-number";
 import { taskBlockers, taskBlockersSummary } from "@/features/planning/lib/task-blockers";
 import { taskHeading } from "@/features/planning/lib/task-heading";
 import type { PlanningArtifactResponse, PlanningArtifactStatus } from "@/features/planning/types";
+import type { ProjectNumbering } from "@/shared/lib/feature-number";
 
 const COLUMNS: { status: PlanningArtifactStatus; label: string }[] = [
   { status: "todo", label: "To do" },
@@ -48,6 +49,7 @@ interface TaskMoveInput {
 interface TaskBoardProps {
   tasks: PlanningArtifactResponse[];
   featureSlug: string;
+  numbering: ProjectNumbering;
   pending: boolean;
   error: Error | null;
   onOpen: (artifact: PlanningArtifactResponse) => void;
@@ -58,6 +60,7 @@ interface TaskBoardProps {
 export function TaskBoard({
   tasks,
   featureSlug,
+  numbering,
   pending,
   error,
   onOpen,
@@ -104,6 +107,7 @@ export function TaskBoard({
                       task={task}
                       siblings={tasks}
                       featureSlug={featureSlug}
+                      numbering={numbering}
                       onOpen={onOpen}
                       onMove={openMove}
                       onDelete={onDelete}
@@ -122,7 +126,7 @@ export function TaskBoard({
             <p className="text-sm text-foreground">
               Move{" "}
               <span className="font-medium">
-                <FeatureNumber slug={featureSlug} />
+                <FeatureNumber slug={featureSlug} numbering={numbering} />
                 {taskHeading(moving.artifact.body, moving.artifact.order)}
               </span>{" "}
               to <span className="font-medium">{columnLabel(moving.status)}</span>.
@@ -153,12 +157,13 @@ interface TaskCardProps {
   task: PlanningArtifactResponse;
   siblings: PlanningArtifactResponse[];
   featureSlug: string;
+  numbering: ProjectNumbering;
   onOpen: (artifact: PlanningArtifactResponse) => void;
   onMove: (artifact: PlanningArtifactResponse, status: PlanningArtifactStatus) => void;
   onDelete: (artifact: PlanningArtifactResponse) => void;
 }
 
-function TaskCard({ task, siblings, featureSlug, onOpen, onMove, onDelete }: TaskCardProps) {
+function TaskCard({ task, siblings, featureSlug, numbering, onOpen, onMove, onDelete }: TaskCardProps) {
   const blockers = task.blocked ? taskBlockers(task, siblings) : [];
   return (
     <li className="rounded-md border border-border bg-surface p-2.5">
@@ -168,7 +173,7 @@ function TaskCard({ task, siblings, featureSlug, onOpen, onMove, onDelete }: Tas
         className="block w-full rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <span className="block text-sm font-medium text-foreground">
-          <FeatureNumber slug={featureSlug} />
+          <FeatureNumber slug={featureSlug} numbering={numbering} />
           {taskHeading(task.body, task.order)}
         </span>
         {task.brief?.trim() ? (

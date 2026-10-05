@@ -1,9 +1,13 @@
+import type { FeatureNumberStyle } from "@/shared/lib/feature-number";
+
 export interface ProjectResponse {
   id: string;
   name: string;
   diskPath: string;
   description: string;
   manifest: string | null;
+  numberStyle: FeatureNumberStyle;
+  numberPrefix: string | null;
   createdAt: string;
 }
 
@@ -16,6 +20,8 @@ export interface ProjectFormValues {
 export type ProjectUpdateValues = ProjectFormValues & {
   manifest?: string | null;
   setManifest?: boolean;
+  numberStyle?: FeatureNumberStyle;
+  numberPrefix?: string;
 };
 
 export interface ProjectManifestImportResponse {

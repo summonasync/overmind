@@ -35,6 +35,7 @@ import {
   type PlanningFeatureStatus,
   type PlanningTab,
 } from "@/features/planning/types";
+import type { ProjectNumbering } from "@/shared/lib/feature-number";
 
 const TAB_LABELS: Record<PlanningTab, string> = {
   spec: "Spec",
@@ -55,9 +56,10 @@ const focusRing =
 interface FeatureWorkspaceProps {
   projectId: string;
   slug: string;
+  numbering: ProjectNumbering;
 }
 
-export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
+export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspaceProps) {
   const searchParams = useSearchParams();
   const requestedTab = searchParams?.get("tab") ?? null;
   const [tab, setTabState] = useState<PlanningTab>(
@@ -197,7 +199,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
 
       <FeatureDependenciesPanel projectId={projectId} feature={feature} />
 
-      <TaskDependenciesPanel featureSlug={slug} tasks={tasks} />
+      <TaskDependenciesPanel featureSlug={slug} numbering={numbering} tasks={tasks} />
 
       <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
 
@@ -254,6 +256,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
           <TaskBoard
             tasks={tasks}
             featureSlug={slug}
+            numbering={numbering}
             pending={setArtifactStatus.isPending}
             error={setArtifactStatus.error as Error | null}
             onOpen={setTaskModal}
@@ -406,6 +409,7 @@ export function FeatureWorkspace({ projectId, slug }: FeatureWorkspaceProps) {
         artifact={deleteTarget}
         siblings={feature.artifacts}
         featureSlug={slug}
+        numbering={numbering}
         pending={deleteArtifact.isPending}
         error={deleteArtifact.error as Error | null}
         onClose={() => setDeleteTarget(null)}

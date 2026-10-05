@@ -1,11 +1,12 @@
-import { formatFeatureNumber } from "@/shared/lib/feature-number";
+import { formatFeatureNumber, type ProjectNumbering } from "@/shared/lib/feature-number";
 
 interface FeatureNumberBadgeProps {
   slug: string;
+  numbering: ProjectNumbering;
 }
 
-export function FeatureNumberBadge({ slug }: FeatureNumberBadgeProps) {
-  const tag = formatFeatureNumber(slug);
+export function FeatureNumberBadge({ slug, numbering }: FeatureNumberBadgeProps) {
+  const tag = formatFeatureNumber(slug, numbering.style, numbering.prefix);
   if (tag === null) {
     return null;
   }

@@ -8,13 +8,15 @@ import {
 } from "@/features/planning/lib/task-blockers";
 import { taskHeading } from "@/features/planning/lib/task-heading";
 import type { PlanningArtifactResponse } from "@/features/planning/types";
+import type { ProjectNumbering } from "@/shared/lib/feature-number";
 
 interface TaskDependenciesPanelProps {
   featureSlug: string;
+  numbering: ProjectNumbering;
   tasks: PlanningArtifactResponse[];
 }
 
-export function TaskDependenciesPanel({ featureSlug, tasks }: TaskDependenciesPanelProps) {
+export function TaskDependenciesPanel({ featureSlug, numbering, tasks }: TaskDependenciesPanelProps) {
   const edges = tasks
     .map((task) => ({ task, blockers: taskBlockers(task, tasks) }))
     .filter((edge) => edge.blockers.length > 0);
@@ -41,7 +43,8 @@ export function TaskDependenciesPanel({ featureSlug, tasks }: TaskDependenciesPa
         {edges.map(({ task, blockers }) => (
           <li key={task.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <span className="font-medium text-foreground">
-              <FeatureNumber slug={featureSlug} />#{task.order} {taskHeading(task.body, task.order)}
+              <FeatureNumber slug={featureSlug} numbering={numbering} />#{task.order}{" "}
+              {taskHeading(task.body, task.order)}
             </span>
             <span aria-hidden className="text-muted">
               →

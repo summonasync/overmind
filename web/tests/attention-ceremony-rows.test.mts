@@ -11,8 +11,13 @@ const section = () =>
 test("ceremony rows render the feature number through the shared badge", () => {
   const source = section();
   assert.ok(source.includes(`import { FeatureNumberBadge } from "@/features/planning";`));
-  assert.ok(source.includes(`<FeatureNumberBadge slug={feature.featureSlug} />`));
+  assert.ok(source.includes(`<FeatureNumberBadge slug={feature.featureSlug} numbering={numbering} />`));
   assert.ok(!source.includes(`>{feature.number}</span>`));
+});
+
+test("each ceremony group resolves the numbering of its own project", () => {
+  const source = section();
+  assert.ok(source.includes(`useProjectNumbering(group.projectId)`));
 });
 
 test("ceremony row titles link to the feature url with card-style hover", () => {

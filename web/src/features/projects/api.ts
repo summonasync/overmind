@@ -28,6 +28,14 @@ export function updateProject(id: string, values: ProjectUpdateValues): Promise<
     diskPath: values.diskPath,
     description: values.description || null,
     ...(values.setManifest ? { manifest: values.manifest ?? null, setManifest: true } : {}),
+    ...(values.numberStyle !== undefined
+      ? {
+          numberStyle: values.numberStyle,
+          ...(values.numberStyle === "key" && values.numberPrefix !== undefined
+            ? { numberPrefix: values.numberPrefix }
+            : {}),
+        }
+      : {}),
   });
 }
 

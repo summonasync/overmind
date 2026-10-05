@@ -23,7 +23,7 @@ import {
   usePlanningMutations,
 } from "@/features/planning";
 import type { PlanningFeatureBoardItem, PlanningFeatureFormValues } from "@/features/planning";
-import { ProjectHeader } from "@/features/projects";
+import { ProjectHeader, useProjectNumbering } from "@/features/projects";
 import { PlanningInfoPanel } from "@/pages/planning-page/ui/planning-info-panel";
 import { EmptyState } from "@/shared/ui/empty-state";
 
@@ -36,6 +36,7 @@ function PlanningPageContent() {
   const featureSlug = searchParams?.get("feature") ?? "";
 
   const { data: features, loading, error } = usePlanningBoard(projectId);
+  const numbering = useProjectNumbering(projectId);
   const boardFilters = useBoardFilters();
   const boardSearch = useBoardSearch();
   const { createFeature, updateFeature, deleteFeature, claimFeature, unclaimFeature } =
@@ -112,7 +113,7 @@ function PlanningPageContent() {
     return (
       <div className="space-y-4">
         <ProjectHeader projectId={projectId} />
-        <FeatureWorkspace projectId={projectId} slug={featureSlug} />
+        <FeatureWorkspace projectId={projectId} slug={featureSlug} numbering={numbering} />
         <DriftPanel projectId={projectId} />
       </div>
     );
@@ -170,6 +171,7 @@ function PlanningPageContent() {
           ) : (
             <FeatureBoard
               projectId={projectId}
+              numbering={numbering}
               features={visibleFeatures}
               onCreate={openCreate}
               onEdit={openEdit}

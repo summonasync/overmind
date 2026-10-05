@@ -6,11 +6,13 @@ import { Modal } from "@/shared/ui/modal";
 import { FeatureNumber } from "@/features/planning/components/feature-number";
 import { artifactDeletePreview } from "@/features/planning/lib/artifact-deletion";
 import type { PlanningArtifactResponse } from "@/features/planning/types";
+import type { ProjectNumbering } from "@/shared/lib/feature-number";
 
 interface DeleteArtifactDialogProps {
   artifact: PlanningArtifactResponse | null;
   siblings: PlanningArtifactResponse[];
   featureSlug: string;
+  numbering: ProjectNumbering;
   pending: boolean;
   error: Error | null;
   onClose: () => void;
@@ -21,6 +23,7 @@ export function DeleteArtifactDialog({
   artifact,
   siblings,
   featureSlug,
+  numbering,
   pending,
   error,
   onClose,
@@ -36,7 +39,7 @@ export function DeleteArtifactDialog({
     <Modal title={`Delete ${preview.target}`} open onClose={onClose}>
       <div className="space-y-4">
         <p className="text-sm text-foreground">
-          <FeatureNumber slug={featureSlug} />
+          <FeatureNumber slug={featureSlug} numbering={numbering} />
           Delete {preview.target}? This cannot be undone.
         </p>
         <ul className="space-y-1.5 text-sm text-muted">

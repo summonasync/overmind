@@ -11,7 +11,7 @@ import {
   useNotificationMutations,
 } from "@/features/notifications";
 import type { NotificationItem } from "@/features/notifications";
-import { ProjectNameBadge } from "@/features/projects";
+import { ProjectNameBadge, useProjectNumbering } from "@/features/projects";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -24,6 +24,7 @@ interface NotificationRowProps {
 
 export function NotificationRow({ item }: NotificationRowProps) {
   const { markRead, reply, remove } = useNotificationMutations();
+  const numbering = useProjectNumbering(notificationProjectId(item));
 
   const meta = NOTIFICATION_KIND_META[item.kind];
   const KindIcon = meta.icon;
@@ -79,7 +80,7 @@ export function NotificationRow({ item }: NotificationRowProps) {
             }}
             className="text-xs font-medium text-primary hover:underline"
           >
-            Open <FeatureSlugLabel slug={item.featureSlug} />
+            Open <FeatureSlugLabel slug={item.featureSlug} numbering={numbering} />
             {item.tab ? ` · ${item.tab}` : ""} →
           </a>
         ) : null}

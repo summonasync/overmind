@@ -8,7 +8,7 @@ import {
   NotificationActions,
 } from "@/features/notifications";
 import type { NotificationItem } from "@/features/notifications";
-import { ProjectNameBadge } from "@/features/projects";
+import { ProjectNameBadge, useProjectNumbering } from "@/features/projects";
 import { cn } from "@/shared/lib/cn";
 import { formatNotificationTime } from "@/shared/lib/relative-time";
 
@@ -19,6 +19,7 @@ interface AwaitingRowProps {
 export function AwaitingRow({ item }: AwaitingRowProps) {
   const meta = NOTIFICATION_KIND_META[item.kind];
   const KindIcon = meta.icon;
+  const numbering = useProjectNumbering(notificationProjectId(item));
 
   return (
     <li
@@ -33,7 +34,7 @@ export function AwaitingRow({ item }: AwaitingRowProps) {
         <span className="text-xs text-muted">{item.agent}</span>
         {item.featureSlug ? (
           <span className="text-xs text-muted">
-            <FeatureSlugLabel slug={item.featureSlug} />
+            <FeatureSlugLabel slug={item.featureSlug} numbering={numbering} />
           </span>
         ) : null}
         <span className="ml-auto shrink-0 text-xs text-muted">
@@ -46,7 +47,7 @@ export function AwaitingRow({ item }: AwaitingRowProps) {
           href={notificationHref(item)}
           className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
         >
-          Open <FeatureSlugLabel slug={item.featureSlug} />
+          Open <FeatureSlugLabel slug={item.featureSlug} numbering={numbering} />
           {item.tab ? ` · ${item.tab}` : ""} →
         </a>
       ) : null}

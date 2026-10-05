@@ -27,9 +27,11 @@ import type {
   PlanningFeaturePriority,
   PlanningFeatureStatus,
 } from "@/features/planning/types";
+import type { ProjectNumbering } from "@/shared/lib/feature-number";
 
 interface FeatureBoardProps {
   projectId: string;
+  numbering: ProjectNumbering;
   features: PlanningFeatureBoardItem[];
   onCreate: () => void;
   onEdit: (item: PlanningFeatureBoardItem) => void;
@@ -123,6 +125,7 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
 
 export function FeatureBoard({
   projectId,
+  numbering,
   features,
   onCreate,
   onEdit,
@@ -217,7 +220,7 @@ export function FeatureBoard({
                   className="group min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   <span className="flex items-center gap-1.5">
-                    <FeatureNumberBadge slug={item.slug} />
+                    <FeatureNumberBadge slug={item.slug} numbering={numbering} />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground group-hover:text-primary">
                       {item.title}
                     </span>

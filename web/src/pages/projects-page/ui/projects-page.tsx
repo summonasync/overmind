@@ -9,6 +9,7 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { useInfoPanel } from "@/widgets/app-shell";
 import {
+  FeatureNumberSettings,
   ProjectDetail,
   ProjectForm,
   ProjectList,
@@ -17,7 +18,8 @@ import {
   useProjectMutations,
 } from "@/features/projects";
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects";
-import { PlanningWorkflowSettings, BacklogImportSection } from "@/features/planning";
+import { PlanningWorkflowSettings, BacklogImportSection, usePlanningBoard } from "@/features/planning";
+import { featureNumber } from "@/shared/lib/feature-number";
 import { ProjectsInfoPanel } from "@/pages/projects-page/ui/projects-info-panel";
 
 function ProjectsPageContent() {
@@ -26,6 +28,7 @@ function ProjectsPageContent() {
 
   const { data: projects, loading, error } = useProjectList();
   const { create, update, remove } = useProjectMutations();
+  const { data: board } = usePlanningBoard(detailId);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectResponse | null>(null);
@@ -34,6 +37,8 @@ function ProjectsPageContent() {
   useInfoPanel(<ProjectsInfoPanel />);
 
   const detail = projects.find((item) => item.id === detailId) ?? null;
+  const previewSlug =
+    board?.find((item) => featureNumber(item.slug) !== null)?.slug ?? null;
 
   const activeError =
     (create.error as Error | null) ??
@@ -99,6 +104,10 @@ function ProjectsPageContent() {
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
               <PlanningWorkflowSettings projectId={detail.id} />
+            </div>
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Feature numbers</h3>
+              <FeatureNumberSettings key={detail.id} project={detail} previewSlug={previewSlug} />
             </div>
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Backlog import</h3>
