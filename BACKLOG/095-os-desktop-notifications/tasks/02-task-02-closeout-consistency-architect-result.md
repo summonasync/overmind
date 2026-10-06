@@ -2,7 +2,7 @@
 feature: 095
 task: 02
 slug: os-desktop-notifications
-status: todo
+status: done
 review: light
 created: 2026-10-04
 depends_on: 01
@@ -21,9 +21,14 @@ Close the wave: one event, three surfaces, no duplicate noise.
 </scope>
 
 <acceptance-criteria>
-- [ ] Consistency recorded; architect verdict recorded; result drafted with click-check.
+- [x] Consistency recorded; architect verdict recorded; result drafted with click-check.
 </acceptance-criteria>
 
 <refs>
 - Spec 12623237; plan 6b95d68b (task 2).
 </refs>
+
+<log>
+- 2026-10-06 [agent] — taken by orchestrator — closeout: consistency pass, architect light, result (final p1 wave)
+- 2026-10-06 [agent] — closeout complete: consistency pass done (single source query; awaiting-predicate divergence bubble readAt vs attention hiddenAt documented in the result per architect W2; no duplicate noise — firedIds dedup + max() title), architect light APPROVED-WITH-WARNINGS with W1 fixed in-tree (window.location.assign per the static-export ADR) and W2 documented (audits/architect-095.md), result 297ae98c drafted with the 7-step permission click-check. Feature goes to review; done-flip waits on the human tap.
+</log>

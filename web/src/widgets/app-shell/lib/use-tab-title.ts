@@ -6,13 +6,13 @@ import { useProjectList } from "@/features/projects";
 import { resolvedProjectName } from "@/shared/lib/project-display";
 import { titleFor } from "@/widgets/app-shell/lib/tab-title";
 
-export function useTabTitle(awaitingCount: number) {
+export function useTabTitle(awaitingCount: number, attentionCount = 0) {
   const searchParams = useSearchParams();
   const { data: projects } = useProjectList();
   const projectId = searchParams?.get("project") || null;
   const projectName = resolvedProjectName(projects, projectId);
 
   useEffect(() => {
-    document.title = titleFor(projectName, awaitingCount);
-  }, [projectName, awaitingCount]);
+    document.title = titleFor(projectName, awaitingCount, attentionCount);
+  }, [projectName, awaitingCount, attentionCount]);
 }

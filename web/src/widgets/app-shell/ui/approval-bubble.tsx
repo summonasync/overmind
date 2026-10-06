@@ -14,6 +14,7 @@ import { Modal } from "@/shared/ui/modal";
 import { Zerling } from "@/shared/ui/zerling";
 import { cn } from "@/shared/lib/cn";
 import { bubbleText } from "@/widgets/app-shell/lib/bubble-text";
+import { useAttentionCount } from "@/widgets/app-shell/lib/attention-store";
 import { notificationHref } from "@/widgets/app-shell/lib/notification-href";
 import { useApprovalBubble } from "@/widgets/app-shell/lib/use-approval-bubble";
 import { useTabTitle } from "@/widgets/app-shell/lib/use-tab-title";
@@ -25,7 +26,7 @@ export function ApprovalBubble() {
   const { reply } = useNotificationMutations();
   const [centerOpen, setCenterOpen] = useState(false);
 
-  useTabTitle(awaitingCount);
+  useTabTitle(awaitingCount, useAttentionCount());
 
   if (surface === "hidden" || item === null) {
     return null;

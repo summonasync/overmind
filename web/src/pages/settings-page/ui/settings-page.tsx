@@ -10,6 +10,7 @@ import { healthKeys } from "@/features/health";
 import { ReindexButton, SettingsForm, useSettings, useSettingsMutations } from "@/features/settings";
 import type { ReindexReport, SettingsFormValues } from "@/features/settings";
 import { useInfoPanel } from "@/widgets/app-shell";
+import { AttentionSettingsSection } from "@/pages/settings-page/ui/attention-settings-section";
 import { SettingsHelpPanel } from "@/pages/settings-page/ui/settings-help-panel";
 
 export function SettingsPage() {
@@ -100,6 +101,8 @@ export function SettingsPage() {
         />
         {rebuild.error ? <ErrorText error={rebuild.error as Error} /> : null}
       </section>
+
+      <AttentionSettingsSection />
     </div>
   );
 }

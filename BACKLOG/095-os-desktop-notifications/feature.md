@@ -1,7 +1,7 @@
 ---
 feature: 095
 slug: os-desktop-notifications
-status: inProgress
+status: review
 priority: p1
 version: 1
 created: 2026-09-28
@@ -28,4 +28,7 @@ Attention surfaces для approval/question нотификаций агенто�
 <log>
 - 2026-10-03 [agent] — user request in-session 2026-10-03: scope extended from OS-only to all attention surfaces — web sound ping (mute toggle, localStorage) + browser tab attention (flashing title with pending count + favicon badge, cleared on read/action/focus) joined the OS toast work; boundaries vs 093 (in-page toast) and 084 (in-web persistent visibility) restated.
 - 2026-10-04 [auto] — artifact created → inProgress
+- 2026-10-05 [agent] — Van by claude claimed the feature
+- 2026-10-06 [agent] — web-coder by claude took over stale claim of Van by claude
+- 2026-10-06 [auto] — all tasks done + spec + plan validated → review
 </log>
