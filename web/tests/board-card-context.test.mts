@@ -49,6 +49,29 @@ test("phase label passes the ready-made server label through", () => {
   assert.equal(cardPhaseLabel(item({ phase: "plan validated" })), "plan validated");
 });
 
+test("every server phase label passes through", () => {
+  for (const label of [
+    "drafting",
+    "writing spec",
+    "planning",
+    "plan validated",
+    "in progress",
+    "review",
+    "done",
+  ]) {
+    assert.equal(cardPhaseLabel(item({ phase: label })), label);
+  }
+});
+
+test("null phase renders no phase label", () => {
+  assert.equal(cardPhaseLabel(item({ phase: null })), null);
+});
+
+test("blank phase (empty or whitespace) renders no phase label", () => {
+  assert.equal(cardPhaseLabel(item({ phase: "" })), null);
+  assert.equal(cardPhaseLabel(item({ phase: "   " })), null);
+});
+
 test("done cards keep the single done representation via the phase label", () => {
   const done = item({ status: "done", phase: "done", taskTotal: 3, taskDone: 3 });
   assert.equal(cardPhaseLabel(done), "done");

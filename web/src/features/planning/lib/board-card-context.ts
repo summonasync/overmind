@@ -5,7 +5,10 @@ export function cardBriefLine(item: PlanningFeatureBoardItem): string | null {
   return excerpt !== undefined && excerpt.length > 0 ? excerpt : null;
 }
 
-export function cardPhaseLabel(item: PlanningFeatureBoardItem): string {
+export function cardPhaseLabel(item: PlanningFeatureBoardItem): string | null {
+  if (item.phase === null || item.phase.trim().length === 0) {
+    return null;
+  }
   return item.phase;
 }
 

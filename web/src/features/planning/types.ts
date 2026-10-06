@@ -65,7 +65,7 @@ export interface PlanningFeatureBoardItem {
   title: string;
   briefExcerpt: string | null;
   status: PlanningFeatureStatus;
-  phase: string;
+  phase: string | null;
   priority: PlanningFeaturePriority;
   queuePosition: number;
   isBlocked: boolean;
