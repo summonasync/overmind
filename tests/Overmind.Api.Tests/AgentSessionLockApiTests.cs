@@ -601,6 +601,18 @@ public sealed class AgentSessionLockApiTests : IDisposable
         var customBody = await custom.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         customBody.GetProperty("agentIdentity").GetProperty("namingRules").GetString()!
             .ShouldBe("aliases are crew names, vendor is the runtime");
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/claim-settings",
+            new { ClaimStaleThresholdMinutes = 25, AgentNamingRules = "aliases come from the crew, keep the vendor casing" },
+            JsonOptions);
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var apiDriven = await _client.PostAsJsonAsync(
+            "/api/onboard", new { Cwd = project.DiskPath }, JsonOptions);
+        var apiBody = await apiDriven.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        apiBody.GetProperty("agentIdentity").GetProperty("namingRules").GetString()!
+            .ShouldBe("aliases come from the crew, keep the vendor casing");
     }
 
     [Fact]

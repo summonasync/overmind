@@ -57,6 +57,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IValidator<CreateProjectRequest>, CreateProjectRequestValidator>();
         services.AddSingleton<IValidator<UpdateProjectRequest>, UpdateProjectRequestValidator>();
+        services.AddSingleton<IValidator<UpdateClaimSettingsRequest>, UpdateClaimSettingsRequestValidator>();
         services.AddSingleton<IValidator<CreateEntryRequest>, CreateEntryRequestValidator>();
         services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();

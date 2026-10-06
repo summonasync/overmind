@@ -77,6 +77,26 @@ public class ProjectTests
     }
 
     [Fact]
+    public void SetClaimSettings_RulesAtLimit_AreStored()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        var rules = new string('x', Project.MaxNamingRulesLength);
+
+        project.SetClaimSettings(15, rules);
+
+        project.AgentNamingRules.ShouldBe(rules);
+    }
+
+    [Fact]
+    public void SetClaimSettings_RulesOverLimit_Throws()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            project.SetClaimSettings(15, new string('x', Project.MaxNamingRulesLength + 1)));
+    }
+
+    [Fact]
     public void SetManifest_TrimsAndStores()
     {
         var project = Project.Create("Overmind", "/disk/path");

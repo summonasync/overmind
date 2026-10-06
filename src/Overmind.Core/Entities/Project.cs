@@ -8,6 +8,7 @@ public sealed partial class Project
     private const int MaxMaterializationSkipHead = 5;
     public const int DefaultClaimStaleThresholdMinutes = 15;
     public const int MaxManifestLength = 200_000;
+    public const int MaxNamingRulesLength = 2000;
     public const int NumberPrefixMaxLength = 16;
 
     [GeneratedRegex("^[A-Z][A-Z0-9_]{1,15}$")]
@@ -64,6 +65,11 @@ public sealed partial class Project
     public void SetClaimSettings(int staleThresholdMinutes, string? namingRules)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(staleThresholdMinutes);
+        if (namingRules is not null)
+        {
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(namingRules.Length, MaxNamingRulesLength);
+        }
+
         ClaimStaleThresholdMinutes = staleThresholdMinutes;
         AgentNamingRules = string.IsNullOrWhiteSpace(namingRules) ? null : namingRules.Trim();
     }

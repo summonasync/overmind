@@ -39,3 +39,16 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
                 $"NumberPrefix must be at most {Project.NumberPrefixMaxLength} characters: an uppercase letter followed by uppercase letters, digits or underscores.");
     }
 }
+
+public sealed class UpdateClaimSettingsRequestValidator : AbstractValidator<UpdateClaimSettingsRequest>
+{
+    public UpdateClaimSettingsRequestValidator()
+    {
+        RuleFor(x => x.ClaimStaleThresholdMinutes)
+            .GreaterThanOrEqualTo(0)
+            .WithMessage("ClaimStaleThresholdMinutes must be zero or greater: 0 disables stale detection.");
+        RuleFor(x => x.AgentNamingRules)
+            .MaximumLength(Project.MaxNamingRulesLength)
+            .WithMessage($"AgentNamingRules must be at most {Project.MaxNamingRulesLength} characters.");
+    }
+}
