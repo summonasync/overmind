@@ -2,7 +2,7 @@
 feature: 047
 task: 00
 slug: api-read-surface-polish
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Add PlanningTaskCounts (5 keys) to BoardItem+QueueItem DTOs and PlanningMapper; extend Api.Tests mirrors with mixed-status and zero-task assertions.
@@ -35,10 +35,10 @@ Both Host projections carry a per-status task breakdown so a feature row is self
 </constraints>
 
 <acceptance-criteria>
-- [ ] taskCounts with 5 keys present on PlanningFeatureBoardItem and PlanningQueueItem; sum equals taskTotal on a mixed-status fixture.
-- [ ] Zero-task feature returns an all-zeros object, not null.
-- [ ] Board endpoint and queue endpoint both serialize taskCounts (Api tests pass).
-- [ ] dotnet build Overmind.sln green; dotnet test tests/Overmind.Api.Tests green.
+- [x] taskCounts with 5 keys present on PlanningFeatureBoardItem and PlanningQueueItem; sum equals taskTotal on a mixed-status fixture.
+- [x] Zero-task feature returns an all-zeros object, not null.
+- [x] Board endpoint and queue endpoint both serialize taskCounts (Api tests pass).
+- [x] dotnet build Overmind.sln green; dotnet test tests/Overmind.Api.Tests green.
 </acceptance-criteria>
 
 <refs>
@@ -52,4 +52,7 @@ Both Host projections carry a per-status task breakdown so a feature row is self
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan T1.
+- 2026-10-06 [agent] — 047/T1 coding round started
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers. Five-bucket invariant verified to domain level (TaskStatuses closed set, invalid statuses throw — sum == taskTotal by construction), passthrough confirmed (Mcp needs nothing for T1), mutation-checked tests, spot-check 253/253. Commit caa6f31.
 </log>

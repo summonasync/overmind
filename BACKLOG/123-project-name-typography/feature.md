@@ -1,7 +1,7 @@
 ---
 feature: 123
 slug: project-name-typography
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-10-04
@@ -22,4 +22,7 @@ User intake 2026-10-04: «название проекта — я бы писал
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 01 taken → inProgress
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification 7d354d0c; result validated in the final batch sitting. Typography/header restructure closed (80d05b2 + 7aefdb8).
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

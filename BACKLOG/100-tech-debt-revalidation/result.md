@@ -1,8 +1,9 @@
 ---
 feature: 100
 slug: tech-debt-revalidation
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 100 — Tech debt: full structural re-validation of the codebase (god-files, seams, FSD)

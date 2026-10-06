@@ -1,7 +1,7 @@
 ---
 feature: 124
 slug: custom-scrollbars
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-10-06
@@ -32,4 +32,7 @@ The apps ship with the browser default scrollbars (full-width grey tracks, OS-st
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 01 taken → inProgress
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification d5a1d81c; result validated in the final batch sitting. Scrollbar feature closed (commit a958703).
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

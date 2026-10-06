@@ -1,8 +1,9 @@
 ---
 feature: 123
 slug: project-name-typography
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 123 — Project name typography: distinct display treatment vs page headings

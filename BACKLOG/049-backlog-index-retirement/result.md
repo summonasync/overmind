@@ -1,8 +1,9 @@
 ---
 feature: 049
 slug: backlog-index-retirement
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 049 — Retire BACKLOG.md generated index: состояние — только борда (UI/MCP), на диске — дерево артефактов

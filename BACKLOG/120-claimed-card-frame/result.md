@@ -1,8 +1,9 @@
 ---
 feature: 120
 slug: claimed-card-frame
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 120 — Board card: claim frame (pin-frame successor)

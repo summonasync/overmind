@@ -1,7 +1,7 @@
 ---
 feature: 121
 slug: alias-rules-editor
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-10-04
@@ -22,4 +22,7 @@ User intake 2026-10-04: «два claude by anthropic — что странно»
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 01 taken → inProgress
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification f76ee37c; result validated in the final batch sitting. Alias-rules pipeline closed (392568f + 50fcedb + 1c2aeed + kit 3c67637); skill sync to ~/.claude/** stays the human's separate act.
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

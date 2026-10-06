@@ -72,14 +72,14 @@ Parameter (`order`, upsert): `Sort key and stable handle; gaps are legal — do 
 
 ## Acceptance criteria
 
-- [ ] `taskCounts` with 5 keys present on both `PlanningFeatureBoardItem` and `PlanningQueueItem`; sum always equals `taskTotal`; zero-task features return all-zeros, never null.
-- [ ] Board endpoint, queue endpoint, single-queue re-projection and MCP `planning_list_features` / `planning_task_queue` all carry `taskCounts` (pass-through asserted).
-- [ ] `planning_list_features` and `planning_task_queue` descriptions mention `taskCounts` (pinned).
-- [ ] `body` parameter of `planning_upsert_artifact` no longer reads «with its XML sections»; the pointer text is pinned.
-- [ ] Holes-are-legal sentence present in `planning_upsert_artifact` and `planning_upsert_tasks` descriptions + the `order` parameter note (pinned).
-- [ ] `web/src/features/planning/types.ts` mirror carries `taskCounts`; `npm run lint && npx tsc --noEmit` green.
-- [ ] No breaking change: all additions are additive; `taskTotal`/`taskDone` semantics and positions unchanged.
-- [ ] `dotnet build Overmind.sln` + full `dotnet test Overmind.sln` green.
+- [x] `taskCounts` with 5 keys present on both `PlanningFeatureBoardItem` and `PlanningQueueItem`; sum always equals `taskTotal`; zero-task features return all-zeros, never null.
+- [x] Board endpoint, queue endpoint, single-queue re-projection and MCP `planning_list_features` / `planning_task_queue` all carry `taskCounts` (pass-through asserted).
+- [x] `planning_list_features` and `planning_task_queue` descriptions mention `taskCounts` (pinned).
+- [x] `body` parameter of `planning_upsert_artifact` no longer reads «with its XML sections»; the pointer text is pinned.
+- [x] Holes-are-legal sentence present in `planning_upsert_artifact` and `planning_upsert_tasks` descriptions + the `order` parameter note (pinned).
+- [x] `web/src/features/planning/types.ts` mirror carries `taskCounts`; `npm run lint && npx tsc --noEmit` green.
+- [x] No breaking change: all additions are additive; `taskTotal`/`taskDone` semantics and positions unchanged.
+- [x] `dotnet build Overmind.sln` + full `dotnet test Overmind.sln` green.
 
 ## Non-goals
 
@@ -100,4 +100,7 @@ Parameter (`order`, upsert): `Sort key and stable handle; gaps are legal — do 
 <log>
 - 2026-10-06 [agent] — spec drafted from feature body + FEATURELIST 09/03 + code recon (PlanningContracts, PlanningMapper, PlanningFeaturesApi, PlanningQueueApi, OvermindPlanningTools descriptions, Program.cs instructions, Canned.cs, contract-pin tests, web types.ts). Shape fork (4 vs 5 keys) resolved to 5 keys with the invariant sum == taskTotal; flagged for human. Item 3 marked superseded by 070 after verifying the dead pointer is gone and absence-pinned.
 - 2026-10-06 [agent] — validated with human proof: notification 25b83593-6332-4841-a85d-7b21bfe9e9b8 replied 2026-10-06 13:05:12 UTC
+- 2026-10-06 [agent] — 047/T4 gate round: all 8 acceptance criteria ticked after green gate on 3aca50c — build 0w/0e; serial tests 2246/2246 (Core 367, Infra 692, Api 674, Mcp 513); web lint 0 errors + tsc clean + vitest 263/263 + next build green; consistency sweep clean (shape agreement Host DTO / Canned / web mirror, three doc-gap texts verbatim + pinned, pass-through asserted). Full evidence in task 03 log. Body change is checkbox ticks only — no semantic edits.
+- 2026-10-06 [auto] — artifact demoted: validated → draft
+- 2026-10-06 [agent] — validated with human proof: notification 447bcc54-9166-4450-a08a-f2809003db8e replied 2026-10-06 17:30:36 UTC
 </log>

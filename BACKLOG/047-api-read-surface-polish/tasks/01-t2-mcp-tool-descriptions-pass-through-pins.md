@@ -2,7 +2,7 @@
 feature: 047
 task: 01
 slug: api-read-surface-polish
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Mention taskCounts in list_features/task_queue descriptions; replace the upsert body-param phrase; add the holes-are-legal order sentence; update Canned.cs + contract pins.
@@ -38,11 +38,11 @@ Callers learn the new field and the two residual doc-gaps close: list_features/t
 </constraints>
 
 <acceptance-criteria>
-- [ ] Both read-tool descriptions mention taskCounts; pinned.
-- [ ] Body param no longer contains "with its XML sections"; the pointer text is pinned.
-- [ ] Holes-are-legal sentence present in both upsert descriptions and the order parameter; pinned.
-- [ ] Canned board and queue JSON carry consistent taskCounts; pass-through assertions green.
-- [ ] dotnet test tests/Overmind.Mcp.Tests green.
+- [x] Both read-tool descriptions mention taskCounts; pinned.
+- [x] Body param no longer contains "with its XML sections"; the pointer text is pinned.
+- [x] Holes-are-legal sentence present in both upsert descriptions and the order parameter; pinned.
+- [x] Canned board and queue JSON carry consistent taskCounts; pass-through assertions green.
+- [x] dotnet test tests/Overmind.Mcp.Tests green.
 </acceptance-criteria>
 
 <refs>
@@ -56,4 +56,8 @@ Callers learn the new field and the two residual doc-gaps close: list_features/t
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan T2.
+- 2026-10-06 [agent] — 047/T2 coding round started
+- 2026-10-06 [agent] — Coding round complete — commit 3aca50c. All three verbatim texts placed (taskCounts mentions in list_features/task_queue, body-param pointer, holes sentence in both upsert descriptions). One judgment call: the order parameter keeps its existing "document kinds ignore it" caveat and appends the verbatim "Sort key and stable handle; gaps are legal — do not renumber to close them." — dropping the caveat would have regressed caller docs. Canned taskCounts: demo-feature {0,1,0,1,0} (sum 2 == taskTotal, done 1 == taskDone), draft-one all zeros; shape matches spec item 1 and the already-landed T3 web mirror. Gates: dotnet build 0 warnings/0 errors; tests/Overmind.Mcp.Tests serially 513/513 green. 5/5 AC ticked.
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 cosmetic NOTE (colon vs parens in the two taskCounts mentions — both pinned as landed, no drift risk). Verbatims byte-checked, Canned shape cross-verified across all three lanes (Host record / Canned / web mirror 1:1), pins purely additive, order-tail retention endorsed, spot-check 171/171. Commit 3aca50c.
 </log>

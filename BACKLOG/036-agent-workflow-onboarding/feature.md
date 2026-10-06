@@ -1,7 +1,7 @@
 ---
 feature: 036
 slug: agent-workflow-onboarding
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-09-20
@@ -42,4 +42,7 @@ created: 2026-09-20
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 01 taken → inProgress
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification c059e273; result validated in the final batch sitting. Onboarding teaching closed (ad50c68 + 5ba84f9 + 5c336b3); live-walk post-deploy follow-up recorded in task 04 log.
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

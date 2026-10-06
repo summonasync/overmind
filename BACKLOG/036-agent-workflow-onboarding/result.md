@@ -1,8 +1,9 @@
 ---
 feature: 036
 slug: agent-workflow-onboarding
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 036 — Agent workflow onboarding: обучить агента без скиллов флою feature→spec→plan→tasks→result

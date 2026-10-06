@@ -1,7 +1,7 @@
 ---
 feature: 047
 slug: api-read-surface-polish
-status: ready
+status: done
 priority: p0
 version: 1
 created: 2026-09-22
@@ -34,4 +34,8 @@ created: 2026-09-22
 <log>
 - 2026-10-06 [agent] — Van by claude claimed the feature
 - 2026-10-06 [auto] — artifact created → ready
+- 2026-10-06 [auto] — task 00 taken → inProgress
+- 2026-10-06 [agent] — by user request in-session — armer notification 8d914133; spec v2 re-validated + result validated in the final batch sitting. taskCounts feature closed (caa6f31 + 3aca50c + 8e7667d).
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

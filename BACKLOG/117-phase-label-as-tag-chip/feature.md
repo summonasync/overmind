@@ -1,7 +1,7 @@
 ---
 feature: 117
 slug: phase-label-as-tag-chip
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-10-04
@@ -22,4 +22,7 @@ User dogfood feedback 2026-10-04: «статусы plan validated и тд — о
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 01 taken → inProgress
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification 6c1e4049; result validated in the final batch sitting. Phase chip closed (2f4cac2 + 1133e30).
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

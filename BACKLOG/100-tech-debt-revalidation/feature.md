@@ -1,7 +1,7 @@
 ---
 feature: 100
 slug: tech-debt-revalidation
-status: inProgress
+status: done
 priority: p0
 version: 1
 created: 2026-09-30
@@ -35,4 +35,7 @@ Run a full architect-review (hard mode) over the whole solution and turn its fin
 - 2026-10-06 [agent] — Van by claude claimed the feature
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 01 taken → inProgress
+- 2026-10-06 [agent] — by user request in-session — armer notification ba24561d; result validated in the final batch sitting. Audit feature closed (audits/architect-review-2026-10-06-100.md); F1-F5 creation and the 090 ADR remain open chat decisions, not pre-decided by this close.
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

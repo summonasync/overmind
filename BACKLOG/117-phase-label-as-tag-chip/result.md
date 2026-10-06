@@ -1,8 +1,9 @@
 ---
 feature: 117
 slug: phase-label-as-tag-chip
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 117 — Board card: phase label as tag chip after the slug
