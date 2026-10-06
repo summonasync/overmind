@@ -1757,6 +1757,31 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task ValidateAsync_WithHiddenRepliedApproval_StillFindsProofLine()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        notification.Hide();
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.ValidateAsync(
+            spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        await _context.Entry(spec).ReloadAsync();
+        var line = PlanningLog.Parse(spec.Body).ShouldHaveSingleItem();
+        line.Source.ShouldBe(PlanningLogSource.Agent);
+        line.Text.ShouldBe($"validated with human proof: notification {notification.Id} replied {notification.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC");
+    }
+
+    [Fact]
     public async Task ValidateAsync_WithoutNotification_ThrowsValidationProofRequired()
     {
         var featureService = CreateFeatureService();
