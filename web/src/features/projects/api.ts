@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type {
+  ClaimSettingsResponse,
   ProjectFormValues,
   ProjectManifestImportResponse,
   ProjectResponse,
@@ -45,4 +46,18 @@ export function importProjectManifest(id: string): Promise<ProjectManifestImport
 
 export function deleteProject(id: string): Promise<void> {
   return apiDelete(`/projects/${id}`);
+}
+
+export function getClaimSettings(id: string): Promise<ClaimSettingsResponse> {
+  return apiGet<ClaimSettingsResponse>(`/projects/${id}/claim-settings`);
+}
+
+export function updateClaimSettings(
+  id: string,
+  values: ClaimSettingsResponse,
+): Promise<ClaimSettingsResponse> {
+  return apiPut<ClaimSettingsResponse>(`/projects/${id}/claim-settings`, {
+    claimStaleThresholdMinutes: values.claimStaleThresholdMinutes,
+    agentNamingRules: values.agentNamingRules,
+  });
 }

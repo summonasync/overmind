@@ -1,5 +1,6 @@
 export { ProjectDetail } from "./components/project-detail";
 export { FeatureNumberSettings } from "./components/feature-number-settings";
+export { ClaimSettingsSection } from "./components/claim-settings-section";
 export { ProjectForm } from "./components/project-form";
 export { ProjectList } from "./components/project-list";
 export { ProjectManifestSection } from "./components/project-manifest-section";
@@ -10,10 +11,17 @@ export {
   useProjectManifestImport,
   useProjectMutations,
 } from "./lib/use-projects";
+export { useClaimSettings, useClaimSettingsMutation } from "./lib/use-claim-settings";
 export { useProjectName } from "./lib/use-project-name";
 export { useProjectNumbering } from "./lib/use-project-numbering";
-export { projectKeys, projectListQueryOptions, projectDetailQueryOptions } from "./queries";
+export {
+  claimSettingsQueryOptions,
+  projectKeys,
+  projectListQueryOptions,
+  projectDetailQueryOptions,
+} from "./queries";
 export type {
+  ClaimSettingsResponse,
   ProjectFormValues,
   ProjectManifestImportResponse,
   ProjectResponse,

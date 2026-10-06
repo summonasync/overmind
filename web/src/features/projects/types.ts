@@ -28,3 +28,8 @@ export interface ProjectManifestImportResponse {
   sourceFile: string;
   manifest: string;
 }
+
+export interface ClaimSettingsResponse {
+  claimStaleThresholdMinutes: number;
+  agentNamingRules: string | null;
+}

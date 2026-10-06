@@ -9,6 +9,7 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { useInfoPanel } from "@/widgets/app-shell";
 import {
+  ClaimSettingsSection,
   FeatureNumberSettings,
   ProjectDetail,
   ProjectForm,
@@ -104,6 +105,10 @@ function ProjectsPageContent() {
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
               <PlanningWorkflowSettings projectId={detail.id} />
+            </div>
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Claim settings</h3>
+              <ClaimSettingsSection projectId={detail.id} />
             </div>
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Feature numbers</h3>
