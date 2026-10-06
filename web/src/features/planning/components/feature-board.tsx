@@ -12,7 +12,12 @@ import { updatePlanningFeature } from "@/features/planning/api";
 import { FeatureNumberBadge } from "@/features/planning/components/feature-number-badge";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
 import { compareBoardItems } from "@/features/planning/lib/board-order";
-import { cardBriefLine, cardPhaseLabel } from "@/features/planning/lib/board-card-context";
+import {
+  cardBriefLine,
+  cardClaimActive,
+  cardClaimLine,
+  cardPhaseLabel,
+} from "@/features/planning/lib/board-card-context";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
@@ -173,6 +178,7 @@ export function FeatureBoard({
           const draggable = item.status !== "done" && !reorderQueue.isPending;
           const isDropTarget = drag !== null && dropTargetSlug === item.slug;
           const brief = cardBriefLine(item);
+          const claimLine = cardClaimLine(item);
           return (
             <li
               key={item.slug}
@@ -209,6 +215,7 @@ export function FeatureBoard({
               onDragEnd={clearDrag}
               className={cn(
                 "flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong",
+                cardClaimActive(item) && "border-primary",
                 draggable && "cursor-grab",
                 drag?.slug === item.slug && "opacity-50",
                 isDropTarget && "ring-2 ring-primary/40",
@@ -227,6 +234,16 @@ export function FeatureBoard({
                   </span>
                   <span className="block truncate font-mono text-xs text-muted">{item.slug}</span>
                 </a>
+                {claimLine !== null ? (
+                  <span
+                    className={cn(
+                      "ml-auto min-w-0 truncate text-xs",
+                      cardClaimActive(item) ? "text-success" : "text-muted",
+                    )}
+                  >
+                    {claimLine}
+                  </span>
+                ) : null}
                 <div className="flex shrink-0 items-center gap-1.5">
                   {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
                   <span
