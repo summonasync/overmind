@@ -156,3 +156,17 @@ Architecture Decision Records. Newest first. Once Accepted, changing a decision 
 **Decision:** The global default for `planning.materializationDefault` is "on": fresh projects materialize their BACKLOG/ tree out of the box. Per-project overrides and the "archive"/"off" strategies remain. The onboard materialization block (strategy/targetDir/lastRun plus the failure state from 054/01) makes the resolved state visible before the first mutation; the clobber guard refuses to overwrite locally modified managed files.
 **Alternatives considered:** Keep "off" with a prominent enable path in onboard — rejected: repeats the DMT failure mode for every new consumer; the mirror is the core agent loop, not an opt-in. Default "on" only for MCP-created projects — rejected: two creation paths with divergent behavior is a support trap.
 **Consequences:** Installs that never stored the setting flip to "on" at upgrade — intended; projects wanting no mirror set "off"/"archive" explicitly (global setting or per-project override). Every fresh project writes a BACKLOG/ tree into its root on the first planning mutation, guarded by the clobber guard and drift detection.
+
+## Task sections canonicalize at the entrance; the 039 parser stays frozen — 2026-10-06
+**Status:** Accepted
+**Context:** Qwen friction #4 (board bug 6ee3be0f): the artifact body stores what the caller sent, but the anchored section regex only recognizes tags on their own lines — an inline `<anti-scope>None.</anti-scope>` is invisible to the parser, so the section silently never registered and `planning_patch_artifact` could not address it. Verified empirically: multi-line found, one-line not.
+**Decision:** Canonicalize at the entrance, not in the parser: both upsert doors and the import door expand one-line XML sections to the multi-line form, idempotently, bounded (depth cap 8). The 039 parser stays frozen — no new grammar, no inline-tag support. Old bodies heal lazily on the next full upsert; genuinely old bodies get a 400 hint naming the canonicalization path.
+**Alternatives considered:** Teach the parser inline tags — rejected: widens the frozen grammar (039) and invites ambiguity inside fenced code; reject inline sections at the door — rejected: breaks every caller that sends compact bodies.
+**Consequences:** Stored bodies differ from what the caller sent (multi-line expansion) — byte-stability is guaranteed from the second upsert onward. The first materialization after a lazy heal shows a one-time file diff with no explicit edit (expected, documented).
+
+## The next disk projection appends before planned-path capture, with FeatureId left null — 2026-10-06
+**Status:** Accepted
+**Context:** Two disk projections exist (planning BACKLOG/, entries ENTRIES/). When a third projection appears, the tempting route is to extend `plannedPaths` capture up front — but entries proved the working shape: append rows during the pass and reconcile, with no feature coupling.
+**Decision:** A third projection appends its rows before the planned-paths capture runs, carries `FeatureId = null` (not feature-scoped), and sanitizes names in its own builder. The reconcile pass treats it like entries: append-only detection, clobber-guard protected.
+**Alternatives considered:** Feature-scoped rows captured into plannedPaths — rejected: couples a global projection to feature lifetime and re-runs the 051 coordination cost.
+**Consequences:** New projections inherit the entries discipline for free; the materializer report gains one more section, nothing else changes.
