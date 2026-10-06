@@ -7,6 +7,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
+import { TabHeader } from "@/shared/ui/tab-header";
 import { useProjectList } from "@/features/projects";
 import { usePlanningBoard } from "@/features/planning";
 import { IssueDetail, IssueFilters, IssueListRow, useIssueList } from "@/features/issues";
@@ -15,6 +16,9 @@ import { GlobalIssueList } from "@/pages/issues-page/ui/global-issue-list";
 
 const ISSUES_DESCRIPTION =
   "Cross-project bug intake. Agents file issues from any project; triage, append follow-ups, close, or promote them to a task on this board.";
+
+const PROJECT_ISSUES_DESCRIPTION =
+  "Cross-project bug intake. Agents file issues from any project; triage, follow up, or promote to a task.";
 
 function authorNameMap(projects: { id: string; name: string }[]): Record<string, string> {
   const map: Record<string, string> = {};
@@ -39,8 +43,6 @@ function IssuesPageContent() {
   const { data: issues, loading, error } = useIssueList(projectId, filter);
   const names = useMemo(() => authorNameMap(projects), [projects]);
 
-  const project = projects.find((item) => item.id === projectId) ?? null;
-
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -57,9 +59,8 @@ function IssuesPageContent() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={project !== null ? `Issues Board — ${project.name}` : "Issues Board"}
-        description={ISSUES_DESCRIPTION}
+      <TabHeader
+        description={PROJECT_ISSUES_DESCRIPTION}
         actions={
           issueId ? (
             <a

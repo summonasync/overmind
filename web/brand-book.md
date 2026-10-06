@@ -92,6 +92,7 @@ Rules: never inside tables/data lists, never more than one per viewport region. 
 - Scale: xs 12 (captions, badges, quotes) · sm 14 (body secondary, table cells) · base 16 (body primary) · lg 18 (subheadings) · xl 20 (card titles) · 2xl 24 (page titles).
 - Line-height 1.5 body / 1.25 headings; weights 400/500/600/700.
 - Page title pattern: 2xl semibold + one-line muted description (as in mockups).
+- Project workspace pattern: mono sm semibold project name above the section tabs; each tab opens with a one-line muted description — the tab title is omitted and the name stays the only h1.
 
 ## 6. Layout
 

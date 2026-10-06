@@ -8,9 +8,9 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
+import { TabHeader } from "@/shared/ui/tab-header";
 import { EntryEditor, EntryFilters, EntryList, EntryReadModal, TagManager, useEntryList, useEntryMutations } from "@/features/entries";
 import type { EntryFormValues, EntryListFilters, EntryResponse } from "@/features/entries";
-import { ProjectHeader } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { EntriesInfoPanel } from "@/pages/entries-page/ui/entries-info-panel";
 
@@ -60,10 +60,8 @@ function EntriesPageContent() {
 
   return (
     <div className="space-y-4">
-      <ProjectHeader projectId={projectId} />
-      <PageHeader
-        title="Entries"
-        description="Capture knowledge, decisions, skills and more. Turn experience into a lasting advantage."
+      <TabHeader
+        description="Capture knowledge, decisions and skills — turn experience into a lasting advantage."
         actions={
           <>
             <a

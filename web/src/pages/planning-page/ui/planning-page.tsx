@@ -7,6 +7,7 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
+import { TabHeader } from "@/shared/ui/tab-header";
 import { useInfoPanel } from "@/widgets/app-shell";
 import {
   BoardFilterBar,
@@ -23,12 +24,15 @@ import {
   usePlanningMutations,
 } from "@/features/planning";
 import type { PlanningFeatureBoardItem, PlanningFeatureFormValues } from "@/features/planning";
-import { ProjectHeader, useProjectNumbering } from "@/features/projects";
+import { useProjectNumbering } from "@/features/projects";
 import { PlanningInfoPanel } from "@/pages/planning-page/ui/planning-info-panel";
 import { EmptyState } from "@/shared/ui/empty-state";
 
 const PLANNING_DESCRIPTION =
   "Plan features as spec, plan, tasks and result. Track ceremony from draft to done. The board order is the queue — first card is next up; drag within a priority band to reorder.";
+
+const DASHBOARD_TAB_DESCRIPTION =
+  "Plan features as spec, plan, tasks and result. The board order is the queue — first card is next up.";
 
 function PlanningPageContent() {
   const searchParams = useSearchParams();
@@ -112,7 +116,6 @@ function PlanningPageContent() {
   if (featureSlug) {
     return (
       <div className="space-y-4">
-        <ProjectHeader projectId={projectId} />
         <FeatureWorkspace projectId={projectId} slug={featureSlug} numbering={numbering} />
         <DriftPanel projectId={projectId} />
       </div>
@@ -130,10 +133,8 @@ function PlanningPageContent() {
 
   return (
     <div className="space-y-4">
-      <ProjectHeader projectId={projectId} />
-      <PageHeader
-        title="Dashboard"
-        description={PLANNING_DESCRIPTION}
+      <TabHeader
+        description={DASHBOARD_TAB_DESCRIPTION}
         actions={
           <>
             <a

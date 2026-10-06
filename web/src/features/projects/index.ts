@@ -1,7 +1,6 @@
 export { ProjectDetail } from "./components/project-detail";
 export { FeatureNumberSettings } from "./components/feature-number-settings";
 export { ProjectForm } from "./components/project-form";
-export { ProjectHeader } from "./components/project-header";
 export { ProjectList } from "./components/project-list";
 export { ProjectManifestSection } from "./components/project-manifest-section";
 export { ProjectNameBadge } from "./components/project-name-badge";
