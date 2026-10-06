@@ -13,6 +13,7 @@ public sealed record PlanningFeatureBoardItem(
     PlanningArtifactStatus? PlanStatus,
     int TaskTotal,
     int TaskDone,
+    PlanningTaskCounts TaskCounts,
     DateTime UpdatedAt,
     bool IsBlocked,
     int QueuePosition,
@@ -35,6 +36,7 @@ public sealed record PlanningQueueItem(
     PlanningArtifactStatus? PlanStatus,
     int TaskDone,
     int TaskTotal,
+    PlanningTaskCounts TaskCounts,
     int Readiness,
     string[] BlockedBy,
     bool IsBlocked,
@@ -45,6 +47,8 @@ public sealed record PlanningQueueItem(
     bool ClaimedByHuman,
     string Phase,
     string? BriefExcerpt);
+
+public sealed record PlanningTaskCounts(int Todo, int InProgress, int Review, int Done, int Blocked);
 
 public sealed record PlanningQueueResponse(PlanningQueueItem[] Items);
 

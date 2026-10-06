@@ -24,6 +24,7 @@ public static class PlanningMapper
             ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
             TaskTotal(artifacts),
             TaskDone(artifacts),
+            TaskCounts(artifacts),
             feature.UpdatedAt,
             isBlocked,
             feature.QueuePosition,
@@ -58,6 +59,7 @@ public static class PlanningMapper
             ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
             TaskDone(artifacts),
             TaskTotal(artifacts),
+            TaskCounts(artifacts),
             Readiness(feature),
             blockers,
             blockers.Length > 0,
@@ -102,6 +104,21 @@ public static class PlanningMapper
 
     private static int TaskDone(IReadOnlyCollection<PlanningArtifact> artifacts) =>
         artifacts.Count(a => a.Kind == PlanningArtifactKind.Task && a.Status == PlanningArtifactStatus.Done);
+
+    private static PlanningTaskCounts TaskCounts(IReadOnlyCollection<PlanningArtifact> artifacts)
+    {
+        var statuses = artifacts
+            .Where(a => a.Kind == PlanningArtifactKind.Task)
+            .Select(a => a.Status)
+            .ToList();
+
+        return new(
+            statuses.Count(s => s == PlanningArtifactStatus.Todo),
+            statuses.Count(s => s == PlanningArtifactStatus.InProgress),
+            statuses.Count(s => s == PlanningArtifactStatus.Review),
+            statuses.Count(s => s == PlanningArtifactStatus.Done),
+            statuses.Count(s => s == PlanningArtifactStatus.Blocked));
+    }
 
     public static bool HasOpenBlocker(
         PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures) =>

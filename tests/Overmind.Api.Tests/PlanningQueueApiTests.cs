@@ -92,6 +92,8 @@ public sealed class PlanningQueueApiTests : IDisposable
         decorated.Readiness.ShouldBe(3);
         decorated.TaskTotal.ShouldBe(2);
         decorated.TaskDone.ShouldBe(0);
+        decorated.TaskCounts.Todo.ShouldBe(2);
+        decorated.TaskCounts.Done.ShouldBe(0);
         decorated.BlockedBy.ShouldBe(["q-blocker"]);
         decorated.IsBlocked.ShouldBeTrue();
 
@@ -563,15 +565,17 @@ public sealed class PlanningQueueApiTests : IDisposable
 
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
-        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt,
-        bool IsBlocked, int QueuePosition);
+        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone,
+        TaskCountsJson TaskCounts, DateTime UpdatedAt, bool IsBlocked, int QueuePosition);
 
     public sealed record QueueResponseJson(QueueItemJson[] Items);
 
     public sealed record QueueItemJson(
         string Slug, string? Number, string Title, string Priority, string Status, int QueuePosition,
-        string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal, int Readiness,
-        string[] BlockedBy, bool IsBlocked);
+        string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal,
+        TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked);
+
+    public sealed record TaskCountsJson(int Todo, int InProgress, int Review, int Done, int Blocked);
 
     public sealed record ArtifactJson(Guid Id);
 

@@ -68,6 +68,49 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Board_MixedTaskStatuses_ReturnsCountsSummingToTaskTotal()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat-1", "Feature 1");
+        var tasks = new List<ArtifactJson>();
+        for (var i = 0; i < 5; i++)
+        {
+            tasks.Add(await CreateTask(project.Id, "feat-1"));
+        }
+
+        await SetTaskStatus(tasks[1].Id, "inProgress");
+        await SetTaskStatus(tasks[2].Id, "review");
+        await SetTaskStatus(tasks[3].Id, "done");
+        await SetTaskStatus(tasks[4].Id, "blocked");
+
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/projects/{project.Id}/planning/features", JsonOptions);
+
+        var item = board!.Single();
+        item.TaskTotal.ShouldBe(5);
+        item.TaskDone.ShouldBe(1);
+        item.TaskCounts.Todo.ShouldBe(1);
+        item.TaskCounts.InProgress.ShouldBe(1);
+        item.TaskCounts.Review.ShouldBe(1);
+        item.TaskCounts.Done.ShouldBe(1);
+        item.TaskCounts.Blocked.ShouldBe(1);
+        (item.TaskCounts.Todo + item.TaskCounts.InProgress + item.TaskCounts.Review +
+            item.TaskCounts.Done + item.TaskCounts.Blocked).ShouldBe(item.TaskTotal);
+    }
+
+    [Fact]
+    public async Task Board_FeatureWithoutTasks_ReturnsAllZeroTaskCounts()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "empty", "Empty");
+
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/projects/{project.Id}/planning/features", JsonOptions);
+
+        board!.Single().TaskCounts.ShouldBe(new TaskCountsJson(0, 0, 0, 0, 0));
+    }
+
+    [Fact]
     public async Task CreateFeature_Returns201()
     {
         var project = await CreateProjectAsync();
@@ -1403,11 +1446,35 @@ public sealed class PlanningApiTests : IDisposable
         return artifact!;
     }
 
+    private async Task<ArtifactJson> CreateTask(Guid projectId, string slug)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}/artifacts",
+            new { Kind = "task", Body = "task body" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var artifact = await response.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        artifact.ShouldNotBeNull();
+        return artifact!;
+    }
+
+    private async Task SetTaskStatus(Guid taskId, string status)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{taskId}/status",
+            new { Status = status, LogNote = $"moving to {status}" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     public sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
 
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
-        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone, DateTime UpdatedAt);
+        string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone,
+        TaskCountsJson TaskCounts, DateTime UpdatedAt);
+
+    public sealed record TaskCountsJson(int Todo, int InProgress, int Review, int Done, int Blocked);
 
     public sealed record FeatureJson(
         string Slug, string Title, string Body, string Status, string Priority,
