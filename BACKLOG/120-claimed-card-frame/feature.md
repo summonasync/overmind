@@ -1,7 +1,7 @@
 ---
 feature: 120
 slug: claimed-card-frame
-status: ready
+status: inProgress
 priority: p0
 version: 1
 created: 2026-10-04
@@ -23,4 +23,5 @@ User messages 2026-10-04: «раньше у нас была рамка вокр�
 - 2026-10-04 [agent] — User design decision in-session: claim line (claimed by {Alias} from {Vendor}) left of the status column in the brief slot, plus card border. Brief row's move to the slug row noted as context (aligns with 117).
 - 2026-10-06 [agent] — Van by claude claimed the feature
 - 2026-10-06 [auto] — artifact created → ready
+- 2026-10-06 [auto] — task 01 taken → inProgress
 </log>

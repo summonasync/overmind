@@ -1,7 +1,7 @@
 ---
 feature: 100
 slug: tech-debt-revalidation
-status: ready
+status: inProgress
 priority: p0
 version: 1
 created: 2026-09-30
@@ -34,4 +34,5 @@ Run a full architect-review (hard mode) over the whole solution and turn its fin
 <log>
 - 2026-10-06 [agent] — Van by claude claimed the feature
 - 2026-10-06 [auto] — artifact created → ready
+- 2026-10-06 [auto] — task 01 taken → inProgress
 </log>

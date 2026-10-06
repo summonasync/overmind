@@ -1,8 +1,9 @@
 ---
 feature: 123
 slug: project-name-typography
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Spec 123 — Project name typography: distinct display treatment vs page headings
@@ -80,4 +81,5 @@ Restructure the project-page header: the project name sits ABOVE the tab bar as 
 <log>
 - 2026-10-06 [agent] — spec drafted from feature body + code inspection of all project-name render sites (draft, awaiting consolidated human validation).
 - 2026-10-06 [agent] — v2 per human amendment: name above tab bar (shell-level), per-tab description block, tab title omitted, ProjectHeader removed; drafted per-tab copy for approval.
+- 2026-10-06 [agent] — validated with human proof: notification fb4b0d62-80b0-4184-8c9b-635e4917e395 replied 2026-10-06 13:13:32 UTC
 </log>
