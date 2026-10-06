@@ -2,7 +2,7 @@ using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
 
-public sealed record OnboardRequest(string Cwd, Guid? ProjectId);
+public sealed record OnboardRequest(string Cwd, Guid? ProjectId, bool Create = true);
 
 public sealed record OnboardBoardSummary(
     IReadOnlyDictionary<PlanningFeatureStatus, int> CountsByStatus);

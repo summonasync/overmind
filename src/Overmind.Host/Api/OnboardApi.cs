@@ -67,6 +67,11 @@ public static class OnboardApi
             {
                 project = matched;
             }
+            else if (!request.Create)
+            {
+                return HttpErrors.NotFound(
+                    $"No project is registered for the working directory '{normalizedCwd}'. Call overmind_onboard to register it, or pass projectId explicitly.");
+            }
             else
             {
                 var name = await ResolveUniqueNameAsync(new DirectoryInfo(normalizedCwd).Name, db, ct);

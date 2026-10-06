@@ -200,6 +200,48 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task Onboard_CreateFalseWithUnregisteredCwd_Returns404GuidanceAndInsertsNothing()
+    {
+        var before = await _client.GetFromJsonAsync<ProjectJson[]>("/api/projects", JsonOptions);
+        var cwd = TestPaths.DiskPath($"onboard-{Guid.NewGuid():N}");
+
+        var response = await _client.PostAsJsonAsync("/api/onboard", new { Cwd = cwd, Create = false });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("overmind_onboard");
+        problem.Detail.ShouldContain("projectId");
+        problem.Detail.ShouldContain(cwd);
+        var after = await _client.GetFromJsonAsync<ProjectJson[]>("/api/projects", JsonOptions);
+        after!.Length.ShouldBe(before!.Length);
+    }
+
+    [Fact]
+    public async Task Onboard_CreateFalseWithRegisteredCwd_ReturnsExistingProjectCreatedFalse()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var project = await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name), Create = false });
+
+        onboard.ProjectId.ShouldBe(project.Id);
+        onboard.ProjectName.ShouldBe(name);
+        onboard.Created.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Onboard_CreateOmittedWithUnregisteredCwd_StillCreatesProject()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Created.ShouldBeTrue();
+        onboard.ProjectName.ShouldBe(name);
+    }
+
+    [Fact]
     public async Task Onboard_BoardSummary_CountsByStatus()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
