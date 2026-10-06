@@ -62,6 +62,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("claimState");
         tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("claimedByAlias");
         tools["planning_list_features"]!["description"]!.GetValue<string>().ShouldContain("board");
+        tools["planning_list_features"]!["description"]!.GetValue<string>()
+            .ShouldContain("taskCounts: todo/inProgress/review/done/blocked, sums to taskTotal");
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
         tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
         tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
@@ -80,6 +82,14 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "Gaps in order numbering are legal and meaningful");
+        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>()
+            .ShouldContain("never renumber existing tasks to close a hole");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain(
+            "Gaps in order numbering are legal and meaningful");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
+            .ShouldContain("never renumber existing tasks to close a hole");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
@@ -89,6 +99,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("priority asc");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("dragging");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("readiness 0-3");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>()
+            .ShouldContain("taskCounts (todo/inProgress/review/done/blocked, sums to taskTotal)");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("briefExcerpt");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("plan validated");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("band-scoped");
@@ -133,6 +145,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         Canned.ToolResultText(response).ShouldContain("\"briefExcerpt\":\"Crash on save when the workspace file is read-only.\"");
         Canned.ToolResultText(response).ShouldNotContain("isCurrent");
         Canned.ToolResultText(response).ShouldContain("\"priority\":\"p1\"");
+        Canned.ToolResultText(response).ShouldContain("\"taskCounts\":{\"todo\":0,\"inProgress\":1,\"review\":0,\"done\":1,\"blocked\":0}");
     }
 
     [Theory]
@@ -313,6 +326,25 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         tools["planning_list_artifacts"]!["description"]!.GetValue<string>().ShouldBe(
             "Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature.");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_Parameters_PinTheBodyPointerAndTheOrderHandle()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_upsert_artifact")!;
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+
+        var body = properties["body"]!["description"]!.GetValue<string>();
+        body.ShouldContain("Expected XML sections per kind are listed in this tool's description");
+        body.ShouldContain("plain markdown is accepted");
+        body.ShouldNotContain("with its XML sections");
+
+        var order = properties["order"]!["description"]!.GetValue<string>();
+        order.ShouldContain("Sort key and stable handle");
+        order.ShouldContain("gaps are legal — do not renumber to close them");
     }
 
     [Fact]
@@ -1817,6 +1849,13 @@ public class PlanningToolContractTests : McpSessionTestBase
         var draft = rows.Single(r => r!["slug"]!.GetValue<string>() == "draft-one")!;
         draft["phase"]!.GetValue<string>().ShouldBe("drafting");
         draft["briefExcerpt"].ShouldBeNull();
+
+        claimed["taskCounts"]!.ToJsonString()
+            .ShouldBe("{\"todo\":0,\"inProgress\":1,\"review\":0,\"done\":1,\"blocked\":0}");
+        claimed["taskCounts"]!.AsObject().Select(p => p.Value!.GetValue<int>()).Sum()
+            .ShouldBe(claimed["taskTotal"]!.GetValue<int>());
+        draft["taskCounts"]!.AsObject().Select(p => p.Value!.GetValue<int>()).Sum()
+            .ShouldBe(draft["taskTotal"]!.GetValue<int>());
     }
 
     [Fact]
