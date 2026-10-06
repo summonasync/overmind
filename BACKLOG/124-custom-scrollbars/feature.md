@@ -1,7 +1,7 @@
 ---
 feature: 124
 slug: custom-scrollbars
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-10-06
@@ -26,3 +26,8 @@ The apps ship with the browser default scrollbars (full-width grey tracks, OS-st
 - Custom scroll physics / JS scroll-jacking.
 - Per-project scrollbar theming (one brand look for the app).
 - Mobile/touch scrollbars (overlay scrollbars on touch are the OS's job).
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>

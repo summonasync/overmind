@@ -1,7 +1,7 @@
 ---
 feature: 121
 slug: alias-rules-editor
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-10-04
@@ -16,3 +16,8 @@ Alias rules as an editable project setting: the user writes the naming prompt (�
 <context>
 User intake 2026-10-04: «два claude by anthropic — что странно» + «мы хотели иметь промпт для выбора алиаса агентами в настройках — типа alias rules». Infrastructure exists since 099: Project.AgentNamingRules (nullable) + SetClaimSettings feeds the agentIdentity block of the onboard response (AgentIdentityDefaults.GenericNamingHint is the empty fallback). Missing: (a) the settings UI never exposes the field — the user cannot write their gachi-core rules anywhere; (b) the ceremony skill says «alias+vendor come from the agentIdentity block» but never tells the agent to CHOOSE a personal stable alias and sign with it.
 </context>
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>

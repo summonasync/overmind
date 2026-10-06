@@ -1,7 +1,7 @@
 ---
 feature: 125
 slug: microbatch-cleanup
-status: draft
+status: review
 priority: p0
 version: 1
 created: 2026-10-06
@@ -31,4 +31,7 @@ Close the accumulated microbatch ledger (243 non-blocking review findings) as on
 
 <log>
 - 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+- 2026-10-06 [auto] — task 01 taken → inProgress
+- 2026-10-06 [auto] — all tasks done + spec + plan validated → review
 </log>

@@ -1,7 +1,7 @@
 ---
 feature: 036
 slug: agent-workflow-onboarding
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-09-20
@@ -36,3 +36,8 @@ created: 2026-09-20
 ## Источник
 
 Идея юзера в сессии 2026-09-20 («что делать, если человек без таких скиллов поставит overmind — мы можем сделать onboarding для агента, обучая его работать по feature-spec-plan-tasks-result flow?»).
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>

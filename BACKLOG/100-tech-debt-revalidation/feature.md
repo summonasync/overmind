@@ -1,7 +1,7 @@
 ---
 feature: 100
 slug: tech-debt-revalidation
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-09-30
@@ -30,3 +30,8 @@ Run a full architect-review (hard mode) over the whole solution and turn its fin
 - 099-agent-claims — in-flight wave; this review runs after it lands.
 - audits/architect-review-2026-09-30-090.md — last structural pass (light, feature-scoped) as the baseline.
 </refs>
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>

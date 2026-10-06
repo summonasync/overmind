@@ -1,7 +1,7 @@
 ---
 feature: 047
 slug: api-read-surface-polish
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-09-22
@@ -30,3 +30,8 @@ created: 2026-09-22
 - FEATURELIST/03-tool-description-gaps.md — XML-фраза и resources-pointer.
 - README FEATURELIST пп. 12–13.
 </refs>
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>

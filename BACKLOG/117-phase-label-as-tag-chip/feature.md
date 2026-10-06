@@ -1,7 +1,7 @@
 ---
 feature: 117
 slug: phase-label-as-tag-chip
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-10-04
@@ -16,3 +16,8 @@ On the board card, the ceremony phase label («plan validated», «in progress»
 <context>
 User dogfood feedback 2026-10-04: «статусы plan validated и тд — она прям между тайтлом и статусом. Я бы хотел её там где slug, после него — и как-то как наши тэги визуально». 091 introduced the derived phase label on cards; 065 provides the shared tag/badge primitives.
 </context>
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>

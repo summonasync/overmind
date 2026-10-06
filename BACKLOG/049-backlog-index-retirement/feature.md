@@ -1,7 +1,7 @@
 ---
 feature: 049
 slug: backlog-index-retirement
-status: draft
+status: ready
 priority: p0
 version: 1
 created: 2026-09-22
@@ -33,3 +33,8 @@ BACKLOG.md с managed-блоком — вторая копия борды в ф�
 - 033-materializer-clobber-guard — соседняя территория материализатора.
 - 042-onboard-observability — видимость материализации, согласование формулировок.
 </refs>
+
+<log>
+- 2026-10-06 [agent] — Van by claude claimed the feature
+- 2026-10-06 [auto] — artifact created → ready
+</log>
