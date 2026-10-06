@@ -134,6 +134,21 @@ public class PlanningToolContractTests : McpSessionTestBase
         Canned.ToolResultText(response).ShouldContain("\"priority\":\"p1\"");
     }
 
+    [Theory]
+    [InlineData("planning_list_features")]
+    [InlineData("planning_task_queue")]
+    [InlineData("planning_materialize_status")]
+    public async Task PlanningReads_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper(string tool)
+    {
+        var response = await Driver.CallToolAsync(tool, new JsonObject());
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("projectId is required");
+        text.ShouldContain("planning_");
+        text.ShouldContain("cwd");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task PlanningReadFeature_ProxiesAgentFeatureRoute()
     {
@@ -389,6 +404,35 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         FindRequest("GET", "/api/agent/planning/artifacts/55555555-5555-5555-5555-555555555555");
         response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_DuplicateDocuments_AliasReportsEveryCandidateInsteadOfPickingOne()
+    {
+        Stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts",
+            """
+            {"artifacts":[
+              {"artifactId":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z"},
+              {"artifactId":"44444444-4444-4444-4444-444444444441","kind":"spec","status":"draft","version":1,"order":1,"updatedAt":"2026-09-10T10:00:00Z"},
+              {"artifactId":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","version":1,"order":0,"updatedAt":"2026-09-08T11:00:00Z"}
+            ]}
+            """);
+
+        var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/S"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("demo-feature/S");
+        text.ShouldContain("demo-feature");
+        text.ShouldContain("2 spec artifacts");
+        text.ShouldContain("spec@0");
+        text.ShouldContain("spec@1");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "GET" && r.Path.StartsWith("/api/agent/planning/artifacts/", StringComparison.Ordinal));
     }
 
     [Fact]

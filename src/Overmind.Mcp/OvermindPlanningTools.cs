@@ -81,6 +81,9 @@ public sealed class OvermindPlanningTools
     private const string ArtifactAddressRequired =
         "Provide artifactId, or alias together with projectId — nothing addresses the artifact.";
 
+    private const string ProjectIdRequired =
+        "projectId is required for planning_* tools — entries tools resolve the project from cwd, planning tools do not.";
+
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
 
@@ -93,9 +96,16 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_list_features", ReadOnly = true, Idempotent = true)]
     [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress, plus claim state (claimedByAlias, claimedByVendor, claimedAt, claimState alive|stale|ended) on claimed entries — a stale or ended claim can be taken over via planning_claim_feature. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection.")]
     public Task<JsonElement> ListFeatures(
-        [Description("Id of the project whose feature board to read.")] Guid projectId,
-        CancellationToken ct) =>
-        Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
+        [Description("Id of the project whose feature board to read.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
+        return Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
+    }
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
     [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
@@ -490,10 +500,15 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
     [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The board order IS the queue: first on the board is next in the queue, and the dashboard board shows exactly this order. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, readiness 0-3, blockedBy, isBlocked, plus claim state when claimed: claimedByAlias, claimedByVendor, claimedAt and claimState (alive | stale | ended — stale claims are take-over-able via planning_claim_feature). Every entry also carries the ceremony context: phase (drafting | writing spec | planning | plan validated | in progress | review | done — derived server-side from spec/plan/task state, the lifecycle status column stays the source of truth) and briefExcerpt (the first <goal> paragraph capped at ~500 chars; null when the feature has no goal — one-glance ceremony context without opening the feature). limit truncates to the first N entries; omit it for the full queue.")]
     public Task<JsonElement> TaskQueue(
-        [Description("Id of the project whose queue to read.")] Guid projectId,
+        [Description("Id of the project whose queue to read.")] Guid? projectId = null,
         [Description("Optional positive int; truncates the queue to the first N entries.")] int? limit = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var url = $"/api/agent/projects/{projectId}/planning/task-queue";
         if (limit is not null)
         {
@@ -855,11 +870,18 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_materialize_status", ReadOnly = true, Idempotent = true)]
     [Description("Mirror diagnostics without filesystem access: returns the project's materialization state as one structured payload — lastSuccess vs lastAttempt (lastAttemptReason carries the failure when the attempt did not succeed), the persisted last-run report per file (startedAt, finishedAt, atomic, written paths, skipped and refused with reasons), trackedFiles, stalePaths (tracked files the last run neither wrote nor skipped, plus tracked files whose disk bytes drifted), strategy and targetDir. lastRun is null when the failed attempt persisted no report — read it as no report for this attempt. Read-only: never triggers a pass; use planning_materialize for that.")]
     public Task<JsonElement> MaterializeStatus(
-        [Description("Id of the project to inspect.")] Guid projectId,
-        CancellationToken ct = default) =>
-        Guarded(() => _api.GetAsync(
+        [Description("Id of the project to inspect.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
+        return Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/materialization-status",
             ct));
+    }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
     {
@@ -1172,6 +1194,7 @@ public sealed class OvermindPlanningTools
     private static Guid ResolveRosterMatch(JsonElement roster, ArtifactAlias wanted, string alias)
     {
         var present = new List<string>();
+        var matches = new List<(Guid Id, string Label)>();
         if (roster.ValueKind == JsonValueKind.Object &&
             roster.TryGetProperty("artifacts", out var artifacts) &&
             artifacts.ValueKind == JsonValueKind.Array)
@@ -1208,14 +1231,28 @@ public sealed class OvermindPlanningTools
                     id.ValueKind == JsonValueKind.String &&
                     Guid.TryParse(id.GetString(), out var artifactId))
                 {
-                    return artifactId;
+                    matches.Add((artifactId, $"{kind}@{order ?? 0}"));
                 }
             }
         }
 
+        if (matches.Count == 1)
+        {
+            return matches[0].Id;
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new McpException(
+                $"No artifact matches alias '{alias}'. Present kind/order pairs: " +
+                $"{(present.Count == 0 ? "(none)" : string.Join(", ", present))}.");
+        }
+
         throw new McpException(
-            $"No artifact matches alias '{alias}'. Present kind/order pairs: " +
-            $"{(present.Count == 0 ? "(none)" : string.Join(", ", present))}.");
+            $"Alias '{alias}' is ambiguous: feature '{wanted.FeatureSlug}' has {matches.Count} {wanted.Kind} " +
+            $"artifacts ({string.Join(", ", matches.Select(m => m.Label))}). S/P/R aliases address the single " +
+            "document of the kind — duplicate documents are a roster bug; resolve by artifactId, " +
+            "planning_list_artifacts lists the pairs.");
     }
 
     private static ArtifactAlias ParseArtifactAlias(string alias)
