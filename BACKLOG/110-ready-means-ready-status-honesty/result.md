@@ -1,8 +1,9 @@
 ---
 feature: 110
 slug: ready-means-ready-status-honesty
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-06
 ---
 
 # Result 110 — Status honesty: spec/plan grooming keeps the feature ready; inProgress only when a task is taken

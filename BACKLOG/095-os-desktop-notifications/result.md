@@ -1,8 +1,9 @@
 ---
 feature: 095
 slug: os-desktop-notifications
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Result 095 — Attention surfaces: OS desktop toasts + web sound + browser tab attention для approval/question

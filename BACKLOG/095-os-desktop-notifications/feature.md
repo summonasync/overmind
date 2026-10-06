@@ -1,7 +1,7 @@
 ---
 feature: 095
 slug: os-desktop-notifications
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-09-28
@@ -31,4 +31,6 @@ Attention surfaces для approval/question нотификаций агенто�
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-06 [agent] — web-coder by claude took over stale claim of Van by claude
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — done via agent review — approved by human tap (notification a0393f0c, reply 2026-10-06 09:48:43 UTC)
+- 2026-10-06 [agent] — claim released on done-close
 </log>

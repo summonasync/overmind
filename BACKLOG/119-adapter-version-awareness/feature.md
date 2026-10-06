@@ -1,7 +1,7 @@
 ---
 feature: 119
 slug: adapter-version-awareness
-status: review
+status: done
 priority: p1
 version: 1
 created: 2026-10-04
@@ -21,4 +21,7 @@ Field incident 2026-10-04: an orchestrator session on a pre-099 adapter tried to
 - 2026-10-04 [auto] — artifact created → inProgress
 - 2026-10-05 [agent] — Van by claude claimed the feature
 - 2026-10-05 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — Van by claude took over stale claim of Van by claude
+- 2026-10-06 [agent] — done via agent review — approved by human tap (notification b26dbc70, reply 2026-10-05 22:31:43 UTC)
+- 2026-10-06 [agent] — claim released on done-close
 </log>

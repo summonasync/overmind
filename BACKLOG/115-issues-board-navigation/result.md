@@ -1,8 +1,9 @@
 ---
 feature: 115
 slug: issues-board-navigation
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-06
 ---
 
 # Result 115 — Issues Board: third project tab + cross-project sidebar view (new/unread first)

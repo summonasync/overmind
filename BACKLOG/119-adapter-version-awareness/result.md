@@ -1,8 +1,9 @@
 ---
 feature: 119
 slug: adapter-version-awareness
-status: draft
+status: validated
 created: 2026-10-05
+validated: 2026-10-06
 ---
 
 # Result 119 — Adapter version awareness: onboard reports stale adapter + tool drift
