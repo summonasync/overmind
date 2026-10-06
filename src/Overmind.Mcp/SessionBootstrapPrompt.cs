@@ -27,6 +27,9 @@ public sealed class SessionBootstrapPrompt
     private const string NotificationUrlRouting =
         "Notification reach: the overmind_notify response may carry url — quote the url in chat when asking for an approval or reporting a question so the human can click through.";
 
+    private const string CeremonyRouting =
+        "Ceremony order: planning_upsert_artifact(kind=spec) → validate with proof (overmind_notify(kind=approval, featureSlug), wait for the human's reply, planning_validate) → planning_upsert_artifact(kind=plan) → validate with proof again → planning_upsert_tasks execution contracts → work loop (planning_current_task, planning_set_status) → result artifact → the human taps the feature done.";
+
     private const string FallbackText =
         "At session start, read overmind://projects to list available projects, then read " +
         "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
@@ -35,7 +38,7 @@ public sealed class SessionBootstrapPrompt
         "(a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
         "and report progress with planning_set_status and planning_append_log. " +
         WriteCostRouting + " " + ReadCostRouting + " " + DependencyRouting + " " + QueueRouting +
-        " " + ValidationProofRouting + " " + NotificationUrlRouting +
+        " " + ValidationProofRouting + " " + NotificationUrlRouting + " " + CeremonyRouting +
         " Set OVERMIND_PROJECT_ID to make the active project explicit.";
 
     private readonly OvermindApiClient _api;
@@ -76,7 +79,7 @@ public sealed class SessionBootstrapPrompt
               $"Planning loop: read overmind://projects/{activeProjectId}/planning/features for the board, " +
               $"take overmind://projects/{activeProjectId}/planning/features/<slug>/current for your next task, " +
               "obey any STOP line (a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
-              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting} {QueueRouting} {ValidationProofRouting} {NotificationUrlRouting}";
+              $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting} {QueueRouting} {ValidationProofRouting} {NotificationUrlRouting} {CeremonyRouting}";
 
         return new GetPromptResult
         {

@@ -142,6 +142,28 @@ public class PromptContractTests : McpSessionTestBase
         PromptText(response).ShouldContain("quote the url in chat when asking for an approval");
     }
 
+    [Fact]
+    public async Task SessionBootstrap_FallbackBranch_CarriesTheCeremonyOrderLine()
+    {
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        PromptText(response).ShouldContain(
+            "Ceremony order: planning_upsert_artifact(kind=spec) → validate with proof (overmind_notify(kind=approval, featureSlug), wait for the human's reply, planning_validate) → planning_upsert_artifact(kind=plan) → validate with proof again → planning_upsert_tasks execution contracts → work loop (planning_current_task, planning_set_status) → result artifact → the human taps the feature done.");
+    }
+
+    [Fact]
+    public async Task SessionBootstrap_WithSingleProject_CarriesTheCeremonyOrderLine()
+    {
+        Stub.RouteGet("/api/projects", $$"""
+            [{"id":"{{Canned.ProjectId}}","name":"alpha","diskPath":"E:\\work\\alpha","description":"","createdAt":"2026-09-01T10:00:00Z"}]
+            """);
+
+        var response = await Driver.GetPromptAsync("session_bootstrap");
+
+        PromptText(response).ShouldContain(
+            "Ceremony order: planning_upsert_artifact(kind=spec) → validate with proof (overmind_notify(kind=approval, featureSlug), wait for the human's reply, planning_validate) → planning_upsert_artifact(kind=plan) → validate with proof again → planning_upsert_tasks execution contracts → work loop (planning_current_task, planning_set_status) → result artifact → the human taps the feature done.");
+    }
+
     private static string PromptText(JsonNode response)
     {
         var result = response["result"];

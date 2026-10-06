@@ -76,6 +76,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
         tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("priority");
         tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
+        tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");

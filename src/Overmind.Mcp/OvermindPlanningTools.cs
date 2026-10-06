@@ -209,7 +209,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_create_feature", Destructive = false, Idempotent = false)]
-    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact to write its spec. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
+    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact(kind=spec), then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
     public async Task<JsonElement> CreateFeature(
         [Description("Id of the project to create the feature in.")] Guid projectId,
         [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars.")] string slug,
