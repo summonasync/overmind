@@ -74,6 +74,7 @@ export interface PlanningFeatureBoardItem {
   planStatus: PlanningArtifactStatus | null;
   taskTotal: number;
   taskDone: number;
+  taskCounts?: { todo: number; inProgress: number; review: number; done: number; blocked: number };
   updatedAt: string;
   claimedByAlias: string | null;
   claimedByVendor: string | null;
