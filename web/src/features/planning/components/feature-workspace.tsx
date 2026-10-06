@@ -87,6 +87,9 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
 
   const setTab = (next: PlanningTab) => {
     setTabState(next);
+    if (!validateArtifact.isPending) {
+      validateArtifact.reset();
+    }
     window.history.replaceState(null, "", `/dashboard?project=${projectId}&feature=${slug}&tab=${next}`);
   };
 

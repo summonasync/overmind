@@ -31,7 +31,6 @@ public sealed record IssueRow(
 public sealed record CrossProjectIssueRow(
     Guid Id,
     Guid ProjectId,
-    string ProjectName,
     string Title,
     IssueStatus Status,
     Guid AuthorProjectId,

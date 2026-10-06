@@ -31,7 +31,7 @@ public static class CrossProjectIssuesApi
     }
 
     private static CrossProjectIssueRow ToRow(IssueBoardRow row) =>
-        new(row.Id, row.ProjectId, row.ProjectName, row.Title, row.Status,
+        new(row.Id, row.ProjectId, row.Title, row.Status,
             row.AuthorProjectId, row.CreatedAt, row.ClosedAt,
             row.PromotedToArtifactId, row.AppendCount);
 }

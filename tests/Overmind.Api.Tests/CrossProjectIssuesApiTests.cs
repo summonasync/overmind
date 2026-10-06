@@ -90,12 +90,10 @@ public sealed class CrossProjectIssuesApiTests : IDisposable
             [newerOpen, olderOpen, closedNewest]);
 
         rows[1].EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["id", "projectId", "projectName", "title", "status", "authorProjectId",
+            ["id", "projectId", "title", "status", "authorProjectId",
              "createdAt", "closedAt", "promotedToArtifactId", "appendCount"]);
         rows[1].GetProperty("projectId").GetString().ShouldBe(first.Id.ToString());
-        rows[1].GetProperty("projectName").GetString().ShouldBe(first.Name);
         rows[1].GetProperty("appendCount").GetInt32().ShouldBe(1);
-        rows[2].GetProperty("projectName").GetString().ShouldBe(second.Name);
         rows[2].GetProperty("status").GetString().ShouldBe("closed");
     }
 

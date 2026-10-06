@@ -37,7 +37,7 @@ function useDocumentHidden(): boolean {
 }
 
 export function useAttentionSurfaces(): void {
-  const { items, isPending } = useNotifications();
+  const { items, isPending, error } = useNotifications();
   const { prefs } = useAttentionPrefs();
   const { data: projects } = useProjectList();
   const hidden = useDocumentHidden();
@@ -52,7 +52,7 @@ export function useAttentionSurfaces(): void {
   }, [awaitingIds]);
 
   useEffect(() => {
-    if (isPending) {
+    if (isPending || error) {
       return;
     }
     if (!primedRef.current) {
@@ -102,7 +102,7 @@ export function useAttentionSurfaces(): void {
         });
       }
     }
-  }, [awaiting, awaitingIds, isPending, prefs.desktop, prefs.chirp, projects]);
+  }, [awaiting, awaitingIds, isPending, error, prefs.desktop, prefs.chirp, projects]);
 
   useEffect(() => {
     const clear = () => {

@@ -28,7 +28,6 @@ export interface IssueCard extends IssueRow {
 export interface CrossProjectIssueRow {
   id: string;
   projectId: string;
-  projectName: string;
   title: string;
   status: IssueStatus;
   authorProjectId: string;
