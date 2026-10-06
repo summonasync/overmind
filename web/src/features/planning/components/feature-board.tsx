@@ -179,6 +179,7 @@ export function FeatureBoard({
           const isDropTarget = drag !== null && dropTargetSlug === item.slug;
           const brief = cardBriefLine(item);
           const claimLine = cardClaimLine(item);
+          const phaseLabel = cardPhaseLabel(item);
           return (
             <li
               key={item.slug}
@@ -232,7 +233,10 @@ export function FeatureBoard({
                       {item.title}
                     </span>
                   </span>
-                  <span className="block truncate font-mono text-xs text-muted">{item.slug}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="min-w-0 truncate font-mono text-xs text-muted">{item.slug}</span>
+                    {phaseLabel !== null ? <Badge className="shrink-0">{phaseLabel}</Badge> : null}
+                  </span>
                 </a>
                 {claimLine !== null ? (
                   <span
@@ -246,12 +250,6 @@ export function FeatureBoard({
                 ) : null}
                 <div className="flex shrink-0 items-center gap-1.5">
                   {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
-                  <span
-                    className="shrink-0 text-[10px] uppercase tracking-wide text-muted"
-                    title={`Ceremony phase: ${cardPhaseLabel(item)}`}
-                  >
-                    {cardPhaseLabel(item)}
-                  </span>
                   <FeatureStatusSelect projectId={projectId} item={item} />
                 </div>
               </div>
