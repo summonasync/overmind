@@ -499,7 +499,8 @@ public static class AgentPlanningApi
         {
             return Results.Ok(new PlanningCurrentResponse(
                 "stop", currentFeature, null,
-                "STOP: spec awaits human validation — it cannot be approved through MCP."));
+                $"STOP: spec awaits human validation — it cannot be approved through MCP. " +
+                $"Send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply — validation is never agent-approvable."));
         }
 
         if (gated && spec is { Status: PlanningArtifactStatus.Validated } &&
@@ -507,7 +508,8 @@ public static class AgentPlanningApi
         {
             return Results.Ok(new PlanningCurrentResponse(
                 "stop", currentFeature, null,
-                "STOP: plan awaits human validation — it cannot be approved through MCP."));
+                $"STOP: plan awaits human validation — it cannot be approved through MCP. " +
+                $"Send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply — validation is never agent-approvable."));
         }
 
         var tasks = feature.Artifacts
@@ -519,7 +521,7 @@ public static class AgentPlanningApi
         {
             return Results.Ok(new PlanningCurrentResponse(
                 "empty", currentFeature, null,
-                "No tasks yet — create them from the validated plan."));
+                "No tasks yet — decompose the validated plan via planning_upsert_tasks: each task an execution contract (goal, scope, anti-scope, acceptance-criteria, refs)."));
         }
 
         if (tasks.All(t => t.Status == PlanningArtifactStatus.Done))
@@ -566,7 +568,7 @@ public static class AgentPlanningApi
         {
             return Results.Ok(new PlanningCurrentResponse(
                 "held", currentFeature, null,
-                $"{inReview} in review — awaiting review completion."));
+                $"{inReview} in review — finish the reviews, then close each task with planning_set_status."));
         }
 
         var blocked = tasks.First(t => t.Status == PlanningArtifactStatus.Blocked);
@@ -598,9 +600,10 @@ public static class AgentPlanningApi
         var result = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Result);
         return result?.Status switch
         {
-            PlanningArtifactStatus.Draft => "Result artifact drafted — validate it.",
-            PlanningArtifactStatus.Validated => "Result validated — close the feature.",
-            _ => "All tasks are done — write the result artifact."
+            PlanningArtifactStatus.Draft => $"Result artifact drafted — validate it via the proof flow: " +
+                $"send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply.",
+            PlanningArtifactStatus.Validated => "Result validated — closing the feature needs the human's done tap on the board.",
+            _ => "All tasks are done — write the result artifact via planning_upsert_artifact(kind=result)."
         };
     }
 

@@ -646,7 +646,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("stop");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("STOP: spec awaits human validation — it cannot be approved through MCP.");
+        current.Reason.ShouldBe(
+            "STOP: spec awaits human validation — it cannot be approved through MCP. " +
+            "Send overmind_notify(kind=approval, featureSlug=feat) and wait for the human's reply — validation is never agent-approvable.");
         current.Feature.Slug.ShouldBe("feat");
     }
 
@@ -661,7 +663,9 @@ public sealed class AgentPlanningApiTests : IDisposable
         var current = await GetCurrentAsync(project.Id, "feat");
 
         current.State.ShouldBe("stop");
-        current.Reason.ShouldBe("STOP: spec awaits human validation — it cannot be approved through MCP.");
+        current.Reason.ShouldBe(
+            "STOP: spec awaits human validation — it cannot be approved through MCP. " +
+            "Send overmind_notify(kind=approval, featureSlug=feat) and wait for the human's reply — validation is never agent-approvable.");
     }
 
     [Fact]
@@ -677,7 +681,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("stop");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("STOP: plan awaits human validation — it cannot be approved through MCP.");
+        current.Reason.ShouldBe(
+            "STOP: plan awaits human validation — it cannot be approved through MCP. " +
+            "Send overmind_notify(kind=approval, featureSlug=feat) and wait for the human's reply — validation is never agent-approvable.");
     }
 
     [Fact]
@@ -693,7 +699,9 @@ public sealed class AgentPlanningApiTests : IDisposable
         var current = await GetCurrentAsync(project.Id, "feat");
 
         current.State.ShouldBe("stop");
-        current.Reason.ShouldBe("STOP: plan awaits human validation — it cannot be approved through MCP.");
+        current.Reason.ShouldBe(
+            "STOP: plan awaits human validation — it cannot be approved through MCP. " +
+            "Send overmind_notify(kind=approval, featureSlug=feat) and wait for the human's reply — validation is never agent-approvable.");
     }
 
     [Fact]
@@ -711,7 +719,8 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("empty");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("No tasks yet — create them from the validated plan.");
+        current.Reason.ShouldBe(
+            "No tasks yet — decompose the validated plan via planning_upsert_tasks: each task an execution contract (goal, scope, anti-scope, acceptance-criteria, refs).");
     }
 
     [Fact]
@@ -723,7 +732,8 @@ public sealed class AgentPlanningApiTests : IDisposable
         var current = await GetCurrentAsync(project.Id, "feat");
 
         current.State.ShouldBe("empty");
-        current.Reason.ShouldBe("No tasks yet — create them from the validated plan.");
+        current.Reason.ShouldBe(
+            "No tasks yet — decompose the validated plan via planning_upsert_tasks: each task an execution contract (goal, scope, anti-scope, acceptance-criteria, refs).");
     }
 
     [Fact]
@@ -740,7 +750,7 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("empty");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("All tasks are done — write the result artifact.");
+        current.Reason.ShouldBe("All tasks are done — write the result artifact via planning_upsert_artifact(kind=result).");
     }
 
     [Fact]
@@ -756,7 +766,9 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("empty");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("Result artifact drafted — validate it.");
+        current.Reason.ShouldBe(
+            "Result artifact drafted — validate it via the proof flow: " +
+            "send overmind_notify(kind=approval, featureSlug=feat) and wait for the human's reply.");
     }
 
     [Fact]
@@ -773,7 +785,7 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("empty");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("Result validated — close the feature.");
+        current.Reason.ShouldBe("Result validated — closing the feature needs the human's done tap on the board.");
     }
 
     [Fact]
@@ -790,7 +802,7 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("held");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("2 in review — awaiting review completion.");
+        current.Reason.ShouldBe("2 in review — finish the reviews, then close each task with planning_set_status.");
     }
 
     [Fact]
@@ -947,7 +959,7 @@ public sealed class AgentPlanningApiTests : IDisposable
 
         current.State.ShouldBe("held");
         current.Artifact.ShouldBeNull();
-        current.Reason.ShouldBe("1 in review — awaiting review completion.");
+        current.Reason.ShouldBe("1 in review — finish the reviews, then close each task with planning_set_status.");
     }
 
     [Fact]
