@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol;
 
 namespace Overmind.Mcp;
@@ -14,7 +15,6 @@ public sealed class ProjectResolver
         _api = api;
     }
 
-    // create only shapes the onboard body from 126/03 on; both door kinds post the cwd-only form today.
     public async Task<Guid> ResolveAsync(Guid? projectId, bool create, string errorNoun, CancellationToken ct)
     {
         if (projectId is not null)
@@ -28,10 +28,16 @@ public sealed class ProjectResolver
             return fromEnvironment;
         }
 
+        var body = new JsonObject { ["cwd"] = Environment.CurrentDirectory };
+        if (!create)
+        {
+            body["create"] = false;
+        }
+
         JsonElement onboard;
         try
         {
-            onboard = await _api.PostAsync("/api/onboard", new { cwd = Environment.CurrentDirectory }, ct);
+            onboard = await _api.PostAsync("/api/onboard", body, ct);
         }
         catch (Exception ex) when (ex is ApiNotFoundException or ApiStatusException or ApiUnreachableException)
         {

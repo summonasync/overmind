@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol;
 using Shouldly;
 using Xunit;
@@ -202,6 +203,35 @@ public sealed class FeatureCodeToolContractTests : IAsyncLifetime
 
         failure.Message.ShouldContain("not a git repository");
         failure.Message.ShouldContain("worktree list --porcelain");
+    }
+
+    [Fact]
+    public async Task CwdResolution_PostsCreateFalseBody()
+    {
+        _stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
+        var git = new StubGitCli();
+
+        await Tool(git).FeatureCode("063-worktree-feature-binding");
+
+        var onboard = _stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        var body = JsonNode.Parse(onboard.Body)!;
+        body["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        body["create"]!.GetValue<bool>().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task UnregisteredCwd_ThrowsHonestGuidanceWithSingleResolveCall()
+    {
+        _stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+        var git = new StubGitCli();
+
+        var failure = await Should.ThrowAsync<McpException>(() =>
+            Tool(git).FeatureCode("063-worktree-feature-binding"));
+
+        failure.Message.ShouldContain("No project is registered for the working directory");
+        failure.Message.ShouldContain("overmind_onboard");
+        _stub.Requests.Count(r => r.Method == "POST" && r.Path == "/api/onboard").ShouldBe(1);
+        git.Calls.ShouldBeEmpty();
     }
 
     private FeatureCodeTools Tool(StubGitCli git) => new(_api, git, new ProjectResolver(_api));

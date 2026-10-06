@@ -60,13 +60,13 @@ public sealed class OvermindNotificationTools
     }
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]
-    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision.")]
+    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision. Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
     public async Task<JsonElement> Replies(
         [Description("Id of the project whose replies to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description("A reply marks its notification read, so false matches nothing — poll with the default true.")] bool? includeRead = null,
         CancellationToken ct = default)
     {
-        var resolved = await _projects.ResolveAsync(projectId, create: true, "for the notification", ct);
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the notification", ct);
         var query = includeRead is null
             ? $"projectId={resolved}"
             : $"projectId={resolved}&includeRead={(includeRead.Value ? "true" : "false")}";

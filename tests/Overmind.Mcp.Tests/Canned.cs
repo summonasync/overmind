@@ -113,6 +113,9 @@ public static class Canned
     public const string NotFoundJson =
         """{"title":"Not Found","detail":"Entry '44444444-4444-4444-4444-444444444444' was not found.","status":404}""";
 
+    public const string OnboardUnregisteredCwdJson =
+        """{"title":"Not Found","detail":"No project is registered for the working directory '/repo'. Call overmind_onboard to register it, or pass projectId explicitly.","status":404}""";
+
     public const string SemanticUnavailableJson =
         """{"title":"Semantic search unavailable","detail":"Semantic search is unavailable because the vector store is down. Use mode=fulltext.","status":503}""";
 

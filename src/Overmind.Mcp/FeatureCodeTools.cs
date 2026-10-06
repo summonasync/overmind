@@ -35,7 +35,8 @@ public sealed class FeatureCodeTools
         "path and last commit short hash + date; a worktree whose path no longer exists is reported stale, not dropped. " +
         "Multiple matches are all listed; no match returns an honest empty result with the naming-convention hint. " +
         "The answer rides along with the host's feature read (status/priority context) into one payload — the host half " +
-        "may fail independently, and then the discovery half is still answered with featureError set.")]
+        "may fail independently, and then the discovery half is still answered with featureError set. " +
+        "Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
     public async Task<JsonElement> FeatureCode(
         [Description("Slug of the feature, as shown on the board.")] string slug,
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
@@ -47,7 +48,7 @@ public sealed class FeatureCodeTools
             throw new McpException("slug is required: pass the feature slug as shown on the board.");
         }
 
-        var resolved = await _projects.ResolveAsync(projectId, create: true, "for the working directory", ct);
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var workspace = Environment.CurrentDirectory;
         var (matches, heads) = await DiscoverAsync(trimmed, workspace, ct);
 

@@ -614,7 +614,9 @@ public class ToolContractTests : McpSessionTestBase
         });
 
         var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
-        JsonNode.Parse(onboard.Body)!["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        var onboardBody = JsonNode.Parse(onboard.Body)!;
+        onboardBody["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        onboardBody["create"].ShouldBeNull();
         FindRequest("DELETE", $"/api/entries/{Canned.EntryId}");
     }
 

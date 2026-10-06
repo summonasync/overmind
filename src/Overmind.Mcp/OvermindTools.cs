@@ -47,7 +47,8 @@ public sealed class OvermindTools
         "Reads the project's manifest — the full markdown describing what the project is, its stack, build/test commands and conventions; the deep read that complements the one-line description in list_projects. " +
         "Returns the manifest markdown verbatim. When no manifest is set the tool says so instead of failing — " +
         "set one on the project config page in the Overmind UI or import it from AGENTS.md/CLAUDE.md/QWEN.md. " +
-        "projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.";
+        "projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; " +
+        "the resolution never creates a project row; an unregistered directory returns guidance instead.";
 
     private readonly OvermindApiClient _api;
     private readonly ProjectResolver _projects;
@@ -254,7 +255,7 @@ public sealed class OvermindTools
         [Description("Id of the project whose manifest to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        var resolvedProjectId = await _projects.ResolveAsync(projectId, create: true, "for the entry", ct);
+        var resolvedProjectId = await _projects.ResolveAsync(projectId, create: false, "for the entry", ct);
         var project = await Guarded(() => _api.GetAsync($"/api/projects/{resolvedProjectId}", ct));
 
         var manifest = project.ValueKind == JsonValueKind.Object &&

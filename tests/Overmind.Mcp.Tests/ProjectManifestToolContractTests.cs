@@ -42,8 +42,26 @@ public class ProjectManifestToolContractTests : McpSessionTestBase
         await Driver.CallToolAsync("read_project_manifest", new JsonObject());
 
         var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
-        JsonNode.Parse(onboard.Body)!["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        var body = JsonNode.Parse(onboard.Body)!;
+        body["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        body["create"]!.GetValue<bool>().ShouldBeFalse();
         FindRequest("GET", $"/api/projects/{Canned.ProjectId}");
+    }
+
+    [Fact]
+    public async Task ReadProjectManifest_UnregisteredCwd_IsErrorWithHostGuidanceAndNoRetry()
+    {
+        Stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+
+        var response = await Driver.CallToolAsync("read_project_manifest", new JsonObject());
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("No project is registered for the working directory");
+        text.ShouldContain("overmind_onboard");
+        Stub.Requests.Count(r => r.Method == "POST" && r.Path == "/api/onboard").ShouldBe(1);
+        Stub.Requests.ShouldNotContain(r => r.Path.StartsWith("/api/projects/", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -60,6 +78,8 @@ public class ProjectManifestToolContractTests : McpSessionTestBase
         description.ShouldContain("says so instead of failing");
         description.ShouldContain("AGENTS.md/CLAUDE.md/QWEN.md");
         description.ShouldContain("OVERMIND_PROJECT_ID");
+        description.ShouldContain("never creates a project row");
+        description.ShouldContain("guidance");
 
         var properties = tools["read_project_manifest"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("projectId");

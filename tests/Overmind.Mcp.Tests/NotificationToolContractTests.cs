@@ -24,7 +24,10 @@ public class NotificationToolContractTests : McpSessionTestBase
         notify.ShouldContain("overmind_replies");
         notify.ShouldContain("quote the url in chat when asking for an approval");
 
-        tools["overmind_replies"]!["description"]!.GetValue<string>().ShouldContain("answers");
+        var replies = tools["overmind_replies"]!["description"]!.GetValue<string>();
+        replies.ShouldContain("answers");
+        replies.ShouldContain("never creates a project row");
+        replies.ShouldContain("guidance");
     }
 
     [Fact]
@@ -119,6 +122,7 @@ public class NotificationToolContractTests : McpSessionTestBase
         var onboardBody = JsonNode.Parse(onboard.Body)!;
         onboardBody["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
         onboardBody["projectId"].ShouldBeNull();
+        onboardBody["create"].ShouldBeNull();
 
         var request = FindRequest("POST", "/api/agent/notifications");
         JsonNode.Parse(request.Body)!["projectId"]!.GetValue<string>().ShouldBe(Canned.ProjectId.ToString());
@@ -192,9 +196,26 @@ public class NotificationToolContractTests : McpSessionTestBase
     {
         await Driver.CallToolAsync("overmind_replies", new JsonObject());
 
-        Stub.Requests.ShouldContain(r => r.Method == "POST" && r.Path == "/api/onboard");
+        var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        JsonNode.Parse(onboard.Body)!["create"]!.GetValue<bool>().ShouldBeFalse();
         var request = FindRequest("GET", "/api/agent/notifications/replies");
         request.Query.ShouldBe($"projectId={Canned.ProjectId}");
+    }
+
+    [Fact]
+    public async Task Replies_UnregisteredCwd_IsErrorWithHostGuidanceAndNoRetry()
+    {
+        Stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+
+        var response = await Driver.CallToolAsync("overmind_replies", new JsonObject());
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = ToolErrorText(response);
+        text.ShouldContain("No project is registered for the working directory");
+        text.ShouldContain("overmind_onboard");
+        Stub.Requests.Count(r => r.Method == "POST" && r.Path == "/api/onboard").ShouldBe(1);
+        Stub.Requests.ShouldNotContain(r => r.Path.StartsWith("/api/agent/notifications/replies", StringComparison.Ordinal));
     }
 
     private static string ToolErrorText(JsonNode response)
