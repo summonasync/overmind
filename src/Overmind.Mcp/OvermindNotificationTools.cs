@@ -9,18 +9,18 @@ namespace Overmind.Mcp;
 [McpServerToolType]
 public sealed class OvermindNotificationTools
 {
-    private const string ProjectIdEnvironmentVariable = "OVERMIND_PROJECT_ID";
-
     private static readonly HashSet<string> NotificationKinds = new(StringComparer.OrdinalIgnoreCase)
     {
         "info", "question", "approval"
     };
 
     private readonly OvermindApiClient _api;
+    private readonly ProjectResolver _projects;
 
-    public OvermindNotificationTools(OvermindApiClient api)
+    public OvermindNotificationTools(OvermindApiClient api, ProjectResolver projects)
     {
         _api = api;
+        _projects = projects;
     }
 
     [McpServerTool(Name = "overmind_notify", Destructive = false, Idempotent = false)]
@@ -40,7 +40,7 @@ public sealed class OvermindNotificationTools
             ["text"] = text
         };
 
-        payload["projectId"] = await ResolveProjectIdAsync(projectId, ct);
+        payload["projectId"] = await _projects.ResolveAsync(projectId, create: true, "for the notification", ct);
         if (featureSlug is not null)
         {
             payload["featureSlug"] = featureSlug;
@@ -66,47 +66,11 @@ public sealed class OvermindNotificationTools
         [Description("A reply marks its notification read, so false matches nothing — poll with the default true.")] bool? includeRead = null,
         CancellationToken ct = default)
     {
-        var resolved = await ResolveProjectIdAsync(projectId, ct);
+        var resolved = await _projects.ResolveAsync(projectId, create: true, "for the notification", ct);
         var query = includeRead is null
             ? $"projectId={resolved}"
             : $"projectId={resolved}&includeRead={(includeRead.Value ? "true" : "false")}";
         return await Guarded(() => _api.GetAsync($"/api/agent/notifications/replies?{query}", ct));
-    }
-
-    private async Task<Guid> ResolveProjectIdAsync(Guid? projectId, CancellationToken ct)
-    {
-        if (projectId is not null)
-        {
-            return projectId.Value;
-        }
-
-        var overrideId = Environment.GetEnvironmentVariable(ProjectIdEnvironmentVariable);
-        if (Guid.TryParse(overrideId, out var fromEnvironment))
-        {
-            return fromEnvironment;
-        }
-
-        JsonElement onboard;
-        try
-        {
-            onboard = await _api.PostAsync("/api/onboard", new { cwd = Environment.CurrentDirectory }, ct);
-        }
-        catch (Exception ex) when (ex is ApiStatusException or ApiNotFoundException or ApiUnreachableException)
-        {
-            throw new McpException(
-                $"Could not resolve the project for the notification: {ex.Message}. Pass projectId explicitly or call overmind_onboard first.");
-        }
-
-        if (onboard.ValueKind == JsonValueKind.Object &&
-            onboard.TryGetProperty("projectId", out var value) &&
-            value.ValueKind == JsonValueKind.String &&
-            Guid.TryParse(value.GetString(), out var resolved))
-        {
-            return resolved;
-        }
-
-        throw new McpException(
-            "The host returned no usable projectId for the working directory. Call overmind_onboard, then pass its projectId explicitly.");
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)

@@ -96,6 +96,7 @@ builder.Logging.ClearProviders();
 builder.Services.AddSingleton(new OvermindApiClient(http));
 builder.Services.AddSingleton<MutationGuard>();
 builder.Services.AddSingleton<IGitCli, GitCli>();
+builder.Services.AddSingleton<ProjectResolver>();
 builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindPlanningTools>();
 builder.Services.AddSingleton<FeatureCodeTools>();

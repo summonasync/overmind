@@ -50,10 +50,12 @@ public sealed class OvermindTools
         "projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.";
 
     private readonly OvermindApiClient _api;
+    private readonly ProjectResolver _projects;
 
-    public OvermindTools(OvermindApiClient api)
+    public OvermindTools(OvermindApiClient api, ProjectResolver projects)
     {
         _api = api;
+        _projects = projects;
     }
 
     [McpServerTool(Name = "list_projects", ReadOnly = true, Idempotent = true)]
@@ -167,7 +169,7 @@ public sealed class OvermindTools
         [Description("Id of the project the entry belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        var resolvedProjectId = await ResolveProjectIdAsync(projectId, ct);
+        var resolvedProjectId = await _projects.ResolveAsync(projectId, create: true, "for the entry", ct);
 
         var entry = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
 
@@ -252,7 +254,7 @@ public sealed class OvermindTools
         [Description("Id of the project whose manifest to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        var resolvedProjectId = await ResolveProjectIdAsync(projectId, ct);
+        var resolvedProjectId = await _projects.ResolveAsync(projectId, create: true, "for the entry", ct);
         var project = await Guarded(() => _api.GetAsync($"/api/projects/{resolvedProjectId}", ct));
 
         var manifest = project.ValueKind == JsonValueKind.Object &&
@@ -275,42 +277,6 @@ public sealed class OvermindTools
         {
             throw new McpException(ex.Message);
         }
-    }
-
-    private async Task<Guid> ResolveProjectIdAsync(Guid? projectId, CancellationToken ct)
-    {
-        if (projectId is not null)
-        {
-            return projectId.Value;
-        }
-
-        var overrideId = Environment.GetEnvironmentVariable("OVERMIND_PROJECT_ID");
-        if (Guid.TryParse(overrideId, out var fromEnvironment))
-        {
-            return fromEnvironment;
-        }
-
-        JsonElement onboard;
-        try
-        {
-            onboard = await _api.PostAsync("/api/onboard", new { cwd = Environment.CurrentDirectory }, ct);
-        }
-        catch (Exception ex) when (ex is ApiNotFoundException or ApiUnreachableException or ApiStatusException)
-        {
-            throw new McpException(
-                $"Could not resolve the project for the entry: {ex.Message}. Pass projectId explicitly or call overmind_onboard first.");
-        }
-
-        if (onboard.ValueKind == JsonValueKind.Object &&
-            onboard.TryGetProperty("projectId", out var value) &&
-            value.ValueKind == JsonValueKind.String &&
-            Guid.TryParse(value.GetString(), out var resolved))
-        {
-            return resolved;
-        }
-
-        throw new McpException(
-            "The host returned no usable projectId for the working directory. Call overmind_onboard, then pass its projectId explicitly.");
     }
 
     private static JsonElement CompactEntry(JsonElement entry)

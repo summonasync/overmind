@@ -204,7 +204,7 @@ public sealed class FeatureCodeToolContractTests : IAsyncLifetime
         failure.Message.ShouldContain("worktree list --porcelain");
     }
 
-    private FeatureCodeTools Tool(StubGitCli git) => new(_api, git);
+    private FeatureCodeTools Tool(StubGitCli git) => new(_api, git, new ProjectResolver(_api));
 
     private static (string WorktreeDir, string Root) CreateTempWorktree(string leaf = "063-bound")
     {

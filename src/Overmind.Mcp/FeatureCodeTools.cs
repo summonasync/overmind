@@ -9,7 +9,6 @@ namespace Overmind.Mcp;
 [McpServerToolType]
 public sealed class FeatureCodeTools
 {
-    private const string ProjectIdEnvironmentVariable = "OVERMIND_PROJECT_ID";
     private const string WorktreeKind = "worktree";
     private const string BranchKind = "branch";
     private const string BranchListArguments =
@@ -20,11 +19,13 @@ public sealed class FeatureCodeTools
 
     private readonly OvermindApiClient _api;
     private readonly IGitCli _git;
+    private readonly ProjectResolver _projects;
 
-    public FeatureCodeTools(OvermindApiClient api, IGitCli git)
+    public FeatureCodeTools(OvermindApiClient api, IGitCli git, ProjectResolver projects)
     {
         _api = api;
         _git = git;
+        _projects = projects;
     }
 
     [McpServerTool(Name = "planning_feature_code", ReadOnly = true, Idempotent = true)]
@@ -46,7 +47,7 @@ public sealed class FeatureCodeTools
             throw new McpException("slug is required: pass the feature slug as shown on the board.");
         }
 
-        var resolved = await ResolveProjectIdAsync(projectId, ct);
+        var resolved = await _projects.ResolveAsync(projectId, create: true, "for the working directory", ct);
         var workspace = Environment.CurrentDirectory;
         var (matches, heads) = await DiscoverAsync(trimmed, workspace, ct);
 
@@ -208,40 +209,4 @@ public sealed class FeatureCodeTools
         value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
-
-    private async Task<Guid> ResolveProjectIdAsync(Guid? projectId, CancellationToken ct)
-    {
-        if (projectId is not null)
-        {
-            return projectId.Value;
-        }
-
-        var overrideId = Environment.GetEnvironmentVariable(ProjectIdEnvironmentVariable);
-        if (Guid.TryParse(overrideId, out var fromEnvironment))
-        {
-            return fromEnvironment;
-        }
-
-        JsonElement onboard;
-        try
-        {
-            onboard = await _api.PostAsync("/api/onboard", new { cwd = Environment.CurrentDirectory }, ct);
-        }
-        catch (Exception ex) when (ex is ApiStatusException or ApiNotFoundException or ApiUnreachableException)
-        {
-            throw new McpException(
-                $"Could not resolve the project for the working directory: {ex.Message}. Pass projectId explicitly or call overmind_onboard first.");
-        }
-
-        if (onboard.ValueKind == JsonValueKind.Object &&
-            onboard.TryGetProperty("projectId", out var value) &&
-            value.ValueKind == JsonValueKind.String &&
-            Guid.TryParse(value.GetString(), out var resolved))
-        {
-            return resolved;
-        }
-
-        throw new McpException(
-            "The host returned no usable projectId for the working directory. Call overmind_onboard, then pass its projectId explicitly.");
-    }
 }
