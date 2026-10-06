@@ -1,7 +1,7 @@
 ---
 feature: 049
 slug: backlog-index-retirement
-status: review
+status: done
 priority: p0
 version: 1
 created: 2026-09-22
@@ -39,4 +39,7 @@ BACKLOG.md с managed-блоком — вторая копия борды в ф�
 - 2026-10-06 [auto] — artifact created → ready
 - 2026-10-06 [auto] — task 04 taken → inProgress
 - 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification 2df3d60c; result validated in the final batch sitting; task 05 (live migration) executed on deployed 0.8.0 and light-APPROVED. The BACKLOG.md index retirement is fully landed: writer gone, tests on end-state, docs+kit+ADR consistent, pointer live, orphans homed.
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

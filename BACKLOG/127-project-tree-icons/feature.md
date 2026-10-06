@@ -1,7 +1,7 @@
 ---
 feature: 127
 slug: project-tree-icons
-status: ready
+status: done
 priority: p1
 version: 1
 created: 2026-10-06
@@ -35,4 +35,9 @@ In the project tree, PROJECT nodes must read as projects at a glance — a purpl
 <log>
 - 2026-10-06 [agent] — Van by claude claimed the feature
 - 2026-10-06 [auto] — artifact created → ready
+- 2026-10-06 [auto] — task 01 taken → inProgress
+- 2026-10-06 [auto] — all tasks done + spec + plan validated → review
+- 2026-10-06 [agent] — by user request in-session — armer notification f1d38300; result validated. Fast-lane feature closed (commit e5cab94): project nodes read as projects at a glance.
+- 2026-10-06 [agent] — done via agent review by Van (claude), approved by human tap 2026-10-06
+- 2026-10-06 [agent] — claim released on done-close
 </log>

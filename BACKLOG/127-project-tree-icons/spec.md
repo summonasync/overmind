@@ -1,8 +1,9 @@
 ---
 feature: 127
 slug: project-tree-icons
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Spec 127 — Project tree: purple project icons distinct from folder nodes
@@ -60,4 +61,5 @@ Make PROJECT nodes in the project tree read as projects at a glance: a purple mi
 
 <log>
 - 2026-10-06 [agent] — spec draft (fast lane: pre-approved body, mechanism and tokens verified in the tree file before drafting)
+- 2026-10-06 [agent] — validated with human proof: notification c0de16d0-33a7-48ad-aa03-0c02d3767f26 replied 2026-10-06 18:53:16 UTC
 </log>

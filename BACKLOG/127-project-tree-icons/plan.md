@@ -1,8 +1,9 @@
 ---
 feature: 127
 slug: project-tree-icons
-status: draft
+status: validated
 created: 2026-10-06
+validated: 2026-10-06
 ---
 
 # Plan 127 — Project tree: purple project icons distinct from folder nodes
@@ -54,4 +55,5 @@ Pins (string-pins for coder + reviewer):
 
 <log>
 - 2026-10-06 [agent] — plan draft (1 task, string-pins on the tree file)
+- 2026-10-06 [agent] — validated with human proof: notification c0de16d0-33a7-48ad-aa03-0c02d3767f26 replied 2026-10-06 18:53:16 UTC
 </log>
