@@ -46,7 +46,7 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 **Works — safe to rely on:**
 | Capability | Tools | Board proof |
 |---|---|---|
-| Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043 |
+| Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions; agent done = result + fresh human tap | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043, 109 |
 | Claims + session lock (claim/unclaim, `X-Overmind-Session` on 13 feature mutations, EOF auto-release, stale take-over) | `planning_claim_feature`, `planning_unclaim_feature` | 099; live dogfood 6/6 |
 | Artifact deletion (agent: draft-only; human: unrestricted; blockedBy edges refuse first) | `planning_delete_artifact` | 094 |
 | Spec/plan/task/result artifacts with XML sections | `planning_upsert_artifact` | 006 |
@@ -117,8 +117,11 @@ Rules:
 1. **Spec gate** — spec artifact `draft` → user approves (in chat, or `overmind_notify`
    kind=`approval` + `overmind_replies`) → `planning_validate`. No plan work before this.
 2. **Plan gate** — same flow for the plan artifact. No task breakdown before this.
-3. **Feature done** — `planning_set_feature_status(status=done)` only on the user's explicit
-   request in-session (agent door), with `logNote` carrying provenance.
+3. **Feature done** — two prerequisites, both enforced server-side (409 teaches the fix):
+   (a) a `result` artifact must exist on the feature; (b) a FRESH human tap — `overmind_notify`
+   kind=`approval` → the user's reply must be newer than the result's last update (same proof
+   mechanics as validation gates; editing the result voids the tap). The done log line carries
+   reviewed-by provenance automatically. The human UI door needs the result but no tap.
 4. When `humanGate=on` (validation block in onboard), `planning_validate` returns STOP —
    the human approves in the Overmind UI; do not retry in a loop, notify and wait.
 

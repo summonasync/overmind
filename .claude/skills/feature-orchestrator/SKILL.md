@@ -147,8 +147,10 @@ Review output must include:
 - Output: `TECHNICAL-SOLUTIONS.md` update (new ADR entry) if structural changes occurred.
 
 ### Wave Closeout (every feature)
-After the result artifact lands and the feature reaches review/done: `planning_unclaim_feature` —
-the claim is a per-session lock, and a held claim 409s other sessions until the session ends.
+The agent-door done flip needs a `result` artifact plus a fresh human tap (notify approval →
+reply newer than the result's last update; see the ceremony skill's Gates). After the feature
+reaches review/done: `planning_unclaim_feature` — the claim is a per-session lock, and a held
+claim 409s other sessions until the session ends.
 
 ---
 
