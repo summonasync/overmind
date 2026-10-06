@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Brain,
   ChevronDown,
   ChevronRight,
   Folder,
-  FolderOpen,
   FolderPlus,
   Plus,
   RefreshCw,
@@ -287,7 +287,7 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
               : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
           )}
         >
-          <FolderOpen size={14} aria-hidden className="shrink-0" />
+          <Brain size={14} aria-hidden className={cn("shrink-0", !active && "text-primary-hover")} />
           <span className="truncate">{entry.projectName ?? entry.name}</span>
         </a>
       </div>
