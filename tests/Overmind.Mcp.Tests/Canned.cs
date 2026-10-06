@@ -405,6 +405,11 @@ public static class Canned
         {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"adapter":{"adapterVersion":null,"hostVersion":"1.0.0+freshbuild","warning":"adapter predates version reporting; restart recommended"},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
+    public const string OnboardAgentIdentityJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"agentIdentity":{"alias":"agent","vendor":"unknown","namingRules":"Aliases on this project take the crew animal list and stay lowercase.\nKeep the alias stable across sessions — it binds the feature claim."},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";
 
     public static int StoredLength(string json, string field) =>

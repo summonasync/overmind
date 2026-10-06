@@ -133,6 +133,19 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ToolsList_OnboardDescription_MentionsAgentIdentityBlock()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain(
+            "agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias)");
+    }
+
+    [Fact]
     public async Task Onboard_HealthySemanticBlock_ShowsAvailableAfterValidation()
     {
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
@@ -232,6 +245,30 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var text = Canned.ToolResultText(response);
         text.ShouldNotContain("Adapter:");
+    }
+
+    [Fact]
+    public async Task Onboard_RendersAgentIdentityBlockWithNamingRules()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAgentIdentityJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Agent identity: default alias 'agent', vendor 'unknown' — pass this pair to planning_claim_feature " +
+            "when claiming a feature; the project's naming rules:");
+        text.ShouldContain("Aliases on this project take the crew animal list and stay lowercase.");
+        text.ShouldContain("Keep the alias stable across sessions — it binds the feature claim.");
+    }
+
+    [Fact]
+    public async Task Onboard_MissingAgentIdentityBlock_RendersNothing()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldNotContain("Agent identity:");
     }
 
     [Fact]

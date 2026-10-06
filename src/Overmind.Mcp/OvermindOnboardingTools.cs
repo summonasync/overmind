@@ -19,7 +19,7 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate), an agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
     public async Task<string> Onboard(CancellationToken ct)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));
@@ -80,6 +80,7 @@ public sealed class OvermindOnboardingTools
 
         AppendMaterialization(payload, output);
         AppendValidation(payload, output);
+        AppendIdentity(payload, output);
         AppendSemantic(payload, output);
         AppendAdapter(payload, output);
 
@@ -208,6 +209,33 @@ public sealed class OvermindOnboardingTools
         {
             output.AppendLine($"Validation: humanGate={state}");
         }
+    }
+
+    private static void AppendIdentity(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("agentIdentity", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("namingRules", out var rules) ||
+            rules.ValueKind != JsonValueKind.String ||
+            rules.GetString() is not { Length: > 0 } rulesText)
+        {
+            return;
+        }
+
+        var alias = block.TryGetProperty("alias", out var aliasValue) &&
+                    aliasValue.ValueKind == JsonValueKind.String
+            ? aliasValue.GetString()
+            : null;
+
+        var vendor = block.TryGetProperty("vendor", out var vendorValue) &&
+                     vendorValue.ValueKind == JsonValueKind.String
+            ? vendorValue.GetString()
+            : null;
+
+        output.AppendLine(
+            $"Agent identity: default alias '{alias ?? "unknown"}', vendor '{vendor ?? "unknown"}' — " +
+            "pass this pair to planning_claim_feature when claiming a feature; the project's naming rules:");
+        output.AppendLine(rulesText);
     }
 
     private static void AppendSemantic(JsonElement payload, StringBuilder output)
