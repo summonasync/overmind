@@ -2,7 +2,7 @@
 feature: 121
 task: 03
 slug: alias-rules-editor
-status: todo
+status: done
 review: light
 created: 2026-10-06
 depends_on: 01
@@ -40,8 +40,8 @@ Depends on task 01's endpoint contract (blockedBy order 1). Mount point and patt
 </constraints>
 
 <acceptance-criteria>
-- [ ] Section renders the persisted rules text; save posts it; invalidation refetches; reload shows the saved value.
-- [ ] npm run lint && npx tsc --noEmit green; npm test green; npm run build green (in web/).
+- [x] Section renders the persisted rules text; save posts it; invalidation refetches; reload shows the saved value.
+- [x] npm run lint && npx tsc --noEmit green; npm test green; npm run build green (in web/).
 </acceptance-criteria>
 
 <refs>
@@ -56,4 +56,7 @@ Depends on task 01's endpoint contract (blockedBy order 1). Mount point and patt
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan slice 03 (batch breakdown; review: light; blockedBy order 1).
+- 2026-10-06 [agent] — 121/03 coding round started
+- 2026-10-06 [agent] — coding round complete — light review gate. Commit 1c2aeed: types/api/queries/claimSettingsQueryOptions, use-claim-settings read+mutation hooks, claim-settings-section (textarea maxLength 2000, synced-state, threshold echoed untouched), barrel exports, mounted after Planning workflow on projects-page; 6 pin tests in web/tests/claim-settings-section.test.mts. Gates green: lint 0 errors (6 pre-existing warnings in unrelated files), tsc clean, 263/263 node:test, next build OK.
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 microbatch candidate (mount pin asserts presence, not position after Planning workflow — position verified by eye; ledger #266). FSD/BFF clean, endpoint contract matches 392568f 1:1, synced-state mirrors workflow-settings, spot-checks 263/263 + lint + tsc. Commit 1c2aeed.
 </log>

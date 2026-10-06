@@ -2,7 +2,7 @@
 feature: 117
 task: 01
 slug: phase-label-as-tag-chip
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Widen phase to string|null, make cardPhaseLabel null-safe, extend board-card-context test pins (null/empty/whitespace → null, seven labels pass through).
@@ -32,10 +32,10 @@ brief: Widen phase to string|null, make cardPhaseLabel null-safe, extend board-c
 </constraints>
 
 <acceptance-criteria>
-- [ ] `phase` is `string | null` on `PlanningFeatureBoardItem`; `npx tsc --noEmit` green.
-- [ ] `cardPhaseLabel` returns null for null/empty/whitespace phase and the verbatim label otherwise.
-- [ ] Tests cover the null/empty/whitespace mapping and the seven-label passthrough; existing pins stay green.
-- [ ] `npm test` and `npx tsc --noEmit` pass in `web/`.
+- [x] `phase` is `string | null` on `PlanningFeatureBoardItem`; `npx tsc --noEmit` green.
+- [x] `cardPhaseLabel` returns null for null/empty/whitespace phase and the verbatim label otherwise.
+- [x] Tests cover the null/empty/whitespace mapping and the seven-label passthrough; existing pins stay green.
+- [x] `npm test` and `npx tsc --noEmit` pass in `web/`.
 </acceptance-criteria>
 
 <refs>
@@ -49,4 +49,7 @@ brief: Widen phase to string|null, make cardPhaseLabel null-safe, extend board-c
 
 <log>
 - 2026-10-06 [agent] — task cut from validated plan task 01.
+- 2026-10-06 [agent] — 117/01 coding round started
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers. Mutation-verified pins (both guard halves load-bearing), seven labels verified against CeremonyPhasePlanner truth, no-trim divergence judged contract-consistent. The WARNING (tooltip null-coercion at feature-board.tsx:251) is already resolved — task 02 (1133e30) removed that span entirely. Commit 2f4cac2.
 </log>

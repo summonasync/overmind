@@ -2,7 +2,7 @@
 feature: 100
 task: 04
 slug: tech-debt-revalidation
-status: todo
+status: review
 review: light
 created: 2026-10-06
 depends_on: 02, 03
@@ -47,4 +47,5 @@ None at breakdown time.
 
 <log>
 - 2026-10-06 [agent] — task created by feature-orchestrator (task breakdown after consolidated validation sitting).
+- 2026-10-06 [agent] — audit task 04 → review: §9 classification (0 blocker-candidates, 4 WARNINGs, 11 SUGGESTIONs → 10 new ledger items #250-#259 + 1 into F5 sketch, 8 declines/watch incl. 5 dedupes), §10 final report + 5 structural follow-up proposals (F1-F5) + superseding-ADR proposal §10.8 (human-gated), §11 self-check (spec AC → sections, clean audit git status). Re-verified on fresh HEAD; fixed a stale tool-count fact. Report audits/architect-review-2026-10-06-100.md (570 lines).
 </log>

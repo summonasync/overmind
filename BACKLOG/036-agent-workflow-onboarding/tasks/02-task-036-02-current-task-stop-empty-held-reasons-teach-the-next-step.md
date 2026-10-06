@@ -2,7 +2,7 @@
 feature: 036
 task: 02
 slug: agent-workflow-onboarding
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: current_task teaching: extend stop/empty/held reasons in AgentPlanningApi.cs (~498/505/518/567, ResultStateReason ~596) to name the next ceremony action with the real tool (STOP → overmind_notify approval + wait; empty → planning_upsert_tasks; result → write/validate/close; held → reviews + planning_set_status); AgentPlanningApiTests pins incl. the moved ~743 pin in the same change.
@@ -30,10 +30,10 @@ Every non-task state of planning_current_task names the next ceremony action wit
 </constraints>
 
 <acceptance-criteria>
-- [ ] Each of the five state sites names its next ceremony action with the real tool name.
-- [ ] AgentPlanningApiTests pins every extended reason; the moved ~743 pin is updated in the same change and green.
-- [ ] No state logic touched — current_task behavior (states, warnings, blocking) unchanged; full AgentPlanningApiTests green.
-- [ ] dotnet build Overmind.sln green; dotnet test Overmind.sln --filter AgentPlanningApiTests green.
+- [x] Each of the five state sites names its next ceremony action with the real tool name.
+- [x] AgentPlanningApiTests pins every extended reason; the moved ~743 pin is updated in the same change and green.
+- [x] No state logic touched — current_task behavior (states, warnings, blocking) unchanged; full AgentPlanningApiTests green.
+- [x] dotnet build Overmind.sln green; dotnet test Overmind.sln --filter AgentPlanningApiTests green.
 </acceptance-criteria>
 
 <refs>
@@ -47,4 +47,8 @@ Every non-task state of planning_current_task names the next ceremony action wit
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan 66a76b70 (slice 2).
+- 2026-10-06 [agent] — 036/02 coding round started
+- 2026-10-06 [agent] — All 4 AC ticked. Reason strings extended at the five sites (spec/plan STOP teach overmind_notify approval + wait; empty teaches planning_upsert_tasks decomposition; held teaches reviews + planning_set_status; result draft/validated/default teach proof flow / human done tap / planning_upsert_artifact(kind=result)); STOP texts interpolate the real feature slug. 10 pins updated in AgentPlanningApiTests incl. the moved ~743 pin; Canned.cs untouched per anti-scope. Gates: dotnet build Overmind.sln 0 warnings 0 errors; AgentPlanningApiTests 140/140; full Overmind.Api.Tests serial (-m:1) 663/663. Full-solution serial run skipped (concurrent reviewer holds build output; project-scope run covers every test pinning these strings). Commit 5ba84f9 (2 files only).
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 3 SUGGESTIONs (cosmetic $ placement; result-draft text implies planning_validate without naming it; Canned.cs held-text divergence — anti-scope, filed to ledger #262). Teaching honesty verified against live tools, zero behavior confirmed (string literals only), spot-check 140/140. Commit 5ba84f9.
 </log>

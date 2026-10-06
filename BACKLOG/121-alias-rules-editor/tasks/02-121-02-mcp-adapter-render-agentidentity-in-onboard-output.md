@@ -2,7 +2,7 @@
 feature: 121
 task: 02
 slug: alias-rules-editor
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: MCP: render the agentIdentity block in overmind_onboard output (AppendIdentity) + tool description mention; OnboardingToolContractTests pins
@@ -34,10 +34,10 @@ The Host serves OnboardAgentIdentityBlock (OnboardApi.cs:107-110) but OvermindOn
 </constraints>
 
 <acceptance-criteria>
-- [ ] Identity line (alias/vendor + rules) rendered in the onboard output; custom rules string asserted in a test.
-- [ ] Missing agentIdentity block does not crash Format.
-- [ ] Tool description mentions the agentIdentity block; description contract tests green.
-- [ ] dotnet build green; Overmind.Mcp.Tests green.
+- [x] Identity line (alias/vendor + rules) rendered in the onboard output; custom rules string asserted in a test.
+- [x] Missing agentIdentity block does not crash Format.
+- [x] Tool description mentions the agentIdentity block; description contract tests green.
+- [x] dotnet build green; Overmind.Mcp.Tests green.
 </acceptance-criteria>
 
 <refs>
@@ -53,4 +53,8 @@ The Host serves OnboardAgentIdentityBlock (OnboardApi.cs:107-110) but OvermindOn
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan slice 02 (batch breakdown; review: light).
+- 2026-10-06 [agent] — 121/02 coding round started
+- 2026-10-06 [agent] — 121/02 coding complete — commit 50fcedb: AppendIdentity rendered between validation and semantic (Agent identity line with default alias/vendor + planning_claim_feature pointer, naming rules verbatim, absent-safe), description carries the agentIdentity block phrase, 3 contract pins added (render with custom multi-line rules, missing-block safe, description phrase). Gates: dotnet build clean, Overmind.Mcp.Tests 512/512 serial (-m:1), dotnet format clean on the three touched files.
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 2 non-blocking observations (partial-tolerance case unpinned per AC scope; render-order vs host-JSON-order cosmetic divergence). Null-path mutation-checked, 099/119 description pins untouched, spot-check 20/20. Commit 50fcedb.
 </log>

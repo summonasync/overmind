@@ -2,7 +2,7 @@
 feature: 036
 task: 01
 slug: agent-workflow-onboarding
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Quickstart ceremony: rework the numbered section of OnboardQuickstart.cs into the gated ceremony (tools per step, proof-flow gates, execution contracts, result+done tap); 032 blocks byte-identical. New WorkflowTeachingContractTests.cs: ceremony pins + tool-name anti-drift guard vs live ListTools + 032 regression mirror.
@@ -31,11 +31,11 @@ The onboard quickstart (OnboardQuickstart.Text) teaches the gated ceremony: crea
 </constraints>
 
 <acceptance-criteria>
-- [ ] The numbered section names every ceremony stage with its tool (create/spec/plan/tasks/loop/result) and both validation gates with the proof flow; the done tap is named.
-- [ ] WorkflowTeachingContractTests pins the ceremony phrases and passes.
-- [ ] The anti-drift guard passes against the live tools list for quickstart AND both bootstrap branches.
-- [ ] All 032 StatusModelContractTests pins stay green without edits to those blocks.
-- [ ] dotnet build Overmind.sln green; dotnet test Overmind.sln --filter "WorkflowTeachingContractTests|StatusModelContractTests" green.
+- [x] The numbered section names every ceremony stage with its tool (create/spec/plan/tasks/loop/result) and both validation gates with the proof flow; the done tap is named.
+- [x] WorkflowTeachingContractTests pins the ceremony phrases and passes.
+- [x] The anti-drift guard passes against the live tools list for quickstart AND both bootstrap branches.
+- [x] All 032 StatusModelContractTests pins stay green without edits to those blocks.
+- [x] dotnet build Overmind.sln green; dotnet test Overmind.sln --filter "WorkflowTeachingContractTests|StatusModelContractTests" green.
 </acceptance-criteria>
 
 <refs>
@@ -49,4 +49,7 @@ The onboard quickstart (OnboardQuickstart.Text) teaches the gated ceremony: crea
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan 66a76b70 (slice 1).
+- 2026-10-06 [agent] — 036/01 coding round started
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 SUGGESTION (guard regex case/prefix-sensitive — scope-agreed, pins compensate; filed to ledger #260 as a remember-when-extending note). Guard audited all 23 tool names independently, zero-behavior verified byte-wise, spot-check 9/9. Commit ad50c68.
 </log>

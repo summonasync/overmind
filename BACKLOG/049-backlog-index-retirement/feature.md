@@ -1,7 +1,7 @@
 ---
 feature: 049
 slug: backlog-index-retirement
-status: ready
+status: inProgress
 priority: p0
 version: 1
 created: 2026-09-22
@@ -37,4 +37,5 @@ BACKLOG.md с managed-блоком — вторая копия борды в ф�
 <log>
 - 2026-10-06 [agent] — Van by claude claimed the feature
 - 2026-10-06 [auto] — artifact created → ready
+- 2026-10-06 [auto] — task 04 taken → inProgress
 </log>

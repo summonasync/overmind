@@ -2,7 +2,7 @@
 feature: 049
 task: 04
 slug: backlog-index-retirement
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Docs sweep: README/CONTEXT/STRUCTURE/AGENTS + new ADR in TECHNICAL-SOLUTIONS + crew kit x8 sentence swap; CONTEXT:131 tombstone untouched; FEATURELIST/ENTRIES/BACKLOG trees untouched.
@@ -33,9 +33,9 @@ English in repo docs; keep each file's voice and formatting; CONTEXT:131 tombsto
 </constraints>
 
 <acceptance-criteria>
-- [ ] All listed files updated; CONTEXT:131 untouched.
-- [ ] New ADR present and numbered per the file's convention.
-- [ ] Kit sentence swap verified identical across 4 contract files and 4 SKILL ports (grep hit sets equal).
+- [x] All listed files updated; CONTEXT:131 untouched.
+- [x] New ADR present and numbered per the file's convention.
+- [x] Kit sentence swap verified identical across 4 contract files and 4 SKILL ports (grep hit sets equal).
 </acceptance-criteria>
 
 <refs>
@@ -43,9 +43,16 @@ spec cc4c4392-566e-4ff3-a84a-ff6aa61914fd; plan cf343934-d939-482d-9dd2-36dc8e41
 </refs>
 
 <obstacles>
-None at creation.
+- One dispatcher commit was impossible as stated: the crew kit (`src/OvermindCrewKit`) is an embedded git repo gitignored by the parent (`/mnt/Ubuntu-Dev/Projects/AI-Tools/Overmind/.gitignore:406`), so the work landed as two same-subject commits — parent `8a0f9fc` (README, CONTEXT, STRUCTURE, AGENTS, TECHNICAL-SOLUTIONS) and kit `c79e072` (x8). No push either side.
+- `.claude/skills/overmind-ceremony/SKILL.md` carried uncommitted lane-109 hunks (feature-done gating) in the working tree; staged surgically via a HEAD+own-hunk blob (`git hash-object` + `update-index --cacheinfo`) — the cached diff contains only the 049 bullet swap, lane-109 hunks remain unstaged and untouched.
+- CONTEXT.md:131 tombstone comment verified untouched (absent from `git diff`); TECHNICAL-SOLUTIONS.md historical ADR consequence lines 24/92/101/108 with stale index pointers left as-is per ADR immutability — the new ADR's Status line names them as superseded.
+- Docs describe the decided end-state per the task; the live migration itself (pointer replacement, row untrack) is task 05, deploy-gated — until it runs, this repo's `BACKLOG.md` still holds generated content.
 </obstacles>
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan step 5
+- 2026-10-06 [agent] — 049/04 docs round started
+- 2026-10-06 [agent] — Docs round done: parent 8a0f9fc (README x3 spots, CONTEXT x4, STRUCTURE x5, AGENTS x1, new ADR "BACKLOG.md index retired: the board is the only state copy (049) — 2026-10-06" in TECHNICAL-SOLUTIONS.md) + kit c79e072 (x8 sentence swap, md5-identical across 4 contracts + 4 SKILL ports). CONTEXT:131 tombstone byte-untouched; grep sweep: living docs carry only intended end-state mentions, residues confined to audits/FEATURELIST/BACKLOG/ENTRIES trees, task-01..03 code/tests and the kit's own historical trees. 3/3 AC ticked.
+- 2026-10-06 [agent] — docs round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 SUGGESTION (TECHNICAL-SOLUTIONS «Newest first» header vs append-at-end practice — pre-existing, filed to ledger #261). All 8 kit files md5-verified across commit blobs, CONTEXT:131 tombstone byte-untouched, ADR supersession correct without editing immutable lines, end-state consistency confirmed across 13 docs. Commits 8a0f9fc + kit c79e072.
 </log>

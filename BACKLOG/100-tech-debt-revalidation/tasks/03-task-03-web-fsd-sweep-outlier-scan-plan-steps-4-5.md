@@ -2,7 +2,7 @@
 feature: 100
 task: 03
 slug: tech-debt-revalidation
-status: todo
+status: review
 review: light
 created: 2026-10-06
 depends_on: 01
@@ -45,4 +45,5 @@ None at breakdown time.
 
 <log>
 - 2026-10-06 [agent] — task created by feature-orchestrator (task breakdown after consolidated validation sitting).
+- 2026-10-06 [agent] — audit task 03 → review: §8 web/FSD sweep appended (FSD direction clean on all five slices; barrel bypasses ×2 + deep imports ×2 = S-microbatch; RSC/BFF clean, one useRouter shim watch; React Query clean; entities/ DECLINED with documented return trigger; outliers: feature-workspace KEEP, project-tree EXTRACT-on-touch). 3/3 AC covered. Report audits/architect-review-2026-10-06-100.md:305-406.
 </log>

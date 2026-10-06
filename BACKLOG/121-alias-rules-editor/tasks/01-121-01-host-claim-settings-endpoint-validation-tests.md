@@ -2,7 +2,7 @@
 feature: 121
 task: 01
 slug: alias-rules-editor
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Host: GET/PUT /api/projects/{id}/claim-settings (PlanningWorkflowApi pattern) + validator + MaxNamingRulesLength guard in SetClaimSettings + API/entity tests incl. onboard round-trip leg
@@ -43,11 +43,11 @@ The naming-rules text (and the coupled claim-stale threshold) becomes writable t
 </constraints>
 
 <acceptance-criteria>
-- [ ] PUT/GET /api/projects/{id}/claim-settings round-trip echoes both values.
-- [ ] Whitespace-only rules persist as null; threshold 0 stores; -1 → 400; 2001 chars → 400; unknown project → 404.
-- [ ] Onboard agentIdentity carries the saved rules via the API-driven test leg.
-- [ ] SetClaimSettings throws for rules > 2000 chars (entity pin).
-- [ ] dotnet build green; targeted Overmind.Api.Tests + Overmind.Core.Tests green.
+- [x] PUT/GET /api/projects/{id}/claim-settings round-trip echoes both values.
+- [x] Whitespace-only rules persist as null; threshold 0 stores; -1 → 400; 2001 chars → 400; unknown project → 404.
+- [x] Onboard agentIdentity carries the saved rules via the API-driven test leg.
+- [x] SetClaimSettings throws for rules > 2000 chars (entity pin).
+- [x] dotnet build green; targeted Overmind.Api.Tests + Overmind.Core.Tests green.
 </acceptance-criteria>
 
 <refs>
@@ -63,4 +63,8 @@ The naming-rules text (and the coupled claim-stale threshold) becomes writable t
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan slice 01 (batch breakdown; review: light).
+- 2026-10-06 [agent] — 121/01 coding round started
+- 2026-10-06 [agent] — First Api.Tests run showed 10 failures across ClaimSettingsApiTests + the extended onboard test: requests fell through to the SPA fallback (GET 200 html, PUT 405). Root cause was a stale Overmind.Host binary — the PostToolUse dotnet-build hook raced my own solution build, and the incremental check saw Program.cs as up-to-date against a dll written mid-edit. Code itself was verified correct via an out-of-tree WebApplication route dump (both routes register). After a forced rebuild: Api.Tests 672/672, Core.Tests 367/367, Infrastructure.Tests 692/692, Mcp.Tests 509/509 — all green. Reviewer note: if endpoints 404/405 in a test run, force a Host rebuild before debugging the code.
+- 2026-10-06 [agent] — Coding round complete — light review gate. Commit 392568f on main (no push). All 5 AC ticked; full serial test sweep green (Api 672, Core 367, Infrastructure 692, Mcp 509).
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 SUGGESTION (parity polish: over-limit 400 test could GET-assert non-persistence like its negative-threshold sibling — optional). Pattern fidelity to PlanningWorkflowApi 1:1, validation semantics per contract, auth-consistent, mutation-checked tests (removed cap → 500 caught), spot-checks 9/9 + 31/31 + build clean. Commit 392568f.
 </log>

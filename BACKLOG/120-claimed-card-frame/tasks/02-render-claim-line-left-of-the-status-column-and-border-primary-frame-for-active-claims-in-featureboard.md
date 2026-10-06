@@ -2,7 +2,7 @@
 feature: 120
 task: 02
 slug: claimed-card-frame
-status: inprogress
+status: done
 review: light
 created: 2026-10-06
 depends_on: 01
@@ -31,11 +31,11 @@ No FeatureClaimChip changes, no overview-panel or task-queue surfaces, no brief-
 </constraints>
 
 <acceptance-criteria>
-- [ ] Claimed card renders the claim line immediately left of the status column cluster.
-- [ ] Actively held claim (alive agent claim or human-held) → `border-primary` frame + `text-success` line.
-- [ ] Stale, ended, and null-liveness claims → `text-muted` line, NO frame.
-- [ ] Unclaimed cards render no claim element and keep today's exact classes.
-- [ ] `npm run lint && npx tsc --noEmit && npm test && npm run build` all green in web/.
+- [x] Claimed card renders the claim line immediately left of the status column cluster.
+- [x] Actively held claim (alive agent claim or human-held) → `border-primary` frame + `text-success` line.
+- [x] Stale, ended, and null-liveness claims → `text-muted` line, NO frame.
+- [x] Unclaimed cards render no claim element and keep today's exact classes.
+- [x] `npm run lint && npx tsc --noEmit && npm test && npm run build` all green in web/.
 </acceptance-criteria>
 
 <refs>
@@ -51,4 +51,7 @@ None at creation.
 <log>
 - 2026-10-06 [agent] — Task created from the validated plan, task 2; blockedBy task 01 (compile dependency on its helper exports).
 - 2026-10-06 [agent] — task 02 coding round started
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — Verified in built CSS: .border-border (pos 17533) is emitted before .border-primary (pos 19860), so the additive cardClaimActive && "border-primary" cn() entry wins over the base border-border; hover:border-border-strong keeps specificity (class + :hover) — unclaimed hover behavior untouched. Commit 3f706cc, gates: lint 0 errors (6 pre-existing warnings elsewhere), tsc clean, tests 254/254, build green.
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 taste SUGGESTION (hoist cardClaimActive into a const; left as-is). CSS-order verified independently against the built chunk, zero layout shift confirmed, helpers-only formatting. Commit 3f706cc.
 </log>

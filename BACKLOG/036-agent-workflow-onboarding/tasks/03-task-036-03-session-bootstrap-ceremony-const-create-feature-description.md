@@ -2,7 +2,7 @@
 feature: 036
 task: 03
 slug: agent-workflow-onboarding
-status: todo
+status: done
 review: light
 created: 2026-10-06
 brief: Adapter texts: shared CeremonyRouting const in SessionBootstrapPrompt.cs (both branches, reuses the pinned proof-flow phrases); planning_create_feature description extended to the proof-gated spec step; pins in PromptAndFailureModeTests (per branch) + PlanningToolContractTests. No other descriptions change.
@@ -31,10 +31,10 @@ The MCP session_bootstrap prompt carries the ceremony order + gate discipline at
 </constraints>
 
 <acceptance-criteria>
-- [ ] Both bootstrap branches carry the ceremony const; PromptAndFailureModeTests pins each branch and passes.
-- [ ] planning_create_feature description carries the proof-gated spec pointer; PlanningToolContractTests pin passes.
-- [ ] Existing prompt/handshake pins stay green (SessionBootstrap tests, HandshakeContractTests, MachineSurfaces_NeverSayFrozen).
-- [ ] dotnet build Overmind.sln green; dotnet test Overmind.sln --filter "PromptContractTests|PlanningToolContractTests|HandshakeContractTests" green.
+- [x] Both bootstrap branches carry the ceremony const; PromptAndFailureModeTests pins each branch and passes.
+- [x] planning_create_feature description carries the proof-gated spec pointer; PlanningToolContractTests pin passes.
+- [x] Existing prompt/handshake pins stay green (SessionBootstrap tests, HandshakeContractTests, MachineSurfaces_NeverSayFrozen).
+- [x] dotnet build Overmind.sln green; dotnet test Overmind.sln --filter "PromptContractTests|PlanningToolContractTests|HandshakeContractTests" green.
 </acceptance-criteria>
 
 <refs>
@@ -48,4 +48,8 @@ The MCP session_bootstrap prompt carries the ceremony order + gate discipline at
 
 <log>
 - 2026-10-06 [agent] — task created from validated plan 66a76b70 (slice 3).
+- 2026-10-06 [agent] — 036/03 coding round started
+- 2026-10-06 [agent] — CeremonyRouting const added to SessionBootstrapPrompt (both branches); planning_create_feature description now carries the proof-gated spec pointer; 2 PromptContractTests branch pins + 1 PlanningToolContractTests description pin added. Gates: build 0w/0e, Mcp.Tests 509/509 serial (-m:1), Api.Tests 663/663, dotnet format verify clean on changed files. Commit 5c336b3. Filter classes from AC4 ran green inside the full serial Mcp.Tests run; separate full-solution test invocation skipped — only Overmind.Mcp sources changed.
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers. Guard coverage confirmed: the anti-drift guard follows the const into both bootstrap branches automatically; complementary exact-text pins verified; ValidationProofRouting/CeremonyRouting complementary; description edit surgical. Spot-check 183/183. Commit 5c336b3.
 </log>

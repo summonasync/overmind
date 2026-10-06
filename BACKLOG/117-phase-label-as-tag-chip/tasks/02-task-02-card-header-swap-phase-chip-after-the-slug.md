@@ -2,7 +2,7 @@
 feature: 117
 task: 02
 slug: phase-label-as-tag-chip
-status: todo
+status: done
 review: light
 created: 2026-10-06
 depends_on: 01
@@ -34,12 +34,12 @@ On the board card, the phase label renders as a shared `Badge` chip (default neu
 </constraints>
 
 <acceptance-criteria>
-- [ ] Phase chip renders on the slug line immediately after the slug, inside the card header link, styled with the shared `Badge` neutral tone — consistent with the version/spec/plan chips.
-- [ ] All seven phase values render through the chip.
-- [ ] Null/absent/blank phase renders no chip at all — no empty chip box, no layout shift in the header row or slug line.
-- [ ] The old plain-text phase span and its `Ceremony phase: …` tooltip are gone from the right-side group; blocked badge and status select keep their order.
-- [ ] Long slug still truncates on one line with the chip visible; slug and chip never wrap.
-- [ ] `npm run lint && npx tsc --noEmit && npm test && npm run build` green in `web/`.
+- [x] Phase chip renders on the slug line immediately after the slug, inside the card header link, styled with the shared `Badge` neutral tone — consistent with the version/spec/plan chips.
+- [x] All seven phase values render through the chip.
+- [x] Null/absent/blank phase renders no chip at all — no empty chip box, no layout shift in the header row or slug line.
+- [x] The old plain-text phase span and its `Ceremony phase: …` tooltip are gone from the right-side group; blocked badge and status select keep their order.
+- [x] Long slug still truncates on one line with the chip visible; slug and chip never wrap.
+- [x] `npm run lint && npx tsc --noEmit && npm test && npm run build` green in `web/`.
 </acceptance-criteria>
 
 <refs>
@@ -54,4 +54,13 @@ On the board card, the phase label renders as a shared `Badge` chip (default neu
 
 <log>
 - 2026-10-06 [agent] — task cut from validated plan task 02; blockedBy task 01 per the plan's 01 → 02 chain.
+- 2026-10-06 [agent] — 117/02 coding round started
+- 2026-10-06 [agent] — 117/02: chip wired on the slug line — flex row inside the header link, shared Badge default neutral tone, shrink-0
+- 2026-10-06 [agent] — 117/02: chip renders cardPhaseLabel verbatim — no mapping or filtering, every phase value flows through the same path
+- 2026-10-06 [agent] — 117/02: chip renders only when phaseLabel !== null; slug span keeps min-w-0 truncate so a null phase leaves the header row untouched
+- 2026-10-06 [agent] — 117/02: old uppercase span and Ceremony phase tooltip deleted from the right-side group; blocked badge then FeatureStatusSelect order preserved
+- 2026-10-06 [agent] — 117/02: slug row is flex nowrap — slug min-w-0 truncate, chip shrink-0, so a long slug collapses before pushing the chip out
+- 2026-10-06 [agent] — 117/02: gates green in web/ — eslint 0 errors (6 pre-existing warnings elsewhere), tsc clean, 257/257 tests, next build ok
+- 2026-10-06 [agent] — coding round complete — light review gate
+- 2026-10-06 [agent] — light review APPROVED — 0 blockers, 1 OBSERVATION (Badge capitalize renders «Grooming» vs old uppercase — inherent to Badge reuse, noted for the human's visual tap). Spot-check 16/16. Commit 1133e30.
 </log>
