@@ -3,6 +3,8 @@ pack-win.ps1 - build the Overmind Windows installer (dist/overmind-<version>-set
 
 Usage: build\windows\pack-win.ps1 -Version <x.y.z> -BundleVersion <int> [-CrewKit <path>] [-SkipWeb]
 
+-CrewKit defaults to <repo>\src\OvermindCrewKit (the embedded crew clone); the flow is repo -> bundle -> home.
+
 Publishes host + mcp as self-contained win-x64, stages the web static export and the crew kit
 into dist\stage-win following build\dist-layout.env, then compiles build\windows\overmind.iss
 with Inno Setup. Emits the setup exe plus a .sha256 sidecar next to it in dist\.
@@ -15,7 +17,7 @@ param(
     [Parameter(Mandatory = $true)]
     [int]$BundleVersion,
 
-    [string]$CrewKit = "$env:USERPROFILE\.claude",
+    [string]$CrewKit = '',
 
     [switch]$SkipWeb
 )
@@ -45,6 +47,10 @@ $stageDir = Join-Path $distDir 'stage-win'
 $issPath = Join-Path $scriptDir 'overmind.iss'
 $iconPath = Join-Path $repoRoot 'src\Overmind.Host\Assets\overmind.ico'
 $layoutPath = Join-Path $buildDir 'dist-layout.env'
+
+if (-not $CrewKit) {
+    $CrewKit = Join-Path $repoRoot 'src\OvermindCrewKit'
+}
 
 function Test-CommandOnPath {
     param([string]$Name)
@@ -120,6 +126,11 @@ if (-not (Test-Path $CrewKit)) {
     Fail "crew kit source not found: $CrewKit"
 }
 
+$kitDirty = & git -C $CrewKit status --porcelain 2>$null
+if ($LASTEXITCODE -eq 0 -and $kitDirty) {
+    Write-Warning "kit working tree has uncommitted changes; bundling as-is: $CrewKit"
+}
+
 foreach ($item in $crewItems) {
     $itemPath = Join-Path $CrewKit $item
     if (-not (Test-Path $itemPath)) {
@@ -128,7 +139,7 @@ foreach ($item in $crewItems) {
 }
 
 $skillCount = 0
-foreach ($sub in @('skills', 'agents')) {
+foreach ($sub in @('.claude\skills', '.claude\agents')) {
     $subPath = Join-Path $CrewKit $sub
     if (Test-Path $subPath) {
         $skillCount += (Get-ChildItem -LiteralPath $subPath -Recurse -Filter 'SKILL.md' -ErrorAction SilentlyContinue | Measure-Object).Count
