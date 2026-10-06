@@ -71,8 +71,6 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         var droppedIds = droppedRows.Concat(keptForeignRows).Select(r => r.Id).ToHashSet();
         rows.RemoveAll(r => droppedIds.Contains(r.Id));
 
-        plans.Add(BuildBacklogPlan(root, features));
-
         // Captured before GuardLocalEdits prunes byte-stable plans: those rows stay tracked, not stale.
         var plannedPaths = plans.Select(p => p.RelativePath).ToHashSet(PathGuard.PathComparer);
 
@@ -524,19 +522,6 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         return builder.ToString();
     }
 
-    private FilePlan BuildBacklogPlan(string root, List<PlanningFeature> features)
-    {
-        var absolute = PathGuard.ResolveUnderRoot(root, BacklogIndexRelativePath);
-        var existing = File.Exists(absolute) ? File.ReadAllText(absolute) : null;
-        var block = ManagedBlock.Render(features);
-        var content = ManagedBlock.Merge(existing, block);
-
-        return FilePlan.Create(root, featureId: null, BacklogIndexRelativePath, content) with
-        {
-            Sha256 = ContentHash.Sha256(block),
-        };
-    }
-
     private static void GuardOverwrites(
         List<FilePlan> plans, List<PlanningMaterializedFile> rows, string otherRoot, bool force,
         List<string> warnings, List<PlanningMaterializationSkip> refused)
@@ -660,16 +645,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         List<PlanningMaterializedFile> rows, ISet<string> plannedPaths) =>
         rows.Where(r => !plannedPaths.Contains(r.RelativePath)).ToList();
 
-    // Markers gone reads as null: the whole index is hand-written territory then and Merge only
-    // re-appends the block, so nothing on disk is lost and the guard stays out of it.
     private static async Task<string?> HashTrackedDiskCopyAsync(FilePlan plan, CancellationToken ct)
     {
-        if (PathGuard.PathsEqual(plan.RelativePath, BacklogIndexRelativePath))
-        {
-            var index = await File.ReadAllTextAsync(plan.AbsolutePath, ct);
-            return ManagedBlock.TryExtract(index, out var block) ? ContentHash.Sha256(block) : null;
-        }
-
         var bytes = await File.ReadAllBytesAsync(plan.AbsolutePath, ct);
         return Convert.ToHexString(SHA256.HashData(bytes));
     }

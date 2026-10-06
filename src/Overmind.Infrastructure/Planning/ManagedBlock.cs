@@ -1,45 +1,9 @@
-using Overmind.Core;
-
 namespace Overmind.Infrastructure.Planning;
 
 internal static class ManagedBlock
 {
     public const string StartMarker = "<!-- overmind:planning:start -->";
     public const string EndMarker = "<!-- overmind:planning:end -->";
-
-    public static string Render(IEnumerable<PlanningFeature> features) =>
-        string.Join(
-            "\n",
-            features.Select(f =>
-                $"- `{StatusMarker(f.Status)}` {f.Slug} → `BACKLOG/{f.Slug}/` — {f.Title}"));
-
-    public static string Merge(string? existingContent, string block)
-    {
-        if (existingContent is null)
-        {
-            return $"# BACKLOG\n\n{StartMarker}\n{block}\n{EndMarker}\n";
-        }
-
-        var start = existingContent.IndexOf(StartMarker, StringComparison.Ordinal);
-        if (start >= 0)
-        {
-            var end = existingContent.IndexOf(EndMarker, start + StartMarker.Length, StringComparison.Ordinal);
-            if (end >= 0)
-            {
-                return existingContent[..start] +
-                       StartMarker + "\n" + block + "\n" + EndMarker +
-                       existingContent[(end + EndMarker.Length)..];
-            }
-        }
-
-        var separator = existingContent.EndsWith("\n\n", StringComparison.Ordinal)
-            ? string.Empty
-            : existingContent.EndsWith('\n')
-                ? "\n"
-                : "\n\n";
-
-        return $"{existingContent}{separator}{StartMarker}\n{block}\n{EndMarker}\n";
-    }
 
     public static bool TryExtract(string content, out string block)
     {
@@ -101,12 +65,4 @@ internal static class ManagedBlock
 
         return prefix + suffix;
     }
-
-    private static string StatusMarker(PlanningFeatureStatus status) => status switch
-    {
-        PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready => "[ ]",
-        PlanningFeatureStatus.InProgress or PlanningFeatureStatus.Review => "[~]",
-        PlanningFeatureStatus.Done => "[x]",
-        _ => "[ ]",
-    };
 }
