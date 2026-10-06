@@ -2,7 +2,7 @@
 feature: 049
 slug: backlog-index-retirement
 status: draft
-priority: p2
+priority: p0
 version: 1
 created: 2026-09-22
 ---

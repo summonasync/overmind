@@ -55,12 +55,10 @@ Spec 3748e264 (validated), plan 98cb3e9a — task 3 of 3, AFTER 01+02 (its e2e v
 </refs>
 
 <obstacles>
-<obstacles>
 - Task/scope text said "vitest suite" — the web repo has no vitest; tests run on node's built-in runner (npm test = node --test "tests/**/*.test.mts", tests/*.test.mts). Followed the repo pattern, suite green 36/36.
 - Widened filter is intentionally NOT a superset of isAwaitingApproval: the spec adds the unread check (title drops on mark-all-read) while the bell filter stays read-tolerant — both pinned in tests to keep 088 bell behavior frozen.
 - More-button label made conditional ("open approvals" / "open all") to match the centerKind decision; scope only asked for initialKind but a fixed "open approvals" label would lie on a mixed set.
 - Title counts the pre-TTL-gate awaiting set: bubble discipline (14d gate, dismiss, nag) hides rows but unread+unreplied items still deserve the tab hint; title and bubble can therefore diverge only for items older than 14 days.
-</obstacles>
 </obstacles>
 
 <log>

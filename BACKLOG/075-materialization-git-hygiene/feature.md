@@ -2,7 +2,7 @@
 feature: 075
 slug: materialization-git-hygiene
 status: draft
-priority: p2
+priority: p1
 version: 1
 created: 2026-09-24
 ---

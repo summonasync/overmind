@@ -49,10 +49,8 @@ Spec 3748e264 (validated), plan 98cb3e9a — task 2 of 3, parallel with 01 (disj
 </refs>
 
 <obstacles>
-<obstacles>
 - The url passthrough pin's canned body contains `&` in the query string; it only survives JSON serialization verbatim because Program.cs already swaps the SDK's HTML-safe encoder for UnsafeRelaxedJsonEscaping at startup (same mechanism the Cyrillic quickstart pins rely on). If that encoder patch ever degrades to escaped output, the pin (and Cyrillic pins) will fail — signal, not noise.
 - url field shape in Canned.NotificationWithUrlJson mirrors the spec's <browser-origin>/dashboard?project=…&feature=…&tab=…; task 01 owns the exact host stamp — if its final shape differs in field placement the passthrough pin still holds (verbatim proxy), only the canned literal would need a touch-up.
-</obstacles>
 </obstacles>
 
 <log>

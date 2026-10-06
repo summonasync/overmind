@@ -53,9 +53,7 @@ Executor reads ONLY this file. Prerequisite: task 01 (guard + sourced Update) la
 </refs>
 
 <obstacles>
-<obstacles>
 - 2026-09-27 [083/02] Scope wording said the hand-crafted log rewrite returns "409-family"; the existing 078 mapping routes LogHistoryNotAppendable (PlanningFailureKind.InvalidInput) to 400 with the typed ProblemDetails title. No behavior changed in this task — the test asserts 400 + title "LogHistoryNotAppendable", which satisfies the AC ("LogHistoryNotAppendable surfaced"). Flag for the reviewer in case the 409 mapping itself should change in a follow-up.
-</obstacles>
 </obstacles>
 
 <log>

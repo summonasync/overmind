@@ -16,13 +16,11 @@ brief: Clobber-guard over ENTRIES/ + report/status lines + tests
 </goal>
 
 <scope>
-<scope>
 - Clobber-guard over ENTRIES/ tracked files (hand-edited → refusal; force → per-file warnings) — pins on the real code paths.
 - Frontmatter sanitization (review-051-01 W1): title/tags must not carry \n/\r into the file — validator-level or EntryDocument sanitize, pinned.
 - Archive-strategy entry files pinned (N1); rename-in-place pinned (N2 — mechanism identical to the pinned tombstone pair).
 - Skipped/refused lines ride the existing materialize report/status surfaces (074).
 - Tests: guard refusal, force pass with warnings, report lines, sanitization, archive, rename.
-</scope>
 </scope>
 
 <acceptance-criteria>

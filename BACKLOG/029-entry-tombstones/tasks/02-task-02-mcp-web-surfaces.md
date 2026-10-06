@@ -16,20 +16,16 @@ Both surfaces see tombstones as first-class.
 </goal>
 
 <scope>
-<scope>
 - MCP delete_entry gains `reason`; list filter type=tombstone verified through the adapter (NormalizeType/ReadableEntryTypes admit tombstone — review-029-01 W2).
 - MCP write_entry admits type=tombstone (spec keeps hand-made burials open) and the delete_entry description stops claiming "no tombstones, no undo".
 - Web: tombstone in type filters, muted tone for rows, create flow allows the type, tombstone rows show provenance/reason.
 - Tests: adapter contract, web rendering states.
 </scope>
-</scope>
 
-<acceptance-criteria>
 <acceptance-criteria>
 - [x] delete_entry reason — contract-tested.
 - [x] write_entry type=tombstone + list filter admitted through the adapter — contract-tested.
 - [x] Web filter/tone/create states — pinned.
-</acceptance-criteria>
 </acceptance-criteria>
 
 <refs>

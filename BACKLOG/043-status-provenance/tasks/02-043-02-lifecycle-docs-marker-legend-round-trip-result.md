@@ -16,7 +16,6 @@ The quickstart/onboard lifecycle block states the three factual rules the field 
 
 <context>
 Task 01 stamped the lines; this task makes the rules they express discoverable BEFORE an agent hits them. The three rules come from the spec's code survey (D3): done + new artifact stays done; no plan → no auto-promotion even at 100% tasks done; import restores statuses verbatim (imported done ≠ auto-closed).
-</goal>
 
 <scope>
 - Quickstart (OnboardQuickstart.Text) lifecycle block: add the three factual rules (one line each, precise wording) and the marker legend (one line: `[agent]`/`[ui]`/`[auto]`/`[import]` in log lines mark who moved a status).

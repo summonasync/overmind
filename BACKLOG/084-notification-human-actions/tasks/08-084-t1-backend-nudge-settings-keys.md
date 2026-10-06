@@ -10,9 +10,7 @@ created: 2026-09-28
 # 084/T1 — Backend: nudge settings keys
 
 <goal>
-<goal>
 SUPERSEDED — accidental duplicate of 084/T1 (task 3395e5a8, order 3), created 2026-09-28 by a coder upsert that omitted `order` and appended a new task instead of updating the original. All real work, obstacles and acceptance evidence live on 3395e5a8. Safe to delete via UI.
-</goal>
 </goal>
 
 <scope>

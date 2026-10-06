@@ -2,7 +2,7 @@
 feature: 123
 slug: project-name-typography
 status: draft
-priority: p2
+priority: p0
 version: 1
 created: 2026-10-04
 ---

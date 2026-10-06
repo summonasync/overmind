@@ -43,11 +43,9 @@ Cheap feature read: planning_read_feature(projectId, slug, includeArtifacts=fals
 </refs>
 
 <obstacles>
-<obstacles>
 - Consequential edits beyond the four listed files: compact response needed a new contract (PlanningFeatureRosterResponse) and mapper method (PlanningMapper.ToFeatureRosterResponse) — both in scope by necessity, flagged here. MCP planning_read_feature description is pinned byte-exact by tests/Overmind.Mcp.Tests/PlanningToolContractTests.cs (not StatusModelContractTests as the briefing guessed) — the pin was extended after the preserved prefix and the expected string updated in place.
 - Behavior facts learned while writing tests: LogNote on first artifact create records no <log> entry (only body marker); task kind is born in "todo"; feature auto-log ("<log> ... artifact created → inProgress </log>") is appended to the feature body on create.
 - Environment: one solution-wide concurrent `dotnet test` (all four test projects in parallel) showed 4 Api + 1 Mcp failures while both project-scoped runs were fully green in repeated runs (518/518, 390/390, twice each, before and after resume); the follow-up diagnostic run was OOM-killed (exit 137). Treated as host resource contention, not a code issue — verification numbers come from the project-scoped runs.
-</obstacles>
 </obstacles>
 
 <log>

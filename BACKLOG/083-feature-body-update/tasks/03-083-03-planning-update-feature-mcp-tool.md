@@ -52,10 +52,8 @@ Executor reads ONLY this file. Prerequisite: task 02 (agent route) landed. Patte
 </refs>
 
 <obstacles>
-<obstacles>
 - Param order: logNote sits before the optional title/body/priority (task listed it last) — C# forbids a required parameter after optional ones, and the MCP schema derives optionality from defaults. Schema requirement holds: logNote is in inputSchema.required.
 - SDK 2.2.0 does not emit [McpServerTool] flag hints (annotations) in the wire tools/list payload — verified live: the annotations node is absent. Mutation flags (Destructive=false, Idempotent=false, no ReadOnly) are pinned at the attribute level in OvermindPlanningTools.cs, identical to every other mutation tool; the live pins cover name, description and schema.
-</obstacles>
 </obstacles>
 
 <log>

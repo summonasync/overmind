@@ -2,7 +2,7 @@
 feature: 100
 slug: tech-debt-revalidation
 status: draft
-priority: p2
+priority: p0
 version: 1
 created: 2026-09-30
 ---

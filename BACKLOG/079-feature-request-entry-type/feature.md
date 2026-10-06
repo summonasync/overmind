@@ -2,7 +2,7 @@
 feature: 079
 slug: feature-request-entry-type
 status: draft
-priority: p2
+priority: p1
 version: 1
 created: 2026-09-25
 ---

@@ -48,10 +48,8 @@ Executor reads ONLY this file. Prerequisite: task 03 (fields live on the API). T
 </refs>
 
 <obstacles>
-<obstacles>
 - 2026-09-28 [executor] Live dev-server check against the running Overmind instance is not possible until the 081 wave deploys: the production DB (~/.overmind/overmind.db) has no PlanningTaskDependencies table yet, so no feature carries task edges there. Manual check was done as a real react-dom/server smoke render of the actual components with a 3-task chain instead (documented in log).
 - 2026-09-28 [executor] planning_patch_artifact acText tick failed silently twice on the AC containing "muting; read-only." — ticked via acIndex instead.
-</obstacles>
 </obstacles>
 
 <log>

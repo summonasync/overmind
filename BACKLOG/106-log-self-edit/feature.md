@@ -2,7 +2,7 @@
 feature: 106
 slug: log-self-edit
 status: draft
-priority: p2
+priority: p1
 version: 1
 created: 2026-10-03
 ---

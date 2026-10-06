@@ -51,11 +51,9 @@ Executor reads ONLY this file. Prerequisites: tasks 01-02 done. 030 LESSON: the 
 </refs>
 
 <obstacles>
-<obstacles>
 - 2026-09-27 [coder] SCOPE EXTENSION (sanctioned by orchestrator, plan deviation): coder 081/02 did not touch the batch door — PlanningArtifactService.UpsertTasksAsync did not accept blockedBy on item contracts, while the spec promises blockedBy on both upsert surfaces and MCP task 04 forwards the field to the batch. Added in this task: PlanningTaskUpsert.BlockedBy (optional, null = untouched, [] = clear), Host PlanningTaskUpsertRequest.BlockedBy + CreateTasks forwarding, and batch edge staging via TaskDependencyService inside the existing batch SaveChanges. Mechanics: two-phase staging (all bodies first, then edges per item) so a batch may reference tasks created later in the same batch; siblings load gained .Include(BlockedBy); failures wrap as TaskBatchItem(index) and persist nothing (single SaveChanges). Tests: Infra (edges in one save, forward reference within batch, unknown order rolls back the whole batch) + Api (batch creates edges and echoes them, unknown order 400 names tasks[1] and writes nothing, cycle across items 409 naming tasks[2] and the path).
 - 2026-09-27 [coder] Build gate: task-02 test file carried a pre-existing CS4014 warning (unawaited NSubstitute DidNotReceiveWithAnyArgs().SyncAsync in TaskDependencyServiceTests.ReplaceEdgesAsync_UnchangedSet_DoesNotSyncMaterialization) that broke the 0W/0E gate; fixed minimally by awaiting the assertion call. dotnet format --verify-no-changes reports issues only in EF-generated migration files (generator-owned style, incl. task 01's migration) — none in files touched here.
 - 2026-09-27 [coder] Design note: blocked/blockedBy serialize only when the task has at least one edge (documents and edge-less tasks omit both) — this is what makes the byte-identical pre-081 AC hold; a task with closed edges still reports blocked=false + blockedBy=[orders]. Roster/full-read/current/batch-echo all pass a TaskBlockedState lookup keyed by order; blocked flag mirrors TaskDependencyService closure semantics (done|review closes).
-</obstacles>
 </obstacles>
 
 <log>

@@ -47,11 +47,9 @@ Executor reads ONLY this file. Prerequisite: task 02 done. 030 precedent (copy t
 </refs>
 
 <obstacles>
-<obstacles>
 - 2026-09-28 — PlanningFeatureService ctor gained TaskDependencyService, so Host AddBacklogImportPipeline (CLI-only registration path) needed one DI line `AddScoped<TaskDependencyService>()`; without it the import CLI exits 1. Anti-scope "no Host" read as no Host feature work — mandatory DI wiring, mirrors the task 02 registration in AddOvermind.
 - 2026-09-28 — Existing tests used `depends_on` on task files as the canonical PRESERVED-unknown-key example (BacklogImporterTests Import_UnknownFrontmatterKeys_PreservedOnArtifactAndListedPerFile, BacklogImportMaterializationTests Import_PreservedFrontmatterKeys_RoundTripThroughMaterializedFile); both rewritten to use `epic: demo` since depends_on is now a parsed structural key for tasks. FrontmatterKeyRegistry seeded palette untouched.
 - 2026-09-28 — Edge restore must run AFTER the first SaveChangesAsync inside the import transaction: freshly restored task artifacts are invisible to the siblings query before the save. RestoreFromImportAsync stages edges additively (existing edges survive, import is additive like 030) and reports a cycle as an unlinked note instead of failing the import.
-</obstacles>
 </obstacles>
 
 <log>

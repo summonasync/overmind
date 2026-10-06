@@ -43,7 +43,6 @@ MPA navigation: every click is a full page load (Next 16 static-export router br
 - [ ] Expanding nodes, navigating away and back keeps the tree expanded (sessionStorage).
 - [ ] Entries nav item deep-links to last active project after one was clicked; plain `/entries` in a fresh tab.
 - [ ] Projects nav label still opens the full list at `/`.
-</constraints>
 
 <refs>
 - @../feature.md

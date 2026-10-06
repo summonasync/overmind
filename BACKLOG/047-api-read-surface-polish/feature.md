@@ -2,7 +2,7 @@
 feature: 047
 slug: api-read-surface-polish
 status: draft
-priority: p2
+priority: p0
 version: 1
 created: 2026-09-22
 ---

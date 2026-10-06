@@ -53,12 +53,10 @@ Executor reads ONLY this file. Guard shape to port: `PlanningArtifact.RequireLog
 </refs>
 
 <obstacles>
-<obstacles>
 - Version semantics pinned, NOT changed: `PlanningFeature.Update` bumps Version only when Status != Draft (Draft edit keeps it); the same rule now also covers note-append updates. Pinned explicitly by `Update_VersionPinnedToBumpOnlyOutsideDraft` plus existing Update_InDraft/AfterLeavingDraft pins. Plan's Version-risk follow-up can rely on this.
 - Import door collision (scope deviation, test-only): the new guard in `Update` broke `BacklogImporterTests.Import_ArtifactOnlyInDatabase_KeptAndReported`. Root cause: `UpsertAsync` → `TransitionOnArtifactCreate` appends an `[auto] artifact created → inProgress` line to the feature body; the test's hand-written feature.md did not carry it, so import was silently DROPPING the board log line — exactly seam #74, now rejected on the import door too. Fix touched only the test fixture: feature.md now mirrors the feature's actual board log lines verbatim (dates copied from the entity, nothing hardcoded); test semantics (kept task 5, reported) unchanged. No production Infrastructure code touched.
 - Heads-up for tasks 02-03: with the guard live in `Update`, any "board ahead of disk" feature import now throws PlanningException.LogHistoryNotAppendable from `PlanningFeatureService.ImportAsync`. If the migration/import door must tolerate stale disk bodies, that bypass needs to be designed in task 02/03 deliberately.
 - Test-authoring quirk: first draft of the pure-append test miscounted (incoming body already carried a new log line, plus the note = 4 lines); reduced it to a clean note-append against the stored body.
-</obstacles>
 </obstacles>
 
 <log>

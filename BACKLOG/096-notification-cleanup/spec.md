@@ -13,7 +13,6 @@ Human-door housekeeping for AgentNotification: per-row delete, bulk «mark all r
 </outcome>
 
 <decisions>
-<decisions>
 - Hard delete, no archive/undo — notifications are ephemeral signal, not records. Simplest mental model: deleted = gone.
 - Endpoints (human door, src/Overmind.Host/Api/NotificationsApi.cs, project resolved by existing convention — the door is GLOBAL, no projectId parameters):
   - `DELETE /api/notifications/{id:guid}` → 204; unknown id → 404 (same error shape as mark-read). Works on any row, including replied proof rows — explicit single-row act.
@@ -25,7 +24,6 @@ Human-door housekeeping for AgentNotification: per-row delete, bulk «mark all r
 - Web (FSD, features/notifications slice): api.ts gains deleteNotification/readAllNotifications/clearReadNotifications on the same relative paths; lib/use-notification-mutations.ts gains three mutations; optimistic cache surgery on the notifications query (remove item / patch ReadAt / drop the read tail minus replied rows) + family-wide invalidation (notificationKeys.all — future 087/093 queries under the same family stay fresh); unreadCount derives from cache patch so the badge moves instantly.
 - UI placement (web/src/widgets/app-shell/ui/notification-center.tsx): header row of the center gets two ghost buttons — «Mark all read» (disabled when unreadCount=0) and «Clear read» (disabled when no clearable read items in the loaded list); notification-row.tsx gets a quiet × button (visible on hover/focus, aria-label «Delete notification», not rendered while the reply form of that row is pending). Destructive actions are one-click (no confirm modal) — the whole point is cheap cleanup; info lost is by design.
 - MCP agent door: not extended. Agents create; humans clean.
-</decisions>
 </decisions>
 
 <open-questions>
@@ -51,13 +49,11 @@ Web:
 </anti-scope>
 
 <acceptance-criteria>
-<acceptance-criteria>
 - [ ] DELETE /api/notifications/{id} removes the row; second call 404. Works on replied proof rows too (explicit per-row act).
 - [ ] read-all marks all unread read (badge → 0), returns marked count; clear-read deletes the read set minus replied proof rows (077 trail preserved), returns deleted count.
 - [ ] Bell center: «Mark all read» and «Clear read» work with optimistic badge/list updates; per-row × removes the row without reload.
 - [ ] Replied/approval flow unbroken: reply still marks read (084 invariant), unread approvals survive read-all and clear-read; replied proof rows survive clear-read.
 - [ ] lint + tsc + build green; dotnet test green including new coverage.
-</acceptance-criteria>
 </acceptance-criteria>
 
 <refs>

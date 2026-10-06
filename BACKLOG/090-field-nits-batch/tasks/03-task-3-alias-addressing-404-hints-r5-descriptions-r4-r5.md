@@ -53,12 +53,10 @@ A typoed artifactId must not dead-end the agent: artifacts become addressable by
 </refs>
 
 <obstacles>
-<obstacles>
 - Scope named three bare artifact-404 sites (PlanningArtifactsApi: GetArtifact/GetVersions/UpdateArtifact), but the agent door (AgentPlanningApi.cs) carried two more bare "Artifact '...' was not found." texts — agent GetArtifact and agent Validate. The failing agent-door 404 pin surfaced them; both now carry the same hint via PlanningException.ArtifactNotFoundHint, per the goal (every artifact-not-found text teaches the format).
 - Briefing placed the no-plan description assertions in tests/Overmind.Api.Tests — impossible there: tool descriptions live in Overmind.Mcp and are not visible from the Api test project. They live in tests/Overmind.Mcp.Tests/PlanningToolContractTests.cs (UpsertArtifactAndCurrentTaskDescriptions_CarryTheNoPlanReviewRule) instead.
 - Making artifactId optional on planning_set_status/planning_append_log forces status/logNote/note to the first parameter position (C# requires defaults after the first optional). MCP calls are JSON named arguments, so wire behavior is unchanged; all existing tool pins pass untouched.
 - Canned fixture PlanningArtifactNotFoundJson updated to the new backend text so the adapter-relay test reflects the real response shape.
-</obstacles>
 </obstacles>
 
 <log>

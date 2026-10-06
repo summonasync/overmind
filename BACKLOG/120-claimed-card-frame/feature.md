@@ -2,7 +2,7 @@
 feature: 120
 slug: claimed-card-frame
 status: draft
-priority: p2
+priority: p0
 version: 1
 created: 2026-10-04
 ---

@@ -55,12 +55,10 @@ Spec ded04f10 v2 (validated), plan 7a436aba — task 1 of 2, before the web task
 </refs>
 
 <obstacles>
-<obstacles>
 - GetOverviewAsync signature: CancellationToken-only -> (bool includeHidden, CancellationToken ct). Chose a bool param over a separate archive method because ListRepliesAsync already carries its bool includeRead on the service with the default applied at the endpoint (bool includeHidden = false on NotificationsApi.List) — param-on-service is the house shape and the single caller (NotificationsApi.List) was updated. No separate method needed.
 - NotificationResponse contract: added trailing DateTime? HiddenAt (required by the includeHidden pin "reveals with HiddenAt set"); NotificationMapper.ToResponse passes it through. AgentNotificationResponse (agent create door) deliberately left without HiddenAt — a fresh create row is always unhidden. Replies endpoint shares NotificationResponse, so hidden rows there now expose their HiddenAt too — harmless additive JSON, web consumers untouched (task 02 scope).
 - Migration file rename: dotnet-ef emitted 20260929110515_; renamed to 20260929000000_ and synced the [Migration] attribute to match the hand-set-timestamp convention of the latest migrations (20260925100000_, 20260927000000_). No db had applied the pre-rename id.
 - dotnet format flags IDE0161 (block-scoped namespace) on the generated migration; all existing migration files share that dotnet-ef shape, kept as-is for consistency.
-</obstacles>
 </obstacles>
 
 <log>

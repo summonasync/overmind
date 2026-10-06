@@ -42,10 +42,7 @@ Human-door housekeeping API: удалить одну нотификацию, п�
 </refs>
 
 <obstacles>
-<obstacles>
-<obstacles>
 - 2026-09-28 [coder] — No real quirks. Convention calls made: DeleteAsync returns bool (true → 204, false → HttpErrors.NotFound 404, same shape as mark-read); count responses carried as ReadAllNotificationsResponse(int Marked) / ClearReadNotificationsResponse(int Deleted) in NotificationContracts.cs; bulk paths are EF ExecuteUpdate/ExecuteDelete (first usage in the codebase, SQLite supports both).
-</obstacles>
 </obstacles>
 
 <log>

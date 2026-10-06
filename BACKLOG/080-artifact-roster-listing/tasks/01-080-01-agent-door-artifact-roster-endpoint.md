@@ -57,11 +57,9 @@ Executor reads ONLY this file. Spec: feature 080 spec artifact (365d4dff, valida
 </refs>
 
 <obstacles>
-<obstacles>
 - Scope pointed at an existing acTicked/acTotal mapping used by planning_read_feature — no such mapping exists in the codebase. Used the single shared AC parser PlanningSections.ParseAcceptanceCriteria (the same one PlanningArtifactService.UntickedAcWarning counts with): acTicked = items with Checked == true, acTotal = all "- " items. No second parser introduced; the counts mapping debuts in this task.
 - Test seed initially set a brief on the spec and got 400 BriefNotAllowedForKind — brief is already task-only at write time, which is also why docs can never carry brief in the roster (enforced upstream, not just omitted in the response shape).
 - During the session the board's own materialization touched BACKLOG.md and BACKLOG/080-artifact-roster-listing/* on disk (mirror churn from task creation, not hand edits) — outside the diff-confinement constraint but owned by the board, left untouched.
-</obstacles>
 </obstacles>
 
 <log>
