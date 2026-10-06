@@ -82,6 +82,11 @@ Rules:
 - **Pin the feature you are working on** (`planning_set_current`) the moment it enters active
   work — mandatory, not optional: the board's pinned current feature is how every runtime and
   every session knows what is in flight. Prefer the pinned feature; ask before switching.
+- Your alias is your own STABLE personal name — pick it per the project's naming rules from
+  the agentIdentity block of the overmind_onboard payload, and reuse the SAME alias in every
+  session so board history stays attributable. Vendor is your runtime (claude, qwen, …); two
+  agents on the same runtime must not look identical — differentiate by alias. The defaults
+  (agent / unknown) are placeholders: replace both before claiming.
 - A **STOP line** from `planning_current_task` is authoritative — surface it to the user verbatim,
   never work around it.
 - Every status move carries a `logNote` explaining WHY. Unexplained moves are rejected by design.

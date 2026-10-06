@@ -84,6 +84,11 @@ Rules:
 - **Claim the feature you are working on** (`planning_claim_feature`) the moment it enters active
   work — before the first feature mutation, not after. The claim is how every runtime and every
   session knows what is in flight; full practice in **Claims workflow** below.
+- Your alias is your own STABLE personal name — pick it per the project's naming rules from
+  the agentIdentity block of the overmind_onboard payload, and reuse the SAME alias in every
+  session so board history stays attributable. Vendor is your runtime (claude, qwen, …); two
+  agents on the same runtime must not look identical — differentiate by alias. The defaults
+  (agent / unknown) are placeholders: replace both before claiming.
 - A **STOP line** from `planning_current_task` is authoritative — surface it to the user verbatim,
   never work around it.
 - Every status move carries a `logNote` explaining WHY. Unexplained moves are rejected by design.
