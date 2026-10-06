@@ -33,7 +33,7 @@ Rules:
 To refresh this block, re-run `squeezr mcp install --project`.
 <!-- /squeezr:project-instructions -->
 
-Project-level rules for AI coding agents. System design: `CONTEXT.md`. Conventions and repo layout: `STRUCTURE.md`. Decision history (ADRs): `TECHNICAL-SOLUTIONS.md`. Work tracking: `BACKLOG.md` + `BACKLOG/` (index statuses, feature folders, task contracts). Read them before changing anything — this file is the entry point, not a replacement.
+Project-level rules for AI coding agents. System design: `CONTEXT.md`. Conventions and repo layout: `STRUCTURE.md`. Decision history (ADRs): `TECHNICAL-SOLUTIONS.md`. Work tracking: the Overmind board (web UI / MCP — the live index) + `BACKLOG/` (materialized feature folders and task contracts; no `BACKLOG.md` index exists). Read them before changing anything — this file is the entry point, not a replacement.
 
 ## What this is
 

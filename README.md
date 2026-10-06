@@ -26,7 +26,7 @@
 
 ### Статус
 
-Альфа. MVP отгружен (`001-overmind-mvp`, 9 тасков: HTTP API, скилл-киты с материализацией, FTS + опциональная семантика, MCP-адаптер, веб-UI, трей-хост), сверху легли `004-projects-tree-view` и `005-tree-workspace`. В работе `006-planning` — церемония feature → spec → plan → task → result как сущность первого класса (готовы 3 из 11 тасков: домен, схема, human door API). Дальше по индексу `002-kit-library`, затем `003-bundled-installer`. Живой срез — в `BACKLOG.md`.
+Альфа. MVP отгружен (`001-overmind-mvp`, 9 тасков: HTTP API, скилл-киты с материализацией, FTS + опциональная семантика, MCP-адаптер, веб-UI, трей-хост), сверху легли `004-projects-tree-view` и `005-tree-workspace`. В работе `006-planning` — церемония feature → spec → plan → task → result как сущность первого класса (готовы 3 из 11 тасков: домен, схема, human door API). Дальше `002-kit-library`, затем `003-bundled-installer`. Живой срез — на борде планирования (веб-UI или MCP); `BACKLOG/` — материализованное зеркало контрактов.
 
 ### Roadmap
 
@@ -55,7 +55,7 @@
 
 Inspired by [OpenViking](https://github.com/volcengine/OpenViking)'s context-as-a-filesystem idea, rebuilt to be download-and-run.
 
-**Status:** alpha — the MVP is shipped (`001-overmind-mvp`), plus the projects tree (`004`, `005`). In flight: `006-planning`, the feature → spec → plan → task → result ceremony as a first-class entity (3 of 11 tasks done). `BACKLOG.md` is the live index.
+**Status:** alpha — the MVP is shipped (`001-overmind-mvp`), plus the projects tree (`004`, `005`). In flight: `006-planning`, the feature → spec → plan → task → result ceremony as a first-class entity (3 of 11 tasks done). The planning board (web UI / MCP) is the live index; the `BACKLOG/` tree holds the materialized contracts.
 
 ## Запуск
 
@@ -106,7 +106,6 @@ UI открывается на `http://overmind.localhost:<port>` — хостн
 ## Repository layout
 
 ```
-BACKLOG.md                    feature index: statuses, execution order, deferred hardening
 BACKLOG/nnn-slug/             one folder per feature
   feature.md                  what and why
   spec.md                     validated design decisions and requirements (frozen)

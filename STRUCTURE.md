@@ -1,18 +1,18 @@
 # STRUCTURE — Project Layout & Conventions
 
-How the repo is organized and the rules for writing code in it. System design lives in `CONTEXT.md`, decision rationale in `TECHNICAL-SOLUTIONS.md`, work tracking in `BACKLOG.md` + `BACKLOG/`.
+How the repo is organized and the rules for writing code in it. System design lives in `CONTEXT.md`, decision rationale in `TECHNICAL-SOLUTIONS.md`, work tracking on the Overmind board + the materialized `BACKLOG/` tree.
 
 ## Repository layout
 
 ```
-├── CONTEXT.md / STRUCTURE.md / TECHNICAL-SOLUTIONS.md / BACKLOG.md
+├── CONTEXT.md / STRUCTURE.md / TECHNICAL-SOLUTIONS.md
 ├── BACKLOG/                  # feature folders (nnn-slug/): feature.md, spec.md, plan.md, tasks/
 ├── ENTRIES/                  # entry projection (051, SIBLING of BACKLOG/ — the importer scans BACKLOG
 │                             #   feature folders only): {type}/{kebab-title}-{id8}.md, one file per entry,
 │                             #   tracked rows like the planning tree — hand edits refuse (033), force warns
 ├── audits/                   # skill-produced reports, named <skill>-*.md
 ├── FEATURELIST/              # field feedback from agents on other projects, materialized from Overmind notes;
-│                              #   raw input for BACKLOG.md, not a decision record (README.md is the index)
+│                              #   raw input for the board, not a decision record (README.md is the index)
 ├── build/                    # packaging: pack.sh/install.sh/run.sh (portable, unix), install.ps1/run.cmd (portable, win),
 │                              #   dist-layout.env (shared crew-kit + folder-name contract), windows/ (Inno Setup channel:
 │                              #   overmind.iss, pack-win.ps1, make-icon.ps1 + overmind.ico, smoke-installer.ps1)
@@ -39,7 +39,7 @@ Central package management: `Directory.Packages.props`; shared build props: `Dir
 8. **Loopback is the security boundary.** Kestrel binds `127.0.0.1` only. Localhost-only endpoints (e.g. `system/browse-folder`) must never do anything a local user shouldn't be able to do.
 9. **Host↔MCP contract is additive-only** (ADR). Renames/removals in Host DTOs silently break the adapter's tolerant `JsonElement` reads — additive changes only, or update both sides in the same change.
 10. **Caller identity a gate depends on lives in the route prefix, never in a parameter.** When one surface must treat a caller differently (agent vs human), split the route prefix and map it onto the same `internal static` handlers: `/api/planning/*` (human door) and `/api/agent/planning/*` (agent door, the only MCP-called surface; gated `validate` + `current` are agent-specific). An actor flag in the body/query or a `X-Overmind-Actor` header would make the gate a parameter any caller can omit (ADR). New planning routes must be mapped on both doors deliberately — forgetting the agent mapping narrows the agent surface without a compile error.
-11. **Canonical version numbering:** a version row labelled N holds the body that was live at version N, and a fresh aggregate is version 1. The planning entities follow it; `ContextEntry`/`EntryVersion` predate it and are off by one — tracked as hardening in `BACKLOG.md`, not to be "fixed" inside an unrelated task.
+11. **Canonical version numbering:** a version row labelled N holds the body that was live at version N, and a fresh aggregate is version 1. The planning entities follow it; `ContextEntry`/`EntryVersion` predate it and are off by one — tracked as hardening on the board, not to be "fixed" inside an unrelated task.
 12. **Enum posture:** enums carry explicit values, and status vocabulary is enforced in the domain (`PlanningArtifact.AllowedStatuses(kind)` throws on violations) — no DB CHECK constraints. Trusted local SQLite file; revisit if the store ever becomes shared.
 
 ## Planning ceremony (standing rules)
@@ -97,7 +97,7 @@ shared     → (nothing above)                    (api client, ui primitives, li
 
 ## AI agent guidelines
 
-- Read `CONTEXT.md` (this system's design), `BACKLOG.md` (index), and the feature folder before changing anything; check `TECHNICAL-SOLUTIONS.md` before proposing an alternative to an existing pattern. Accepted ADRs are changed only by a new superseding ADR — never a silent edit.
+- Read `CONTEXT.md` (this system's design), the planning board (the live index — web UI or MCP), and the feature folder before changing anything; check `TECHNICAL-SOLUTIONS.md` before proposing an alternative to an existing pattern. Accepted ADRs are changed only by a new superseding ADR — never a silent edit.
 - Complex work follows `BACKLOG/nnn-slug/` task files; executing agents read only their `tasks/NN-foo.md`; accepted spec/plan are read-only snapshots.
 - No auto-commits. Report changed files; the user commits.
 - New third-party packages need license vetting (OSI-approved) and central version pinning before adding.
