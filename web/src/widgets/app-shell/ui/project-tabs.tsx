@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Tabs, type TabsItem } from "@/shared/ui/tabs";
+import { useProjectName } from "@/features/projects";
 import { getLastActiveProjectId } from "@/features/projects/lib/tree-session";
 
 const NO_PROJECT_HINT = "Select a project first";
@@ -49,6 +50,7 @@ function ProjectTabsBar({ activeKey }: ProjectTabsBarProps) {
 
   const projectParam = searchParams?.get("project") || null;
   const projectId = projectParam ?? lastActiveProject;
+  const isFeatureView = Boolean(searchParams?.get("feature"));
 
   const items: TabsItem[] = PROJECT_TAB_ROUTES.map((route) => ({
     key: route.key,
@@ -57,5 +59,26 @@ function ProjectTabsBar({ activeKey }: ProjectTabsBarProps) {
     title: projectId === null ? NO_PROJECT_HINT : undefined,
   }));
 
-  return <Tabs items={items} activeKey={activeKey} ariaLabel="Project sections" />;
+  return (
+    <>
+      {projectId !== null ? <ProjectName projectId={projectId} asHeading={!isFeatureView} /> : null}
+      <Tabs items={items} activeKey={activeKey} ariaLabel="Project sections" />
+    </>
+  );
+}
+
+interface ProjectNameProps {
+  projectId: string;
+  asHeading: boolean;
+}
+
+function ProjectName({ projectId, asHeading }: ProjectNameProps) {
+  const name = useProjectName(projectId);
+  const Tag = asHeading ? "h1" : "p";
+
+  return (
+    <Tag className="mb-2 truncate font-mono text-sm font-semibold tracking-wide text-primary">
+      {name}
+    </Tag>
+  );
 }
