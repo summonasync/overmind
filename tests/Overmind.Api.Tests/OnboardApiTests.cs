@@ -438,11 +438,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 
             var featureDoc = Path.Combine(sandbox, "BACKLOG", "feat", "feature.md");
             var pristine = await File.ReadAllTextAsync(featureDoc);
-            var indexPath = Path.Combine(sandbox, "BACKLOG.md");
-            var pristineIndex = await File.ReadAllTextAsync(indexPath);
             await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
-            await File.WriteAllTextAsync(indexPath, pristineIndex
-                .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal));
 
             var squatter = Path.Combine(sandbox, "BACKLOG", "second", "feature.md");
             Directory.CreateDirectory(Path.GetDirectoryName(squatter)!);
@@ -458,10 +454,6 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
             failed.Materialization.LastSuccess.ShouldNotBeNull();
 
             await File.WriteAllTextAsync(featureDoc, pristine);
-            await File.WriteAllTextAsync(indexPath, pristineIndex);
-
-            await File.WriteAllTextAsync(featureDoc, pristine);
-            await File.WriteAllTextAsync(indexPath, pristineIndex);
             File.Delete(squatter);
 
             await CreateFeatureAsync(project.Id, "third", "Third");

@@ -69,7 +69,6 @@ public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifet
         rows.Select(m => m.RelativePath).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(
             new[]
             {
-                "BACKLOG.md",
                 "BACKLOG/010-demo/feature.md",
                 "BACKLOG/010-demo/spec.md",
                 "BACKLOG/010-demo/tasks/01-first.md",
@@ -80,13 +79,11 @@ public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifet
         (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
 
         var taskBytesBefore = await File.ReadAllBytesAsync(pinnedTaskPath);
-        var indexBytesBefore = await File.ReadAllBytesAsync(Path.Combine(_projectDir, "BACKLOG.md"));
 
         var second = await materializer.SyncAsync(projectId, force: false, CancellationToken.None);
         second.Warnings.ShouldBeEmpty();
 
         (await File.ReadAllBytesAsync(pinnedTaskPath)).ShouldBe(taskBytesBefore);
-        (await File.ReadAllBytesAsync(Path.Combine(_projectDir, "BACKLOG.md"))).ShouldBe(indexBytesBefore);
         (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
 
         var reimport = await CreateImporter(ctx)
@@ -323,13 +320,12 @@ public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifet
         var rows = await ctx.PlanningMaterializedFiles.Where(m => m.ProjectId == projectId).ToListAsync();
         rows.Select(m => m.RelativePath).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(new[]
         {
-            "BACKLOG.md",
             "BACKLOG/010-demo/feature.md",
             "BACKLOG/010-demo/spec.md",
             "BACKLOG/010-demo/tasks/01-first.md",
         });
 
-        foreach (var row in rows.Where(m => m.RelativePath != "BACKLOG.md"))
+        foreach (var row in rows)
         {
             row.Sha256.ShouldBe(await ShaOfAsync(Path.Combine(_projectDir, row.RelativePath)));
         }
@@ -358,7 +354,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifet
         var row = await ctx.PlanningMaterializedFiles.SingleAsync(m =>
             m.ProjectId == projectId && m.RelativePath == "BACKLOG/010-demo/tasks/01-first.md");
         row.Sha256.ShouldBe(await ShaOfAsync(taskPath));
-        (await ctx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(4);
+        (await ctx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(3);
 
         var materializer = CreateMaterializer(ctx);
         var sync = await materializer.SyncAsync(projectId, force: false, CancellationToken.None);

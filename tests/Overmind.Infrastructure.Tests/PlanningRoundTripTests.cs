@@ -794,7 +794,6 @@ public sealed class PlanningRoundTripTests : IDisposable
             snapshot[Path.GetRelativePath(_repoDir, file)] = await File.ReadAllTextAsync(file);
         }
 
-        snapshot["BACKLOG.md"] = await File.ReadAllTextAsync(Path.Combine(_repoDir, "BACKLOG.md"));
         return snapshot;
     }
 

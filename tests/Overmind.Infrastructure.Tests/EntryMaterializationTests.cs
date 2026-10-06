@@ -276,7 +276,7 @@ public sealed class EntryMaterializationTests : IDisposable
         var refusal = run.Refused.ShouldHaveSingleItem();
         refusal.RelativePath.ShouldBe(relative);
         refusal.Reason.ShouldContain("local edits");
-        run.Skipped.ShouldContain(s => s.RelativePath == "BACKLOG.md");
+        run.Skipped.ShouldBeEmpty();
     }
 
     [Fact]

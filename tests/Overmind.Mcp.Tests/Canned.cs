@@ -320,12 +320,12 @@ public static class Canned
 
     public const string PlanningMaterializeReportJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG/demo-feature/spec.md","sha256":"bb"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":["Overwrote untracked file: /repo/BACKLOG/stray.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"content already matches the board"},{"relativePath":"BACKLOG/demo-feature/tasks/01-build.md","reason":"content already matches the board"}],"lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z"}
+        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG/demo-feature/spec.md","sha256":"bb"},{"relativePath":"BACKLOG/demo-feature/plan.md","sha256":"cc"}],"warnings":["Overwrote untracked file: /repo/BACKLOG/stray.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"content already matches the board"},{"relativePath":"BACKLOG/demo-feature/tasks/01-build.md","reason":"content already matches the board"}],"lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z"}
         """;
 
     public const string PlanningMaterializeCleanReportJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG.md","sha256":"cc"}],"warnings":[],"skipped":[],"lastSuccess":"2026-09-24T09:30:00Z","lastAttempt":"2026-09-24T09:30:00Z"}
+        {"projectId":"11111111-1111-1111-1111-111111111111","strategy":"on","files":[{"relativePath":"BACKLOG/demo-feature/feature.md","sha256":"aa"},{"relativePath":"BACKLOG/demo-feature/spec.md","sha256":"cc"}],"warnings":[],"skipped":[],"lastSuccess":"2026-09-24T09:30:00Z","lastAttempt":"2026-09-24T09:30:00Z"}
         """;
 
     public const string PlanningMaterializeAllSkippedJson =
@@ -343,7 +343,7 @@ public static class Canned
 
     public const string PlanningMaterializeStatusJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z","lastAttemptReason":null,"lastRun":{"startedAt":"2026-09-24T09:30:00Z","finishedAt":"2026-09-24T09:30:05Z","atomic":true,"written":["BACKLOG/demo-feature/feature.md","BACKLOG.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"content already matches the board"}],"refused":[]},"trackedFiles":2,"stalePaths":["BACKLOG/demo-feature/spec.md"],"strategy":"on","targetDir":"/repo/BACKLOG"}
+        {"projectId":"11111111-1111-1111-1111-111111111111","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-24T09:30:00Z","lastAttemptReason":null,"lastRun":{"startedAt":"2026-09-24T09:30:00Z","finishedAt":"2026-09-24T09:30:05Z","atomic":true,"written":["BACKLOG/demo-feature/feature.md","BACKLOG/demo-feature/spec.md"],"skipped":[{"relativePath":"BACKLOG/foreign/feature.md","reason":"content already matches the board"}],"refused":[]},"trackedFiles":2,"stalePaths":["BACKLOG/demo-feature/spec.md"],"strategy":"on","targetDir":"/repo/BACKLOG"}
         """;
 
     public const string PlanningMaterializeStatusNoReportJson =

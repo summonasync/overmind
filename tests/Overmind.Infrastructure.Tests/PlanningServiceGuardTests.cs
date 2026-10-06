@@ -95,17 +95,13 @@ public sealed class PlanningServiceGuardTests : IDisposable
 
         var featurePath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "feature.md");
         var taskPath = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks", "01-first-task.md");
-        var indexPath = Path.Combine(_projectDir, "BACKLOG.md");
         var pristine = new Dictionary<string, string>
         {
             [featurePath] = await File.ReadAllTextAsync(featurePath),
             [taskPath] = await File.ReadAllTextAsync(taskPath),
-            [indexPath] = await File.ReadAllTextAsync(indexPath),
         };
         await File.AppendAllTextAsync(featurePath, "\nhand edit\n");
         await File.AppendAllTextAsync(taskPath, "\nhand edit\n");
-        await File.WriteAllTextAsync(indexPath, pristine[indexPath]
-            .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal));
 
         using (var ctx = _db.CreateContext())
         {

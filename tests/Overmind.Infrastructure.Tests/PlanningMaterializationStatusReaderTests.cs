@@ -49,12 +49,12 @@ public sealed class PlanningMaterializationStatusReaderTests : IDisposable
         status.LastAttemptReason.ShouldBeNull();
         status.Strategy.ShouldBe(PlanningMaterialization.On);
         status.TargetDir.ShouldBe(Path.Combine(_projectDir, "BACKLOG"));
-        status.TrackedFiles.ShouldBe(5);
+        status.TrackedFiles.ShouldBe(4);
         status.StalePaths.ShouldBeEmpty();
 
         var run = status.LastRun.ShouldNotBeNull();
         run!.Atomic.ShouldBeTrue();
-        run.Written.Length.ShouldBe(5);
+        run.Written.Length.ShouldBe(4);
         run.Skipped.ShouldBeEmpty();
         run.Refused.ShouldBeEmpty();
     }
@@ -100,7 +100,7 @@ public sealed class PlanningMaterializationStatusReaderTests : IDisposable
 
         status.LastAttemptReason.ShouldNotBeNull();
         status.LastRun.ShouldBeNull();
-        status.StalePaths.Count.ShouldBe(5);
+        status.StalePaths.Count.ShouldBe(4);
         status.StalePaths.ShouldContain("BACKLOG/006-demo/feature.md");
     }
 

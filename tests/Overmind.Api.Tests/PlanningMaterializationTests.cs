@@ -75,15 +75,16 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
         var project = await CreateProjectWithMaterializationAsync("on");
         await CreateFeatureAsync(project.Id, "invader", "Invader");
 
-        var foreign = Path.Combine(_projectDir, "BACKLOG", "invader", "feature.md");
+        var featureDoc = Path.Combine(_projectDir, "BACKLOG", "invader", "feature.md");
+        File.Exists(featureDoc).ShouldBeTrue();
+        await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+
+        var foreign = Path.Combine(_projectDir, "BACKLOG", "second", "feature.md");
         Directory.CreateDirectory(Path.GetDirectoryName(foreign)!);
         await File.WriteAllTextAsync(foreign, "user content");
-
-        var indexPath = Path.Combine(_projectDir, "BACKLOG.md");
-        await File.WriteAllTextAsync(indexPath, (await File.ReadAllTextAsync(indexPath))
-            .Replace("`[ ]`", "`[x]`", StringComparison.Ordinal));
         var foreignBytes = await File.ReadAllBytesAsync(foreign);
-        var indexBytes = await File.ReadAllBytesAsync(indexPath);
+
+        await CreateFeatureAsync(project.Id, "second", "Second");
 
         var response = await _client.PostAsJsonAsync(
             $"/api/projects/{project.Id}/planning/materialize", new { Force = false });
@@ -95,11 +96,11 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
         problem!.Detail.ShouldNotBeNull();
         problem!.Detail!.ShouldContain("nothing was written");
         problem.Detail.ShouldContain("BACKLOG/invader/feature.md");
-        problem.Detail.ShouldContain("BACKLOG.md");
+        problem.Detail.ShouldContain("BACKLOG/second/feature.md");
         problem.Detail.ShouldContain("planning_upsert_artifact");
 
         (await File.ReadAllBytesAsync(foreign)).ShouldBe(foreignBytes);
-        (await File.ReadAllBytesAsync(indexPath)).ShouldBe(indexBytes);
+        (await File.ReadAllTextAsync(featureDoc)).ShouldContain("hand edit");
     }
 
     [Fact]
@@ -242,9 +243,6 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
 
         var featureFile = Path.Combine(_projectDir, "BACKLOG", "myfeat", "feature.md");
         (await File.ReadAllTextAsync(featureFile)).ShouldContain("# Feature myfeat — My Feature");
-
-        var index = await File.ReadAllTextAsync(Path.Combine(_projectDir, "BACKLOG.md"));
-        index.ShouldContain("- `[ ]` myfeat → `BACKLOG/myfeat/` — My Feature");
     }
 
     [Fact]
@@ -260,7 +258,7 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
         raw.ShouldContain("\"lastSuccess\":");
         raw.ShouldContain("\"lastAttempt\":");
         raw.ShouldContain("\"lastAttemptReason\":");
-        raw.ShouldContain("\"trackedFiles\":2");
+        raw.ShouldContain("\"trackedFiles\":1");
         raw.ShouldContain("\"stalePaths\":[]");
         raw.ShouldNotContain("LastSuccess", Case.Sensitive);
 
@@ -272,13 +270,12 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
         status.LastAttemptReason.ShouldBeNull();
         status.Strategy.ShouldBe("on");
         status.TargetDir.ShouldBe(Path.Combine(_projectDir, "BACKLOG"));
-        status.TrackedFiles.ShouldBe(2);
+        status.TrackedFiles.ShouldBe(1);
         status.StalePaths.ShouldBeEmpty();
 
         var run = status.LastRun.ShouldNotBeNull();
         run!.Atomic.ShouldBeTrue();
         run.Written.ShouldContain("BACKLOG/feat/feature.md");
-        run.Written.ShouldContain("BACKLOG.md");
         run.Skipped.ShouldBeEmpty();
         run.Refused.ShouldBeEmpty();
     }
@@ -320,7 +317,6 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
         run.Written.ShouldBeEmpty();
         run.Refused.ShouldNotBeEmpty();
         status.StalePaths.Length.ShouldBe(status.TrackedFiles);
-        status.StalePaths.ShouldContain("BACKLOG.md");
         status.StalePaths.ShouldContain("BACKLOG/feat/feature.md");
     }
 
