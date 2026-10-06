@@ -335,7 +335,9 @@ public sealed class PlanningArtifactService
         var items = PlanningSections.ParseAcceptanceCriteria(artifact.Body);
         var unticked = items.Count(item => item.Checked == false);
 
-        return unticked > 0 ? [$"{unticked} of {items.Count} acceptance items unticked"] : null;
+        return unticked > 0
+            ? [$"{unticked} of {items.Count(item => item.Checked.HasValue)} acceptance items unticked"]
+            : null;
     }
 
     public async Task<PlanningArtifactPatchResult> PatchAsync(
@@ -472,7 +474,7 @@ public sealed class PlanningArtifactService
             throw PlanningException.CannotDeclineTask();
         }
 
-        return await AppendLogAsync(artifactId, DeclineNote(reason), ct, PlanningLogSource.Ui);
+        return await AppendLogAsync(artifact, DeclineNote(reason), ct, PlanningLogSource.Ui);
     }
 
     private static string DeclineNote(string? reason)
@@ -488,6 +490,13 @@ public sealed class PlanningArtifactService
         PlanningLogSource? source = null)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
+
+        return await AppendLogAsync(artifact, note, ct, source);
+    }
+
+    private async Task<PlanningArtifact> AppendLogAsync(
+        PlanningArtifact artifact, string note, CancellationToken ct, PlanningLogSource? source)
+    {
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
 
         artifact.AppendLog(note, source);

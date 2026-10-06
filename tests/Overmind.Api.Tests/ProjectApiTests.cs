@@ -217,6 +217,24 @@ public sealed class ProjectApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_UntrimmedPrefix_TrimsBeforeValidation()
+    {
+        var created = await CreateProjectAsync("padded-prefix", TestPaths.DiskPath("padded-prefix"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "padded-prefix",
+            DiskPath = TestPaths.DiskPath("padded-prefix"),
+            NumberStyle = "key",
+            NumberPrefix = " OM ",
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        updated!.NumberPrefix.ShouldBe("OM");
+    }
+
+    [Fact]
     public async Task Update_UnknownNumberStyle_Returns400NamingAllowedValues()
     {
         var created = await CreateProjectAsync("bad-style", TestPaths.DiskPath("bad-style"));

@@ -1309,6 +1309,32 @@ public sealed class PlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task SetArtifactStatus_TaskDoneWithUntickedAc_SurfacesWarnings()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new
+            {
+                Kind = "task",
+                Body = "# Task\n\n<acceptance-criteria>\n- [x] endpoint wired\n- [ ] docs written\n</acceptance-criteria>\n"
+            });
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var task = (await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions))!;
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{task.Id}/status",
+            new { Status = "done", LogNote = "closing with gaps" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.GetProperty("warnings").EnumerateArray()
+            .Select(w => w.GetString()).ToArray()
+            .ShouldBe(["1 of 2 acceptance items unticked"]);
+    }
+
     private async Task<ProjectJson> CreateProjectAsync()
     {
         var response = await _client.PostAsJsonAsync("/api/projects", new

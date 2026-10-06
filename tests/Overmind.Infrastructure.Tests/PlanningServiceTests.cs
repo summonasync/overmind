@@ -1086,6 +1086,43 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task SetStatusAsync_AllAcTickedAndCheckboxInLogNote_NoWarnings()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "# Task\n\n<acceptance-criteria>\n- [x] endpoint wired\n- [x] docs written\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var result = await artifactService.SetStatusAsync(
+            task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent,
+            "closing with leftovers: - [ ] docs", default);
+
+        result.Warnings.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_MarkerlessAcLine_ExcludedFromWarningDenominator()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "# Task\n\n<acceptance-criteria>\n- [ ] docs written\n- follow-up note\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var result = await artifactService.SetStatusAsync(
+            task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+
+        result.Warnings.ShouldBe(["1 of 1 acceptance items unticked"]);
+    }
+
+    [Fact]
     public async Task SetStatusAsync_ManualValidatedToDraft_OnSpecOfDoneFeature_FeatureStaysDone()
     {
         var featureService = CreateFeatureService();

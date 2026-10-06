@@ -70,16 +70,10 @@ public static class AgentIssuesApi
             authorFilter = authorValue;
         }
 
-        IssueStatus? parsedStatus = null;
-        if (status is not null)
+        var (parsedStatus, statusError) = IssueStatusParser.Parse(status);
+        if (statusError is not null)
         {
-            if (!PlanningFeaturesApi.TryParseEnum<IssueStatus>(status, out var statusValue))
-            {
-                return HttpErrors.BadRequest(
-                    $"Unknown status '{status}'. Allowed values: open, triaged, promoted, closed.");
-            }
-
-            parsedStatus = statusValue;
+            return HttpErrors.BadRequest(statusError);
         }
 
         var issues = await service.ListAsync(projectId, parsedStatus, authorFilter, ct);

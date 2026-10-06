@@ -34,7 +34,7 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
                     && Enum.IsDefined(parsed)))
             .WithMessage("NumberStyle must be one of: hash, key, plain.");
         RuleFor(x => x.NumberPrefix)
-            .Must(prefix => prefix is null || Project.NumberPrefixRegex.IsMatch(prefix))
+            .Must(prefix => prefix is null || Project.NumberPrefixRegex.IsMatch(prefix.Trim()))
             .WithMessage(
                 $"NumberPrefix must be at most {Project.NumberPrefixMaxLength} characters: an uppercase letter followed by uppercase letters, digits or underscores.");
     }
