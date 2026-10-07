@@ -13,6 +13,7 @@ $homePaths = @{
     gemini      = Join-Path $HOME '.gemini'
     antigravity = Join-Path $HOME '.gemini\antigravity'
     qwen        = Join-Path $HOME '.qwen'
+    codex       = Join-Path $HOME '.codex'
 }
 
 $targets = @()

@@ -11,7 +11,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; gemini) echo "$HOME/.gemini";; antigravity) echo "$HOME/.gemini/antigravity";; qwen) echo "$HOME/.qwen";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; gemini) echo "$HOME/.gemini";; antigravity) echo "$HOME/.gemini/antigravity";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
 
 # Every manifest entry carries all four fields in this exact order — the no-python fallback
 # below groups grep hits four at a time, so a missing "mode" would desynchronise the whole list.

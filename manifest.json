@@ -27,6 +27,11 @@
     { "source": ".qwen/QWEN.md", "home": "qwen", "type": "file", "mode": "mirror" },
     { "source": ".qwen/SKILLFLOW.md", "home": "qwen", "type": "file", "mode": "mirror" },
     { "source": ".qwen/settings-snippet.jsonc", "home": "qwen", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "qwen", "type": "file", "mode": "mirror" }
+    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "qwen", "type": "file", "mode": "mirror" },
+    { "source": ".codex/agents", "home": "codex", "type": "dir", "mode": "mirror" },
+    { "source": ".codex/skills", "home": "codex", "type": "dir", "mode": "mirror" },
+    { "source": ".codex/AGENTS.md", "home": "codex", "type": "file", "mode": "mirror" },
+    { "source": ".codex/SKILLFLOW.md", "home": "codex", "type": "file", "mode": "mirror" },
+    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "codex", "type": "file", "mode": "mirror" }
   ]
 }

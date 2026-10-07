@@ -1,6 +1,6 @@
 # Global Agent Context (Google Antigravity)
 
-> Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind. Quadruple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
+> Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind. Quintuple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
 
 ## Squeezr — Code Navigation
 

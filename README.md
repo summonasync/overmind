@@ -1,8 +1,8 @@
 # Bob.Kit-Uncensored
 
-> One agent crew. Four runtimes. Zero corporate polish.
+> One agent crew. Five runtimes. Zero corporate polish.
 
-Single source of truth for one AI agent crew running on four runtimes: **Kimi Code CLI**, **Claude Code**, **Google Antigravity**, and **Qwen Code**. The repo holds all mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code, `.gemini/` (incl. `GEMINI.md`) serves Antigravity, `.qwen/` (incl. `QWEN.md`) serves Qwen Code. Content (rules, workflows, skills, agents) is semantically identical across the four; only tool-specific details (model names, home paths, tool identifiers, runtime features, enforcement mechanics) differ.
+Single source of truth for one AI agent crew running on five runtimes: **Kimi Code CLI**, **Claude Code**, **Google Antigravity**, **Qwen Code**, and **OpenAI Codex CLI**. The repo holds all mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code, `.gemini/` (incl. `GEMINI.md`) serves Antigravity, `.qwen/` (incl. `QWEN.md`) serves Qwen Code, `.codex/` (incl. `AGENTS.md`) serves Codex CLI. Content (rules, workflows, skills, agents) is semantically identical across the five; only tool-specific details (model names, home paths, tool identifiers, runtime features, enforcement mechanics) differ.
 
 The crew: orchestrators, coders, reviewers, architects, a product strategist (`product-strategist`), an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming maniac (`naming-helper`) — 35 agents, 43 skills, one workflow graph.
 
@@ -13,12 +13,13 @@ The crew: orchestrators, coders, reviewers, architects, a product strategist (`p
 - **Claude Code**.
 - **Google Antigravity** — skills/agents deploy to `~/.gemini/antigravity/` (open `SKILL.md` standard, picked up natively); rules deploy as `~/.gemini/GEMINI.md`. Overmind MCP setup on this runtime is manual and not yet verified.
 - **Qwen Code** — skills deploy to `~/.qwen/skills/`, agents to `~/.qwen/agents/`, rules to `~/.qwen/QWEN.md` (all native Qwen Code locations). Sub-agent models are pinned in agent frontmatter to `qwen3.7-plus` (execution/review) and `qwen3.8-max` (orchestration, audit, detection, obfuscation); both resolve through `modelProviders.openai` in `~/.qwen/settings.json` (ModelStudio Token Plan). If your provider lineup differs, re-point the pins — see `SYNC-STRUCTURE.md` checklist item 6.
+- **OpenAI Codex CLI** — skills deploy to `~/.codex/skills/`, sub-agent roles to `~/.codex/agents/` (verified format: standalone TOML with exactly `name`, `description`, `model`, `developer_instructions` — the loader is strict, an extra field silently drops the role), rules to `~/.codex/AGENTS.md`. Requires codex-cli with skills + custom-agent support (verified on 0.160.1). Sub-agent model tiers are pinned per role: `gpt-6-luna` for the fixer and language coders, `gpt-6.1-sol` for everything else; complex coder tasks escalate the same role via `spawn_agent(model="gpt-6.1-sol", fork_turns="none")` — sanctioned by `.codex/AGENTS.md`. The kit never writes `~/.codex/config.toml`; MCP servers (overmind, squeezr) are registered separately (`codex mcp add` / vendor installers).
 
 ## Layout
 
 ```
 .
-├── SYNC-STRUCTURE.md      # quadruple-edit contract: file mapping, translation tables, deploy modes, checklist
+├── SYNC-STRUCTURE.md      # quintuple-edit contract: file mapping, translation tables, deploy modes, checklist
 ├── manifest.json          # deploy manifest: single source of truth for install/uninstall scripts
 ├── install.ps1            # deploy to tool homes (Windows); -DryRun prints plan only
 ├── install.sh             # deploy to tool homes (Git Bash/Linux); --dry-run prints plan only
@@ -29,7 +30,7 @@ The crew: orchestrators, coders, reviewers, architects, a product strategist (`p
 │   ├── agents/            # 35 agent definitions
 │   ├── skills/            # 43 skill directories
 │   ├── SKILLFLOW.md       # workflow graph shared by all skills
-│   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to all four homes)
+│   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to all five homes)
 │   └── config.toml        # Kimi runtime config (secondary-model pool) — Kimi only
 ├── .claude/
 │   ├── CLAUDE.md          # Claude-side mirror of AGENTS.md
@@ -49,12 +50,17 @@ The crew: orchestrators, coders, reviewers, architects, a product strategist (`p
 │   ├── SKILLFLOW.md
 │   ├── settings-snippet.jsonc  # Qwen-only permissions/hooks layer — merge by hand, never auto-installed
 │   └── hooks/             # Qwen-only PostToolUse verification hook (.ps1 + .sh)
+├── .codex/
+│   ├── AGENTS.md          # Codex-side mirror of AGENTS.md (deploys to ~/.codex/)
+│   ├── agents/            # 35 sub-agent roles (TOML: name/description/model/developer_instructions)
+│   ├── skills/            # 43 skill directories
+│   └── SKILLFLOW.md
 └── BACKLOG/                 # per-project artifact tree, materialized by Overmind (read-only mirror)
 ```
 
 ## Install / update deployment to tool homes
 
-Install scripts read `manifest.json` and copy repo content into the runtime home directories (`~/.kimi-code/`, `~/.claude/`, `~/.gemini/`, `~/.gemini/antigravity/`, `~/.qwen/`). A home that does not exist is skipped with a note (for `antigravity`, an existing `~/.gemini/` is enough — the subdirectory is created on copy). Both support a dry-run mode that prints the full copy plan without touching the filesystem:
+Install scripts read `manifest.json` and copy repo content into the runtime home directories (`~/.kimi-code/`, `~/.claude/`, `~/.gemini/`, `~/.gemini/antigravity/`, `~/.qwen/`, `~/.codex/`). A home that does not exist is skipped with a note (for `antigravity`, an existing `~/.gemini/` is enough — the subdirectory is created on copy). Both support a dry-run mode that prints the full copy plan without touching the filesystem:
 
 ```powershell
 powershell -File install.ps1 -DryRun    # plan only
@@ -89,7 +95,8 @@ What goes where (mirrors `manifest.json`):
 | `.gemini/GEMINI.md` | `~/.gemini/` |
 | `.gemini/antigravity/agents/`, `.gemini/antigravity/skills/`, `.gemini/antigravity/SKILLFLOW.md` | `~/.gemini/antigravity/` |
 | `.qwen/agents/`, `.qwen/skills/`, `.qwen/hooks/` (merge mode), `.qwen/QWEN.md`, `.qwen/SKILLFLOW.md`, `.qwen/settings-snippet.jsonc` | `~/.qwen/` |
-| `.kimi-code/SOCIAL_DICTIONARY.md` | all four homes |
+| `.codex/agents/`, `.codex/skills/`, `.codex/AGENTS.md`, `.codex/SKILLFLOW.md` | `~/.codex/` |
+| `.kimi-code/SOCIAL_DICTIONARY.md` | all five homes |
 
 A project's `BACKLOG/` tree is never deployed — it is materialized by the Overmind MCP server from the board, per project.
 
@@ -126,13 +133,16 @@ Both hook scripts **fail open**: no payload, unknown tool, no project anchor, mi
 - **This repo's `.qwen/` is also live project config**: Qwen Code reads `.qwen/skills/` and `.qwen/agents/` as *project-level* customizations, so working inside `Skills_dotNetCrew` activates all 42 skills and 34 agents for that session. Same as `.claude/` does for Claude Code — intended, but worth knowing when you wonder where a skill came from.
 - **`WebSearch` has no Qwen Code equivalent**: agents that carried `WebSearch` + `FetchURL` on the Claude side collapse to a single `web_fetch` entry on the Qwen side. Capability loss is limited to search-engine queries; direct URL fetching is unchanged.
 - **`settings-snippet.jsonc` path patterns are unverified end-to-end**: the `permissions` rule syntax follows the documented specifier forms, but the snippet has not been applied to a live `settings.json` and probed. Check `/permissions` after merging.
+- **`~/.codex/skills/` and `~/.codex/agents/` are mirror-owned**: both deploy with `mirror` mode by crew decision (2026-10-07) — any third-party skill or role dropped there is deleted on the next `install.*`. Move non-crew content elsewhere before installing.
+- **Codex roles are strict TOML**: the role loader accepts exactly `name`, `description`, `model`, `developer_instructions`; an unknown field silently drops the role (a warning appears at session start). If a spawned role "does not exist", check the file's fields first.
+- **`gpt-6.1-sol` can be at capacity**: the priority pool occasionally rejects requests with "Selected model is at capacity". Sub-agent pins stay as-is; interactive fallback to `gpt-5.6-sol` (`codex exec -m ...`) is a session-level choice, not a pin change.
 
 ## Editing rule
 
-Any change to crew behavior, agents, skills, or policies must be applied to **all four mirrors in the same commit**. File quadruples, allowed tool-specific divergences, the Kimi→Claude, Kimi→Antigravity and Kimi→Qwen translation tables, deploy modes, and the pre-commit grep checklist are defined in [SYNC-STRUCTURE.md](SYNC-STRUCTURE.md). Read it before touching `.kimi-code/`, `.claude/`, `.gemini/`, or `.qwen/`.
+Any change to crew behavior, agents, skills, or policies must be applied to **all five mirrors in the same commit**. File quintuples, allowed tool-specific divergences, the Kimi→Claude, Kimi→Antigravity, Kimi→Qwen and Kimi→Codex translation tables, deploy modes, and the pre-commit grep checklist are defined in [SYNC-STRUCTURE.md](SYNC-STRUCTURE.md). Read it before touching `.kimi-code/`, `.claude/`, `.gemini/`, `.qwen/`, or `.codex/`.
 
 ## Crew docs
 
-- `.kimi-code/AGENTS.md` / `.claude/CLAUDE.md` / `.gemini/GEMINI.md` / `.qwen/QWEN.md` — stack, conventions, workflow, delegation policy (authoritative crew contract)
-- `.kimi-code/SKILLFLOW.md` / `.claude/SKILLFLOW.md` / `.gemini/antigravity/SKILLFLOW.md` / `.qwen/SKILLFLOW.md` — phase graph and skill output contract
+- `.kimi-code/AGENTS.md` / `.claude/CLAUDE.md` / `.gemini/GEMINI.md` / `.qwen/QWEN.md` / `.codex/AGENTS.md` — stack, conventions, workflow, delegation policy (authoritative crew contract)
+- `.kimi-code/SKILLFLOW.md` / `.claude/SKILLFLOW.md` / `.gemini/antigravity/SKILLFLOW.md` / `.qwen/SKILLFLOW.md` / `.codex/SKILLFLOW.md` — phase graph and skill output contract
 - `BACKLOG/` — per-project artifact tree materialized by Overmind (read-only; state lives on the Overmind board)
