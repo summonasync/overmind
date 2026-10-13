@@ -60,6 +60,10 @@ public sealed class PlanningException : Exception
     public static PlanningException BriefNotAllowedForKind(PlanningArtifactKind kind) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BriefNotAllowedForKind, $"A brief is only allowed on task artifacts; kind '{kind}' cannot carry one.");
 
+    public static PlanningException InvalidBrief() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidBrief,
+            $"A brief must be single-line text of at most {PlanningArtifact.BriefMaxLength} characters (a blank brief clears it).");
+
     public static PlanningException InvalidFeatureTransition(string slug, PlanningFeatureStatus current, PlanningFeatureStatus target) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidFeatureTransition,
             $"Feature '{slug}' cannot move from '{current}' to '{target}'; allowed targets: {string.Join(", ", PlanningFeatureTransitions.AllowedTargets(current).Select(s => s.ToString().ToLowerInvariant()))}.");
@@ -130,7 +134,7 @@ public sealed class PlanningException : Exception
 
     public static PlanningException TickTextAmbiguous(string text, IReadOnlyList<int> matchingIndices) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickTextAmbiguous,
-            $"The text '{text}' matches {matchingIndices.Count} acceptance-criteria items (indices {string.Join(", ", matchingIndices)}); tick by index instead.");
+            $"The text '{text}' matches {matchingIndices.Count} acceptance-criteria items (indices {string.Join(", ", matchingIndices)}); address by index instead.");
 
     public static PlanningException TickItemNotCheckable(int index, string rawText) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.TickItemNotCheckable,

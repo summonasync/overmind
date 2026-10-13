@@ -15,6 +15,8 @@ public sealed class PlanningArtifact
 
     public const string HumanDeletionMarker = "human";
 
+    public const int BriefMaxLength = 500;
+
     private static readonly FrozenSet<PlanningArtifactStatus> SpecPlanResultStatuses =
         new HashSet<PlanningArtifactStatus>
         {
@@ -97,7 +99,7 @@ public sealed class PlanningArtifact
                 : PlanningArtifactStatus.Draft,
             Review = review,
             Body = body,
-            Brief = brief == string.Empty ? null : brief,
+            Brief = NormalizeBrief(brief),
             Order = order,
             Version = 1,
             CreatedAt = now,
@@ -145,7 +147,7 @@ public sealed class PlanningArtifact
             Status = status,
             Review = review,
             Body = body,
-            Brief = brief == string.Empty ? null : brief,
+            Brief = NormalizeBrief(brief),
             Order = order,
             FrozenAt = frozenAt,
             Version = version,
@@ -276,8 +278,23 @@ public sealed class PlanningArtifact
 
     public void SetBrief(string? brief)
     {
-        Brief = brief == string.Empty ? null : brief;
+        Brief = NormalizeBrief(brief);
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static string? NormalizeBrief(string? brief)
+    {
+        if (string.IsNullOrWhiteSpace(brief))
+        {
+            return null;
+        }
+
+        if (brief.Contains('\r') || brief.Contains('\n') || brief.Length > BriefMaxLength)
+        {
+            throw PlanningException.InvalidBrief();
+        }
+
+        return brief;
     }
 
     public void ReplaceBlockedEdges(IReadOnlyCollection<Guid> blockingIds)
@@ -462,13 +479,21 @@ public sealed class PlanningArtifact
 
     private static string SwapAcMarker(string line, bool checking)
     {
-        var markerAt = line.IndexOf(checking ? "[ ]" : "[x]", StringComparison.Ordinal);
-        if (!checking && markerAt < 0)
-        {
-            markerAt = line.IndexOf("[X]", StringComparison.Ordinal);
-        }
+        var marker = checking ? "[ ]" : UntickMarker(line);
+        var markerAt = line.IndexOf(marker, StringComparison.Ordinal);
 
         return string.Concat(line.AsSpan(0, markerAt), checking ? "[x]" : "[ ]", line.AsSpan(markerAt + 3));
+    }
+
+    private static string UntickMarker(string line)
+    {
+        var text = line.TrimStart();
+        if (text.StartsWith("- ", StringComparison.Ordinal))
+        {
+            text = text[2..].TrimStart();
+        }
+
+        return text.StartsWith("[X]", StringComparison.Ordinal) ? "[X]" : "[x]";
     }
 
     private static string BareAcText(PlanningAcItem item)

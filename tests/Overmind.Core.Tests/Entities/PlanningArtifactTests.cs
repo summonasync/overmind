@@ -988,6 +988,19 @@ ship the guard
     }
 
     [Fact]
+    public void UntickAc_UpperCaseMarker_WithLowercaseBoxInTheTail_ClearsOnlyTheMarker()
+    {
+        var body = "<acceptance-criteria>\n- [X] todo [x] already covered by task 03\n</acceptance-criteria>\n";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, body);
+
+        var unticked = artifact.UntickAc(1, null);
+
+        unticked.Changed.ShouldBeTrue();
+        artifact.Body.ShouldContain("- [ ] todo [x] already covered by task 03");
+        artifact.Body.ShouldNotContain("- [x]");
+    }
+
+    [Fact]
     public void UntickAc_ItemWithoutCheckboxMarker_ThrowsNotCheckable()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
@@ -1131,6 +1144,60 @@ ship the guard
 
         artifact.SetPreservedFrontmatter(null);
         artifact.PreservedFrontmatter.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetBrief_AtCap_IsAccepted()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+        var brief = new string('x', PlanningArtifact.BriefMaxLength);
+
+        artifact.SetBrief(brief);
+
+        artifact.Brief.ShouldBe(brief);
+    }
+
+    [Fact]
+    public void SetBrief_OverCap_ThrowsInvalidBrief()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.SetBrief(new string('x', PlanningArtifact.BriefMaxLength + 1)));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidBrief);
+        artifact.Brief.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetBrief_Multiline_ThrowsInvalidBrief()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+
+        Should.Throw<PlanningException>(() => artifact.SetBrief("first line\nsecond line"))
+            .Code.ShouldBe(PlanningFailureCode.InvalidBrief);
+    }
+
+    [Fact]
+    public void SetBrief_BlankText_ClearsTheBrief()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+        artifact.SetBrief("real brief");
+
+        artifact.SetBrief(string.Empty);
+        artifact.Brief.ShouldBeNull();
+
+        artifact.SetBrief("real brief");
+        artifact.SetBrief("   ");
+        artifact.Brief.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Create_WithMultilineBrief_ThrowsInvalidBrief()
+    {
+        Should.Throw<PlanningException>(() => PlanningArtifact.Create(
+                FeatureId, PlanningArtifactKind.Task, "body content", brief: "one\ntwo"))
+            .Code.ShouldBe(PlanningFailureCode.InvalidBrief);
     }
 
     [Fact]

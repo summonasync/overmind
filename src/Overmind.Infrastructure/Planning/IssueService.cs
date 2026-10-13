@@ -85,21 +85,19 @@ public sealed class IssueService
             issues = issues.Where(i => i.Status == status.Value);
         }
 
-        return await
-            (from issue in issues
-             join project in _db.Projects.AsNoTracking() on issue.ProjectId equals project.Id
-             orderby issue.Status, issue.CreatedAt descending
-             select new IssueBoardRow(
-                 issue.Id,
-                 issue.ProjectId,
-                 project.Name,
-                 issue.Title,
-                 issue.Status,
-                 issue.AuthorProjectId,
-                 issue.CreatedAt,
-                 issue.ClosedAt,
-                 issue.PromotedToArtifactId,
-                 _db.IssueAppends.Count(a => a.IssueId == issue.Id)))
+        return await issues
+            .OrderBy(i => i.Status)
+            .ThenByDescending(i => i.CreatedAt)
+            .Select(i => new IssueBoardRow(
+                i.Id,
+                i.ProjectId,
+                i.Title,
+                i.Status,
+                i.AuthorProjectId,
+                i.CreatedAt,
+                i.ClosedAt,
+                i.PromotedToArtifactId,
+                _db.IssueAppends.Count(a => a.IssueId == i.Id)))
             .ToListAsync(ct);
     }
 

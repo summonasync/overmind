@@ -54,7 +54,7 @@ public sealed class OvermindPlanningTools
         "logNote is required for feature status moves: the note is recorded as a dated line in the feature log and carries the provenance (who asked for the move).";
 
     private const string PatchShapeError =
-        "A patch carries exactly one of: a section with its replacement content, an acceptance-criteria tick or un-tick (acIndex or exact acText), or a task brief — not both and not neither.";
+        "A patch carries exactly one of: a section with its replacement content, an acceptance-criteria tick or un-tick (acIndex or exact acText), or a task brief — never several and never none.";
 
     private const string AcIndexBasisLine =
         "acIndex is 1-based; numbering matches the materialized mirror; acText is the recommended selector";

@@ -2078,7 +2078,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("TickTextAmbiguous");
-        problem.Detail!.ShouldContain("tick by index instead");
+        problem.Detail!.ShouldContain("address by index instead");
     }
 
     [Fact]
@@ -2190,6 +2190,30 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("BriefNotAllowedForKind");
+    }
+
+    [Theory]
+    [InlineData(5000, 3)]
+    [InlineData(501, 1)]
+    [InlineData(20, 2)]
+    public async Task Patch_SetBrief_OverCapOrMultiline_Returns400InvalidBrief(int length, int lineCount)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nWire it.\n</goal>\n"
+        });
+        var brief = string.Join('\n', Enumerable.Repeat(new string('x', length), lineCount));
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "set_brief", Brief = brief });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidBrief");
     }
 
     [Theory]

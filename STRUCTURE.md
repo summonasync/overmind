@@ -64,7 +64,7 @@ Feature 006 landed the planning bounded context whole (domain, both doors, workf
 - **No comments by default** — comments exist only for non-obvious decisions. Never restate the code.
 - All user-facing messages, identifiers, and docs in English.
 - No `async void`. Cancellation tokens flow through async APIs.
-- No god-services: if a class accumulates >5 public methods, split it. Current ceiling is 6 (`PlanningArtifactService` — `PatchAsync` put it one over the guidance in 039; a patch-path extraction is the recorded split candidate, not to be done opportunistically); `SkillMaterializer` and `PlanningFeatureService` are at 3.
+- No god-services: if a class accumulates >5 public methods, split it. Current ceiling is 8 (`PlanningArtifactService` — `PatchAsync` pushed it past the 039 guidance and later additions kept it there; a patch-path extraction is the recorded split candidate, not to be done opportunistically); `PlanningFeatureService` is at 6, `SkillMaterializer` at 3.
 - FluentValidation for request validation; Shouldly + NSubstitute + xUnit for tests. Manual mapping or mappers — no AutoMapper.
 - EF Core migrations in `Overmind.Infrastructure/Migrations/`, generated, never hand-edited (the FTS5 trigger SQL in the initial migration is the documented exception).
 

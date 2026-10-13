@@ -115,7 +115,19 @@ public class CeremonyPhasePlannerTests
         excerpt.ShouldNotBeNull();
         excerpt.Length.ShouldBe(501);
         excerpt.ShouldEndWith("…");
-        excerpt.ShouldStartWith(new string('а', 499));
+        excerpt.ShouldStartWith(new string('а', 500));
+    }
+
+    [Fact]
+    public void BriefExcerpt_ExactlyAtCap_ReturnedVerbatim_NoEllipsis()
+    {
+        var paragraph = new string('а', CeremonyPhasePlanner.ExcerptCap);
+        var body = $"<goal>\n{paragraph}\n</goal>";
+
+        var excerpt = CeremonyPhasePlanner.BriefExcerpt(body);
+
+        excerpt.ShouldBe(paragraph);
+        excerpt.ShouldNotEndWith("…");
     }
 
     [Fact]

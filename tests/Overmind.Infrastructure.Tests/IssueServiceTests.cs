@@ -22,10 +22,8 @@ public sealed class IssueServiceTests : IDisposable
     private static readonly Guid ForeignSessionId = Guid.NewGuid();
 
     private readonly Guid _boardProjectId;
-    private readonly string _boardProjectName;
     private readonly Guid _authorProjectId;
     private readonly Guid _foreignProjectId;
-    private readonly string _foreignProjectName;
 
     public IssueServiceTests()
     {
@@ -43,10 +41,8 @@ public sealed class IssueServiceTests : IDisposable
         _context.Projects.Add(foreign);
         _context.SaveChanges();
         _boardProjectId = board.Id;
-        _boardProjectName = board.Name;
         _authorProjectId = author.Id;
         _foreignProjectId = foreign.Id;
-        _foreignProjectName = foreign.Name;
     }
 
     public void Dispose()
@@ -341,7 +337,7 @@ public sealed class IssueServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ListAll_AggregatesAcrossProjects_AndResolvesProjectNames()
+    public async Task ListAll_AggregatesAcrossProjects_WithAppendCounts()
     {
         var service = CreateIssueService();
         var onBoard = await service.CreateAsync(_boardProjectId, _authorProjectId, "Board crash", "body");
@@ -354,11 +350,9 @@ public sealed class IssueServiceTests : IDisposable
         rows.Select(r => r.Id).ShouldBe([onForeign.Id, onBoard.Id]);
         var boardRow = rows.Single(r => r.Id == onBoard.Id);
         boardRow.ProjectId.ShouldBe(_boardProjectId);
-        boardRow.ProjectName.ShouldBe(_boardProjectName);
         boardRow.AppendCount.ShouldBe(1);
         var foreignRow = rows.Single(r => r.Id == onForeign.Id);
         foreignRow.ProjectId.ShouldBe(_foreignProjectId);
-        foreignRow.ProjectName.ShouldBe(_foreignProjectName);
     }
 
     [Fact]

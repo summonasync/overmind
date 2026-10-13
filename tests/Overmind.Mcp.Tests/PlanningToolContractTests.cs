@@ -2447,7 +2447,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["untick"] = true
         });
 
-        ToolErrorText(withSection).ShouldContain("not both and not neither");
+        ToolErrorText(withSection).ShouldContain("never several and never none");
 
         var alone = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
         {
@@ -2455,21 +2455,24 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["untick"] = true
         });
 
-        ToolErrorText(alone).ShouldContain("not both and not neither");
+        ToolErrorText(alone).ShouldContain("never several and never none");
         Stub.Requests.ShouldNotContain(r =>
             r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
     }
 
     [Theory]
-    [InlineData(" ", "x", null, null, "non-blank section")]
-    [InlineData("goal", " ", null, null, "replacement content")]
-    [InlineData("goal", null, null, null, "replacement content")]
-    [InlineData(null, null, 1, "first", "not both")]
-    [InlineData(null, null, null, "", "non-blank acText")]
-    [InlineData(null, null, null, null, "not both and not neither")]
-    [InlineData("goal", "content", 1, null, "not both and not neither")]
+    [InlineData(" ", "x", null, null, null, "non-blank section")]
+    [InlineData("goal", " ", null, null, null, "replacement content")]
+    [InlineData("goal", null, null, null, null, "replacement content")]
+    [InlineData(null, null, 1, "first", null, "not both")]
+    [InlineData(null, null, null, "", null, "non-blank acText")]
+    [InlineData(null, null, null, null, null, "never several and never none")]
+    [InlineData("goal", "content", 1, null, null, "never several and never none")]
+    [InlineData("goal", "content", null, null, "stray brief", "never several and never none")]
+    [InlineData(null, null, null, null, " ", "non-blank single-line")]
+    [InlineData(null, null, null, null, "first\nsecond", "non-blank single-line")]
     public async Task PlanningPatchArtifact_MalformedShape_RejectedWithoutHttpCall(
-        string? section, string? content, int? acIndex, string? acText, string expectedFragment)
+        string? section, string? content, int? acIndex, string? acText, string? brief, string expectedFragment)
     {
         var arguments = new JsonObject
         {
@@ -2491,6 +2494,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         {
             arguments["acText"] = acText;
         }
+        if (brief is not null)
+        {
+            arguments["brief"] = brief;
+        }
 
         var response = await Driver.CallToolAsync("planning_patch_artifact", arguments);
 
@@ -2498,6 +2505,21 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain(expectedFragment);
         Stub.Requests.ShouldNotContain(r =>
             r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_BriefOverCap_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["brief"] = new string('x', 501)
+        });
+
+        ToolErrorText(response).ShouldContain("at most 500 chars");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
     }
 
     [Fact]

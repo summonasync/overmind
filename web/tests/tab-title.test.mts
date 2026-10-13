@@ -19,7 +19,13 @@ test("awaiting count prefixes the plain base without a project", () => {
   assert.equal(titleFor(null, 3), "(3) Overmind");
 });
 
-test("empty awaiting set keeps the bare project base", () => {
-  assert.equal(titleFor("Mindlash Studio", 0), "Mindlash Studio — Overmind");
-  assert.equal(titleFor(null, 0), "Overmind");
+test("negative awaiting never prefixes the base", () => {
+  assert.equal(titleFor("Mindlash Studio", -3), "Mindlash Studio — Overmind");
+  assert.equal(titleFor(null, -3), "Overmind");
+});
+
+test("attention count outranks awaiting for the prefix", () => {
+  assert.equal(titleFor("Mindlash Studio", 2, 5), "(5) Mindlash Studio — Overmind");
+  assert.equal(titleFor(null, 0, 4), "(4) Overmind");
+  assert.equal(titleFor(null, 2, 1), "(2) Overmind");
 });

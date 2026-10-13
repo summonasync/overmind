@@ -5,7 +5,6 @@ namespace Overmind.Infrastructure.Planning;
 public sealed record IssueBoardRow(
     Guid Id,
     Guid ProjectId,
-    string ProjectName,
     string Title,
     IssueStatus Status,
     Guid AuthorProjectId,
