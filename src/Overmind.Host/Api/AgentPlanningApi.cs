@@ -57,6 +57,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/priority", SetFeaturePriority).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/pin-code", PlanningCodePinApi.PinCodeForAgent).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/claim", Claim);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/unclaim", Unclaim);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/dependencies", PlanningDependenciesApi.List);

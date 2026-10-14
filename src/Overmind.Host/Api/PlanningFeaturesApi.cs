@@ -20,6 +20,7 @@ public static class PlanningFeaturesApi
         group.MapPut("/projects/{projectId:guid}/planning/features/{slug}", UpdateFeature);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/claim", Claim);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/unclaim", Unclaim);
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/pin-code", PlanningCodePinApi.PinCode);
         group.MapDelete("/projects/{projectId:guid}/planning/features/{slug}", DeleteFeature);
         group.MapPost("/projects/{projectId:guid}/planning/queue/reorder", PlanningQueueApi.Reorder);
 

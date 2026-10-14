@@ -245,6 +245,7 @@ public sealed class AgentSessionLockApiTests : IDisposable
         "set_feature_status", "update_feature", "set_feature_priority", "move_feature",
         "add_feature_dependency", "remove_feature_dependency", "upsert_artifact", "upsert_tasks",
         "set_status", "append_log", "patch_artifact", "validate", "delete_artifact",
+        "pin_feature_code",
     ]);
 
     private async Task<(HttpResponseMessage Response, Guid SpecId, Guid TaskId, string BlockerSlug)> SendMutationAsync(
@@ -274,6 +275,8 @@ public sealed class AgentSessionLockApiTests : IDisposable
                 new { Title = "Renamed", LogNote = "rename" }),
             "set_feature_priority" => (HttpMethod.Post, $"{featureUrl}/priority",
                 new { Priority = "p1" }),
+            "pin_feature_code" => (HttpMethod.Post, $"{featureUrl}/pin-code",
+                new { Branch = "feat/lock-branch" }),
             "move_feature" => (HttpMethod.Post, $"{featureUrl}/queue-move",
                 new { Move = "last" }),
             "add_feature_dependency" => (HttpMethod.Post, $"{featureUrl}/dependencies",

@@ -101,6 +101,22 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             Canned.PlanningFeaturePriorityJson);
         stub.Route(
             "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/pin-code",
+            req =>
+            {
+                var submitted = JsonNode.Parse(req.Body)!;
+                var echo = new JsonObject
+                {
+                    ["slug"] = "demo-feature",
+                    ["pinnedBranch"] = submitted["branch"]?.GetValue<string>(),
+                    ["pinnedWorktreePath"] = submitted["worktreePath"]?.GetValue<string>(),
+                    ["version"] = 4,
+                    ["lastLogLine"] = "code pin set on the board"
+                };
+                return new StubOvermindApi.Response(200, echo.ToJsonString());
+            });
+        stub.Route(
+            "POST",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/claim",
             200,
             Canned.PlanningClaimedJson);

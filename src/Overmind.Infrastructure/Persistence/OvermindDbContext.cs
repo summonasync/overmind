@@ -180,6 +180,8 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(f => f.ClaimedByAlias).HasMaxLength(AgentSession.MaxIdentityLength);
             builder.Property(f => f.ClaimedByVendor).HasMaxLength(AgentSession.MaxIdentityLength);
             builder.Property(f => f.ClaimedByHuman).HasDefaultValue(false);
+            builder.Property(f => f.PinnedBranch).HasMaxLength(200);
+            builder.Property(f => f.PinnedWorktreePath).HasMaxLength(400);
             builder.Property(f => f.Priority).HasDefaultValue(FeaturePriority.P2).HasSentinel(FeaturePriority.P2);
             builder.Property(f => f.QueuePosition).HasDefaultValue(0);
         });

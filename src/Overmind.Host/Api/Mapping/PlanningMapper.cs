@@ -152,7 +152,9 @@ public static class PlanningMapper
             feature.ClaimedByVendor,
             feature.ClaimedAt,
             feature.ClaimSessionId is null ? null : claimState,
-            feature.ClaimedByHuman);
+            feature.ClaimedByHuman,
+            feature.PinnedBranch,
+            feature.PinnedWorktreePath);
     }
 
     public static PlanningFeatureRosterResponse ToFeatureRosterResponse(
@@ -181,7 +183,9 @@ public static class PlanningMapper
             feature.ClaimedByVendor,
             feature.ClaimedAt,
             feature.ClaimSessionId is null ? null : claimState,
-            feature.ClaimedByHuman);
+            feature.ClaimedByHuman,
+            feature.PinnedBranch,
+            feature.PinnedWorktreePath);
     }
 
     public static PlanningFeatureDependenciesResponse ToDependenciesResponse(FeatureDependencies dependencies)

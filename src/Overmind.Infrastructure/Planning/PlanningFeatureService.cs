@@ -241,6 +241,31 @@ public sealed partial class PlanningFeatureService
         feature.AppendLog("claim released on done-close", source);
     }
 
+    public async Task<PlanningFeature> SetCodePinAsync(
+        Guid projectId, string slug, string? branch, string? worktreePath,
+        PlanningLogSource source, CancellationToken ct = default)
+    {
+        var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);
+        if (!projectExists)
+        {
+            throw PlanningException.MissingProject(projectId);
+        }
+
+        var feature = await _db.PlanningFeatures
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
+
+        if (feature is null)
+        {
+            throw PlanningException.MissingFeature(slug);
+        }
+
+        feature.SetCodePin(branch, worktreePath, source);
+
+        await _db.SaveChangesAsync(ct);
+        await _materialization.DispatchAsync(projectId, ct);
+        return feature;
+    }
+
     public async Task DeleteAsync(Guid projectId, string slug, CancellationToken ct = default)
     {
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);

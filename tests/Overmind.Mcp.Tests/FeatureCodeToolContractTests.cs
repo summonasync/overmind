@@ -112,6 +112,145 @@ public sealed class FeatureCodeToolContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PinnedFeature_MatchesPinFirstAndFlagsEntries()
+    {
+        var (worktreeDir, tempRoot) = CreateTempWorktree();
+        try
+        {
+            var git = new StubGitCli();
+            git.Stage("worktree list --porcelain",
+                """
+                worktree /repo/main
+                HEAD f67669fabc1234567890abcdef1234567890abcd
+                branch refs/heads/main
+
+                worktree {{PATH}}
+                HEAD 0123456789abcdef0123456789abcdef01234567
+                branch refs/heads/feat/063-worktree-feature-binding
+
+                """.Replace("{{PATH}}", worktreeDir));
+            git.Stage("for-each-ref",
+                "main\tf67669f\t2026-10-05T10:15:00+03:00\n" +
+                "feat/063-worktree-feature-binding\tcceb4fe\t2026-10-04T18:40:00Z\n" +
+                "feat/063-short-rename\t0a1b2c3\t2026-10-01T00:00:00Z\n");
+            _stub.RouteGet($"/api/projects/{Canned.ProjectId}", Canned.ProjectJson);
+            _stub.RouteGet(
+                $"/api/agent/projects/{Canned.ProjectId}/planning/features/063-worktree-feature-binding",
+                PinnedFeatureJson(worktreeDir));
+
+            var result = await Tool(git).FeatureCode("063-worktree-feature-binding", Canned.ProjectId);
+
+            var matches = result.GetProperty("matches");
+            matches.GetArrayLength().ShouldBe(3);
+
+            var worktree = matches[0];
+            worktree.GetProperty("kind").GetString().ShouldBe("worktree");
+            worktree.GetProperty("path").GetString().ShouldBe(worktreeDir);
+            worktree.GetProperty("pinned").GetBoolean().ShouldBeTrue();
+            worktree.GetProperty("stale").GetBoolean().ShouldBeFalse();
+
+            var branch = matches[1];
+            branch.GetProperty("kind").GetString().ShouldBe("branch");
+            branch.GetProperty("name").GetString().ShouldBe("feat/063-worktree-feature-binding");
+            branch.GetProperty("pinned").GetBoolean().ShouldBeTrue();
+
+            var convention = matches[2];
+            convention.GetProperty("name").GetString().ShouldBe("feat/063-short-rename");
+            convention.GetProperty("pinned").GetBoolean().ShouldBeFalse();
+
+            result.GetProperty("hint").ValueKind.ShouldBe(JsonValueKind.Null);
+            result.GetRawText().ShouldContain("\"pinned\":true");
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StalePin_IsReportedPinnedStale_NotDropped()
+    {
+        var git = new StubGitCli();
+        git.Stage("worktree list --porcelain",
+            """
+            worktree /repo/main
+            HEAD f67669fabc1234567890abcdef1234567890abcd
+            branch refs/heads/main
+
+            """);
+        git.Stage("for-each-ref", "main\tf67669f\t2026-10-05T10:15:00+03:00\n");
+        _stub.RouteGet($"/api/projects/{Canned.ProjectId}", Canned.ProjectJson);
+        _stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/063-worktree-feature-binding",
+            StalePinFeatureJson);
+
+        var result = await Tool(git).FeatureCode("063-worktree-feature-binding", Canned.ProjectId);
+
+        var matches = result.GetProperty("matches");
+        matches.GetArrayLength().ShouldBe(2);
+
+        var branchPin = matches[0];
+        branchPin.GetProperty("kind").GetString().ShouldBe("branch");
+        branchPin.GetProperty("name").GetString().ShouldBe("feat/063-swept-away");
+        branchPin.GetProperty("stale").GetBoolean().ShouldBeTrue();
+        branchPin.GetProperty("pinned").GetBoolean().ShouldBeTrue();
+        branchPin.GetProperty("lastCommit").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var worktreePin = matches[1];
+        worktreePin.GetProperty("kind").GetString().ShouldBe("worktree");
+        worktreePin.GetProperty("name").GetString().ShouldBe("063-swept-away");
+        worktreePin.GetProperty("path").GetString().ShouldBe("/repo/.claude/worktrees/063-swept-away");
+        worktreePin.GetProperty("stale").GetBoolean().ShouldBeTrue();
+        worktreePin.GetProperty("pinned").GetBoolean().ShouldBeTrue();
+
+        result.GetProperty("hint").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task ClearedPin_DiscoveryStaysUnflagged()
+    {
+        var (worktreeDir, tempRoot) = CreateTempWorktree();
+        try
+        {
+            var git = new StubGitCli();
+            git.Stage("worktree list --porcelain",
+                """
+                worktree {{PATH}}
+                HEAD 0123456789abcdef0123456789abcdef01234567
+                branch refs/heads/feat/063-worktree-feature-binding
+
+                """.Replace("{{PATH}}", worktreeDir));
+            git.Stage("for-each-ref",
+                "feat/063-worktree-feature-binding\tcceb4fe\t2026-10-04T18:40:00Z\n");
+            _stub.RouteGet($"/api/projects/{Canned.ProjectId}", Canned.ProjectJson);
+            _stub.RouteGet(
+                $"/api/agent/projects/{Canned.ProjectId}/planning/features/063-worktree-feature-binding",
+                ClearedPinFeatureJson);
+
+            var result = await Tool(git).FeatureCode("063-worktree-feature-binding", Canned.ProjectId);
+
+            result.GetProperty("matches").GetArrayLength().ShouldBe(2);
+            result.GetRawText().ShouldNotContain("\"pinned\"");
+            result.GetRawText().ShouldNotContain("pinnedBranch");
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    private static string PinnedFeatureJson(string worktreePath) =>
+        $$"""
+        {"slug":"063-worktree-feature-binding","title":"Worktree feature binding","status":"inProgress","priority":"p1","updatedAt":"2026-09-10T08:00:00Z","pinnedBranch":"feat/063-worktree-feature-binding","pinnedWorktreePath":"{{worktreePath}}"}
+        """;
+
+    private const string StalePinFeatureJson =
+        """{"slug":"063-worktree-feature-binding","title":"Worktree feature binding","status":"inProgress","priority":"p1","updatedAt":"2026-09-10T08:00:00Z","pinnedBranch":"feat/063-swept-away","pinnedWorktreePath":"/repo/.claude/worktrees/063-swept-away"}""";
+
+    private const string ClearedPinFeatureJson =
+        """{"slug":"063-worktree-feature-binding","title":"Worktree feature binding","status":"inProgress","priority":"p1","updatedAt":"2026-09-10T08:00:00Z","pinnedBranch":null,"pinnedWorktreePath":null}""";
+
+    [Fact]
     public async Task NoMatch_ReturnsHonestEmpty_WithConventionHint()
     {
         var git = new StubGitCli();

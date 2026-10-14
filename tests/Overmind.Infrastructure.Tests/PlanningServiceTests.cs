@@ -2905,4 +2905,91 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         ex.Code.ShouldBe(PlanningFailureCode.BlockedByNotAllowedForKind);
     }
+
+    [Fact]
+    public async Task SetCodePin_SetsFieldsAndLogLine_AndSurvivesReload()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "pinned", "Title", "body");
+
+        var pinned = await service.SetCodePinAsync(
+            _projectId, "pinned", "feat/pin-branch", "/repo/wt", PlanningLogSource.Agent);
+
+        pinned.PinnedBranch.ShouldBe("feat/pin-branch");
+        pinned.PinnedWorktreePath.ShouldBe("/repo/wt");
+        pinned.LastLogLine.ShouldContain("code pin set: branch 'feat/pin-branch', worktree '/repo/wt'");
+
+        var lines = PlanningLog.Parse(pinned.Body);
+        lines.Last().Source.ShouldBe(PlanningLogSource.Agent);
+
+        var reloaded = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "pinned");
+        reloaded.PinnedBranch.ShouldBe("feat/pin-branch");
+        reloaded.PinnedWorktreePath.ShouldBe("/repo/wt");
+    }
+
+    [Fact]
+    public async Task SetCodePin_Replace_AppendsOneLinePerChange()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "repinned", "Title", "body");
+
+        await service.SetCodePinAsync(_projectId, "repinned", "old", null, PlanningLogSource.Agent);
+        var replaced = await service.SetCodePinAsync(
+            _projectId, "repinned", "new", "/repo/wt", PlanningLogSource.Agent);
+
+        replaced.PinnedBranch.ShouldBe("new");
+        var lines = PlanningLog.Parse(replaced.Body);
+        lines.Count.ShouldBe(2);
+        lines[1].Text.ShouldBe("code pin set: branch 'new', worktree '/repo/wt'");
+    }
+
+    [Fact]
+    public async Task SetCodePin_ClearOnEmptyPin_IsNoOpWithoutLogLine()
+    {
+        var service = CreateFeatureService();
+        var feature = await service.CreateAsync(_projectId, "unpinned", "Title", "body");
+
+        var cleared = await service.SetCodePinAsync(_projectId, "unpinned", null, null, PlanningLogSource.Ui);
+
+        cleared.PinnedBranch.ShouldBeNull();
+        cleared.PinnedWorktreePath.ShouldBeNull();
+        PlanningLog.Parse(cleared.Body).ShouldBeEmpty();
+        cleared.LastLogLine.ShouldBe(feature.LastLogLine);
+    }
+
+    [Fact]
+    public async Task SetCodePin_ClearPinnedPin_ClearsFields()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "toclear", "Title", "body");
+        await service.SetCodePinAsync(_projectId, "toclear", "feat/x", "/repo/wt", PlanningLogSource.Agent);
+
+        var cleared = await service.SetCodePinAsync(_projectId, "toclear", null, null, PlanningLogSource.Agent);
+
+        cleared.PinnedBranch.ShouldBeNull();
+        cleared.PinnedWorktreePath.ShouldBeNull();
+        PlanningLog.Parse(cleared.Body).Last().Text.ShouldBe("code pin cleared");
+    }
+
+    [Fact]
+    public async Task SetCodePin_MissingFeature_ThrowsNotFound()
+    {
+        var service = CreateFeatureService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            service.SetCodePinAsync(_projectId, "ghost", "feat/x", null, PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingFeature);
+    }
+
+    [Fact]
+    public async Task SetCodePin_MissingProject_ThrowsNotFound()
+    {
+        var service = CreateFeatureService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            service.SetCodePinAsync(Guid.NewGuid(), "feat", "x", null, PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
+    }
 }

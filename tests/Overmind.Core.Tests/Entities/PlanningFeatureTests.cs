@@ -513,4 +513,106 @@ public class PlanningFeatureTests
         feature.Update("t4", "b4");
         feature.Version.ShouldBe(3);
     }
+
+    [Fact]
+    public void SetCodePin_BranchAndWorktree_SetValuesAndAppendOneLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        var changed = feature.SetCodePin("feat/pin-branch", "/repo/wt", PlanningLogSource.Agent);
+
+        changed.ShouldBeTrue();
+        feature.PinnedBranch.ShouldBe("feat/pin-branch");
+        feature.PinnedWorktreePath.ShouldBe("/repo/wt");
+        feature.Version.ShouldBe(1);
+
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.ShouldHaveSingleItem();
+        lines[0].Text.ShouldBe("code pin set: branch 'feat/pin-branch', worktree '/repo/wt'");
+        lines[0].Source.ShouldBe(PlanningLogSource.Agent);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void SetCodePin_BlankValues_NormalizeToNull(string? blank)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        feature.SetCodePin(blank, "  ", PlanningLogSource.Ui);
+
+        feature.PinnedBranch.ShouldBeNull();
+        feature.PinnedWorktreePath.ShouldBeNull();
+        PlanningLog.Parse(feature.Body).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void SetCodePin_Replace_UpdatesValuesAndAppendsOneLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("old-branch", null, PlanningLogSource.Agent);
+
+        feature.SetCodePin("new-branch", "/repo/wt", PlanningLogSource.Agent);
+
+        feature.PinnedBranch.ShouldBe("new-branch");
+        feature.PinnedWorktreePath.ShouldBe("/repo/wt");
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.Count.ShouldBe(2);
+        lines[1].Text.ShouldBe("code pin set: branch 'new-branch', worktree '/repo/wt'");
+    }
+
+    [Fact]
+    public void SetCodePin_IdenticalValues_NoOpWithoutLogLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/repo/wt", PlanningLogSource.Agent);
+
+        var changed = feature.SetCodePin("feat/pin", " /repo/wt ", PlanningLogSource.Agent);
+
+        changed.ShouldBeFalse();
+        PlanningLog.Parse(feature.Body).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void SetCodePin_ClearOnEmptyPin_NoOpWithoutLogLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        var changed = feature.SetCodePin(null, null, PlanningLogSource.Ui);
+
+        changed.ShouldBeFalse();
+        feature.PinnedBranch.ShouldBeNull();
+        feature.PinnedWorktreePath.ShouldBeNull();
+        PlanningLog.Parse(feature.Body).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void SetCodePin_ClearPinnedPin_ClearsValuesAndAppendsOneLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/repo/wt", PlanningLogSource.Agent);
+
+        var changed = feature.SetCodePin(null, "", PlanningLogSource.Agent);
+
+        changed.ShouldBeTrue();
+        feature.PinnedBranch.ShouldBeNull();
+        feature.PinnedWorktreePath.ShouldBeNull();
+        var lines = PlanningLog.Parse(feature.Body);
+        lines.Count.ShouldBe(2);
+        lines[1].Text.ShouldBe("code pin cleared");
+    }
+
+    [Fact]
+    public void SetCodePin_PartialClear_KeepsOtherHalf()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/repo/wt", PlanningLogSource.Agent);
+
+        feature.SetCodePin(null, "/repo/wt", PlanningLogSource.Agent);
+
+        feature.PinnedBranch.ShouldBeNull();
+        feature.PinnedWorktreePath.ShouldBe("/repo/wt");
+        PlanningLog.Parse(feature.Body).Last().Text.ShouldBe("code pin set: worktree '/repo/wt'");
+    }
 }

@@ -66,6 +66,15 @@ public sealed record UpdatePlanningFeatureByAgentRequest(
 
 public sealed record SetPlanningFeaturePriorityRequest(string Priority);
 
+public sealed record SetPlanningFeatureCodePinRequest(string? Branch, string? WorktreePath);
+
+public sealed record PlanningFeatureCodePinResponse(
+    string Slug,
+    string? PinnedBranch,
+    string? PinnedWorktreePath,
+    int Version,
+    string LastLogLine);
+
 public sealed record ClaimPlanningFeatureRequest(string Alias, string Vendor);
 
 public sealed record PlanningFeatureClaimResponse(
@@ -95,7 +104,9 @@ public sealed record PlanningFeatureResponse(
     string? ClaimedByVendor,
     DateTime? ClaimedAt,
     AgentSessionLiveness? ClaimState,
-    bool ClaimedByHuman);
+    bool ClaimedByHuman,
+    string? PinnedBranch,
+    string? PinnedWorktreePath);
 
 public sealed record PlanningFeatureRosterResponse(
     string Slug,
@@ -114,7 +125,9 @@ public sealed record PlanningFeatureRosterResponse(
     string? ClaimedByVendor,
     DateTime? ClaimedAt,
     AgentSessionLiveness? ClaimState,
-    bool ClaimedByHuman);
+    bool ClaimedByHuman,
+    string? PinnedBranch,
+    string? PinnedWorktreePath);
 
 public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
 

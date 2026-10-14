@@ -44,6 +44,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_update_feature",
             "planning_move_feature",
             "planning_set_feature_priority",
+            "planning_feature_code",
+            "planning_pin_feature_code",
             "planning_list_feature_dependencies",
             "planning_add_feature_dependency",
             "planning_remove_feature_dependency",
@@ -112,6 +114,11 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("explicit approval");
         tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("tail");
         tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("planning_move_feature");
+        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("naming convention");
+        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("planning_feature_code");
+        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("full replace");
+        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("no-op success");
+        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("one feature log line");
         tools["planning_list_feature_dependencies"]!["description"]!.GetValue<string>().ShouldContain("done or review");
         tools["planning_add_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("cycle");
         tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
@@ -140,6 +147,30 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("commit the planning alongside the code");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
+
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(31);
+    }
+
+    [Fact]
+    public async Task PricedLadder_CarriesTierPhrases_NineRungs()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var descriptions = response["result"]!["tools"]!.AsArray()
+            .Select(t => (Name: t!["name"]!.GetValue<string>(), Text: t["description"]!.GetValue<string>()))
+            .Where(pair => pair.Name.StartsWith("planning_", StringComparison.Ordinal))
+            .ToDictionary(pair => pair.Name, pair => pair.Text);
+
+        descriptions["planning_append_log"].ShouldContain("cheapest write");
+        descriptions["planning_pin_feature_code"].ShouldContain("full replace");
+        descriptions["planning_edit_log"].ShouldContain("cheap write tier");
+        descriptions["planning_patch_artifact"].ShouldContain("middle tier");
+        descriptions["planning_upsert_artifact"].ShouldContain("most expensive write");
+        descriptions["planning_read_artifact"].ShouldContain("cheapest read");
+        descriptions["planning_read_artifact_diff"].ShouldContain("no full bodies, only the change hunks");
+        descriptions["planning_read_feature"].ShouldContain("most expensive read");
+
+        descriptions.Count(pair => pair.Value.Contains("most expensive", StringComparison.Ordinal)).ShouldBe(2);
     }
 
     [Fact]
@@ -201,6 +232,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     [InlineData("planning_claim_feature", """{"slug":"demo-feature","alias":"Dan","vendor":"claude"}""")]
     [InlineData("planning_unclaim_feature", """{"slug":"demo-feature"}""")]
     [InlineData("planning_set_feature_priority", """{"slug":"demo-feature","priority":"p1"}""")]
+    [InlineData("planning_pin_feature_code", """{"slug":"demo-feature"}""")]
     [InlineData("planning_list_feature_dependencies", """{"slug":"demo-feature"}""")]
     [InlineData("planning_add_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""")]
     [InlineData("planning_remove_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""")]
@@ -2517,6 +2549,73 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         ToolErrorText(response).ShouldContain($"Invalid feature priority '{priority}'");
         Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/priority", StringComparison.Ordinal));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningPinFeatureCode_PostsFullReplacePayloadThroughTheAgentDoor()
+    {
+        var response = await Driver.CallToolAsync("planning_pin_feature_code", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["branch"] = "feat/pinned-branch",
+            ["worktreePath"] = "/repo/wt"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/pin-code", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/pin-code");
+        var body = JsonNode.Parse(request.Body)!;
+        body["branch"]!.GetValue<string>().ShouldBe("feat/pinned-branch");
+        body["worktreePath"]!.GetValue<string>().ShouldBe("/repo/wt");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["slug"]!.GetValue<string>().ShouldBe("demo-feature");
+        echo["pinnedBranch"]!.GetValue<string>().ShouldBe("feat/pinned-branch");
+        echo["pinnedWorktreePath"]!.GetValue<string>().ShouldBe("/repo/wt");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("code pin set on the board");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningPinFeatureCode_BlankArgsNormalizeToNulls_AndEchoTheClear()
+    {
+        var response = await Driver.CallToolAsync("planning_pin_feature_code", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/pin-code", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["branch"].ShouldBeNull();
+        body["worktreePath"].ShouldBeNull();
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["pinnedBranch"].ShouldBeNull();
+        echo["pinnedWorktreePath"].ShouldBeNull();
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningPinFeatureCode_MissingFeature_PassesThe404Through()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/pin-code",
+            404,
+            Canned.PlanningFeatureNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_pin_feature_code", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = "ghost-feature"
+        });
+
+        ToolErrorText(response).ShouldContain("was not found");
         Driver.HasExited.ShouldBeFalse();
     }
 

@@ -19,6 +19,8 @@ public sealed class PlanningFeature
     public DateTime? ClaimedAt { get; private set; }
     public Guid? ClaimSessionId { get; private set; }
     public bool ClaimedByHuman { get; private set; }
+    public string? PinnedBranch { get; private set; }
+    public string? PinnedWorktreePath { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -185,6 +187,49 @@ public sealed class PlanningFeature
     {
         Priority = priority;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public bool SetCodePin(string? branch, string? worktreePath, PlanningLogSource source)
+    {
+        var pinnedBranch = NormalizePin(branch);
+        var pinnedWorktreePath = NormalizePin(worktreePath);
+
+        if (string.Equals(PinnedBranch, pinnedBranch, StringComparison.Ordinal) &&
+            string.Equals(PinnedWorktreePath, pinnedWorktreePath, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        PinnedBranch = pinnedBranch;
+        PinnedWorktreePath = pinnedWorktreePath;
+        AppendLog(PinChangedNote(pinnedBranch, pinnedWorktreePath), source);
+        return true;
+    }
+
+    private static string? NormalizePin(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string PinChangedNote(string? branch, string? worktreePath)
+    {
+        if (branch is null && worktreePath is null)
+        {
+            return "code pin cleared";
+        }
+
+        var parts = new List<string>(2);
+        if (branch is not null)
+        {
+            parts.Add($"branch '{branch}'");
+        }
+
+        if (worktreePath is not null)
+        {
+            parts.Add($"worktree '{worktreePath}'");
+        }
+
+        return $"code pin set: {string.Join(", ", parts)}";
     }
 
     public void SetQueuePosition(int position)

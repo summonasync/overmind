@@ -1702,6 +1702,56 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task PinCode_AgentDoor_SetsPinWithTheAgentMarker()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/feat/pin-code",
+            new { Branch = "feat/agent-branch", WorktreePath = "/repo/wt" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pin = await response.Content.ReadFromJsonAsync<PinJson>(JsonOptions);
+        pin!.PinnedBranch.ShouldBe("feat/agent-branch");
+        pin.LastLogLine.ShouldContain("code pin set: branch 'feat/agent-branch', worktree '/repo/wt'");
+
+        var roster = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat?includeArtifacts=false", JsonOptions);
+        roster!.PinnedBranch.ShouldBe("feat/agent-branch");
+        roster.PinnedWorktreePath.ShouldBe("/repo/wt");
+        roster.Body.ShouldContain("[agent] — code pin set: branch 'feat/agent-branch'");
+    }
+
+    [Fact]
+    public async Task PinCode_AgentDoor_ClearsPinAndLogsCleared()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var pinUrl = $"/api/agent/projects/{project.Id}/planning/features/feat/pin-code";
+        await _client.PostAsJsonAsync(pinUrl, new { Branch = "feat/agent-branch" });
+
+        var response = await _client.PostAsJsonAsync(pinUrl, new { Branch = (string?)null, WorktreePath = (string?)null });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pin = await response.Content.ReadFromJsonAsync<PinJson>(JsonOptions);
+        pin!.PinnedBranch.ShouldBeNull();
+        pin.LastLogLine.ShouldContain("code pin cleared");
+    }
+
+    [Fact]
+    public async Task PinCode_AgentDoor_MissingFeature_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/features/ghost/pin-code",
+            new { Branch = "feat/x" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task UpdateFeature_UnknownPriority_Returns400ListingBands()
     {
         var project = await CreateProjectAsync();
@@ -2843,7 +2893,11 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     public sealed record FeatureJson(
         string Slug, string Title, string Body, string Status,
-        int Version, DateTime CreatedAt, DateTime UpdatedAt, ArtifactJson[] Artifacts);
+        int Version, DateTime CreatedAt, DateTime UpdatedAt, ArtifactJson[] Artifacts,
+        string? PinnedBranch = null, string? PinnedWorktreePath = null);
+
+    public sealed record PinJson(
+        string Slug, string? PinnedBranch, string? PinnedWorktreePath, int Version, string LastLogLine);
 
     public sealed record ArtifactJson(
         Guid Id, string Kind, string Status, string Review,

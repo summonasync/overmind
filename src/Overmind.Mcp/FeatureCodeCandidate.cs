@@ -7,4 +7,9 @@ public sealed record FeatureCodeCandidate(
     string? Path,
     string? Ref,
     string? HeadSha,
-    bool Stale);
+    bool Stale,
+    bool Pinned = false)
+{
+    public const string WorktreeKind = "worktree";
+    public const string BranchKind = "branch";
+}

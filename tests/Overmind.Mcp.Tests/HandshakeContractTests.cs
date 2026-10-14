@@ -66,7 +66,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheFortyEightTools()
+    public async Task ToolsList_ExposesExactlyTheFortyNineTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -88,6 +88,7 @@ public class HandshakeContractTests : McpSessionTestBase
             "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features",
             "planning_materialize", "planning_materialize_status", "planning_move_feature",
             "planning_patch_artifact",
+            "planning_pin_feature_code",
             "planning_read_artifact", "planning_read_artifact_diff", "planning_read_feature",
             "planning_remove_feature_dependency",
             "planning_set_feature_priority", "planning_set_feature_status", "planning_set_status",

@@ -727,6 +727,43 @@ public sealed class OvermindPlanningTools
         return CompactFeature(feature);
     }
 
+    [McpServerTool(Name = "planning_pin_feature_code", Destructive = false, Idempotent = true)]
+    [Description("Pins the explicit code location of a feature: a branch and/or a worktree path stored on the feature itself. planning_feature_code matches branches and worktrees by naming convention; a pin overrides that — use it when the code lives on a differently named branch, several candidates match, or the worktree was created by hand. Upsert semantics: the body is a full replace, last write wins, so resending one field keeps only what you send; both fields null or omitted clears the pin entirely, and clearing an empty pin is a no-op success. Every actual change appends one feature log line; the resulting pin is echoed.")]
+    public async Task<CallToolResult> PinFeatureCode(
+        [Description("Slug of the feature to pin, as shown on the board.")] string slug,
+        [Description("Branch to pin as a short branch name as printed by planning_feature_code; null or omitted clears the branch half of the pin.")] string? branch = null,
+        [Description("Worktree path to pin; null or omitted clears the worktree half of the pin.")] string? worktreePath = null,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
+        var echo = await _mutations.SendAsync(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/pin-code",
+            new { branch = BlankToNull(branch), worktreePath = BlankToNull(worktreePath) },
+            ct), readback: null, ct);
+
+        var pin = new JsonObject
+        {
+            ["slug"] = echo.GetProperty("slug").GetString(),
+            ["pinnedBranch"] = PinValue(echo, "pinnedBranch"),
+            ["pinnedWorktreePath"] = PinValue(echo, "pinnedWorktreePath"),
+            ["lastLogLine"] = echo.GetProperty("lastLogLine").GetString()
+        };
+        return EchoResult(pin.Deserialize<JsonElement>());
+    }
+
+    private static string? BlankToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? PinValue(JsonElement payload, string field) =>
+        payload.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
     [McpServerTool(Name = "planning_list_feature_dependencies", ReadOnly = true, Idempotent = true)]
     [Description("Lists the dependency graph of a feature: blockedBy (features this one waits for) and blocks (features waiting on this one), each entry carrying slug, status and closed — a dependency closes when its blocker reaches done or review. An unclosed blockedBy stops planning_current_task.")]
     public Task<JsonElement> ListFeatureDependencies(

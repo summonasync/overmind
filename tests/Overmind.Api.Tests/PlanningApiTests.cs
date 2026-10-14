@@ -313,7 +313,7 @@ public sealed class PlanningApiTests : IDisposable
         var feature = JsonDocument.Parse(raw).RootElement;
 
         feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman"]);
+            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath"]);
 
         var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();
         artifacts.Length.ShouldBe(2);
@@ -362,7 +362,7 @@ public sealed class PlanningApiTests : IDisposable
         raw.ShouldNotContain("spec note");
         var feature = JsonDocument.Parse(raw).RootElement;
         feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman"]);
+            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath"]);
         feature.GetProperty("body").GetString()!.ShouldContain("UNIQUE_FEATURE_MARKER");
 
         var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();
@@ -1643,6 +1643,127 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task PinCode_SetsPin_AndFeatureReadCarriesPinFields()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/pin-code",
+            new { Branch = "feat/pin-branch", WorktreePath = "/repo/wt" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pin = await response.Content.ReadFromJsonAsync<PinJson>(JsonOptions);
+        pin!.Slug.ShouldBe("feat");
+        pin.PinnedBranch.ShouldBe("feat/pin-branch");
+        pin.PinnedWorktreePath.ShouldBe("/repo/wt");
+        pin.LastLogLine.ShouldContain("code pin set: branch 'feat/pin-branch', worktree '/repo/wt'");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.PinnedBranch.ShouldBe("feat/pin-branch");
+        feature.PinnedWorktreePath.ShouldBe("/repo/wt");
+        feature.Body.ShouldContain("[ui] — code pin set: branch 'feat/pin-branch'");
+    }
+
+    [Fact]
+    public async Task PinCode_ReplaceAndClear_RoundTripsWithOneLinePerChange()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var pinUrl = $"/api/projects/{project.Id}/planning/features/feat/pin-code";
+
+        await _client.PostAsJsonAsync(pinUrl, new { Branch = "first" });
+        var replaced = await _client.PostAsJsonAsync(pinUrl, new { Branch = "second", WorktreePath = "/repo/wt" });
+        var cleared = await _client.PostAsJsonAsync(pinUrl, new { Branch = (string?)null, WorktreePath = (string?)null });
+
+        replaced.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var replacedPin = await replaced.Content.ReadFromJsonAsync<PinJson>(JsonOptions);
+        replacedPin!.PinnedBranch.ShouldBe("second");
+        replacedPin.LastLogLine.ShouldContain("code pin set: branch 'second', worktree '/repo/wt'");
+
+        cleared.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var clearedPin = await cleared.Content.ReadFromJsonAsync<PinJson>(JsonOptions);
+        clearedPin!.PinnedBranch.ShouldBeNull();
+        clearedPin.PinnedWorktreePath.ShouldBeNull();
+        clearedPin.LastLogLine.ShouldContain("code pin cleared");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/feat?includeArtifacts=false", JsonOptions);
+        feature!.PinnedBranch.ShouldBeNull();
+        feature.Body.ShouldContain("code pin cleared");
+    }
+
+    [Fact]
+    public async Task PinCode_ClearOnEmptyPin_NoOpSuccess()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/pin-code",
+            new { Branch = (string?)null, WorktreePath = (string?)null });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pin = await response.Content.ReadFromJsonAsync<PinJson>(JsonOptions);
+        pin!.PinnedBranch.ShouldBeNull();
+        pin.PinnedWorktreePath.ShouldBeNull();
+        pin.LastLogLine.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task PinCode_MissingFeature_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/ghost/pin-code",
+            new { Branch = "feat/x" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task PinCode_MissingProject_Returns404()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{Guid.NewGuid()}/planning/features/feat/pin-code",
+            new { Branch = "feat/x" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task PinCode_OversizedBranch_ReturnsValidationProblem()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/pin-code",
+            new { Branch = new string('b', 201) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Branch");
+    }
+
+    [Fact]
+    public async Task PinCode_MultilineWorktreePath_ReturnsValidationProblem()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/pin-code",
+            new { WorktreePath = "/repo/wt\nsecond" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("WorktreePath");
+    }
+
+    [Fact]
     public async Task GetArtifact_Unknown_Returns404()
     {
         var response = await _client.GetAsync($"/api/planning/artifacts/{Guid.NewGuid()}");
@@ -1775,7 +1896,11 @@ public sealed class PlanningApiTests : IDisposable
 
     public sealed record FeatureJson(
         string Slug, string Title, string Body, string Status, string Priority,
-        int Version, DateTime CreatedAt, DateTime UpdatedAt, ArtifactJson[] Artifacts);
+        int Version, DateTime CreatedAt, DateTime UpdatedAt, ArtifactJson[] Artifacts,
+        string? PinnedBranch = null, string? PinnedWorktreePath = null);
+
+    public sealed record PinJson(
+        string Slug, string? PinnedBranch, string? PinnedWorktreePath, int Version, string LastLogLine);
 
     public sealed record ArtifactJson(
         Guid Id, string Kind, string Status, string Review,

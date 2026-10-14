@@ -102,6 +102,21 @@ public sealed class PlanningTaskUpsertRequestValidator : AbstractValidator<Plann
     }
 }
 
+public sealed class SetPlanningFeatureCodePinRequestValidator
+    : AbstractValidator<SetPlanningFeatureCodePinRequest>
+{
+    public SetPlanningFeatureCodePinRequestValidator()
+    {
+        RuleFor(x => x.Branch).MaximumLength(200).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
+            .WithMessage("Branch must be a single line.")
+            .When(x => x.Branch is not null);
+
+        RuleFor(x => x.WorktreePath).MaximumLength(400).Must(p => !p!.Contains('\r') && !p.Contains('\n'))
+            .WithMessage("WorktreePath must be a single line.")
+            .When(x => x.WorktreePath is not null);
+    }
+}
+
 public sealed class SetPlanningFeatureStatusRequestValidator : AbstractValidator<SetPlanningFeatureStatusRequest>
 {
     public SetPlanningFeatureStatusRequestValidator()

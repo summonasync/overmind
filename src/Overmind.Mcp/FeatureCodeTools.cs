@@ -9,8 +9,6 @@ namespace Overmind.Mcp;
 [McpServerToolType]
 public sealed class FeatureCodeTools
 {
-    private const string WorktreeKind = "worktree";
-    private const string BranchKind = "branch";
     private const string BranchListArguments =
         "for-each-ref --format=%(refname:short)%09%(objectname:short)%09%(committerdate:iso8601-strict) refs/heads";
     private const string NoMatchHint =
@@ -34,6 +32,10 @@ public sealed class FeatureCodeTools
         "feature's slug or its NNN prefix (the feat/NNN-slug convention) are reported with kind (worktree/branch), name, " +
         "path and last commit short hash + date; a worktree whose path no longer exists is reported stale, not dropped. " +
         "Multiple matches are all listed; no match returns an honest empty result with the naming-convention hint. " +
+        "An explicit code pin (planning_pin_feature_code) overrides the convention: " +
+        "pinned locations are matched against the local listing first and flagged pinned, convention hits follow " +
+        "deduplicated against the pin, and a pinned location missing locally is reported stale — never silently dropped, " +
+        "never auto-cleared; with no pin set the output is unchanged. " +
         "The answer rides along with the host's feature read (status/priority context) into one payload — the host half " +
         "may fail independently, and then the discovery half is still answered with featureError set. " +
         "Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
@@ -50,7 +52,10 @@ public sealed class FeatureCodeTools
 
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var workspace = Environment.CurrentDirectory;
-        var (matches, heads) = await DiscoverAsync(trimmed, workspace, ct);
+        var (candidates, heads) = await DiscoverAsync(trimmed, workspace, ct);
+        var context = await ReadFeatureAsync(resolved, trimmed, workspace, ct);
+        var (pinnedBranch, pinnedWorktreePath) = CodePinOf(context.Feature);
+        var matches = FeatureCodeMerger.Merge(trimmed, candidates, pinnedBranch, pinnedWorktreePath);
 
         var payload = new JsonObject
         {
@@ -59,11 +64,11 @@ public sealed class FeatureCodeTools
             ["matches"] = await MatchesJsonAsync(matches, heads, workspace, ct),
             ["hint"] = matches.Count == 0 ? NoMatchHint : null
         };
-        await AppendFeatureAsync(payload, resolved, trimmed, workspace, ct);
+        AppendFeatureContext(payload, context, workspace);
         return JsonSerializer.SerializeToElement(payload);
     }
 
-    private async Task<(IReadOnlyList<FeatureCodeCandidate> Matches, IReadOnlyDictionary<string, GitBranchHead> Heads)> DiscoverAsync(
+    private async Task<(IReadOnlyList<FeatureCodeCandidate> Candidates, IReadOnlyDictionary<string, GitBranchHead> Heads)> DiscoverAsync(
         string slug, string workspace, CancellationToken ct)
     {
         var listing = await RunAsync(workspace, "worktree list --porcelain", ct);
@@ -80,10 +85,10 @@ public sealed class FeatureCodeTools
         foreach (var head in heads.Values)
         {
             candidates.Add(new FeatureCodeCandidate(
-                BranchKind, head.Name, [head.Name], null, head.Name, null, false));
+                FeatureCodeCandidate.BranchKind, head.Name, [head.Name], null, head.Name, null, false));
         }
 
-        return (FeatureCodeMatcher.Match(slug, candidates), heads);
+        return (candidates, heads);
     }
 
     private static FeatureCodeCandidate WorktreeCandidate(GitWorktree worktree)
@@ -94,13 +99,34 @@ public sealed class FeatureCodeTools
             : [worktree.Branch, leaf];
 
         return new FeatureCodeCandidate(
-            WorktreeKind,
+            FeatureCodeCandidate.WorktreeKind,
             worktree.Branch ?? leaf,
             names,
             worktree.Path,
             worktree.Branch,
             worktree.IsBare ? null : worktree.Head,
             !Directory.Exists(worktree.Path));
+    }
+
+    private async Task<FeatureReadContext> ReadFeatureAsync(Guid projectId, string slug, string workspace, CancellationToken ct)
+    {
+        bool? workspaceMatchesProject = null;
+        JsonElement? feature = null;
+        string? error = null;
+        try
+        {
+            var project = await _api.GetAsync($"/api/projects/{projectId}", ct);
+            workspaceMatchesProject = WorkspaceMatchesProject(workspace, StringOf(project, "diskPath"));
+            feature = await _api.GetAsync(
+                $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}?includeArtifacts=false", ct);
+        }
+        catch (Exception ex) when (ex is ApiStatusException or ApiNotFoundException or ApiUnreachableException)
+        {
+            feature = null;
+            error = $"the host feature read failed, so only the discovery half is answered: {ex.Message}";
+        }
+
+        return new FeatureReadContext(workspaceMatchesProject, feature, error);
     }
 
     private async Task<JsonArray> MatchesJsonAsync(
@@ -110,19 +136,26 @@ public sealed class FeatureCodeTools
         CancellationToken ct)
     {
         var array = new JsonArray();
+        var anyPinned = matches.Any(match => match.Pinned);
         foreach (var match in matches)
         {
             var commit = await CommitOfAsync(match, heads, workspace, ct);
-            array.Add(new JsonObject
+            var entry = new JsonObject
             {
                 ["kind"] = match.Kind,
                 ["name"] = match.Name,
                 ["path"] = match.Path,
-                ["stale"] = match.Stale,
-                ["lastCommit"] = commit is null
-                    ? null
-                    : new JsonObject { ["hash"] = commit.Value.Hash, ["date"] = commit.Value.Date }
-            });
+                ["stale"] = match.Stale
+            };
+            if (anyPinned)
+            {
+                entry["pinned"] = match.Pinned;
+            }
+
+            entry["lastCommit"] = commit is null
+                ? null
+                : new JsonObject { ["hash"] = commit.Value.Hash, ["date"] = commit.Value.Date };
+            array.Add(entry);
         }
 
         return array;
@@ -136,7 +169,7 @@ public sealed class FeatureCodeTools
             return (head.ShortHash, head.CommitDate);
         }
 
-        if (match.Kind == WorktreeKind && match.HeadSha is { } sha && sha.Length is >= 4 and <= 64 && sha.All(char.IsAsciiHexDigit))
+        if (match.Kind == FeatureCodeCandidate.WorktreeKind && match.HeadSha is { } sha && sha.Length is >= 4 and <= 64 && sha.All(char.IsAsciiHexDigit))
         {
             var result = await RunAsync(workspace, $"log -1 --format=%h%x09%cI {sha}", ct);
             var parts = result.StandardOutput.TrimEnd().Split('\t');
@@ -167,29 +200,29 @@ public sealed class FeatureCodeTools
         return result;
     }
 
-    private async Task AppendFeatureAsync(JsonObject payload, Guid projectId, string slug, string workspace, CancellationToken ct)
+    private static void AppendFeatureContext(JsonObject payload, FeatureReadContext context, string workspace)
     {
-        try
+        if (context.WorkspaceMatchesProject is { } matchesProject)
         {
-            var project = await _api.GetAsync($"/api/projects/{projectId}", ct);
-            payload["workspaceMatchesProject"] = WorkspaceMatchesProject(workspace, StringOf(project, "diskPath"));
-            var feature = await _api.GetAsync(
-                $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}?includeArtifacts=false", ct);
-            payload["feature"] = new JsonObject
+            payload["workspaceMatchesProject"] = matchesProject;
+        }
+
+        payload["feature"] = context.Feature is { } feature
+            ? new JsonObject
             {
                 ["title"] = StringOf(feature, "title"),
                 ["status"] = StringOf(feature, "status"),
                 ["priority"] = StringOf(feature, "priority"),
                 ["updatedAt"] = StringOf(feature, "updatedAt")
-            };
-            payload["featureError"] = null;
-        }
-        catch (Exception ex) when (ex is ApiStatusException or ApiNotFoundException or ApiUnreachableException)
-        {
-            payload["feature"] = null;
-            payload["featureError"] = $"the host feature read failed, so only the discovery half is answered: {ex.Message}";
-        }
+            }
+            : null;
+        payload["featureError"] = context.Error;
     }
+
+    private static (string? Branch, string? WorktreePath) CodePinOf(JsonElement? feature) =>
+        feature is { } payload
+            ? (StringOf(payload, "pinnedBranch"), StringOf(payload, "pinnedWorktreePath"))
+            : (null, null);
 
     private static bool WorkspaceMatchesProject(string workspace, string? diskPath)
     {
@@ -210,4 +243,6 @@ public sealed class FeatureCodeTools
         value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+
+    private sealed record FeatureReadContext(bool? WorkspaceMatchesProject, JsonElement? Feature, string? Error);
 }

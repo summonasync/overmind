@@ -37,15 +37,17 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task Onboard_Quickstart_WarnsAgentsToCheckTombstonesBeforeResurrecting()
+    public async Task Onboard_Quickstart_TombstoneAwareness_PointsAtBriefing()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
-        var project = await CreateProjectAsync(name, TestPaths.DiskPath(name));
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
 
         var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
 
-        onboard.Quickstart.ShouldContain("check tombstones");
-        onboard.Quickstart.ShouldContain("list_entries type=tombstone");
+        onboard.Quickstart.ShouldContain("call overmind_briefing");
+        onboard.Quickstart.ShouldContain("and the tombstone list");
+        onboard.Quickstart.ShouldContain("Check tombstones before proposing anything that smells like a resurrect");
+        onboard.Quickstart.ShouldContain("deleted entries are buried there with title, provenance and final content, not erased");
     }
 
     [Fact]
