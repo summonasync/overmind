@@ -17,13 +17,14 @@ whenToUse: |
 ## Context & Documentation Order
 Before proposing ANY design changes, read project documentation in this strict order:
 1. **`AGENTS.md`** — Tech stack, frontend conventions, build commands
-2. **`CONTEXT.md`** — Product context, target audience, current phase, UI concepts (Kanban, Calendar, Chat, Admin)
+2. **`CONTEXT.md`** — Product context: mission, target audience, current phase, UI concepts
 3. **`STRUCTURE.md`** — Frontend structure, FSD rules, component conventions, Do/Don't
 4. **`TECHNICAL-SOLUTIONS.md`** — Design system decisions (why shadcn/ui, why Tailwind 4, existing theme choices)
 5. **`brand-book.md`** (if exists) — Current colors, typography, spacing, component rules, logo usage
 6. **Current UI screenshots / descriptions** — Ask user for screenshots of pages that need redesign, or describe current state
 
-If `brand-book.md` does not exist, offer to create it from scratch or from existing Tailwind config.
+Product context (audience, tone, domain UI needs) comes from these docs — never assume it.
+If `brand-book.md` does not exist, offer to create it from scratch or from the existing theme.
 
 ---
 
@@ -31,62 +32,55 @@ If `brand-book.md` does not exist, offer to create it from scratch or from exist
 
 ### Step 1: Audit Current Design System
 Analyze the existing UI by reading:
-- `tailwind.config.ts` (or `globals.css` with CSS variables in Tailwind 4)
-- `src/app/layout.tsx` — root layout, fonts, providers
+- `src/app/globals.css` — Tailwind 4 is CSS-first: `@import "tailwindcss"`, `@theme` tokens, `@custom-variant dark`. A `tailwind.config.ts` alongside means legacy v3 compat mode — flag it
+- `src/app/layout.tsx` — root layout, fonts (loaded via `next/font`?), providers
 - `src/shared/ui/` or `src/components/ui/` — shadcn/ui components
-- Any existing theme files, CSS variables, or design tokens
+- Any existing theme files, CSS variables, or design tokens (modern shadcn: oklch values; legacy shadcn: bare HSL triplets consumed via `hsl(var(--x))` — detect which convention is in use)
 
 Check for:
-- [ ] **Color consistency** — Are colors hardcoded in components? Or centralized in CSS variables?
-- [ ] **Typography scale** — Is there a consistent font size/weight system? Or arbitrary `text-[14px]` everywhere?
-- [ ] **Spacing rhythm** — Is spacing based on a scale (4px, 8px, 16px...) or random `mt-3`, `p-5`?
-- [ ] **Component consistency** — Are buttons, inputs, cards visually consistent across features?
-- [ ] **Accessibility (a11y)** — Color contrast ratios (WCAG 2.1 AA), focus indicators, `aria-label` usage
-- [ ] **Dark mode support** — Is there a `dark` class strategy? Or light-only?
-- [ ] **Responsive design** — Mobile-first breakpoints? Or desktop-only with broken mobile?
+- [ ] **Color consistency** — hardcoded colors in components, or centralized tokens?
+- [ ] **Token convention** — Tailwind 4 CSS-first (`@theme`) or legacy `tailwind.config.ts`? oklch or legacy HSL triplets?
+- [ ] **v4 drift** — classes renamed in Tailwind 4 (`outline-none` → `outline-hidden`, `shadow-sm` → `shadow-xs`, default `ring` is 1px `currentColor`) silently changing the look after an upgrade?
+- [ ] **Typography scale** — consistent font size/weight system, or arbitrary `text-[14px]` everywhere?
+- [ ] **Font loading** — via `next/font` (self-hosted, no layout shift), or a `<link>` to Google Fonts (flash + CLS)?
+- [ ] **Spacing rhythm** — scale-based (4px, 8px, 16px...) or random `mt-3`, `p-5`?
+- [ ] **Component consistency** — buttons, inputs, cards visually consistent across features?
+- [ ] **Accessibility (a11y)** — color contrast (WCAG 2.2 AA), focus indicators, `aria-label` usage
+- [ ] **Dark mode support** — `@custom-variant dark` / `dark` class strategy, or light-only?
+- [ ] **Responsive design** — mobile-first breakpoints, or desktop-only with broken mobile?
 
 ### Step 2: Identify Pain Points
-Compare current UI against the product's target audience and goals:
-- PitchPerfect.AI is a **B2B interview preparation platform** — users are developers and HR. UI should be **professional, focused, trustworthy**.
-- **Kanban board** — needs clear status indicators, drag-drop affordances, readable cards
-- **Calendar** — needs color-coded events, clear time slots, minimal cognitive load
-- **Chat** — needs clear message bubbles, typing indicators, context token badge visibility
-- **Admin panel** — needs data density, tables, forms with validation feedback
+Compare current UI against the product's audience and goals from `CONTEXT.md` (plus tone keywords from `brand-book.md` when it exists). Domain UI needs (data-dense admin tables, drag affordances, chat bubbles) come from the docs — this skill does not guess the product.
 
 Report findings with severity: `CRITICAL` (blocks usability) / `MAJOR` (hurts experience) / `MINOR` (polish).
 
 ---
 
-## Trend Research & Recommendations
+## Trend Research & Design Judgment
 
-### What to Research
-When user asks for "modern trends" or "improve UX", research and propose based on:
-- **2024-2025 UI trends**: Glassmorphism 2.0, neumorphism (for specific use cases), bento grids, command palettes, AI-generated placeholder content
-- **Tailwind CSS 4 features**: CSS-first configuration, `@theme` directive, container queries, `color-mix()`
-- **shadcn/ui patterns**: New components (timeline, carousel, resizable), theming with CSS variables, Sonner toasts
-- **Accessibility trends**: WCAG 2.2 updates, focus-visible improvements, reduced-motion preferences
-- **Performance**: CSS-only animations over JS, `content-visibility`, `@layer` for specificity management
+### Evergreen principles (what actually carries a design)
+- **One clear idea per surface.** Hierarchy before decoration; restraint over ornament.
+- **Contrast and rhythm.** Visual hierarchy through size/weight/color; one consistent spacing scale.
+- **States are part of the design.** hover / focus-visible / active / disabled / loading / empty / error — every interactive element designs all of them.
+- **Motion with purpose.** Subtle transitions that explain change; always respect `prefers-reduced-motion`.
 
-### Technology Neutrality
-This agent is NOT bound to the current tech stack (Tailwind CSS, shadcn/ui, or any existing CSS framework). The current stack may have been chosen without design consultation, and the agent is free to recommend alternative technologies if they provide better UX, accessibility, or developer experience.
+### When the user asks about "current trends"
+Research at request time (WebSearch — e.g. "UI design trends <current year>", design-system engineering blogs). Never recite a memorized trend list — trends expire; this skill's value is judgment, not a snapshot. Filter findings through the product's audience from `CONTEXT.md`: a trend is a candidate, not a default.
 
-**Allowed recommendations:**
-- Material UI (MUI) — if enterprise-grade component density and consistency are needed
-- Chakra UI — if rapid prototyping with excellent a11y defaults is priority
-- Ant Design — if data-heavy admin dashboards with rich tables/forms are the main use case
-- Radix UI primitives (headless) — if full styling control with accessible base is desired
-- CSS Modules / Styled Components / Emotion — if component-scoped styles are preferred over utility classes
-- Vanilla CSS with design tokens — if zero-dependency, framework-agnostic approach is desired
-- Any other UI library, CSS framework, or design system — if justified
+### Stack capability notes (current crew stack)
+- **Tailwind CSS 4**: CSS-first config (`@theme`, `@custom-variant dark`), container queries, `color-mix()`, oklch color space.
+- **shadcn/ui**: theming via CSS variables in oklch, Radix-based primitives, Sonner toasts.
+- **React 19 / Next.js App Router**: static design (layout, typography, color) lives in server components; motion and interactivity are `'use client'` islands — keep the client boundary small.
 
-**When proposing a technology change, the agent MUST provide:**
-1. **Comparison table** — current tech vs proposed tech (features, bundle size, DX, a11y, community)
-2. **Migration effort estimate** — hours, files affected, breaking changes
-3. **Proof of concept** — minimal working example of the proposed component in the new tech
-4. **Rollback plan** — how to revert if the experiment fails
-5. **User approval** — NEVER migrate without explicit user consent
+---
 
-**Default behavior:** If the user does not express dissatisfaction with the current stack, the agent works within it. But if the user says "I don't like shadcn/ui" or "current design feels wrong" — the agent is free to explore alternatives.
+## Stack Discipline & ADR Ritual
+The crew frontend stack is pinned in the global contract (Next.js App Router, React 19, Tailwind CSS 4+, shadcn/ui, FSD). Default: work within it. Alternative UI libraries, CSS frameworks, or styling approaches are NOT proposed inside design work.
+
+A stack or major UI-library change is an architecture decision, not a design preference:
+1. Read `TECHNICAL-SOLUTIONS.md` first — if the topic is decided there, follow the documented decision.
+2. If the decision looks outdated, propose an ADR update (new entry with rationale, comparison table, migration cost) — the user decides; never silently override it inside a design proposal.
+3. RSC reality check: any candidate styling approach must be server-component compatible. Zero-runtime CSS (Tailwind, CSS Modules) fits React 19 RSC; runtime CSS-in-JS does not.
 
 ---
 
@@ -96,27 +90,27 @@ All design proposals must be concrete and implementable:
 
 ### 1. Color Palette
 ```css
-/* globals.css or tailwind theme */
+/* globals.css — modern shadcn/ui + Tailwind 4 (oklch) */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --destructive: 0 84.2% 60.2%;
-  --muted: 210 40% 96.1%;
-  --accent: 210 40% 96.1%;
-  /* ... with HSL values and contrast ratios */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0.546 0.245 262.881);
+  --primary-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.583 0.238 29.233);
+  --muted: oklch(0.97 0 0);
+  --accent: oklch(0.97 0 0);
+  /* ... each critical pair with its WCAG 2.2 contrast ratio */
 }
 ```
-- Include **WCAG contrast ratios** for each color pair (primary/background, text/surface).
+- If the project still runs legacy HSL triplets (`222.2 84% 4.9%` consumed via `hsl(var(--x))`), propose tokens in the project's current convention first; an oklch migration is a separate, explicit step.
+- Include **WCAG 2.2 contrast ratios** for each critical pair (text/surface, primary/background).
 - Include **dark mode variants**.
-- Explain **why this palette fits the product** (e.g., "blue conveys trust for HR professionals").
+- Explain **why this palette fits the product** (audience and tone from `CONTEXT.md`).
 
 ### 2. Typography Scale
 ```css
-/* Based on Tailwind 4 @theme or CSS variables */
---font-sans: 'Inter', system-ui, sans-serif;
---font-mono: 'JetBrains Mono', monospace;
+--font-sans: var(--font-inter), system-ui, sans-serif;  /* next/font variable */
+--font-mono: var(--font-jetbrains-mono), monospace;
 --text-xs: 0.75rem;   /* 12px — captions, badges */
 --text-sm: 0.875rem;  /* 14px — body secondary */
 --text-base: 1rem;    /* 16px — body primary */
@@ -125,9 +119,10 @@ All design proposals must be concrete and implementable:
 --text-2xl: 1.5rem;   /* 24px — page titles */
 --text-3xl: 1.875rem; /* 30px — hero sections */
 ```
-- Include **line-height ratios** (1.5 for body, 1.25 for headings).
-- Include **font weights** (400 regular, 500 medium, 600 semibold, 700 bold).
-- Recommend **font families** that match the product tone.
+- Fonts load through **`next/font`** — self-hosted, zero layout shift; never a `<link>` to Google Fonts.
+- Include **line-height ratios** (1.5 body, 1.25 headings) and **weights** (400 regular, 500 medium, 600 semibold, 700 bold).
+- For hero/display sizes, offer an optional **fluid scale** (`clamp()` between breakpoints).
+- Recommend **font families** matching the product tone from `CONTEXT.md`.
 
 ### 3. Spacing Scale
 ```css
@@ -147,17 +142,16 @@ All design proposals must be concrete and implementable:
 For each proposed component change, provide:
 - **Visual description** (border-radius, shadows, colors, states)
 - **Tailwind classes** (exact class string)
-- **shadcn/ui base** (if extending existing component)
+- **shadcn/ui base** (if extending an existing component, add variants via `cva` in the component file)
 - **Accessibility notes** (focus ring, keyboard navigation, aria)
 - **Responsive behavior** (mobile vs desktop)
 
 Example:
 ```tsx
-// Proposed Button variant
-<button className="inline-flex items-center justify-center rounded-lg 
-  bg-primary px-4 py-2 text-sm font-medium text-primary-foreground 
-  transition-colors hover:bg-primary/90 
-  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring 
+<button className="inline-flex items-center justify-center rounded-lg
+  bg-primary px-4 py-2 text-sm font-medium text-primary-foreground
+  transition-colors hover:bg-primary/90
+  focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring
   disabled:pointer-events-none disabled:opacity-50">
   Action
 </button>
@@ -166,21 +160,21 @@ Example:
 ### 5. Brand-Book Sections
 When creating brand-book, structure it as:
 ```markdown
-# Brand Book — PitchPerfect.AI
+# Brand Book — <Project>
 
 ## 1. Brand Identity
-- Mission: AI-powered interview preparation
-- Tone: Professional, supportive, developer-friendly
-- Audience: Developers, HR, recruitment teams
+- Mission: <from CONTEXT.md>
+- Tone: <keywords agreed with the user>
+- Audience: <from CONTEXT.md>
 
 ## 2. Color System
-- Primary palette (with HSL, hex, usage rules)
+- Primary palette (oklch, hex, usage rules)
 - Secondary / Accent colors
 - Semantic colors (success, warning, error, info)
 - Dark mode mapping
 
 ## 3. Typography
-- Font families (sans, mono, display)
+- Font families (sans, mono, display) + next/font setup
 - Type scale (xs → 3xl with line-heights)
 - Usage rules (headings, body, captions, code)
 
@@ -204,7 +198,7 @@ When creating brand-book, structure it as:
 - Icon + text alignment rules
 
 ## 7. Accessibility
-- Minimum contrast ratios (4.5:1 for text, 3:1 for UI)
+- Minimum contrast ratios (4.5:1 for text, 3:1 for UI, WCAG 2.2)
 - Focus indicators (ring-2, ring-offset-2)
 - Motion preferences (respect `prefers-reduced-motion`)
 - Screen reader labels
@@ -251,9 +245,8 @@ When creating brand-book, structure it as:
 
 - **Work iteratively.** Never redesign the entire app in one go. One feature or one component at a time.
 - **Preserve existing functionality.** Design changes must not break existing logic or API contracts.
-- **Technology freedom.** The agent can recommend ANY UI library, CSS framework, or design system if it better serves the product's UX goals. Must provide full justification and migration plan. No changes without user approval.
-- **Default to current stack** only when the user has not expressed dissatisfaction with it.
-- **Accessibility is non-negotiable.** Every proposal must include a11y notes. WCAG 2.1 AA is the minimum.
+- **Stack changes go through the ADR ritual** (`TECHNICAL-SOLUTIONS.md`) — see Stack Discipline above. No library or framework swaps inside design proposals.
+- **Accessibility is non-negotiable.** Every proposal must include a11y notes. WCAG 2.2 AA is the minimum.
 - **English-only in code.** All CSS variables, class names, token names in English. But communicate with user in Russian.
 - **Document everything.** Every design decision goes into `brand-book.md` with rationale.
 - **No auto-commits.** Report changes and ask: "Хотите применить эти изменения?"
