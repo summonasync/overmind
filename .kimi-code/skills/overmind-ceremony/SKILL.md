@@ -52,21 +52,25 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 | Spec/plan/task/result artifacts with XML sections | `planning_upsert_artifact` | 006 |
 | Validation gate (humanGate off by default; chat approval → validate) | `planning_validate` | 055 |
 | Status moves with mandatory log note | `planning_set_status` | 043 |
-| Partial reads (sections) + patch writes (section replace, AC tick) + log append | `planning_read_artifact`, `planning_patch_artifact`, `planning_append_log` | 039, 040 |
+| Partial reads (sections) + patch writes (section replace, AC tick) + log append + newest-own-line log correction | `planning_read_artifact`, `planning_patch_artifact`, `planning_append_log`, `planning_edit_log` | 039, 040, 106 |
 | Current-task resolver (STOP lines are authoritative) | `planning_current_task` | 013 |
 | Agent→human notifications with deep links + reply path | `overmind_notify`, `overmind_replies` | 020 |
-| Entries: note/decision/gate/guard (skills via UI only) | `write_entry`, `read_entry`, `update_entry`, `list_entries`, `search` | 002 |
+| Entries: note/decision/gate/guard/featureRequest/tombstone (skills via UI only) | `write_entry`, `read_entry`, `update_entry`, `list_entries`, `search` | 002, 079 |
+| Start-of-work briefing — guards/gates with full bodies, decisions/notes as snippets, tombstone list in one call | `overmind_briefing` | 052 |
 | Materialization to `BACKLOG/` with clobber guard | automatic after mutations; status in `overmind_onboard` | 033, 054 |
 | Batch planning ops (`planning_upsert_tasks`, atomic all-or-nothing) | `planning_upsert_tasks` | 044; live on 007 (7 task artifacts, one call) |
 | Structured feature dependencies (blockedBy/blocks) | `planning_add_feature_dependency`, `planning_remove_feature_dependency`, `planning_list_feature_dependencies` | 030; wired on 007 |
 | Agent-side import of materialized feature folders | `planning_import_feature` | 058 (OM-7) |
+| Mirror export into an explicit empty target (commit-alongside snapshot; zero tracking rows) | `planning_export_backlog` | 075 |
+
+| Artifact version diff as a unified diff (read-only; omitted pair = the two most recent versions; a trailing newline is ignored, so "x" vs "x\n" diffs as empty) | `planning_read_artifact_diff` | 045 |
+| Pointer metadata projection (artifact responses and roster rows carry additive `pointers: [{path, anchor}]` — the server never reads the targets) | `planning_read_artifact`, `planning_list_artifacts` | 046 |
 
 **Does NOT exist yet — never promise, never emulate silently:**
 | Missing | Board ref | Interim rule |
 |---|---|---|
 | Entry tombstones | 029 (draft) | Mark removals as `<removed YYYY-MM-DD — reason>` in bodies |
 | Entries materialization to disk | 051 (draft) | Entries live in DB only — read via MCP |
-| Agent briefing tool | 052 (draft) | Briefing = `overmind_onboard` + `planning_list_features` + `planning_current_task` + `list_entries` |
 | Worktree/branch ↔ feature binding | 063 (draft) | Branch `feature/<slug>`; concurrent writers get separate worktrees — see Workspace isolation technique |
 
 If a needed capability is in the "missing" list — check the Overmind board first
@@ -75,7 +79,7 @@ If a needed capability is in the "missing" list — check the Overmind board fir
 ## The Ceremony Loop
 
 ```
-overmind_onboard → planning_list_features → planning_current_task
+overmind_onboard → overmind_briefing → planning_list_features → planning_current_task
       → work (per artifact kind) → planning_set_status(+logNote) / planning_append_log
       → repeat → result artifact → feature to review/done
 ```
