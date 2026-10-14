@@ -63,6 +63,7 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 
 | Artifact version diff as a unified diff (read-only; omitted pair = the two most recent versions; a trailing newline is ignored, so "x" vs "x\n" diffs as empty) | `planning_read_artifact_diff` | 045 |
 | Pointer metadata projection (artifact responses and roster rows carry additive `pointers: [{path, anchor}]` — the server never reads the targets) | `planning_read_artifact`, `planning_list_artifacts` | 046 |
+| Feature code discovery + explicit pin (read-only scan for worktrees and branches carrying the slug or its NNN prefix; a pin `planning_pin_feature_code` overrides the convention — pinned locations list first flagged `pinned`, convention hits follow deduplicated, a pin missing locally is reported stale, never auto-cleared) | `planning_feature_code`, `planning_pin_feature_code` | 126, 134 |
 
 **Does NOT exist yet — never promise, never emulate silently:**
 | Missing | Board ref | Interim rule |
