@@ -88,6 +88,93 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task CreateFeature_CollidingNumber_ThrowsNumberCollisionNamingTheHolder()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "075-sprint", "Sprint", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.CreateAsync(_projectId, "75-other", "Other", "body"));
+        ex.Kind.ShouldBe(PlanningFailureKind.Duplicate);
+        ex.Code.ShouldBe(PlanningFailureCode.NumberCollision);
+        ex.Message.ShouldContain("075-sprint");
+        ex.Message.ShouldContain("status 'draft'");
+        ex.Message.ShouldContain("076");
+    }
+
+    [Fact]
+    public async Task CreateFeature_PaddedRequestAgainstUnpaddedExisting_ThrowsNumberCollision()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "7-pinned", "Pinned", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.CreateAsync(_projectId, "007-retry", "Retry", "body"));
+        ex.Code.ShouldBe(PlanningFailureCode.NumberCollision);
+        ex.Message.ShouldContain("7-pinned");
+    }
+
+    [Fact]
+    public async Task CreateFeature_DuplicateSlug_PrecedesTheNumberCheck()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "007-x", "X", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.CreateAsync(_projectId, "007-x", "X again", "body"));
+        ex.Code.ShouldBe(PlanningFailureCode.DuplicateSlug);
+    }
+
+    [Fact]
+    public async Task CreateFeature_NumberlessSlug_AmongNumberedOnes_Succeeds()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "007-x", "X", "body");
+
+        var created = await service.CreateAsync(_projectId, "notes", "Notes", "body");
+        created.Slug.ShouldBe("notes");
+    }
+
+    [Fact]
+    public async Task CreateFeature_NextFreeNumber_Succeeds()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "075-a", "A", "body");
+
+        var created = await service.CreateAsync(_projectId, "76-b", "B", "body");
+        created.Slug.ShouldBe("76-b");
+    }
+
+    [Fact]
+    public async Task ImportFeature_CollidingNumber_ImportsVerbatimAndJoinsTheGuard()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "10-alpha", "Alpha", "body");
+
+        var result = await service.ImportAsync(
+            _projectId,
+            new BacklogFeatureImport(
+                "010-beta",
+                "Beta",
+                "<goal>beta</goal>",
+                PlanningFeatureStatus.Draft,
+                FeaturePriority.P2,
+                1,
+                DateTime.UtcNow,
+                [],
+                [],
+                []),
+            CancellationToken.None);
+
+        result.Created.ShouldBeTrue();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.CreateAsync(_projectId, "10-gamma", "Gamma", "body"));
+        ex.Code.ShouldBe(PlanningFailureCode.NumberCollision);
+        ex.Message.ShouldContain("010-beta");
+    }
+
+    [Fact]
     public async Task CreateFeature_InvalidSlug_ThrowsInvalidSlug()
     {
         var service = CreateFeatureService();

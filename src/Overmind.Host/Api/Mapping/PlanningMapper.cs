@@ -199,11 +199,13 @@ public static class PlanningMapper
     public static PlanningArtifactRosterItemResponse ToRosterItem(
         PlanningArtifact artifact, IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null)
     {
+        var pointers = Pointers(artifact);
         if (artifact.Kind != PlanningArtifactKind.Task)
         {
             return new(
                 artifact.Id, artifact.Kind, artifact.Status,
-                artifact.Version, artifact.Order, artifact.UpdatedAt);
+                artifact.Version, artifact.Order, artifact.UpdatedAt,
+                Pointers: pointers);
         }
 
         var (blocked, blockedBy) = BlockedView(artifact, blockedStates);
@@ -216,7 +218,8 @@ public static class PlanningMapper
             items.Count,
             artifact.Brief,
             blocked,
-            blockedBy);
+            blockedBy,
+            pointers);
     }
 
     public static PlanningArtifactResponse ToArtifactResponse(
@@ -243,8 +246,13 @@ public static class PlanningMapper
             artifact.StatusChanged,
             artifact.FeatureStatusChanged,
             blocked,
-            blockedBy);
+            blockedBy,
+            Pointers(artifact));
     }
+
+    private static PlanningArtifactPointerResponse[] Pointers(PlanningArtifact artifact) =>
+        [.. PointerMarkerGrammar.Parse(artifact.Body)
+            .Select(p => new PlanningArtifactPointerResponse(p.Path, p.Anchor))];
 
     private static (bool? Blocked, int[]? BlockedBy) BlockedView(
         PlanningArtifact artifact, IReadOnlyDictionary<int, TaskBlockedState>? blockedStates)

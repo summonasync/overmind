@@ -120,6 +120,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/import",
             200,
             Canned.PlanningImportReportJson);
+        stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/export",
+            200,
+            Canned.PlanningExportReportJson);
         stub.RouteGet(
             $"/api/agent/projects/{Canned.ProjectId}/planning/materialization-status",
             Canned.PlanningMaterializeStatusJson);
@@ -226,6 +231,7 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                 : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/status", 200, Canned.PlanningArtifactStatusEchoJson);
         stub.Route("POST", "/api/agent/planning/artifacts/[^/]+/log", 200, Canned.PlanningArtifactLogEchoJson);
+        stub.Route("PUT", "/api/agent/planning/artifacts/[^/]+/log", 200, Canned.PlanningArtifactLogEchoJson);
         stub.Route(
             "POST",
             "/api/agent/planning/artifacts/[^/]+/validate",

@@ -748,6 +748,109 @@ public sealed class PlanningRoundTripTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RoundTrip_PointerBody_ImportMaterializeReImportIsByteStable()
+    {
+        var projectId = await SeedProjectAsync();
+        WritePointerPlanFeature();
+
+        var report = await ImportAsync(projectId);
+
+        report.FeaturesCreated.ShouldBe(1);
+        report.ArtifactsCreated.ShouldBe(1);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var plan = await ctx.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Plan);
+            plan.Body.ShouldBe(
+                "<plan>\npointer: docs/plans/010-demo-plan.md#implementation\n</plan>");
+        }
+
+        await SyncAsync(projectId, force: true);
+
+        var planPath = Path.Combine(BacklogDir, "010-demo", "plan.md");
+        (await File.ReadAllTextAsync(planPath)).ShouldContain("pointer: docs/plans/010-demo-plan.md#implementation");
+
+        var first = await SnapshotAsync();
+
+        await SyncAsync(projectId);
+
+        (await SnapshotAsync()).ShouldBe(first);
+
+        var reimport = await ImportAsync(projectId);
+        reimport.FeaturesCreated.ShouldBe(0);
+        reimport.ArtifactsCreated.ShouldBe(0);
+        reimport.ArtifactsUpdated.ShouldBe(0);
+
+        (await SnapshotAsync()).ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task Import_MalformedPointerArtifactBody_FailsWithTypedInnerFailure()
+    {
+        var projectId = await SeedProjectAsync();
+        WriteRaw("010-demo/feature.md",
+            "---\n" +
+            "feature: 010\n" +
+            "slug: demo\n" +
+            "status: ready\n" +
+            "version: 1\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Feature 010 — Demo feature title\n\n" +
+            "<goal>\nBuild the demo.\n</goal>\n");
+        WriteRaw("010-demo/spec.md",
+            "---\n" +
+            "feature: 010\n" +
+            "slug: demo\n" +
+            "status: draft\n" +
+            "created: 2026-09-01\n" +
+            "---\n\n" +
+            "# Spec 010 — Demo feature title\n\n" +
+            "<scope>\npointer: ../escape.md\n</scope>\n");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => ImportAsync(projectId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ImportFailed);
+        var inner = ex.InnerException.ShouldBeOfType<PlanningException>();
+        inner.Code.ShouldBe(PlanningFailureCode.InvalidPointerMarker);
+    }
+
+    private void WritePointerPlanFeature()
+    {
+        WriteRaw("010-demo/feature.md",
+            """
+            ---
+            feature: 010
+            slug: demo
+            status: ready
+            version: 1
+            created: 2026-09-01
+            ---
+
+            # Feature 010 — Demo feature title
+
+            <goal>
+            Build the demo.
+            </goal>
+            """);
+        WriteRaw("010-demo/plan.md",
+            """
+            ---
+            feature: 010
+            slug: demo
+            status: draft
+            created: 2026-09-01
+            ---
+
+            # Plan 010 — Demo feature title
+
+            <plan>
+            pointer: docs/plans/010-demo-plan.md#implementation
+            </plan>
+            """);
+    }
+
     private async Task<Guid> SeedProjectAsync()
     {
         using var ctx = _db.CreateContext();

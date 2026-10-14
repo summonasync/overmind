@@ -82,6 +82,52 @@ public sealed class EntryMaterializationTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_FeatureRequestEntry_LandsInKebabDirectoryAndStaysPinnedOnResync()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        Guid entryId;
+        using (var seed = _db.CreateContext())
+        {
+            var entry = ContextEntry.Create(
+                projectId, EntryType.FeatureRequest, "Vector Cache", "Origin: chat, 2026-10-13.");
+            seed.ContextEntries.Add(entry);
+            await seed.SaveChangesAsync();
+            entryId = entry.Id;
+        }
+
+        using (var stored = _db.CreateContext())
+        {
+            var entry = await stored.ContextEntries.SingleAsync(e => e.Id == entryId);
+            await CreateMaterializer(stored).SyncAsync(projectId, ct: CancellationToken.None);
+
+            var relative = $"ENTRIES/feature-request/vector-cache-{entryId.ToString("N")[..8]}.md";
+            var doc = await File.ReadAllTextAsync(Path.Combine(_projectDir, relative));
+            doc.ShouldBe(
+                "---\n" +
+                $"id: {entryId}\n" +
+                "type: featureRequest\n" +
+                "title: Vector Cache\n" +
+                $"createdAt: {entry.CreatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
+                $"updatedAt: {entry.UpdatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
+                "---\n\n" +
+                "Origin: chat, 2026-10-13.");
+        }
+
+        using (var resync = _db.CreateContext())
+        {
+            var report = await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
+
+            report.Refused.ShouldBeEmpty();
+            report.Skipped.ShouldContain(s =>
+                s.RelativePath.StartsWith("ENTRIES/feature-request/", StringComparison.Ordinal) &&
+                s.Reason.Contains("already matches", StringComparison.Ordinal));
+        }
+
+        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "feature-request"))
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task Sync_ResyncWithUnchangedEntries_IsByteIdempotent()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
@@ -426,6 +472,119 @@ public sealed class EntryMaterializationTests : IDisposable
         rows.Where(p => p.StartsWith("ENTRIES/", StringComparison.Ordinal))
             .ShouldHaveSingleItem()
             .ShouldBe($"ENTRIES/note/new-title-{id8}.md");
+    }
+
+    [Fact]
+    public async Task Sync_CyrillicEntryTitle_WritesTransliteratedAsciiFilename()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Решение по кэшированию");
+
+        using var ctx = _db.CreateContext();
+        var report = await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var relative = $"ENTRIES/decision/reshenie-po-keshirovaniyu-{entryId.ToString("N")[..8]}.md";
+        report.Files.ShouldContain(f => f.RelativePath == relative);
+        File.Exists(Path.Combine(_projectDir, relative.Replace('/', Path.DirectorySeparatorChar))).ShouldBeTrue();
+        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "decision")).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Sync_TitleUnchangedEntryWithLegacyNonAsciiName_StaysByteIdentical()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Решение по кэшированию");
+
+        using (var ctx = _db.CreateContext())
+        {
+            await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        var id8 = entryId.ToString("N")[..8];
+        var legacyRelative = $"ENTRIES/decision/решение-по-кэшированию-{id8}.md";
+        File.Move(
+            Path.Combine(_projectDir, "ENTRIES", "decision", $"reshenie-po-keshirovaniyu-{id8}.md"),
+            Path.Combine(_projectDir, "ENTRIES", "decision", $"решение-по-кэшированию-{id8}.md"));
+
+        using (var track = _db.CreateContext())
+        {
+            var row = track.PlanningMaterializedFiles.Single(m => m.ProjectId == projectId);
+            track.Entry(row).Property(r => r.RelativePath).CurrentValue = legacyRelative;
+            await track.SaveChangesAsync();
+        }
+
+        var before = await SnapshotTreeAsync(_projectDir);
+
+        using var resync = _db.CreateContext();
+        var report = await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Warnings.ShouldBeEmpty();
+        report.Refused.ShouldBeEmpty();
+        report.Skipped.ShouldContain(s =>
+            s.RelativePath == legacyRelative &&
+            s.Reason.Contains("already matches", StringComparison.Ordinal));
+
+        var after = await SnapshotTreeAsync(_projectDir);
+        after.Keys.ShouldBe(before.Keys, ignoreOrder: true);
+        foreach (var (file, hash) in before)
+        {
+            after[file].ShouldBe(hash);
+        }
+
+        File.Exists(Path.Combine(_projectDir, legacyRelative.Replace('/', Path.DirectorySeparatorChar)))
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Sync_TitleChangeOnLegacyNonAsciiName_ConvergesToTransliteratedFilename()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Решение по кэшированию");
+
+        using (var ctx = _db.CreateContext())
+        {
+            await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+        }
+
+        var id8 = entryId.ToString("N")[..8];
+        var legacyRelative = $"ENTRIES/decision/решение-по-кэшированию-{id8}.md";
+        File.Move(
+            Path.Combine(_projectDir, "ENTRIES", "decision", $"reshenie-po-keshirovaniyu-{id8}.md"),
+            Path.Combine(_projectDir, "ENTRIES", "decision", $"решение-по-кэшированию-{id8}.md"));
+
+        using (var track = _db.CreateContext())
+        {
+            var row = track.PlanningMaterializedFiles.Single(m => m.ProjectId == projectId);
+            track.Entry(row).Property(r => r.RelativePath).CurrentValue = legacyRelative;
+            await track.SaveChangesAsync();
+        }
+
+        using (var rename = _db.CreateContext())
+        {
+            var entry = await rename.ContextEntries.SingleAsync(e => e.Id == entryId);
+            rename.Entry(entry).Property(e => e.Title).CurrentValue = "Cache Decision";
+            await rename.SaveChangesAsync();
+        }
+
+        using var resync = _db.CreateContext();
+        var report = await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
+
+        report.Warnings.ShouldBeEmpty();
+        report.Refused.ShouldBeEmpty();
+        File.Exists(Path.Combine(_projectDir, "ENTRIES", "decision", $"решение-по-кэшированию-{id8}.md"))
+            .ShouldBeFalse();
+        var convergedRelative = $"ENTRIES/decision/cache-decision-{id8}.md";
+        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "decision"))
+            .ShouldHaveSingleItem()
+            .ShouldBe(Path.Combine(_projectDir, "ENTRIES", "decision", $"cache-decision-{id8}.md"));
+
+        var rows = await resync.PlanningMaterializedFiles
+            .Where(m => m.ProjectId == projectId)
+            .Select(m => m.RelativePath)
+            .ToListAsync();
+        rows.Where(p => p.StartsWith("ENTRIES/", StringComparison.Ordinal))
+            .ShouldHaveSingleItem()
+            .ShouldBe(convergedRelative);
     }
 
     [Fact]

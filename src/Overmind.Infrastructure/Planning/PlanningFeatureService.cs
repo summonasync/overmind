@@ -49,6 +49,23 @@ public sealed partial class PlanningFeatureService
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
+        var existing = await _db.PlanningFeatures
+            .Where(f => f.ProjectId == projectId)
+            .OrderBy(f => f.Slug)
+            .Select(f => new FeatureNumberEntry(f.Slug, f.Status))
+            .ToListAsync(ct);
+
+        if (existing.Any(f => f.Slug == slug))
+        {
+            throw PlanningException.DuplicateSlug(slug);
+        }
+
+        if (FeatureNumberGuard.FindCollision(existing, slug) is { } collision)
+        {
+            throw PlanningException.NumberCollision(
+                slug, collision.CollidingSlug, collision.CollidingStatus, collision.SuggestedNumber);
+        }
+
         var feature = PlanningFeature.Create(projectId, slug, title, body, priority);
         _db.PlanningFeatures.Add(feature);
         await AssignQueueTailAsync(feature, ct);
@@ -252,6 +269,11 @@ public sealed partial class PlanningFeatureService
         Guid projectId, BacklogFeatureImport import, CancellationToken ct = default)
     {
         import = CanonicalizeInlineSections(import);
+
+        foreach (var artifact in import.Artifacts)
+        {
+            PointerMarkerGrammar.EnsureValid(artifact.Body);
+        }
 
         if (!IsValidSlug(import.Slug))
         {

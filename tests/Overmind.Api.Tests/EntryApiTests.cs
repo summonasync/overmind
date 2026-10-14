@@ -439,6 +439,86 @@ public sealed class EntryApiTests : IDisposable
         remaining!.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task FeatureRequest_RoundTripsWriteUpdateAndFilter()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "featureRequest",
+            Title = "batched microbatch sweeper",
+            Content = "Origin: chat, 2026-10-13.\n\nSweep non-blocking review findings in batches.",
+            Tags = new[] { "idea" },
+            SkillFiles = (object[]?)null,
+        });
+
+        created.Type.ShouldBe("featureRequest");
+
+        var putResponse = await _client.PutAsJsonAsync($"/api/entries/{created.Id}", new
+        {
+            Title = "batched microbatch sweeper",
+            Content = "Origin: chat, 2026-10-13.\n\nUpdated: sweep after each review wave.",
+        });
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var requested = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=featureRequest", JsonOptions);
+        requested.ShouldNotBeNull();
+        requested!.Single().Id.ShouldBe(created.Id);
+
+        var others = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=note", JsonOptions);
+        others.ShouldNotBeNull();
+        others!.ShouldNotContain(e => e.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task CreateEntry_MixedCaseType_ParsesToCanonicalEnum()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "FEATUREREQUEST",
+            Title = "case pin",
+            Content = "body",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        created.Type.ShouldBe("featureRequest");
+    }
+
+    [Fact]
+    public async Task Delete_FeatureRequest_BuriesPlainTombstone()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "featureRequest",
+            Title = "buried idea",
+            Content = "wombats draft roadmaps",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        var deleteResponse = await _client.DeleteAsync($"/api/entries/{created.Id}?reason=superseded");
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var tombstone = await deleteResponse.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        tombstone.ShouldNotBeNull();
+        tombstone!.Type.ShouldBe("tombstone");
+        tombstone.Title.ShouldBe("buried idea (deleted)");
+        tombstone.Content.ShouldContain("Original type:");
+        tombstone.Content.ShouldContain("wombats draft roadmaps");
+
+        var filtered = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=tombstone", JsonOptions);
+        filtered.ShouldNotBeNull();
+        filtered!.Single().Id.ShouldBe(tombstone.Id);
+
+        (await _client.GetAsync($"/api/entries/{created.Id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private Guid CreateProject(string name)
     {
         var response = _client.PostAsJsonAsync("/api/projects", new

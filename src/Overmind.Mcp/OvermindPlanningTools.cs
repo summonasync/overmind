@@ -110,11 +110,16 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
     [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; prefer planning_read_artifact for one document. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
     public async Task<JsonElement> ReadFeature(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
         [Description("Set false for the cheap read: the feature body plus a roster summary (kind, order, status, brief for tasks, acTicked/acTotal) without artifact bodies or log lines. Default true returns every artifact in full.")] bool? includeArtifacts = null,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var url = $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}";
         if (includeArtifacts == false)
         {
@@ -126,13 +131,18 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_list_artifacts", ReadOnly = true, Idempotent = true)]
-    [Description("Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature.")]
+    [Description("Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature. Every row carries additive pointers: [{path, anchor}] parsed from pointer lines in the body — an artifact can point at a repo file instead of copying it; the server never reads the targets (empty array when none).")]
     public Task<JsonElement> ListArtifacts(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
         [Description("Optional artifact kind filter: spec, plan, task or result — the server validates the value and rejects unknown ones with a 400.")] string? kind = null,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var url = $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/artifacts";
         if (!string.IsNullOrWhiteSpace(kind))
         {
@@ -143,7 +153,7 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only.")]
+    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only. Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.")]
     public async Task<JsonElement> ReadArtifact(
         [Description("Id of the artifact to read, as handed out by planning_current_task; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections.")] string? sections = null,
@@ -196,28 +206,70 @@ public sealed class OvermindPlanningTools
         return node.Deserialize<JsonElement>();
     }
 
+    [McpServerTool(Name = "planning_read_artifact_diff", ReadOnly = true, Idempotent = true)]
+    [Description("Diffs two versions of one artifact as a unified diff — the read between planning_read_artifact and nothing: no full bodies, only the change hunks. fromVersion/toVersion optional: omitting both diffs the two most recent versions. Adjacent versions may carry log-only bumps, so an empty diff between neighbors is a valid answer, not an error. Trailing-newline semantics: a trailing newline is ignored, so 'x' vs 'x\\n' diffs as empty (unlike git there is no \\ No newline marker). An unknown from/to version fails with ArtifactVersionNotFound 404; from == to or from > to fails with InvalidVersionRange 400.")]
+    public async Task<JsonElement> ReadArtifactDiff(
+        [Description("Id of the artifact to diff; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
+        [Description("Optional older side of the range; defaults to toVersion - 1.")] int? fromVersion = null,
+        [Description("Optional newer side of the range; defaults to the artifact's current version.")] int? toVersion = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
+        CancellationToken ct = default)
+    {
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
+        var url = $"/api/agent/planning/artifacts/{id}/diff";
+
+        var query = new List<string>(2);
+        if (fromVersion is not null)
+        {
+            query.Add($"from={fromVersion}");
+        }
+
+        if (toVersion is not null)
+        {
+            query.Add($"to={toVersion}");
+        }
+
+        if (query.Count > 0)
+        {
+            url += $"?{string.Join('&', query)}";
+        }
+
+        return await Guarded(() => _api.GetAsync(url, ct));
+    }
+
     [McpServerTool(Name = "planning_current_task", ReadOnly = true, Idempotent = true)]
     [Description("Planning ceremony, step 2: the current task of a feature, or a stop/held/empty state whose reason leads the payload. Obey a STOP line — ask the user, do not work around it. A feature with unclosed blockers returns a stop state naming them — reads stay open, task issuance does not. Held means every remaining task sits in review; the all-done states tell you to write the result artifact, validate a drafted one, or close the feature after validation; task payloads carry soft spec/plan warnings (never STOP). Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
     public async Task<JsonElement> CurrentTask(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to take the current task from.")] string slug,
-        CancellationToken ct)
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var payload = await Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/current", ct));
         return LeadWithStopReason(payload);
     }
 
     [McpServerTool(Name = "planning_create_feature", Destructive = false, Idempotent = false)]
-    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). Follow with planning_upsert_artifact(kind=spec), then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
+    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). The slug's NNN number prefix must be free: any feature holding that number (numeric compare, 7 = 007) earns a 409 NumberCollision whose detail names the colliding feature and suggests the next free number. Follow with planning_upsert_artifact(kind=spec), then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
     public async Task<JsonElement> CreateFeature(
-        [Description("Id of the project to create the feature in.")] Guid projectId,
         [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars.")] string slug,
         [Description("Human-readable feature title.")] string title,
         [Description("Optional markdown body of the feature document (goal, requirements, non-goals).")] string? body = null,
         [Description("Optional priority: p0 (critical), p1 (high), p2 (normal — the default when omitted), p3 (low).")] string? priority = null,
+        [Description("Id of the project to create the feature in.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var payload = new JsonObject
         {
             ["slug"] = slug,
@@ -240,7 +292,6 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
     [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). Features cannot be deleted or archived via MCP — the UI owns feature deletion. Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
     public async Task<JsonElement> UpsertArtifact(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
         [Description("Artifact kind: spec, plan, task or result.")] string kind,
         [Description("Markdown body. Expected XML sections per kind are listed in this tool's description; plain markdown is accepted — for spec/plan/result only the <log> section is machine-parsed.")] string body,
@@ -249,8 +300,14 @@ public sealed class OvermindPlanningTools
         [Description("Change note recorded in the artifact log; required when editing a validated artifact.")] string? logNote = null,
         [Description("Optional one-line brief of a task artifact, max 500 chars; not allowed for other kinds.")] string? brief = null,
         [Description("Optional task-only blockedBy: sibling task orders of the same feature this task waits on. Re-upsert replaces the edge set declaratively (empty array clears); omitted preserves the current edges on update and sets none on create.")] int[]? blockedBy = null,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var payload = new JsonObject
         {
             ["kind"] = NormalizeKind(kind),
@@ -281,11 +338,16 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_upsert_tasks", Destructive = false, Idempotent = false)]
     [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization pass is enqueued after the batch — it runs shortly after, in the background, never per item — and one feature auto-transition evaluation runs; creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order, review light/hard, brief (task-only, one line, max 500 chars), blockedBy (sibling task orders this task waits on; empty array clears, omitted preserves the current edges), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. An item whose order hits an existing task updates that task in place.")]
     public async Task<JsonElement> UpsertTasks(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to create or update tasks in.")] string featureSlug,
         [Description("Array of task items, each an object: body (required), order, review, logNote, brief, blockedBy.")] JsonElement tasks,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var payload = new JsonObject
         {
             ["tasks"] = BuildTaskItems(tasks)
@@ -444,12 +506,17 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_set_feature_status", Destructive = false, Idempotent = false)]
     [Description("Moves a feature status on the planning board — only on the user's explicit request in the current session, never on the agent's own initiative. Allowed targets: done (close, from any non-done status) or inProgress (review rollback); every other manual move belongs to the human door in the Overmind UI. done is gated: the feature needs a result artifact first (FeatureResultRequired 409 names it), and a fresh human tap — an approval reply newer than the result's last update; without one the call fails with FeatureDoneTapRequired 409 — send overmind_notify(kind=approval, featureSlug=<slug>), wait for the human's reply, then retry, or let the human close the feature in the UI. A successful agent-path done stamps the feature log with reviewed-by provenance (echoed as lastLogLine unless a held claim adds its release line after it). inProgress needs no gate. The logNote is mandatory, lands as a dated line in the feature log, and must carry the provenance, e.g. 'by user request in-session'.")]
     public async Task<JsonElement> SetFeatureStatus(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to move, as shown on the board.")] string slug,
         [Description("New status: done or inProgress — the only agent-door targets.")] string status,
         [Description("Required note recorded as a dated log line; carries the provenance, e.g. 'by user request in-session'.")] string logNote,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         if (string.IsNullOrWhiteSpace(logNote))
         {
             throw new McpException(FeatureStatusNoteRequired);
@@ -459,21 +526,26 @@ public sealed class OvermindPlanningTools
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/status",
             new { status = normalized, logNote },
-            ct), FeatureLogReadback(projectId, slug, logNote), ct);
+            ct), FeatureLogReadback(projectId.Value, slug, logNote), ct);
         return MutationEcho(echo, "slug");
     }
 
     [McpServerTool(Name = "planning_update_feature", Destructive = false, Idempotent = false)]
     [Description("Partial edit of a feature's title, body, or priority — durable what/why stays correctable by agents. logNote is mandatory and lands as a dated line in the feature log. A priority change moves the feature to the tail of its priority band. Status is not editable here — use planning_set_feature_status.")]
     public Task<JsonElement> UpdateFeature(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to edit, as shown on the board.")] string slug,
         [Description("Required note recorded as a dated [agent] line in the feature log — why the edit happened.")] string logNote,
         [Description("New feature title; omit to keep the current one.")] string? title = null,
         [Description("Full replacement body — markdown with its XML sections; omit to keep the current one.")] string? body = null,
         [Description("New priority: p0 (critical), p1 (high), p2 (normal), p3 (low); omit to keep the current one.")] string? priority = null,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var payload = new JsonObject { ["logNote"] = logNote };
 
         if (!string.IsNullOrWhiteSpace(title))
@@ -494,7 +566,7 @@ public sealed class OvermindPlanningTools
         return _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/update",
             payload,
-            ct), FeatureLogReadback(projectId, slug, logNote), ct);
+            ct), FeatureLogReadback(projectId.Value, slug, logNote), ct);
     }
 
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
@@ -521,12 +593,17 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_move_feature", Destructive = false, Idempotent = false)]
     [Description("Moves a feature within its priority band on the planning queue — band-scoped only; crossing bands means planning_set_feature_priority. Moves: 'up' and 'down' swap with the adjacent non-done feature (no-op at the band edges), 'first' and 'last' jump to the band head or tail, 'toPosition' takes the absolute 1-based spot in position. The server resolves neighbors and renumbers, so no band-wide read is needed. Contract violations (unknown move, position only for toPosition, out-of-range) return error text naming the contract; the human reorders by dragging on the dashboard board.")]
     public async Task<CallToolResult> MoveFeature(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to move, as shown on the board.")] string slug,
         [Description("One of: up, down, first, last, toPosition.")] string move,
         [Description("1-based spot in the feature's priority band; required only when move is toPosition.")] int? position = null,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var contract = QueueMoveContractError(move, position);
         if (contract is not null)
         {
@@ -562,12 +639,17 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_claim_feature", Destructive = false, Idempotent = false)]
     [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
     public async Task<CallToolResult> ClaimFeature(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to claim, as shown on the board.")] string slug,
         [Description("Your display alias, max 32 chars (e.g. Dan).")] string alias,
         [Description("Your vendor string, max 32 chars (e.g. qwen, claude).")] string vendor,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         if (alias.Trim().Length > ClaimIdentityCap)
         {
             throw new McpException(
@@ -599,10 +681,15 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_unclaim_feature", Destructive = false, Idempotent = true)]
     [Description("Releases your claim on the feature — holder session only; any other session gets a 409 naming the holder. The human door in the Overmind UI can release any claim without session restrictions. Unclaiming an unclaimed feature is a no-op, and a claim released itself when the holder closed the feature done.")]
     public async Task<CallToolResult> UnclaimFeature(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to unclaim, as shown on the board.")] string slug,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/unclaim",
             new { },
@@ -622,11 +709,16 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_set_feature_priority", Destructive = false, Idempotent = false)]
     [Description("Changes a feature priority (p0 critical, p1 high, p2 normal, p3 low) — the feature re-enters at the tail of the new band. Band crossings are the weightier act: only on the user's explicit approval in the current session, never on the agent's own initiative. Moves within one band belong to planning_move_feature or the human board drag.")]
     public async Task<JsonElement> SetFeaturePriority(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature to re-prioritize, as shown on the board.")] string slug,
         [Description("New priority: p0 (critical), p1 (high), p2 (normal), p3 (low).")] string priority,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var normalized = NormalizePriority(priority);
         var feature = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/priority",
@@ -638,20 +730,32 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_list_feature_dependencies", ReadOnly = true, Idempotent = true)]
     [Description("Lists the dependency graph of a feature: blockedBy (features this one waits for) and blocks (features waiting on this one), each entry carrying slug, status and closed — a dependency closes when its blocker reaches done or review. An unclosed blockedBy stops planning_current_task.")]
     public Task<JsonElement> ListFeatureDependencies(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature, as shown on the board.")] string slug,
-        CancellationToken ct = default) =>
-        Guarded(() => _api.GetAsync(
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
+        return Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/dependencies", ct));
+    }
 
     [McpServerTool(Name = "planning_add_feature_dependency", Destructive = false, Idempotent = false)]
     [Description("Adds a blocker to a feature: the feature stops issuing tasks through planning_current_task until the blocker closes (done or review). Rejects self-reference and any edge that completes a dependency cycle, naming the chain. Same-project only.")]
     public Task<JsonElement> AddFeatureDependency(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature that gains the blocker.")] string slug,
         [Description("Slug of the blocking feature, as shown on the board.")] string blockedBySlug,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         if (string.IsNullOrWhiteSpace(blockedBySlug))
         {
             throw new McpException("blockedBySlug is required: the feature slug of the blocker, as shown on the board.");
@@ -666,11 +770,16 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_remove_feature_dependency", Destructive = false, Idempotent = false)]
     [Description("Removes one blocker from a feature; removing a link that is not there is a no-op. Lifting the last unclosed blocker unblocks the feature for planning_current_task.")]
     public Task<JsonElement> RemoveFeatureDependency(
-        [Description("Id of the project the feature belongs to.")] Guid projectId,
         [Description("Slug of the feature whose blocker is removed.")] string slug,
         [Description("Slug of the blocker to remove.")] string blockedBySlug,
+        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         if (string.IsNullOrWhiteSpace(blockedBySlug))
         {
             throw new McpException("blockedBySlug is required: the feature slug of the blocker to remove.");
@@ -696,6 +805,23 @@ public sealed class OvermindPlanningTools
             $"/api/agent/planning/artifacts/{id}/log",
             new { note, source = DoorSource },
             ct), ArtifactLogReadback(id, note), ct);
+        return MutationEcho(echo, "id");
+    }
+
+    [McpServerTool(Name = "planning_edit_log", Destructive = false, Idempotent = false)]
+    [Description("Corrects the text of the newest log line on one artifact — cheap write tier: one line changes, body is not resent. Preconditions: the target must be the artifact's newest <log> line and carry your own actor marker ([agent] on this door, [ui] on the human door) — not-newest and wrong-actor attempts are 409s naming the line's owner; text must be a single line, multiline replacements are refused because the domain refuses splicing a second line into the log. Date and actor marker are preserved byte-for-byte; only the prose after the marker changes. The edit is version-traced: the previous body is snapshotted and recoverable via planning_read_artifact_diff — nothing is deleted. Feature-level logs are out of scope (append-only there); planning_append_log adds a new line, this tool corrects the line already written.")]
+    public async Task<JsonElement> EditLog(
+        [Description("Replacement single-line text of the newest log line; the date and the [agent]/[ui] marker are preserved.")] string text,
+        [Description("Id of the artifact whose newest log line is edited; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
+        [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
+        [Description(ArtifactAliasDescription)] string? alias = null,
+        CancellationToken ct = default)
+    {
+        var id = await AddressArtifactAsync(artifactId, projectId, alias, ct);
+        var echo = await _mutations.SendAsync(() => _api.PutAsync(
+            $"/api/agent/planning/artifacts/{id}/log",
+            new { text },
+            ct), ArtifactLogReadback(id, text), ct);
         return MutationEcho(echo, "id");
     }
 
@@ -836,12 +962,17 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_import_feature", Destructive = false, Idempotent = false)]
-    [Description("Imports one materialized feature folder from disk in a single call — bodies never pass through the model. Give the absolute path of the folder that holds feature.md, under the project root (e.g. /repo/BACKLOG/058-agent-side-import); spec.md, plan.md, result.md and tasks/NN-*.md are picked up by convention, statuses are restored verbatim with [import] markers in the logs, and existing artifacts are re-imported as new versions. Relative paths and paths outside the project root are rejected. The response reports created vs updated per feature and artifact plus per-file notes.")]
+    [Description("Imports one materialized feature folder from disk in a single call — bodies never pass through the model. Give the absolute path of the folder that holds feature.md, under the project root (e.g. /repo/BACKLOG/058-agent-side-import); spec.md, plan.md, result.md and tasks/NN-*.md are picked up by convention, statuses are restored verbatim with [import] markers in the logs, and existing artifacts are re-imported as new versions. Relative paths and paths outside the project root are rejected. Import never enforces the create-path number-collision guard — a mirror with colliding NNN numbers restores verbatim. The response reports created vs updated per feature and artifact plus per-file notes.")]
     public Task<JsonElement> ImportFeature(
-        [Description("Id of the project to import the feature into.")] Guid projectId,
         [Description("Absolute path of the feature folder under the project root — the directory containing feature.md.")] string path,
+        [Description("Id of the project to import the feature into.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         if (string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("path is required: the feature folder to import, e.g. /repo/BACKLOG/058-agent-side-import.");
@@ -856,10 +987,15 @@ public sealed class OvermindPlanningTools
     [McpServerTool(Name = "planning_materialize", Destructive = false, Idempotent = false)]
     [Description("Triggers a materialization pass: the full plan is computed first, then written atomically — any guarded file (untracked at a planned path, or tracked with local edits not on the board) aborts the whole run with a 409 listing every refusal, and nothing is written that run. Skips in the report are byte-identical no-ops (content already matches the board), not guarded files. A normal board mutation already enqueues a pass that runs shortly after in the background; this tool runs the pass inline and waits for the report — call it after an import, a strategy switch, or when onboard reports a failed attempt or stale mirror state. force adopts guarded files with per-file warnings instead of refusing; transcribe hand edits to the board before forcing.")]
     public async Task<JsonElement> Materialize(
-        [Description("Id of the project to materialize.")] Guid projectId,
+        [Description("Id of the project to materialize.")] Guid? projectId = null,
         [Description("True to overwrite guarded files with per-file warnings instead of refusing them; transcribe hand edits to the board before forcing.")] bool force = false,
         CancellationToken ct = default)
     {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
         var report = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/projects/{projectId}/planning/materialize",
             new { force },
@@ -881,6 +1017,37 @@ public sealed class OvermindPlanningTools
         return Guarded(() => _api.GetAsync(
             $"/api/agent/projects/{projectId}/planning/materialization-status",
             ct));
+    }
+
+    [McpServerTool(Name = "planning_export_backlog", Destructive = false, Idempotent = false)]
+    [Description("Renders the full materialized mirror (planning tree + entries projection) into an explicit target directory as plain greppable files — the \"commit the planning alongside the code\" path. Uses the same document renderers as the materializer pass, so the snapshot is byte-identical to what a materialize run would write; zero tracking rows and zero drift machinery are created. The target must be an empty directory — non-empty refuses with 409 (a snapshot, not a sync) — and it must not sit inside BACKLOG/ or ENTRIES/. targetPath is always explicit; there is no default. Compact echo: written file count + target, no body echo.")]
+    public async Task<JsonElement> ExportBacklog(
+        [Description("Absolute path of the target directory: it must be empty or not exist yet, and it cannot sit inside BACKLOG/ or ENTRIES/.")] string targetPath,
+        [Description("Id of the project whose mirror to export.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        if (projectId is null)
+        {
+            throw new McpException(ProjectIdRequired);
+        }
+
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            throw new McpException(
+                "targetPath is required: an absolute path of the empty target directory for the snapshot.");
+        }
+
+        var report = await _mutations.SendAsync(() => _api.PostAsync(
+            $"/api/agent/projects/{projectId}/planning/export",
+            new { targetPath = targetPath.Trim() },
+            ct), readback: null, ct);
+
+        return new JsonObject
+        {
+            ["projectId"] = report.GetProperty("projectId").GetString(),
+            ["target"] = report.GetProperty("target").GetString(),
+            ["files"] = report.GetProperty("fileCount").GetInt32()
+        }.Deserialize<JsonElement>();
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)

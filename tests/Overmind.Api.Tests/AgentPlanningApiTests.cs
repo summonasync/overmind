@@ -129,6 +129,104 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task EditLog_AgentDoor_CorrectsTheNewestAgentLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+        await PostAgentLogAsync(spec.Id, "halfway trough the wiring");
+
+        var response = await _client.PutAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Text = "halfway through the wiring" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.LastLogLine.ShouldBe("halfway through the wiring");
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain("[agent] — halfway through the wiring");
+        artifact.Body.ShouldNotContain("trough");
+    }
+
+    [Fact]
+    public async Task EditLog_AgentDoor_WrongActor_WhenTheNewestLineIsUi()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+        await PostHumanLogAsync(spec.Id, "board-side note");
+
+        var response = await _client.PutAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Text = "agent editing the human's line" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogEditWrongActor");
+        problem.Detail!.ShouldContain("own door marker");
+    }
+
+    [Fact]
+    public async Task EditLog_AgentDoor_NotNewest_WhenANewerUiLineFollows()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+        await PostAgentLogAsync(spec.Id, "my older note");
+        await PostHumanLogAsync(spec.Id, "the human replied after");
+
+        var response = await _client.PutAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Text = "reach past the newer line" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogEditNotNewest");
+        problem.Detail!.ShouldContain("entry 1 of 2");
+    }
+
+    [Fact]
+    public async Task EditLog_AgentDoor_MultilineText_ReturnsTypedRefusal()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+        await PostAgentLogAsync(spec.Id, "line to correct");
+
+        var response = await _client.PutAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Text = "corrected\r\nsmuggled line" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogEditMultilineText");
+    }
+
+    [Fact]
+    public async Task EditLog_AgentDoor_BlankText_ReturnsValidationProblem()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "v1" });
+        await PostAgentLogAsync(spec.Id, "line to correct");
+
+        var response = await _client.PutAsJsonAsync(
+            AgentLogUrl(spec.Id), new { Text = "   " });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private async Task PostAgentLogAsync(Guid artifactId, string note)
+    {
+        var response = await _client.PostAsJsonAsync(AgentLogUrl(artifactId), new { Note = note });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task PostHumanLogAsync(Guid artifactId, string note)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{artifactId}/log", new { Note = note });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Patch_WithLogNote_WritesTheAgentMarker()
     {
         var project = await CreateProjectAsync();
@@ -2327,6 +2425,32 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Diff_AgentDoor_ServesTheSameContractAsTheHumanDoor()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat",
+            new { Kind = "task", Body = "old line", Order = 0 });
+        await _client.PostAsJsonAsync(
+            AgentArtifactsUrl(project.Id, "feat"), new { Kind = "task", Body = "new line", Order = 0 });
+
+        var response = await _client.GetAsync($"{AgentReadUrl(task.Id)}/diff");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var diff = await response.Content.ReadFromJsonAsync<DiffJson>(JsonOptions);
+        diff!.ArtifactId.ShouldBe(task.Id);
+        diff.FromVersion.ShouldBe(1);
+        diff.ToVersion.ShouldBe(2);
+        diff.Diff.ShouldContain("-old line");
+        diff.Diff.ShouldContain("+new line");
+
+        var human = await _client.GetAsync($"/api/planning/artifacts/{task.Id}/diff");
+        human.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var humanDiff = await human.Content.ReadFromJsonAsync<DiffJson>(JsonOptions);
+        humanDiff!.Diff.ShouldBe(diff.Diff);
+    }
+
+    [Fact]
     public async Task Read_UnknownArtifact_Returns404()
     {
         var project = await CreateProjectAsync();
@@ -2736,6 +2860,8 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record LogLineJson(string? Date, string Text);
 
     public sealed record VersionJson(int Version, string Body, DateTime CreatedAt);
+
+    public sealed record DiffJson(Guid ArtifactId, int FromVersion, int ToVersion, string Diff);
 
     public sealed record RosterJson(RosterItemJson[] Artifacts);
 

@@ -264,6 +264,49 @@ public sealed class PlanningArtifact
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void EditNewestLog(string text, PlanningLogSource actor)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw PlanningException.LogEditBlankText();
+        }
+
+        if (text.Contains('\r') || text.Contains('\n'))
+        {
+            throw PlanningException.LogEditMultilineText();
+        }
+
+        var lines = PlanningLog.Parse(Body);
+        if (lines.Count == 0)
+        {
+            throw PlanningException.LogEditEmptyLog();
+        }
+
+        var newest = lines[^1];
+        var ownedNewest = -1;
+        for (var i = lines.Count - 1; i >= 0; i--)
+        {
+            if (lines[i].Source == actor)
+            {
+                ownedNewest = i;
+                break;
+            }
+        }
+
+        if (newest.Source != actor)
+        {
+            throw ownedNewest >= 0
+                ? PlanningException.LogEditNotNewest(actor, newest.Source, ownedNewest + 1, lines.Count)
+                : PlanningException.LogEditWrongActor(actor, newest.Source);
+        }
+
+        Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
+
+        Body = PlanningLog.ReplaceNewest(Body, text);
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void SetReview(PlanningReviewLevel review)
     {
         Review = review;

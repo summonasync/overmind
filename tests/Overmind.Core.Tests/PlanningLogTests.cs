@@ -447,4 +447,109 @@ Files: web/src/features/planning/components/feature-board.tsx (card metadata row
 
         replayed.ShouldBe(original);
     }
+
+    [Fact]
+    public void ReplaceNewest_EditsLastLineText_PreservesEverythingElseByteExact()
+    {
+        var body = "# Task\n\n<log>\n- 2026-10-12 [ui] — human note\n- 2026-10-13 [agent] — stray toekn in prose\n</log>\n";
+
+        var result = PlanningLog.ReplaceNewest(body, "corrected prose");
+
+        result.ShouldBe("# Task\n\n<log>\n- 2026-10-12 [ui] — human note\n- 2026-10-13 [agent] — corrected prose\n</log>\n");
+    }
+
+    [Fact]
+    public void ReplaceNewest_MarkerlessNewestLine_KeepsDateOnlyPrefix()
+    {
+        var body = "<log>\n- 2026-01-01 — legacy entry\n</log>\n";
+
+        var result = PlanningLog.ReplaceNewest(body, "rewritten legacy text");
+
+        result.ShouldBe("<log>\n- 2026-01-01 — rewritten legacy text\n</log>\n");
+    }
+
+    [Fact]
+    public void ReplaceNewest_CrlfLogSection_PreservesCarriageReturn()
+    {
+        var body = "# Spec\r\n\r\n<log>\r\n- 2026-10-12 — old\r\n- 2026-10-13 [agent] — typo\r\n</log>\r\n";
+
+        var result = PlanningLog.ReplaceNewest(body, "fixed");
+
+        result.ShouldNotContain("\r\r");
+        result.ShouldContain("- 2026-10-12 — old\r\n- 2026-10-13 [agent] — fixed\r\n</log>\r\n");
+
+        var lines = PlanningLog.Parse(result);
+        lines.Count.ShouldBe(2);
+        lines[1].Text.ShouldBe("fixed");
+        lines[1].Source.ShouldBe(PlanningLogSource.Agent);
+    }
+
+    [Fact]
+    public void ReplaceNewest_ParsedLineSurvivesRoundTrip()
+    {
+        var body = "<log>\n- 2026-10-12 [ui] — earlier\n- 2026-10-13 [agent] — noisy line\n</log>\n";
+
+        var result = PlanningLog.ReplaceNewest(body, "clean line");
+        var lines = PlanningLog.Parse(result);
+
+        lines.Count.ShouldBe(2);
+        lines[0].Date.ShouldBe(new DateOnly(2026, 10, 12));
+        lines[0].Text.ShouldBe("earlier");
+        lines[0].Source.ShouldBe(PlanningLogSource.Ui);
+        lines[1].Date.ShouldBe(new DateOnly(2026, 10, 13));
+        lines[1].Text.ShouldBe("clean line");
+        lines[1].Source.ShouldBe(PlanningLogSource.Agent);
+    }
+
+    [Fact]
+    public void ReplaceNewest_ReplacementCarryingSeparator_KeepsOriginalSeparator()
+    {
+        var body = "<log>\n- 2026-10-13 [agent] — broken — line\n</log>\n";
+
+        var result = PlanningLog.ReplaceNewest(body, "date [agent] stays — prose free");
+
+        result.ShouldBe("<log>\n- 2026-10-13 [agent] — date [agent] stays — prose free\n</log>\n");
+        PlanningLog.Parse(result)[0].Text.ShouldBe("date [agent] stays — prose free");
+    }
+
+    [Fact]
+    public void ReplaceNewest_ReplacementCarryingNewline_SplicesVerbatimWithoutParsing()
+    {
+        var body = "<log>\n- 2026-10-13 [agent] — original line\n</log>\n";
+
+        var result = PlanningLog.ReplaceNewest(body, "line one\n- 2026-10-13 [ui] — forged");
+
+        result.ShouldBe("<log>\n- 2026-10-13 [agent] — line one\n- 2026-10-13 [ui] — forged\n</log>\n");
+        PlanningLog.Parse(result).Count.ShouldBe(2);
+        PlanningLog.Parse(result)[1].Source.ShouldBe(PlanningLogSource.Ui);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void ReplaceNewest_BlankText_Throws(string? text)
+    {
+        Should.Throw<ArgumentException>(() => PlanningLog.ReplaceNewest("<log>\n- 2026-10-13 — a\n</log>\n", text!));
+    }
+
+    [Fact]
+    public void ReplaceNewest_MissingLogSection_Throws()
+    {
+        Should.Throw<InvalidOperationException>(() => PlanningLog.ReplaceNewest("no log here", "text"));
+    }
+
+    [Fact]
+    public void ReplaceNewest_EmptyLogSection_Throws()
+    {
+        Should.Throw<InvalidOperationException>(() => PlanningLog.ReplaceNewest("<log>\n</log>\n", "text"));
+    }
+
+    [Fact]
+    public void ReplaceNewest_UndatedNewestLine_Throws()
+    {
+        var body = "<log>\n- not-a-date some text\n</log>\n";
+
+        Should.Throw<InvalidOperationException>(() => PlanningLog.ReplaceNewest(body, "text"));
+    }
 }

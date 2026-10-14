@@ -34,6 +34,13 @@ public sealed class PlanningException : Exception
     public static PlanningException DuplicateArtifact(PlanningArtifactKind kind, int order) =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact, $"An artifact of kind '{kind}' with order {order} already exists.");
 
+    public static PlanningException NumberCollision(
+        string slug, string collidingSlug, PlanningFeatureStatus collidingStatus, int suggestedNumber) =>
+        new(PlanningFailureKind.Duplicate, PlanningFailureCode.NumberCollision,
+            $"Feature number of '{slug}' is already taken by '{collidingSlug}' (status '{collidingStatus.ToString().ToLowerInvariant()}') " +
+            "— NNN prefixes are the board's addressing layer and compare numerically (7 = 007). " +
+            $"Rename the slug with the next free number: {suggestedNumber:D3}.");
+
     public static PlanningException TaskBatchItem(int index, PlanningException inner) =>
         new(inner.Kind, inner.Code, $"tasks[{index}]: {inner.Message}", inner);
 
@@ -229,6 +236,77 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DeletionBlockedByDependents,
             "Clean up dependencies first: " +
             $"these tasks still depend on it: {string.Join(", ", dependents)}.");
+
+    public static PlanningException ExportTargetNotAbsolute(string targetPath) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ExportTargetNotAbsolute,
+            $"Export target '{targetPath}' is not an absolute directory path.");
+
+    public static PlanningException ExportTargetNotEmpty(string targetDirectory) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ExportTargetNotEmpty,
+            $"Export target '{targetDirectory}' is not empty: export writes a fresh snapshot and refuses an existing tree.");
+
+    public static PlanningException ExportTargetInsideMirror(string targetDirectory) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ExportTargetInsideMirror,
+            $"Export target '{targetDirectory}' sits inside the materialized mirror (BACKLOG/ or ENTRIES/); " +
+            "export never writes into the mirror itself.");
+
+    public static PlanningException ArtifactVersionNotFound(Guid artifactId, int version, int currentVersion)
+    {
+        var coverage = currentVersion <= 1
+            ? "version 1 is the live body itself; no snapshots are stored yet"
+            : $"the live body is version {currentVersion}; stored snapshots cover 1..{currentVersion - 1}";
+
+        return new(PlanningFailureKind.NotFound, PlanningFailureCode.ArtifactVersionNotFound,
+            $"Artifact '{artifactId}' has no version {version}: {coverage}.");
+    }
+
+    public static PlanningException InvalidVersionRange(int fromVersion, int toVersion) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidVersionRange,
+            fromVersion == toVersion
+                ? $"Invalid version range: from and to are both {fromVersion}; there is nothing to diff."
+                : $"Invalid version range: from ({fromVersion}) is greater than to ({toVersion}); " +
+                "versions diff forward, from oldest to newest.");
+
+    public static PlanningException InvalidPointerMarker(string line, string rule) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidPointerMarker,
+            $"Malformed pointer line '{line}': {rule} A pointer line is " +
+            "'pointer: <repo-relative-path>[#anchor]' — the case-sensitive marker 'pointer:' as the " +
+            "first token, whitespace, then a repo-relative path (no leading '/', forward slashes only, " +
+            "no '..' segments) with an optional non-empty '#anchor'.");
+
+    public static PlanningException LogEditNotNewest(
+        PlanningLogSource actor, PlanningLogSource? newestMarker, int ownedPosition, int lineCount) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LogEditNotNewest,
+            $"Only the newest log line is editable, and the newest line carries {MarkerLabel(newestMarker)}, " +
+            $"not your [{actor.ToString().ToLowerInvariant()}] marker: your newest " +
+            $"[{actor.ToString().ToLowerInvariant()}] line is entry {ownedPosition} of {lineCount}, and an edit " +
+            "cannot reach past a newer line. Append a correction line via planning_append_log instead, " +
+            "or let the newer line's door edit its own text.");
+
+    public static PlanningException LogEditEmptyLog() =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LogEditNotNewest,
+            "The artifact's log holds no lines to edit: the edit reaches the newest line only — " +
+            "append one via planning_append_log first.");
+
+    public static PlanningException LogEditWrongActor(PlanningLogSource actor, PlanningLogSource? newestMarker) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LogEditWrongActor,
+            $"The newest log line carries {MarkerLabel(newestMarker)}, and the log holds no " +
+            $"[{actor.ToString().ToLowerInvariant()}] line to edit — only lines carrying your own door marker " +
+            "are yours. Append a new line via planning_append_log instead.");
+
+    public static PlanningException LogEditBlankText() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LogEditBlankText,
+            "The replacement text of a log line must not be blank: the edit corrects the line's prose, it never removes the line.");
+
+    public static PlanningException LogEditMultilineText() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LogEditMultilineText,
+            "Log line text must be single-line; the log grammar is line-based — text carrying '\\r' or '\\n' " +
+            "would splice verbatim into the body and parse as extra log lines.");
+
+    private static string MarkerLabel(PlanningLogSource? source) =>
+        source is { } marker
+            ? $"the [{marker.ToString().ToLowerInvariant()}] marker"
+            : "no actor marker";
 
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));

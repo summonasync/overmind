@@ -93,6 +93,17 @@ public class WorkflowTeachingContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public void Quickstart_TeachesBriefingFirst()
+    {
+        var text = OnboardQuickstart.Text;
+
+        text.ShouldContain("call overmind_briefing — one call returns the start-of-work picture");
+        text.IndexOf("overmind_briefing", StringComparison.Ordinal)
+            .ShouldBeLessThan(text.IndexOf("list_entries", StringComparison.Ordinal));
+        text.ShouldContain("list_entries and read_entry are the depth tools");
+    }
+
+    [Fact]
     public void Quickstart_MirrorsTheStatusModelPins()
     {
         var text = OnboardQuickstart.Text;

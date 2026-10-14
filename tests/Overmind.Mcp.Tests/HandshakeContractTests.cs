@@ -29,16 +29,19 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task Initialize_Instructions_PointAtListEntries_NeverAtTheDeadResourcesUri()
+    public async Task Initialize_Instructions_TeachBriefingFirst_NeverTheDeadResourcesUri()
     {
         var result = await Driver.InitializeAsync();
 
         var instructions = result["result"]!["instructions"]!.GetValue<string>();
         instructions.ShouldNotContain("overmind://resources");
-        instructions.ShouldContain("list_entries");
         instructions.ShouldContain("overmind_onboard");
         instructions.ShouldContain("Claim it first with planning_claim_feature");
         instructions.ShouldContain("onboarding quickstart explains the workflow");
+        instructions.ShouldContain("overmind_briefing returns the whole guardrail picture in one call");
+        instructions.IndexOf("overmind_briefing", StringComparison.Ordinal)
+            .ShouldBeLessThan(instructions.IndexOf("list_entries", StringComparison.Ordinal));
+        instructions.ShouldContain("list_entries");
         instructions.ShouldContain("quote the url in chat when asking for an approval");
     }
 
@@ -63,7 +66,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheFortyThreeTools()
+    public async Task ToolsList_ExposesExactlyTheFortyEightTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -76,16 +79,16 @@ public class HandshakeContractTests : McpSessionTestBase
             "delete_entry",
             "issues_append",
             "issues_create", "issues_get", "issues_list", "issues_promote", "issues_set_status",
-            "list_entries", "list_projects", "overmind_notify", "overmind_onboard",
+            "list_entries", "list_projects", "overmind_briefing", "overmind_notify", "overmind_onboard",
             "overmind_replies", "planning_add_feature_dependency",
             "planning_append_log",
             "planning_claim_feature",
             "planning_create_feature", "planning_current_task",
-            "planning_delete_artifact", "planning_feature_code", "planning_import_feature",
+            "planning_delete_artifact", "planning_edit_log", "planning_export_backlog", "planning_feature_code", "planning_import_feature",
             "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features",
             "planning_materialize", "planning_materialize_status", "planning_move_feature",
             "planning_patch_artifact",
-            "planning_read_artifact", "planning_read_feature",
+            "planning_read_artifact", "planning_read_artifact_diff", "planning_read_feature",
             "planning_remove_feature_dependency",
             "planning_set_feature_priority", "planning_set_feature_status", "planning_set_status",
             "planning_task_queue", "planning_unclaim_feature", "planning_update_feature",

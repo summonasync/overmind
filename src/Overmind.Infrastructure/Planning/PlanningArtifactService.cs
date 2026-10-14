@@ -28,6 +28,7 @@ public sealed class PlanningArtifactService
         IReadOnlyList<int>? blockedBy = null)
     {
         body = PlanningSectionCanonicalizer.Canonicalize(body);
+        PointerMarkerGrammar.EnsureValid(body);
 
         if (brief is not null && kind != PlanningArtifactKind.Task)
         {
@@ -174,6 +175,8 @@ public sealed class PlanningArtifactService
             var task = tasks[i] with { Body = PlanningSectionCanonicalizer.Canonicalize(tasks[i].Body) };
             try
             {
+                PointerMarkerGrammar.EnsureValid(task.Body);
+
                 var (artifact, isNew, changed) = StageTask(featureId, task, siblings, source);
                 staged.Add(artifact);
                 mutated |= changed;
@@ -367,7 +370,9 @@ public sealed class PlanningArtifactService
         {
             if (wantsSection)
             {
-                artifact.PatchSection(patch.Section!, patch.Content!, patch.LogNote, source);
+                var content = PlanningSectionCanonicalizer.Canonicalize(patch.Content!);
+                PointerMarkerGrammar.EnsureValid(content);
+                artifact.PatchSection(patch.Section!, content, patch.LogNote, source);
             }
             else if (wantsBrief)
             {
@@ -500,6 +505,21 @@ public sealed class PlanningArtifactService
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
 
         artifact.AppendLog(note, source);
+        feature.Touch();
+
+        await _db.SaveChangesAsync(ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
+
+        return artifact;
+    }
+
+    public async Task<PlanningArtifact> EditNewestLogAsync(
+        Guid artifactId, string text, PlanningLogSource actor, CancellationToken ct = default)
+    {
+        var artifact = await LoadArtifactOrThrow(artifactId, ct);
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+
+        artifact.EditNewestLog(text, actor);
         feature.Touch();
 
         await _db.SaveChangesAsync(ct);

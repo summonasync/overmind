@@ -13,4 +13,5 @@ public sealed record PlanningMaterializationReport(
     IReadOnlyList<PlanningMaterializationSkip>? Refused = null,
     bool Atomic = true,
     DateTime StartedAt = default,
-    DateTime FinishedAt = default);
+    DateTime FinishedAt = default,
+    PlanningGitHygieneOutcome? GitHygiene = null);

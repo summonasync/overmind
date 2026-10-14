@@ -50,6 +50,7 @@ public static class DependencyInjection
 
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<PlanningArtifactService>();
+        services.AddScoped<PlanningArtifactDiffService>();
         services.AddScoped<NotificationsService>();
         services.AddScoped<CeremoniesService>();
         services.AddScoped<ManifestImporter>();
@@ -73,9 +74,11 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<SetPlanningFeatureStatusRequest>, SetPlanningFeatureStatusRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
+        services.AddSingleton<IValidator<EditPlanningLogRequest>, EditPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<DeclinePlanningArtifactRequest>, DeclinePlanningArtifactRequestValidator>();
         services.AddSingleton<IValidator<ImportPlanningFeatureRequest>, ImportPlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<PlanningImportFolderRequest>, PlanningImportFolderRequestValidator>();
+        services.AddSingleton<IValidator<PlanningExportRequest>, PlanningExportRequestValidator>();
         services.AddSingleton<IValidator<AddPlanningFeatureDependencyRequest>, AddPlanningFeatureDependencyRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueMoveRequest>, PlanningQueueMoveRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
@@ -126,6 +129,7 @@ public static class DependencyInjection
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();
         services.AddScoped<BacklogFeatureScanner>();
+        services.AddScoped<PlanningExportService>();
 
         return services;
     }

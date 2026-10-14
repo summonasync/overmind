@@ -45,5 +45,16 @@ public enum PlanningFailureCode
     IssueInvalidTransition,
     MissingIssue,
     ArtifactDeletionRefused,
-    DeletionBlockedByDependents
+    DeletionBlockedByDependents,
+    ExportTargetNotAbsolute,
+    ExportTargetNotEmpty,
+    ExportTargetInsideMirror,
+    ArtifactVersionNotFound,
+    InvalidVersionRange,
+    InvalidPointerMarker,
+    NumberCollision,
+    LogEditNotNewest,
+    LogEditWrongActor,
+    LogEditBlankText,
+    LogEditMultilineText
 }

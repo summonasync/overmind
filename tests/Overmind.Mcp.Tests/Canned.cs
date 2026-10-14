@@ -150,10 +150,10 @@ public static class Canned
     public const string PlanningArtifactRosterJson =
         """
         {"artifacts":[
-          {"artifactId":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z"},
-          {"artifactId":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","version":1,"order":0,"updatedAt":"2026-09-08T11:00:00Z"},
-          {"artifactId":"88888888-8888-8888-8888-888888888888","kind":"task","status":"done","version":1,"order":1,"updatedAt":"2026-09-09T12:00:00Z","review":"light","acTicked":1,"acTotal":2,"brief":"Build the domain"},
-          {"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","review":"hard","acTicked":0,"acTotal":3,"brief":"Wire the endpoints","blocked":false,"blockedBy":[1]}
+          {"artifactId":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z","pointers":[{"path":"docs/demo-spec.md","anchor":"non-goals"}]},
+          {"artifactId":"77777777-7777-7777-7777-777777777777","kind":"plan","status":"draft","version":1,"order":0,"updatedAt":"2026-09-08T11:00:00Z","pointers":[]},
+          {"artifactId":"88888888-8888-8888-8888-888888888888","kind":"task","status":"done","version":1,"order":1,"updatedAt":"2026-09-09T12:00:00Z","review":"light","acTicked":1,"acTotal":2,"brief":"Build the domain","pointers":[]},
+          {"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","review":"hard","acTicked":0,"acTotal":3,"brief":"Wire the endpoints","blocked":false,"blockedBy":[1],"pointers":[]}
         ]}
         """;
 
@@ -187,6 +187,9 @@ public static class Canned
     public const string PlanningArtifactSpecReadJson =
         """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","review":"light","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z","body":"# Demo spec\n\nShip the demo."}""";
 
+    public const string PlanningArtifactDiffJson =
+        """{"artifactId":"99999999-9999-9999-9999-999999999999","fromVersion":1,"toVersion":2,"diff":"@@ -1 +1 @@\n-from\n+to"}""";
+
     public const string PlanningArtifactNotFoundJson =
         """{"title":"Not Found","detail":"Artifact '99999999-9999-9999-9999-999999999999' was not found. Addressing by slug? The MCP tools accept artifact aliases: '<slug>/T<order>' for a task, '<slug>/S', '<slug>/P', '<slug>/R' for the single spec, plan or result — planning_list_artifacts lists the feature's actual kind/order pairs.","status":404}""";
 
@@ -196,12 +199,15 @@ public static class Canned
     public const string PlanningArtifactDeletionBlockedJson =
         """{"title":"DeletionBlockedByDependents","detail":"Clean up dependencies first: these tasks still depend on it: task 02.","status":409}""";
 
+    public const string PlanningNumberCollisionJson =
+        """{"title":"NumberCollision","detail":"Feature number of '7-other' is already taken by '075-sprint' (status 'inProgress') — NNN prefixes are the board's addressing layer and compare numerically (7 = 007). Rename the slug with the next free number: 076.","status":409}""";
+
     public const string PlanningArtifactDemotedJson =
         """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"draft","review":"light","order":0,"body":"# Demo spec\n\n<goal>\nReworked after review.\n</goal>","frozenAt":null,"version":3,"createdAt":"2026-09-08T10:05:00Z","updatedAt":"2026-09-26T09:00:00Z","log":[{"date":"2026-09-26","text":"artifact demoted: validated → draft"}],"statusChanged":"validated → draft","featureStatusChanged":"review → inProgress"}""";
 
     public const string PlanningCurrentTaskJson =
         """
-        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[],"blocked":false,"blockedBy":[1]},"reason":null,"warnings":["plan not validated"]}
+        {"state":"task","feature":{"slug":"demo-feature","title":"Demo feature","status":"inProgress"},"artifact":{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","order":2,"body":"# Wire the API\n\n<goal>Expose the endpoints.</goal>","frozenAt":null,"version":1,"createdAt":"2026-09-08T11:10:00Z","updatedAt":"2026-09-10T07:30:00Z","log":[],"blocked":false,"blockedBy":[1],"pointers":[]},"reason":null,"warnings":["plan not validated"]}
         """;
 
     public const string PlanningCurrentHeldJson =
@@ -343,6 +349,14 @@ public static class Canned
 
     public const string PlanningImportOutsideRootJson =
         """{"title":"ImportFailed","detail":"Importing '/elsewhere/BACKLOG/058-demo' failed: Path '/elsewhere/BACKLOG/058-demo' resolves outside the project directory '/repo'.","status":400}""";
+
+    public const string PlanningExportReportJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","target":"/repo/docs/planning-snapshot","fileCount":3}
+        """;
+
+    public const string PlanningExportTargetNotEmptyJson =
+        """{"title":"ExportTargetNotEmpty","detail":"Export target '/repo/docs/planning-snapshot' is not empty: export writes a fresh snapshot and refuses an existing tree.","status":409}""";
 
     public const string PlanningMaterializeStatusJson =
         """

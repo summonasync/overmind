@@ -163,6 +163,8 @@ public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Sta
 
 public sealed record AppendPlanningLogRequest(string Note, string? Source = null);
 
+public sealed record EditPlanningLogRequest(string Text);
+
 public sealed record SetPlanningArtifactStatusResponse(
     Guid Id,
     PlanningArtifactStatus Status,
@@ -252,7 +254,8 @@ public sealed record PlanningArtifactRosterItemResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AcTotal = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Brief = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
+    PlanningArtifactPointerResponse[] Pointers = null!);
 
 public sealed record PlanningArtifactResponse(
     Guid Id,
@@ -270,11 +273,20 @@ public sealed record PlanningArtifactResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusChanged = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
+    PlanningArtifactPointerResponse[] Pointers = null!);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 
+public sealed record PlanningArtifactPointerResponse(string Path, string? Anchor);
+
 public sealed record PlanningArtifactVersionResponse(int Version, string Body, DateTime CreatedAt);
+
+public sealed record PlanningArtifactDiffResponse(
+    Guid ArtifactId,
+    int FromVersion,
+    int ToVersion,
+    string Diff);
 
 public sealed record PlanningWorkflowResponse(
     PlanningMaterialization Materialization,
@@ -343,7 +355,10 @@ public sealed record PlanningMaterializationReportResponse(
     string[] Warnings,
     PlanningMaterializationSkipResponse[] Skipped,
     DateTime? LastSuccess,
-    DateTime? LastAttempt);
+    DateTime? LastAttempt,
+    PlanningGitHygieneOutcomeResponse? GitHygiene = null);
+
+public sealed record PlanningGitHygieneOutcomeResponse(string Status, string? RepositoryRoot, string? Detail);
 
 public sealed record PlanningMaterializationStatusRunResponse(
     DateTime StartedAt,
@@ -369,3 +384,7 @@ public sealed record PlanningDriftResponse(
     string? FeatureSlug,
     string RelativePath,
     DriftKind Kind);
+
+public sealed record PlanningExportRequest(string TargetPath);
+
+public sealed record PlanningExportResponse(Guid ProjectId, string Target, int FileCount);

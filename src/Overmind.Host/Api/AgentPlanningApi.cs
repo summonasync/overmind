@@ -33,6 +33,14 @@ public static class AgentPlanningApi
         CancellationToken ct) =>
         PlanningArtifactsApi.AppendLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
 
+    internal static Task<IResult> EditLog(
+        Guid id,
+        EditPlanningLogRequest request,
+        IValidator<EditPlanningLogRequest> validator,
+        PlanningArtifactService service,
+        CancellationToken ct) =>
+        PlanningArtifactsApi.EditLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
+
     private static RouteHandlerBuilder LockToClaim(this RouteHandlerBuilder builder) =>
         builder.AddEndpointFilter(ClaimLockFilter.Instance);
 
@@ -58,12 +66,15 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/artifacts", PlanningFeaturesApi.ListArtifacts);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts/tasks", PlanningArtifactsApi.CreateTasks).LockToClaim();
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
+        group.MapGet("/planning/artifacts/{id:guid}/diff", PlanningArtifactsApi.Diff);
         group.MapPost("/planning/artifacts/{id:guid}/status", SetArtifactStatus).LockToClaim();
         group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog).LockToClaim();
+        group.MapPut("/planning/artifacts/{id:guid}/log", EditLog).LockToClaim();
         group.MapPost("/planning/artifacts/{id:guid}/patch", Patch).LockToClaim();
         group.MapDelete("/planning/artifacts/{id:guid}", DeleteArtifact).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/import", ImportFeature);
         group.MapGet("/projects/{projectId:guid}/planning/materialization-status", MaterializationStatus);
+        group.MapPost("/projects/{projectId:guid}/planning/export", PlanningExportApi.Export);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate).LockToClaim();
 
         return group;

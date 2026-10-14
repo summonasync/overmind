@@ -51,6 +51,12 @@ public sealed class AgentArtifactRosterApiTests : IDisposable
         spec["acTicked"].ShouldBeNull();
         spec["acTotal"].ShouldBeNull();
         spec["brief"].ShouldBeNull();
+        spec["pointers"]!.AsArray().Count.ShouldBe(1);
+        spec["pointers"]![0]!["path"]!.GetValue<string>().ShouldBe("docs/roster-spec.md");
+        spec["pointers"]![0]!["anchor"]!.GetValue<string>().ShouldBe("non-goals");
+
+        var plan = items[1]!;
+        plan["pointers"]!.ToJsonString().ShouldBe("[]");
 
         var firstTask = items[3]!;
         firstTask["review"]!.GetValue<string>().ShouldBe("light");
@@ -139,6 +145,8 @@ public sealed class AgentArtifactRosterApiTests : IDisposable
                 # Spec
 
                 SECRET-ROSTER-BODY
+
+                pointer: docs/roster-spec.md#non-goals
 
                 <acceptance-criteria>
                 - [x] spec level item

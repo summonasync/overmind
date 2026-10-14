@@ -20,7 +20,7 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         var text = PromptText(response);
-        text.ShouldContain("read overmind://projects to list available projects");
+        text.ShouldContain("list_projects names the candidate projects");
         text.ShouldContain("OVERMIND_PROJECT_ID");
     }
 
@@ -36,7 +36,7 @@ public class PromptContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task SessionBootstrap_WithSingleProject_PointsAtItsGatesAndGuards()
+    public async Task SessionBootstrap_WithSingleProject_TeachesTheBriefingFirstStart()
     {
         Stub.RouteGet("/api/projects", $$"""
             [{"id":"{{Canned.ProjectId}}","name":"alpha","diskPath":"E:\\work\\alpha","description":"","createdAt":"2026-09-01T10:00:00Z"}]
@@ -45,7 +45,9 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         var text = PromptText(response);
-        text.ShouldContain($"read overmind://projects/{Canned.ProjectId}/gates and /guards and follow them");
+        text.ShouldContain($"call overmind_briefing for project {Canned.ProjectId}");
+        text.ShouldContain("guards and gates with full bodies");
+        text.ShouldContain("read_entry for depth");
     }
 
     [Fact]
@@ -58,8 +60,8 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         var text = PromptText(response);
-        text.ShouldContain($"overmind://projects/{Canned.ProjectId}/planning/features");
-        text.ShouldContain("planning/features/<slug>/current");
+        text.ShouldContain("planning_list_features for the board");
+        text.ShouldContain("planning_current_task for your next task");
         text.ShouldContain("STOP");
         text.ShouldContain("planning_set_status");
         text.ShouldContain("planning_append_log");
@@ -97,8 +99,8 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         var text = PromptText(response);
-        text.ShouldContain("overmind://projects/{id}/planning/features");
-        text.ShouldContain("planning/features/<slug>/current");
+        text.ShouldContain("planning_list_features for the board");
+        text.ShouldContain("planning_current_task for your next task");
         text.ShouldContain("STOP");
         text.ShouldContain("planning_set_status");
         text.ShouldContain("planning_append_log");

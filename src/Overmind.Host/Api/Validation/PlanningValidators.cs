@@ -126,6 +126,14 @@ public sealed class AppendPlanningLogRequestValidator : AbstractValidator<Append
     }
 }
 
+public sealed class EditPlanningLogRequestValidator : AbstractValidator<EditPlanningLogRequest>
+{
+    public EditPlanningLogRequestValidator()
+    {
+        RuleFor(x => x.Text).NotEmpty();
+    }
+}
+
 public sealed class DeclinePlanningArtifactRequestValidator : AbstractValidator<DeclinePlanningArtifactRequest>
 {
     public DeclinePlanningArtifactRequestValidator()
@@ -162,6 +170,17 @@ public sealed class PlanningImportFolderRequestValidator : AbstractValidator<Pla
         !name.Contains('/') &&
         !name.Contains('\\') &&
         name is not ("." or "..");
+}
+
+public sealed class PlanningExportRequestValidator : AbstractValidator<PlanningExportRequest>
+{
+    public PlanningExportRequestValidator()
+    {
+        RuleFor(x => x.TargetPath).NotEmpty();
+        RuleFor(x => x.TargetPath).Must(Path.IsPathFullyQualified)
+            .When(x => !string.IsNullOrWhiteSpace(x.TargetPath))
+            .WithMessage("TargetPath must be an absolute directory path, e.g. /repo/docs/planning-snapshot.");
+    }
 }
 
 public sealed class AddPlanningFeatureDependencyRequestValidator : AbstractValidator<AddPlanningFeatureDependencyRequest>

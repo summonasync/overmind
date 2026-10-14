@@ -13,6 +13,7 @@ public class ContextEntryTests
     [InlineData(EntryType.Decision)]
     [InlineData(EntryType.Gate)]
     [InlineData(EntryType.Guard)]
+    [InlineData(EntryType.FeatureRequest)]
     [InlineData(EntryType.Tombstone)]
     public void Create_SetsTypeAndTimestamps(EntryType type)
     {

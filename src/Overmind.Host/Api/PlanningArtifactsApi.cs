@@ -18,10 +18,12 @@ public static class PlanningArtifactsApi
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/artifacts", CreateArtifact);
         group.MapGet("/planning/artifacts/{id:guid}", GetArtifact);
         group.MapGet("/planning/artifacts/{id:guid}/versions", GetVersions);
+        group.MapGet("/planning/artifacts/{id:guid}/diff", Diff);
         group.MapPut("/planning/artifacts/{id:guid}", UpdateArtifact);
         group.MapDelete("/planning/artifacts/{id:guid}", DeleteArtifact);
         group.MapPost("/planning/artifacts/{id:guid}/status", SetStatus);
         group.MapPost("/planning/artifacts/{id:guid}/log", AppendLog);
+        group.MapPut("/planning/artifacts/{id:guid}/log", EditLog);
         group.MapPost("/planning/artifacts/{id:guid}/validate", Validate);
         group.MapPost("/planning/artifacts/{id:guid}/decline", Decline);
 
@@ -170,6 +172,25 @@ public static class PlanningArtifactsApi
         return Results.Ok(versions.Select(PlanningMapper.ToVersionResponse).ToArray());
     }
 
+    internal static async Task<IResult> Diff(
+        Guid id,
+        int? from,
+        int? to,
+        PlanningArtifactDiffService diffService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await diffService.DiffAsync(id, from, to, ct);
+            return Results.Ok(new PlanningArtifactDiffResponse(
+                result.ArtifactId, result.FromVersion, result.ToVersion, result.Diff));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
     internal static async Task<IResult> UpdateArtifact(
         Guid id,
         UpdatePlanningArtifactRequest request,
@@ -287,6 +308,39 @@ public static class PlanningArtifactsApi
             var artifact = await service.AppendLogAsync(
                 id, request.Note, ct,
                 PlanningDoorSource.Resolve(request.Source, fallbackSource));
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    internal static Task<IResult> EditLog(
+        Guid id,
+        EditPlanningLogRequest request,
+        IValidator<EditPlanningLogRequest> validator,
+        PlanningArtifactService service,
+        CancellationToken ct) =>
+        EditLogForDoor(id, request, validator, service, PlanningLogSource.Ui, ct);
+
+    internal static async Task<IResult> EditLogForDoor(
+        Guid id,
+        EditPlanningLogRequest request,
+        IValidator<EditPlanningLogRequest> validator,
+        PlanningArtifactService service,
+        PlanningLogSource actor,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        try
+        {
+            var artifact = await service.EditNewestLogAsync(id, request.Text, actor, ct);
             return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
         }
         catch (PlanningException ex)

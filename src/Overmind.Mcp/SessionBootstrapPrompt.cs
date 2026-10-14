@@ -31,10 +31,10 @@ public sealed class SessionBootstrapPrompt
         "Ceremony order: planning_upsert_artifact(kind=spec) → validate with proof (overmind_notify(kind=approval, featureSlug), wait for the human's reply, planning_validate) → planning_upsert_artifact(kind=plan) → validate with proof again → planning_upsert_tasks execution contracts → work loop (planning_current_task, planning_set_status) → result artifact → the human taps the feature done.";
 
     private const string FallbackText =
-        "At session start, read overmind://projects to list available projects, then read " +
-        "overmind://projects/{id}/gates and /guards for the active project and follow them. " +
-        "Planning loop: read overmind://projects/{id}/planning/features for the board, take " +
-        "overmind://projects/{id}/planning/features/<slug>/current for your next task, obey any STOP line " +
+        "At session start, list_projects names the candidate projects, then overmind_briefing returns " +
+        "the start-of-work picture in one call — guards and gates with full bodies, decisions and the " +
+        "latest notes as snippets, and the tombstone list (read_entry for depth). " +
+        "Planning loop: planning_list_features for the board, planning_current_task for your next task, obey any STOP line " +
         "(a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
         "and report progress with planning_set_status and planning_append_log. " +
         WriteCostRouting + " " + ReadCostRouting + " " + DependencyRouting + " " + QueueRouting +
@@ -49,7 +49,7 @@ public sealed class SessionBootstrapPrompt
     }
 
     [McpServerPrompt(Name = "session_bootstrap", Title = "Overmind session bootstrap")]
-    [Description("Instruction text telling the agent which gates and guards to read at session start.")]
+    [Description("Instruction text for session start: overmind_briefing returns the gates-and-guards picture, the planning loop follows.")]
     public async Task<GetPromptResult> GetBootstrap(CancellationToken ct)
     {
         var activeProjectId = Environment.GetEnvironmentVariable("OVERMIND_PROJECT_ID");
@@ -75,9 +75,10 @@ public sealed class SessionBootstrapPrompt
 
         var text = string.IsNullOrWhiteSpace(activeProjectId)
             ? FallbackText
-            : $"At session start, read overmind://projects/{activeProjectId}/gates and /guards and follow them. " +
-              $"Planning loop: read overmind://projects/{activeProjectId}/planning/features for the board, " +
-              $"take overmind://projects/{activeProjectId}/planning/features/<slug>/current for your next task, " +
+            : $"At session start, call overmind_briefing for project {activeProjectId} — one call returns " +
+              "the start-of-work picture: guards and gates with full bodies, decisions and the latest notes " +
+              "as snippets, and the tombstone list (read_entry for depth). " +
+              "Planning loop: planning_list_features for the board, planning_current_task for your next task, " +
               "obey any STOP line (a gated spec or plan is approved by the user in the Overmind UI, never by you), " +
               $"and report progress with planning_set_status and planning_append_log. {WriteCostRouting} {ReadCostRouting} {DependencyRouting} {QueueRouting} {ValidationProofRouting} {NotificationUrlRouting} {CeremonyRouting}";
 

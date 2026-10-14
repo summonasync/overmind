@@ -142,6 +142,26 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateFeature_CollidingNumber_Returns409NamingTheHolderAndNextFree()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "010-first", "First");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Slug = "10-second", Title = "Second", Body = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Status.ShouldBe(409);
+        problem.Title.ShouldBe("NumberCollision");
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("010-first");
+        problem.Detail.ShouldContain("status 'draft'");
+        problem.Detail.ShouldContain("011");
+    }
+
+    [Fact]
     public async Task CreateFeature_BadSlug_Returns400()
     {
         var project = await CreateProjectAsync();
@@ -301,7 +321,8 @@ public sealed class PlanningApiTests : IDisposable
         var spec = artifacts[0];
         spec.GetProperty("kind").GetString().ShouldBe("spec");
         spec.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["id", "kind", "status", "review", "order", "body", "brief", "frozenAt", "version", "createdAt", "updatedAt", "log"]);
+            ["id", "kind", "status", "review", "order", "body", "brief", "frozenAt", "version", "createdAt", "updatedAt", "log", "pointers"]);
+        spec.GetProperty("pointers").EnumerateArray().ShouldBeEmpty();
         spec.GetProperty("body").GetString().ShouldStartWith("# Spec v2");
         spec.GetProperty("log").EnumerateArray().Single().GetProperty("text").GetString().ShouldBe("spec note");
 
@@ -353,13 +374,14 @@ public sealed class PlanningApiTests : IDisposable
         var rosterSpec = artifacts[0];
         rosterSpec.GetProperty("kind").GetString().ShouldBe("spec");
         rosterSpec.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["artifactId", "kind", "status", "version", "order", "updatedAt"]);
+            ["artifactId", "kind", "status", "version", "order", "updatedAt", "pointers"]);
+        rosterSpec.GetProperty("pointers").EnumerateArray().ShouldBeEmpty();
         rosterSpec.GetProperty("artifactId").GetString().ShouldBe(spec!.Id.ToString());
 
         var rosterTask = artifacts[1];
         rosterTask.GetProperty("kind").GetString().ShouldBe("task");
         rosterTask.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["artifactId", "kind", "status", "version", "order", "updatedAt", "review", "acTicked", "acTotal", "brief"]);
+            ["artifactId", "kind", "status", "version", "order", "updatedAt", "review", "acTicked", "acTotal", "brief", "pointers"]);
         rosterTask.GetProperty("artifactId").GetString().ShouldBe(task!.Id.ToString());
         rosterTask.GetProperty("status").GetString().ShouldBe("todo");
         rosterTask.GetProperty("order").GetInt32().ShouldBe(0);
@@ -592,6 +614,40 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task ArtifactResponse_PointerProjection_ParsesPathsAndAnchorsEmptyWhenNone()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+
+        var pointedBody = """
+            <goal>Point at the plan.</goal>
+
+            pointer: docs/auth-redesign.md#non-goals
+            pointer: src/Auth/Keys.cs
+            """;
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = pointedBody });
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        created!.Pointers.ShouldNotBeNull();
+        created.Pointers.Select(p => (p.Path, p.Anchor)).ShouldBe(
+            [("docs/auth-redesign.md", (string?)"non-goals"), ("src/Auth/Keys.cs", null)]);
+
+        var stored = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        stored!.Pointers.ShouldNotBeNull();
+        stored.Pointers.Length.ShouldBe(2);
+
+        var plain = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "plan", Body = "<goal>No pointers here.</goal>" });
+        var plainArtifact = await plain.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        plainArtifact!.Pointers.ShouldNotBeNull();
+        plainArtifact.Pointers.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task ValidateSpec_SetsValidatedAndFrozenAt()
     {
         var project = await CreateProjectAsync();
@@ -714,6 +770,134 @@ public sealed class PlanningApiTests : IDisposable
             $"/api/planning/artifacts/{created.Id}/versions", JsonOptions);
         versions.ShouldNotBeNull();
         versions!.Length.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Diff_DefaultPair_DiffsTheTwoMostRecentVersions()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var spec = await CreateVersionedSpec(project.Id, "old line", "new line");
+
+        var diff = await _client.GetFromJsonAsync<DiffJson>(
+            $"/api/planning/artifacts/{spec.Id}/diff", JsonOptions);
+
+        diff.ShouldNotBeNull();
+        diff!.ArtifactId.ShouldBe(spec.Id);
+        diff.FromVersion.ShouldBe(1);
+        diff.ToVersion.ShouldBe(2);
+        diff.Diff.ShouldContain("@@");
+        diff.Diff.ShouldContain("-old line");
+        diff.Diff.ShouldContain("+new line");
+    }
+
+    [Fact]
+    public async Task Diff_ExplicitPair_FollowsTheRequestedRange()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var spec = await CreateVersionedSpec(project.Id, "first", "second");
+        await UpsertSpecBody(project.Id, "third");
+
+        var response = await _client.GetAsync($"/api/planning/artifacts/{spec.Id}/diff?from=1&to=2");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var diff = await response.Content.ReadFromJsonAsync<DiffJson>(JsonOptions);
+        diff!.FromVersion.ShouldBe(1);
+        diff.ToVersion.ShouldBe(2);
+        diff.Diff.ShouldContain("-first");
+        diff.Diff.ShouldContain("+second");
+        diff.Diff.ShouldNotContain("third");
+    }
+
+    [Fact]
+    public async Task Diff_TrailingNewlineOnlyChange_DiffsAsEmpty()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var spec = await CreateVersionedSpec(project.Id, "same", "same\n");
+
+        var diff = await _client.GetFromJsonAsync<DiffJson>(
+            $"/api/planning/artifacts/{spec.Id}/diff", JsonOptions);
+
+        diff.ShouldNotBeNull();
+        diff!.Diff.ShouldBe(string.Empty);
+    }
+
+    [Fact]
+    public async Task Diff_UnknownArtifact_Returns404WithTheAliasHint()
+    {
+        var missing = Guid.NewGuid();
+
+        var response = await _client.GetAsync($"/api/planning/artifacts/{missing}/diff");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldStartWith($"Artifact '{missing}' was not found.");
+        problem.Detail.ShouldContain("<slug>/T<order>");
+    }
+
+    [Fact]
+    public async Task Diff_UnknownVersion_Returns404NamingTheCoverage()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var spec = await CreateVersionedSpec(project.Id, "only", "latest");
+
+        var response = await _client.GetAsync($"/api/planning/artifacts/{spec.Id}/diff?from=9&to=10");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain("has no version 9");
+        problem.Detail!.ShouldContain("the live body is version 2");
+    }
+
+    [Fact]
+    public async Task Diff_FromEqualsTo_Returns400InvalidVersionRange()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var spec = await CreateVersionedSpec(project.Id, "first", "second");
+
+        var response = await _client.GetAsync($"/api/planning/artifacts/{spec.Id}/diff?from=1&to=1");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidVersionRange");
+        problem.Detail!.ShouldContain("nothing to diff");
+    }
+
+    [Fact]
+    public async Task Diff_FromGreaterThanTo_Returns400InvalidVersionRange()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var spec = await CreateVersionedSpec(project.Id, "first", "second");
+
+        var response = await _client.GetAsync($"/api/planning/artifacts/{spec.Id}/diff?from=2&to=1");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidVersionRange");
+        problem.Detail!.ShouldContain("from (2) is greater than to (1)");
+    }
+
+    private async Task<ArtifactJson> CreateVersionedSpec(Guid projectId, string firstBody, string secondBody)
+    {
+        await UpsertSpecBody(projectId, firstBody);
+        return await UpsertSpecBody(projectId, secondBody);
+    }
+
+    private async Task<ArtifactJson> UpsertSpecBody(Guid projectId, string body)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = body });
+
+        response.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.OK);
+        var artifact = await response.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        artifact.ShouldNotBeNull();
+        return artifact!;
     }
 
     [Theory]
@@ -1207,6 +1391,119 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task EditLog_HttpDoor_ReplacesTheNewestUiLineText()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateSpecAsync(project);
+
+        await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{created!.Id}/log",
+            new { Note = "halfway trough the wiring" });
+        var editResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/log",
+            new { Text = "halfway through the wiring" });
+
+        editResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await editResponse.Content.ReadFromJsonAsync<ArtifactMutationJson>(JsonOptions);
+        echo!.Version.ShouldBe(created.Version + 2);
+        echo.LastLogLine.ShouldBe("halfway through the wiring");
+
+        var getResponse = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{created.Id}", JsonOptions);
+        getResponse!.Body.ShouldContain("[ui] — halfway through the wiring");
+        getResponse.Body.ShouldNotContain("trough");
+    }
+
+    [Fact]
+    public async Task EditLog_MultilineText_ReturnsTypedMultilineRefusal()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateSpecAsync(project);
+        await AppendLogAsync(created!.Id, "first line");
+
+        var editResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/log",
+            new { Text = "corrected line\nsmuggled second line" });
+
+        editResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await editResponse.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogEditMultilineText");
+    }
+
+    [Fact]
+    public async Task EditLog_NotNewest_Returns409NamingTheOwnedEntry()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateSpecAsync(project);
+        await AppendLogAsync(created!.Id, "my older note");
+        await AppendLogAsync(created.Id, "agent got the last word", "agent");
+
+        var editResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/log",
+            new { Text = "reach past the newer line" });
+
+        editResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await editResponse.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogEditNotNewest");
+        problem.Detail!.ShouldContain("entry 1 of 2");
+    }
+
+    [Fact]
+    public async Task EditLog_WrongActor_Returns409WhenTheDoorOwnsNoLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateSpecAsync(project);
+        await AppendLogAsync(created!.Id, "agent-only line", "agent");
+
+        var editResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/log",
+            new { Text = "human claiming the agent line" });
+
+        editResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await editResponse.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogEditWrongActor");
+        problem.Detail!.ShouldContain("own door marker");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task EditLog_BlankText_ReturnsValidationProblem(string? text)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "feat", "Feature");
+        var created = await CreateSpecAsync(project);
+        await AppendLogAsync(created!.Id, "line to edit");
+
+        var editResponse = await _client.PutAsJsonAsync(
+            $"/api/planning/artifacts/{created.Id}/log",
+            new { Text = text });
+
+        editResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private async Task<ArtifactJson?> CreateSpecAsync(ProjectJson project)
+    {
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "spec", Body = "body" });
+        return await createResponse.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+    }
+
+    private async Task AppendLogAsync(Guid artifactId, string note, string? source = null)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{artifactId}/log",
+            new { Note = note, Source = source });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task CreateArtifact_WithLogNote_WritesTheUiMarker()
     {
         var project = await CreateProjectAsync();
@@ -1484,11 +1781,15 @@ public sealed class PlanningApiTests : IDisposable
         Guid Id, string Kind, string Status, string Review,
         int Order, string Body, DateTime? FrozenAt, int Version,
         DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null,
-        string? StatusChanged = null);
+        string? StatusChanged = null, PointerJson[]? Pointers = null);
 
     public sealed record LogLineJson(string? Date, string Text);
 
+    public sealed record PointerJson(string Path, string? Anchor);
+
     public sealed record VersionJson(int Version, string Body, DateTime CreatedAt);
+
+    public sealed record DiffJson(Guid ArtifactId, int FromVersion, int ToVersion, string Diff);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 

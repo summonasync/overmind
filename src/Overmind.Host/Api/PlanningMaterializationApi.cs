@@ -74,5 +74,11 @@ public static class PlanningMaterializationApi
             report.Warnings.ToArray(),
             report.Skipped.Select(s => new PlanningMaterializationSkipResponse(s.RelativePath, s.Reason)).ToArray(),
             lastSuccess,
-            lastAttempt);
+            lastAttempt,
+            report.GitHygiene is null
+                ? null
+                : new PlanningGitHygieneOutcomeResponse(
+                    report.GitHygiene.Status,
+                    report.GitHygiene.RepositoryRoot,
+                    report.GitHygiene.Detail));
 }

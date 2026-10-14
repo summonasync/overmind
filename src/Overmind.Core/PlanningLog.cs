@@ -41,6 +41,64 @@ public static class PlanningLog
         return result.ToString();
     }
 
+    public static string ReplaceNewest(string body, string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        ArgumentNullException.ThrowIfNull(body);
+
+        if (!PlanningSections.TryFind("log", body, out var section))
+        {
+            throw new InvalidOperationException("The body carries no log section.");
+        }
+
+        var contentStart = section.OpenIndex + section.OpenLength;
+        if (contentStart < body.Length && body[contentStart] == '\n')
+        {
+            contentStart++;
+        }
+
+        var contentEnd = section.CloseIndex;
+        if (contentEnd >= 2 && body[contentEnd - 1] == '\n')
+        {
+            contentEnd -= body[contentEnd - 2] == '\r' ? 2 : 1;
+        }
+
+        var lineStart = -1;
+        var lineLength = 0;
+
+        if (contentEnd >= contentStart)
+        {
+            var offset = 0;
+            foreach (var raw in body[contentStart..contentEnd].Split('\n'))
+            {
+                if (raw.Trim().StartsWith("- ", StringComparison.Ordinal))
+                {
+                    lineStart = contentStart + offset;
+                    lineLength = raw.Length;
+                }
+
+                offset += raw.Length + 1;
+            }
+        }
+
+        if (lineStart < 0)
+        {
+            throw new InvalidOperationException("The log section holds no line to edit.");
+        }
+
+        var line = body.Substring(lineStart, lineLength);
+        var separator = line.IndexOf(" — ", StringComparison.Ordinal);
+        if (separator < 0)
+        {
+            throw new InvalidOperationException("The newest log line is not a dated entry; its text cannot be replaced.");
+        }
+
+        var carriageReturn = line.EndsWith('\r') ? "\r" : string.Empty;
+        var edited = string.Concat(line.AsSpan(0, separator + 3), text, carriageReturn);
+
+        return string.Concat(body.AsSpan(0, lineStart), edited, body.AsSpan(lineStart + lineLength));
+    }
+
     public static IReadOnlyList<PlanningLogLine> Parse(string body)
     {
         if (string.IsNullOrEmpty(body) || !PlanningSections.TryFind("log", body, out var section))

@@ -98,6 +98,7 @@ builder.Services.AddSingleton<MutationGuard>();
 builder.Services.AddSingleton<IGitCli, GitCli>();
 builder.Services.AddSingleton<ProjectResolver>();
 builder.Services.AddSingleton<OvermindTools>();
+builder.Services.AddSingleton<OvermindBriefingTools>();
 builder.Services.AddSingleton<OvermindPlanningTools>();
 builder.Services.AddSingleton<FeatureCodeTools>();
 builder.Services.AddSingleton<IssuesTools>();
@@ -114,14 +115,16 @@ builder.Services
         options.ServerInstructions =
             "Overmind shared-context adapter. Call overmind_onboard first — it resolves your project and returns the onboarding quickstart. " +
             "Working a feature? Claim it first with planning_claim_feature — the onboarding quickstart explains the workflow. " +
-            "Project gates, guards, notes, decisions, skills and tombstones (graves of deleted entries) live as entries: " +
-            "list them with list_entries (type=gate|guard|note|decision|skill|tombstone) and read them with read_entry — " +
+            "Start of work: overmind_briefing returns the whole guardrail picture in one call — guards and gates with full bodies, decisions and the latest notes as ~200-character snippets, and the tombstone list. " +
+            "Gates, guards, notes, decisions, skills and tombstones (graves of deleted entries) live as entries: " +
+            "list_entries (type=gate|guard|note|decision|skill|tombstone) explores them and read_entry reads one in full — " +
             "check tombstones before proposing anything that smells like a resurrect; the onboard payload names the active project. " +
             "Use tools for project/entry CRUD and fulltext or semantic search. " +
             "When overmind_notify returns a url, quote the url in chat when asking for an approval or reporting a question so the human can click through.";
     })
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()
+    .WithTools<OvermindBriefingTools>()
     .WithTools<OvermindPlanningTools>()
     .WithTools<FeatureCodeTools>()
     .WithTools<IssuesTools>()

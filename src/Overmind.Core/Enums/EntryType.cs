@@ -2,10 +2,11 @@ namespace Overmind.Core;
 
 public enum EntryType
 {
-    Note,
-    Decision,
-    Gate,
-    Guard,
-    Skill,
-    Tombstone
+    Note = 0,
+    Decision = 1,
+    Gate = 2,
+    Guard = 3,
+    Skill = 4,
+    Tombstone = 5,
+    FeatureRequest = 6
 }

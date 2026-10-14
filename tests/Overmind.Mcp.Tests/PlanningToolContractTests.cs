@@ -28,12 +28,14 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_unclaim_feature",
             "planning_list_artifacts",
             "planning_read_artifact",
+            "planning_read_artifact_diff",
             "planning_current_task",
             "planning_create_feature",
             "planning_upsert_artifact",
             "planning_upsert_tasks",
             "planning_set_status",
             "planning_append_log",
+            "planning_edit_log",
             "planning_patch_artifact",
             "planning_delete_artifact",
             "planning_validate",
@@ -47,7 +49,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_remove_feature_dependency",
             "planning_materialize",
             "planning_materialize_status",
-            "planning_import_feature"
+            "planning_import_feature",
+            "planning_export_backlog"
         ];
         foreach (var name in expected)
         {
@@ -118,6 +121,13 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("untick=true");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("already unticked — no change");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("tickedIndex + tickedText");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("newest <log> line");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("own actor marker");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("[agent] on this door, [ui] on the human door");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("single line");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("version-traced");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("Feature-level logs are out of scope");
+        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("planning_append_log");
         tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain(
             "agents can delete draft artifacts only; validated/done deletion is the human's door in the UI");
         tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain("clean up dependencies first");
@@ -127,6 +137,9 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("all-or-nothing");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("one feature auto-transition evaluation");
         tools["planning_import_feature"]!["description"]!.GetValue<string>().ShouldContain("never pass through the model");
+        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("commit the planning alongside the code");
+        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
+        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
     }
 
     [Fact]
@@ -155,6 +168,48 @@ public class PlanningToolContractTests : McpSessionTestBase
     public async Task PlanningReads_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper(string tool)
     {
         var response = await Driver.CallToolAsync(tool, new JsonObject());
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("projectId is required");
+        text.ShouldContain("planning_");
+        text.ShouldContain("cwd");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningMaterialize_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper()
+    {
+        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject());
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("projectId is required");
+        text.ShouldContain("planning_");
+        text.ShouldContain("cwd");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("planning_read_feature", """{"slug":"demo-feature"}""")]
+    [InlineData("planning_list_artifacts", """{"slug":"demo-feature"}""")]
+    [InlineData("planning_current_task", """{"slug":"demo-feature"}""")]
+    [InlineData("planning_create_feature", """{"slug":"demo-feature","title":"Demo"}""")]
+    [InlineData("planning_upsert_artifact", """{"featureSlug":"demo-feature","kind":"spec","body":"<goal>body</goal>"}""")]
+    [InlineData("planning_upsert_tasks", """{"featureSlug":"demo-feature","tasks":[]}""")]
+    [InlineData("planning_set_feature_status", """{"slug":"demo-feature","status":"inProgress","logNote":"note"}""")]
+    [InlineData("planning_update_feature", """{"slug":"demo-feature","logNote":"note"}""")]
+    [InlineData("planning_move_feature", """{"slug":"demo-feature","move":"up"}""")]
+    [InlineData("planning_claim_feature", """{"slug":"demo-feature","alias":"Dan","vendor":"claude"}""")]
+    [InlineData("planning_unclaim_feature", """{"slug":"demo-feature"}""")]
+    [InlineData("planning_set_feature_priority", """{"slug":"demo-feature","priority":"p1"}""")]
+    [InlineData("planning_list_feature_dependencies", """{"slug":"demo-feature"}""")]
+    [InlineData("planning_add_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""")]
+    [InlineData("planning_remove_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""")]
+    [InlineData("planning_import_feature", """{"path":"/repo/BACKLOG/058-agent-side-import"}""")]
+    [InlineData("planning_export_backlog", """{"targetPath":"/tmp/demo-snapshot"}""")]
+    public async Task PlanningRequiredProjectIdTools_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper(
+        string tool, string arguments)
+    {
+        var response = await Driver.CallToolAsync(tool, JsonNode.Parse(arguments)!.AsObject());
 
         var text = ToolErrorText(response);
         text.ShouldContain("projectId is required");
@@ -273,7 +328,12 @@ public class PlanningToolContractTests : McpSessionTestBase
         items.Count.ShouldBe(4);
         items.ShouldNotContain(i => i!.AsObject().ContainsKey("body"));
         items.ShouldNotContain(i => i!.AsObject().ContainsKey("log"));
-        items.Single(i => i!["kind"]!.GetValue<string>() == "spec")!.AsObject().ContainsKey("review").ShouldBeFalse();
+        var spec = items.Single(i => i!["kind"]!.GetValue<string>() == "spec")!.AsObject();
+        spec.ContainsKey("review").ShouldBeFalse();
+        spec["pointers"]!.AsArray().Count.ShouldBe(1);
+        spec["pointers"]![0]!["path"]!.GetValue<string>().ShouldBe("docs/demo-spec.md");
+        spec["pointers"]![0]!["anchor"]!.GetValue<string>().ShouldBe("non-goals");
+        items.Single(i => i!["kind"]!.GetValue<string>() == "plan")!["pointers"]!.ToJsonString().ShouldBe("[]");
         var task = items.Single(i => i!["artifactId"]!.GetValue<string>() == Canned.PlanningTaskTwoId.ToString())!.AsObject();
         task["review"]!.GetValue<string>().ShouldBe("hard");
         task["acTicked"]!.GetValue<int>().ShouldBe(0);
@@ -281,6 +341,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         task["brief"]!.GetValue<string>().ShouldBe("Wire the endpoints");
         task["blocked"]!.GetValue<bool>().ShouldBeFalse();
         task["blockedBy"]!.ToJsonString().ShouldBe("[1]");
+        task["pointers"]!.ToJsonString().ShouldBe("[]");
     }
 
     [Fact]
@@ -325,7 +386,8 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_list_artifacts"]!["description"]!.GetValue<string>().ShouldBe(
-            "Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature.");
+            "Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature. " +
+            "Every row carries additive pointers: [{path, anchor}] parsed from pointer lines in the body — an artifact can point at a repo file instead of copying it; the server never reads the targets (empty array when none).");
     }
 
     [Fact]
@@ -483,6 +545,68 @@ public class PlanningToolContractTests : McpSessionTestBase
         JsonNode.Parse(request.Body)!["note"]!.GetValue<string>().ShouldBe("aliased progress note");
 
         Canned.ToolResultText(response).ShouldContain("log line recorded on the board");
+    }
+
+    [Fact]
+    public async Task PlanningEditLog_PutsTheReplacementText()
+    {
+        var response = await Driver.CallToolAsync("planning_edit_log", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["text"] = "halfway through the wiring, corrected"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "PUT" && r.Path.EndsWith("/log", StringComparison.Ordinal));
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/log");
+        var posted = JsonNode.Parse(request.Body)!;
+        posted["text"]!.GetValue<string>().ShouldBe("halfway through the wiring, corrected");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine"]);
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.PlanningTaskTwoId.ToString());
+        echo["version"]!.GetValue<int>().ShouldBe(3);
+        echo["status"]!.GetValue<string>().ShouldBe("inProgress");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("log line recorded on the board");
+    }
+
+    [Fact]
+    public async Task PlanningEditLog_TaskAlias_PutsToTheResolvedArtifact()
+    {
+        var response = await Driver.CallToolAsync("planning_edit_log", new JsonObject
+        {
+            ["text"] = "aliased correction",
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T1"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "PUT" && r.Path.EndsWith("/log", StringComparison.Ordinal));
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskOneId}/log");
+        JsonNode.Parse(request.Body)!["text"]!.GetValue<string>().ShouldBe("aliased correction");
+
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningEditLog_WrongActorRefusal_SurfacesTheHostDetail()
+    {
+        Stub.Route(
+            "PUT",
+            $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/log",
+            409,
+            """{"title":"LogEditWrongActor","detail":"The newest log line carries the [ui] marker, and the log holds no [agent] line to edit — only lines carrying your own door marker are yours. Append a new line via planning_append_log instead.","status":409}""");
+
+        var response = await Driver.CallToolAsync("planning_edit_log", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["text"] = "correction across the door"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("[ui]");
+        text.ShouldContain("own door marker");
+        text.ShouldContain("planning_append_log");
+        Driver.HasExited.ShouldBeFalse();
     }
 
     [Fact]
@@ -769,7 +893,9 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_read_artifact"]!["description"]!.GetValue<string>().ShouldBe(
-            "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only.");
+            "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. " +
+            "The review field appears on task payloads only. Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. " +
+            "Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.");
     }
 
     [Fact]
@@ -782,6 +908,199 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("claimedByAlias");
         tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("most expensive read");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_Description_PinsTheLadderAdjacencyAndTrailingNewline()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_read_artifact_diff"]!["description"]!.GetValue<string>().ShouldBe(
+            "Diffs two versions of one artifact as a unified diff — the read between planning_read_artifact and " +
+            "nothing: no full bodies, only the change hunks. fromVersion/toVersion optional: omitting both diffs " +
+            "the two most recent versions. Adjacent versions may carry log-only bumps, so an empty diff between " +
+            "neighbors is a valid answer, not an error. Trailing-newline semantics: a trailing newline is ignored, " +
+            "so 'x' vs 'x\\n' diffs as empty (unlike git there is no \\ No newline marker). An unknown from/to " +
+            "version fails with ArtifactVersionNotFound 404; from == to or from > to fails with InvalidVersionRange 400.");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_Parameters_PinTheOptionalVersionPairAndAliasTail()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_read_artifact_diff")!;
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+
+        properties.ShouldContainKey("artifactId");
+        properties.ShouldContainKey("projectId");
+        properties.ShouldContainKey("alias");
+        properties["fromVersion"]!["description"]!.GetValue<string>().ShouldContain("defaults to toVersion - 1");
+        properties["toVersion"]!["description"]!.GetValue<string>().ShouldContain("defaults to the artifact's current version");
+        properties["alias"]!["description"]!.GetValue<string>().ShouldContain("'<slug>/T<order>'");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_DefaultPair_HitsTheAgentDiffRouteWithoutQuery()
+    {
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            Canned.PlanningArtifactDiffJson);
+
+        var response = await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString()
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/diff");
+        request.Query.ShouldBeEmpty();
+
+        response["result"]!["isError"].ShouldBeNull();
+        Canned.ToolResultText(response).ShouldContain("@@ -1 +1 @@");
+        Canned.ToolResultText(response).ShouldContain("+to");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_ExplicitVersions_AreForwardedAsFromAndTo()
+    {
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            Canned.PlanningArtifactDiffJson);
+
+        await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["fromVersion"] = 1,
+            ["toVersion"] = 3
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        ParseQuery(request.Query)["from"].ShouldBe("1");
+        ParseQuery(request.Query)["to"].ShouldBe("3");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_FromVersionOnly_ForwardsFromWithoutTo()
+    {
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            Canned.PlanningArtifactDiffJson);
+
+        await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["fromVersion"] = 2
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        ParseQuery(request.Query)["from"].ShouldBe("2");
+        ParseQuery(request.Query).ShouldNotContainKey("to");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_ToVersionOnly_ForwardsToWithoutFrom()
+    {
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            Canned.PlanningArtifactDiffJson);
+
+        await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["toVersion"] = 4
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        ParseQuery(request.Query).ShouldNotContainKey("from");
+        ParseQuery(request.Query)["to"].ShouldBe("4");
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_TaskAlias_ResolvesThroughTheRosterThenDiffs()
+    {
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            Canned.PlanningArtifactDiffJson);
+
+        var response = await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        var request = FindRequest("GET", "/api/agent/planning/artifacts/");
+        request.Path.ShouldBe($"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/diff");
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_NeitherArtifactIdNorAlias_RejectedClientSide()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject());
+
+        ToolErrorText(response).ShouldContain("Provide artifactId, or alias together with projectId");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_AliasWithArtifactId_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["alias"] = "demo-feature/T2"
+        });
+
+        ToolErrorText(response).ShouldContain("not both");
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_UnknownVersion_SurfacesThe404Detail()
+    {
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            404,
+            """{"title":"Not Found","detail":"Artifact '99999999-9999-9999-9999-999999999999' has no version 5: the live body is version 2; stored snapshots cover 1..1.","status":404}""");
+
+        var response = await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["fromVersion"] = 5
+        });
+
+        ToolErrorText(response).ShouldContain("has no version 5");
+        ToolErrorText(response).ShouldContain("stored snapshots cover 1..1");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifactDiff_InvalidRange_SurfacesThe400Detail()
+    {
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+/diff",
+            400,
+            """{"title":"InvalidVersionRange","detail":"Invalid version range: from and to are both 2; there is nothing to diff.","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_read_artifact_diff", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["fromVersion"] = 2,
+            ["toVersion"] = 2
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Invalid version range");
+        text.ShouldContain("nothing to diff");
+        Driver.HasExited.ShouldBeFalse();
     }
 
     [Fact]
@@ -831,6 +1150,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("plan not validated");
         text.ShouldContain("\"blocked\":false");
         text.ShouldContain("\"blockedBy\":[1]");
+        text.ShouldContain("\"pointers\":[]");
     }
 
     [Fact]
@@ -959,6 +1279,57 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain($"Invalid feature priority '{priority}'");
         text.ShouldContain("p0, p1, p2, p3");
         Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path.EndsWith("/planning/features", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningCreateFeature_NumberCollision409_SurfacesTheTeachingDetail()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features",
+            409,
+            Canned.PlanningNumberCollisionJson);
+
+        var response = await Driver.CallToolAsync("planning_create_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = "7-other",
+            ["title"] = "Other"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("overmind API returned 409");
+        text.ShouldContain("already taken by '075-sprint'");
+        text.ShouldContain("compare numerically");
+        text.ShouldContain("next free number: 076");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningCreateFeature_Description_DocumentsTheNumberGuard()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_create_feature"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("409 NumberCollision");
+        description.ShouldContain("7 = 007");
+        description.ShouldContain("next free number");
+    }
+
+    [Fact]
+    public async Task PlanningImportFeature_Description_DocumentsTheCreateOnlyGuard()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_import_feature"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("never enforces the create-path number-collision guard");
+        description.ShouldContain("restores verbatim");
     }
 
     [Fact]
@@ -1699,7 +2070,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         var required = tool["inputSchema"]!["required"]!.AsArray()
             .Select(r => r!.GetValue<string>())
             .ToArray();
-        required.ShouldContain("projectId");
+        required.ShouldNotContain("projectId");
         required.ShouldContain("slug");
         required.ShouldContain("logNote");
         required.ShouldNotContain("title");
@@ -2829,6 +3200,87 @@ public class PlanningToolContractTests : McpSessionTestBase
         text.ShouldContain("path is required");
         Stub.Requests.ShouldNotContain(r =>
             r.Method == "POST" && r.Path.EndsWith("/planning/import", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningExportBacklog_PostsTheTargetPathToTheAgentExportRouteAndEchoesTheCompactSnapshot()
+    {
+        var target = "/repo/docs/planning-snapshot";
+
+        var response = await Driver.CallToolAsync("planning_export_backlog", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["targetPath"] = target
+        });
+
+        var request = FindRequest("POST", $"/api/agent/projects/{Canned.ProjectId}/planning/export");
+        request.Path.ShouldBe($"/api/agent/projects/{Canned.ProjectId}/planning/export");
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body["targetPath"]!.GetValue<string>().ShouldBe(target);
+
+        var text = Canned.ToolResultText(response);
+        var echo = JsonNode.Parse(text)!.AsObject();
+        echo["projectId"]!.GetValue<string>().ShouldBe(Canned.ProjectId.ToString());
+        echo["target"]!.GetValue<string>().ShouldBe("/repo/docs/planning-snapshot");
+        echo["files"]!.GetValue<int>().ShouldBe(3);
+        text.ShouldNotContain("body");
+    }
+
+    [Fact]
+    public async Task PlanningExportBacklog_TargetRefused_SurfacesTheRefusalAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/export",
+            409,
+            Canned.PlanningExportTargetNotEmptyJson);
+
+        var response = await Driver.CallToolAsync("planning_export_backlog", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["targetPath"] = "/repo/docs/planning-snapshot"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Export target '/repo/docs/planning-snapshot' is not empty");
+        text.ShouldContain("refuses an existing tree");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task PlanningExportBacklog_BlankTargetPath_RejectedWithoutHttpCall(string? targetPath)
+    {
+        var response = await Driver.CallToolAsync("planning_export_backlog", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["targetPath"] = targetPath
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("targetPath is required");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/planning/export", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningExportBacklog_Description_PinsTheSnapshotContract()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldBe(
+            "Renders the full materialized mirror (planning tree + entries projection) into an explicit " +
+            "target directory as plain greppable files — the \"commit the planning alongside the code\" path. " +
+            "Uses the same document renderers as the materializer pass, so the snapshot is byte-identical to " +
+            "what a materialize run would write; zero tracking rows and zero drift machinery are created. " +
+            "The target must be an empty directory — non-empty refuses with 409 (a snapshot, not a sync) — " +
+            "and it must not sit inside BACKLOG/ or ENTRIES/. targetPath is always explicit; there is no default. " +
+            "Compact echo: written file count + target, no body echo.");
     }
 
     [Fact]

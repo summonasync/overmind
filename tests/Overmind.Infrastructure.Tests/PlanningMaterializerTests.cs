@@ -116,7 +116,7 @@ public sealed class PlanningMaterializerTests : IDisposable
 
         var tasksDir = Path.Combine(_projectDir, "BACKLOG", "076-demo", "tasks");
         File.Exists(Path.Combine(tasksDir, "01-data-ef-blockedby-on-planningfeature.md")).ShouldBeTrue();
-        File.Exists(Path.Combine(tasksDir, "02-cpm-обновление-пакетов-aspire-13-5.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(tasksDir, "02-cpm-obnovlenie-paketov-aspire-13-5.md")).ShouldBeTrue();
         File.Exists(Path.Combine(tasksDir, "02-task-02.md")).ShouldBeFalse();
         (await CreateMaterializer(sync).DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
     }
@@ -1135,7 +1135,7 @@ public sealed class PlanningMaterializerTests : IDisposable
         await materializer.SyncAsync(projectId, ct: CancellationToken.None);
 
         var tasksDir = Path.Combine(_projectDir, "BACKLOG", "006-demo", "tasks");
-        var pinnedPath = Path.Combine(tasksDir, "01-первая-задача.md");
+        var pinnedPath = Path.Combine(tasksDir, "01-pervaya-zadacha.md");
         File.Exists(pinnedPath).ShouldBeTrue();
 
         var task = await ctx.PlanningArtifacts.SingleAsync(a => a.Kind == PlanningArtifactKind.Task);
