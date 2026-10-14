@@ -1,4 +1,11 @@
-export type EntryType = "note" | "decision" | "gate" | "guard" | "skill" | "tombstone";
+export type EntryType =
+  | "note"
+  | "decision"
+  | "gate"
+  | "guard"
+  | "skill"
+  | "tombstone"
+  | "featureRequest";
 
 export type AgentPlatform = "claude" | "kimiCode" | "codex" | "gemini" | "antigravity" | "qwen";
 
@@ -9,6 +16,7 @@ export const ENTRY_TYPES: readonly EntryType[] = [
   "guard",
   "skill",
   "tombstone",
+  "featureRequest",
 ];
 
 export const AGENT_PLATFORMS: readonly AgentPlatform[] = [

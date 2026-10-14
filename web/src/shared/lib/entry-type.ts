@@ -1,7 +1,16 @@
-import { FileText, GitBranch, Lock, ShieldCheck, Skull, Sparkles, type LucideIcon } from "lucide-react";
+import {
+  FileText,
+  GitBranch,
+  Lightbulb,
+  Lock,
+  ShieldCheck,
+  Skull,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import type { EntryType } from "@/shared/api/types";
 
-export type EntryTone = "info" | "warning" | "success" | "danger" | "skill" | "muted";
+export type EntryTone = "info" | "warning" | "success" | "danger" | "skill" | "idea" | "muted";
 
 export interface EntryTypeMeta {
   tone: EntryTone;
@@ -16,4 +25,5 @@ export const ENTRY_TYPE_META: Record<EntryType, EntryTypeMeta> = {
   guard: { tone: "danger", icon: Lock, label: "Guard" },
   skill: { tone: "skill", icon: Sparkles, label: "Skill" },
   tombstone: { tone: "muted", icon: Skull, label: "Tombstone" },
+  featureRequest: { tone: "idea", icon: Lightbulb, label: "Feature request" },
 };

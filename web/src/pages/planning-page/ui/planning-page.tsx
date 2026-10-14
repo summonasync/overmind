@@ -22,8 +22,14 @@ import {
   usePlanningBoard,
   usePlanningFeature,
   usePlanningMutations,
+  usePlanningWorkflow,
 } from "@/features/planning";
-import type { PlanningFeatureBoardItem, PlanningFeatureFormValues } from "@/features/planning";
+import type {
+  BoardAttentionContext,
+  PlanningFeatureBoardItem,
+  PlanningFeatureFormValues,
+} from "@/features/planning";
+import { useAwaitingNotifications } from "@/features/notifications";
 import { useProjectNumbering } from "@/features/projects";
 import { PlanningInfoPanel } from "@/pages/planning-page/ui/planning-info-panel";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -43,6 +49,8 @@ function PlanningPageContent() {
   const numbering = useProjectNumbering(projectId);
   const boardFilters = useBoardFilters();
   const boardSearch = useBoardSearch();
+  const { items: awaiting } = useAwaitingNotifications(boardFilters.filters.attentionOnly);
+  const { data: workflow } = usePlanningWorkflow(projectId);
   const { createFeature, updateFeature, deleteFeature, claimFeature, unclaimFeature } =
     usePlanningMutations(projectId);
 
@@ -125,7 +133,19 @@ function PlanningPageContent() {
   const searchedFeatures = boardSearch.isActive
     ? features.filter((item) => boardItemMatchesSearch(item, boardSearch.query))
     : features;
-  const visibleFeatures = filterBoardItems(searchedFeatures, boardFilters.filters);
+  const attention: BoardAttentionContext = {
+    awaitingFeatureSlugs: new Set(
+      awaiting
+        .flatMap((item) =>
+          typeof item.featureSlug === "string" &&
+          (item.projectId == null || item.projectId === projectId)
+            ? [item.featureSlug]
+            : [],
+        ),
+    ),
+    humanValidationOn: workflow?.effectiveRequireHumanValidation === true,
+  };
+  const visibleFeatures = filterBoardItems(searchedFeatures, boardFilters.filters, attention);
   const clearBoardRestrictions = () => {
     boardSearch.clear();
     boardFilters.clearFilters();

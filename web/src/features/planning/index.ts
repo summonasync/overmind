@@ -62,6 +62,7 @@ export {
 } from "./lib/artifact-deletion";
 export type { ArtifactDeletePreview } from "./lib/artifact-deletion";
 export type {
+  BoardAttentionContext,
   BoardFilterSearchParams,
   PlanningBoardArtifactFilter,
   PlanningBoardFilters,

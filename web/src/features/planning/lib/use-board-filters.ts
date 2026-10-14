@@ -7,6 +7,7 @@ import {
   coerceBoardFilters,
   isBoardFilterActive,
   parseBoardFilters,
+  writeBoardFilterParams,
 } from "@/features/planning/lib/board-filters";
 import type { PlanningBoardFilters } from "@/features/planning/lib/board-filters";
 import { readJson, writeJson } from "@/shared/lib/session-json";
@@ -17,7 +18,7 @@ function readFiltersFromLocation(): PlanningBoardFilters {
 
 const FILTER_CHANGE_EVENT = "board-filters:change";
 const BOARD_FILTERS_STORAGE_KEY = "overmind.board.filters";
-const FILTER_PARAM_NAMES = ["status", "priority", "spec", "plan", "pinned", "hidedone", "blocked"] as const;
+const FILTER_PARAM_NAMES = ["status", "priority", "spec", "plan", "pinned", "hidedone", "blocked", "attention"] as const;
 
 export function useBoardFilters() {
   const initialSearchParams = useSearchParams();
@@ -60,41 +61,7 @@ export function useBoardFilters() {
     setFiltersState(next);
     writeJson(BOARD_FILTERS_STORAGE_KEY, next);
     const params = new URLSearchParams(window.location.search);
-    if (next.statuses.length > 0) {
-      params.set("status", next.statuses.join(","));
-    } else {
-      params.delete("status");
-    }
-    if (next.priorities.length > 0) {
-      params.set("priority", next.priorities.join(","));
-    } else {
-      params.delete("priority");
-    }
-    if (next.spec !== "any") {
-      params.set("spec", next.spec);
-    } else {
-      params.delete("spec");
-    }
-    if (next.plan !== "any") {
-      params.set("plan", next.plan);
-    } else {
-      params.delete("plan");
-    }
-    if (next.pinnedOnly) {
-      params.set("pinned", "1");
-    } else {
-      params.delete("pinned");
-    }
-    if (!next.hideDone) {
-      params.set("hidedone", "0");
-    } else {
-      params.delete("hidedone");
-    }
-    if (next.blockedOnly) {
-      params.set("blocked", "1");
-    } else {
-      params.delete("blocked");
-    }
+    writeBoardFilterParams(params, next);
     const query = params.toString();
     const path = window.location.pathname;
     window.history.replaceState(null, "", query ? `${path}?${query}` : path);

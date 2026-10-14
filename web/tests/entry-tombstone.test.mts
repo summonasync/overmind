@@ -25,8 +25,8 @@ const tombstoneResponse = () => ({
   skillFiles: [],
 });
 
-test("tombstone joins the entry type list as the fifth-plus-one citizen", () => {
-  assert.deepEqual([...ENTRY_TYPES], [
+test("tombstone keeps its historical slot in the entry type list", () => {
+  assert.deepEqual([...ENTRY_TYPES].slice(0, 6), [
     "note",
     "decision",
     "gate",

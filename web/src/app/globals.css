@@ -25,6 +25,7 @@
   --color-type-guard: #ef4444;
   --color-type-skill: #a855f7;
   --color-type-tombstone: #71717a;
+  --color-type-featureRequest: #facc15;
 
   --color-ceremony-goal: var(--color-success);
   --color-ceremony-requirements: var(--color-warning);
