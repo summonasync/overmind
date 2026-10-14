@@ -1,15 +1,12 @@
-using System.Text.RegularExpressions;
-
 namespace Overmind.Core;
 
-public static partial class PlanningSectionCanonicalizer
+public static class PlanningSectionCanonicalizer
 {
     // Deep one-line nesting (``<a><b>…</b></a>``) expands fully in one pass so Canonicalize
     // stays byte-idempotent; the cap only keeps a hostile body from recursing without bound.
     private const int MaxInlineNesting = 8;
-
-    [GeneratedRegex(@"^(?<indent>[ \t]*)<(?<name>[a-z][a-z0-9-]*)>(?<content>.*)</\k<name>>[ \t]*\r?$", RegexOptions.None, 2000)]
-    private static partial Regex InlineSectionPattern();
+    // ParseGroups recurses once per sibling group; past this many closers a line stays raw.
+    private const int MaxGroupsPerLine = 256;
 
     public static string Canonicalize(string body)
     {
@@ -23,20 +20,23 @@ public static partial class PlanningSectionCanonicalizer
         foreach (var line in lines)
         {
             if (IsFencedLine(line, ref fence) ||
-                InlineSectionPattern().Match(line) is not { Success: true } match)
+                !TrySplitGroups(StripCarriageReturn(line, out var carriageReturn), out var indent, out var groups))
             {
                 expanded.Add(line);
                 continue;
             }
 
             changed = true;
-            Expand(
-                expanded,
-                match.Groups["indent"].Value,
-                match.Groups["name"].Value,
-                match.Groups["content"].Value,
-                line.EndsWith('\r'),
-                depth: 0);
+            for (var i = 0; i < groups.Count; i++)
+            {
+                Expand(
+                    expanded,
+                    indent,
+                    groups[i].Name,
+                    groups[i].Content,
+                    carriageReturn: carriageReturn && i == groups.Count - 1,
+                    depth: 0);
+            }
         }
 
         return changed ? string.Join("\n", expanded) : body;
@@ -50,15 +50,18 @@ public static partial class PlanningSectionCanonicalizer
         char? fence = null;
         foreach (var line in body.Split('\n'))
         {
-            if (IsFencedLine(line, ref fence))
+            if (IsFencedLine(line, ref fence) ||
+                !TrySplitGroups(StripCarriageReturn(line, out _), out _, out var groups))
             {
                 continue;
             }
 
-            var match = InlineSectionPattern().Match(line);
-            if (match.Success && match.Groups["name"].Value == name)
+            foreach (var group in groups)
             {
-                return true;
+                if (group.Name == name)
+                {
+                    return true;
+                }
             }
         }
 
@@ -70,27 +73,129 @@ public static partial class PlanningSectionCanonicalizer
     {
         var lineEnd = carriageReturn ? "\r" : string.Empty;
         expanded.Add(string.Concat(indent, "<", name, ">", lineEnd));
+        EmitContent(expanded, content, carriageReturn, depth);
+        expanded.Add(string.Concat(indent, "</", name, ">", lineEnd));
+    }
 
-        if (content.Trim().Length > 0)
+    private static void EmitContent(List<string> expanded, string content, bool carriageReturn, int depth)
+    {
+        if (content.Trim().Length == 0)
         {
-            var nested = depth < MaxInlineNesting ? InlineSectionPattern().Match(content) : Match.Empty;
-            if (nested.Success)
+            return;
+        }
+
+        if (depth < MaxInlineNesting && TrySplitGroups(content, out _, out var groups))
+        {
+            foreach (var group in groups)
             {
-                Expand(
-                    expanded,
-                    string.Empty,
-                    nested.Groups["name"].Value,
-                    nested.Groups["content"].Value,
-                    carriageReturn: false,
-                    depth + 1);
+                Expand(expanded, string.Empty, group.Name, group.Content, carriageReturn: false, depth + 1);
             }
-            else
+
+            return;
+        }
+
+        expanded.Add(string.Concat(content, carriageReturn ? "\r" : string.Empty));
+    }
+
+    private static bool TrySplitGroups(string text, out string indent, out List<InlineGroup> groups)
+    {
+        var start = 0;
+        while (start < text.Length && text[start] is ' ' or '\t')
+        {
+            start++;
+        }
+
+        indent = text[..start];
+        groups = [];
+        if (CountClosers(text) > MaxGroupsPerLine)
+        {
+            return false;
+        }
+
+        return ParseGroups(text, start, groups) && groups.Count > 0;
+    }
+
+    private static int CountClosers(string text)
+    {
+        var count = 0;
+        var from = 0;
+        while ((from = text.IndexOf("</", from, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            from += 2;
+        }
+
+        return count;
+    }
+
+    private static bool ParseGroups(string text, int pos, List<InlineGroup> groups)
+    {
+        while (pos < text.Length && text[pos] is ' ' or '\t')
+        {
+            pos++;
+        }
+
+        if (pos == text.Length)
+        {
+            return true;
+        }
+
+        if (text[pos] != '<')
+        {
+            return false;
+        }
+
+        var nameEnd = text.IndexOf('>', pos + 1);
+        if (nameEnd < 0 || !IsValidName(text[(pos + 1)..nameEnd], out var name))
+        {
+            return false;
+        }
+
+        var contentStart = nameEnd + 1;
+        var close = string.Concat("</", name, ">");
+        var searchFrom = contentStart;
+        while (true)
+        {
+            var closeStart = text.IndexOf(close, searchFrom, StringComparison.Ordinal);
+            if (closeStart < 0)
             {
-                expanded.Add(string.Concat(content, lineEnd));
+                return false;
+            }
+
+            var insertAt = groups.Count;
+            if (ParseGroups(text, closeStart + close.Length, groups))
+            {
+                groups.Insert(insertAt, new InlineGroup(name, text[contentStart..closeStart]));
+                return true;
+            }
+
+            searchFrom = closeStart + 1;
+        }
+    }
+
+    private static bool IsValidName(string candidate, out string name)
+    {
+        name = candidate;
+        if (candidate.Length == 0 || candidate[0] is < 'a' or > 'z')
+        {
+            return false;
+        }
+
+        for (var i = 1; i < candidate.Length; i++)
+        {
+            if (candidate[i] is not ('-' or (>= 'a' and <= 'z') or (>= '0' and <= '9')))
+            {
+                return false;
             }
         }
 
-        expanded.Add(string.Concat(indent, "</", name, ">", lineEnd));
+        return true;
+    }
+
+    private static string StripCarriageReturn(string line, out bool carriageReturn)
+    {
+        carriageReturn = line.EndsWith('\r');
+        return carriageReturn ? line[..^1] : line;
     }
 
     private static bool IsFencedLine(string line, ref char? fence)
@@ -113,4 +218,6 @@ public static partial class PlanningSectionCanonicalizer
 
         return fence is not null;
     }
+
+    private readonly record struct InlineGroup(string Name, string Content);
 }

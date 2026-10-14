@@ -362,6 +362,21 @@ public sealed class OvermindPlanningTools
 
     private static JsonArray BuildTaskItems(JsonElement tasks)
     {
+        if (tasks.ValueKind == JsonValueKind.String)
+        {
+            try
+            {
+                if (JsonNode.Parse(tasks.GetString()!) is JsonArray encoded)
+                {
+                    tasks = JsonSerializer.SerializeToElement(encoded);
+                }
+            }
+            catch (JsonException)
+            {
+                throw new McpException("tasks must be an array of task items.");
+            }
+        }
+
         if (tasks.ValueKind != JsonValueKind.Array)
         {
             throw new McpException("tasks must be an array of task items.");

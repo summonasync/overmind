@@ -215,6 +215,74 @@ public class PlanningSectionCanonicalizerTests
     }
 
     [Fact]
+    public void Canonicalize_ConcatenatedGroups_AllExpandInOrder()
+    {
+        var body = "<goal>G.</goal><scope>S.</scope><anti-scope>AS.</anti-scope>"
+            + "<constraints>C.</constraints><acceptance-criteria>[x] one</acceptance-criteria><refs>- spec ab</refs>\n";
+
+        var canonical = PlanningSectionCanonicalizer.Canonicalize(body);
+
+        canonical.ShouldBe(
+            "<goal>\nG.\n</goal>\n<scope>\nS.\n</scope>\n<anti-scope>\nAS.\n</anti-scope>\n"
+            + "<constraints>\nC.\n</constraints>\n<acceptance-criteria>\n[x] one\n</acceptance-criteria>\n"
+            + "<refs>\n- spec ab\n</refs>\n");
+        PlanningSections.List(canonical).ShouldBe(
+            new[] { "goal", "scope", "anti-scope", "constraints", "acceptance-criteria", "refs" });
+        PlanningSections.Find("acceptance-criteria", canonical)!.Content.ShouldBe("[x] one");
+    }
+
+    [Fact]
+    public void Canonicalize_WhitespaceBetweenGroups_ExpandsBoth()
+    {
+        var canonical = PlanningSectionCanonicalizer.Canonicalize("<goal>A.</goal> <scope>B.</scope>\n");
+
+        canonical.ShouldBe("<goal>\nA.\n</goal>\n<scope>\nB.\n</scope>\n");
+        PlanningSections.List(canonical).ShouldBe(new[] { "goal", "scope" });
+    }
+
+    [Fact]
+    public void Canonicalize_ConcatenatedGroups_CarriageReturnRidesTheLastExpansion()
+    {
+        PlanningSectionCanonicalizer.Canonicalize("<goal>A.</goal><scope>B.</scope>\r\n")
+            .ShouldBe("<goal>\nA.\n</goal>\n<scope>\r\nB.\r\n</scope>\r\n");
+    }
+
+    [Fact]
+    public void Canonicalize_ConcatenatedGroupsInsideFence_AreUntouched()
+    {
+        var body = "```\n<goal>a</goal><scope>b</scope>\n```\n<log>\n- note\n</log>\n";
+
+        PlanningSectionCanonicalizer.Canonicalize(body).ShouldBe(body);
+    }
+
+    [Fact]
+    public void Canonicalize_NestedConcatenatedGroups_FullyExpandInOnePass()
+    {
+        var once = PlanningSectionCanonicalizer.Canonicalize("<goal><scope>a</scope><refs>r</refs></goal>");
+
+        once.ShouldBe("<goal>\n<scope>\na\n</scope>\n<refs>\nr\n</refs>\n</goal>");
+        PlanningSectionCanonicalizer.Canonicalize(once).ShouldBe(once);
+    }
+
+    [Fact]
+    public void Canonicalize_ProseLineWithEmbeddedTags_IsUntouched()
+    {
+        var body = "use <b>bold</b> here\n";
+
+        PlanningSectionCanonicalizer.Canonicalize(body).ShouldBe(body);
+    }
+
+    [Fact]
+    public void HasInlineSection_FindsNamesInsideConcatenatedLines()
+    {
+        var body = "<goal>a</goal><scope>b</scope>\n";
+
+        PlanningSectionCanonicalizer.HasInlineSection("scope", body).ShouldBeTrue();
+        PlanningSectionCanonicalizer.HasInlineSection("goal", body).ShouldBeTrue();
+        PlanningSectionCanonicalizer.HasInlineSection("refs", body).ShouldBeFalse();
+    }
+
+    [Fact]
     public void HasInlineSection_MatchesRequestedNameOnly()
     {
         var body = "<goal>\nx\n</goal>\n\n<anti-scope>None.</anti-scope>\n";
@@ -250,5 +318,16 @@ public class PlanningSectionCanonicalizerTests
         var second = PlanningSectionCanonicalizer.Canonicalize(first);
         PlanningSectionCanonicalizer.HasInlineSection("constraints", second).ShouldBeFalse();
         second.ShouldBe(PlanningSectionCanonicalizer.Canonicalize(second));
+    }
+
+    [Fact]
+    public void Canonicalize_GroupRunPastPerLineCap_StaysRaw()
+    {
+        var body = string.Concat(Enumerable.Repeat("<note>x</note>", 300));
+
+        PlanningSectionCanonicalizer.Canonicalize(body).ShouldBe(body);
+        PlanningSectionCanonicalizer.HasInlineSection("note", body).ShouldBeFalse();
+        PlanningSectionCanonicalizer.Canonicalize("<note>x</note><goal>g</goal>")
+            .ShouldBe("<note>\nx\n</note>\n<goal>\ng\n</goal>");
     }
 }

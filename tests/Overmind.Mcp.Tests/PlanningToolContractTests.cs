@@ -1608,6 +1608,24 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningUpsertTasks_ArrayEncodedAsString_IsCoercedIntoTheBatch()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["tasks"] = """[{"body":"# Task one\n\n<goal>Model it.</goal>"}]"""
+        });
+
+        var posted = JsonNode.Parse(Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal)).Body)!["tasks"]!.AsArray();
+        posted.Count.ShouldBe(1);
+        posted[0]!["body"]!.GetValue<string>().ShouldContain("Model it.");
+
+        response["result"]!["isError"].ShouldBeNull();
+    }
+
+    [Fact]
     public async Task PlanningUpsertTasks_NonArrayBlockedBy_RejectedInsteadOfSilentlyDropped()
     {
         var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject

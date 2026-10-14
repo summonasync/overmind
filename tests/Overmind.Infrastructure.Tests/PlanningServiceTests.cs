@@ -464,6 +464,29 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpsertArtifact_ConcatenatedTaskSections_RegisterAndPatch()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "<goal>Fix it.</goal><scope>Canonicalizer.</scope>"
+            + "<acceptance-criteria>- [x] sections parse</acceptance-criteria><log></log>",
+            0, null, null, default);
+
+        PlanningSections.List(task.Body).ShouldBe(new[] { "goal", "scope", "acceptance-criteria", "log" });
+
+        var patched = await artifactService.PatchAsync(
+            task.Id,
+            new PlanningArtifactPatch(Section: "scope", Content: "Expanded.", LogNote: "section patch"),
+            default);
+
+        PlanningSections.Find("scope", patched.Artifact.Body)!.Content.ShouldBe("Expanded.");
+    }
+
+    [Fact]
     public async Task UpsertArtifact_FrozenWithoutNote_ThrowsChangeNoteRequired()
     {
         var featureService = CreateFeatureService();
