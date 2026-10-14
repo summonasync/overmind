@@ -46,6 +46,12 @@ export function ProjectList({ projects, onEdit, onDelete }: ProjectListProps) {
             ) : null}
           </div>
           <div className="flex shrink-0 gap-1">
+            <a
+              className="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background border border-border bg-surface text-foreground hover:bg-surface-raised hover:border-border-strong"
+              href={`/?project=${project.id}`}
+            >
+              Details
+            </a>
             <Button variant="secondary" onClick={() => onEdit(project)}>
               <Pencil size={13} aria-hidden />
               Edit
