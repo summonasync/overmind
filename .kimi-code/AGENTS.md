@@ -1,6 +1,6 @@
 # Global Agent Context
 
-> Repo layout: this crew lives in `.kimi-code/` (this file, agents, skills). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind. Quintuple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
+> Repo layout: this crew lives in `.kimi-code/` (this file, agents, skills). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind.
 
 ## Squeezr — Code Navigation
 
@@ -114,18 +114,9 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 - For LLM topics: mention tokenization, quantization, LoRA, inference — but keep code examples in C# where possible
 - Prefer ONNX Runtime for inference in .NET over calling Python scripts
 
-## Documentation Files (project-level — read in this order before making changes)
+## Documentation Files
 
-| File | Purpose | Language | When to Read |
-|------|---------|----------|-------------|
-| `CONTEXT.md` | System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design | English | First — for all architectural context |
-| Overmind board (MCP) | THE source of truth for all planning state: features, spec/plan/task/result artifacts, statuses, entries. Access via `mcp__overmind__*` tools (`overmind_onboard` first). Rules of engagement: `overmind-ceremony` skill | — | Before starting work — what's done, what's planned, which task is current |
-| `BACKLOG/nnn-slug/` (materialized) | Read-only mirror of board artifacts, rewritten by Overmind after every planning mutation. NEVER hand-edit — all writes go through MCP tools | English | Humans and MCP-less tools read here; agents with MCP read via `planning_read_artifact` |
-| `STRUCTURE.md` | Project structure, code style guidelines, architecture rules, AI agent guidelines, Do/Don't | English | Before writing code — for conventions and patterns |
-| `TECHNICAL-SOLUTIONS.md` | Architecture Decision Records (ADRs): chosen technical solutions, trade-offs, reasons why X was chosen over Y | English | Before proposing alternative approaches or challenging existing patterns — to understand historical context |
-| `AGENTS.md` | Project-level: tech stack, build commands, security, conventions for AI coding agents | English | For build/run commands and agent-specific rules |
-
-## Documentation Files (globally)
+Project-level docs are listed in the project's own `AGENTS.md` (References section) and on the Overmind board — read them before making changes in that project. Global crew docs:
 | File | Purpose | Language | When to Read |
 |------|---------|----------|-------------|
 | `SOCIAL_DICTIONARY.md` | Social vocabulary: addressing terms, slang, dev slang, gachi core, roast rules, stop-words, tone rules | Russian | Before composing any user-facing message — for tone, slang and emotional markup |
@@ -152,17 +143,7 @@ Mandatory workflow gates (e.g. review after Complex) proceed without asking; all
 - Sub-agents inherit this file's rules: communication style, code conventions, workflow and no-auto-commits apply to them too.
 - Sub-agents receive their task as an Overmind artifact reference (projectId/featureSlug/artifactId) and work it through `mcp__overmind__*` tools — reads via `planning_read_artifact`, logs/obstacles/AC-ticks via `planning_append_log` / `planning_patch_artifact`, statuses via `planning_set_status`. Full contract: `overmind-ceremony` skill.
 
-**Enforcement (config, not just prompt):** this policy is backed by the sub-agent model pool in `~/.kimi-code/config.toml` (Kimi Code CLI, v2 engine):
-
-```toml
-[secondary_model]
-default_model = "kimi-code/kimi-for-coding"
-[secondary_model.models]
-"kimi-code/kimi-for-coding" = "K2.7 Coding: heavier tasks — review, planning, deep debugging"
-"kimi-code/kimi-k3" = "K3: orchestration, audit, AI-code detection, obfuscation"  # verify exact alias in runtime
-```
-
-The feature is experimental: enable with `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1` (or `KIMI_CODE_EXPERIMENTAL_FLAG=1`). TUI equivalent: `/secondary-model`. The pool makes the `Agent`/`AgentSwarm` `model` parameter list ONLY these aliases — this file's rules cover the rest (`primary` ban, role mapping).
+**Enforcement (config, not just prompt):** this policy is backed by the sub-agent model pool — the `[secondary_model]` section in `~/.kimi-code/config.toml` (Kimi Code CLI, v2 engine). Exact aliases, defaults and the enable flag live there and are the source of truth — do not paste a copy here, it drifts. The pool restricts the `Agent`/`AgentSwarm` `model` parameter to the configured aliases; this file's rules cover the rest (`primary` ban, role mapping).
 
 ## Deterministic Enforcement (hooks > prompts)
 Rules that must hold EVERY time are enforced by hooks/config, not by prompt text alone.

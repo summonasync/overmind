@@ -1,6 +1,6 @@
 # Global Agent Context (Google Antigravity)
 
-> Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind. Quintuple-edit rule: see `SYNC-STRUCTURE.md` (repo root).
+> Repo layout: this crew lives in `.gemini/` (this file) and `.gemini/antigravity/` (agents, skills, SKILLFLOW.md). Planning state lives on the Overmind board (MCP); `BACKLOG/` in a project root is a read-only materialized mirror owned by Overmind.
 
 ## Squeezr — Code Navigation
 
@@ -114,18 +114,9 @@ Use `SOCIAL_DICTIONARY.md` to speak with user. Addressing terms, dev slang, пи
 - For LLM topics: mention tokenization, quantization, LoRA, inference — but keep code examples in C# where possible
 - Prefer ONNX Runtime for inference in .NET over calling Python scripts
 
-## Documentation Files (project-level — read in this order before making changes)
+## Documentation Files
 
-| File | Purpose | Language | When to Read |
-|------|---------|----------|-------------|
-| `CONTEXT.md` | System design: architecture decisions, service roles, communication rules, AI Framework details, development phases, MCP server design | English | First — for all architectural context |
-| Overmind board (MCP) | THE source of truth for all planning state: features, spec/plan/task/result artifacts, statuses, entries. Access via `mcp__overmind__*` tools (`overmind_onboard` first). Rules of engagement: `overmind-ceremony` skill | — | Before starting work — what's done, what's planned, which task is current |
-| `BACKLOG/nnn-slug/` (materialized) | Read-only mirror of board artifacts, rewritten by Overmind after every planning mutation. NEVER hand-edit — all writes go through MCP tools | English | Humans and MCP-less tools read here; agents with MCP read via `planning_read_artifact` |
-| `STRUCTURE.md` | Project structure, code style guidelines, architecture rules, AI agent guidelines, Do/Don't | English | Before writing code — for conventions and patterns |
-| `TECHNICAL-SOLUTIONS.md` | Architecture Decision Records (ADRs): chosen technical solutions, trade-offs, reasons why X was chosen over Y | English | Before proposing alternative approaches or challenging existing patterns — to understand historical context |
-| `AGENTS.md` | Project-level: tech stack, build commands, security, conventions for AI coding agents | English | For build/run commands and agent-specific rules |
-
-## Documentation Files (globally)
+Project-level docs are listed in the project's own `AGENTS.md` (References section) and on the Overmind board — read them before making changes in that project. Global crew docs:
 | File | Purpose | Language | When to Read |
 |------|---------|----------|-------------|
 | `SOCIAL_DICTIONARY.md` | Social vocabulary: addressing terms, slang, dev slang, gachi core, roast rules, stop-words, tone rules | Russian | Before composing any user-facing message — for tone, slang and emotional markup |
