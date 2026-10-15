@@ -44,7 +44,8 @@ When the user wants the picture kept, persist a dated snapshot as a tagged `note
 (`write_entry`) — entries are DB-only, read via MCP, never side files.
 
 ### 2. Goals & direction
-Socratic questioning, ONE question at a time (`overmind-ceremony` techniques): the user
+Socratic questioning, ONE question at a time — every question ships with 2–3 proposed answers +
+a recommendation; the user picks (iron rule, `overmind-ceremony` techniques): the user
 owns the vision; you structure it, challenge contradictions, force success criteria.
 Durable outcomes land as overmind entries:
 

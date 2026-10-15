@@ -47,7 +47,8 @@ path and counts. If unprocessed inputs > 0, they are raised first at GATE 1.
 1. **Unprocessed inputs first, one decision each:** "supply a readable copy" (re-run the
    researcher on it when it arrives) or "exclude" (recorded as `A-NN | excluded: <file> | assumed`
    in `## Assumptions`). No input is left undecided.
-2. Then `Q-NN` questions ONE at a time. Each answer is written into the research report's
+2. Then `Q-NN` questions ONE at a time, each presented socratically — proposed answer options +
+   your recommendation; the user picks, edits or overrides. Each answer is written into the research report's
    `## Assumptions` table as `Q-NN | answer | answered-by-user` or `Q-NN | assumption text |
    assumed`. You edit only that section.
 3. **An answer that adds, removes or re-sizes work** ("iOS in the MVP too", "drop invoicing")
@@ -64,8 +65,9 @@ rows only, then re-spawn the architect. One such round; a second non-empty list 
 Work that reaches GATE 2 without a row is not estimated (AM-03) and must not be hidden in a
 WARNING.
 ### GATE 2 — architecture and phasing (user)
-Present: component map, stack table, phases table (ids per phase, dev FTE). The user approves or
-asks for changes; changes go back to `augur-architect` (one more pass). Record the approval line
+Present: component map, stack table, phases table (ids per phase, dev FTE) — socratic
+presentation: summary + explicit options (approve / named changes), never a bare «ok?». The user
+approves or asks for changes; changes go back to `augur-architect` (one more pass). Record the approval line
 verbatim in your log. No estimate before this line exists.
 ### Phase 3 Estimate (iteration 1)
 Spawn `augur-estimator` with the **full input set** — every spawn, re-estimates included:

@@ -34,7 +34,7 @@ Before proposing ANY changes, read documentation in this exact order:
 6. **`SKILLFLOW.md`** — workflow graph: valid transitions and alternative routes; used for every «next step» suggestion.
 7. **Feature artifacts** — after identifying the current feature on the board (Step 2), read it via `planning_read_feature` (orchestrator view: body + spec + plan) and the current task via `planning_current_task`. The executing sub-agent reads ONLY its task artifact via `planning_read_artifact` IN FULL. Task artifacts are the authoritative execution contracts.
 
-If CONTEXT.md/STRUCTURE.md are missing, report which ones are absent and ask the user if they should be created. If overmind MCP is unavailable — STOP (hard requirement, see `overmind-ceremony`).
+If CONTEXT.md/STRUCTURE.md are missing, report which ones are absent and ask socratically — propose creating them (say which first and why) vs proceeding without them. If overmind MCP is unavailable — STOP (hard requirement, see `overmind-ceremony`).
 
 ### Step 2: Determine Scope Lock
 After reading documentation, determine the working mode:
@@ -47,7 +47,7 @@ After reading documentation, determine the working mode:
 - **Never rewrite validated spec/plan artifacts without explicit user re-validation.** Routine writes are only: `planning_set_status` (with logNote), `planning_append_log`, `planning_patch_artifact` (sections, AC ticks). Never hand-edit materialized files under `BACKLOG/` — they belong to the materializer.
 
 **IF the board is empty:**
-- Ask the user: "Борда пуста. Создать фичу '[описание]'?"
+- Ask socratically: "Борда пуста. Предлагаю фичу '[описание]' — body: [what/why], priority pN. Варианты: 1) создаём как предложено; 2) правишь описание/приоритет; 3) пока не создаём. Что делаем?"
 - On approval: `planning_create_feature` (durable what/why in the body). Complex features then go through Phase 0 gates; a Simple task = feature with a single task artifact.
 - Do NOT start coding until scope is defined on the board.
 
@@ -70,8 +70,8 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
 
 ### Phase 0: Spec & Plan Gates (Complex features — MANDATORY, sequential)
 0. **Requirements intake (OPTIONAL, trigger-based).** ONLY when requirements arrive in arbitrary/messy form (ticket, letter, chat dump, CSV, design files, conflicting sources): parse, deduplicate, decompose into actionable REQ-items, mark contradictions and gaps — record as entries (`write_entry`, type=note) or in the feature body. **STOP. User confirms requirements are complete — this is the intake gate.** Skip when the user provides already-structured requirements or the feature body already covers the scope.
-1. **Spec gate.** Build the spec artifact (`planning_upsert_artifact`, kind=spec) — questioning technique per `overmind-ceremony` (Socratic, ONE question at a time) until requirements are unambiguous. The feature must already exist on the board; if missing and the work is Complex, `planning_create_feature` FIRST and confirm with the user. **STOP. Present the spec to the user. On explicit approval → `planning_validate`. No planning before this.**
-2. **Plan gate.** Build the plan artifact — decomposition per `overmind-ceremony` techniques (small tasks, exact file paths, verification step per task). **STOP. Present to the user. On explicit approval → `planning_validate`. No task breakdown before this.**
+1. **Spec gate.** Build the spec artifact (`planning_upsert_artifact`, kind=spec) — questioning technique per `overmind-ceremony` (Socratic, ONE question at a time — every question ships with 2–3 proposed answers + your recommendation; the user picks) until requirements are unambiguous. The feature must already exist on the board; if missing and the work is Complex, `planning_create_feature` FIRST and confirm with the user. **STOP. Present the spec socratically — summary + explicit options (approve / change X / rework Y) + your recommendation, never a bare «ok?». On explicit approval → `planning_validate`. No planning before this.**
+2. **Plan gate.** Build the plan artifact — decomposition per `overmind-ceremony` techniques (small tasks, exact file paths, verification step per task). **STOP. Present to the user — same socratic shape: summary + options + recommendation, never a bare «ok?». On explicit approval → `planning_validate`. No task breakdown before this.**
 3. **Task breakdown.** After plan validation: `planning_upsert_artifact(kind=task, order=N, brief=..., review=light|hard)` per task, each with XML sections and `<refs>` linking back to spec/plan.
 4. Validated spec/plan are **frozen**. Any change mid-flight → `planning_patch_artifact` with `logNote` + user re-validation, never silent edits.
 5. Medium features (no validation ceremony needed) MAY skip spec/plan — tasks only. Simple tasks = single task artifact.
@@ -139,7 +139,7 @@ Review output must include:
 - **If Security BLOCKER found:** STOP pipeline immediately. Do NOT auto-fix. Present to user with `[SECURITY]` tag and require human approval. Security vulnerabilities (injection, hardcoded secrets, broken auth) must be reviewed by a human before any code changes.
 - **If regular BLOCKERS exist:** return to Phase 2 (coder) with review comments as input.
 - **Review comments are verified, not obeyed:** the coder reproduces every BLOCKER locally before fixing it. A comment that does not hold up is answered with evidence and bounced back to the reviewer — no blind fixes, no performative agreement.
-- **If only WARNINGS/SUGGESTIONS:** present them to user and ask if they want fixes now or later.
+- **If only WARNINGS/SUGGESTIONS:** present them with options — fix now / fix later / skip — plus which ones you'd fix first and why.
 
 ### Phase 5: Architecture Gate (End-of-Phase only)
 - Run ONLY after completing a sprint phase or large refactoring.
@@ -156,7 +156,7 @@ the claim is a per-session lock, and a held claim 409s other sessions until the 
 - **NEVER run `git commit` from any skill automatically.** Do NOT commit any changes unless the user explicitly asks: "закоммить", "сделай коммит", "commit".
 - **NEVER run `git push` automatically.** Push ONLY after explicit user request.
 - **Skills MAY stage files** (`git add`) to show what changed, but do NOT commit.
-- **After completing ALL phases, report the list of changed files** and ask: "Изменены файлы: [список]. Хотите сделать коммит?"
+- **After completing ALL phases, report the list of changed files** and ask socratically: propose the commit message — "Изменены файлы: [список]. Предлагаю коммит: '[текст]'. Варианты: коммитим как предложено / правишь текст / не коммитим."
 - If the user says nothing about commit — leave changes unstaged/uncommitted.
 - **Orchestrator MUST enforce this rule:** if any sub-skill attempts to commit, stop it and report to user.
 
@@ -192,13 +192,14 @@ Task is COMPLEX if:
 
 ## Communication Rules
 - **Speak Russian.**
+- **Socratic questions only (IRON RULE).** Every work question to the user (spec, plan, scope, review findings, next step) ships with 2–3 concrete proposed answers + your recommendation — the user picks, edits, or overrides, never invents the answer from scratch. A bare question with no options is a violation; small talk is the only exception. Same shape for `overmind_notify(kind=question)`.
 - **At start:** Report what was found: "Борда прочитана, текущая фича: [slug], задача: [artifactId/order]. Anti-Scope: [Y]. Скоуп зафиксирован."
 - **During work:** Report progress after each phase: "Фаза 1 завершена...", "Фаза 2: изменены файлы...", "Фаза 3: ревью..." Board moves compactly: "таска → inProgress", "spec validated".
-- **If scope violation detected:** "Этот запрос выходит за рамки текущей фичи. Добавить на борду?"
+- **If scope violation detected:** "Этот запрос выходит за рамки текущей фичи. Варианты: 1) новая фича на борде (предлагаю '[описание]', priority pN); 2) работаем вне борды; 3) откладываем. Что делаем?"
 - **If STOP line / blocked:** "Задача [N] заблокирована: [причина]. Требуется решение человека." — verbatim, never softened.
 - **Never skip Phase 3.** Review is mandatory for complex tasks.
 - **If Security BLOCKER:** explicitly say: "Найдена критическая уязвимость безопасности. Авто-исправление запрещено. Требуется ручное ревью."
-- **At finish:** "Работа завершена. Изменены файлы: [список]. Хотите сделать коммит?"
+- **At finish:** "Работа завершена. Изменены файлы: [список]. Предлагаю коммит: '[текст]' — коммитим / правишь текст / оставляем несохранённым."
 - **Output contract (MANDATORY — this skill and every delegated skill):** end with a fixed block, then STOP:
   1. **Done** — summary + artifact identifiers (feature slug, artifact ids) and `audits/` paths where applicable.
   2. **Next step** — recommended follow-up per `SKILLFLOW.md` (exact skill/command name).

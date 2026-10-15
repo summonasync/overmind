@@ -126,6 +126,8 @@ Rules:
    request in-session (agent door), with `logNote` carrying provenance.
 4. When `humanGate=on` (validation block in onboard), `planning_validate` returns STOP —
    the human approves in the Overmind UI; do not retry in a loop, notify and wait.
+5. **Gate presentations are Socratic too** — an approval request is never a bare «ok?»: artifact
+   summary + explicit options (approve / change X / rework Y) + your recommendation.
 
 ## Working the Artifacts
 
@@ -165,7 +167,10 @@ artifacts through Overmind, not through disk files.
 
 ## Techniques (replacing the superpowers plugin — inline, no external dependency)
 
-**Socratic spec questioning** (replaces superpowers:brainstorming). Ask ONE question at a time.
+**Socratic spec questioning** (replaces superpowers:brainstorming). Ask ONE question at a time —
+and every question is SOCRATIC by the iron rule: it ships with 2–3 concrete proposed answers plus
+your recommendation; the user picks, edits or overrides. A bare question without proposed answers
+is a violation — social talk is the only exception.
 Probe: real user pain, edge cases, data ownership, failure modes, what is explicitly OUT of scope.
 Stop when the spec artifact holds no ambiguity a coder could resolve two different ways.
 Output lands ONLY in the spec artifact — never in side files.

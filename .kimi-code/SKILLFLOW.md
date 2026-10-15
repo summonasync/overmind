@@ -102,3 +102,4 @@ Hours and FTE only, never money. Deal won → `solution-architect` (ADRs, CONTEX
 - Overmind MCP is a hard requirement for planning ceremonies — no MCP → STOP, no file-based fallback.
 - Cloud CLI mutations (`gcloud`/`az`/`aws`) are never autonomous — user approval every time; infra goes through IaC.
 - Every skill ends with the output contract: Done → Next step → Alternatives → STOP.
+- Every work question to the user is SOCRATIC — the question ships with 2–3 proposed answers + a recommendation; the user picks. Bare questions (no options) are social-talk-only, never work (spec/plan/augur gates included).
