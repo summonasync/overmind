@@ -68,6 +68,7 @@ Applies to every markdown frontmatter (SKILL.md on all five sides, agent files o
 | `.kimi-code/agents/pipeline-doctor.md` | `.claude/agents/pipeline-doctor.md` | `.gemini/antigravity/agents/pipeline-doctor.md` | `.qwen/agents/pipeline-doctor.md` |
 | `.kimi-code/agents/feature-orchestrator.md` | `.claude/agents/feature-orchestrator.md` | `.gemini/antigravity/agents/feature-orchestrator.md` | `.qwen/agents/feature-orchestrator.md` |
 | `.kimi-code/agents/sprint-planner.md` | `.claude/agents/sprint-planner.md` | `.gemini/antigravity/agents/sprint-planner.md` | `.qwen/agents/sprint-planner.md` |
+| `.kimi-code/agents/wave-marshal.md` | `.claude/agents/wave-marshal.md` | `.gemini/antigravity/agents/wave-marshal.md` | `.qwen/agents/wave-marshal.md` |
 | `.kimi-code/agents/tutor-master.md` | `.claude/agents/tutor-master.md` | `.gemini/antigravity/agents/tutor-master.md` | `.qwen/agents/tutor-master.md` |
 | `.kimi-code/skills/ai-code-detector/` | `.claude/skills/ai-code-detector/` | `.gemini/antigravity/skills/ai-code-detector/` | `.qwen/skills/ai-code-detector/` |
 | `.kimi-code/skills/ai-obfuscation-reviewer/` | `.claude/skills/ai-obfuscation-reviewer/` | `.gemini/antigravity/skills/ai-obfuscation-reviewer/` | `.qwen/skills/ai-obfuscation-reviewer/` |
@@ -109,6 +110,7 @@ Applies to every markdown frontmatter (SKILL.md on all five sides, agent files o
 | `.kimi-code/skills/squeezr-ops/` | `.claude/skills/squeezr-ops/` | `.gemini/antigravity/skills/squeezr-ops/` | `.qwen/skills/squeezr-ops/` |
 | `.kimi-code/skills/feature-orchestrator/` | `.claude/skills/feature-orchestrator/` | `.gemini/antigravity/skills/feature-orchestrator/` | `.qwen/skills/feature-orchestrator/` |
 | `.kimi-code/skills/sprint-planner/` | `.claude/skills/sprint-planner/` | `.gemini/antigravity/skills/sprint-planner/` | `.qwen/skills/sprint-planner/` |
+| `.kimi-code/skills/wave-marshal/` | `.claude/skills/wave-marshal/` | `.gemini/antigravity/skills/wave-marshal/` | `.qwen/skills/wave-marshal/` |
 | `.kimi-code/skills/tutor-master/` | `.claude/skills/tutor-master/` | `.gemini/antigravity/skills/tutor-master/` | `.qwen/skills/tutor-master/` |
 
 ## Codex side mapping
@@ -291,7 +293,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 41 agent files + 50 skill dirs on the kimi/claude/antigravity/codex sides; 40 + 49 on the qwen side (pre-existing qwen gap: the `git-commit-ai-detector` agent and its skill are absent there; a qwen-side change must keep 34/42, not drift further).
+4. Count parity intact: 42 agent files + 51 skill dirs on the kimi/claude/antigravity/codex sides; 41 + 50 on the qwen side (pre-existing qwen gap: the `git-commit-ai-detector` agent and its skill are absent there; a qwen-side change must keep 41/50, not drift further).
    ```bash
    for d in .kimi-code .claude .gemini/antigravity .qwen .codex; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```
