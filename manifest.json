@@ -12,7 +12,7 @@
     { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "kimi", "type": "file", "mode": "mirror" },
     { "source": ".kimi-code/config.toml", "home": "kimi", "type": "file", "mode": "mirror" },
     { "source": ".claude/agents", "home": "claude", "type": "dir", "mode": "mirror" },
-    { "source": ".claude/skills", "home": "claude", "type": "dir", "mode": "mirror" },
+    { "source": ".claude/skills", "home": "claude", "type": "dir", "mode": "merge" },
     { "source": ".claude/CLAUDE.md", "home": "claude", "type": "file", "mode": "mirror" },
     { "source": ".claude/SKILLFLOW.md", "home": "claude", "type": "file", "mode": "mirror" },
     { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "claude", "type": "file", "mode": "mirror" },

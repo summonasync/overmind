@@ -120,7 +120,20 @@ The Codex side (`.codex/`) mirrors every row of the file-mapping table above wit
 | `.kimi-code/AGENTS.md` | `.codex/AGENTS.md` |
 | `.kimi-code/SKILLFLOW.md` | `.codex/SKILLFLOW.md` |
 | `.kimi-code/agents/<name>.md` | `.codex/agents/<name>.toml` |
+| `.kimi-code/agents/augur-orchestrator.md` | `.claude/agents/augur-orchestrator.md` | `.gemini/antigravity/agents/augur-orchestrator.md` | `.qwen/agents/augur-orchestrator.md` |
+| `.kimi-code/agents/augur-researcher.md` | `.claude/agents/augur-researcher.md` | `.gemini/antigravity/agents/augur-researcher.md` | `.qwen/agents/augur-researcher.md` |
+| `.kimi-code/agents/augur-architect.md` | `.claude/agents/augur-architect.md` | `.gemini/antigravity/agents/augur-architect.md` | `.qwen/agents/augur-architect.md` |
+| `.kimi-code/agents/augur-estimator.md` | `.claude/agents/augur-estimator.md` | `.gemini/antigravity/agents/augur-estimator.md` | `.qwen/agents/augur-estimator.md` |
+| `.kimi-code/agents/augur-challenger.md` | `.claude/agents/augur-challenger.md` | `.gemini/antigravity/agents/augur-challenger.md` | `.qwen/agents/augur-challenger.md` |
+| `.kimi-code/agents/umbraco-sensei.md` | `.claude/agents/umbraco-sensei.md` | `.gemini/antigravity/agents/umbraco-sensei.md` | `.qwen/agents/umbraco-sensei.md` |
 | `.kimi-code/skills/<name>/` | `.codex/skills/<name>/` |
+| `.kimi-code/skills/augur-orchestrator/` | `.claude/skills/augur-orchestrator/` | `.gemini/antigravity/skills/augur-orchestrator/` | `.qwen/skills/augur-orchestrator/` |
+| `.kimi-code/skills/augur-researcher/` | `.claude/skills/augur-researcher/` | `.gemini/antigravity/skills/augur-researcher/` | `.qwen/skills/augur-researcher/` |
+| `.kimi-code/skills/augur-architect/` | `.claude/skills/augur-architect/` | `.gemini/antigravity/skills/augur-architect/` | `.qwen/skills/augur-architect/` |
+| `.kimi-code/skills/augur-estimator/` | `.claude/skills/augur-estimator/` | `.gemini/antigravity/skills/augur-estimator/` | `.qwen/skills/augur-estimator/` |
+| `.kimi-code/skills/augur-challenger/` | `.claude/skills/augur-challenger/` | `.gemini/antigravity/skills/augur-challenger/` | `.qwen/skills/augur-challenger/` |
+| `.kimi-code/skills/augur-method/` | `.claude/skills/augur-method/` | `.gemini/antigravity/skills/augur-method/` | `.qwen/skills/augur-method/` |
+| `.kimi-code/skills/umbraco-sensei/` | `.claude/skills/umbraco-sensei/` | `.gemini/antigravity/skills/umbraco-sensei/` | `.qwen/skills/umbraco-sensei/` |
 | `.kimi-code/SOCIAL_DICTIONARY.md` | deployed to `~/.codex/` from `.kimi-code/` (single source, five homes) |
 
 The agent row is the one format break in the kit: md frontmatter on the four md-based sides becomes a standalone TOML role file on the Codex side (fields exactly `name`, `description`, `model`, `developer_instructions`; body → `developer_instructions`). Semantics stay identical; only the container changes.
@@ -145,6 +158,7 @@ The agent row is the one format break in the kit: md frontmatter on the four md-
 | Parallel spawn primitive | `AgentSwarm` | Multiple `Task` tool calls in one message | Parallel background agents in Agent Manager | Multiple `agent` tool calls in one message; `subagent_type: "fork"` when the child needs parent context | Multiple `spawn_agent` calls in one turn; `fork_turns` controls context propagation (`"none"`/numeric for model overrides) |
 | Deterministic enforcement | Hooks (PreToolUse/PostToolUse) + config deny-list | Prompt-enforced only | Behavioral rules in GEMINI.md + IDE permission settings configured by the user | `permissions.deny`/`ask` + `PostToolUse` hooks in `~/.qwen/settings.json`, shipped as `.qwen/settings-snippet.jsonc` for hand-merging. Read/Edit deny rules also cover equivalent shell commands, so there is no `cat .env` bypass | Behavioral/prompt-only by crew decision: codex has hooks in the runtime (feature flag `hooks`, stable) but the kit ships none and never writes `~/.codex/config.toml`; verification discipline (build/lint in the same turn) replaces PostToolUse hooks |
 | Agent frontmatter extras | — | — | `whenToUse`, `tools`, `subagents` keys kept; unknown keys are ignored by the runtime | `tools` kept (canonical names); `whenToUse` folded into `description` (Qwen delegates on `description`) | Strict TOML: EXACTLY `name`, `description`, `model`, `developer_instructions` — any extra field makes the loader drop the role silently (fail-soft stderr warning at session start) |
+| MCP tools in allowlists (2026-10-15) | `mcp__overmind__*` listed verbatim in every `tools:` allowlist — MCP tool names are identical on every runtime | same | same | same; `Skill` and `Write` have Qwen ids `write_file` only — `Skill` is dropped, the augur researcher loads pdf/docx helpers through `run_shell_command` | no allowlist field — MCP access is prose inside `developer_instructions` |
 | Tool names in allowlists | Kimi tool ids | Claude Code tool ids (`Read`, `Grep`, `Glob`, `Bash`, `WebSearch`, `FetchURL`) | as authored | Canonical Qwen tool ids (`read_file`, `grep_search`, `glob`, `run_shell_command`, `web_fetch`). `WebSearch` has no Qwen equivalent — it and `FetchURL` collapse into a single `web_fetch` entry | No allowlist field — restrictions carried as prose inside `developer_instructions` |
 
 ## Translation table (Kimi → Claude)
@@ -248,6 +262,8 @@ Every manifest entry carries an explicit `mode` — the `install.sh`/`uninstall.
 
 `merge` exists because `~/.qwen/` hosts non-crew content (e.g. `bailian-*` skills installed by `bl skill init`) that a whole-directory mirror would delete. Known limitation: `merge` uninstall only removes children that still exist in the repo — a crew skill deleted from the repo leaves an orphan in the home until removed by hand.
 
+`~/.claude/skills` is **merge since 2026-10-15**: the home also hosts Anthropic-synced skills (`synced/`) that a whole-directory mirror would delete.
+
 `~/.codex/skills` and `~/.codex/agents` are **mirror by user decision (2026-10-07)**: they are crew-owned; third-party skills or roles dropped there are deleted on the next install.
 
 ## Skill authoring rules
@@ -263,19 +279,19 @@ Applies to creating or editing any skill in this repo. The verification half liv
 ## Pre-commit checklist (run before committing any crew edit)
 
 1. All five sides of every touched quintuple updated in the same commit.
-2. No cross-runtime leakage. **Known benign exceptions:** `skills/coding-challenge-orchestrator/SKILL.md` names every runtime on purpose (its AI-leakage deny-list must stay identical on all five sides); `skills/overmind-ceremony/SKILL.md` carries the verbatim sentence "Antigravity runtime: overmind MCP is expected but not verified" on all five sides (a cross-runtime fact); `skills/squeezr-ops/SKILL.md` is a product doc that names several runtimes on purpose (a Claude settings example in its hook section, qwen/kimi client notes) and is identical on all five sides. Filter all three out of every grep below.
+2. No cross-runtime leakage. **Known benign exceptions:** `skills/umbraco-sensei/references/breaking-changes.md` carries the Umbraco API name `JsonNetSerializer` (its substring `sonNetS` trips the case-insensitive `sonnet` grep — filter `umbraco-sensei` out); `skills/coding-challenge-orchestrator/SKILL.md` names every runtime on purpose (its AI-leakage deny-list must stay identical on all five sides); `skills/overmind-ceremony/SKILL.md` carries the verbatim sentence "Antigravity runtime: overmind MCP is expected but not verified" on all five sides (a cross-runtime fact); `skills/squeezr-ops/SKILL.md` is a product doc that names several runtimes on purpose (a Claude settings example in its hook section, qwen/kimi client notes) and is identical on all five sides. Filter all three out of every grep below.
    ```bash
-   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|config\.toml\|sonnet\|opus\|haiku\|\.claude\|qwen3\.' .gemini/ | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
-   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|qwen3\.\|\.qwen' .claude/                                     | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
-   grep -rni 'claude code\|sonnet\|opus\|haiku\|qwen3\.\|\.qwen' .kimi-code/                                 | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
-   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|sonnet\|opus\|haiku\|\.claude\|\.gemini\|antigravity' .qwen/  | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
-   grep -rni 'gemini\|antigravity\|qwen' .kimi-code/ .claude/                                                | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
-   grep -rniE 'k2\.7|\bk3\b|kimi|agentswarm|sonnet|opus|haiku|\.claude|qwen3\.|\.qwen|gemini|antigravity' .codex/ | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
-   grep -rniE 'codex|gpt-6' .kimi-code/ .claude/ .gemini/ .qwen/                                             | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr   # must be empty
+   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|config\.toml\|sonnet\|opus\|haiku\|\.claude\|qwen3\.' .gemini/ | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
+   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|qwen3\.\|\.qwen' .claude/                                     | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
+   grep -rni 'claude code\|sonnet\|opus\|haiku\|qwen3\.\|\.qwen' .kimi-code/                                 | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
+   grep -rni 'k2\.7\|\bk3\b\|kimi\|agentswarm\|sonnet\|opus\|haiku\|\.claude\|\.gemini\|antigravity' .qwen/  | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
+   grep -rni 'gemini\|antigravity\|qwen' .kimi-code/ .claude/                                                | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
+   grep -rniE 'k2\.7|\bk3\b|kimi|agentswarm|sonnet|opus|haiku|\.claude|qwen3\.|\.qwen|gemini|antigravity' .codex/ | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
+   grep -rniE 'codex|gpt-6' .kimi-code/ .claude/ .gemini/ .qwen/                                             | grep -v coding-challenge-orchestrator | grep -v overmind-ceremony | grep -v squeezr | grep -v umbraco-sensei   # must be empty
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 35 agent files + 43 skill dirs on the kimi/claude/antigravity/codex sides; 34 + 42 on the qwen side (pre-existing qwen gap: the `git-commit-ai-detector` agent and its skill are absent there; a qwen-side change must keep 34/42, not drift further).
+4. Count parity intact: 41 agent files + 50 skill dirs on the kimi/claude/antigravity/codex sides; 40 + 49 on the qwen side (pre-existing qwen gap: the `git-commit-ai-detector` agent and its skill are absent there; a qwen-side change must keep 34/42, not drift further).
    ```bash
    for d in .kimi-code .claude .gemini/antigravity .qwen .codex; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```

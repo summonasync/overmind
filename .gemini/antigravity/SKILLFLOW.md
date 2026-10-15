@@ -68,8 +68,27 @@ Board feature with a single task artifact, no spec/plan (same shape the Overmind
 **System-wide audit (sprint retro, phase end):**
 `audit-orchestrator` — outside the feature flow; reads state from the board; outputs `audits/audit-YYYY-MM-DD.md`.
 
+<!-- augur-crew:start (source: D:\Projects\AI-Center\augur-crew\SKILLFLOW.augur.md) -->
+**Pre-sales research & estimation (augur-crew):**
+`augur-orchestrator` — outside the feature flow, Overmind optional, runs INLINE in the main session (gates need the user). Pipeline:
+`augur-researcher` (strong execution model, sourced inventory) → **GATE 1** (user closes open questions) →
+`augur-architect` (strongest reasoning model, architecture + stack + phases; consults `solution-architect` in consult-only mode) →
+**GATE 2** (user approves architecture and phasing) → `augur-estimator` (strongest reasoning model, classic vs
+AI-native hours, FTE, three scenarios, BA/QA delta — md + xlsx per `augur-method`) →
+`augur-challenger` (strong execution model, hostile review with routed findings; BLOCKER → re-estimate, max 2 re-estimates / 3 challenges) → one-page
+`audits/augur-summary-<client>-<date>.md`. Artifacts: `audits/augur-{research,architecture}-<client>-<date>.md`, `audits/augur-{estimate,challenge}-<client>-<date>-i<n>.{md,xlsx}`.
+Hours and FTE only, never money. Deal won → `solution-architect` (ADRs, CONTEXT.md) →
+`product-strategist` / `sprint-planner` (phases as board features) → `feature-orchestrator`.
+`augur-method` holds the estimation rules (AM-IDs) and the calibration log (edit the repo copy, then `install.ps1`).
+<!-- augur-crew:end -->
+
 **Self-healing CI/CD (failing pipeline):**
 `pipeline-doctor` — log-reader (strong execution model) → fix (strong execution model) → trigger pipeline → watch → repeat, **max 3 iterations, then STOP and report**. Review of the final fix by a separate agent. Transport: `gh` CLI for cloud GitHub (token scope = security perimeter, never widen it for the agent); `glab`/REST for on-prem Git — transport is swappable, the loop is not. Tell the agent explicitly when the codebase is available locally, or it will read files through the API.
+
+<!-- umbraco-exodus:start -->
+**Umbraco migration (version upgrade of an Umbraco CMS solution) — Umbraco Exodus crew:**
+`umbraco-exodus-orchestrator` (project-level, installed into the client repo via `umbraco-exodus/Skills/umbraco-exodus/install.sh`) — replaces the main route: `umbraco-exodus-auditor` → user validates audit → plan mode (one board feature per phase) → user validates plan → run mode with `umbraco-exodus-backend-coder` / `umbraco-exodus-backoffice-coder` / `umbraco-exodus-content-migrator` and `umbraco-exodus-verifier` verdicts as phase gates. `feature-orchestrator` hands off when the solution references `Umbraco.Cms` and the request is a migration or upgrade. `umbraco-sensei` dojo mode (`DOJO:`) serves all of them.
+<!-- umbraco-exodus:end -->
 
 ## Hard Rules (always on, any route)
 
