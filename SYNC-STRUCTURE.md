@@ -52,7 +52,7 @@ Applies to every markdown frontmatter (SKILL.md on all five sides, agent files o
 | `.kimi-code/agents/go-code-reviewer.md` | `.claude/agents/go-code-reviewer.md` | `.gemini/antigravity/agents/go-code-reviewer.md` | `.qwen/agents/go-code-reviewer.md` |
 | `.kimi-code/agents/go-coder.md` | `.claude/agents/go-coder.md` | `.gemini/antigravity/agents/go-coder.md` | `.qwen/agents/go-coder.md` |
 | `.kimi-code/agents/maui-coder.md` | `.claude/agents/maui-coder.md` | `.gemini/antigravity/agents/maui-coder.md` | `.qwen/agents/maui-coder.md` |
-| `.kimi-code/agents/naming-helper.md` | `.claude/agents/naming-helper.md` | `.gemini/antigravity/agents/naming-helper.md` | `.qwen/agents/naming-helper.md` |
+| `.kimi-code/agents/naming-sensei.md` | `.claude/agents/naming-sensei.md` | `.gemini/antigravity/agents/naming-sensei.md` | `.qwen/agents/naming-sensei.md` |
 | `.kimi-code/agents/js-platform-code-reviewer.md` | `.claude/agents/js-platform-code-reviewer.md` | `.gemini/antigravity/agents/js-platform-code-reviewer.md` | `.qwen/agents/js-platform-code-reviewer.md` |
 | `.kimi-code/agents/js-platform-coder.md` | `.claude/agents/js-platform-coder.md` | `.gemini/antigravity/agents/js-platform-coder.md` | `.qwen/agents/js-platform-coder.md` |
 | `.kimi-code/agents/node-architect.md` | `.claude/agents/node-architect.md` | `.gemini/antigravity/agents/node-architect.md` | `.qwen/agents/node-architect.md` |
@@ -88,7 +88,7 @@ Applies to every markdown frontmatter (SKILL.md on all five sides, agent files o
 | `.kimi-code/skills/go-code-reviewer/` | `.claude/skills/go-code-reviewer/` | `.gemini/antigravity/skills/go-code-reviewer/` | `.qwen/skills/go-code-reviewer/` |
 | `.kimi-code/skills/go-coder/` | `.claude/skills/go-coder/` | `.gemini/antigravity/skills/go-coder/` | `.qwen/skills/go-coder/` |
 | `.kimi-code/skills/maui-coder/` | `.claude/skills/maui-coder/` | `.gemini/antigravity/skills/maui-coder/` | `.qwen/skills/maui-coder/` |
-| `.kimi-code/skills/naming-helper/` | `.claude/skills/naming-helper/` | `.gemini/antigravity/skills/naming-helper/` | `.qwen/skills/naming-helper/` |
+| `.kimi-code/skills/naming-sensei/` | `.claude/skills/naming-sensei/` | `.gemini/antigravity/skills/naming-sensei/` | `.qwen/skills/naming-sensei/` |
 | `.kimi-code/skills/js-platform-best-practices/` | `.claude/skills/js-platform-best-practices/` | `.gemini/antigravity/skills/js-platform-best-practices/` | `.qwen/skills/js-platform-best-practices/` |
 | `.kimi-code/skills/js-platform-code-reviewer/` | `.claude/skills/js-platform-code-reviewer/` | `.gemini/antigravity/skills/js-platform-code-reviewer/` | `.qwen/skills/js-platform-code-reviewer/` |
 | `.kimi-code/skills/js-platform-coder/` | `.claude/skills/js-platform-coder/` | `.gemini/antigravity/skills/js-platform-coder/` | `.qwen/skills/js-platform-coder/` |

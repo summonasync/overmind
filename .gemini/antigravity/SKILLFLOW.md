@@ -65,6 +65,9 @@ Board feature with a single task artifact, no spec/plan (same shape the Overmind
 **Docs-only:**
 `documentation-writer` — skips Phase 3 code review, uses its own verification checklist.
 
+**Naming (any artifact — class, section, service, repo, feature):**
+`naming-sensei` — the crew's naming consultant: any agent (coder, orchestrator, reviewer) routes a naming ask to it as a `DOJO:` prompt and gets an instant dry strike in dojo mode — main name + two backups + one-line rationale, zero dialogue. The user's «сенсей…» ask gets the same in crew tone. Heavy names (product/repo/brand) go through the full ceremony: tone calibration → AI-cliche veto → spectrum or elimination tournament (3–6 rounds × 5 names, 1–2 winners, semifinals past 8 survivors) → collision check on finalists. Never applies a name itself — application is coder work.
+
 **Coding challenge / тестовое задание:**
 `coding-challenge-orchestrator` — replaces this entire flow with its fixed pipeline.
 

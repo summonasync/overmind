@@ -4,7 +4,7 @@
 
 Single source of truth for one AI agent crew running on five runtimes: **Kimi Code CLI**, **Claude Code**, **Google Antigravity**, **Qwen Code**, and **OpenAI Codex CLI**. The repo holds all mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code, `.gemini/` (incl. `GEMINI.md`) serves Antigravity, `.qwen/` (incl. `QWEN.md`) serves Qwen Code, `.codex/` (incl. `AGENTS.md`) serves Codex CLI. Content (rules, workflows, skills, agents) is semantically identical across the five; only tool-specific details (model names, home paths, tool identifiers, runtime features, enforcement mechanics) differ.
 
-The crew: orchestrators, coders, reviewers, architects, a product strategist (`product-strategist`), an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming maniac (`naming-helper`) — 35 agents, 43 skills, one workflow graph.
+The crew: orchestrators, coders, reviewers, architects, a product strategist (`product-strategist`), an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming sensei (`naming-sensei`) — 35 agents, 43 skills, one workflow graph.
 
 ## Prerequisites
 
