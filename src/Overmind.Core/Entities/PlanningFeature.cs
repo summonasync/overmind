@@ -2,6 +2,9 @@ namespace Overmind.Core;
 
 public sealed class PlanningFeature
 {
+    public const int MaxCodeSurfaces = 16;
+    public const int MaxCodeSurfaceLength = 200;
+
     private PlanningFeature()
     {
     }
@@ -21,6 +24,8 @@ public sealed class PlanningFeature
     public bool ClaimedByHuman { get; private set; }
     public string? PinnedBranch { get; private set; }
     public string? PinnedWorktreePath { get; private set; }
+    public string? Lane { get; private set; }
+    public string? CodeSurfaces { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -209,6 +214,44 @@ public sealed class PlanningFeature
     private static string? NormalizePin(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    public bool SetLane(string? lane)
+    {
+        var normalized = NormalizePin(lane);
+
+        if (normalized is not null && normalized.Length > PlanningLane.MaxNameLength)
+        {
+            throw new ArgumentException(
+                $"Lane '{normalized}' exceeds the {PlanningLane.MaxNameLength} character cap.");
+        }
+
+        if (string.Equals(Lane, normalized, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        Lane = normalized;
+        return true;
+    }
+
+    public bool SetCodeSurfaces(string? surfacesJson, PlanningLogSource? source = null)
+    {
+        if (string.Equals(CodeSurfaces, surfacesJson, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        CodeSurfaces = surfacesJson;
+
+        if (source is { } logSource)
+        {
+            AppendLog(
+                string.IsNullOrWhiteSpace(surfacesJson) ? "code surfaces cleared" : "code surfaces set",
+                logSource);
+        }
+
+        return true;
     }
 
     private static string PinChangedNote(string? branch, string? worktreePath)

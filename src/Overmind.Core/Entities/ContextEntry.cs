@@ -21,6 +21,7 @@ public sealed class ContextEntry
     public List<SkillFile> SkillFiles { get; private set; } = [];
     public List<EntryTag> EntryTags { get; private set; } = [];
     public List<EntryVersion> Versions { get; private set; } = [];
+    public List<EntryAck> Acks { get; private set; } = [];
 
     public static ContextEntry Create(Guid projectId, EntryType type, string title, string content)
     {

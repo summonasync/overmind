@@ -33,6 +33,9 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
     public DbSet<Issue> Issues => Set<Issue>();
     public DbSet<IssueAppend> IssueAppends => Set<IssueAppend>();
+    public DbSet<PlanningLane> PlanningLanes => Set<PlanningLane>();
+    public DbSet<PlanningDirective> PlanningDirectives => Set<PlanningDirective>();
+    public DbSet<EntryAck> EntryAcks => Set<EntryAck>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -66,6 +69,11 @@ public sealed class OvermindDbContext : DbContext
 
             builder.Property(p => p.NumberPrefix)
                 .HasMaxLength(Project.NumberPrefixMaxLength);
+
+            builder.HasMany(p => p.Lanes)
+                .WithOne()
+                .HasForeignKey(l => l.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ContextEntry>(builder =>
@@ -83,6 +91,11 @@ public sealed class OvermindDbContext : DbContext
             builder.HasMany(e => e.Versions)
                 .WithOne()
                 .HasForeignKey(v => v.EntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasMany(e => e.Acks)
+                .WithOne()
+                .HasForeignKey(a => a.ContextEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -306,6 +319,44 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(a => new { a.IssueId, a.CreatedAt });
+        });
+
+        modelBuilder.Entity<PlanningLane>(builder =>
+        {
+            builder.Property(l => l.Name).HasMaxLength(PlanningLane.MaxNameLength).UseCollation("NOCASE");
+            builder.Property(l => l.Contour).HasMaxLength(PlanningLane.MaxContourLength);
+
+            builder.HasIndex(l => new { l.ProjectId, l.Name }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlanningFeature>(builder =>
+        {
+            builder.Property(f => f.Lane).HasMaxLength(PlanningLane.MaxNameLength);
+            builder.Property(f => f.CodeSurfaces).HasMaxLength(4000);
+        });
+
+        modelBuilder.Entity<PlanningDirective>(builder =>
+        {
+            builder.HasOne<PlanningFeature>()
+                .WithMany()
+                .HasForeignKey(d => d.PlanningFeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(d => d.Text).HasMaxLength(PlanningDirective.MaxTextLength);
+            builder.Property(d => d.AuthorAlias).HasMaxLength(PlanningDirective.MaxIdentityLength);
+            builder.Property(d => d.AuthorVendor).HasMaxLength(PlanningDirective.MaxIdentityLength);
+            builder.Property(d => d.AckByAlias).HasMaxLength(PlanningDirective.MaxIdentityLength);
+            builder.Property(d => d.AckVendor).HasMaxLength(PlanningDirective.MaxIdentityLength);
+
+            builder.HasIndex(d => new { d.PlanningFeatureId, d.AckAt });
+        });
+
+        modelBuilder.Entity<EntryAck>(builder =>
+        {
+            builder.Property(a => a.Alias).HasMaxLength(EntryAck.MaxIdentityLength);
+            builder.Property(a => a.Vendor).HasMaxLength(EntryAck.MaxIdentityLength);
+
+            builder.HasIndex(a => a.ContextEntryId);
         });
     }
 }

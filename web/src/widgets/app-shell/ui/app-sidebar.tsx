@@ -6,6 +6,7 @@ import {
   BellRing,
   ChevronDown,
   ChevronRight,
+  Columns3,
   Folder,
   Package,
   Search,
@@ -42,6 +43,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
   { href: "/issues", label: "Issues Board", icon: SquareKanban },
+  { href: "/lanes", label: "Lanes", icon: Columns3 },
   { href: "/attention", label: "Attention", icon: BellRing },
   { href: "/kits", label: "Kits", icon: Package },
   { href: "/search", label: "Search", icon: Search },

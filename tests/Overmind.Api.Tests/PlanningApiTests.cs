@@ -313,7 +313,7 @@ public sealed class PlanningApiTests : IDisposable
         var feature = JsonDocument.Parse(raw).RootElement;
 
         feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath"]);
+            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath", "lane", "codeSurfaces", "potentialOverlaps", "openDirectives"]);
 
         var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();
         artifacts.Length.ShouldBe(2);
@@ -362,7 +362,7 @@ public sealed class PlanningApiTests : IDisposable
         raw.ShouldNotContain("spec note");
         var feature = JsonDocument.Parse(raw).RootElement;
         feature.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath"]);
+            ["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt", "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath", "openDirectiveCount", "lane", "codeSurfaces", "potentialOverlaps"]);
         feature.GetProperty("body").GetString()!.ShouldContain("UNIQUE_FEATURE_MARKER");
 
         var artifacts = feature.GetProperty("artifacts").EnumerateArray().ToArray();

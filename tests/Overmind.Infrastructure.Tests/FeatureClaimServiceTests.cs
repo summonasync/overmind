@@ -391,6 +391,230 @@ public sealed class FeatureClaimServiceTests : IDisposable
         PlanningLog.Parse(closed.Body).Last().Text.ShouldBe("claim released on done-close");
     }
 
+    [Fact]
+    public async Task Claim_TargetHeldByForeignAlive_InBusyLane_YieldsClaimHeldNotLaneSerial()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service
+            .ClaimAsync(_projectId, "feat-a", "Bobby", "claude", ForeignSessionId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
+        ex.Message.ShouldContain("Dan by qwen (alive)");
+    }
+
+    [Fact]
+    public async Task Claim_RestartAdoptOfOwnFeatureInBusyLane_SucceedsWithoutOverride()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+        var restartSessionId = Guid.NewGuid();
+
+        var adopted = await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", restartSessionId);
+
+        adopted.ClaimSessionId.ShouldBe(restartSessionId);
+        adopted.ClaimedByAlias.ShouldBe("Dan");
+        PlanningLog.Parse(adopted.Body).Last().Text
+            .ShouldBe("session restarted, claim adopted by Dan by qwen");
+    }
+
+    [Fact]
+    public async Task Claim_CaseOnlyRosterRename_KeepsEnforcementOnTheLane()
+    {
+        var laneService = new LaneService(_context, CreateClaimService());
+        await laneService.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await laneService.SetLanesAsync(_projectId, [new LaneUpsert("Frontend", null, null)]);
+        await CreateFeatureService().UpdateAsync(
+            _projectId, "feat-b", null, null, status: null, priority: null, lane: "Frontend", ct: default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => CreateClaimService()
+            .ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneSerialBusy);
+        ex.Message.ShouldContain("feat-a");
+    }
+
+    [Fact]
+    public async Task Claim_LaneBusyByAnotherAlias_ThrowsNamingLaneAndHolder()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service
+            .ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.LaneClaimHeld);
+        ex.Message.ShouldContain("frontend");
+        ex.Message.ShouldContain("Dan by qwen");
+        ex.Message.ShouldContain("feat-a");
+    }
+
+    [Fact]
+    public async Task Claim_LaneHoldsOpenFeature_ThrowsSerialViolation()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service
+            .ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneSerialBusy);
+        ex.Message.ShouldContain("frontend");
+        ex.Message.ShouldContain("feat-a");
+    }
+
+    [Fact]
+    public async Task Claim_LaneBusyWithOverride_Passes()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+
+        var claimed = await service.ClaimAsync(
+            _projectId, "feat-b", "Bobby", "claude", ForeignSessionId, overrideLaneCheck: true);
+
+        claimed.ClaimedByAlias.ShouldBe("Bobby");
+    }
+
+    [Fact]
+    public async Task Claim_LaneHoldsOnlyStaleClaimByAnotherAlias_FallsThroughToSerialCheck()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service
+            .ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneSerialBusy);
+    }
+
+    [Fact]
+    public async Task Claim_SameAliasAliveInLane_BlockedBySerialOnly()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service
+            .ClaimAsync(_projectId, "feat-b", "Dan", "qwen", ForeignSessionId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneSerialBusy);
+    }
+
+    [Fact]
+    public async Task Claim_NoLaneSet_LaneChecksAreSkipped()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+
+        var claimed = await service.ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId);
+
+        claimed.ClaimedByAlias.ShouldBe("Bobby");
+    }
+
+    [Fact]
+    public async Task Claim_ReClaimOfTheSameFeature_IsUnaffectedByLaneChecks()
+    {
+        await CreateFeatureAsync("feat-a");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+
+        var again = await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+
+        again.ClaimSessionId.ShouldBe(HolderSessionId);
+    }
+
+    [Fact]
+    public async Task Claim_OtherLaneFeaturesAllDone_Passes()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        var finished = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "feat-a");
+        finished.SetStatus(PlanningFeatureStatus.Done);
+        await _context.SaveChangesAsync();
+
+        var claimed = await service.ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId);
+
+        claimed.ClaimedByAlias.ShouldBe("Bobby");
+    }
+
+    [Fact]
+    public async Task HumanClaim_IntoBusyLane_IsNeverLocked()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+
+        var claimed = await service.ClaimAsync(_projectId, "feat-b", "board", "human", null);
+
+        claimed.ClaimedByHuman.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Claim_UnknownLaneStillEnforcesChecksByName()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "ghost-lane");
+        await SetLaneAsync("feat-b", "ghost-lane");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service
+            .ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneSerialBusy);
+        ex.Message.ShouldContain("ghost-lane");
+    }
+
+    private async Task SetLaneAsync(string slug, string lane)
+    {
+        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == slug);
+        feature.SetLane(lane);
+        await _context.SaveChangesAsync();
+    }
+
     private async Task SeedResultWithTapAsync(string slug)
     {
         var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == slug);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
@@ -10,7 +11,9 @@ public static class PlanningMapper
     private static readonly Regex FeatureNumberPattern = new(@"^([0-9]+[a-z]?)(?:-|$)", RegexOptions.Compiled);
 
     public static PlanningFeatureBoardItem ToBoardItem(
-        PlanningFeature feature, bool isBlocked, AgentSessionLiveness? claimState = null)
+        PlanningFeature feature, bool isBlocked, AgentSessionLiveness? claimState = null,
+        LaneHolderResponse? laneHolder = null, IReadOnlyList<FeatureOverlapRow>? overlaps = null,
+        int openDirectiveCount = 0)
     {
         var artifacts = feature.Artifacts;
 
@@ -38,12 +41,18 @@ public static class PlanningMapper
                 ArtifactStatus(artifacts, PlanningArtifactKind.Spec),
                 ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
                 TaskTotal(artifacts)),
-            CeremonyPhasePlanner.BriefExcerpt(feature.Body));
+            CeremonyPhasePlanner.BriefExcerpt(feature.Body),
+            openDirectiveCount,
+            feature.Lane,
+            laneHolder ?? LaneHolderOf(feature, claimState),
+            Overlaps(overlaps));
     }
 
     public static PlanningQueueItem ToQueueItem(
         PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures,
-        AgentSessionLiveness? claimState = null)
+        AgentSessionLiveness? claimState = null, LaneHolderResponse? laneHolder = null,
+        IReadOnlyList<FeatureOverlapRow>? overlaps = null,
+        int openDirectiveCount = 0)
     {
         var blockers = OpenBlockerSlugs(feature, projectFeatures);
         var artifacts = feature.Artifacts;
@@ -73,8 +82,47 @@ public static class PlanningMapper
                 ArtifactStatus(artifacts, PlanningArtifactKind.Spec),
                 ArtifactStatus(artifacts, PlanningArtifactKind.Plan),
                 TaskTotal(artifacts)),
-            CeremonyPhasePlanner.BriefExcerpt(feature.Body));
+            CeremonyPhasePlanner.BriefExcerpt(feature.Body),
+            openDirectiveCount,
+            feature.Lane,
+            laneHolder ?? LaneHolderOf(feature, claimState),
+            Overlaps(overlaps));
     }
+
+    public static OpenDirectiveResponse[] ToOpenDirectives(
+        IEnumerable<PlanningDirective> directives) =>
+        [.. directives.Select(d => new OpenDirectiveResponse(
+            d.Id, d.Text, d.AuthorAlias, d.AuthorVendor, d.CreatedAt, d.Acked))];
+
+    private static PotentialOverlap[] Overlaps(IReadOnlyList<FeatureOverlapRow>? rows) =>
+        rows is null || rows.Count == 0
+            ? []
+            : [.. rows.Select(r => new PotentialOverlap(r.WithFeatureSlug, [.. r.SharedGlobs]))];
+
+    private static CodeSurfaceFeatureRow ToSurfaceRow(PlanningFeature feature) =>
+        new(feature.Id, feature.Slug, feature.Status, feature.ClaimSessionId, feature.CodeSurfaces);
+
+    public static IReadOnlyDictionary<string, LaneHolderResponse> LaneHoldersByLane(
+        IEnumerable<PlanningFeature> features,
+        IReadOnlyDictionary<Guid, AgentSessionLiveness> claimLiveness) =>
+        features
+            .Where(f => f.Lane is not null &&
+                        f.ClaimSessionId is not null &&
+                        f.ClaimedByAlias is not null &&
+                        claimLiveness.GetValueOrDefault(f.Id) == AgentSessionLiveness.Alive)
+            .GroupBy(f => f.Lane!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(f => f.ClaimedAt)
+                    .Select(f => new LaneHolderResponse(
+                        f.ClaimedByAlias!, f.ClaimedByVendor!, AgentSessionLiveness.Alive))
+                    .First(),
+                StringComparer.OrdinalIgnoreCase);
+
+    private static LaneHolderResponse? LaneHolderOf(PlanningFeature feature, AgentSessionLiveness? claimState) =>
+        claimState == AgentSessionLiveness.Alive && feature.ClaimedByAlias is not null
+            ? new LaneHolderResponse(feature.ClaimedByAlias, feature.ClaimedByVendor!, claimState.Value)
+            : null;
 
     public static int Readiness(PlanningFeature feature) =>
         (ArtifactStatus(feature.Artifacts, PlanningArtifactKind.Spec) == PlanningArtifactStatus.Validated ? 1 : 0) +
@@ -126,10 +174,80 @@ public static class PlanningMapper
             projectFeatures.TryGetValue(link.BlockedByFeatureId, out var blocker) &&
             !FeatureDependencyEntry.IsClosed(blocker.Status));
 
+    public static WaveSnapshotResponse ToWaveSnapshotResponse(WaveSnapshotData snapshot)
+    {
+        var graph = snapshot.QueueFeatures.ToDictionary(f => f.Id);
+        var laneHolders = LaneHoldersByLane(snapshot.QueueFeatures, snapshot.ClaimLiveness);
+        var overlaps = CodeSurfaceOverlapProjection.Compute([.. snapshot.QueueFeatures.Select(ToSurfaceRow)]);
+
+        return new WaveSnapshotResponse(
+            snapshot.ProjectId,
+            snapshot.GeneratedAt,
+            [.. snapshot.CoordinationTags],
+            [.. snapshot.QueueFeatures.Select(f =>
+                ToQueueItem(
+                    f, graph, snapshot.ClaimLiveness.GetValueOrDefault(f.Id),
+                    laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
+                    overlaps.GetValueOrDefault(f.Id),
+                    snapshot.OpenDirectiveCounts.GetValueOrDefault(f.Id)))],
+            [.. snapshot.QueueFeatures
+                .Where(f => f.ClaimSessionId is not null)
+                .Select(f => ToSnapshotClaim(f, snapshot.ClaimLiveness.GetValueOrDefault(f.Id)))],
+            [.. snapshot.InFlightFeatures.Select(f =>
+                new WaveSnapshotCodeLocation(f.Slug, f.PinnedBranch, f.PinnedWorktreePath))],
+            [.. snapshot.QueueFeatures
+                .Select(f => (Slug: f.Slug, Open: OpenBlockerSlugs(f, graph)))
+                .Where(row => row.Open.Length > 0)
+                .Select(row => new WaveSnapshotBlockers(row.Slug, row.Open))],
+            [.. snapshot.CoordinationEntries.Select(ToSnapshotEntry)]);
+    }
+
+    private static WaveSnapshotClaim ToSnapshotClaim(PlanningFeature feature, AgentSessionLiveness claimState) =>
+        new(
+            feature.Slug,
+            feature.ClaimedByAlias!,
+            feature.ClaimedByVendor!,
+            feature.ClaimedAt!.Value,
+            claimState,
+            feature.ClaimedByHuman,
+            feature.UpdatedAt,
+            feature.QueuePosition,
+            feature.Priority,
+            feature.Status);
+
+    private static WaveSnapshotEntry ToSnapshotEntry(ContextEntry entry) =>
+        new(
+            entry.Id,
+            entry.Type,
+            entry.Title,
+            [.. entry.EntryTags
+                .Where(t => t.Tag is not null)
+                .Select(t => t.Tag!.Name)
+                .OrderBy(name => name, StringComparer.Ordinal)],
+            Clip(entry.Content),
+            entry.UpdatedAt);
+
+    private static string Clip(string content)
+    {
+        const int cap = 200;
+        var flattened = string.Join(' ', content
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0));
+
+        var info = new StringInfo(flattened);
+        return info.LengthInTextElements <= cap
+            ? flattened
+            : info.SubstringByTextElements(0, cap) + "…";
+    }
+
     public static PlanningFeatureResponse ToFeatureResponse(
         PlanningFeature feature, FeatureDependencies dependencies,
         IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null,
-        AgentSessionLiveness? claimState = null)
+        AgentSessionLiveness? claimState = null,
+        string[]? codeSurfaces = null,
+        IReadOnlyList<FeatureOverlapRow>? overlaps = null,
+        IReadOnlyList<PlanningDirective>? openDirectives = null)
     {
         return new PlanningFeatureResponse(
             feature.Slug,
@@ -154,13 +272,20 @@ public static class PlanningMapper
             feature.ClaimSessionId is null ? null : claimState,
             feature.ClaimedByHuman,
             feature.PinnedBranch,
-            feature.PinnedWorktreePath);
+            feature.PinnedWorktreePath,
+            feature.Lane,
+            codeSurfaces ?? CodeSurfacesJson.Deserialize(feature.CodeSurfaces).ToArray(),
+            Overlaps(overlaps),
+            ToOpenDirectives(openDirectives ?? []));
     }
 
     public static PlanningFeatureRosterResponse ToFeatureRosterResponse(
         PlanningFeature feature, FeatureDependencies dependencies,
         IReadOnlyDictionary<int, TaskBlockedState>? blockedStates = null,
-        AgentSessionLiveness? claimState = null)
+        AgentSessionLiveness? claimState = null,
+        string[]? codeSurfaces = null,
+        IReadOnlyList<FeatureOverlapRow>? overlaps = null,
+        int openDirectiveCount = 0)
     {
         return new PlanningFeatureRosterResponse(
             feature.Slug,
@@ -185,7 +310,11 @@ public static class PlanningMapper
             feature.ClaimSessionId is null ? null : claimState,
             feature.ClaimedByHuman,
             feature.PinnedBranch,
-            feature.PinnedWorktreePath);
+            feature.PinnedWorktreePath,
+            openDirectiveCount,
+            feature.Lane,
+            codeSurfaces ?? CodeSurfacesJson.Deserialize(feature.CodeSurfaces).ToArray(),
+            Overlaps(overlaps));
     }
 
     public static PlanningFeatureDependenciesResponse ToDependenciesResponse(FeatureDependencies dependencies)

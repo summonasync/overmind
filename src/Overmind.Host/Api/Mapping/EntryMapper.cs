@@ -24,6 +24,11 @@ public static class EntryMapper
             entry.SkillFiles
                 .Select(f => new SkillFileDto(f.Platform, f.RelativePath, f.Content))
                 .OrderBy(f => f.RelativePath, StringComparer.Ordinal)
+                .ToArray(),
+            entry.Acks
+                .OrderBy(a => a.At)
+                .ThenBy(a => a.Id)
+                .Select(a => new EntryReadAck(a.Alias, a.Vendor, a.At))
                 .ToArray());
     }
 

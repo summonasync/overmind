@@ -1,10 +1,12 @@
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
 using Overmind.Infrastructure.VectorSearch;
 
@@ -22,6 +24,10 @@ public static class EntriesApi
         group.MapPut("/entries/{id:guid}", Update);
         group.MapDelete("/entries/{id:guid}", Delete);
         group.MapGet("/entries/{id:guid}/versions", ListVersions);
+        group.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForHuman);
+
+        var agent = routes.MapGroup("/api/agent");
+        agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
 
         return group;
     }
@@ -49,6 +55,7 @@ public static class EntriesApi
             var entries = await db.ContextEntries
                 .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
                 .Include(e => e.SkillFiles)
+                .Include(e => e.Acks)
                 .AsSplitQuery()
                 .Where(e => hitIds.Contains(e.Id))
                 .ToListAsync(ct);
@@ -66,6 +73,7 @@ public static class EntriesApi
         var query = db.ContextEntries
             .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
             .Include(e => e.SkillFiles)
+            .Include(e => e.Acks)
             .AsSplitQuery()
             .Where(e => e.ProjectId == projectId);
 
@@ -158,6 +166,7 @@ public static class EntriesApi
         var entry = await db.ContextEntries
             .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
             .Include(e => e.SkillFiles)
+            .Include(e => e.Acks)
             .FirstOrDefaultAsync(e => e.Id == id, ct);
 
         if (entry is null)
@@ -290,8 +299,77 @@ public static class EntriesApi
         return await db.ContextEntries
             .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
             .Include(e => e.SkillFiles)
+            .Include(e => e.Acks)
             .FirstOrDefaultAsync(e => e.Id == id, ct);
     }
+
+    internal static async Task<IResult> AckForAgent(
+        Guid projectId,
+        Guid entryId,
+        EntryAckService acks,
+        OvermindDbContext db,
+        HttpRequest http,
+        CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var sessionId))
+        {
+            return AgentIdentityRequired();
+        }
+
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null)
+        {
+            return AgentIdentityRequired();
+        }
+
+        return await AckAsync(
+            projectId, entryId, new DirectiveAuthor(session.Alias, session.Vendor, session.Id), acks, ct);
+    }
+
+    internal static async Task<IResult> AckForHuman(
+        Guid projectId,
+        Guid entryId,
+        EntryAckService acks,
+        IValidator<EntryAckHumanRequest> validator,
+        [FromBody] EntryAckHumanRequest? request,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request ?? new EntryAckHumanRequest(null, null), ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        return await AckAsync(projectId, entryId, new DirectiveAuthor(request?.Alias, request?.Vendor, null), acks, ct);
+    }
+
+    private static async Task<IResult> AckAsync(
+        Guid projectId,
+        Guid entryId,
+        DirectiveAuthor author,
+        EntryAckService acks,
+        CancellationToken ct)
+    {
+        try
+        {
+            var outcome = await acks.AckAsync(projectId, entryId, author, ct);
+            return Results.Ok(new EntryAckResponse(
+                outcome.Ack.ContextEntryId,
+                outcome.AckedNow,
+                outcome.Ack.Alias,
+                outcome.Ack.Vendor,
+                outcome.Ack.At));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    private static IResult AgentIdentityRequired() =>
+        HttpErrors.BadRequest(
+            $"Entry acknowledgement requires the {SessionHeader.Name} header and a registered agent session — " +
+            "register via POST /api/agent/sessions.");
 
     private static async Task<List<Tag>> ResolveTagsAsync(OvermindDbContext db, string[]? names, CancellationToken ct)
     {

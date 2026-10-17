@@ -12,7 +12,7 @@ public static class PlanningQueueApi
 {
     internal static async Task<IResult> QueueRead(
         Guid projectId, int? limit, OvermindDbContext db, FeatureClaimService claims,
-        CancellationToken ct)
+        DirectiveService directives, CancellationToken ct)
     {
         if (limit is < 1)
         {
@@ -34,10 +34,17 @@ public static class PlanningQueueApi
             .ThenBy(f => f.Slug)
             .ToList();
 
-        var claimLiveness = await claims.ClaimLivenessAsync(projectId, queue, ct);
+        var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
+        var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
+        var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(new PlanningQueueResponse(queue
             .Take(limit ?? queue.Count)
-            .Select(f => PlanningMapper.ToQueueItem(f, graph, claimLiveness.GetValueOrDefault(f.Id)))
+            .Select(f => PlanningMapper.ToQueueItem(
+                f, graph, claimLiveness.GetValueOrDefault(f.Id),
+                laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
+                overlapIndex.GetValueOrDefault(f.Id),
+                directiveCounts.GetValueOrDefault(f.Id)))
             .ToArray()));
     }
 
@@ -48,6 +55,7 @@ public static class PlanningQueueApi
         IValidator<PlanningQueueMoveRequest> validator,
         FeatureQueueService queue,
         FeatureClaimService claims,
+        DirectiveService directives,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -81,9 +89,15 @@ public static class PlanningQueueApi
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
         }
 
+        var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
+        var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
+        var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(PlanningMapper.ToQueueItem(
-            moved, features.ToDictionary(f => f.Id),
-            (await claims.ClaimLivenessAsync(projectId, [moved], ct)).GetValueOrDefault(moved.Id)));
+            moved, features.ToDictionary(f => f.Id), claimLiveness.GetValueOrDefault(moved.Id),
+            laneHolders.GetValueOrDefault(moved.Lane ?? string.Empty),
+            overlapIndex.GetValueOrDefault(moved.Id),
+            directiveCounts.GetValueOrDefault(moved.Id)));
     }
 
     internal static async Task<IResult> Reorder(
@@ -92,6 +106,7 @@ public static class PlanningQueueApi
         IValidator<PlanningQueueReorderRequest> validator,
         FeatureQueueService queue,
         FeatureClaimService claims,
+        DirectiveService directives,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -120,10 +135,17 @@ public static class PlanningQueueApi
         var features = await LoadProjectFeatures(db, projectId, ct);
         var graph = features.ToDictionary(f => f.Id);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
+        var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
+        var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(new PlanningQueueResponse(features
             .Where(f => f.Priority == priority && f.Status != PlanningFeatureStatus.Done)
             .OrderBy(f => f.QueuePosition)
-            .Select(f => PlanningMapper.ToQueueItem(f, graph, claimLiveness.GetValueOrDefault(f.Id)))
+            .Select(f => PlanningMapper.ToQueueItem(
+                f, graph, claimLiveness.GetValueOrDefault(f.Id),
+                laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
+                overlapIndex.GetValueOrDefault(f.Id),
+                directiveCounts.GetValueOrDefault(f.Id)))
             .ToArray()));
     }
 

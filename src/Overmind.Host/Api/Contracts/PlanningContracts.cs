@@ -23,7 +23,11 @@ public sealed record PlanningFeatureBoardItem(
     AgentSessionLiveness? ClaimState,
     bool ClaimedByHuman,
     string Phase,
-    string? BriefExcerpt);
+    string? BriefExcerpt,
+    int OpenDirectiveCount,
+    string? Lane = null,
+    LaneHolderResponse? LaneHolder = null,
+    PotentialOverlap[]? PotentialOverlaps = null);
 
 public sealed record PlanningQueueItem(
     string Slug,
@@ -46,7 +50,11 @@ public sealed record PlanningQueueItem(
     AgentSessionLiveness? ClaimState,
     bool ClaimedByHuman,
     string Phase,
-    string? BriefExcerpt);
+    string? BriefExcerpt,
+    int OpenDirectiveCount,
+    string? Lane = null,
+    LaneHolderResponse? LaneHolder = null,
+    PotentialOverlap[]? PotentialOverlaps = null);
 
 public sealed record PlanningTaskCounts(int Todo, int InProgress, int Review, int Done, int Blocked);
 
@@ -59,10 +67,12 @@ public sealed record PlanningQueueReorderRequest(string Priority, string[] Slugs
 public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body, string? Priority = null);
 
 public sealed record UpdatePlanningFeatureRequest(
-    string? Title, string? Body, PlanningFeatureStatus? Status, string? Priority = null);
+    string? Title, string? Body, PlanningFeatureStatus? Status, string? Priority = null, string? Lane = null,
+    string[]? CodeSurfaces = null);
 
 public sealed record UpdatePlanningFeatureByAgentRequest(
-    string? Title, string? Body, string? Priority, string LogNote);
+    string? Title, string? Body, string? Priority, string LogNote, string? Lane = null,
+    string[]? CodeSurfaces = null);
 
 public sealed record SetPlanningFeaturePriorityRequest(string Priority);
 
@@ -75,7 +85,7 @@ public sealed record PlanningFeatureCodePinResponse(
     int Version,
     string LastLogLine);
 
-public sealed record ClaimPlanningFeatureRequest(string Alias, string Vendor);
+public sealed record ClaimPlanningFeatureRequest(string Alias, string Vendor, bool OverrideLaneCheck = false);
 
 public sealed record PlanningFeatureClaimResponse(
     string Slug,
@@ -83,7 +93,34 @@ public sealed record PlanningFeatureClaimResponse(
     string? ClaimedByVendor,
     DateTime? ClaimedAt,
     AgentSessionLiveness? ClaimState,
-    bool ClaimedByHuman);
+    bool ClaimedByHuman,
+    string? Lane = null,
+    bool OverrideLaneCheck = false);
+
+public sealed record LaneUpsertRequest(string Name, string? Contour = null, int? SerialOrder = null);
+
+public sealed record SetLanesRequest(LaneUpsertRequest[] Lanes);
+
+public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
+
+public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs);
+
+public sealed record LaneFeatureResponse(
+    string Slug,
+    PlanningFeatureStatus Status,
+    string? ClaimedByAlias,
+    string? ClaimedByVendor,
+    AgentSessionLiveness? ClaimState);
+
+public sealed record LaneRowResponse(
+    string Name,
+    string? Contour,
+    int? SerialOrder,
+    int OpenFeatureCount,
+    LaneHolderResponse? Holder,
+    LaneFeatureResponse[] Features);
+
+public sealed record LanesResponse(LaneRowResponse[] Lanes);
 
 public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
 
@@ -106,7 +143,32 @@ public sealed record PlanningFeatureResponse(
     AgentSessionLiveness? ClaimState,
     bool ClaimedByHuman,
     string? PinnedBranch,
-    string? PinnedWorktreePath);
+    string? PinnedWorktreePath,
+    string? Lane = null,
+    string[]? CodeSurfaces = null,
+    PotentialOverlap[]? PotentialOverlaps = null,
+    OpenDirectiveResponse[]? OpenDirectives = null);
+
+public sealed record OpenDirectiveResponse(
+    Guid Id,
+    string Text,
+    string? AuthorAlias,
+    string? AuthorVendor,
+    DateTime CreatedAt,
+    bool Ack);
+
+public sealed record AppendPlanningDirectiveRequest(string Text);
+
+public sealed record AppendPlanningDirectiveHumanRequest(string Text, string? Alias = null, string? Vendor = null);
+
+public sealed record AckPlanningDirectiveRequest(string? Alias = null, string? Vendor = null);
+
+public sealed record DirectiveAckResponse(
+    Guid Id,
+    bool Ack,
+    string? AckByAlias,
+    string? AckVendor,
+    DateTime? AckAt);
 
 public sealed record PlanningFeatureRosterResponse(
     string Slug,
@@ -127,7 +189,11 @@ public sealed record PlanningFeatureRosterResponse(
     AgentSessionLiveness? ClaimState,
     bool ClaimedByHuman,
     string? PinnedBranch,
-    string? PinnedWorktreePath);
+    string? PinnedWorktreePath,
+    int OpenDirectiveCount,
+    string? Lane = null,
+    string[]? CodeSurfaces = null,
+    PotentialOverlap[]? PotentialOverlaps = null);
 
 public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
 
@@ -321,7 +387,8 @@ public sealed record PlanningCurrentResponse(
 public sealed record PlanningCurrentFeature(
     string Slug,
     string Title,
-    PlanningFeatureStatus Status);
+    PlanningFeatureStatus Status,
+    OpenDirectiveResponse[]? OpenDirectives = null);
 
 public sealed record MaterializePlanningRequest(bool Force);
 
@@ -401,3 +468,37 @@ public sealed record PlanningDriftResponse(
 public sealed record PlanningExportRequest(string TargetPath);
 
 public sealed record PlanningExportResponse(Guid ProjectId, string Target, int FileCount);
+
+public sealed record WaveSnapshotResponse(
+    Guid ProjectId,
+    DateTime GeneratedAt,
+    string[] CoordinationTags,
+    PlanningQueueItem[] Queue,
+    WaveSnapshotClaim[] Claims,
+    WaveSnapshotCodeLocation[] CodeLocations,
+    WaveSnapshotBlockers[] OpenBlockers,
+    WaveSnapshotEntry[] Entries);
+
+public sealed record WaveSnapshotClaim(
+    string Slug,
+    string ClaimedByAlias,
+    string ClaimedByVendor,
+    DateTime ClaimedAt,
+    AgentSessionLiveness ClaimState,
+    bool ClaimedByHuman,
+    DateTime LastActivityAt,
+    int QueuePosition,
+    FeaturePriority Priority,
+    PlanningFeatureStatus Status);
+
+public sealed record WaveSnapshotCodeLocation(string Slug, string? PinnedBranch, string? PinnedWorktreePath);
+
+public sealed record WaveSnapshotBlockers(string Slug, string[] OpenBlockers);
+
+public sealed record WaveSnapshotEntry(
+    Guid Id,
+    EntryType Type,
+    string Title,
+    string[] Tags,
+    string Snippet,
+    DateTime UpdatedAt);

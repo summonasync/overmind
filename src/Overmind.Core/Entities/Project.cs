@@ -37,6 +37,7 @@ public sealed partial class Project
     public string? Manifest { get; private set; }
     public ProjectNumberStyle NumberStyle { get; private set; } = ProjectNumberStyle.Hash;
     public string? NumberPrefix { get; private set; }
+    public List<PlanningLane> Lanes { get; private set; } = [];
 
     public static Project Create(string name, string diskPath, string description = "")
     {

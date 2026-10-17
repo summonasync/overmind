@@ -52,6 +52,7 @@ public static class AgentPlanningApi
         group.MapPost("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.CreateFeature);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
         group.MapGet("/projects/{projectId:guid}/planning/task-queue", PlanningQueueApi.QueueRead);
+        group.MapGet("/projects/{projectId:guid}/planning/wave-snapshot", WaveSnapshotApi.Snapshot);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
@@ -99,8 +100,9 @@ public static class AgentPlanningApi
 
         try
         {
-            var feature = await claims.ClaimAsync(projectId, slug, request.Alias, request.Vendor, sessionId, ct);
-            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+            var feature = await claims.ClaimAsync(
+                projectId, slug, request.Alias, request.Vendor, sessionId, request.OverrideLaneCheck, ct);
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, request.OverrideLaneCheck, ct));
         }
         catch (PlanningException ex)
         {
@@ -128,7 +130,7 @@ public static class AgentPlanningApi
         try
         {
             var feature = await claims.UnclaimAsync(projectId, slug, sessionId, ct);
-            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, overrideLaneCheck: false, ct));
         }
         catch (PlanningException ex)
         {
@@ -144,6 +146,7 @@ public static class AgentPlanningApi
         FeatureClaimService claims,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
+        DirectiveService directives,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -155,7 +158,7 @@ public static class AgentPlanningApi
 
         try
         {
-            await service.UpdateAsync(projectId, slug, null, null, null, parsed, ct);
+            await service.UpdateAsync(projectId, slug, null, null, null, parsed, lane: null, codeSurfaces: null, ct);
         }
         catch (PlanningException ex)
         {
@@ -167,7 +170,8 @@ public static class AgentPlanningApi
             feature!,
             await dependencies.ListDependenciesAsync(projectId, slug, ct),
             await PlanningFeaturesApi.BlockedStatesAsync(taskDependencies, feature!, ct),
-            (await claims.ClaimLivenessAsync(projectId, [feature!], ct)).GetValueOrDefault(feature!.Id)));
+            (await claims.ClaimLivenessAsync(projectId, [feature!], ct)).GetValueOrDefault(feature!.Id),
+            openDirectives: await directives.ListOpenAsync(feature!.Id, ct)));
     }
 
     internal static async Task<IResult> ImportFeature(
@@ -457,7 +461,7 @@ public static class AgentPlanningApi
         {
             var feature = await service.UpdateAsync(
                 projectId, slug, request.Title, request.Body,
-                priority, request.LogNote, PlanningLogSource.Agent, ct);
+                priority, request.LogNote, PlanningLogSource.Agent, request.Lane, request.CodeSurfaces, ct);
 
             return Results.Ok(new PlanningFeatureAgentUpdateResponse(
                 feature.Slug, feature.Status, feature.Version, feature.UpdatedAt, feature.Body.Length));
@@ -474,6 +478,7 @@ public static class AgentPlanningApi
         PlanningPolicy policy,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
+        DirectiveService directives,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -491,7 +496,9 @@ public static class AgentPlanningApi
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
         }
 
-        var currentFeature = new PlanningCurrentFeature(feature.Slug, feature.Title, feature.Status);
+        var currentFeature = new PlanningCurrentFeature(
+            feature.Slug, feature.Title, feature.Status,
+            PlanningMapper.ToOpenDirectives(await directives.ListOpenAsync(feature.Id, ct)));
 
         var openBlockers = await dependencies.OpenBlockersAsync(projectId, slug, ct);
         if (openBlockers.Count > 0)

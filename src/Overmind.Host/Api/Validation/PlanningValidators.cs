@@ -21,6 +21,20 @@ public sealed class UpdatePlanningFeatureRequestValidator : AbstractValidator<Up
         {
             RuleFor(x => x.Title).MaximumLength(200);
         });
+
+        RuleFor(x => x.Lane)
+            .MaximumLength(PlanningLane.MaxNameLength)
+            .When(x => x.Lane is not null);
+
+        RuleFor(x => x.CodeSurfaces)
+            .Must(s => s!.Length <= PlanningFeature.MaxCodeSurfaces)
+            .WithMessage(CodeSurfaceRules.SetSizeMessage)
+            .When(x => x.CodeSurfaces is not null);
+
+        RuleForEach(x => x.CodeSurfaces)
+            .Must(CodeSurfaceRules.IsValidEntry)
+            .WithMessage(CodeSurfaceRules.EntryMessage)
+            .When(x => x.CodeSurfaces is not null);
     }
 }
 
@@ -35,8 +49,9 @@ public sealed class UpdatePlanningFeatureByAgentRequestValidator
         RuleFor(x => x.LogNote).NotEmpty();
 
         RuleFor(x => x)
-            .Must(x => x.Title is not null || x.Body is not null || x.Priority is not null)
-            .WithMessage("Provide at least one editable field: title, body, priority.");
+            .Must(x => x.Title is not null || x.Body is not null || x.Priority is not null ||
+                       x.Lane is not null || x.CodeSurfaces is not null)
+            .WithMessage("Provide at least one editable field: title, body, priority, lane, codeSurfaces.");
 
         RuleFor(x => x.Title)
             .Must(t => !string.IsNullOrWhiteSpace(t))
@@ -52,6 +67,36 @@ public sealed class UpdatePlanningFeatureByAgentRequestValidator
             .Must(p => Enum.TryParse(p, ignoreCase: true, out FeaturePriority parsed) && Enum.IsDefined(parsed))
             .WithMessage($"Must be one of: {allowedPriorities}.")
             .When(x => x.Priority is not null);
+
+        RuleFor(x => x.Lane)
+            .MaximumLength(PlanningLane.MaxNameLength)
+            .When(x => x.Lane is not null);
+
+        RuleFor(x => x.CodeSurfaces)
+            .Must(s => s!.Length <= PlanningFeature.MaxCodeSurfaces)
+            .WithMessage(CodeSurfaceRules.SetSizeMessage)
+            .When(x => x.CodeSurfaces is not null);
+
+        RuleForEach(x => x.CodeSurfaces)
+            .Must(CodeSurfaceRules.IsValidEntry)
+            .WithMessage(CodeSurfaceRules.EntryMessage)
+            .When(x => x.CodeSurfaces is not null);
+    }
+}
+
+public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest>
+{
+    public SetLanesRequestValidator()
+    {
+        RuleFor(x => x.Lanes).NotNull()
+            .WithMessage("The roster must be an array of lane objects; an empty array clears the roster.");
+
+        RuleForEach(x => x.Lanes).ChildRules(lane =>
+        {
+            lane.RuleFor(l => l.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
+            lane.RuleFor(l => l.Contour).MaximumLength(PlanningLane.MaxContourLength);
+            lane.RuleFor(l => l.SerialOrder).GreaterThanOrEqualTo(0).When(l => l.SerialOrder.HasValue);
+        });
     }
 }
 
@@ -242,5 +287,23 @@ public sealed class PlanningQueueReorderRequestValidator : AbstractValidator<Pla
             .When(x => x.Slugs is not null);
         RuleForEach(x => x.Slugs).NotEmpty()
             .WithMessage("Every slug in the reorder list must be non-empty.");
+    }
+}
+
+public sealed class AppendPlanningDirectiveRequestValidator : AbstractValidator<AppendPlanningDirectiveRequest>
+{
+    public AppendPlanningDirectiveRequestValidator()
+    {
+        RuleFor(x => x.Text).NotEmpty().MaximumLength(PlanningDirective.MaxTextLength);
+    }
+}
+
+public sealed class AppendPlanningDirectiveHumanRequestValidator : AbstractValidator<AppendPlanningDirectiveHumanRequest>
+{
+    public AppendPlanningDirectiveHumanRequestValidator()
+    {
+        RuleFor(x => x.Text).NotEmpty().MaximumLength(PlanningDirective.MaxTextLength);
+        RuleFor(x => x.Alias).MaximumLength(PlanningDirective.MaxIdentityLength);
+        RuleFor(x => x.Vendor).MaximumLength(PlanningDirective.MaxIdentityLength);
     }
 }

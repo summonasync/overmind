@@ -66,7 +66,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheFortyNineTools()
+    public async Task ToolsList_ExposesExactlyTheFiftyFiveTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -76,22 +76,24 @@ public class HandshakeContractTests : McpSessionTestBase
             .ToArray();
 
         names.ShouldBe([
+            "ack_entry",
             "delete_entry",
             "issues_append",
             "issues_create", "issues_get", "issues_list", "issues_promote", "issues_set_status",
             "list_entries", "list_projects", "overmind_briefing", "overmind_notify", "overmind_onboard",
-            "overmind_replies", "planning_add_feature_dependency",
+            "overmind_replies", "overmind_wave_snapshot",
+            "planning_ack_directive", "planning_add_feature_dependency", "planning_append_directive",
             "planning_append_log",
             "planning_claim_feature",
             "planning_create_feature", "planning_current_task",
             "planning_delete_artifact", "planning_edit_log", "planning_export_backlog", "planning_feature_code", "planning_import_feature",
-            "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features",
+            "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features", "planning_list_lanes",
             "planning_materialize", "planning_materialize_status", "planning_move_feature",
             "planning_patch_artifact",
             "planning_pin_feature_code",
             "planning_read_artifact", "planning_read_artifact_diff", "planning_read_feature",
             "planning_remove_feature_dependency",
-            "planning_set_feature_priority", "planning_set_feature_status", "planning_set_status",
+            "planning_set_feature_priority", "planning_set_feature_status", "planning_set_lanes", "planning_set_status",
             "planning_task_queue", "planning_unclaim_feature", "planning_update_feature",
             "planning_upsert_artifact",
             "planning_upsert_tasks", "planning_validate",

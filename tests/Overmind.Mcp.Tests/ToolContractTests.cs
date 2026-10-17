@@ -691,6 +691,27 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task AckEntry_Description_PinsThePureReadsAndTheOwnerContract()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["ack_entry"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("readBy row");
+        description.ShouldContain("The entry body, its version and UpdatedAt are never touched");
+        description.ShouldContain("reads stay pure");
+        description.ShouldContain("owner-only body writes are unchanged");
+        description.ShouldContain("idempotent no-op");
+        description.ShouldContain("projectId is required");
+
+        var properties = tools["ack_entry"]!["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("entryId");
+        properties.ShouldContainKey("projectId");
+    }
+
+    [Fact]
     public async Task ReadEntry_NotFound_MapsToToolError()
     {
         Stub.Route("GET", $"/api/entries/{Canned.MissingEntryId}", 404, Canned.NotFoundJson);

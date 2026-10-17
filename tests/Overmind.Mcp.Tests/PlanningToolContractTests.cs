@@ -148,7 +148,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
 
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(31);
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(35);
     }
 
     [Fact]
@@ -2103,9 +2103,14 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldBe(
-            "Partial edit of a feature's title, body, or priority — durable what/why stays correctable by agents. " +
+            "Partial edit of a feature's title, body, priority, lane, or codeSurfaces — durable what/why stays correctable by agents. " +
             "logNote is mandatory and lands as a dated line in the feature log. " +
             "A priority change moves the feature to the tail of its priority band. " +
+            "lane assigns the feature to a lane roster entry by name (must exist — planning_set_lanes owns the roster; " +
+            "empty string clears the lane, omit to keep). " +
+            "codeSurfaces declares the repo-relative glob patterns this feature touches (e.g. src/web/**) — advisory only: " +
+            "the queue, board and wave-snapshot rows project potentialOverlaps between in-flight features so coordinators " +
+            "see cross-lane collisions; an empty array clears the surfaces, omit to keep. " +
             "Status is not editable here — use planning_set_feature_status.");
     }
 
@@ -2126,6 +2131,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         required.ShouldNotContain("title");
         required.ShouldNotContain("body");
         required.ShouldNotContain("priority");
+        required.ShouldNotContain("codeSurfaces");
 
         var properties = tool["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("projectId");
@@ -2134,6 +2140,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         properties.ShouldContainKey("title");
         properties.ShouldContainKey("body");
         properties.ShouldContainKey("priority");
+        properties.ShouldContainKey("codeSurfaces");
     }
 
     [Fact]
@@ -2161,6 +2168,36 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         var echo = JsonNode.Parse(Canned.ToolResultText(response))!;
         JsonNode.DeepEquals(echo, JsonNode.Parse(Canned.PlanningFeatureUpdateEchoJson)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task PlanningUpdateFeature_PostsCodeSurfacesArray_PassesThroughIncludingEmptyClear()
+    {
+        await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["logNote"] = "declaring surfaces",
+            ["codeSurfaces"] = new JsonArray("src/web/**", "src/api/**/*.cs")
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/update", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body["codeSurfaces"]!.AsArray().Select(v => v!.GetValue<string>())
+            .ShouldBe(["src/web/**", "src/api/**/*.cs"]);
+
+        await Driver.CallToolAsync("planning_update_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["logNote"] = "clearing surfaces",
+            ["codeSurfaces"] = new JsonArray()
+        });
+
+        var clear = Stub.Requests.Last(r =>
+            r.Method == "POST" && r.Path.EndsWith("/update", StringComparison.Ordinal));
+        JsonNode.Parse(clear.Body)!["codeSurfaces"]!.AsArray().Count.ShouldBe(0);
     }
 
     [Fact]

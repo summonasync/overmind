@@ -7,7 +7,8 @@ namespace Overmind.Host.Api;
 public static class FeatureClaimEcho
 {
     public static async Task<PlanningFeatureClaimResponse> ForAsync(
-        FeatureClaimService claims, Guid projectId, PlanningFeature feature, CancellationToken ct) =>
+        FeatureClaimService claims, Guid projectId, PlanningFeature feature,
+        bool overrideLaneCheck, CancellationToken ct) =>
         new(feature.Slug,
             feature.ClaimedByAlias,
             feature.ClaimedByVendor,
@@ -16,5 +17,7 @@ public static class FeatureClaimEcho
                 ? null
                 : (await claims.ClaimLivenessAsync(projectId, [feature], ct))
                     .GetValueOrDefault(feature.Id),
-            feature.ClaimedByHuman);
+            feature.ClaimedByHuman,
+            feature.Lane,
+            overrideLaneCheck);
 }

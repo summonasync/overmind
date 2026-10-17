@@ -16,6 +16,11 @@ public sealed class ClaimLockFilter : IEndpointFilter
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var http = context.HttpContext;
+        if (http.GetEndpoint()?.Metadata.GetMetadata<OpenCoordinationSurface>() is not null)
+        {
+            return await next(context);
+        }
+
         if (SessionHeader.TryRead(http.Request, out var sessionId))
         {
             var route = http.Request.RouteValues;

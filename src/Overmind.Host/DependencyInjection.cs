@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<UpdateClaimSettingsRequest>, UpdateClaimSettingsRequestValidator>();
         services.AddSingleton<IValidator<CreateEntryRequest>, CreateEntryRequestValidator>();
         services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
+        services.AddSingleton<IValidator<EntryAckHumanRequest>, EntryAckHumanRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();
         services.AddSingleton<IValidator<UpdateKitRequest>, UpdateKitRequestValidator>();
         services.AddSingleton<IValidator<KitScanRequest>, KitScanRequestValidator>();
@@ -83,6 +84,9 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<AddPlanningFeatureDependencyRequest>, AddPlanningFeatureDependencyRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueMoveRequest>, PlanningQueueMoveRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
+        services.AddSingleton<IValidator<SetLanesRequest>, SetLanesRequestValidator>();
+        services.AddSingleton<IValidator<AppendPlanningDirectiveRequest>, AppendPlanningDirectiveRequestValidator>();
+        services.AddSingleton<IValidator<AppendPlanningDirectiveHumanRequest>, AppendPlanningDirectiveHumanRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();
         services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
         services.AddSingleton<IValidator<CreateNotificationRequest>, CreateNotificationRequestValidator>();
@@ -122,10 +126,14 @@ public static class DependencyInjection
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningStatusBackfill>();
         services.AddScoped<FeatureClaimService>();
+        services.AddScoped<LaneService>();
+        services.AddScoped<DirectiveService>();
+        services.AddScoped<EntryAckService>();
         services.AddScoped<IssueService>();
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<FeatureDependencyService>();
         services.AddScoped<FeatureQueueService>();
+        services.AddScoped<WaveSnapshotService>();
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();

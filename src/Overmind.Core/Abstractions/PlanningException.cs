@@ -310,4 +310,41 @@ public sealed class PlanningException : Exception
 
     private static string FormatAcItems(IReadOnlyList<PlanningAcItem> items) =>
         string.Join("; ", items.Select(i => $"{i.Index}: {i.RawText}"));
+
+    public static PlanningException LaneNameDuplicate(string name) =>
+        new(PlanningFailureKind.Duplicate, PlanningFailureCode.LaneNameDuplicate,
+            $"A lane named '{name}' appears more than once in the roster; lane names are unique per project (case-insensitive).");
+
+    public static PlanningException LaneRosterTooLarge(int count, int cap) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneRosterTooLarge,
+            $"The roster carries {count} lanes; a project holds at most {cap}.");
+
+    public static PlanningException LaneNotInRoster(string lane, IReadOnlyList<string> rosterNames) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneNotInRoster,
+            $"Lane '{lane}' is not in the project roster; features join a lane only by roster name. " +
+            $"Roster present: {(rosterNames.Count == 0 ? "(empty)" : string.Join(", ", rosterNames))}. " +
+            "Extend the roster via planning_set_lanes first.");
+
+    public static PlanningException LaneClaimHeld(
+        string lane, string slug, string alias, string vendor, AgentSessionLiveness liveness) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneClaimHeld,
+            $"Lane '{lane}' is busy: feature '{slug}' holds an alive claim by {alias} by {vendor} " +
+            $"({liveness.ToString().ToLowerInvariant()}). One agent owns a lane at a time — " +
+            "pick a feature outside this lane, or resend with overrideLaneCheck=true to claim anyway.");
+
+    public static PlanningException MissingDirective(Guid directiveId) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingDirective,
+            $"Directive '{directiveId}' was not found on this feature — it may live on another feature, " +
+            "or it was never appended; planning_read_feature lists the open directives with their ids.");
+
+    public static PlanningException LaneSerialBusy(string lane, string openSlug) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneSerialBusy,
+            $"Lane '{lane}' is serial: feature '{openSlug}' is still open in this lane. " +
+            "One feature at a time within a lane — finish it first, or resend with " +
+            "overrideLaneCheck=true to claim anyway.");
+
+    public static PlanningException MissingEntry(Guid entryId) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingEntry,
+            $"Entry '{entryId}' was not found in this project — it may belong to another project, " +
+            "or it was never written; list_entries lists the project's entries with their ids.");
 }

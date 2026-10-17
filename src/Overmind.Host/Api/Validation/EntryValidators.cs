@@ -29,6 +29,15 @@ public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryR
     }
 }
 
+public sealed class EntryAckHumanRequestValidator : AbstractValidator<EntryAckHumanRequest>
+{
+    public EntryAckHumanRequestValidator()
+    {
+        RuleFor(x => x.Alias).MaximumLength(EntryAck.MaxIdentityLength);
+        RuleFor(x => x.Vendor).MaximumLength(EntryAck.MaxIdentityLength);
+    }
+}
+
 public sealed class UpdateEntryRequestValidator : AbstractValidator<UpdateEntryRequest>
 {
     public UpdateEntryRequestValidator()

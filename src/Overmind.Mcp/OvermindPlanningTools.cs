@@ -81,9 +81,6 @@ public sealed class OvermindPlanningTools
     private const string ArtifactAddressRequired =
         "Provide artifactId, or alias together with projectId — nothing addresses the artifact.";
 
-    private const string ProjectIdRequired =
-        "projectId is required for planning_* tools — entries tools resolve the project from cwd, planning tools do not.";
-
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
 
@@ -101,7 +98,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         return Guarded(() => _api.GetAsync($"/api/agent/projects/{projectId}/planning/features", ct));
@@ -117,7 +114,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var url = $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}";
@@ -140,7 +137,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var url = $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/artifacts";
@@ -247,7 +244,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var payload = await Guarded(() => _api.GetAsync(
@@ -267,7 +264,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var payload = new JsonObject
@@ -305,7 +302,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var payload = new JsonObject
@@ -345,7 +342,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var payload = new JsonObject
@@ -529,7 +526,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         if (string.IsNullOrWhiteSpace(logNote))
@@ -546,19 +543,21 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_update_feature", Destructive = false, Idempotent = false)]
-    [Description("Partial edit of a feature's title, body, or priority — durable what/why stays correctable by agents. logNote is mandatory and lands as a dated line in the feature log. A priority change moves the feature to the tail of its priority band. Status is not editable here — use planning_set_feature_status.")]
+    [Description("Partial edit of a feature's title, body, priority, lane, or codeSurfaces — durable what/why stays correctable by agents. logNote is mandatory and lands as a dated line in the feature log. A priority change moves the feature to the tail of its priority band. lane assigns the feature to a lane roster entry by name (must exist — planning_set_lanes owns the roster; empty string clears the lane, omit to keep). codeSurfaces declares the repo-relative glob patterns this feature touches (e.g. src/web/**) — advisory only: the queue, board and wave-snapshot rows project potentialOverlaps between in-flight features so coordinators see cross-lane collisions; an empty array clears the surfaces, omit to keep. Status is not editable here — use planning_set_feature_status.")]
     public Task<JsonElement> UpdateFeature(
         [Description("Slug of the feature to edit, as shown on the board.")] string slug,
         [Description("Required note recorded as a dated [agent] line in the feature log — why the edit happened.")] string logNote,
         [Description("New feature title; omit to keep the current one.")] string? title = null,
         [Description("Full replacement body — markdown with its XML sections; omit to keep the current one.")] string? body = null,
         [Description("New priority: p0 (critical), p1 (high), p2 (normal), p3 (low); omit to keep the current one.")] string? priority = null,
+        [Description("Lane roster name to assign (must exist); empty string clears the lane; omit to keep the current one.")] string? lane = null,
+        [Description("Repo-relative glob patterns declaring the file surfaces this feature touches (e.g. [\"src/web/**\"]; only * and ** wildcards are supported — ?, [, ], {, } are rejected); empty array clears; omit to keep the current ones.")] string[]? codeSurfaces = null,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var payload = new JsonObject { ["logNote"] = logNote };
@@ -578,6 +577,16 @@ public sealed class OvermindPlanningTools
             payload["priority"] = priority;
         }
 
+        if (lane is not null)
+        {
+            payload["lane"] = lane;
+        }
+
+        if (codeSurfaces is not null)
+        {
+            payload["codeSurfaces"] = new JsonArray(codeSurfaces.Select(s => JsonValue.Create(s)).ToArray());
+        }
+
         return _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/update",
             payload,
@@ -593,7 +602,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var url = $"/api/agent/projects/{projectId}/planning/task-queue";
@@ -616,7 +625,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var contract = QueueMoveContractError(move, position);
@@ -652,17 +661,18 @@ public sealed class OvermindPlanningTools
     }
 
     [McpServerTool(Name = "planning_claim_feature", Destructive = false, Idempotent = false)]
-    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
+    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. Lane discipline rides on the claim: a feature whose lane already holds an alive claim by a DIFFERENT alias, or whose lane still carries another open feature (serial lane), refuses with 409 — overrideLaneCheck=true is the explicit escape hatch and is echoed back. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
     public async Task<CallToolResult> ClaimFeature(
         [Description("Slug of the feature to claim, as shown on the board.")] string slug,
         [Description("Your display alias, max 32 chars (e.g. Dan).")] string alias,
         [Description("Your vendor string, max 32 chars (e.g. qwen, claude).")] string vendor,
+        [Description("True to skip the lane busy/serial checks — the explicit escape hatch, echoed in the response.")] bool overrideLaneCheck = false,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         if (alias.Trim().Length > ClaimIdentityCap)
@@ -679,7 +689,7 @@ public sealed class OvermindPlanningTools
 
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/claim",
-            new { alias = alias.Trim(), vendor = vendor.Trim() },
+            new { alias = alias.Trim(), vendor = vendor.Trim(), overrideLaneCheck },
             ct), readback: null, ct);
 
         var claim = new JsonObject
@@ -690,6 +700,16 @@ public sealed class OvermindPlanningTools
             ["claimedAt"] = echo.GetProperty("claimedAt").GetString(),
             ["claimState"] = echo.GetProperty("claimState").GetString()
         };
+        if (echo.TryGetProperty("lane", out var lane) && lane.ValueKind == JsonValueKind.String)
+        {
+            claim["lane"] = lane.GetString();
+        }
+
+        if (echo.TryGetProperty("overrideLaneCheck", out var overridden) && overridden.ValueKind == JsonValueKind.True)
+        {
+            claim["overrideLaneCheck"] = true;
+        }
+
         return EchoResult(claim.Deserialize<JsonElement>());
     }
 
@@ -702,7 +722,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
@@ -731,7 +751,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var normalized = NormalizePriority(priority);
@@ -753,7 +773,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
@@ -788,7 +808,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         return Guarded(() => _api.GetAsync(
@@ -805,7 +825,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         if (string.IsNullOrWhiteSpace(blockedBySlug))
@@ -829,7 +849,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         if (string.IsNullOrWhiteSpace(blockedBySlug))
@@ -1022,7 +1042,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         if (string.IsNullOrWhiteSpace(path))
@@ -1045,7 +1065,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         var report = await _mutations.SendAsync(() => _api.PostAsync(
@@ -1063,7 +1083,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         return Guarded(() => _api.GetAsync(
@@ -1080,7 +1100,7 @@ public sealed class OvermindPlanningTools
     {
         if (projectId is null)
         {
-            throw new McpException(ProjectIdRequired);
+            throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
         if (string.IsNullOrWhiteSpace(targetPath))

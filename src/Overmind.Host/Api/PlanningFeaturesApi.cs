@@ -28,7 +28,8 @@ public static class PlanningFeaturesApi
     }
 
     internal static async Task<IResult> Board(
-        Guid projectId, OvermindDbContext db, FeatureClaimService claims, CancellationToken ct)
+        Guid projectId, OvermindDbContext db, FeatureClaimService claims, DirectiveService directives,
+        CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
         if (!projectExists)
@@ -45,9 +46,15 @@ public static class PlanningFeaturesApi
 
         var projectFeatures = features.ToDictionary(f => f.Id);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
+        var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var overlapIndex = await OverlapIndexAsync(db, projectId, ct);
+        var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(features
             .Select(f => PlanningMapper.ToBoardItem(
-                f, PlanningMapper.HasOpenBlocker(f, projectFeatures), claimLiveness.GetValueOrDefault(f.Id)))
+                f, PlanningMapper.HasOpenBlocker(f, projectFeatures), claimLiveness.GetValueOrDefault(f.Id),
+                laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
+                overlapIndex.GetValueOrDefault(f.Id),
+                directiveCounts.GetValueOrDefault(f.Id)))
             .ToArray());
     }
 
@@ -103,6 +110,7 @@ public static class PlanningFeaturesApi
         FeatureClaimService claims,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
+        DirectiveService directives,
         CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
@@ -119,17 +127,23 @@ public static class PlanningFeaturesApi
 
         var claimState = (await claims.ClaimLivenessAsync(projectId, [feature], ct))
             .GetValueOrDefault(feature.Id);
+        var overlapIndex = await OverlapIndexAsync(db, projectId, ct);
+        var openDirectives = await directives.ListOpenAsync(feature.Id, ct);
 
         if (includeArtifacts == false)
         {
             return Results.Ok(PlanningMapper.ToFeatureRosterResponse(
                 feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
-                await BlockedStatesAsync(taskDependencies, feature, ct), claimState));
+                await BlockedStatesAsync(taskDependencies, feature, ct), claimState,
+                overlaps: overlapIndex.GetValueOrDefault(feature.Id),
+                openDirectiveCount: openDirectives.Count));
         }
 
         return Results.Ok(PlanningMapper.ToFeatureResponse(
             feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
-            await BlockedStatesAsync(taskDependencies, feature, ct), claimState));
+            await BlockedStatesAsync(taskDependencies, feature, ct), claimState,
+            overlaps: overlapIndex.GetValueOrDefault(feature.Id),
+            openDirectives: openDirectives));
     }
 
     internal static async Task<IResult> ListArtifacts(
@@ -186,8 +200,9 @@ public static class PlanningFeaturesApi
     {
         try
         {
-            var feature = await claims.ClaimAsync(projectId, slug, request.Alias, request.Vendor, null, ct);
-            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+            var feature = await claims.ClaimAsync(
+                projectId, slug, request.Alias, request.Vendor, null, request.OverrideLaneCheck, ct);
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, request.OverrideLaneCheck, ct));
         }
         catch (PlanningException ex)
         {
@@ -208,7 +223,7 @@ public static class PlanningFeaturesApi
         try
         {
             var feature = await claims.UnclaimAsync(projectId, slug, null, ct);
-            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, ct));
+            return Results.Ok(await FeatureClaimEcho.ForAsync(claims, projectId, feature, overrideLaneCheck: false, ct));
         }
         catch (PlanningException ex)
         {
@@ -225,6 +240,7 @@ public static class PlanningFeaturesApi
         FeatureClaimService claims,
         FeatureDependencyService dependencies,
         TaskDependencyService taskDependencies,
+        DirectiveService directives,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -247,7 +263,9 @@ public static class PlanningFeaturesApi
 
         try
         {
-            await service.UpdateAsync(projectId, slug, request.Title, request.Body, request.Status, priority, ct);
+            await service.UpdateAsync(
+                projectId, slug, request.Title, request.Body, request.Status, priority,
+                request.Lane, request.CodeSurfaces, ct);
         }
         catch (PlanningException ex)
         {
@@ -255,10 +273,13 @@ public static class PlanningFeaturesApi
         }
 
         var feature = await LoadFeatureWithArtifacts(db, projectId, slug, ct);
+        var overlapIndex = await OverlapIndexAsync(db, projectId, ct);
         return Results.Ok(PlanningMapper.ToFeatureResponse(
             feature!, await dependencies.ListDependenciesAsync(projectId, slug, ct),
             await BlockedStatesAsync(taskDependencies, feature!, ct),
-            (await claims.ClaimLivenessAsync(projectId, [feature!], ct)).GetValueOrDefault(feature!.Id)));
+            (await claims.ClaimLivenessAsync(projectId, [feature!], ct)).GetValueOrDefault(feature!.Id),
+            overlaps: overlapIndex.GetValueOrDefault(feature!.Id),
+            openDirectives: await directives.ListOpenAsync(feature!.Id, ct)));
     }
 
     internal static async Task<IResult> DeleteFeature(
@@ -293,6 +314,14 @@ public static class PlanningFeaturesApi
     {
         return Enum.TryParse(value, ignoreCase: true, out parsed) && Enum.IsDefined(parsed);
     }
+
+    internal static async Task<IReadOnlyDictionary<Guid, IReadOnlyList<FeatureOverlapRow>>> OverlapIndexAsync(
+        OvermindDbContext db, Guid projectId, CancellationToken ct) =>
+        CodeSurfaceOverlapProjection.Compute(await db.PlanningFeatures
+            .AsNoTracking()
+            .Where(f => f.ProjectId == projectId)
+            .Select(f => new CodeSurfaceFeatureRow(f.Id, f.Slug, f.Status, f.ClaimSessionId, f.CodeSurfaces))
+            .ToListAsync(ct));
 
     private static IResult InvalidValue(string field, string[] allowed) =>
         Results.ValidationProblem(new Dictionary<string, string[]>

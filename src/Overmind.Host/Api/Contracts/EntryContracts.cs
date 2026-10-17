@@ -28,6 +28,13 @@ public sealed record EntryResponse(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<SkillFileDto> SkillFiles);
+    IReadOnlyList<SkillFileDto> SkillFiles,
+    IReadOnlyList<EntryReadAck> ReadBy);
+
+public sealed record EntryReadAck(string? Alias, string? Vendor, DateTime At);
+
+public sealed record EntryAckHumanRequest(string? Alias, string? Vendor);
+
+public sealed record EntryAckResponse(Guid EntryId, bool Ack, string? Alias, string? Vendor, DateTime At);
 
 public sealed record EntryVersionResponse(int Version, string Content, DateTime CreatedAt);

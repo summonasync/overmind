@@ -55,7 +55,7 @@
 
 Inspired by [OpenViking](https://github.com/volcengine/OpenViking)'s context-as-a-filesystem idea, rebuilt to be download-and-run.
 
-**Status:** alpha — the MVP is shipped (`001-overmind-mvp`), plus the projects tree (`004`, `005`). In flight: `006-planning`, the feature → spec → plan → task → result ceremony as a first-class entity (3 of 11 tasks done). The planning board (web UI / MCP) is the live index; the `BACKLOG/` tree holds the materialized contracts.
+**Status:** alpha — the MVP is shipped (`001-overmind-mvp`), plus the projects tree (`004`, `005`) and the planning ceremony (`006` and successors). The latest wave (`137`) shipped parallel-wave coordination — lane rosters, claim-time lane checks, a one-call wave snapshot, the directive channel and entry read-acks — bringing the MCP surface to 55 tools. The planning board (web UI / MCP) is the live index; the `BACKLOG/` tree holds the materialized contracts.
 
 ## Запуск
 

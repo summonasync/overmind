@@ -56,5 +56,12 @@ public enum PlanningFailureCode
     LogEditNotNewest,
     LogEditWrongActor,
     LogEditBlankText,
-    LogEditMultilineText
+    LogEditMultilineText,
+    LaneNameDuplicate,
+    LaneRosterTooLarge,
+    LaneNotInRoster,
+    LaneClaimHeld,
+    LaneSerialBusy,
+    MissingDirective,
+    MissingEntry
 }

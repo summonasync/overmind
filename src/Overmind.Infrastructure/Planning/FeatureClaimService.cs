@@ -19,10 +19,13 @@ public sealed class FeatureClaimService
     }
 
     // sessionId null = the web human door: no session restrictions, the claim is bound to a fresh
-    // session row that goes stale like any other, and the log lands with the Ui source.
+    // session row that goes stale like any other, and the log lands with the Ui source. The human
+    // door skips the lane checks for the same reason it skips the claim lock. Lane checks run
+    // after the alive-holder throw, and never gate the restart-adopt of a feature already claimed
+    // by the same alias — the agent keeps its lane across adapter restarts.
     public async Task<PlanningFeature> ClaimAsync(
         Guid projectId, string slug, string alias, string vendor, Guid? sessionId = null,
-        CancellationToken ct = default)
+        bool overrideLaneCheck = false, CancellationToken ct = default)
     {
         var project = await RequireProjectAsync(projectId, ct);
         var feature = await RequireFeatureAsync(projectId, slug, ct);
@@ -55,8 +58,15 @@ public sealed class FeatureClaimService
                     slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
             }
 
-            var adopted = !isHuman && liveness == AgentSessionLiveness.Ended
-                          && string.Equals(feature.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal)
+            var sameAlias = string.Equals(
+                feature.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal);
+
+            if (!isHuman && !sameAlias && !overrideLaneCheck && feature.Lane is not null)
+            {
+                await EnsureLaneFreeAsync(project, feature, alias, ct);
+            }
+
+            var adopted = !isHuman && liveness == AgentSessionLiveness.Ended && sameAlias
                           && string.Equals(feature.ClaimedByVendor, vendor.Trim(), StringComparison.Ordinal);
             var note = adopted
                 ? $"session restarted, claim adopted by {alias} by {vendor}"
@@ -67,6 +77,11 @@ public sealed class FeatureClaimService
             feature.AppendLog(note, source);
             await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
             return feature;
+        }
+
+        if (!isHuman && !overrideLaneCheck && feature.Lane is not null)
+        {
+            await EnsureLaneFreeAsync(project, feature, alias, ct);
         }
 
         feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
@@ -221,6 +236,44 @@ public sealed class FeatureClaimService
 
         await _db.SaveChangesAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
+    }
+
+    private async Task EnsureLaneFreeAsync(Project project, PlanningFeature target, string alias, CancellationToken ct)
+    {
+        var lane = target.Lane!;
+        var candidates = await _db.PlanningFeatures
+            .Where(f => f.ProjectId == project.Id && f.Lane != null && f.Id != target.Id)
+            .ToListAsync(ct);
+        var laneFeatures = candidates
+            .Where(f => string.Equals(f.Lane, lane, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (laneFeatures.Count == 0)
+        {
+            return;
+        }
+
+        var liveness = await ClaimLivenessAsync(project.Id, laneFeatures, ct);
+
+        var foreignClaim = laneFeatures.FirstOrDefault(f =>
+            f.ClaimSessionId is not null &&
+            liveness.GetValueOrDefault(f.Id) == AgentSessionLiveness.Alive &&
+            !string.Equals(f.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal));
+        if (foreignClaim is not null)
+        {
+            throw PlanningException.LaneClaimHeld(
+                lane, foreignClaim.Slug, foreignClaim.ClaimedByAlias!, foreignClaim.ClaimedByVendor!,
+                AgentSessionLiveness.Alive);
+        }
+
+        var open = laneFeatures
+            .Where(f => f.Status != PlanningFeatureStatus.Done)
+            .OrderBy(f => f.Slug, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (open is not null)
+        {
+            throw PlanningException.LaneSerialBusy(lane, open.Slug);
+        }
     }
 
     private async Task<Project> RequireProjectAsync(Guid projectId, CancellationToken ct) =>

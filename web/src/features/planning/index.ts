@@ -9,6 +9,7 @@ export { CeremonyStepper } from "./components/ceremony-stepper";
 export { DeleteArtifactDialog } from "./components/delete-artifact-dialog";
 export { DriftPanel } from "./components/drift-panel";
 export { FeatureBoard } from "./components/feature-board";
+export { FeatureClaimChip } from "./components/feature-claim-chip";
 export { FeatureDependenciesPanel } from "./components/feature-dependencies-panel";
 export { FeatureForm } from "./components/feature-form";
 export { FeatureNumber } from "./components/feature-number";

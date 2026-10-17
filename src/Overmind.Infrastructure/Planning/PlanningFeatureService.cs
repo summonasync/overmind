@@ -86,7 +86,8 @@ public sealed partial class PlanningFeatureService
 
     public async Task<PlanningFeature> UpdateAsync(
         Guid projectId, string slug, string? title, string? body,
-        PlanningFeatureStatus? status, FeaturePriority? priority = null, CancellationToken ct = default)
+        PlanningFeatureStatus? status, FeaturePriority? priority = null,
+        string? lane = null, IReadOnlyList<string>? codeSurfaces = null, CancellationToken ct = default)
     {
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);
         if (!projectExists)
@@ -107,7 +108,19 @@ public sealed partial class PlanningFeatureService
             await FeatureDoneGate.RequireResultAsync(_db, feature, ct);
         }
 
+        var resolvedLane = lane is null ? null : await ResolveLaneAsync(projectId, lane, ct);
+
         feature.Update(title, body);
+
+        if (lane is not null)
+        {
+            feature.SetLane(resolvedLane);
+        }
+
+        if (codeSurfaces is not null)
+        {
+            feature.SetCodeSurfaces(CodeSurfacesJson.Serialize(codeSurfaces), PlanningLogSource.Ui);
+        }
 
         if (status.HasValue && status.Value != feature.Status)
         {
@@ -139,7 +152,8 @@ public sealed partial class PlanningFeatureService
 
     public async Task<PlanningFeature> UpdateAsync(
         Guid projectId, string slug, string? title, string? body,
-        FeaturePriority? priority, string logNote, PlanningLogSource source, CancellationToken ct = default)
+        FeaturePriority? priority, string logNote, PlanningLogSource source,
+        string? lane = null, IReadOnlyList<string>? codeSurfaces = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(logNote))
         {
@@ -160,7 +174,19 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.MissingFeature(slug);
         }
 
+        var resolvedLane = lane is null ? null : await ResolveLaneAsync(projectId, lane, ct);
+
         feature.Update(title, body, logNote, source);
+
+        if (lane is not null)
+        {
+            feature.SetLane(resolvedLane);
+        }
+
+        if (codeSurfaces is not null)
+        {
+            feature.SetCodeSurfaces(CodeSurfacesJson.Serialize(codeSurfaces));
+        }
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
@@ -228,6 +254,37 @@ public sealed partial class PlanningFeatureService
         await _db.SaveChangesAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
         return feature;
+    }
+
+    private async Task<string?> ResolveLaneAsync(Guid projectId, string lane, CancellationToken ct)
+    {
+        var roster = await _db.PlanningLanes
+            .AsNoTracking()
+            .Where(l => l.ProjectId == projectId)
+            .Select(l => l.Name)
+            .ToListAsync(ct);
+
+        var trimmed = lane.Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        if (trimmed.Length > PlanningLane.MaxNameLength)
+        {
+            throw new ArgumentException(
+                $"Lane '{trimmed}' exceeds the {PlanningLane.MaxNameLength} character cap.");
+        }
+
+        var match = roster.FirstOrDefault(
+            name => string.Equals(name, trimmed, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+        {
+            return match;
+        }
+
+        throw PlanningException.LaneNotInRoster(
+            trimmed, [.. roster.OrderBy(n => n, StringComparer.OrdinalIgnoreCase)]);
     }
 
     private static void ReleaseClaimOnDone(PlanningFeature feature, PlanningLogSource source)

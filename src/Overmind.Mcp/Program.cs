@@ -101,6 +101,11 @@ builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindBriefingTools>();
 builder.Services.AddSingleton<OvermindPlanningTools>();
 builder.Services.AddSingleton<FeatureCodeTools>();
+builder.Services.AddSingleton<WaveListingCache>();
+builder.Services.AddSingleton<WaveSnapshotTools>();
+builder.Services.AddSingleton<LaneTools>();
+builder.Services.AddSingleton<DirectiveTools>();
+builder.Services.AddSingleton<EntryAckTools>();
 builder.Services.AddSingleton<IssuesTools>();
 builder.Services.AddSingleton<OvermindOnboardingTools>();
 builder.Services.AddSingleton<OvermindNotificationTools>();
@@ -127,6 +132,10 @@ builder.Services
     .WithTools<OvermindBriefingTools>()
     .WithTools<OvermindPlanningTools>()
     .WithTools<FeatureCodeTools>()
+    .WithTools<WaveSnapshotTools>()
+    .WithTools<LaneTools>()
+    .WithTools<DirectiveTools>()
+    .WithTools<EntryAckTools>()
     .WithTools<IssuesTools>()
     .WithTools<OvermindOnboardingTools>()
     .WithTools<OvermindNotificationTools>()

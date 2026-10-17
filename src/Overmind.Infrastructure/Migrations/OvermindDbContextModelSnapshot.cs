@@ -147,6 +147,33 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("ContextEntries");
                 });
 
+            modelBuilder.Entity("Overmind.Core.EntryAck", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ContextEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Vendor")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContextEntryId");
+
+                    b.ToTable("EntryAcks");
+                });
+
             modelBuilder.Entity("Overmind.Core.EntryTag", b =>
                 {
                     b.Property<Guid>("EntryId")
@@ -370,6 +397,52 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("PlanningArtifactVersions");
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningDirective", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AckAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AckByAlias")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AckVendor")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorAlias")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AuthorSessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorVendor")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PlanningFeatureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanningFeatureId", "AckAt");
+
+                    b.ToTable("PlanningDirectives");
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningFeature", b =>
                 {
                     b.Property<Guid>("Id")
@@ -399,7 +472,15 @@ namespace Overmind.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CodeSurfaces")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Lane")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PinnedBranch")
@@ -461,6 +542,42 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasIndex("BlockedByFeatureId");
 
                     b.ToTable("PlanningFeatureDependencies");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningLane", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Contour")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SerialOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("PlanningLanes");
                 });
 
             modelBuilder.Entity("Overmind.Core.PlanningMaterializedFile", b =>
@@ -758,6 +875,15 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.EntryAck", b =>
+                {
+                    b.HasOne("Overmind.Core.ContextEntry", null)
+                        .WithMany("Acks")
+                        .HasForeignKey("ContextEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Overmind.Core.EntryTag", b =>
                 {
                     b.HasOne("Overmind.Core.ContextEntry", "Entry")
@@ -828,6 +954,15 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningDirective", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningFeature", null)
+                        .WithMany()
+                        .HasForeignKey("PlanningFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningFeature", b =>
                 {
                     b.HasOne("Overmind.Core.Project", null)
@@ -854,6 +989,15 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("BlockedBy");
 
                     b.Navigation("Feature");
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningLane", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany("Lanes")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Overmind.Core.PlanningMaterializedFile", b =>
@@ -949,6 +1093,8 @@ namespace Overmind.Infrastructure.Migrations
 
             modelBuilder.Entity("Overmind.Core.ContextEntry", b =>
                 {
+                    b.Navigation("Acks");
+
                     b.Navigation("EntryTags");
 
                     b.Navigation("SkillFiles");
@@ -968,6 +1114,11 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("Artifacts");
 
                     b.Navigation("BlockedBy");
+                });
+
+            modelBuilder.Entity("Overmind.Core.Project", b =>
+                {
+                    b.Navigation("Lanes");
                 });
 
             modelBuilder.Entity("Overmind.Core.SkillKit", b =>

@@ -267,7 +267,8 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var service = CreateFeatureService();
         await service.CreateAsync(_projectId, "feat", "Title", "body", FeaturePriority.P3);
 
-        var updated = await service.UpdateAsync(_projectId, "feat", null, null, null, null, default);
+        var updated = await service.UpdateAsync(
+            _projectId, "feat", null, null, status: null, priority: null, ct: default);
 
         updated.Priority.ShouldBe(FeaturePriority.P3);
     }
