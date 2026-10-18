@@ -5,7 +5,8 @@ export type EntryType =
   | "guard"
   | "skill"
   | "tombstone"
-  | "featureRequest";
+  | "featureRequest"
+  | "audit";
 
 export type AgentPlatform = "claude" | "kimiCode" | "codex" | "gemini" | "antigravity" | "qwen";
 
@@ -17,6 +18,7 @@ export const ENTRY_TYPES: readonly EntryType[] = [
   "skill",
   "tombstone",
   "featureRequest",
+  "audit",
 ];
 
 export const AGENT_PLATFORMS: readonly AgentPlatform[] = [
@@ -28,8 +30,14 @@ export const AGENT_PLATFORMS: readonly AgentPlatform[] = [
   "qwen",
 ];
 
-export interface BrowseFolderResponse {
+export interface BrowseRootEntry {
+  name: string;
   path: string;
+  kind: string;
+}
+
+export interface BrowseRootsResponse {
+  roots: BrowseRootEntry[];
 }
 
 export interface TreeRoot {
@@ -53,6 +61,7 @@ export interface DirectoryEntry {
 export interface ListDirectoryResponse {
   path: string;
   truncated: boolean;
+  accessible: boolean;
   entries: DirectoryEntry[];
 }
 

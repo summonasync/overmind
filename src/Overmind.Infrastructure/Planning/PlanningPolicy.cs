@@ -49,6 +49,17 @@ public sealed class PlanningPolicy
             : PlanningMaterialization.Off;
     }
 
+    public async Task<string?> ResolveAgentNamingRulesAsync(Project project, CancellationToken ct)
+    {
+        if (project.AgentNamingRules is not null)
+        {
+            return project.AgentNamingRules;
+        }
+
+        var global = await _settings.GetAsync(SettingKeys.PlanningAgentNamingRulesDefault, ct);
+        return string.IsNullOrWhiteSpace(global) ? null : global;
+    }
+
     private async Task<Project> LoadProjectAsync(Guid projectId, CancellationToken ct)
     {
         return await _db.Projects.FindAsync([projectId], ct)

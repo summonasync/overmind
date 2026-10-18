@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/shared/lib/cn";
-import { formatBacklogAge } from "@/shared/lib/relative-time";
+import { formatBacklogAge, formatCalendarDate } from "@/shared/lib/relative-time";
 import type { PlanningFeatureBoardItem } from "@/features/planning/types";
 
 interface FeatureClaimChipProps {
@@ -20,12 +20,17 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
 
   const holder = `${item.claimedByAlias} by ${item.claimedByVendor}`;
   const age = item.claimedAt === null ? null : formatBacklogAge(item.claimedAt);
+  const claimedOn = item.claimedAt === null ? undefined : formatCalendarDate(item.claimedAt);
 
   if (item.claimedByHuman) {
     return (
       <span
         className={cn(chipBase, "border border-border/50 bg-surface-raised text-muted/80")}
-        title={`Held by a human on the board (${holder})`}
+        title={
+          claimedOn === undefined
+            ? `Held by a human on the board (${holder})`
+            : `Held by a human on the board (${holder}) — since ${claimedOn}`
+        }
       >
         human-held
         {age !== null ? ` · ${age}` : ""}
@@ -35,7 +40,10 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
 
   if (item.claimState === "stale") {
     return (
-      <span className={cn(chipBase, "border border-border bg-surface-raised text-muted")}>
+      <span
+        className={cn(chipBase, "border border-border bg-surface-raised text-muted")}
+        title={claimedOn}
+      >
         stale{age !== null ? ` ${age}` : ""} · {holder}
       </span>
     );
@@ -52,6 +60,7 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
   return (
     <span
       className={cn(chipBase, "border border-success/30 bg-success/10 text-success")}
+      title={claimedOn}
       data-claim-state="alive"
     >
       <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-success" />

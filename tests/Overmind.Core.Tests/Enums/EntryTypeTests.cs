@@ -10,7 +10,7 @@ public class EntryTypeTests
     public void Members_StayAppendOnlyWithSerialValues()
     {
         Enum.GetNames<EntryType>().ShouldBe(
-            ["Note", "Decision", "Gate", "Guard", "Skill", "Tombstone", "FeatureRequest"]);
-        Enum.GetValues<EntryType>().Select(type => (int)type).ShouldBe([0, 1, 2, 3, 4, 5, 6]);
+            ["Note", "Decision", "Gate", "Guard", "Skill", "Tombstone", "FeatureRequest", "Audit"]);
+        Enum.GetValues<EntryType>().Select(type => (int)type).ShouldBe([0, 1, 2, 3, 4, 5, 6, 7]);
     }
 }

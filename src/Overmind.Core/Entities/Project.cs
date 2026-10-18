@@ -37,6 +37,7 @@ public sealed partial class Project
     public string? Manifest { get; private set; }
     public ProjectNumberStyle NumberStyle { get; private set; } = ProjectNumberStyle.Hash;
     public string? NumberPrefix { get; private set; }
+    public bool IsFavorite { get; private set; }
     public List<PlanningLane> Lanes { get; private set; } = [];
 
     public static Project Create(string name, string diskPath, string description = "")
@@ -53,6 +54,7 @@ public sealed partial class Project
             PlanningMaterialization = PlanningMaterialization.Inherit,
             RequireHumanValidation = HumanValidationOverride.Unset,
             NumberStyle = ProjectNumberStyle.Hash,
+            IsFavorite = false,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -86,6 +88,8 @@ public sealed partial class Project
         ArgumentOutOfRangeException.ThrowIfGreaterThan(manifest.Length, MaxManifestLength);
         Manifest = string.IsNullOrWhiteSpace(manifest) ? null : manifest.Trim();
     }
+
+    public void SetFavorite(bool isFavorite) => IsFavorite = isFavorite;
 
     public void SetNumbering(ProjectNumberStyle style, string? numberPrefix)
     {

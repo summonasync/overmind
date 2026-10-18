@@ -9,4 +9,5 @@ export const selectToneClasses: Record<BadgeTone, string> = {
   danger: "border-danger/40 text-danger",
   skill: "border-type-skill/40 text-type-skill",
   idea: "border-type-featureRequest/40 text-type-featureRequest",
+  audit: "border-type-audit/40 text-type-audit",
 };

@@ -40,6 +40,10 @@ export function updateProject(id: string, values: ProjectUpdateValues): Promise<
   });
 }
 
+export function toggleProjectFavorite(id: string, isFavorite: boolean): Promise<ProjectResponse> {
+  return apiPost<ProjectResponse>(`/projects/${id}/favorite`, { isFavorite });
+}
+
 export function importProjectManifest(id: string): Promise<ProjectManifestImportResponse> {
   return apiPost<ProjectManifestImportResponse>(`/projects/${id}/manifest/import`);
 }

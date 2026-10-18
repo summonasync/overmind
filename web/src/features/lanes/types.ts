@@ -28,3 +28,9 @@ export interface LaneRow {
 export interface LanesRoster {
   lanes: LaneRow[];
 }
+
+export interface LaneUpsertInput {
+  name: string;
+  contour: string | null;
+  serialOrder: number | null;
+}

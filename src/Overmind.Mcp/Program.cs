@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using Overmind.Mcp;
+using Overmind.Mcp.Planning;
 using Overmind.Mcp.Registration;
 
 if (args.Length > 0 && args[0] == "install")
@@ -99,7 +100,10 @@ builder.Services.AddSingleton<IGitCli, GitCli>();
 builder.Services.AddSingleton<ProjectResolver>();
 builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindBriefingTools>();
-builder.Services.AddSingleton<OvermindPlanningTools>();
+builder.Services.AddSingleton<PlanningFeatureTools>();
+builder.Services.AddSingleton<PlanningArtifactTools>();
+builder.Services.AddSingleton<PlanningMaterializationTools>();
+builder.Services.AddSingleton<PlanningArtifactAliasResolver>();
 builder.Services.AddSingleton<FeatureCodeTools>();
 builder.Services.AddSingleton<WaveListingCache>();
 builder.Services.AddSingleton<WaveSnapshotTools>();
@@ -130,7 +134,9 @@ builder.Services
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()
     .WithTools<OvermindBriefingTools>()
-    .WithTools<OvermindPlanningTools>()
+    .WithTools<PlanningFeatureTools>()
+    .WithTools<PlanningArtifactTools>()
+    .WithTools<PlanningMaterializationTools>()
     .WithTools<FeatureCodeTools>()
     .WithTools<WaveSnapshotTools>()
     .WithTools<LaneTools>()

@@ -7,7 +7,7 @@ import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
-import { browseFolder } from "@/shared/api/system";
+import { FolderPickerModal } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { KitDetailPanel } from "@/widgets/kit-workspace/ui/kit-detail-panel";
 import { KitForm, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
@@ -24,6 +24,7 @@ export function KitsPage() {
   const [deleting, setDeleting] = useState<KitResponse | null>(null);
   const [expandedKitId, setExpandedKitId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useInfoPanel(<KitsInfoPanel />);
 
@@ -33,13 +34,14 @@ export function KitsPage() {
     (mutations.remove.error as Error | null) ??
     error;
 
-  const handleImportFromFolder = async () => {
-    const selected = await browseFolder();
-    if (!selected) {
-      return;
-    }
+  const handleImportFromFolder = () => {
+    setPickerOpen(true);
+  };
+
+  const handleFolderPicked = (path: string) => {
+    setPickerOpen(false);
     setImportOpen(true);
-    kitImport.scan.mutate(selected.path);
+    kitImport.scan.mutate(path);
   };
 
   const handleSubmit = (values: KitFormValues) => {
@@ -124,6 +126,13 @@ export function KitsPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         kitImport={kitImport}
+      />
+
+      <FolderPickerModal
+        title="Import from folder"
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleFolderPicked}
       />
     </div>
   );

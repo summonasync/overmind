@@ -50,6 +50,22 @@ public sealed class PlanningQueueApiTests : IDisposable
     }
 
     [Fact]
+    public async Task QueueRead_RowsCarryFeatureTimestamps()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "stamp-a", "Stamp A");
+
+        var queue = await GetQueueAsync(project.Id);
+        var row = queue!.Items.Single(i => i.Slug == "stamp-a");
+        row.CreatedAt.ShouldNotBe(default);
+        row.UpdatedAt.ShouldNotBe(default);
+        row.UpdatedAt.ShouldBeGreaterThanOrEqualTo(row.CreatedAt);
+
+        var board = await GetBoardAsync(project.Id);
+        board!.Single(f => f.Slug == "stamp-a").CreatedAt.ShouldNotBe(default);
+    }
+
+    [Fact]
     public async Task QueueRead_SortsPriorityThenPosition_ExcludesDone()
     {
         var project = await CreateProjectAsync();
@@ -566,14 +582,16 @@ public sealed class PlanningQueueApiTests : IDisposable
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
         string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone,
-        TaskCountsJson TaskCounts, DateTime UpdatedAt, bool IsBlocked, int QueuePosition);
+        TaskCountsJson TaskCounts, DateTime UpdatedAt, bool IsBlocked, int QueuePosition,
+        DateTime CreatedAt);
 
     public sealed record QueueResponseJson(QueueItemJson[] Items);
 
     public sealed record QueueItemJson(
         string Slug, string? Number, string Title, string Priority, string Status, int QueuePosition,
         string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal,
-        TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked);
+        TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked,
+        DateTime CreatedAt, DateTime UpdatedAt);
 
     public sealed record TaskCountsJson(int Todo, int InProgress, int Review, int Done, int Blocked);
 

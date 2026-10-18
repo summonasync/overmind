@@ -14,6 +14,7 @@ public sealed record PlanningFeatureBoardItem(
     int TaskTotal,
     int TaskDone,
     PlanningTaskCounts TaskCounts,
+    DateTime CreatedAt,
     DateTime UpdatedAt,
     bool IsBlocked,
     int QueuePosition,
@@ -52,6 +53,8 @@ public sealed record PlanningQueueItem(
     string Phase,
     string? BriefExcerpt,
     int OpenDirectiveCount,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
     string? Lane = null,
     LaneHolderResponse? LaneHolder = null,
     PotentialOverlap[]? PotentialOverlaps = null);

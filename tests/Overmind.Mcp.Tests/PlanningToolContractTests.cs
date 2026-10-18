@@ -107,6 +107,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_task_queue"]!["description"]!.GetValue<string>()
             .ShouldContain("taskCounts (todo/inProgress/review/done/blocked, sums to taskTotal)");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("briefExcerpt");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("createdAt");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("updatedAt");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("plan validated");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("band-scoped");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("toPosition");
@@ -187,6 +189,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         Canned.ToolResultText(response).ShouldContain("demo-feature");
         Canned.ToolResultText(response).ShouldContain("\"phase\":\"in progress\"");
         Canned.ToolResultText(response).ShouldContain("\"briefExcerpt\":\"Crash on save when the workspace file is read-only.\"");
+        Canned.ToolResultText(response).ShouldContain("\"createdAt\":\"2026-09-08T09:00:00Z\"");
         Canned.ToolResultText(response).ShouldNotContain("isCurrent");
         Canned.ToolResultText(response).ShouldContain("\"priority\":\"p1\"");
         Canned.ToolResultText(response).ShouldContain("\"taskCounts\":{\"todo\":0,\"inProgress\":1,\"review\":0,\"done\":1,\"blocked\":0}");
@@ -2304,9 +2307,13 @@ public class PlanningToolContractTests : McpSessionTestBase
         var claimed = rows.Single(r => r!["slug"]!.GetValue<string>() == "demo-feature")!;
         claimed["phase"]!.GetValue<string>().ShouldBe("in progress");
         claimed["briefExcerpt"]!.GetValue<string?>().ShouldBe("Crash on save when the workspace file is read-only.");
+        claimed["createdAt"]!.GetValue<string>().ShouldBe("2026-09-08T09:00:00Z");
+        claimed["updatedAt"]!.GetValue<string>().ShouldBe("2026-09-10T08:00:00Z");
         var draft = rows.Single(r => r!["slug"]!.GetValue<string>() == "draft-one")!;
         draft["phase"]!.GetValue<string>().ShouldBe("drafting");
         draft["briefExcerpt"].ShouldBeNull();
+        draft["createdAt"]!.GetValue<string>().ShouldBe("2026-09-09T09:00:00Z");
+        draft["updatedAt"]!.GetValue<string>().ShouldBe("2026-09-09T09:00:00Z");
 
         claimed["taskCounts"]!.ToJsonString()
             .ShouldBe("{\"todo\":0,\"inProgress\":1,\"review\":0,\"done\":1,\"blocked\":0}");

@@ -44,12 +44,14 @@ export function AppShell({ children }: AppShellProps) {
           <AppTopbar />
           <MobileNav />
           <DegradedBanner />
-          <ProjectTabs />
           <div className="flex flex-1">
             <Suspense fallback={null}>
               <ProjectsRailMount />
             </Suspense>
-            <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
+            <main className="min-w-0 flex-1 p-4 lg:p-6">
+              <ProjectTabs />
+              {children}
+            </main>
             <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />
           </div>
         </div>

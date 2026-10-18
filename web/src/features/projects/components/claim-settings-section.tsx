@@ -46,7 +46,7 @@ export function ClaimSettingsSection({ projectId }: ClaimSettingsSectionProps) {
     <form onSubmit={handleSubmit} className="space-y-3">
       <p className="text-xs text-muted">
         Naming rules agents read in the agentIdentity block of their onboard briefing — pin claim
-        aliases and formatting expectations here.
+        aliases and formatting expectations here. Empty — the global default applies.
       </p>
       <Textarea
         rows={6}

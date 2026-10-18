@@ -112,7 +112,7 @@ public static class OnboardApi
             new OnboardAgentIdentityBlock(
                 AgentIdentityDefaults.Alias,
                 AgentIdentityDefaults.Vendor,
-                project.AgentNamingRules ?? AgentIdentityDefaults.GenericNamingHint),
+                await policy.ResolveAgentNamingRulesAsync(project, ct) ?? AgentIdentityDefaults.GenericNamingHint),
             BuildAdapterBlock(http),
             OnboardQuickstart.Text));
     }

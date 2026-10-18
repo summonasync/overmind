@@ -222,6 +222,77 @@ public sealed class SettingsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_IncludesAgentNamingRulesDefault_EmptyByDefault()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningAgentNamingRulesDefault").GetString().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Put_AgentNamingRulesDefault_RoundTrips_Trimmed_AndSurvivesPartialUpdates()
+    {
+        using var put = await _client.PutAsJsonAsync(
+            "/api/settings", new { PlanningAgentNamingRulesDefault = "  aliases are crew names  " });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("planningAgentNamingRulesDefault").GetString()
+            .ShouldBe("aliases are crew names");
+
+        await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningAgentNamingRulesDefault").GetString()
+            .ShouldBe("aliases are crew names");
+    }
+
+    [Fact]
+    public async Task Put_AgentNamingRulesDefault_EmptyValue_ClearsBackToDefault()
+    {
+        await _client.PutAsJsonAsync("/api/settings", new { PlanningAgentNamingRulesDefault = "crew names" });
+
+        using var clear = await _client.PutAsJsonAsync("/api/settings", new { PlanningAgentNamingRulesDefault = "" });
+
+        clear.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await clear.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningAgentNamingRulesDefault").GetString().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Put_AgentNamingRulesDefault_WhitespaceOnly_CollapsesToEmpty()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { PlanningAgentNamingRulesDefault = "   " });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningAgentNamingRulesDefault").GetString().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Put_AgentNamingRulesDefault_RejectsOverProjectLimit()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { PlanningAgentNamingRulesDefault = new string('r', 2001) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_AgentNamingRulesDefault_AcceptsAtProjectLimit()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { PlanningAgentNamingRulesDefault = new string('r', 2000) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("planningAgentNamingRulesDefault").GetString().ShouldBe(new string('r', 2000));
+    }
+
+    [Fact]
     public async Task Get_IncludesQdrantEndpointDefault()
     {
         using var response = await _client.GetAsync("/api/settings");

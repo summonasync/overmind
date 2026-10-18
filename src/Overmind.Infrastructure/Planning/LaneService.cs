@@ -30,9 +30,25 @@ public sealed class LaneService
         var byName = existing.ToDictionary(
             l => l.Name, l => l, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var lane in existing.Where(l => !lanes.Any(u => Matches(u.Name, l.Name))))
+        var removed = existing
+            .Where(l => !lanes.Any(u => Matches(u.Name, l.Name)))
+            .ToList();
+
+        foreach (var lane in removed)
         {
             _db.PlanningLanes.Remove(lane);
+        }
+
+        if (removed.Count > 0)
+        {
+            var orphans = await _db.PlanningFeatures
+                .Where(f => f.ProjectId == projectId && f.Lane != null)
+                .ToListAsync(ct);
+
+            foreach (var feature in orphans.Where(f => removed.Any(l => Matches(l.Name, f.Lane!))))
+            {
+                feature.SetLane(null);
+            }
         }
 
         foreach (var upsert in lanes)

@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Host.Api.Contracts;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Host.Api;
@@ -8,13 +8,11 @@ namespace Overmind.Host.Api;
 public static class SystemApi
 {
     private const int MaxDirectoryEntries = 500;
-    private static readonly SemaphoreSlim DialogLock = new(1, 1);
-    private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(120);
-    // MVP measure: spawning a shell dialog per request (powershell / osascript / zenity / kdialog per OS).
+
     public static RouteGroupBuilder MapSystemApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/system");
-        group.MapPost("/browse-folder", BrowseFolder);
+        group.MapGet("/browse-roots", BrowseRoots);
         group.MapGet("/list-directory", ListDirectory);
         return group;
     }
@@ -55,48 +53,64 @@ public static class SystemApi
         var normalizedRoot = NormalizePath(fullPath);
         var entries = new List<DirectoryEntryResponse>();
         var truncated = false;
-        foreach (var directory in Directory.EnumerateDirectories(fullPath))
+        var accessible = true;
+        try
         {
-            try
+            foreach (var directory in Directory.EnumerateDirectories(fullPath))
             {
-                var attributes = File.GetAttributes(directory);
-                if ((attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                if (IsHiddenOnUnix(directory))
                 {
                     continue;
                 }
 
-                var normalized = NormalizePath(directory);
-                projectMap.TryGetValue(normalized, out var project);
-                entries.Add(new DirectoryEntryResponse(
-                    Path.GetFileName(normalized),
-                    normalized,
-                    true,
-                    project?.Id,
-                    project?.Name));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-            {
-                entries.Add(new DirectoryEntryResponse(
-                    Path.GetFileName(NormalizePath(directory)),
-                    NormalizePath(directory),
-                    false,
-                    null,
-                    null));
-            }
+                try
+                {
+                    var attributes = File.GetAttributes(directory);
+                    if ((attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                    {
+                        continue;
+                    }
 
-            if (entries.Count >= MaxDirectoryEntries)
-            {
-                truncated = true;
-                break;
+                    var normalized = NormalizePath(directory);
+                    projectMap.TryGetValue(normalized, out var project);
+                    entries.Add(new DirectoryEntryResponse(
+                        Path.GetFileName(normalized),
+                        normalized,
+                        true,
+                        project?.Id,
+                        project?.Name));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    entries.Add(new DirectoryEntryResponse(
+                        Path.GetFileName(NormalizePath(directory)),
+                        NormalizePath(directory),
+                        false,
+                        null,
+                        null));
+                }
+
+                if (entries.Count >= MaxDirectoryEntries)
+                {
+                    truncated = true;
+                    break;
+                }
             }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            accessible = false;
         }
 
         var ordered = entries
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return Results.Ok(new ListDirectoryResponse(normalizedRoot, truncated, ordered));
+        return Results.Ok(new ListDirectoryResponse(normalizedRoot, truncated, ordered, accessible));
     }
+
+    private static bool IsHiddenOnUnix(string path) =>
+        !OperatingSystem.IsWindows() && Path.GetFileName(path).StartsWith('.');
 
     internal static string NormalizePath(string path)
     {
@@ -106,133 +120,77 @@ public static class SystemApi
         return trimmed.Length <= root.Length ? root : trimmed;
     }
 
-    private static async Task<IResult> BrowseFolder()
+    private static async Task<IResult> BrowseRoots(AppSettingsService settings, CancellationToken ct)
     {
-        if (OperatingSystem.IsLinux() && FindLinuxPicker() is null)
+        var roots = new List<BrowseRootEntry>();
+        AddHomeRoot(roots);
+        AddVolumeRoots(roots);
+
+        var treeRoots = await SystemRootsApi.ReadRootsAsync(settings, ct);
+        foreach (var root in treeRoots)
         {
-            return Results.Problem(
-                statusCode: StatusCodes.Status501NotImplemented,
-                title: "Folder picker unavailable",
-                detail: "Install zenity or kdialog to enable the folder picker on Linux.");
+            AddBrowseRoot(roots, root, "treeRoot");
         }
 
-        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux())
-        {
-            return Results.StatusCode(StatusCodes.Status501NotImplemented);
-        }
-
-        if (!await DialogLock.WaitAsync(TimeSpan.Zero))
-        {
-            return Results.StatusCode(StatusCodes.Status409Conflict);
-        }
-
-        try
-        {
-            var processStartInfo = CreateDialogProcess();
-
-            using (var process = Process.Start(processStartInfo))
-            {
-                if (process is null)
-                {
-                    return Results.StatusCode(StatusCodes.Status501NotImplemented);
-                }
-
-                using var timeoutCts = new CancellationTokenSource(DialogTimeout);
-
-                try
-                {
-                    await process.WaitForExitAsync(timeoutCts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    process.Kill();
-                    return Results.NoContent();
-                }
-
-                var selectedPath = (await process.StandardOutput.ReadToEndAsync()).Trim();
-
-                if (selectedPath.Length == 0)
-                {
-                    return Results.NoContent();
-                }
-
-                return Results.Ok(new BrowseFolderResponse(selectedPath));
-            }
-        }
-        catch (Exception ex)
-        {
-            return Results.Problem(
-                statusCode: StatusCodes.Status501NotImplemented,
-                title: "Folder picker unavailable",
-                detail: ex.Message);
-        }
-        finally
-        {
-            DialogLock.Release();
-        }
+        return Results.Ok(new BrowseRootsResponse(roots.ToArray()));
     }
 
-    private static ProcessStartInfo CreateDialogProcess()
+    private static void AddHomeRoot(List<BrowseRootEntry> roots) =>
+        AddBrowseRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "home", "home");
+
+    private static void AddVolumeRoots(List<BrowseRootEntry> roots)
     {
         if (OperatingSystem.IsWindows())
         {
-            return new ProcessStartInfo
+            foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady))
             {
-                FileName = "powershell",
-                Arguments = "-Sta -NoProfile -NonInteractive -Command \"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Select project folder'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            var picker = FindLinuxPicker();
-            if (picker is null)
-            {
-                throw new InvalidOperationException("Neither zenity nor kdialog found on PATH.");
+                AddBrowseRoot(roots, drive.Name, "drive", GetDriveLabel(drive));
             }
-
-            return new ProcessStartInfo
-            {
-                FileName = picker,
-                Arguments = picker == "zenity"
-                    ? "--file-selection --directory --title=\"Select project folder\""
-                    : "--getexistingdirectory",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
         }
-
-        return new ProcessStartInfo
+        else if (OperatingSystem.IsMacOS())
         {
-            FileName = "osascript",
-            Arguments = "-e 'POSIX path of (choose folder with prompt \"Select project folder\")'",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
+            foreach (var volume in ListMacVolumes())
+            {
+                AddBrowseRoot(roots, volume, "volume");
+            }
+        }
     }
 
-    private static string? FindLinuxPicker()
+    private static string GetDriveLabel(DriveInfo drive) =>
+        string.IsNullOrWhiteSpace(drive.VolumeLabel) ? drive.Name : drive.VolumeLabel;
+
+    private static IReadOnlyList<string> ListMacVolumes()
     {
-        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        try
         {
-            foreach (var picker in new[] { "zenity", "kdialog" })
-            {
-                if (File.Exists(Path.Combine(directory, picker)))
-                {
-                    return picker;
-                }
-            }
+            return Directory.EnumerateDirectories("/Volumes").ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private static void AddBrowseRoot(List<BrowseRootEntry> roots, string path, string kind, string? name = null)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            return;
         }
 
-        return null;
+        var normalized = NormalizePath(path);
+        if (roots.Any(existing => existing.Path.Equals(normalized, PathComparison)))
+        {
+            return;
+        }
+
+        var resolved = name ?? Path.GetFileName(normalized);
+        roots.Add(new BrowseRootEntry(
+            string.IsNullOrEmpty(resolved) ? normalized : resolved,
+            normalized,
+            kind));
     }
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }

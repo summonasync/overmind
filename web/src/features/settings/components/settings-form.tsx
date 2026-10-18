@@ -7,6 +7,7 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
+import { Textarea } from "@/shared/ui/textarea";
 import { TestVerdicts } from "@/features/settings/components/test-verdicts";
 import type { VectorSearchHealth } from "@/shared/api/types";
 import type {
@@ -47,6 +48,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
   const [planningRequireHumanValidationDefault, setPlanningRequireHumanValidationDefault] = useState(
     settings.planningRequireHumanValidationDefault,
   );
+  const [planningAgentNamingRulesDefault, setPlanningAgentNamingRulesDefault] = useState(
+    settings.planningAgentNamingRulesDefault,
+  );
   const [notificationNudgeMode, setNotificationNudgeMode] = useState(settings.notificationNudgeMode);
   const [notificationNudgeIntervalMinutes, setNotificationNudgeIntervalMinutes] = useState(
     String(settings.notificationNudgeIntervalMinutes),
@@ -64,6 +68,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     setQdrantEndpoint(settings.qdrantEndpoint);
     setPlanningMaterializationDefault(settings.planningMaterializationDefault);
     setPlanningRequireHumanValidationDefault(settings.planningRequireHumanValidationDefault);
+    setPlanningAgentNamingRulesDefault(settings.planningAgentNamingRulesDefault);
     setNotificationNudgeMode(settings.notificationNudgeMode);
     setNotificationNudgeIntervalMinutes(String(settings.notificationNudgeIntervalMinutes));
     setIntervalError(null);
@@ -85,6 +90,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       qdrantEndpoint: qdrantEndpoint.trim(),
       planningMaterializationDefault,
       planningRequireHumanValidationDefault,
+      planningAgentNamingRulesDefault: planningAgentNamingRulesDefault.trim(),
       notificationNudgeMode,
       notificationNudgeIntervalMinutes: minutes,
     });
@@ -222,6 +228,17 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             </Select>
           </Field>
         </div>
+        <Field label="Agent naming rules default" htmlFor="planning-agent-naming-rules-default">
+          <Textarea
+            id="planning-agent-naming-rules-default"
+            rows={5}
+            maxLength={2000}
+            value={planningAgentNamingRulesDefault}
+            onChange={(event) => setPlanningAgentNamingRulesDefault(event.target.value)}
+            placeholder="Aliases look like Dan, Rex. One agent, one claim at a time…"
+          />
+        </Field>
+        <p className="text-xs text-muted">{planningAgentNamingRulesDefault.length}/2000</p>
       </div>
 
       <div className="space-y-3 border-t border-border pt-4">

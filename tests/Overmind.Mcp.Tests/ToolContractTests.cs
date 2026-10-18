@@ -165,6 +165,20 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ListEntries_AuditTypeFilter_IsAcceptedAndProxied()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "audit"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        ParseQuery(request.Query)["type"].ShouldBe("audit");
+    }
+
+    [Fact]
     public async Task ToolsList_ListEntries_DescriptionPinsMetadataDefault()
     {
         var response = await Driver.ListToolsAsync();
@@ -175,7 +189,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
             "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill, featureRequest, tombstone), tag and q (fulltext). " +
+            "Optional filters: type (note, decision, gate, guard, skill, featureRequest, audit, tombstone), tag and q (fulltext). " +
             "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
 
         var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
@@ -446,6 +460,7 @@ public class ToolContractTests : McpSessionTestBase
     [InlineData("gate")]
     [InlineData("guard")]
     [InlineData("featureRequest")]
+    [InlineData("audit")]
     [InlineData("tombstone")]
     public async Task WriteEntry_AllowedTypes_ProxyToApi(string type)
     {

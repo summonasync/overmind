@@ -20,6 +20,7 @@ const toneClasses: Record<BadgeTone, string> = {
   danger: "bg-danger/10 text-danger",
   skill: "bg-type-skill/10 text-type-skill",
   idea: "bg-type-featureRequest/10 text-type-featureRequest",
+  audit: "bg-type-audit/10 text-type-audit",
 };
 
 export function Badge({ tone = "neutral", children, className, style }: BadgeProps) {

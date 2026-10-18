@@ -26,7 +26,7 @@ export function ProjectTabs() {
   }
 
   return (
-    <div className="px-4 pt-4 lg:px-6 lg:pt-6">
+    <div className="pb-4 lg:pb-6">
       <Suspense fallback={null}>
         <ProjectTabsBar activeKey={active.key} />
       </Suspense>

@@ -13,6 +13,7 @@ export interface SettingsResponse {
   openAiApiKeyConfigured: boolean;
   planningMaterializationDefault: PlanningMaterializationDefault;
   planningRequireHumanValidationDefault: PlanningValidationDefault;
+  planningAgentNamingRulesDefault: string;
   notificationNudgeMode: NotificationNudgeMode;
   notificationNudgeIntervalMinutes: number;
 }
@@ -30,6 +31,7 @@ export interface SettingsFormValues {
   qdrantEndpoint: string;
   planningMaterializationDefault: PlanningMaterializationDefault;
   planningRequireHumanValidationDefault: PlanningValidationDefault;
+  planningAgentNamingRulesDefault: string;
   notificationNudgeMode: NotificationNudgeMode;
   notificationNudgeIntervalMinutes: number;
 }

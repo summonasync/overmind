@@ -2,14 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Brain, FolderCog, FolderPlus, FolderTree, List, RefreshCw, type LucideIcon } from "lucide-react";
+import { Brain, FolderCog, FolderPlus, FolderTree, List, RefreshCw, Star, type LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
-import { browseFolder } from "@/shared/api/system";
 import { Modal } from "@/shared/ui/modal";
-import { ProjectForm, ProjectTree, useAddTreeRoot, useProjectList, useProjectMutations } from "@/features/projects";
+import { Select } from "@/shared/ui/select";
 import {
+  FolderPickerModal,
+  ProjectForm,
+  ProjectTree,
+  useAddTreeRoot,
+  useProjectList,
+  useProjectMutations,
+} from "@/features/projects";
+import {
+  filterFavoriteProjects,
+  sortProjects,
+  type ProjectSortField,
+} from "@/features/projects/lib/project-order";
+import {
+  getFavoritesOnly,
+  getProjectSortField,
   getRailView,
+  saveFavoritesOnly,
   saveLastActiveProjectId,
+  saveProjectSortField,
   saveRailView,
   type RailView,
 } from "@/features/projects/lib/tree-session";
@@ -45,6 +61,7 @@ function ProjectsRail() {
   const searchParams = useSearchParams();
   const [view, setView] = useState<RailView>("tree");
   const [registerPath, setRegisterPath] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const addRoot = useAddTreeRoot();
   const { create } = useProjectMutations();
@@ -61,15 +78,15 @@ function ProjectsRail() {
     saveRailView(next);
   };
 
-  const handleAddRoot = async () => {
+  const handleAddRoot = () => {
     setAddError(null);
-    const selected = await browseFolder();
-    if (!selected) {
-      return;
-    }
+    setPickerOpen(true);
+  };
 
+  const handleRootPicked = async (path: string) => {
+    setPickerOpen(false);
     try {
-      await addRoot.mutateAsync(selected.path);
+      await addRoot.mutateAsync(path);
     } catch (err) {
       setAddError(err instanceof Error ? err.message : "Failed to add root folder.");
     }
@@ -81,12 +98,12 @@ function ProjectsRail() {
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface lg:sticky lg:top-14 lg:flex lg:h-[calc(100vh-3.5rem)] lg:self-start">
       <div className="flex items-center gap-1 px-4 pb-1 pt-4">
         <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Folders
+          Mindboards
         </span>
         {view === "tree" ? (
           <button
             type="button"
-            onClick={() => void handleAddRoot()}
+            onClick={handleAddRoot}
             disabled={addRoot.isPending}
             aria-label="Add root folder"
             title="Add root folder"
@@ -154,6 +171,12 @@ function ProjectsRail() {
           />
         ) : null}
       </Modal>
+      <FolderPickerModal
+        title="Add root folder"
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(path) => void handleRootPicked(path)}
+      />
     </aside>
   );
 }
@@ -164,10 +187,31 @@ interface ProjectListRowsProps {
 
 function ProjectListRows({ activeProjectId }: ProjectListRowsProps) {
   const { data: projects, loading, error, refetch } = useProjectList();
-  const sorted = useMemo(
-    () => [...projects].sort((a, b) => a.name.localeCompare(b.name)),
-    [projects],
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [sortField, setSortField] = useState<ProjectSortField>("name");
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setFavoritesOnly(getFavoritesOnly());
+      setSortField(getProjectSortField());
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const visible = useMemo(
+    () => sortProjects(filterFavoriteProjects(projects, favoritesOnly), sortField),
+    [projects, favoritesOnly, sortField],
   );
+
+  const handleFavoritesOnly = (next: boolean) => {
+    setFavoritesOnly(next);
+    saveFavoritesOnly(next);
+  };
+
+  const handleSortField = (next: ProjectSortField) => {
+    setSortField(next);
+    saveProjectSortField(next);
+  };
 
   if (loading) {
     return <p className="px-2 py-1 text-xs text-muted">Loading projects…</p>;
@@ -189,34 +233,82 @@ function ProjectListRows({ activeProjectId }: ProjectListRowsProps) {
     );
   }
 
-  if (sorted.length === 0) {
+  if (projects.length === 0) {
     return <p className="px-2 py-1 text-xs text-muted">No registered projects yet.</p>;
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
-      {sorted.map((project) => {
-        const active = activeProjectId !== null && project.id === activeProjectId;
-        return (
-          <a
-            key={project.id}
-            href={`/dashboard?project=${project.id}`}
-            title={project.diskPath}
-            aria-current={active ? "page" : undefined}
-            onClick={() => saveLastActiveProjectId(project.id)}
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5 px-2 pb-1">
+        <div
+          role="group"
+          aria-label="Filter projects"
+          className="flex items-center gap-0.5 rounded-md border border-border bg-surface-raised p-0.5"
+        >
+          <button
+            type="button"
+            aria-pressed={!favoritesOnly}
+            onClick={() => handleFavoritesOnly(false)}
+            title="All projects"
             className={cn(
-              "flex min-w-0 items-center gap-2 rounded-md border-l-2 px-2 py-2 text-sm font-medium transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-              active
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
+              "flex min-w-0 flex-1 items-center justify-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              !favoritesOnly ? "bg-primary/15 text-primary" : "text-muted hover:text-foreground",
             )}
           >
-            <Brain size={16} aria-hidden className={cn("shrink-0", !active && "text-primary-hover")} />
-            <span className="truncate">{project.name}</span>
-          </a>
-        );
-      })}
+            All
+          </button>
+          <button
+            type="button"
+            aria-pressed={favoritesOnly}
+            onClick={() => handleFavoritesOnly(true)}
+            title="Favorite projects"
+            className={cn(
+              "flex min-w-0 flex-1 items-center justify-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              favoritesOnly ? "bg-primary/15 text-primary" : "text-muted hover:text-foreground",
+            )}
+          >
+            <Star size={11} aria-hidden />
+            Favorites
+          </button>
+        </div>
+        <Select
+          aria-label="Sort projects"
+          value={sortField}
+          onChange={(event) => handleSortField(event.target.value as ProjectSortField)}
+          className="w-full px-1.5 py-0.5 text-xs"
+        >
+          <option value="name">Name</option>
+          <option value="openFeatures">Open features</option>
+        </Select>
+      </div>
+      {visible.length === 0 ? (
+        <p className="px-2 py-1 text-xs text-muted">No favorite projects yet.</p>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {visible.map((project) => {
+            const active = activeProjectId !== null && project.id === activeProjectId;
+            return (
+              <a
+                key={project.id}
+                href={`/dashboard?project=${project.id}`}
+                title={project.diskPath}
+                aria-current={active ? "page" : undefined}
+                onClick={() => saveLastActiveProjectId(project.id)}
+                className={cn(
+                  "flex min-w-0 items-center gap-2 rounded-md border-l-2 px-2 py-2 text-sm font-medium transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
+                )}
+              >
+                <Brain size={16} aria-hidden className={cn("shrink-0", !active && "text-primary-hover")} />
+                <span className="truncate">{project.name}</span>
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

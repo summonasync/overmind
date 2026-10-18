@@ -27,6 +27,13 @@ export const boardQueryOptions = (projectId: string) =>
     refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 
+export const boardOnceQueryOptions = (projectId: string) =>
+  queryOptions({
+    queryKey: planningKeys.board(projectId),
+    queryFn: () => listPlanningBoard(projectId),
+    enabled: projectId.length > 0,
+  });
+
 export const featureQueryOptions = (projectId: string, slug: string) =>
   queryOptions({
     queryKey: planningKeys.feature(projectId, slug),

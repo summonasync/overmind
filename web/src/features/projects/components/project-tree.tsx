@@ -14,7 +14,7 @@ import {
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
-import { browseFolder } from "@/shared/api/system";
+import { FolderPickerModal } from "@/features/projects/components/folder-picker-modal";
 import {
   useAddTreeRoot,
   useDirectory,
@@ -39,6 +39,7 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
   const { data: projects } = useProjectList();
   const addRoot = useAddTreeRoot();
   const [addError, setAddError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<string[]>([]);
   const [routeCollapsed, setRouteCollapsed] = useState<string[]>([]);
   const [sessionReady, setSessionReady] = useState(false);
@@ -99,19 +100,28 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
     setExpandedPaths((paths) => [...paths, path]);
   };
 
-  const handleAddRoot = async () => {
+  const handleAddRoot = () => {
     setAddError(null);
-    const selected = await browseFolder();
-    if (!selected) {
-      return;
-    }
+    setPickerOpen(true);
+  };
 
+  const handleRootPicked = async (path: string) => {
+    setPickerOpen(false);
     try {
-      await addRoot.mutateAsync(selected.path);
+      await addRoot.mutateAsync(path);
     } catch (err) {
       setAddError(err instanceof Error ? err.message : "Failed to add root folder.");
     }
   };
+
+  const picker = (
+    <FolderPickerModal
+      title="Add root folder"
+      open={pickerOpen}
+      onClose={() => setPickerOpen(false)}
+      onSelect={(path) => void handleRootPicked(path)}
+    />
+  );
 
   if (isPending) {
     return <p className="px-3 py-1 text-xs text-muted">Loading folders…</p>;
@@ -135,32 +145,38 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
 
   if (data.roots.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-        <p className="text-xs text-muted">No root folders yet. Add one to browse your projects.</p>
-        <Button variant="accent" onClick={() => void handleAddRoot()} disabled={addRoot.isPending}>
-          <FolderPlus size={14} aria-hidden />
-          Add root folder
-        </Button>
-        {addError ? <p className="text-xs text-danger">{addError}</p> : null}
-      </div>
+      <>
+        {picker}
+        <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
+          <p className="text-xs text-muted">No root folders yet. Add one to browse your projects.</p>
+          <Button variant="accent" onClick={handleAddRoot} disabled={addRoot.isPending}>
+            <FolderPlus size={14} aria-hidden />
+            Add root folder
+          </Button>
+          {addError ? <p className="text-xs text-danger">{addError}</p> : null}
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
-      {data.roots.map((root) => (
-        <TreeNode
-          key={root.path}
-          entry={rootToEntry(root)}
-          depth={0}
-          onRegister={onRegister}
-          onToggleExpanded={toggleExpanded}
-          isExpanded={isExpanded}
-          activeProjectId={activeProjectId}
-          actions={<RootRemoveButton root={root} />}
-        />
-      ))}
-    </div>
+    <>
+      {picker}
+      <div className="flex flex-col gap-0.5">
+        {data.roots.map((root) => (
+          <TreeNode
+            key={root.path}
+            entry={rootToEntry(root)}
+            depth={0}
+            onRegister={onRegister}
+            onToggleExpanded={toggleExpanded}
+            isExpanded={isExpanded}
+            activeProjectId={activeProjectId}
+            actions={<RootRemoveButton root={root} />}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 

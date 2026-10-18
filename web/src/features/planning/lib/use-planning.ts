@@ -22,6 +22,7 @@ import {
   validatePlanningArtifact,
 } from "@/features/planning/api";
 import {
+  boardOnceQueryOptions,
   boardQueryOptions,
   driftQueryOptions,
   featureQueryOptions,
@@ -40,6 +41,11 @@ import type {
 
 export function usePlanningBoard(projectId: string) {
   const query = useQuery(boardQueryOptions(projectId));
+  return { data: query.data ?? [], loading: query.isPending, error: query.error };
+}
+
+export function usePlanningBoardOnce(projectId: string) {
+  const query = useQuery(boardOnceQueryOptions(projectId));
   return { data: query.data ?? [], loading: query.isPending, error: query.error };
 }
 

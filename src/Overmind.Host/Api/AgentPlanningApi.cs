@@ -475,178 +475,31 @@ public static class AgentPlanningApi
     internal static async Task<IResult> Current(
         Guid projectId,
         string slug,
-        PlanningPolicy policy,
-        FeatureDependencyService dependencies,
-        TaskDependencyService taskDependencies,
-        DirectiveService directives,
-        OvermindDbContext db,
+        PlanningCurrentService current,
         CancellationToken ct)
     {
-        var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
-        if (!projectExists)
+        PlanningCurrentResult result;
+        try
         {
-            return HttpErrors.NotFound($"Project '{projectId}' was not found.");
+            result = await current.GetCurrentAsync(projectId, slug, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
         }
 
-        var feature = await db.PlanningFeatures
-            .Include(f => f.Artifacts)
-            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
-        if (feature is null)
-        {
-            return HttpErrors.NotFound($"Feature '{slug}' was not found.");
-        }
-
-        var currentFeature = new PlanningCurrentFeature(
-            feature.Slug, feature.Title, feature.Status,
-            PlanningMapper.ToOpenDirectives(await directives.ListOpenAsync(feature.Id, ct)));
-
-        var openBlockers = await dependencies.OpenBlockersAsync(projectId, slug, ct);
-        if (openBlockers.Count > 0)
-        {
-            return Results.Ok(new PlanningCurrentResponse(
-                "stop", currentFeature, null,
-                $"STOP: feature '{feature.Slug}' is blocked by unclosed features: {BlockerList(openBlockers)}. " +
-                "Reads stay open; task issuance stops until every blocker closes (done or review)."));
-        }
-
-        var gated = await policy.ResolveValidationGateAsync(projectId, ct);
-
-        var spec = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
-        var plan = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Plan);
-
-        if (gated && (spec is null || spec.Status == PlanningArtifactStatus.Draft))
-        {
-            return Results.Ok(new PlanningCurrentResponse(
-                "stop", currentFeature, null,
-                $"STOP: spec awaits human validation — it cannot be approved through MCP. " +
-                $"Send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply — validation is never agent-approvable."));
-        }
-
-        if (gated && spec is { Status: PlanningArtifactStatus.Validated } &&
-            (plan is null || plan.Status == PlanningArtifactStatus.Draft))
-        {
-            return Results.Ok(new PlanningCurrentResponse(
-                "stop", currentFeature, null,
-                $"STOP: plan awaits human validation — it cannot be approved through MCP. " +
-                $"Send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply — validation is never agent-approvable."));
-        }
-
-        var tasks = feature.Artifacts
-            .Where(a => a.Kind == PlanningArtifactKind.Task)
-            .OrderBy(a => a.Order)
-            .ToList();
-
-        if (tasks.Count == 0)
-        {
-            return Results.Ok(new PlanningCurrentResponse(
-                "empty", currentFeature, null,
-                "No tasks yet — decompose the validated plan via planning_upsert_tasks: each task an execution contract (goal, scope, anti-scope, acceptance-criteria, refs)."));
-        }
-
-        if (tasks.All(t => t.Status == PlanningArtifactStatus.Done))
-        {
-            return Results.Ok(new PlanningCurrentResponse(
-                "empty", currentFeature, null, ResultStateReason(feature)));
-        }
-
-        var candidates = tasks
-            .Where(t => t.Status is PlanningArtifactStatus.Todo or PlanningArtifactStatus.InProgress)
-            .ToList();
-
-        if (candidates.Count > 0)
-        {
-            var blockedStates = await taskDependencies.BlockedOrdersAsync(feature.Id, ct);
-            var blockedOrders = blockedStates
-                .Where(s => s.Blocked)
-                .Select(s => s.Order)
-                .ToHashSet();
-
-            var actionable = candidates.FirstOrDefault(t => !blockedOrders.Contains(t.Order));
-            if (actionable is not null)
-            {
-                return Results.Ok(new PlanningCurrentResponse(
-                    "task",
-                    currentFeature,
-                    PlanningMapper.ToArtifactResponse(
-                        actionable, blockedStates.ToDictionary(s => s.Order)),
-                    null,
-                    SpecPlanWarnings(feature)));
-            }
-
-            return Results.Ok(new PlanningCurrentResponse(
-                "stop",
-                currentFeature,
-                null,
-                $"STOP: every actionable task is blocked by unclosed tasks: " +
-                $"{await UnclosedChainAsync(taskDependencies, candidates, ct)}. " +
-                "Reads stay open; task issuance stops until every blocker closes (done or review)."));
-        }
-
-        var inReview = tasks.Count(t => t.Status == PlanningArtifactStatus.Review);
-        if (inReview > 0)
-        {
-            return Results.Ok(new PlanningCurrentResponse(
-                "held", currentFeature, null,
-                $"{inReview} in review — finish the reviews, then close each task with planning_set_status."));
-        }
-
-        var blocked = tasks.First(t => t.Status == PlanningArtifactStatus.Blocked);
         return Results.Ok(new PlanningCurrentResponse(
-            "task",
-            currentFeature,
-            PlanningMapper.ToArtifactResponse(blocked),
-            "The next task is blocked.",
-            SpecPlanWarnings(feature)));
-    }
-
-    private static async Task<string> UnclosedChainAsync(
-        TaskDependencyService taskDependencies,
-        IReadOnlyList<PlanningArtifact> candidates,
-        CancellationToken ct)
-    {
-        var links = new List<string>(candidates.Count);
-        foreach (var candidate in candidates)
-        {
-            var blockers = await taskDependencies.UnclosedBlockersAsync(candidate.Id, ct);
-            links.Add($"task {candidate.Order} blocked by [{string.Join(", ", blockers.Select(b => b.Order))}]");
-        }
-
-        return string.Join(", ", links);
-    }
-
-    private static string ResultStateReason(PlanningFeature feature)
-    {
-        var result = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Result);
-        return result?.Status switch
-        {
-            PlanningArtifactStatus.Draft => $"Result artifact drafted — validate it via the proof flow: " +
-                $"send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply.",
-            PlanningArtifactStatus.Validated => "Result validated — closing the feature needs the human's done tap on the board.",
-            _ => "All tasks are done — write the result artifact via planning_upsert_artifact(kind=result)."
-        };
-    }
-
-    private static string[]? SpecPlanWarnings(PlanningFeature feature)
-    {
-        var spec = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
-        var plan = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Plan);
-
-        var warnings = new List<string>(2);
-        if (spec is null)
-        {
-            warnings.Add("spec missing");
-        }
-        else if (spec.Status == PlanningArtifactStatus.Draft)
-        {
-            warnings.Add("spec not validated");
-        }
-
-        if (plan is null || plan.Status == PlanningArtifactStatus.Draft)
-        {
-            warnings.Add("plan not validated");
-        }
-
-        return warnings.Count == 0 ? null : [.. warnings];
+            result.State,
+            new PlanningCurrentFeature(
+                result.Feature.Slug,
+                result.Feature.Title,
+                result.Feature.Status,
+                PlanningMapper.ToOpenDirectives(result.Feature.OpenDirectives)),
+            result.Actionable is null
+                ? null
+                : PlanningMapper.ToArtifactResponse(result.Actionable, result.BlockedStates),
+            result.Reason,
+            result.Warnings));
     }
 
     internal static async Task<IResult> DeleteArtifact(
@@ -719,12 +572,6 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(ex);
         }
     }
-
-    private static string BlockerList(IReadOnlyList<FeatureDependencyEntry> openBlockers) =>
-        string.Join(", ", openBlockers.Select(FormatBlocker));
-
-    private static string FormatBlocker(FeatureDependencyEntry entry) =>
-        $"{entry.Slug} ({entry.Status.ToString().ToLowerInvariant()})";
 
     private static bool CarriesPatchShape(PatchPlanningArtifactRequest request)
     {

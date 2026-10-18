@@ -22,6 +22,7 @@ export function updateSettings(values: SettingsFormValues): Promise<UpdateSettin
     qdrantEndpoint: values.qdrantEndpoint || null,
     planningMaterializationDefault: values.planningMaterializationDefault,
     planningRequireHumanValidationDefault: values.planningRequireHumanValidationDefault,
+    planningAgentNamingRulesDefault: values.planningAgentNamingRulesDefault,
     notificationNudgeMode: values.notificationNudgeMode,
     notificationNudgeIntervalMinutes: values.notificationNudgeIntervalMinutes,
   });

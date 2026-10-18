@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Overmind.Core;
+using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
 
@@ -254,6 +257,59 @@ public sealed class ProjectApiTests : IDisposable
         problem.Errors["NumberStyle"][0].ShouldContain("plain");
     }
 
+    [Fact]
+    public async Task SetFavorite_ToggleRoundTrip_PersistsState()
+    {
+        var created = await CreateProjectAsync("favorite", TestPaths.DiskPath("favorite"));
+
+        var starResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{created.Id}/favorite", new { IsFavorite = true });
+        starResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var starred = await starResponse.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        starred!.IsFavorite.ShouldBeTrue();
+
+        var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{created.Id}", JsonOptions);
+        fetched!.IsFavorite.ShouldBeTrue();
+
+        var unstarResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{created.Id}/favorite", new { IsFavorite = false });
+        var unstarred = await unstarResponse.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        unstarred!.IsFavorite.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task SetFavorite_MissingProject_Returns404()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{Guid.NewGuid()}/favorite", new { IsFavorite = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task ListAll_OpenFeatureCount_ExcludesDoneFeatures()
+    {
+        var created = await CreateProjectAsync("counted", TestPaths.DiskPath("counted"));
+        await CreateFeatureAsync(created.Id, "open-one");
+        await CreateFeatureAsync(created.Id, "closed-one");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            db.PlanningFeatures.Single(f => f.Slug == "closed-one").SetStatus(PlanningFeatureStatus.Done);
+            db.SaveChanges();
+        }
+
+        var raw = await _client.GetStringAsync("/api/projects");
+        using var document = JsonDocument.Parse(raw);
+        var fieldNames = document.RootElement[0].EnumerateObject().Select(p => p.Name).ToArray();
+        fieldNames.ShouldContain("isFavorite");
+        fieldNames.ShouldContain("openFeatureCount");
+
+        var listed = await _client.GetFromJsonAsync<List<ProjectJson>>("/api/projects", JsonOptions);
+        listed!.Single().OpenFeatureCount.ShouldBe(1);
+    }
+
     private async Task<ProjectJson> CreateProjectAsync(string name, string diskPath)
     {
         var response = await _client.PostAsJsonAsync("/api/projects", new
@@ -269,6 +325,15 @@ public sealed class ProjectApiTests : IDisposable
         return project!;
     }
 
+    private async Task CreateFeatureAsync(Guid projectId, string slug)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features",
+            new { Slug = slug, Title = slug, Body = (string?)null });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
     public sealed record ProjectJson(
         Guid Id,
         string Name,
@@ -276,6 +341,8 @@ public sealed class ProjectApiTests : IDisposable
         string Description,
         string NumberStyle,
         string? NumberPrefix,
+        bool IsFavorite,
+        int OpenFeatureCount,
         DateTime CreatedAt);
 
     public sealed record ProblemJson(

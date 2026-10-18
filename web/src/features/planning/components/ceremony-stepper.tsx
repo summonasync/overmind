@@ -19,6 +19,7 @@ const TONE_DOTS: Record<BadgeTone, string> = {
   danger: "bg-danger",
   skill: "bg-type-skill",
   idea: "bg-type-featureRequest",
+  audit: "bg-type-audit",
 };
 
 interface CeremonyStepperProps {

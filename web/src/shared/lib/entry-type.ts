@@ -4,13 +4,22 @@ import {
   Lightbulb,
   Lock,
   ShieldCheck,
+  ShieldHalf,
   Skull,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import type { EntryType } from "@/shared/api/types";
 
-export type EntryTone = "info" | "warning" | "success" | "danger" | "skill" | "idea" | "muted";
+export type EntryTone =
+  | "info"
+  | "warning"
+  | "success"
+  | "danger"
+  | "skill"
+  | "idea"
+  | "muted"
+  | "audit";
 
 export interface EntryTypeMeta {
   tone: EntryTone;
@@ -26,4 +35,5 @@ export const ENTRY_TYPE_META: Record<EntryType, EntryTypeMeta> = {
   skill: { tone: "skill", icon: Sparkles, label: "Skill" },
   tombstone: { tone: "muted", icon: Skull, label: "Tombstone" },
   featureRequest: { tone: "idea", icon: Lightbulb, label: "Feature request" },
+  audit: { tone: "audit", icon: ShieldHalf, label: "Audit" },
 };

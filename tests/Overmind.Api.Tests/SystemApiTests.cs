@@ -210,6 +210,27 @@ public sealed class SystemApiTests : IDisposable
     }
 
     [Fact]
+    public async Task BrowseRoots_IncludesHomeDirectory()
+    {
+        var roots = await GetBrowseRootsAsync(_client);
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        roots.Roots.ShouldContain(r => r.Kind == "home" && r.Path == Normalize(home));
+    }
+
+    [Fact]
+    public async Task BrowseRoots_ReflectsConfiguredTreeRoots()
+    {
+        await AddRootAsync(_sandboxDir);
+
+        var roots = await GetBrowseRootsAsync(_client);
+
+        var root = roots.Roots.Single(r => r.Path == Normalize(_sandboxDir));
+        root.Name.ShouldBe(new DirectoryInfo(_sandboxDir).Name);
+        root.Kind.ShouldBe("treeRoot");
+    }
+
+    [Fact]
     public async Task ListDirectory_ReturnsSubdirectoriesOnly_SortedAlphabetically()
     {
         Directory.CreateDirectory(Path.Combine(_sandboxDir, "zebra"));
@@ -242,6 +263,56 @@ public sealed class SystemApiTests : IDisposable
         var listing = await GetListingAsync(_sandboxDir);
 
         listing.Entries.Select(e => e.Name).ShouldBe(["visible"]);
+    }
+
+    [Fact]
+    public async Task ListDirectory_HidesDotDirectoriesOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(Path.Combine(_sandboxDir, ".stash"));
+        Directory.CreateDirectory(Path.Combine(_sandboxDir, "visible"));
+
+        var listing = await GetListingAsync(_sandboxDir);
+
+        listing.Entries.Select(e => e.Name).ShouldBe(["visible"]);
+    }
+
+    [Fact]
+    public async Task ListDirectory_UnreadableRoot_ReturnsEmptyInaccessibleListing()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var locked = Path.Combine(_sandboxDir, "locked");
+        Directory.CreateDirectory(locked);
+        File.SetUnixFileMode(locked, UnixFileMode.None);
+        try
+        {
+            if (CanEnumerate(locked))
+            {
+                return;
+            }
+
+            var response = await _client.GetAsync(
+                $"/api/system/list-directory?path={Uri.EscapeDataString(locked)}");
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var listing = (await response.Content.ReadFromJsonAsync<ListingJson>(JsonOptions))!;
+            listing.Accessible.ShouldBeFalse();
+            listing.Entries.ShouldBeEmpty();
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                locked,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Fact]
@@ -341,6 +412,32 @@ public sealed class SystemApiTests : IDisposable
         return roots!;
     }
 
+    private async Task<BrowseRootsJson> GetBrowseRootsAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/system/browse-roots");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var roots = await response.Content.ReadFromJsonAsync<BrowseRootsJson>(JsonOptions);
+        roots.ShouldNotBeNull();
+        return roots!;
+    }
+
+    private static bool CanEnumerate(string path)
+    {
+        try
+        {
+            foreach (var _ in Directory.EnumerateDirectories(path))
+            {
+                break;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private async Task<ListingJson> GetListingAsync(string path)
     {
         var response = await _client.GetAsync(
@@ -380,7 +477,11 @@ public sealed class SystemApiTests : IDisposable
 
     public sealed record ProblemJson(string? Title, string? Detail);
 
-    public sealed record ListingJson(string Path, bool Truncated, EntryJson[] Entries);
+    public sealed record ListingJson(string Path, bool Truncated, EntryJson[] Entries, bool Accessible);
+
+    public sealed record BrowseRootsJson(BrowseRootJson[] Roots);
+
+    public sealed record BrowseRootJson(string Name, string Path, string Kind);
 
     public sealed record EntryJson(string Name, string Path, bool Accessible, Guid? ProjectId, string? ProjectName);
 

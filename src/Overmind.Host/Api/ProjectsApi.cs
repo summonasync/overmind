@@ -19,6 +19,7 @@ public static class ProjectsApi
         group.MapGet("/{id:guid}", GetById);
         group.MapPut("/{id:guid}", Update);
         group.MapDelete("/{id:guid}", Delete);
+        group.MapPost("/{id:guid}/favorite", SetFavorite);
         group.MapPost("/{id:guid}/manifest/import", ImportManifest);
 
         return group;
@@ -30,7 +31,16 @@ public static class ProjectsApi
             .OrderBy(p => p.Name)
             .ToListAsync(ct);
 
-        return Results.Ok(projects.Select(ProjectMapper.ToResponse).ToArray());
+        var openCounts = await db.PlanningFeatures
+            .Where(f => f.Status != PlanningFeatureStatus.Done)
+            .GroupBy(f => f.ProjectId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var countByProject = openCounts.ToDictionary(c => c.Key, c => c.Count);
+
+        return Results.Ok(projects
+            .Select(p => ProjectMapper.ToResponse(p, countByProject.GetValueOrDefault(p.Id)))
+            .ToArray());
     }
 
     private static async Task<IResult> Create(
@@ -65,6 +75,23 @@ public static class ProjectsApi
         return project is null
             ? HttpErrors.NotFound($"Project '{id}' was not found.")
             : Results.Ok(ProjectMapper.ToResponse(project));
+    }
+
+    private static async Task<IResult> SetFavorite(
+        Guid id,
+        FavoriteRequest request,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (project is null)
+        {
+            return HttpErrors.NotFound($"Project '{id}' was not found.");
+        }
+
+        project.SetFavorite(request.IsFavorite);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ProjectMapper.ToResponse(project));
     }
 
     private static async Task<IResult> Update(

@@ -21,7 +21,7 @@ import {
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
-import { formatRelativeTime } from "@/shared/lib/relative-time";
+import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
 import { FeatureClaimChip } from "@/features/planning/components/feature-claim-chip";
 import { useDragAutoscroll } from "@/features/planning/lib/use-drag-autoscroll";
 import { useQueueReorder } from "@/features/planning/lib/use-queue-reorder";
@@ -292,7 +292,10 @@ export function FeatureBoard({
               ) : null}
 
               <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
-                <span className="truncate text-xs text-muted">
+                <span
+                  className="truncate text-xs text-muted"
+                  title={formatCalendarDate(item.updatedAt)}
+                >
                   updated {formatRelativeTime(item.updatedAt)}
                 </span>
                 <div className="flex shrink-0 gap-1">

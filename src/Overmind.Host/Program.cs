@@ -25,6 +25,11 @@ try
         return await BacklogImportCli.RunAsync(args, CancellationToken.None);
     }
 
+    if (PlanningCli.IsRequested(args))
+    {
+        return await PlanningCli.RunAsync(args, CancellationToken.None);
+    }
+
     Directory.CreateDirectory(OvermindPaths.DataDirectory);
 
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions

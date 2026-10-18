@@ -1,9 +1,12 @@
 import { readJson, writeJson } from "@/shared/lib/session-json";
+import type { ProjectSortField } from "@/features/projects/lib/project-order";
 
 const EXPANDED_PATHS_KEY = "overmind.tree.expandedPaths";
 const PROJECTS_OPEN_KEY = "overmind.tree.projectsOpen";
 const LAST_PROJECT_KEY = "overmind.tree.lastProjectId";
 const RAIL_VIEW_KEY = "overmind.rail.view";
+const FAVORITES_ONLY_KEY = "overmind.projects.favoritesOnly";
+const SORT_FIELD_KEY = "overmind.projects.sortField";
 
 export type RailView = "list" | "tree";
 
@@ -13,6 +16,22 @@ export function getRailView(): RailView {
 
 export function saveRailView(view: RailView): void {
   writeJson(RAIL_VIEW_KEY, view);
+}
+
+export function getFavoritesOnly(): boolean {
+  return readJson<boolean>(FAVORITES_ONLY_KEY, false) === true;
+}
+
+export function saveFavoritesOnly(favoritesOnly: boolean): void {
+  writeJson(FAVORITES_ONLY_KEY, favoritesOnly);
+}
+
+export function getProjectSortField(): ProjectSortField {
+  return readJson<unknown>(SORT_FIELD_KEY, "name") === "openFeatures" ? "openFeatures" : "name";
+}
+
+export function saveProjectSortField(field: ProjectSortField): void {
+  writeJson(SORT_FIELD_KEY, field);
 }
 
 export function getExpandedPaths(): string[] {

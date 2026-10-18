@@ -21,6 +21,10 @@ public sealed record ProjectResponse(
     string? Manifest,
     ProjectNumberStyle NumberStyle,
     string? NumberPrefix,
+    bool IsFavorite,
+    int OpenFeatureCount,
     DateTime CreatedAt);
+
+public sealed record FavoriteRequest(bool IsFavorite);
 
 public sealed record ProjectManifestImportResponse(string SourceFile, string Manifest);

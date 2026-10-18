@@ -28,6 +28,7 @@ public static class PlanningMapper
             TaskTotal(artifacts),
             TaskDone(artifacts),
             TaskCounts(artifacts),
+            feature.CreatedAt,
             feature.UpdatedAt,
             isBlocked,
             feature.QueuePosition,
@@ -84,6 +85,8 @@ public static class PlanningMapper
                 TaskTotal(artifacts)),
             CeremonyPhasePlanner.BriefExcerpt(feature.Body),
             openDirectiveCount,
+            feature.CreatedAt,
+            feature.UpdatedAt,
             feature.Lane,
             laneHolder ?? LaneHolderOf(feature, claimState),
             Overlaps(overlaps));

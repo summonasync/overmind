@@ -5,6 +5,7 @@ import {
   createProject,
   deleteProject,
   importProjectManifest,
+  toggleProjectFavorite,
   updateProject,
 } from "@/features/projects/api";
 import { projectKeys, projectListQueryOptions } from "@/features/projects/queries";
@@ -44,6 +45,21 @@ export function useProjectMutations() {
   });
 
   return { create, update, remove };
+}
+
+export function useProjectFavoriteToggle() {
+  const queryClient = useQueryClient();
+
+  const toggle = useMutation({
+    mutationFn: ({ id, isFavorite }: { id: string; isFavorite: boolean }) =>
+      toggleProjectFavorite(id, isFavorite),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...projectKeys.all, "tree"] });
+    },
+  });
+
+  return toggle;
 }
 
 export function useProjectManifestImport() {

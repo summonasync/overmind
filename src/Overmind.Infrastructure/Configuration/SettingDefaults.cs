@@ -11,6 +11,7 @@ public static class SettingDefaults
     public const string PlanningMaterializationDefault = "on";
     public const string PlanningMaterializationSync = "off";
     public const string PlanningRequireHumanValidationDefault = "off";
+    public const string PlanningAgentNamingRulesDefault = "";
 
     public const string NotificationNudgeMode = "quiet";
     public const int NotificationNudgeIntervalMinutes = 10;

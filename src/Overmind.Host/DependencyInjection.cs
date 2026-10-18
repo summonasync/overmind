@@ -133,6 +133,7 @@ public static class DependencyInjection
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<FeatureDependencyService>();
         services.AddScoped<FeatureQueueService>();
+        services.AddScoped<PlanningCurrentService>();
         services.AddScoped<WaveSnapshotService>();
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<BacklogImportSeeder>();

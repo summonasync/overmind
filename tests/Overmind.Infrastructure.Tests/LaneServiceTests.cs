@@ -75,6 +75,7 @@ public sealed class LaneServiceTests : IDisposable
         var service = CreateService();
         await service.SetLanesAsync(_projectId,
             [new LaneUpsert("frontend", "old contour", 2), new LaneUpsert("obsolete", "gone", null)]);
+        await CreateFeatureAsync("010-old", "obsolete");
 
         var roster = await service.SetLanesAsync(_projectId,
         [
@@ -86,6 +87,7 @@ public sealed class LaneServiceTests : IDisposable
         roster.Single(l => l.Name == "frontend").Contour.ShouldBe("web/src");
         roster.Single(l => l.Name == "frontend").SerialOrder.ShouldBeNull();
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(2);
+        (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "010-old")).Lane.ShouldBeNull();
     }
 
     [Fact]
@@ -223,16 +225,31 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeletingALaneKeepsTheFeatureLaneString()
+    public async Task SetLanes_RemovingOneLane_UnassignsOnlyItsFeatures()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
-        await CreateFeatureAsync("011-lane-a", "frontend");
+        await service.SetLanesAsync(_projectId,
+        [
+            new LaneUpsert("gone", "gone contour", null),
+            new LaneUpsert("kept", "kept contour", 3)
+        ]);
+        await CreateFeatureAsync("011-gone-a", "gone");
+        await CreateFeatureAsync("012-gone-b", "gone");
+        await CreateFeatureAsync("013-kept-a", "kept");
 
-        await service.SetLanesAsync(_projectId, []);
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("kept", "kept contour", 3)]);
 
-        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-lane-a");
-        feature.Lane.ShouldBe("frontend");
+        var kept = roster.ShouldHaveSingleItem();
+        kept.Name.ShouldBe("kept");
+        kept.Contour.ShouldBe("kept contour");
+        kept.SerialOrder.ShouldBe(3);
+        kept.Features.Select(f => f.Slug).ShouldBe(["013-kept-a"]);
+
+        var orphans = await _context.PlanningFeatures
+            .Where(f => f.Slug == "011-gone-a" || f.Slug == "012-gone-b")
+            .ToListAsync();
+        orphans.Select(f => f.Slug).ShouldBe(["011-gone-a", "012-gone-b"]);
+        orphans.ShouldAllBe(f => f.Lane == null);
     }
 
     [Fact]

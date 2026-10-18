@@ -8,6 +8,8 @@ export interface ProjectResponse {
   manifest: string | null;
   numberStyle: FeatureNumberStyle;
   numberPrefix: string | null;
+  isFavorite: boolean;
+  openFeatureCount: number;
   createdAt: string;
 }
 

@@ -70,6 +70,10 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(p => p.NumberPrefix)
                 .HasMaxLength(Project.NumberPrefixMaxLength);
 
+            builder.Property(p => p.IsFavorite)
+                .HasDefaultValue(false)
+                .HasSentinel(false);
+
             builder.HasMany(p => p.Lanes)
                 .WithOne()
                 .HasForeignKey(l => l.ProjectId)

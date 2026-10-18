@@ -2,6 +2,7 @@
 
 import { CircleHelp, ClipboardList } from "lucide-react";
 import { Markdown } from "@/shared/lib/markdown";
+import { formatCalendarDate } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -113,11 +114,19 @@ export function FeatureOverviewPanel({ projectId, slug }: FeatureOverviewPanelPr
           <ul className="space-y-1.5 border-t border-border pt-2">
             <li className="flex items-center justify-between text-xs">
               <span className="text-muted">In backlog</span>
-              <span className="font-medium text-foreground">{formatBacklogAge(feature.createdAt)}</span>
+              <span
+                className="font-medium text-foreground"
+                title={formatCalendarDate(feature.createdAt)}
+              >
+                {formatBacklogAge(feature.createdAt)}
+              </span>
             </li>
             <li className="flex items-center justify-between text-xs">
               <span className="text-muted">Updated</span>
-              <span className="font-medium text-foreground">
+              <span
+                className="font-medium text-foreground"
+                title={formatCalendarDate(feature.updatedAt)}
+              >
                 {formatRelativeTime(feature.updatedAt)}
               </span>
             </li>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.VectorSearch;
@@ -77,6 +78,14 @@ public static class SettingsApi
                 $"Must be one of: {string.Join(", ", SettingDefaults.PlanningRequireHumanValidationDefaults)}.");
         }
 
+        if (request.PlanningAgentNamingRulesDefault is not null &&
+            request.PlanningAgentNamingRulesDefault.Trim().Length > Project.MaxNamingRulesLength)
+        {
+            return InvalidSetting(
+                nameof(request.PlanningAgentNamingRulesDefault),
+                $"Must be at most {Project.MaxNamingRulesLength} characters.");
+        }
+
         if (request.PlanningMaterializationSync is not null &&
             !SettingDefaults.PlanningMaterializationSyncModes.Contains(
                 request.PlanningMaterializationSync, StringComparer.OrdinalIgnoreCase))
@@ -149,6 +158,13 @@ public static class SettingsApi
                 request.PlanningRequireHumanValidationDefault.ToLowerInvariant(), ct);
         }
 
+        if (request.PlanningAgentNamingRulesDefault is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.PlanningAgentNamingRulesDefault,
+                request.PlanningAgentNamingRulesDefault.Trim(), ct);
+        }
+
         if (request.PlanningMaterializationSync is not null)
         {
             await settings.SetAsync(
@@ -180,6 +196,7 @@ public static class SettingsApi
             updated.OpenAiApiKeyConfigured,
             updated.PlanningMaterializationDefault,
             updated.PlanningRequireHumanValidationDefault,
+            updated.PlanningAgentNamingRulesDefault,
             updated.PlanningMaterializationSync,
             updated.NotificationNudgeMode,
             updated.NotificationNudgeIntervalMinutes,
@@ -253,6 +270,8 @@ public static class SettingsApi
             SettingKeys.PlanningMaterializationDefault, SettingDefaults.PlanningMaterializationDefault, ct);
         var planningRequireHumanValidationDefault = await settings.GetOrDefaultAsync(
             SettingKeys.PlanningRequireHumanValidationDefault, SettingDefaults.PlanningRequireHumanValidationDefault, ct);
+        var planningAgentNamingRulesDefault = await settings.GetOrDefaultAsync(
+            SettingKeys.PlanningAgentNamingRulesDefault, SettingDefaults.PlanningAgentNamingRulesDefault, ct);
         var planningMaterializationSync = await settings.GetOrDefaultAsync(
             SettingKeys.PlanningMaterializationSync, SettingDefaults.PlanningMaterializationSync, ct);
         var notificationNudgeMode = await settings.GetOrDefaultAsync(
@@ -267,8 +286,8 @@ public static class SettingsApi
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
-            planningMaterializationDefault, planningRequireHumanValidationDefault, planningMaterializationSync,
-            notificationNudgeMode, notificationNudgeIntervalMinutes);
+            planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
+            planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

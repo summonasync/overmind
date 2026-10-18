@@ -519,6 +519,49 @@ public sealed class EntryApiTests : IDisposable
         (await _client.GetAsync($"/api/entries/{created.Id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Audit_RoundTripsCreateFilterSearchAndAck()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "audit",
+            Title = "architect-review: 098-audit-log-board",
+            Content = "verdict: PASS · feature:098 · task:T0\n\nBackend surface clean, mirror naming intact.",
+            Tags = new[] { "feature:098" },
+            SkillFiles = (object[]?)null,
+        });
+
+        created.Type.ShouldBe("audit");
+
+        var filtered = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=audit", JsonOptions);
+        filtered.ShouldNotBeNull();
+        filtered!.Single().Id.ShouldBe(created.Id);
+
+        var searched = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=audit&q=verdict", JsonOptions);
+        searched.ShouldNotBeNull();
+        searched!.Single().Id.ShouldBe(created.Id);
+
+        var notes = await _client.GetFromJsonAsync<List<EntryJson>>(
+            $"/api/projects/{_projectId}/entries?type=note", JsonOptions);
+        notes.ShouldNotBeNull();
+        notes!.ShouldNotContain(e => e.Id == created.Id);
+
+        var ackResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{_projectId}/entries/{created.Id}/ack",
+            new { Alias = "Johan", Vendor = "human" }, JsonOptions);
+        ackResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var ack = await ackResponse.Content.ReadFromJsonAsync<AuditAckJson>(JsonOptions);
+        ack.ShouldNotBeNull();
+        ack!.Ack.ShouldBeTrue();
+
+        var read = await _client.GetFromJsonAsync<AuditEntryJson>($"/api/entries/{created.Id}", JsonOptions);
+        read.ShouldNotBeNull();
+        read!.ReadBy.Single().Alias.ShouldBe("Johan");
+    }
+
     private Guid CreateProject(string name)
     {
         var response = _client.PostAsJsonAsync("/api/projects", new
@@ -560,4 +603,10 @@ public sealed class EntryApiTests : IDisposable
         List<SkillFileJson> SkillFiles);
 
     public sealed record VersionJson(int Version, string Content, DateTime CreatedAt);
+
+    public sealed record AuditReadAckJson(string? Alias, string? Vendor, DateTime At);
+
+    public sealed record AuditAckJson(Guid EntryId, bool Ack, string? Alias, string? Vendor, DateTime At);
+
+    public sealed record AuditEntryJson(Guid Id, string Type, List<AuditReadAckJson> ReadBy);
 }

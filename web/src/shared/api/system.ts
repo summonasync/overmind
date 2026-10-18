@@ -1,12 +1,12 @@
 import { apiDelete, apiGet, apiPost } from "@/shared/api/client";
 import type {
-  BrowseFolderResponse,
+  BrowseRootsResponse,
   ListDirectoryResponse,
   TreeRootsResponse,
 } from "@/shared/api/types";
 
-export function browseFolder(): Promise<BrowseFolderResponse | undefined> {
-  return apiPost<BrowseFolderResponse | undefined>("/system/browse-folder");
+export function browseRoots(): Promise<BrowseRootsResponse> {
+  return apiGet<BrowseRootsResponse>("/system/browse-roots");
 }
 
 export function getTreeRoots(): Promise<TreeRootsResponse> {

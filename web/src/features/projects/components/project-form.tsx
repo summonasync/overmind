@@ -5,8 +5,8 @@ import { Button } from "@/shared/ui/button";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { ErrorText } from "@/shared/ui/error-text";
+import { FolderPickerModal } from "@/features/projects/components/folder-picker-modal";
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects/types";
-import { browseFolder } from "@/shared/api/system";
 
 interface ProjectFormProps {
   initial?: ProjectResponse;
@@ -21,31 +21,16 @@ export function ProjectForm({ initial, initialPath, pending, error, onSubmit, on
   const [name, setName] = useState(initial?.name ?? "");
   const [diskPath, setDiskPath] = useState(initial?.diskPath ?? initialPath ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [browsePending, setBrowsePending] = useState(false);
-  const [browseError, setBrowseError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     onSubmit({ name: name.trim(), diskPath: diskPath.trim(), description: description.trim() });
   };
 
-  const handleBrowse = async () => {
-    setBrowsePending(true);
-    setBrowseError(null);
-    try {
-      const result = await browseFolder();
-      if (result?.path) {
-        setDiskPath(result.path);
-      }
-    } catch {
-      setBrowseError("Could not open the folder picker.");
-    } finally {
-      setBrowsePending(false);
-    }
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3">
       <Field label="Name" htmlFor="project-name">
         <Input
           id="project-name"
@@ -66,14 +51,12 @@ export function ProjectForm({ initial, initialPath, pending, error, onSubmit, on
           />
           <Button
             variant="secondary"
-            onClick={handleBrowse}
-            disabled={browsePending}
+            onClick={() => setPickerOpen(true)}
             className="shrink-0"
           >
-            {browsePending ? "Browsing…" : "Browse"}
+            Browse
           </Button>
         </div>
-        {browseError ? <ErrorText error={new Error(browseError)} /> : null}
       </Field>
       <Field label="Description" htmlFor="project-description">
         <Input
@@ -93,5 +76,15 @@ export function ProjectForm({ initial, initialPath, pending, error, onSubmit, on
         </Button>
       </div>
     </form>
+      <FolderPickerModal
+        title="Choose folder"
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(path) => {
+          setPickerOpen(false);
+          setDiskPath(path);
+        }}
+      />
+    </>
   );
 }

@@ -149,6 +149,16 @@ public sealed class TaskDependencyService
             .ToList();
     }
 
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<int>>> UnclosedBlockerOrdersAsync(
+        Guid featureId, CancellationToken ct = default)
+    {
+        var tasks = await LoadSiblingsAsync(featureId, ct);
+
+        return tasks.Values.ToDictionary(
+            t => t.Order,
+            t => UnclosedBlockerOrdersOf(t, tasks));
+    }
+
     private bool ValidateAndReplace(
         PlanningArtifact task, IReadOnlyList<int> blockedByOrders,
         IReadOnlyDictionary<Guid, PlanningArtifact> siblings)
@@ -235,6 +245,15 @@ public sealed class TaskDependencyService
         PlanningArtifact task, IReadOnlyDictionary<Guid, PlanningArtifact> siblings) =>
         task.BlockedBy
             .Where(d => siblings.ContainsKey(d.BlockingId))
+            .Select(d => siblings[d.BlockingId].Order)
+            .OrderBy(o => o)
+            .ToList();
+
+    private static IReadOnlyList<int> UnclosedBlockerOrdersOf(
+        PlanningArtifact task, IReadOnlyDictionary<Guid, PlanningArtifact> siblings) =>
+        task.BlockedBy
+            .Where(d => siblings.TryGetValue(d.BlockingId, out var blocker)
+                && !TaskDependencyEntry.IsClosed(blocker.Status))
             .Select(d => siblings[d.BlockingId].Order)
             .OrderBy(o => o)
             .ToList();
