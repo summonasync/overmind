@@ -2,11 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/shared/ui/button";
+import { cn } from "@/shared/lib/cn";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Modal } from "@/shared/ui/modal";
-import { Select } from "@/shared/ui/select";
 import { FEATURE_PRIORITIES } from "@/features/planning";
 import type { PlanningFeaturePriority } from "@/features/planning";
 import { lanePriorityToValue } from "@/features/lanes/lib/lane-priority";
@@ -68,20 +68,31 @@ export function LaneAddDialog({ projectId, roster, onClose }: LaneAddDialogProps
             placeholder="Files or area this lane owns"
           />
         </Field>
-        <Field label="Priority" htmlFor="lane-priority">
-          <Select
-            id="lane-priority"
-            value={priorityChoice}
-            onChange={(event) => setPriorityChoice(event.target.value as LanePriorityChoice)}
-            className="w-full"
-          >
-            {PRIORITY_CHOICES.map((choice) => (
-              <option key={choice} value={choice}>
-                {choice === "none" ? "None" : choice.toUpperCase()}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-muted">Priority</span>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Lane priority">
+            {PRIORITY_CHOICES.map((choice) => {
+              const selected = priorityChoice === choice;
+              return (
+                <button
+                  key={choice}
+                  type="button"
+                  onClick={() => setPriorityChoice(choice)}
+                  aria-pressed={selected}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                    selected
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border text-muted hover:border-border-strong hover:text-foreground",
+                  )}
+                >
+                  {choice === "none" ? "None" : choice.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {validationError !== null ? (
           <p className="text-xs text-danger" role="alert">
             {validationError}
