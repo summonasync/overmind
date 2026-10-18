@@ -1,7 +1,7 @@
 "use client";
 
-import { PLANNING_FEATURE_STATUSES } from "@/features/planning";
 import type { PlanningFeatureStatus } from "@/features/planning";
+import { LANE_FILTER_STATUSES } from "@/features/lanes/lib/lane-filters";
 import { cn } from "@/shared/lib/cn";
 
 interface LaneStatusChipsProps {
@@ -28,7 +28,7 @@ export function LaneStatusChips({ selected, onToggle, onClear }: LaneStatusChips
       >
         All
       </button>
-      {PLANNING_FEATURE_STATUSES.map((status) => {
+      {LANE_FILTER_STATUSES.map((status) => {
         const active = selected.has(status);
         return (
           <button

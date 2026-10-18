@@ -22,9 +22,9 @@ public sealed class LaneTools
     }
 
     [McpServerTool(Name = "planning_set_lanes", Destructive = false, Idempotent = false)]
-    [Description("Replaces the project's lane roster wholesale — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Full replace: lanes missing from the payload are deleted, known names (case-insensitive) are updated in place, new names are inserted; features keep their lane string when a lane is deleted — the field is a plain name reference, never an FK. Each item: name (required, max 64, unique per project), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet). An empty array clears the roster. Features join a lane via planning_update_feature's lane field, which must name a roster entry. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
+    [Description("Replaces the project's lane roster wholesale — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Full replace: lanes missing from the payload are deleted, known names (case-insensitive) are updated in place, new names are inserted; features keep their lane string when a lane is deleted — the field is a plain name reference, never an FK. Each item: name (required, max 64, unique per project), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet), priority (optional int 0-3, mirroring feature priorities p0-p3 — lane columns sort priority asc, nulls last; null = no priority). An empty array clears the roster. Features join a lane via planning_update_feature's lane field, which must name a roster entry. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
     public async Task<CallToolResult> SetLanes(
-        [Description("Full replacement roster: an array of lane objects — name (required), contour, serialOrder. An empty array clears the roster.")] JsonElement lanes,
+        [Description("Full replacement roster: an array of lane objects — name (required), contour, serialOrder, priority (optional 0-3, omit for none). An empty array clears the roster.")] JsonElement lanes,
         [Description("Id of the project the roster belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
@@ -60,7 +60,7 @@ public sealed class LaneTools
     }
 
     [McpServerTool(Name = "planning_list_lanes", ReadOnly = true, Idempotent = true)]
-    [Description("Reads the project's lane roster with the live projection per lane: name, contour, serialOrder (reserved, no behavior yet), openFeatureCount (non-done features currently in the lane), holder (alias + vendor + claimState of the alive claim on any feature in the lane), and the features themselves (slug, status, claim identity, claimState). The wave marshal reads this before deciding who moves — a busy lane is one holder and serial lanes are one open feature at a time.")]
+    [Description("Reads the project's lane roster with the live projection per lane: name, contour, serialOrder (reserved, no behavior yet), priority (0-3, null = no priority — the board sorts lanes priority asc, nulls last), openFeatureCount (non-done features currently in the lane), holder (alias + vendor + claimState of the alive claim on any feature in the lane), and the features themselves (slug, status, claim identity, claimState). The wave marshal reads this before deciding who moves — a busy lane is one holder and serial lanes are one open feature at a time.")]
     public async Task<JsonElement> ListLanes(
         [Description("Id of the project whose roster to read.")] Guid? projectId = null,
         CancellationToken ct = default)
@@ -113,7 +113,7 @@ public sealed class LaneTools
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
-                throw new McpException($"lanes[{index}] must be an object: name, contour, serialOrder.");
+                throw new McpException($"lanes[{index}] must be an object: name, contour, serialOrder, priority.");
             }
 
             var name = item.TryGetProperty("name", out var nameElement) &&
@@ -135,6 +135,12 @@ public sealed class LaneTools
                 serialOrder.ValueKind == JsonValueKind.Number)
             {
                 entry["serialOrder"] = serialOrder.GetInt32();
+            }
+
+            if (item.TryGetProperty("priority", out var priority) &&
+                priority.ValueKind == JsonValueKind.Number)
+            {
+                entry["priority"] = priority.GetInt32();
             }
 
             items.Add(entry);

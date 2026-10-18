@@ -42,7 +42,7 @@ public sealed class LanesApiTests : IDisposable
 
         var put = await _client.PutAsJsonAsync(
             $"/api/agent/projects/{project.Id}/planning/lanes",
-            new { Lanes = new[] { new { Name = "frontend", Contour = "web/src", SerialOrder = 1 } } });
+            new { Lanes = new[] { new { Name = "frontend", Contour = "web/src", SerialOrder = 1, Priority = 2 } } });
         put.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var roster = await GetRosterAsync(project.Id, agentDoor: true);
@@ -50,9 +50,24 @@ public sealed class LanesApiTests : IDisposable
         roster.Lanes[0].Name.ShouldBe("frontend");
         roster.Lanes[0].Contour.ShouldBe("web/src");
         roster.Lanes[0].SerialOrder.ShouldBe(1);
+        roster.Lanes[0].Priority.ShouldBe(2);
         roster.Lanes[0].OpenFeatureCount.ShouldBe(0);
         roster.Lanes[0].Holder.ShouldBeNull();
         roster.Lanes[0].Features.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task PutLanes_PriorityOutOfRange_Returns400()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes",
+            new { Lanes = new[] { new { Name = "frontend", Priority = 4 } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await put.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Lanes[0].Priority");
     }
 
     [Fact]
@@ -197,8 +212,8 @@ public sealed class LanesApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("LaneClaimHeld");
-        problem.Detail.ShouldContain("frontend");
-        problem.Detail.ShouldContain("Van by claude");
+        problem.Detail!.ShouldContain("frontend");
+        problem.Detail!.ShouldContain("Van by claude");
     }
 
     [Fact]
@@ -397,6 +412,7 @@ public sealed class LanesApiTests : IDisposable
         string Name,
         string? Contour,
         int? SerialOrder,
+        int? Priority,
         int OpenFeatureCount,
         LaneHolderJson? Holder,
         LaneFeatureJson[] Features);

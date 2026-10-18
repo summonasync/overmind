@@ -1,4 +1,8 @@
+import { PLANNING_FEATURE_STATUSES } from "@/features/planning";
 import type { PlanningFeatureStatus } from "@/features/planning";
+
+export const LANE_FILTER_STATUSES: readonly PlanningFeatureStatus[] =
+  PLANNING_FEATURE_STATUSES.filter((status) => status !== "done");
 
 export function isStatusVisible(
   selected: ReadonlySet<PlanningFeatureStatus>,

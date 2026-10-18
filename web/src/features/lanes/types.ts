@@ -20,6 +20,7 @@ export interface LaneRow {
   name: string;
   contour: string | null;
   serialOrder: number | null;
+  priority: number | null;
   openFeatureCount: number;
   holder: LaneHolder | null;
   features: LaneFeatureSummary[];
@@ -33,4 +34,5 @@ export interface LaneUpsertInput {
   name: string;
   contour: string | null;
   serialOrder: number | null;
+  priority: number | null;
 }

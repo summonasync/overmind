@@ -100,7 +100,8 @@ public sealed record PlanningFeatureClaimResponse(
     string? Lane = null,
     bool OverrideLaneCheck = false);
 
-public sealed record LaneUpsertRequest(string Name, string? Contour = null, int? SerialOrder = null);
+public sealed record LaneUpsertRequest(
+    string Name, string? Contour = null, int? SerialOrder = null, int? Priority = null);
 
 public sealed record SetLanesRequest(LaneUpsertRequest[] Lanes);
 
@@ -119,6 +120,7 @@ public sealed record LaneRowResponse(
     string Name,
     string? Contour,
     int? SerialOrder,
+    int? Priority,
     int OpenFeatureCount,
     LaneHolderResponse? Holder,
     LaneFeatureResponse[] Features);

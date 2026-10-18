@@ -58,7 +58,7 @@ public sealed class LaneToolContractTests : IAsyncLifetime
         _stub.Route("PUT", LanesRoute, 200, RosterJson);
 
         var result = await Tool().SetLanes(
-            Element("""[{"name":"frontend","contour":"web/src","serialOrder":1}]"""),
+            Element("""[{"name":"frontend","contour":"web/src","serialOrder":1,"priority":0}]"""),
             Canned.ProjectId);
 
         var request = _stub.Requests.Single(r => r.Method == "PUT");
@@ -66,6 +66,7 @@ public sealed class LaneToolContractTests : IAsyncLifetime
         request.Body.ShouldContain("\"name\":\"frontend\"");
         request.Body.ShouldContain("\"contour\":\"web/src\"");
         request.Body.ShouldContain("\"serialOrder\":1");
+        request.Body.ShouldContain("\"priority\":0");
         Text(result).ShouldBe("Lane roster holds 1 lane(s): frontend.");
     }
 

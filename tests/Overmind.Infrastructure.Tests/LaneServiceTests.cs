@@ -216,6 +216,56 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SetLanes_PriorityPersistsAndRoundTripsThroughTheRoster()
+    {
+        var service = CreateService();
+
+        var roster = await service.SetLanesAsync(_projectId,
+            [new LaneUpsert("frontend", "web/src", 1, 0), new LaneUpsert("backend", null, null, 2)]);
+
+        roster.Single(l => l.Name == "frontend").Priority.ShouldBe(0);
+        roster.Single(l => l.Name == "backend").Priority.ShouldBe(2);
+        (await _context.PlanningLanes.SingleAsync(l => l.Name == "frontend")).Priority.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task SetLanes_OmittedPriority_ClearsTheStoredOne()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null, 1)]);
+
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        roster.Single().Priority.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ListLanes_PriorityFirst_NullsLast_SerialThenNameWithinEqualPriority()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId,
+        [
+            new LaneUpsert("zeta", null, null, null),
+            new LaneUpsert("alpha", null, 2, 2),
+            new LaneUpsert("beta", null, null, 0),
+            new LaneUpsert("gamma", null, 1, 2)
+        ]);
+
+        var roster = await service.ListLanesAsync(_projectId);
+
+        roster.Select(l => l.Name).ShouldBe(["beta", "gamma", "alpha", "zeta"]);
+    }
+
+    [Fact]
+    public async Task SetLanes_PriorityOutOfRange_Throws()
+    {
+        await Should.ThrowAsync<ArgumentException>(() => CreateService()
+            .SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null, 4)]));
+        await Should.ThrowAsync<ArgumentException>(() => CreateService()
+            .SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null, -1)]));
+    }
+
+    [Fact]
     public async Task ListLanes_UnknownProject_ThrowsNotFound()
     {
         var ex = await Should.ThrowAsync<PlanningException>(() =>

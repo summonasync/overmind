@@ -5,6 +5,7 @@ import { Badge } from "@/shared/ui/badge";
 import { featureStatusTone, priorityTone } from "@/features/planning";
 import type { PlanningFeaturePriority, PlanningFeatureStatus } from "@/features/planning";
 import { isStatusVisible } from "@/features/lanes/lib/lane-filters";
+import { lanePriorityFromValue } from "@/features/lanes/lib/lane-priority";
 import { sortLaneFeatures } from "@/features/lanes/lib/lane-order";
 import { LaneClaimChip } from "@/features/lanes/components/lane-claim-chip";
 import type { LaneFeatureSummary, LaneRow } from "@/features/lanes/types";
@@ -43,11 +44,17 @@ export function LaneCard({ lane, priorities, statusFilter, onDelete }: LaneCardP
     lane.features.filter((feature) => isStatusVisible(statusFilter, feature.status)),
     priorities,
   );
+  const lanePriority = lane.priority === null ? undefined : lanePriorityFromValue(lane.priority);
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate text-sm font-semibold text-foreground">{lane.name}</p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="min-w-0 truncate text-sm font-semibold text-foreground">{lane.name}</p>
+          {lanePriority !== undefined ? (
+            <Badge tone={priorityTone(lanePriority)}>{lanePriority}</Badge>
+          ) : null}
+        </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {lane.contour !== null ? <Badge>{lane.contour}</Badge> : null}
           <Badge tone={lane.openFeatureCount > 0 ? "warning" : "neutral"}>

@@ -66,6 +66,7 @@ public static class LanesApi
             lane.Name,
             lane.Contour,
             lane.SerialOrder,
+            lane.Priority,
             lane.OpenFeatureCount,
             lane.Holder is { } holder
                 ? new LaneHolderResponse(holder.Alias, holder.Vendor, holder.ClaimState)
@@ -75,6 +76,6 @@ public static class LanesApi
 
     private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes) =>
     [
-        .. lanes.Select(lane => new LaneUpsert(lane.Name, lane.Contour, lane.SerialOrder))
+        .. lanes.Select(lane => new LaneUpsert(lane.Name, lane.Contour, lane.SerialOrder, lane.Priority))
     ];
 }

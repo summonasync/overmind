@@ -7,6 +7,7 @@ export function toUpsertRows(lanes: LaneRow[]): LaneUpsertInput[] {
     name: lane.name,
     contour: lane.contour,
     serialOrder: lane.serialOrder,
+    priority: lane.priority,
   }));
 }
 
@@ -14,12 +15,18 @@ export function appendLane(
   lanes: LaneRow[],
   name: string,
   contour: string | null,
+  priority: number | null,
 ): LaneUpsertInput[] {
   const trimmedName = name.trim();
   const trimmedContour = contour?.trim() ?? "";
   return [
     ...toUpsertRows(lanes),
-    { name: trimmedName, contour: trimmedContour.length > 0 ? trimmedContour : null, serialOrder: null },
+    {
+      name: trimmedName,
+      contour: trimmedContour.length > 0 ? trimmedContour : null,
+      serialOrder: null,
+      priority,
+    },
   ];
 }
 

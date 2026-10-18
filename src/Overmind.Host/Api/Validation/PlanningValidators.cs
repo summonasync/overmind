@@ -96,6 +96,8 @@ public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest
             lane.RuleFor(l => l.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
             lane.RuleFor(l => l.Contour).MaximumLength(PlanningLane.MaxContourLength);
             lane.RuleFor(l => l.SerialOrder).GreaterThanOrEqualTo(0).When(l => l.SerialOrder.HasValue);
+            lane.RuleFor(l => l.Priority).InclusiveBetween(0, PlanningLane.MaxPriority)
+                .When(l => l.Priority.HasValue);
         });
     }
 }

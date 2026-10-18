@@ -55,11 +55,12 @@ public sealed class LaneService
         {
             if (byName.TryGetValue(upsert.Name, out var current))
             {
-                current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder);
+                current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority);
             }
             else
             {
-                _db.PlanningLanes.Add(PlanningLane.Create(projectId, upsert.Name, upsert.Contour, upsert.SerialOrder));
+                _db.PlanningLanes.Add(PlanningLane.Create(
+                    projectId, upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority));
             }
         }
 
@@ -106,7 +107,9 @@ public sealed class LaneService
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         return [.. lanes
-            .OrderBy(l => l.SerialOrder.HasValue ? 0 : 1)
+            .OrderBy(l => l.Priority.HasValue ? 0 : 1)
+            .ThenBy(l => l.Priority)
+            .ThenBy(l => l.SerialOrder.HasValue ? 0 : 1)
             .ThenBy(l => l.SerialOrder)
             .ThenBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
             .Select(l => ToRow(l, byLane.GetValueOrDefault(l.Name) ?? [], liveness))];
@@ -137,6 +140,7 @@ public sealed class LaneService
             lane.Name,
             lane.Contour,
             lane.SerialOrder,
+            lane.Priority,
             summaries.Count(s => s.Status != PlanningFeatureStatus.Done),
             holder,
             summaries);
@@ -165,6 +169,12 @@ public sealed class LaneService
             {
                 throw new ArgumentException(
                     $"Lane contour exceeds the {PlanningLane.MaxContourLength} character cap.");
+            }
+
+            if (lane.Priority is < 0 or > PlanningLane.MaxPriority)
+            {
+                throw new ArgumentException(
+                    $"Lane priority must be between 0 and {PlanningLane.MaxPriority}.");
             }
 
             if (!seen.Add(name))

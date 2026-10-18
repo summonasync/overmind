@@ -563,6 +563,9 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
 
+                    b.Property<int?>("Priority")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT");
 

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Plus } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
+import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
@@ -17,7 +19,7 @@ import type { PlanningFeatureBoardItem, PlanningFeatureStatus } from "@/features
 import type { ProjectNumbering } from "@/shared/lib/feature-number";
 import { useProjectNumbering } from "@/features/projects";
 import { LaneCard } from "@/features/lanes/components/lane-card";
-import { LaneAddForm } from "@/features/lanes/components/lane-add-form";
+import { LaneAddDialog } from "@/features/lanes/components/lane-add-dialog";
 import { LaneDeleteDialog } from "@/features/lanes/components/lane-delete-dialog";
 import { LaneStatusChips } from "@/features/lanes/components/lane-status-chips";
 import { isStatusVisible, toggleStatus } from "@/features/lanes/lib/lane-filters";
@@ -63,6 +65,7 @@ export function LaneBoard() {
   const numbering = useProjectNumbering(projectId);
   const [statusFilter, setStatusFilter] = useState<ReadonlySet<PlanningFeatureStatus>>(new Set());
   const [deletingLane, setDeletingLane] = useState<LaneRow | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const { data: roster, loading, error } = useLanes(projectId);
   const { data: features, loading: boardLoading, error: boardError } = usePlanningBoard(projectId);
@@ -84,7 +87,10 @@ export function LaneBoard() {
     );
   }
 
-  const lanes = roster?.lanes ?? [];
+  const lanes = (roster?.lanes ?? []).map((lane) => ({
+    ...lane,
+    features: lane.features.filter((feature) => feature.status !== "done"),
+  }));
   const priorities = priorityBySlug(features);
   const unlaned = sortBoardItems(
     features.filter(
@@ -97,24 +103,25 @@ export function LaneBoard() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Lanes" description={LANES_DESCRIPTION} />
+      <PageHeader
+        title="Lanes"
+        description={LANES_DESCRIPTION}
+        actions={
+          <Button onClick={() => setAdding(true)} disabled={roster === null}>
+            <Plus size={14} aria-hidden />
+            Add lane
+          </Button>
+        }
+      />
 
       <ErrorText error={error ?? boardError} />
-
-      {roster === null ? null : <LaneAddForm projectId={projectId} roster={lanes} />}
-
-      <LaneStatusChips
-        selected={statusFilter}
-        onToggle={(status) => setStatusFilter(toggleStatus(statusFilter, status))}
-        onClear={() => setStatusFilter(new Set())}
-      />
 
       {loading ? (
         <LoadingState label="Loading lanes…" />
       ) : lanes.length === 0 ? (
         <EmptyState
           title="No lanes defined"
-          hint="The project roster has no lanes yet. Create the first one above."
+          hint="The project roster has no lanes yet. Use Add lane in the header to create the first one."
         />
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
@@ -152,6 +159,19 @@ export function LaneBoard() {
           </ul>
         )}
       </section>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+        <span className="text-xs font-medium text-muted">Status</span>
+        <LaneStatusChips
+          selected={statusFilter}
+          onToggle={(status) => setStatusFilter(toggleStatus(statusFilter, status))}
+          onClear={() => setStatusFilter(new Set())}
+        />
+      </div>
+
+      {adding && roster !== null ? (
+        <LaneAddDialog projectId={projectId} roster={lanes} onClose={() => setAdding(false)} />
+      ) : null}
 
       {deletingLane !== null && roster !== null ? (
         <LaneDeleteDialog

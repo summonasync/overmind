@@ -9,6 +9,7 @@ import type { LaneRow } from "@/features/lanes/types";
 interface CreateLaneInput {
   name: string;
   contour: string | null;
+  priority: number | null;
   roster: LaneRow[];
 }
 
@@ -26,7 +27,7 @@ export function useLaneMutations(projectId: string) {
 
   const createLane = useMutation({
     mutationFn: (input: CreateLaneInput) =>
-      setLanes(projectId, appendLane(input.roster, input.name, input.contour)),
+      setLanes(projectId, appendLane(input.roster, input.name, input.contour, input.priority)),
     onSuccess: invalidate,
   });
 
