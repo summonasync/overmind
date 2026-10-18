@@ -14,6 +14,7 @@ export {
 export { useClaimSettings, useClaimSettingsMutation } from "./lib/use-claim-settings";
 export { useProjectName } from "./lib/use-project-name";
 export { useProjectNumbering } from "./lib/use-project-numbering";
+export { useAddTreeRoot } from "./lib/use-project-tree";
 export {
   claimSettingsQueryOptions,
   projectKeys,

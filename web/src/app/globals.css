@@ -96,3 +96,40 @@
     background: color-mix(in oklab, var(--color-muted) 60%, var(--color-foreground));
   }
 }
+
+@layer utilities {
+  .app-rail-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 150ms ease;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 12px,
+      black calc(100% - 12px),
+      transparent
+    );
+  }
+
+  .app-rail-scroll:hover {
+    scrollbar-color: var(--color-muted) transparent;
+  }
+
+  .app-rail-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .app-rail-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .app-rail-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+  }
+
+  .app-rail-scroll:hover::-webkit-scrollbar-thumb {
+    background: var(--color-muted);
+  }
+}

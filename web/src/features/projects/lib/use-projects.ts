@@ -16,7 +16,7 @@ import type {
 
 export function useProjectList() {
   const query = useQuery(projectListQueryOptions());
-  return { data: query.data ?? [], loading: query.isPending, error: query.error };
+  return { data: query.data ?? [], loading: query.isPending, error: query.error, refetch: query.refetch };
 }
 
 export function useProjectMutations() {

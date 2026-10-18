@@ -11,9 +11,10 @@ interface ProjectListProps {
   projects: ProjectResponse[];
   onEdit: (project: ProjectResponse) => void;
   onDelete: (project: ProjectResponse) => void;
+  detailsBasePath?: string;
 }
 
-export function ProjectList({ projects, onEdit, onDelete }: ProjectListProps) {
+export function ProjectList({ projects, onEdit, onDelete, detailsBasePath = "/" }: ProjectListProps) {
   if (projects.length === 0) {
     return <EmptyState title="No projects yet" hint="Create your first project to get started." />;
   }
@@ -48,7 +49,7 @@ export function ProjectList({ projects, onEdit, onDelete }: ProjectListProps) {
           <div className="flex shrink-0 gap-1">
             <a
               className="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background border border-border bg-surface text-foreground hover:bg-surface-raised hover:border-border-strong"
-              href={`/?project=${project.id}`}
+              href={`${detailsBasePath}?project=${project.id}`}
             >
               Details
             </a>

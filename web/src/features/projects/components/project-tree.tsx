@@ -148,22 +148,6 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex items-center justify-between px-1 py-0.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Folders</span>
-        <button
-          type="button"
-          onClick={() => void handleAddRoot()}
-          disabled={addRoot.isPending}
-          aria-label="Add root folder"
-          title="Add root folder"
-          className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50"
-        >
-          <FolderPlus size={13} aria-hidden />
-        </button>
-      </div>
-      {addError ? (
-        <p className="px-1 text-xs text-danger">{addError}</p>
-      ) : null}
       {data.roots.map((root) => (
         <TreeNode
           key={root.path}
@@ -280,14 +264,14 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
           aria-current={active ? "page" : undefined}
           onClick={() => saveLastActiveProjectId(entry.projectId)}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-1.5 rounded-md border-l-2 px-1 py-1 text-xs font-medium transition-colors",
+            "flex min-w-0 flex-1 items-center gap-2 rounded-md border-l-2 px-2 py-2 text-sm font-medium transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
             active
               ? "border-primary bg-primary/10 text-primary"
               : "border-transparent text-muted hover:bg-surface-raised hover:text-foreground",
           )}
         >
-          <Brain size={14} aria-hidden className={cn("shrink-0", !active && "text-primary-hover")} />
+          <Brain size={16} aria-hidden className={cn("shrink-0", !active && "text-primary-hover")} />
           <span className="truncate">{entry.projectName ?? entry.name}</span>
         </a>
       </div>
@@ -312,10 +296,10 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
             entry.accessible ? "hover:text-foreground" : "opacity-40",
           )}
         >
-          {expanded ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
+          {expanded ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
         </button>
-        <Folder size={14} aria-hidden className="shrink-0 opacity-70" />
-        <span className="min-w-0 flex-1 truncate py-1 text-xs" title={entry.path}>
+        <Folder size={16} aria-hidden className="shrink-0 opacity-70" />
+        <span className="min-w-0 flex-1 truncate py-2 text-sm font-medium" title={entry.path}>
           {entry.name}
         </span>
         <button

@@ -1,7 +1,8 @@
 "use client";
 
 import { Clock, Folder } from "lucide-react";
-import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
+import { InfoPanelSection } from "@/widgets/app-shell/ui/info-panel-section";
+import { InfoPanelStat } from "@/widgets/app-shell/ui/info-panel-stat";
 import { useProjectList } from "@/features/projects";
 import { formatCalendarDate } from "@/shared/lib/relative-time";
 
