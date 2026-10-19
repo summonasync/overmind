@@ -8,6 +8,7 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ProjectsInfoPanel, useInfoPanel } from "@/widgets/app-shell";
+import { GrimoireBanner } from "@/widgets/grimoire-banner";
 import { useProjectList } from "@/features/projects";
 import {
   filterFavoriteProjects,
@@ -67,6 +68,7 @@ export function ProjectsPage() {
 
   return (
     <div className="space-y-4">
+      <GrimoireBanner />
       <PageHeader
         title="Projects"
         description="Organize coding-agent context, from codebases to documentation, in one unified space."

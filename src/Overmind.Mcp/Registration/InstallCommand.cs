@@ -2,6 +2,8 @@ namespace Overmind.Mcp.Registration;
 
 public sealed class InstallCommand
 {
+    private const string GrimoireLinePrefix = "grimoire";
+
     private readonly AgentPathEnvironment _environment;
     private readonly string _workingDirectory;
     private readonly string _binaryPath;
@@ -80,13 +82,11 @@ public sealed class InstallCommand
 
         var commandPath = StableInstallLinkResolver.ResolvePreferredBinaryPath(_binaryPath, _environment);
         var processed = 0;
-        var added = 0;
-        var updated = 0;
-        var unchanged = 0;
-        var removed = 0;
-        var notPresent = 0;
         var skipped = 0;
-        var failed = 0;
+        var overmind = new UpsertTally();
+        var grimoireOperation = PlanGrimoireOperation(options);
+        var grimoire = new UpsertTally();
+        var runOvermindOperation = !options.RemoveGrimoire;
 
         var selection = PlanSelection(options).ToList();
         foreach (var (agent, selected) in selection)
@@ -105,31 +105,21 @@ public sealed class InstallCommand
                 continue;
             }
 
-            var result = await InvokeEngineAsync(agent, configPath, commandPath, options, cancellationToken);
-
-            switch (result.Outcome)
+            if (runOvermindOperation)
             {
-                case ConfigUpsertOutcome.Added:
-                    added++;
-                    break;
-                case ConfigUpsertOutcome.Updated:
-                    updated++;
-                    break;
-                case ConfigUpsertOutcome.Unchanged:
-                    unchanged++;
-                    break;
-                case ConfigUpsertOutcome.Removed:
-                    removed++;
-                    break;
-                case ConfigUpsertOutcome.NotPresent:
-                    notPresent++;
-                    break;
-                default:
-                    failed++;
-                    break;
+                var result = await InvokeEngineAsync(
+                    agent, configPath, commandPath, options.Remove, options.DryRun, ManagedServerKey.Overmind, cancellationToken);
+                overmind.Add(result);
+                await _output.WriteLineAsync(FormatLine(agent.Name, configPath, result, options.DryRun));
             }
 
-            await _output.WriteLineAsync(FormatLine(agent.Name, configPath, result, options.DryRun));
+            if (grimoireOperation is not null)
+            {
+                var grimoireResult = await InvokeEngineAsync(
+                    agent, configPath, commandPath, grimoireOperation.Value.Remove, options.DryRun, ManagedServerKey.Grimoire, cancellationToken);
+                grimoire.Add(grimoireResult);
+                await _output.WriteLineAsync(FormatLine(agent.Name, configPath, grimoireResult, options.DryRun, GrimoireLinePrefix));
+            }
         }
 
         OnboardRunSummary? onboard = null;
@@ -139,8 +129,14 @@ public sealed class InstallCommand
         }
 
         var summary =
-            $"summary: {processed} processed, {added} added, {updated} updated, {unchanged} unchanged, " +
-            $"{removed} removed, {notPresent} not present, {skipped} skipped, {failed} failed";
+            $"summary: {processed} processed, {overmind.Added} added, {overmind.Updated} updated, {overmind.Unchanged} unchanged, " +
+            $"{overmind.Removed} removed, {overmind.NotPresent} not present, {skipped} skipped, {overmind.Failed} failed";
+        if (grimoireOperation is not null)
+        {
+            summary +=
+                $"; grimoire: {grimoire.Added} added, {grimoire.Updated} updated, {grimoire.Unchanged} unchanged, " +
+                $"{grimoire.Removed} removed, {grimoire.NotPresent} not present, {grimoire.Failed} failed";
+        }
         if (onboard is not null)
         {
             summary +=
@@ -150,22 +146,24 @@ public sealed class InstallCommand
 
         await _output.WriteLineAsync(summary);
 
-        return failed == 0 ? 0 : 1;
+        return overmind.Failed == 0 && grimoire.Failed == 0 ? 0 : 1;
     }
 
     private async Task<ConfigUpsertResult> InvokeEngineAsync(
         AgentDefinition agent,
         string configPath,
         string commandPath,
-        InstallOptions options,
+        bool remove,
+        bool dryRun,
+        ManagedServerKey key,
         CancellationToken cancellationToken)
     {
         try
         {
             var engine = _engines[agent.ConfigFormat];
-            return options.Remove
-                ? await engine.RemoveAsync(configPath, options.DryRun, cancellationToken)
-                : await engine.UpsertAsync(configPath, commandPath, options.DryRun, cancellationToken);
+            return remove
+                ? await engine.RemoveAsync(configPath, dryRun, cancellationToken, key)
+                : await engine.UpsertAsync(configPath, commandPath, dryRun, cancellationToken, key);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -175,6 +173,16 @@ public sealed class InstallCommand
         {
             return ConfigUpsertResult.Failure(ex.Message);
         }
+    }
+
+    private static (ManagedServerKey Key, bool Remove)? PlanGrimoireOperation(InstallOptions options)
+    {
+        if (options.WithGrimoire)
+        {
+            return (ManagedServerKey.Grimoire, Remove: false);
+        }
+
+        return options.RemoveGrimoire ? (ManagedServerKey.Grimoire, Remove: true) : null;
     }
 
     private async Task<OnboardRunSummary> RunOnboardingAsync(
@@ -267,7 +275,7 @@ public sealed class InstallCommand
         }
     }
 
-    private static string FormatLine(string name, string path, ConfigUpsertResult result, bool dryRun)
+    private static string FormatLine(string name, string path, ConfigUpsertResult result, bool dryRun, string? verbPrefix = null)
     {
         var verb = result.Outcome switch
         {
@@ -278,6 +286,11 @@ public sealed class InstallCommand
             ConfigUpsertOutcome.NotPresent => "not present",
             _ => "failed",
         };
+
+        if (verbPrefix is not null)
+        {
+            verb = $"{verbPrefix} {verb}";
+        }
 
         return result.Error is null
             ? $"{name}: {verb} — {path}"
@@ -294,6 +307,41 @@ public sealed class InstallCommand
         };
 
         return $"{name}: {verb} — {result.FilePath}";
+    }
+
+    private sealed class UpsertTally
+    {
+        public int Added { get; private set; }
+        public int Updated { get; private set; }
+        public int Unchanged { get; private set; }
+        public int Removed { get; private set; }
+        public int NotPresent { get; private set; }
+        public int Failed { get; private set; }
+
+        public void Add(ConfigUpsertResult result)
+        {
+            switch (result.Outcome)
+            {
+                case ConfigUpsertOutcome.Added:
+                    Added++;
+                    break;
+                case ConfigUpsertOutcome.Updated:
+                    Updated++;
+                    break;
+                case ConfigUpsertOutcome.Unchanged:
+                    Unchanged++;
+                    break;
+                case ConfigUpsertOutcome.Removed:
+                    Removed++;
+                    break;
+                case ConfigUpsertOutcome.NotPresent:
+                    NotPresent++;
+                    break;
+                default:
+                    Failed++;
+                    break;
+            }
+        }
     }
 
     private sealed class OnboardRunSummary

@@ -39,6 +39,10 @@ Project-level rules for AI coding agents. System design: `CONTEXT.md`. Conventio
 
 Overmind — a win/mac/linux desktop app (.NET 10) giving AI coding agents a shared, persistent context store: one local Host process (Kestrel loopback API, SQLite + FTS5 + optional Qdrant, Avalonia tray icon), a static-export Next.js SPA served by the Host, and a standalone stdio MCP adapter. Full topology: `CONTEXT.md`.
 
+## Domain boundary
+
+Overmind is the WORK layer: projects, features, tasks, planning entries — work knowledge goes into Overmind entries. Grimoire (an external companion app; when its `grimoire` MCP server is wired) is the PERSONAL layer: persona, communication style, relational notes, and agent journals go there. The same rule is written into the onboard block the registration engine maintains in your agent config — follow it when deciding where a memory belongs.
+
 ## Stack
 
 - Backend: .NET 10 / C# 14, ASP.NET Core minimal APIs (vertical slices), EF Core (SQLite WAL + FTS5), Serilog, FluentValidation, Avalonia (tray only, no windows)

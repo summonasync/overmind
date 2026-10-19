@@ -16,6 +16,11 @@ public static class SettingDefaults
     public const string NotificationNudgeMode = "quiet";
     public const int NotificationNudgeIntervalMinutes = 10;
 
+    public const string GrimoireOverridePath = "";
+    public const string GrimoireBookName = "";
+    public const string GrimoireWired = "false";
+    public const string GrimoireInstallChannel = "";
+
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];
     public static readonly string[] PlanningMaterializationDefaults = ["off", "on", "archive"];
     public static readonly string[] PlanningMaterializationSyncModes = ["on", "off"];

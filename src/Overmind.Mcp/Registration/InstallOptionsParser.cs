@@ -5,14 +5,16 @@ namespace Overmind.Mcp.Registration;
 public static class InstallOptionsParser
 {
     public const string UsageText = """
-        usage: overmind-mcp install [--all] [--agents <csv>] [--project] [--onboard] [--remove] [--dry-run]
+        usage: overmind-mcp install [--all] [--agents <csv>] [--project] [--onboard] [--remove] [--with-grimoire] [--remove-grimoire] [--dry-run]
 
-          --all           register at all six agents, ignoring detection
-          --agents <csv>  comma-separated agent subset; wins over --all
-          --project       project scope (git root from cwd) instead of user scope
-          --onboard       write the managed onboard block to the repo's agent instruction file
-          --remove        remove the overmind registration instead of adding it
-          --dry-run       print the plan, write nothing
+          --all              register at all six agents, ignoring detection
+          --agents <csv>     comma-separated agent subset; wins over --all
+          --project          project scope (git root from cwd) instead of user scope
+          --onboard          write the managed onboard block to the repo's agent instruction file
+          --remove           remove the overmind registration instead of adding it
+          --with-grimoire    also register the grimoire MCP entry (command `grimoire`, args ["mcp"])
+          --remove-grimoire  remove only the grimoire MCP entry; overmind registrations stay untouched
+          --dry-run          print the plan, write nothing
 
         exit codes: 0 ok or nothing to do, 1 any failure, 2 usage error
         """;
@@ -28,6 +30,8 @@ public static class InstallOptionsParser
         var project = false;
         var onboard = false;
         var remove = false;
+        var withGrimoire = false;
+        var removeGrimoire = false;
         var dryRun = false;
         List<string>? agents = null;
 
@@ -46,6 +50,12 @@ public static class InstallOptionsParser
                     break;
                 case "--remove":
                     remove = true;
+                    break;
+                case "--with-grimoire":
+                    withGrimoire = true;
+                    break;
+                case "--remove-grimoire":
+                    removeGrimoire = true;
                     break;
                 case "--dry-run":
                     dryRun = true;
@@ -76,6 +86,24 @@ public static class InstallOptionsParser
             return false;
         }
 
+        if (withGrimoire && removeGrimoire)
+        {
+            error = "flag --with-grimoire is incompatible with --remove-grimoire.";
+            return false;
+        }
+
+        if (withGrimoire && remove)
+        {
+            error = "flag --with-grimoire is incompatible with --remove.";
+            return false;
+        }
+
+        if (remove && removeGrimoire)
+        {
+            error = "flag --remove-grimoire is incompatible with --remove.";
+            return false;
+        }
+
         options = new InstallOptions
         {
             All = all,
@@ -83,6 +111,8 @@ public static class InstallOptionsParser
             Project = project,
             Onboard = onboard,
             Remove = remove,
+            WithGrimoire = withGrimoire,
+            RemoveGrimoire = removeGrimoire,
             DryRun = dryRun,
         };
         return true;

@@ -7,8 +7,8 @@ namespace Overmind.Mcp.Registration;
 public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
 {
     private const string ServersTableName = "mcp_servers";
-    private const string OvermindKey = "overmind";
     private const string CommandKey = "command";
+    private const string ArgsKey = "args";
 
     private readonly ConfigBackupTracker _backupTracker;
 
@@ -19,7 +19,12 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
 
     public AgentConfigFormat Format => AgentConfigFormat.Toml;
 
-    public async Task<ConfigUpsertResult> UpsertAsync(string filePath, string commandPath, bool dryRun, CancellationToken cancellationToken)
+    public async Task<ConfigUpsertResult> UpsertAsync(
+        string filePath,
+        string commandPath,
+        bool dryRun,
+        CancellationToken cancellationToken,
+        ManagedServerKey key = ManagedServerKey.Overmind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandPath);
@@ -30,7 +35,7 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
             return ConfigUpsertResult.Failure(error!);
         }
 
-        var result = ApplyUpsert(model!, commandPath);
+        var result = ApplyUpsert(model!, commandPath, key);
         if (result.Outcome is ConfigUpsertOutcome.Unchanged or ConfigUpsertOutcome.Failed || dryRun)
         {
             return result;
@@ -39,7 +44,11 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
         return await SaveAsync(filePath, model!, result, cancellationToken);
     }
 
-    public async Task<ConfigUpsertResult> RemoveAsync(string filePath, bool dryRun, CancellationToken cancellationToken)
+    public async Task<ConfigUpsertResult> RemoveAsync(
+        string filePath,
+        bool dryRun,
+        CancellationToken cancellationToken,
+        ManagedServerKey key = ManagedServerKey.Overmind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
@@ -49,7 +58,7 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
             return ConfigUpsertResult.Failure(error!);
         }
 
-        var result = ApplyRemove(model!);
+        var result = ApplyRemove(model!, key);
         if (result.Outcome is ConfigUpsertOutcome.NotPresent or ConfigUpsertOutcome.Failed || dryRun)
         {
             return result;
@@ -91,7 +100,7 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
         return true;
     }
 
-    private static ConfigUpsertResult ApplyUpsert(TomlTable model, string commandPath)
+    private static ConfigUpsertResult ApplyUpsert(TomlTable model, string commandPath, ManagedServerKey key)
     {
         TomlTable servers;
         if (model.TryGetValue(ServersTableName, out var serversValue))
@@ -109,35 +118,93 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
             model[ServersTableName] = servers;
         }
 
-        if (servers.TryGetValue(OvermindKey, out var existingOvermind)
-            && existingOvermind is TomlTable existingTable
-            && existingTable.Count == 1
-            && existingTable.TryGetValue(CommandKey, out var existingCommand)
-            && existingCommand is string existingCommandText
-            && string.Equals(existingCommandText, commandPath, StringComparison.Ordinal))
+        var keyName = ManagedServerKeys.Name(key);
+        if (servers.TryGetValue(keyName, out var existingEntry)
+            && existingEntry is TomlTable existingTable
+            && MatchesDesiredEntry(existingTable, key, commandPath))
         {
             return ConfigUpsertResult.Success(ConfigUpsertOutcome.Unchanged);
         }
 
-        var outcome = servers.ContainsKey(OvermindKey) ? ConfigUpsertOutcome.Updated : ConfigUpsertOutcome.Added;
-        servers[OvermindKey] = new TomlTable { [CommandKey] = commandPath };
+        var outcome = servers.ContainsKey(keyName) ? ConfigUpsertOutcome.Updated : ConfigUpsertOutcome.Added;
+        servers[keyName] = BuildDesiredEntry(key, commandPath);
         return ConfigUpsertResult.Success(outcome);
     }
 
-    private static ConfigUpsertResult ApplyRemove(TomlTable model)
+    private static ConfigUpsertResult ApplyRemove(TomlTable model, ManagedServerKey key)
     {
         if (model.TryGetValue(ServersTableName, out var serversValue) && serversValue is TomlTable servers)
         {
-            if (!servers.ContainsKey(OvermindKey))
+            var keyName = ManagedServerKeys.Name(key);
+            if (!servers.ContainsKey(keyName))
             {
                 return ConfigUpsertResult.Success(ConfigUpsertOutcome.NotPresent);
             }
 
-            servers.Remove(OvermindKey);
+            servers.Remove(keyName);
             return ConfigUpsertResult.Success(ConfigUpsertOutcome.Removed);
         }
 
         return ConfigUpsertResult.Success(ConfigUpsertOutcome.NotPresent);
+    }
+
+    private static TomlTable BuildDesiredEntry(ManagedServerKey key, string commandPath)
+    {
+        if (key == ManagedServerKey.Overmind)
+        {
+            return new TomlTable { [CommandKey] = commandPath };
+        }
+
+        var args = new TomlArray();
+        foreach (var arg in ManagedServerKeys.GrimoireArgs)
+        {
+            args.Add(arg);
+        }
+
+        return new TomlTable
+        {
+            [CommandKey] = ManagedServerKeys.GrimoireCommand,
+            [ArgsKey] = args,
+        };
+    }
+
+    private static bool MatchesDesiredEntry(TomlTable existing, ManagedServerKey key, string commandPath)
+    {
+        var desired = BuildDesiredEntry(key, commandPath);
+        if (existing.Count != desired.Count)
+        {
+            return false;
+        }
+
+        foreach (var pair in desired)
+        {
+            if (!existing.TryGetValue(pair.Key, out var value))
+            {
+                return false;
+            }
+
+            if (pair.Value is TomlArray desiredArgs)
+            {
+                if (value is not TomlArray args || args.Count != desiredArgs.Count)
+                {
+                    return false;
+                }
+
+                for (var index = 0; index < desiredArgs.Count; index++)
+                {
+                    if (!string.Equals(args[index] as string, desiredArgs[index] as string, StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                }
+            }
+            else if (!string.Equals(value as string, pair.Value as string, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private async Task<ConfigUpsertResult> SaveAsync(string filePath, TomlTable model, ConfigUpsertResult result, CancellationToken cancellationToken)

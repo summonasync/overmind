@@ -6,8 +6,8 @@ namespace Overmind.Mcp.Registration;
 public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
 {
     private const string ServersPropertyName = "mcpServers";
-    private const string OvermindKey = "overmind";
     private const string CommandPropertyName = "command";
+    private const string ArgsPropertyName = "args";
     private const int DefaultIndentSize = 2;
 
     private readonly ConfigBackupTracker _backupTracker;
@@ -19,7 +19,12 @@ public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
 
     public AgentConfigFormat Format => AgentConfigFormat.Json;
 
-    public async Task<ConfigUpsertResult> UpsertAsync(string filePath, string commandPath, bool dryRun, CancellationToken cancellationToken)
+    public async Task<ConfigUpsertResult> UpsertAsync(
+        string filePath,
+        string commandPath,
+        bool dryRun,
+        CancellationToken cancellationToken,
+        ManagedServerKey key = ManagedServerKey.Overmind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandPath);
@@ -36,25 +41,30 @@ public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
             return ConfigUpsertResult.Failure(error!);
         }
 
-        var desired = new JsonObject { [CommandPropertyName] = commandPath };
-        if (JsonNode.DeepEquals(servers[OvermindKey], desired))
+        var keyName = ManagedServerKeys.Name(key);
+        var desired = BuildDesiredEntry(key, commandPath);
+        if (JsonNode.DeepEquals(servers[keyName], desired))
         {
             return ConfigUpsertResult.Success(ConfigUpsertOutcome.Unchanged);
         }
 
-        var outcome = servers[OvermindKey] is null ? ConfigUpsertOutcome.Added : ConfigUpsertOutcome.Updated;
+        var outcome = servers[keyName] is null ? ConfigUpsertOutcome.Added : ConfigUpsertOutcome.Updated;
         if (dryRun)
         {
             return ConfigUpsertResult.Success(outcome);
         }
 
-        servers[OvermindKey] = desired;
+        servers[keyName] = desired;
         var rendered = JsonConfigWriter.Write(root!, DetectIndentSize(content), DetectNewline(content));
         await AtomicConfigFileWriter.WriteAsync(filePath, rendered, _backupTracker, cancellationToken);
         return ConfigUpsertResult.Success(outcome);
     }
 
-    public async Task<ConfigUpsertResult> RemoveAsync(string filePath, bool dryRun, CancellationToken cancellationToken)
+    public async Task<ConfigUpsertResult> RemoveAsync(
+        string filePath,
+        bool dryRun,
+        CancellationToken cancellationToken,
+        ManagedServerKey key = ManagedServerKey.Overmind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
@@ -69,7 +79,8 @@ public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
             return ConfigUpsertResult.Failure(error!);
         }
 
-        if (root![ServersPropertyName] is not JsonObject servers || servers[OvermindKey] is null)
+        var keyName = ManagedServerKeys.Name(key);
+        if (root![ServersPropertyName] is not JsonObject servers || servers[keyName] is null)
         {
             return ConfigUpsertResult.Success(ConfigUpsertOutcome.NotPresent);
         }
@@ -79,10 +90,30 @@ public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
             return ConfigUpsertResult.Success(ConfigUpsertOutcome.Removed);
         }
 
-        servers.Remove(OvermindKey);
+        servers.Remove(keyName);
         var rendered = JsonConfigWriter.Write(root, DetectIndentSize(content), DetectNewline(content));
         await AtomicConfigFileWriter.WriteAsync(filePath, rendered, _backupTracker, cancellationToken);
         return ConfigUpsertResult.Success(ConfigUpsertOutcome.Removed);
+    }
+
+    private static JsonObject BuildDesiredEntry(ManagedServerKey key, string commandPath)
+    {
+        if (key == ManagedServerKey.Overmind)
+        {
+            return new JsonObject { [CommandPropertyName] = commandPath };
+        }
+
+        var args = new JsonArray();
+        foreach (var arg in ManagedServerKeys.GrimoireArgs)
+        {
+            args.Add(arg);
+        }
+
+        return new JsonObject
+        {
+            [CommandPropertyName] = ManagedServerKeys.GrimoireCommand,
+            [ArgsPropertyName] = args,
+        };
     }
 
     private static async Task<string?> ReadAsync(string filePath, CancellationToken cancellationToken)

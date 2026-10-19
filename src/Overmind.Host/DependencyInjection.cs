@@ -6,6 +6,7 @@ using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
+using Overmind.Infrastructure.Grimoire;
 using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Materialization;
@@ -47,6 +48,15 @@ public static class DependencyInjection
             provider.GetRequiredService<AppSettingsService>(),
             provider.GetRequiredService<ILogger<BundledSeedService>>(),
             OvermindPaths.BundledDirectory));
+
+        services.AddSingleton<IOvermindCliLocator, OvermindCliLocator>();
+        services.AddSingleton<IGrimoireEngineRunner, GrimoireEngineRunner>();
+        services.AddSingleton<IGrimoireBinaryLocator, GrimoireBinaryLocator>();
+        services.AddSingleton<IGrimoireCli, GrimoireCli>();
+        services.AddSingleton<IGrimoireHealthClient, GrimoireHealthClient>();
+        services.AddSingleton<GrimoireConfigReader>();
+        services.AddScoped<GrimoireDetectionService>();
+        services.AddScoped<GrimoireIntegrationService>();
 
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<PlanningArtifactService>();

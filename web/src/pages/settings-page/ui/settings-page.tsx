@@ -7,6 +7,7 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { Zerling } from "@/shared/ui/zerling";
 import { healthKeys } from "@/features/health";
+import { GrimoireStatusTile } from "@/features/grimoire";
 import { ReindexButton, SettingsForm, useSettings, useSettingsMutations } from "@/features/settings";
 import type { ReindexReport, SettingsFormValues } from "@/features/settings";
 import { useInfoPanel } from "@/widgets/app-shell";
@@ -111,6 +112,8 @@ export function SettingsPage() {
         </section>
 
         <AttentionSettingsSection />
+
+        <GrimoireStatusTile />
       </div>
     </SettingsHub>
   );
