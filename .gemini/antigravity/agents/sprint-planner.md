@@ -1,6 +1,6 @@
 ---
 name: sprint-planner
-description: "Board-level planner: task queue, priorities, feature dependencies, sprint slicing"
+description: "Board-level planner: task queue, priorities, feature dependencies, sprint slicing, lane grooming for parallel waves"
 whenToUse: Triaging the backlog, creating features or planning a sprint
 subagents:
   - feature-orchestrator

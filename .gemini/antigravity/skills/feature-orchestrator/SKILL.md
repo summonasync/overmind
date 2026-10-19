@@ -41,7 +41,7 @@ After reading documentation, determine the working mode:
 
 **IF the board has features:**
 - We are **LOCKED to the board scope**. No new features, no scope changes, no "while we're at it" suggestions.
-- Work the pinned current feature; if none — ask the user which feature to pin (`planning_set_current`).
+- Work the next feature from `planning_task_queue` (board order IS the queue) or the one the user names. Claim it the moment work starts — `planning_claim_feature` (full practice: `overmind-ceremony`, Claims workflow); unclaim at wave close.
 - `planning_current_task` returns the next task or a stop/empty reason. A **STOP line is authoritative** — report to the user verbatim, never work around it: "Задача заблокирована: [причина]. Требуется решение человека."
 - The task artifact's `<anti-scope>` section is hard constraints — do NOT touch anything listed there. `<acceptance-criteria>` + spec-compliance becomes the Phase 3 review checklist.
 - **Never rewrite validated spec/plan artifacts without explicit user re-validation.** Routine writes are only: `planning_set_status` (with logNote), `planning_append_log`, `planning_patch_artifact` (sections, AC ticks). Never hand-edit materialized files under `BACKLOG/` — they belong to the materializer.
