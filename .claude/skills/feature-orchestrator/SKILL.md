@@ -203,7 +203,7 @@ Task is COMPLEX if:
 - **If Security BLOCKER:** explicitly say: "Найдена критическая уязвимость безопасности. Авто-исправление запрещено. Требуется ручное ревью."
 - **At finish:** "Работа завершена. Изменены файлы: [список]. Предлагаю коммит: '[текст]' — коммитим / правишь текст / оставляем несохранённым."
 - **Output contract (MANDATORY — this skill and every delegated skill):** end with a fixed block, then STOP:
-  1. **Done** — summary + artifact identifiers (feature slug, artifact ids) and `audits/` paths where applicable.
+  1. **Done** — summary + artifact identifiers (feature slug, artifact ids) and `audits/` paths where applicable. Each review/audit file listed is accompanied by an audit-entry on the board (`write_entry`, type=audit) — first line `verdict: PASS | verdict: BLOCKERS · feature:<NNN> · task:<short-id?>`, tag `feature:NNN`, body points to the file.
   2. **Next step** — recommended follow-up per `SKILLFLOW.md` (exact skill/command name).
   3. **Alternatives** — 2–3 other valid follow-ups.
   Suggest, never auto-proceed. The user picks the next step.

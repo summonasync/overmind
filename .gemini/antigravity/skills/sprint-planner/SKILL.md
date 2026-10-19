@@ -24,8 +24,9 @@ decision lands as queue order, priority band, or dependency on the board, never 
 
 1. First action, always: `overmind_onboard` — it resolves the project, returns `projectId`,
    the board summary, the materialization block and the validation block (`humanGate`).
-   No `mcp__overmind__*` tools in this session → **STOP** and tell the user — same rule as
-   `overmind-ceremony`, no file-based fallback.
+   No `mcp__overmind__*` tools in this session → run the same ceremonies over the
+   `overmind planning` CLI door (133, mapping in `overmind-ceremony`); neither transport →
+   **STOP** and tell the user, no file-based fallback.
 2. Read the `overmind-ceremony` skill before your first board move. This skill DEFERS to it for
    every ceremony mechanic — lifecycle, gates, status moves with `logNote`, STOP semantics,
    the sub-agent briefing contract — and must not re-derive or duplicate them.

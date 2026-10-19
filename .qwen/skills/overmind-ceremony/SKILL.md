@@ -1,9 +1,9 @@
 ---
 name: overmind-ceremony
 description: |
-  Owns all planning ceremonies via the Overmind MCP server: feature board, spec/plan/task/result
-  artifacts, status lifecycle, validation gates, agent<->human notifications, and the sub-agent
-  briefing contract. Replaces the superpowers plugin entirely — its techniques (Socratic questioning,
+  Owns all planning ceremonies on the Overmind board — via the MCP server or the `overmind planning`
+  CLI: feature board, spec/plan/task/result artifacts, status lifecycle, validation gates,
+  agent<->human notifications, and the sub-agent briefing contract. Replaces the superpowers plugin entirely — its techniques (Socratic questioning,
   plan decomposition, root-cause debugging, TDD scope, verification) live here as inline rules.
 type: prompt
 whenToUse: |
@@ -15,28 +15,94 @@ whenToUse: |
 
 # Overmind Ceremony Skill
 
-Single source of truth for HOW this crew runs planning ceremonies on the Overmind MCP server.
-Other skills do NOT call `planning_*` / `overmind_*` tools on their own initiative — they route
-through the rules in this file.
+Single source of truth for HOW this crew runs planning ceremonies on the Overmind board — over
+MCP or the `overmind planning` CLI. Other skills do NOT call `planning_*` / `overmind_*` tools
+(or CLI verbs) on their own initiative — they route through the rules in this file.
 
 ## Hard Requirement (DO NOT SKIP)
 
-Overmind MCP is a **hard prerequisite**. First action of any ceremony:
+An overmind transport is a **hard prerequisite**: MCP **or** CLI — two transports, one ceremony.
+The board stays the single source of truth either way, and both doors pass the same server-side
+rules. First action of any ceremony:
 
 1. Call `overmind_onboard` — it resolves the project from cwd, returns `projectId`, board summary,
    materialization block (strategy/targetDir/lastRun) and validation block (`humanGate`).
-2. If the `mcp__overmind__*` tools are not available in this session → **STOP**. Tell the user:
-   "Overmind MCP не настроен в этом рантайме. Церемонии планирования без него не работают —
-   настрой MCP-сервер overmind и вернись." Do NOT fall back to hand-written BACKLOG files.
-3. Antigravity runtime: overmind MCP is expected but not verified — same STOP rule applies.
+2. If the `mcp__overmind__*` tools are not available in this session, probe the CLI door
+   (`overmind planning ...` — see the CLI Transport section below). CLI present → run the
+   ceremony through it. That is not a degraded fallback — it is the same doors over HTTP.
+3. Both transports absent → **STOP**. Tell the user:
+   "Ни MCP, ни CLI overmind в этом рантайме нет. Церемонии планирования без них не работают —
+   настрой MCP-сервер overmind (или CLI `overmind planning`) и вернись."
+   Do NOT fall back to hand-written BACKLOG files.
+4. Antigravity runtime: overmind MCP is expected but not verified — same rule applies
+   (probe MCP, then CLI, then STOP).
+
+## CLI Transport — `overmind planning`
+
+The CLI is the second door to the same ceremony seam. It talks HTTP to the running Overmind host
+(`OVERMIND_API_URL` → `~/.overmind/host.port` → `127.0.0.1:4761`), so every mutation passes the
+same server-side filters as MCP: ClaimLock, log markers, human-gate logic. It exists for MCP-less
+runtimes, scripts and CI — not as a way around the rules.
+
+```
+overmind planning <verb> [...args] [--json]
+```
+
+- Output: compact text on stdout; `--json` for machine parsing — the two agree.
+- Exit codes: `0` success · `1` runtime failure (host not running — output carries a
+  "start the host" hint — HTTP error, contract refusal like a 409) · `2` usage error.
+- A host that is not running is `exit 1` with a hint, never a STOP: the CLI door is itself
+  the answer to "no MCP".
+
+### Command map (ceremony loop → verbs)
+
+| Ceremony step | MCP tool | CLI verb |
+|---|---|---|
+| Projects | `list_projects` | `projects list` |
+| Board queue / features | `planning_task_queue`, `planning_list_features` | `queue`, `features list` |
+| Feature read (full) | `planning_read_feature` | `feature read {slug}` |
+| Current task | `planning_current_task` | `current {slug}` |
+| Lanes | `planning_list_lanes` | `lanes` |
+| Artifact read / diff | `planning_read_artifact`, `planning_read_artifact_diff` | `artifact read {alias} [--sections ...]`, `artifact diff` |
+| Materialization state | `planning_materialize_status` | `materialization-status` |
+| Claim / unclaim | `planning_claim_feature`, `planning_unclaim_feature` | `claim {slug}`, `unclaim {slug}` |
+| Artifact upsert / patch | `planning_upsert_artifact`, `planning_patch_artifact` | `artifact upsert`, `artifact patch` |
+| Task batch (atomic) | `planning_upsert_tasks` | `tasks batch` |
+| Log append / edit | `planning_append_log`, `planning_edit_log` | `log append`, `log edit` |
+| Task status move | `planning_set_status` (task) | `task status` |
+| Feature update | `planning_update_feature` | `feature update` |
+| Directives append / ack | `planning_append_directive`, `planning_ack_directive` | `directive append`, `directive ack` |
+
+The rows down to `materialization-status` are reads — they run without a session. The rows from
+`claim`/`unclaim` down are draft mutations — they require a session (next subsection).
+
+**Not in CLI v1** — human-gate verbs stay on MCP / the human UI door: `validate`
+(approval-proof flow), feature `status done` (human tap), `set_feature_priority`
+(user-approval convention).
+
+### Session (mutations only)
+
+- `OVERMIND_SESSION_ID` set → the CLI reuses that session.
+- Not set → the CLI auto-registers one from `OVERMIND_ALIAS` / `OVERMIND_VENDOR` — same
+  defaults as the adapter (`agent` / `unknown`); set both to real values before claiming,
+  per the identity rules in The Ceremony Loop.
+- Claim staleness is unchanged: run-and-exit CLI sessions honestly go stale. A long CLI-only
+  workflow keeps `OVERMIND_SESSION_ID` alive or re-claims — same 409 recipe as MCP.
+
+### STOP authority
+
+STOP / HELD lines in CLI text output are authoritative — exactly as in MCP renders. A STOP from
+`current {slug}` or a refused mutation naming its holder is surfaced to the user verbatim and
+never worked around. The transport changes; the authority does not.
 
 ## Source of Truth Model
 
 - **Board (Overmind DB) = the only source of truth** for features, artifacts, statuses, entries.
 - **`BACKLOG/` on disk = read-only materialized mirror**, rewritten by Overmind after every
   planning mutation (when materialization strategy is `on` — check the onboard block).
-- **Never hand-edit materialized files.** All writes go through MCP tools. A clobber guard
-  protects local edits, but managed files belong to the materializer.
+- **Never hand-edit materialized files.** All writes go through ceremony doors — MCP tools or
+  CLI verbs (same server-side rules). A clobber guard protects local edits, but managed files
+  belong to the materializer.
 - No `BACKLOG.md` index exists (retired, 049) — the board (web UI / MCP) is the only live state
   copy; the `BACKLOG/` tree holds the materialized contracts, and statuses read from a file are
   stale by definition — check the board.
@@ -46,7 +112,7 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 **Works — safe to rely on:**
 | Capability | Tools | Board proof |
 |---|---|---|
-| Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043 |
+| Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions; agent done = result + fresh human tap | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043, 109 |
 | Claims + session lock (claim/unclaim, `X-Overmind-Session` on 13 feature mutations, EOF auto-release, stale take-over) | `planning_claim_feature`, `planning_unclaim_feature` | 099; live dogfood 6/6 |
 | Artifact deletion (agent: draft-only; human: unrestricted; blockedBy edges refuse first) | `planning_delete_artifact` | 094 |
 | Spec/plan/task/result artifacts with XML sections | `planning_upsert_artifact` | 006 |
@@ -66,13 +132,16 @@ Overmind MCP is a **hard prerequisite**. First action of any ceremony:
 | Artifact version diff as a unified diff (read-only; omitted pair = the two most recent versions; a trailing newline is ignored, so "x" vs "x\n" diffs as empty) | `planning_read_artifact_diff` | 045 |
 | Pointer metadata projection (artifact responses and roster rows carry additive `pointers: [{path, anchor}]` — the server never reads the targets) | `planning_read_artifact`, `planning_list_artifacts` | 046 |
 | Feature code discovery + explicit pin (read-only scan for worktrees and branches carrying the slug or its NNN prefix; a pin `planning_pin_feature_code` overrides the convention — pinned locations list first flagged `pinned`, convention hits follow deduplicated, a pin missing locally is reported stale, never auto-cleared) | `planning_feature_code`, `planning_pin_feature_code` | 126, 134 |
+| Wave read projection + collision inputs — one-call snapshot (`overmind_wave_snapshot` №50: `planning_task_queue` rows verbatim, per-claim identity — alias, vendor, claimState, claimedAt, claimedByHuman —, code locations enriched adapter-side with the feature-code discovery, open blockers rolled up per feature, coordination entries by tag, default `wave-sync,lane-marshalling`, `entryLimit` 1–100 default 20); lane rosters with live holder projection (`planning_set_lanes` full-replace / `planning_list_lanes` №51/52); `lane`, `laneHolder`, `potentialOverlaps`, `openDirectiveCount` projected on queue and board rows; `lane` + `codeSurfaces` globs settable via `planning_update_feature`; claim-time lane check (409 on busy/serial lane, `overrideLaneCheck=true` escape hatch echoed back) | `overmind_wave_snapshot`, `planning_set_lanes`, `planning_list_lanes`, `planning_update_feature`, `planning_claim_feature` | 137 |
+| Directive channel — the one write that reaches a live claim holder: any session appends to ANY feature regardless of claim or status (append-only, ≤500 chars, session-attributed, HOLD/SYNC/YIELD-style), holder or any reader acks (idempotent), acked leave the `openDirectives`/`openDirectiveCount` projections; coordination entries confirm back the same way — `ack_entry` (№55) appends one additive `readBy` row [alias, vendor, at] per ack, explicit, idempotent, reads stay pure; mutates no artifacts, no statuses, no versions — the 409 claim lock stays intact | `planning_append_directive`, `planning_ack_directive` (№53/54), `ack_entry` (№55) | 137 |
 
 **Does NOT exist yet — never promise, never emulate silently:**
 | Missing | Board ref | Interim rule |
 |---|---|---|
-| Entry tombstones | 029 (draft) | Mark removals as `<removed YYYY-MM-DD — reason>` in bodies |
-| Entries materialization to disk | 051 (draft) | Entries live in DB only — read via MCP |
-| Worktree/branch ↔ feature binding | 063 (draft) | Branch `feature/<slug>`; concurrent writers get separate worktrees — see Workspace isolation technique |
+| Direct CLI door to planning ops (agent access without the MCP server) | 133 (planned) | Every planning interaction runs through the overmind MCP server — no shell fallback |
+
+(Former rows shipped and moved to the matrix above: entry tombstones, entries materialization
+to `ENTRIES/`, worktree/branch ↔ feature binding — feature 134. Do not resurrect them here.)
 
 If a needed capability is in the "missing" list — check the Overmind board first
 (`planning_list_features` on the Overmind project); if it shipped, update this matrix.
@@ -116,14 +185,26 @@ Rules:
   taking over. Session stale/ended → take-over is legitimate (re-claim with the same call).
 - **EOF auto-release** — a dead adapter process releases its claim on its own; there is nothing
   to clean up afterwards.
+- **Coordinator channel (137)** — a wave marshal or lane neighbor reaches a live holder WITHOUT
+  the claim: `planning_append_directive` lands a HOLD/SYNC/YIELD line the holder sees as
+  `openDirectives` on `planning_current_task` / `planning_read_feature` and acknowledges with
+  `planning_ack_directive`. Append-only, nothing else touched — the channel adds
+  coordination, it never bypasses the 409 lock. Acks are a cooperative channel, not
+  tamper-proof: any session may ack, attribution is honest but not enforced. The `readBy`
+  response shape mirrors the directive `AckProjection` by design — a contract-boundary copy,
+  change both together — and identity comparison is case-sensitive (`Billy` and `billy` are
+  different readers).
 
 ## Gates (human approval points)
 
 1. **Spec gate** — spec artifact `draft` → user approves (in chat, or `overmind_notify`
    kind=`approval` + `overmind_replies`) → `planning_validate`. No plan work before this.
 2. **Plan gate** — same flow for the plan artifact. No task breakdown before this.
-3. **Feature done** — `planning_set_feature_status(status=done)` only on the user's explicit
-   request in-session (agent door), with `logNote` carrying provenance.
+3. **Feature done** — two prerequisites, both enforced server-side (409 teaches the fix):
+   (a) a `result` artifact must exist on the feature; (b) a FRESH human tap — `overmind_notify`
+   kind=`approval` → the user's reply must be newer than the result's last update (same proof
+   mechanics as validation gates; editing the result voids the tap). The done log line carries
+   reviewed-by provenance automatically. The human UI door needs the result but no tap.
 4. When `humanGate=on` (validation block in onboard), `planning_validate` returns STOP —
    the human approves in the Overmind UI; do not retry in a loop, notify and wait.
 5. **Gate presentations are Socratic too** — an approval request is never a bare «ok?»: artifact
@@ -150,8 +231,9 @@ Rules:
 
 ## Sub-Agent Briefing Contract (MANDATORY)
 
-Sub-agents in this crew's runtimes inherit the host's MCP tools — they CAN and MUST work
-artifacts through Overmind, not through disk files.
+Sub-agents in this crew's runtimes inherit the host's overmind transport — MCP tools, or the
+`overmind planning` CLI where MCP is absent. They CAN and MUST work artifacts through Overmind,
+not through disk files.
 
 - Orchestrator hands the sub-agent: `projectId` (or "resolve via `overmind_onboard`"),
   `featureSlug`, and the task `artifactId` (or order number).
@@ -161,9 +243,11 @@ artifacts through Overmind, not through disk files.
 - Sub-agent writes back: `<log>` lines via `planning_append_log`; discovered workarounds/quirks
   via `planning_patch_artifact(section=obstacles)`; AC ticks via
   `planning_patch_artifact(acIndex|acText)`; status moves via `planning_set_status` with logNote.
-- Disk copies under `BACKLOG/` are for humans and for tools without MCP. A sub-agent with
-  overmind MCP never reads its task from disk.
-- If the sub-agent runtime has no overmind MCP → STOP and report (hard requirement above).
+- Disk copies under `BACKLOG/` are for humans and for tools without a transport. A sub-agent
+  with overmind MCP or CLI never reads its task from disk.
+- If the sub-agent runtime has neither overmind MCP nor the CLI → STOP and report (hard
+  requirement above). With CLI only, the same contract runs over the verbs in the command map —
+  the orchestrator states in the briefing which transport to use; read/patch/log/status map 1:1.
 
 ## Techniques (replacing the superpowers plugin — inline, no external dependency)
 

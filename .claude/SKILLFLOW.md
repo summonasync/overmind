@@ -3,7 +3,7 @@
 Every skill reads this file before suggesting its «next step» (see Skill output contract in AGENTS.md).
 The graph suggests — the user decides. Skills NEVER auto-proceed to the next step.
 
-**All planning state lives on the Overmind board (MCP).** Ceremony mechanics (probe, lifecycle,
+**All planning state lives on the Overmind board (MCP or the `overmind planning` CLI).** Ceremony mechanics (probe, lifecycle,
 gates, sub-agent briefing, capability matrix) are owned by the `overmind-ceremony` skill.
 `BACKLOG/` on disk is a read-only materialized mirror — never hand-edit it.
 
@@ -25,7 +25,7 @@ gates, sub-agent briefing, capability matrix) are owned by the `overmind-ceremon
 
 The feature is created on the board (`planning_create_feature`) when it enters the backlog, **before Phase 0**.
 | 2 Implement | `dotnet-coder` / `web-coder` / `node-coder` / `js-platform-coder` / `maui-coder` (Sonnet) | code + `<obstacles>`/`<log>` patched into the task artifact | `nuget-licensing-guard` before any NuGet change |
-| 3 Review | `dotnet-code-reviewer` / `web-code-reviewer` / `node-code-reviewer` / `js-platform-code-reviewer` (Sonnet); depth from the task's `review:` flag — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `audits/review-NNN-NN.md` | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
+| 3 Review | `dotnet-code-reviewer` / `web-code-reviewer` / `node-code-reviewer` / `js-platform-code-reviewer` (Sonnet); depth from the task's `review:` flag — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `audits/review-NNN-NN.md` + audit-entry on the board (first line = machine-parsable verdict per the CLAUDE.md provenance rule, `feature:NNN` tag, pointer to the file) | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
 | 4 Fix loop | coder ← review comments | updated code | back to Phase 3 |
 | 5 Arch gate | `architect-review` Hard checklist (end of sprint phase / big refactor only) | `audits/architect-review-YYYY-MM-DD.md` + ADR in `TECHNICAL-SOLUTIONS.md` | — |
 
@@ -100,9 +100,9 @@ Hours and FTE only, never money. Deal won → `solution-architect` (ADRs, CONTEX
 
 - No auto-commits, ever — `git commit`/`git push` only on explicit user request.
 - Sub-agents: `Claude Sonnet` (default) / `Claude Opus` (orchestration, audit, detection, obfuscation) only. Never inherit the main conversation's model for delegated work.
-- Executing sub-agent reads ONLY its task artifact (via `planning_read_artifact` — never from disk when MCP is available). spec/plan artifacts belong to orchestrator + reviewer; the feature body is readable by all.
+- Executing sub-agent reads ONLY its task artifact (via `planning_read_artifact` or the matching CLI verb — never from disk when MCP or the CLI is available). spec/plan artifacts belong to orchestrator + reviewer; the feature body is readable by all.
 - Frozen artifacts (validated spec/plan) change only via `planning_patch_artifact` with `logNote` or re-validation with the user. Removed content gets a `<removed>` tombstone, never silent deletion (context-clash defense).
-- Overmind MCP is a hard requirement for planning ceremonies — no MCP → STOP, no file-based fallback.
+- Overmind (MCP or the `overmind planning` CLI) is a hard requirement for planning ceremonies — no MCP → use the CLI, neither → STOP, no file-based fallback.
 - Cloud CLI mutations (`gcloud`/`az`/`aws`) are never autonomous — user approval every time; infra goes through IaC.
 - Every skill ends with the output contract: Done → Next step → Alternatives → STOP.
 - Every work question to the user is SOCRATIC — the question ships with 2–3 proposed answers + a recommendation; the user picks. Bare questions (no options) are social-talk-only, never work (spec/plan/augur gates included).

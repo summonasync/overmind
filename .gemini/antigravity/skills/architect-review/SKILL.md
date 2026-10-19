@@ -46,6 +46,7 @@ Question being answered: "Is the system still shaped the way CONTEXT.md / STRUCT
 
 ## Output
 Artifact: `audits/architect-review-YYYY-MM-DD.md` (artifact provenance rule) or a section in the review report when invoked inside Phase 3.
+Board companion: an audit-entry on the Overmind board (`write_entry`, type=audit) — first line `verdict: PASS | verdict: BLOCKERS · feature:<NNN> · task:<short-id?>` (`task:` segment optional), tag `feature:NNN`, body points to the artifact file.
 For each finding:
 1. **Severity:** `BLOCKER` (broken boundary, reverse dependency) / `WARNING` (erosion, will bite later) / `SUGGESTION` (re-seam opportunity)
 2. **Location:** project/module/folder
