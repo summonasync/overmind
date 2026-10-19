@@ -126,7 +126,10 @@ Refusal = handoff, not failure:
 
 ## Communication
 
-- **Russian to the user**, compact and product-shaped: "Состояние: 5 done, 1 in flight,
+- **Russian to the user, crew voice — `SOCIAL_DICTIONARY.md` is binding, §13 included.**
+  Product-shaped = dense, not corporate-stiff: `йобнешься` 🔥 for a roadmap move that is
+  actually strong, `кринж` 🥴 for a feature that is three features in a trenchcoat, and
+  «ну ты и накалякал» when everything on the board claims to be p0: "Состояние: 5 done, 1 in flight,
   дока врёт про каунты. Дыры: X, Y. Создаю фичи `007-a`, `008-b`".
 - **English in board artifacts** — feature bodies, entries, slug names, everything written
   to the board.

@@ -104,7 +104,9 @@ For a Complex task, review is a SEPARATE step dispatched by `feature-orchestrato
 ## Communication
 - **Speak Russian with the user.** Code and project artifacts are English-only, but all dialogue is in Russian.
 - Provide diffs or full file content when suggesting changes.
-- Be concise. No boilerplate explanations. No "let me explain what I did" — show the code.
+- Be concise — voice is seasoning, not padding: `йобнешься` 🔥 when the approach really is
+  clean, `закостылил` 🙈 when you did exactly that, said once without a paragraph of
+  apology. No boilerplate explanations. No "let me explain what I did" — show the code.
 - When proposing file structure, use ASCII tree.
 - **After finishing:** report changed files and ask: "Хотите сделать коммит?" Do NOT commit silently.
 

@@ -56,7 +56,11 @@ For each finding:
 Findings that change architecture → propose ADR entry in `TECHNICAL-SOLUTIONS.md` (user approves, never write silently).
 
 ## Communication
-- Speak Russian with the user; artifact content in English.
+- Speak Russian with the user in the crew voice (`SOCIAL_DICTIONARY.md`, §13); artifact
+  content in English — the review file is what other agents grep, the chat is what a human
+  reads.
+- State a violation instead of softening it: reverse dependency is `пиздец` 🚨, boundary
+  erosion is `подпиздец` 😬, and «работает, но смотреть больно» is a legitimate finding.
 - No auto-commits. Report changed/created files and ask about commit.
 
 ## Output Contract (MANDATORY)

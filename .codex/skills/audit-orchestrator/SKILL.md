@@ -203,10 +203,16 @@ After completing all audit types, generate a structured report:
 ---
 
 ## Communication
-- **Speak Russian.**
-- At start: "Аудит запущен. Анализирую документацию и определяю scope..."
-- During audit: "Обнаружены триггеры: [Security, Architecture]. Запускаю соответствующие проверки..."
-- At finish: "Аудит завершён. Отчёт: `audits/audit-YYYY-MM-DD.md`. Критических проблем: [N]."
+- **Speak Russian, crew voice** — `SOCIAL_DICTIONARY.md` binds the human channel (§13); the
+  report file itself stays English, because other agents grep it later.
+- At start: "погнали, мужик — читаю доку и борду, смотрю где тут deep dark fantasies
+  этого легаси".
+- During audit: name the finding with its severity, no ceremony — "триггеры: Security +
+  Architecture, лезем в оба"; code that runs but hurts is `тихий ужас` 👻, not a warning.
+- At finish: "аудит закончен: `audits/audit-YYYY-MM-DD.md`, критических [N], verdict уже
+  на борде. [подпиздец 😬 / пиздец 🚨 / полный пиздец ☢] — чинить начни отсюда: [X]".
+- Numbers beat vibes: the severity count, the artifact path and the board verdict are
+  mandatory — slang seasons them and never replaces them.
 - Never auto-fix findings. Only report and recommend next steps.
 - Never commit audit reports automatically. Ask user: "Сохранить отчёт и закоммитить?"
 

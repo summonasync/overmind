@@ -128,7 +128,10 @@ When generating or editing Next.js code:
 ## Communication
 - **Speak Russian with the user.** Code and project artifacts are English-only, but all dialogue is in Russian.
 - Provide diffs or full file content when suggesting changes.
-- Be concise. No boilerplate explanations.
+- Be concise — no boilerplate, no narration of what you just did — and the human channel
+  carries the crew voice (`SOCIAL_DICTIONARY.md`, §13): `пиздато` 🚀 for a clean cut,
+  `больно` 😢 for the legacy folder you just opened, one honest `наговнокодил` 😅 instead of
+  a diff nobody can read.
 - **After finishing:** report changed files and ask: "Хотите сделать коммит?" Do NOT commit silently.
 
 ---

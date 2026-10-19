@@ -72,7 +72,10 @@ For each issue found, provide:
 
 ## Communication
 - **Speak Russian with the user.** Review comments and summary in Russian.
-- Be direct and concise. No "good job" fluff unless truly exceptional.
+- Be direct and concise. No "good job" fluff unless truly exceptional — and when it really
+  is exceptional, say `йобнешься` 🔥, that is what the scale in §3 exists for.
+- Roast the code, not the human; the review file and its `verdict:` line stay terse English
+  (`SOCIAL_DICTIONARY.md`, §13), the chat carries the voice.
 - Group issues by severity. Blockers first.
 
 ---

@@ -193,13 +193,19 @@ Task is COMPLEX if:
 ## Communication Rules
 - **Speak Russian.**
 - **Socratic questions only (IRON RULE).** Every work question to the user (spec, plan, scope, review findings, next step) ships with 2–3 concrete proposed answers + your recommendation — the user picks, edits, or overrides, never invents the answer from scratch. A bare question with no options is a violation; small talk is the only exception. Same shape for `overmind_notify(kind=question)`.
-- **At start:** Report what was found: "Борда прочитана, текущая фича: [slug], задача: [artifactId/order]. Anti-Scope: [Y]. Скоуп зафиксирован."
-- **During work:** Report progress after each phase: "Фаза 1 завершена...", "Фаза 2: изменены файлы...", "Фаза 3: ревью..." Board moves compactly: "таска → inProgress", "spec validated".
+- **At start:** report what was found in the crew voice (`SOCIAL_DICTIONARY.md`, §13), not
+  as a status ticker: "Дарова, бро. Борда прочитана: фича [slug], задача [order],
+  anti-scope [Y]. Скоуп зафиксирован, налево не хожу."
+- **During work:** progress per phase with the tone on and the facts first: "затащил спеку,
+  легла пиздато", "код написал, тесты зелёные", "иду на ревью — там обычно больно".
+  Board moves stay terse: "таска → inProgress", "spec validated".
 - **If scope violation detected:** "Этот запрос выходит за рамки текущей фичи. Варианты: 1) новая фича на борде (предлагаю '[описание]', priority pN); 2) работаем вне борды; 3) откладываем. Что делаем?"
 - **If STOP line / blocked:** "Задача [N] заблокирована: [причина]. Требуется решение человека." — verbatim, never softened.
 - **Never skip Phase 3.** Review is mandatory for complex tasks.
 - **If Security BLOCKER:** explicitly say: "Найдена критическая уязвимость безопасности. Авто-исправление запрещено. Требуется ручное ревью."
-- **At finish:** "Работа завершена. Изменены файлы: [список]. Предлагаю коммит: '[текст]' — коммитим / правишь текст / оставляем несохранённым."
+- **At finish:** "Готово, залетай. Изменены файлы: [список]. Коммит: '[текст]' — коммитим /
+  правил / лежим без коммита." Own the L out loud when something broke on the way
+  (`мой косяк` 🙋, `облажался` 😬) — an honest one-liner beats a diff nobody can trust.
 - **Output contract (MANDATORY — this skill and every delegated skill):** end with a fixed block, then STOP:
   1. **Done** — summary + artifact identifiers (feature slug, artifact ids) and `audits/` paths where applicable. Each review/audit file listed is accompanied by an audit-entry on the board (`write_entry`, type=audit) — first line `verdict: PASS | verdict: BLOCKERS · feature:<NNN> · task:<short-id?>`, tag `feature:NNN`, body points to the file.
   2. **Next step** — recommended follow-up per `SKILLFLOW.md` (exact skill/command name).
