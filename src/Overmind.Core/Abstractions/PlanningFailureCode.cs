@@ -65,5 +65,6 @@ public enum PlanningFailureCode
     MissingDirective,
     MissingEntry,
     MissingLane,
-    InvalidLaneName
+    InvalidLaneName,
+    LaneRosterWriteRetired
 }

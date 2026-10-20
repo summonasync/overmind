@@ -7,21 +7,32 @@ namespace Overmind.Host.Api;
 
 public static class LanesApi
 {
+    private const string LanePathPrefix = "/projects/{projectId:guid}/";
+    private const string CollectionLiteral = "planning/lanes";
+    private const string RosterLiteral = "planning/lanes-roster";
+
+    // The whole-roster writer lives on its own sibling literal: a client drops a `.` segment before the wire
+    // (RFC 3986 reference resolution), so `PUT .../lanes/.` arrives as `PUT .../lanes/` and used to swap the
+    // roster from a URL shaped like one-lane surgery. The collapse-writer is gone; a collapsed URL now lands
+    // on the tombstone below, which binds no body and calls no service (LaneRouteShapeTests, RosterShapedPut_*).
+    // Full rationale: CONTEXT.md, "MCP planning surface" (143). Do not point `Set` back at the collection.
     public static RouteGroupBuilder MapLanesApi(this IEndpointRouteBuilder routes)
     {
         var human = routes.MapGroup("/api");
-        human.MapGet("/projects/{projectId:guid}/planning/lanes", List);
-        human.MapPost("/projects/{projectId:guid}/planning/lanes", Create);
-        human.MapPut("/projects/{projectId:guid}/planning/lanes", Set);
-        human.MapPut("/projects/{projectId:guid}/planning/lanes/{name}", Update);
-        human.MapDelete("/projects/{projectId:guid}/planning/lanes/{name}", Delete);
+        human.MapGet(LanePathPrefix + CollectionLiteral, List);
+        human.MapPost(LanePathPrefix + CollectionLiteral, Create);
+        human.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);
+        human.MapPut(LanePathPrefix + RosterLiteral, Set);
+        human.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
+        human.MapDelete(LanePathPrefix + CollectionLiteral + "/{name}", Delete);
 
         var agent = routes.MapGroup("/api/agent");
-        agent.MapGet("/projects/{projectId:guid}/planning/lanes", List);
-        agent.MapPost("/projects/{projectId:guid}/planning/lanes", Create);
-        agent.MapPut("/projects/{projectId:guid}/planning/lanes", Set);
-        agent.MapPut("/projects/{projectId:guid}/planning/lanes/{name}", Update);
-        agent.MapDelete("/projects/{projectId:guid}/planning/lanes/{name}", Delete);
+        agent.MapGet(LanePathPrefix + CollectionLiteral, List);
+        agent.MapPost(LanePathPrefix + CollectionLiteral, Create);
+        agent.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);
+        agent.MapPut(LanePathPrefix + RosterLiteral, Set);
+        agent.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
+        agent.MapDelete(LanePathPrefix + CollectionLiteral + "/{name}", Delete);
 
         return human;
     }
@@ -81,6 +92,13 @@ public static class LanesApi
         {
             return HttpErrors.BadRequest(ex.Message);
         }
+    }
+
+    internal static IResult RosterWriterRetired(HttpRequest request)
+    {
+        var retiredPath = request.Path.ToString().TrimEnd('/');
+        var rosterPath = retiredPath[..(retiredPath.Length - CollectionLiteral.Length)] + RosterLiteral;
+        return PlanningErrors.Map(PlanningException.LaneRosterWriteRetired(retiredPath, rosterPath));
     }
 
     internal static async Task<IResult> Update(

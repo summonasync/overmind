@@ -325,6 +325,14 @@ public sealed class PlanningException : Exception
             "edit and delete routes carry the name as a single path segment — a lane named that way would be " +
             "created but never addressable by those routes. Pick a name without those characters.");
 
+    public static PlanningException LaneRosterWriteRetired(string retiredPath, string rosterPath) =>
+        new(PlanningFailureKind.Gone, PlanningFailureCode.LaneRosterWriteRetired,
+            $"'PUT {retiredPath}' is retired and wrote nothing: the whole-roster writer answers at 'PUT {rosterPath}'. " +
+            "It left the collection on purpose — a client removes a '.' segment before the wire (RFC 3986 reference " +
+            "resolution), so a URL whose shape says one-lane surgery arrived as a PUT on the collection and swapped " +
+            $"the entire roster. Resend a wholesale write to 'PUT {rosterPath}', " +
+            $"or edit one lane at 'PUT {retiredPath}/{{name}}'.");
+
     public static PlanningException LaneNotInRoster(string lane, IReadOnlyList<string> rosterNames) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneNotInRoster,
             $"Lane '{lane}' is not in the project roster; features join a lane only by roster name. " +

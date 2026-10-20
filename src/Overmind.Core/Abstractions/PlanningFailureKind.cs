@@ -6,5 +6,6 @@ public enum PlanningFailureKind
     Duplicate,
     RuleViolation,
     InvalidStatus,
-    InvalidInput
+    InvalidInput,
+    Gone
 }

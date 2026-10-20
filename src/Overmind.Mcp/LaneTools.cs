@@ -22,7 +22,7 @@ public sealed class LaneTools
     }
 
     [McpServerTool(Name = "planning_set_lanes", Destructive = false, Idempotent = false)]
-    [Description("Replaces the project's lane roster wholesale — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Full replace: lanes missing from the payload are deleted, known names (case-insensitive) are updated in place, new names are inserted; features keep their lane string when a lane is deleted — the field is a plain name reference, never an FK. Each item: name (required, max 64, unique per project), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet), priority (optional int 0-3, mirroring feature priorities p0-p3 — lane columns sort priority asc, nulls last; null = no priority). An empty array clears the roster. Features join a lane via planning_update_feature's lane field, which must name a roster entry. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
+    [Description("Replaces the project's lane roster wholesale — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Full replace: lanes missing from the payload are deleted, known names (case-insensitive) are updated in place, new names are inserted; features keep their lane string when a lane is deleted — the field is a plain name reference, never an FK. Each item: name (required, max 64, unique per project, and addressable as a single URL path segment — a lane is edited granularly at its name, so no slash, backslash or control character, and never a bare dot or dot-dot: those are refused with 400 InvalidLaneName before anything is written), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet), priority (optional int 0-3, mirroring feature priorities p0-p3 — lane columns sort priority asc, nulls last; null = no priority). An empty array clears the roster. Features join a lane via planning_update_feature's lane field, which must name a roster entry. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
     public async Task<CallToolResult> SetLanes(
         [Description("Full replacement roster: an array of lane objects — name (required), contour, serialOrder, priority (optional 0-3, omit for none). An empty array clears the roster.")] JsonElement lanes,
         [Description("Id of the project the roster belongs to.")] Guid? projectId = null,
@@ -36,7 +36,7 @@ public sealed class LaneTools
         var payload = new JsonObject { ["lanes"] = BuildLaneItems(lanes) };
 
         var roster = await _mutations.SendAsync(() => _api.PutAsync(
-            $"/api/agent/projects/{projectId}/planning/lanes",
+            $"/api/agent/projects/{projectId}/planning/lanes-roster",
             payload,
             ct), readback: null, ct);
 

@@ -51,6 +51,14 @@ test("create posts the single lane onto the collection route", () => {
   assert.ok(body.includes(", lane)"), "the whole lane, name included, is the create body");
 });
 
+test("the wholesale roster write lives on its sibling literal", () => {
+  const body = functionBody(lanesApi(), "setLanes");
+  assert.ok(
+    body.includes("`/projects/${projectId}/planning/lanes-roster`"),
+    "the collection route answers a typed refusal now; the sibling literal is the only whole-roster door",
+  );
+});
+
 test("update and delete address the lane by an encoded path segment", () => {
   const api = lanesApi();
   assert.ok(functionBody(api, "lanePath").includes("planning/lanes/${encodeURIComponent(name)}"));

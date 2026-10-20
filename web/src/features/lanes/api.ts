@@ -6,7 +6,7 @@ export function listLanes(projectId: string): Promise<LanesRoster> {
 }
 
 export function setLanes(projectId: string, lanes: LaneUpsertInput[]): Promise<LanesRoster> {
-  return apiPut<LanesRoster>(`/projects/${projectId}/planning/lanes`, { lanes });
+  return apiPut<LanesRoster>(`/projects/${projectId}/planning/lanes-roster`, { lanes });
 }
 
 export function createLane(projectId: string, lane: LaneUpsertInput): Promise<LanesRoster> {

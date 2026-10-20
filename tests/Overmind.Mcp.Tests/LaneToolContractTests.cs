@@ -9,6 +9,9 @@ namespace Overmind.Mcp.Tests;
 
 public sealed class LaneToolContractTests : IAsyncLifetime
 {
+    private static readonly string RosterRoute =
+        $"/api/agent/projects/{Canned.ProjectId}/planning/lanes-roster";
+
     private static readonly string LanesRoute =
         $"/api/agent/projects/{Canned.ProjectId}/planning/lanes";
 
@@ -55,14 +58,14 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     [Fact]
     public async Task SetLanes_PutsTheFullRosterThrough()
     {
-        _stub.Route("PUT", LanesRoute, 200, RosterJson);
+        _stub.Route("PUT", RosterRoute, 200, RosterJson);
 
         var result = await Tool().SetLanes(
             Element("""[{"name":"frontend","contour":"web/src","serialOrder":1,"priority":0}]"""),
             Canned.ProjectId);
 
         var request = _stub.Requests.Single(r => r.Method == "PUT");
-        request.Path.ShouldBe(LanesRoute);
+        request.Path.ShouldBe(RosterRoute);
         request.Body.ShouldContain("\"name\":\"frontend\"");
         request.Body.ShouldContain("\"contour\":\"web/src\"");
         request.Body.ShouldContain("\"serialOrder\":1");
@@ -73,7 +76,7 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     [Fact]
     public async Task SetLanes_EmptyArrayClearsTheRoster()
     {
-        _stub.Route("PUT", LanesRoute, 200, """{"lanes":[]}""");
+        _stub.Route("PUT", RosterRoute, 200, """{"lanes":[]}""");
 
         var result = await Tool().SetLanes(Element("[]"), Canned.ProjectId);
 
@@ -103,7 +106,7 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     [Fact]
     public async Task SetLanes_StringEncodedArray_IsDecoded()
     {
-        _stub.Route("PUT", LanesRoute, 200, RosterJson);
+        _stub.Route("PUT", RosterRoute, 200, RosterJson);
 
         var encoded = JsonValue.Create("""[{"name":"frontend"}]""")!.ToJsonString();
         await Tool().SetLanes(Element(encoded), Canned.ProjectId);

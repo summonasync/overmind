@@ -41,7 +41,7 @@ public sealed class LanesApiTests : IDisposable
         var project = await CreateProjectAsync();
 
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{project.Id}/planning/lanes",
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = "frontend", Contour = "web/src", SerialOrder = 1, Priority = 2 } } });
         put.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -62,7 +62,7 @@ public sealed class LanesApiTests : IDisposable
         var project = await CreateProjectAsync();
 
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{project.Id}/planning/lanes",
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = "frontend", Priority = 4 } } });
 
         put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -101,7 +101,7 @@ public sealed class LanesApiTests : IDisposable
         var project = await CreateProjectAsync();
 
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{project.Id}/planning/lanes",
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = "frontend" }, new { Name = "Frontend" } } });
 
         put.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -113,7 +113,7 @@ public sealed class LanesApiTests : IDisposable
         var project = await CreateProjectAsync();
 
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{project.Id}/planning/lanes",
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Contour = "web" } } });
 
         put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -125,7 +125,7 @@ public sealed class LanesApiTests : IDisposable
         var ghostProject = Guid.NewGuid();
 
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{ghostProject}/planning/lanes",
+            $"/api/agent/projects/{ghostProject}/planning/lanes-roster",
             new { Lanes = Array.Empty<object>() });
 
         put.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -491,7 +491,7 @@ public sealed class LanesApiTests : IDisposable
         await PostLaneAsync(project.Id, "frontend");
 
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{project.Id}/planning/lanes",
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = "frontend" }, new { Name = @"infra\win" } } });
 
         put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -650,7 +650,7 @@ public sealed class LanesApiTests : IDisposable
     private async Task PutLaneAsync(Guid projectId, string name)
     {
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{projectId}/planning/lanes",
+            $"/api/agent/projects/{projectId}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = name } } });
         put.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -666,7 +666,7 @@ public sealed class LanesApiTests : IDisposable
     private async Task PutLanesAsync(Guid projectId, params string[] names)
     {
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{projectId}/planning/lanes",
+            $"/api/agent/projects/{projectId}/planning/lanes-roster",
             new { Lanes = names.Select(name => new { Name = name }) });
         put.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
