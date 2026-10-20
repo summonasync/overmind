@@ -40,6 +40,9 @@ export {
   workflowQueryOptions,
 } from "./queries";
 export { updatePlanningFeature } from "./api";
+export { movePlanningFeatureQueue } from "./api";
+export type { PlanningQueueMove, PlanningQueueMoveValues } from "./api";
+export { compareBoardItems } from "./lib/board-order";
 export {
   BOARD_ARTIFACT_FILTERS,
   EMPTY_BOARD_FILTERS,

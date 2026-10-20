@@ -68,6 +68,24 @@ export function reorderPlanningQueue(
   });
 }
 
+export type PlanningQueueMove = "up" | "down" | "first" | "last" | "toPosition";
+
+export interface PlanningQueueMoveValues {
+  move: PlanningQueueMove;
+  position?: number;
+}
+
+export function movePlanningFeatureQueue(
+  projectId: string,
+  slug: string,
+  values: PlanningQueueMoveValues,
+): Promise<void> {
+  return apiPost<void>(`/projects/${projectId}/planning/features/${slug}/queue-move`, {
+    move: values.move,
+    position: values.position ?? null,
+  });
+}
+
 export function claimPlanningFeature(
   projectId: string,
   slug: string,

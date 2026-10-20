@@ -1,20 +1,29 @@
 "use client";
 
+import { useMemo } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { featureStatusTone, priorityTone } from "@/features/planning";
-import type { PlanningFeaturePriority, PlanningFeatureStatus } from "@/features/planning";
+import type {
+  PlanningFeatureBoardItem,
+  PlanningFeatureStatus,
+} from "@/features/planning";
 import { isStatusVisible } from "@/features/lanes/lib/lane-filters";
 import { lanePriorityFromValue } from "@/features/lanes/lib/lane-priority";
 import { sortLaneFeatures } from "@/features/lanes/lib/lane-order";
+import type { LaneMoveTarget } from "@/features/lanes/lib/lane-order";
 import { LaneClaimChip } from "@/features/lanes/components/lane-claim-chip";
+import { LaneFeatureMove } from "@/features/lanes/components/lane-feature-move";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
+import type { LaneMoveController } from "@/features/lanes/lib/use-feature-queue-move";
 import type { LaneFeatureSummary, LaneRow } from "@/features/lanes/types";
 
 interface LaneCardProps {
   lane: LaneRow;
   projectId: string;
-  priorities: ReadonlyMap<string, PlanningFeaturePriority>;
+  boardItems: ReadonlyMap<string, PlanningFeatureBoardItem>;
+  moveTargets: ReadonlyMap<string, LaneMoveTarget>;
+  queueMove: LaneMoveController;
   statusFilter: ReadonlySet<PlanningFeatureStatus>;
   onEdit: (lane: LaneRow) => void;
   onDelete: (lane: LaneRow) => void;
@@ -24,10 +33,23 @@ interface LaneFeatureRowProps {
   projectId: string;
   feature: LaneFeatureSummary;
   laneName: string;
-  priority: PlanningFeaturePriority | undefined;
+  boardItem: PlanningFeatureBoardItem | undefined;
+  target: LaneMoveTarget | undefined;
+  queueMove: LaneMoveController;
 }
 
-function LaneFeatureRow({ projectId, feature, laneName, priority }: LaneFeatureRowProps) {
+function LaneFeatureRow({
+  projectId,
+  feature,
+  laneName,
+  boardItem,
+  target,
+  queueMove,
+}: LaneFeatureRowProps) {
+  const priority = boardItem?.priority;
+  const reorderable = boardItem !== undefined && target !== undefined;
+  const actions = <FeatureLaneActions projectId={projectId} slug={feature.slug} currentLane={laneName} />;
+
   return (
     <li className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
@@ -42,15 +64,41 @@ function LaneFeatureRow({ projectId, feature, laneName, priority }: LaneFeatureR
           />
         </span>
       </div>
-      <FeatureLaneActions projectId={projectId} slug={feature.slug} currentLane={laneName} />
+      {reorderable ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <LaneFeatureMove
+            slug={feature.slug}
+            laneName={laneName}
+            priority={boardItem.priority}
+            target={target}
+            queueMove={queueMove}
+          />
+          {actions}
+        </div>
+      ) : (
+        actions
+      )}
     </li>
   );
 }
 
-export function LaneCard({ lane, projectId, priorities, statusFilter, onEdit, onDelete }: LaneCardProps) {
-  const visibleFeatures = sortLaneFeatures(
-    lane.features.filter((feature) => isStatusVisible(statusFilter, feature.status)),
-    priorities,
+export function LaneCard({
+  lane,
+  projectId,
+  boardItems,
+  moveTargets,
+  queueMove,
+  statusFilter,
+  onEdit,
+  onDelete,
+}: LaneCardProps) {
+  const visibleFeatures = useMemo(
+    () =>
+      sortLaneFeatures(
+        lane.features.filter((feature) => isStatusVisible(statusFilter, feature.status)),
+        boardItems,
+      ),
+    [lane.features, boardItems, statusFilter],
   );
   const lanePriority = lane.priority === null ? undefined : lanePriorityFromValue(lane.priority);
 
@@ -110,7 +158,9 @@ export function LaneCard({ lane, projectId, priorities, statusFilter, onEdit, on
               projectId={projectId}
               feature={feature}
               laneName={lane.name}
-              priority={priorities.get(feature.slug)}
+              boardItem={boardItems.get(feature.slug)}
+              target={moveTargets.get(feature.slug)}
+              queueMove={queueMove}
             />
           ))}
         </ul>

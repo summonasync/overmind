@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
@@ -25,7 +25,8 @@ import { LaneEditDialog } from "@/features/lanes/components/lane-edit-dialog";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import { LaneStatusChips } from "@/features/lanes/components/lane-status-chips";
 import { isStatusVisible, toggleStatus } from "@/features/lanes/lib/lane-filters";
-import { priorityBySlug, sortBoardItems } from "@/features/lanes/lib/lane-order";
+import { boardItemsBySlug, laneMoveTargetsBySlug, sortBoardItems } from "@/features/lanes/lib/lane-order";
+import { useFeatureQueueMove } from "@/features/lanes/lib/use-feature-queue-move";
 import { useLanes } from "@/features/lanes/lib/use-lanes";
 import type { LaneRow } from "@/features/lanes/types";
 
@@ -75,6 +76,35 @@ export function LaneBoard() {
 
   const { data: roster, loading, error } = useLanes(projectId);
   const { data: features, loading: boardLoading, error: boardError } = usePlanningBoard(projectId);
+  // The mutation lives here, not on the card: a second move must not start while one is in flight, because
+  // its target was numbered against the pre-move band and would land on a slot that no longer means that.
+  const queueMove = useFeatureQueueMove(projectId);
+
+  const lanes = useMemo(
+    () =>
+      (roster?.lanes ?? []).map((lane) => ({
+        ...lane,
+        features: lane.features.filter((feature) => feature.status !== "done"),
+      })),
+    [roster],
+  );
+  const boardItems = useMemo(() => boardItemsBySlug(features), [features]);
+  const moveTargets = useMemo(
+    () => laneMoveTargetsBySlug(lanes, features, statusFilter),
+    [lanes, features, statusFilter],
+  );
+  const unlaned = useMemo(
+    () =>
+      sortBoardItems(
+        features.filter(
+          (item) =>
+            (item.lane === null || item.lane === undefined) &&
+            item.status !== "done" &&
+            isStatusVisible(statusFilter, item.status),
+        ),
+      ),
+    [features, statusFilter],
+  );
 
   if (!projectId) {
     return (
@@ -93,20 +123,6 @@ export function LaneBoard() {
     );
   }
 
-  const lanes = (roster?.lanes ?? []).map((lane) => ({
-    ...lane,
-    features: lane.features.filter((feature) => feature.status !== "done"),
-  }));
-  const priorities = priorityBySlug(features);
-  const unlaned = sortBoardItems(
-    features.filter(
-      (item) =>
-        (item.lane === null || item.lane === undefined) &&
-        item.status !== "done" &&
-        isStatusVisible(statusFilter, item.status),
-    ),
-  );
-
   return (
     <div className="space-y-4">
       <PageHeader
@@ -120,7 +136,7 @@ export function LaneBoard() {
         }
       />
 
-      <ErrorText error={error ?? boardError} />
+      <ErrorText error={error ?? boardError ?? queueMove.error} />
 
       {loading ? (
         <LoadingState label="Loading lanes…" />
@@ -136,7 +152,9 @@ export function LaneBoard() {
               key={lane.name}
               lane={lane}
               projectId={projectId}
-              priorities={priorities}
+              boardItems={boardItems}
+              moveTargets={moveTargets}
+              queueMove={queueMove}
               statusFilter={statusFilter}
               onEdit={setEditingLane}
               onDelete={setDeletingLane}
