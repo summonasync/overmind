@@ -437,6 +437,166 @@ public sealed class PlanningQueueApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task HumanDoorMove_UpAndDown_SwapWithinBand_AndReorderIsReadable()
+    {
+        var project = await CreateProjectAsync();
+        foreach (var slug in new[] { "hd-a", "hd-b", "hd-c" })
+        {
+            await CreateFeature(project.Id, slug, $"Human door {slug}");
+        }
+
+        var up = await HumanMoveAsync(project.Id, "hd-c", "up");
+        up.Slug.ShouldBe("hd-c");
+        up.QueuePosition.ShouldBe(2);
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-a", "hd-c", "hd-b"]);
+
+        var down = await HumanMoveAsync(project.Id, "hd-a", "down");
+        down.QueuePosition.ShouldBe(2);
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-c", "hd-a", "hd-b"]);
+
+        var board = (await GetBoardAsync(project.Id))!;
+        board.Single(f => f.Slug == "hd-c").QueuePosition.ShouldBe(1);
+        board.Single(f => f.Slug == "hd-a").QueuePosition.ShouldBe(2);
+        board.Single(f => f.Slug == "hd-b").QueuePosition.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task HumanDoorMove_FirstLastAndToPosition_AreAvailableOnTheHumanDoor()
+    {
+        var project = await CreateProjectAsync();
+        foreach (var slug in new[] { "hd-a", "hd-b", "hd-c", "hd-d" })
+        {
+            await CreateFeature(project.Id, slug, $"Human door {slug}");
+        }
+
+        var first = await HumanMoveAsync(project.Id, "hd-d", "first");
+        first.QueuePosition.ShouldBe(1);
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-d", "hd-a", "hd-b", "hd-c"]);
+
+        var last = await HumanMoveAsync(project.Id, "hd-d", "last");
+        last.QueuePosition.ShouldBe(4);
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-a", "hd-b", "hd-c", "hd-d"]);
+
+        var toPosition = await HumanMoveAsync(project.Id, "hd-c", "toPosition", 2);
+        toPosition.QueuePosition.ShouldBe(2);
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-a", "hd-c", "hd-b", "hd-d"]);
+    }
+
+    [Fact]
+    public async Task HumanDoorMove_AtBandEdges_IsSuccessfulNoOp()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "hd-a", "Human door A");
+        await CreateFeature(project.Id, "hd-b", "Human door B");
+
+        var head = await HumanMoveAsync(project.Id, "hd-a", "up");
+        head.QueuePosition.ShouldBe(1);
+
+        var tail = await HumanMoveAsync(project.Id, "hd-b", "down");
+        tail.QueuePosition.ShouldBe(2);
+
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-a", "hd-b"]);
+    }
+
+    [Fact]
+    public async Task HumanDoorMove_KeepsEveryFeatureInItsOwnPriorityBand()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "hd-p1", "Human door P1", "p1");
+        await CreateFeature(project.Id, "hd-a", "Human door A");
+        await CreateFeature(project.Id, "hd-b", "Human door B");
+
+        await HumanMoveAsync(project.Id, "hd-p1", "down");
+        await HumanMoveAsync(project.Id, "hd-a", "up");
+        await HumanMoveAsync(project.Id, "hd-b", "up");
+
+        var queue = await GetQueueAsync(project.Id);
+        queue!.Items.Select(i => i.Slug).ShouldBe(["hd-p1", "hd-b", "hd-a"]);
+        queue.Items.Select(i => i.Priority).ShouldBe(["p1", "p2", "p2"]);
+        queue.Items.Single(i => i.Slug == "hd-p1").QueuePosition.ShouldBe(1);
+        queue.Items.Single(i => i.Slug == "hd-b").QueuePosition.ShouldBe(1);
+        queue.Items.Single(i => i.Slug == "hd-a").QueuePosition.ShouldBe(2);
+
+        var board = (await GetBoardAsync(project.Id))!;
+        board.Single(f => f.Slug == "hd-p1").Priority.ShouldBe("p1");
+        board.Single(f => f.Slug == "hd-b").Priority.ShouldBe("p2");
+    }
+
+    [Fact]
+    public async Task HumanDoorMove_DoneFeature_Returns400FeatureNotInQueue()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "hd-a", "Human door A");
+        await CreateFeature(project.Id, "hd-b", "Human door B");
+        await BringToStatusAsync(project.Id, "hd-b", "done");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/hd-b/queue-move", new { Move = "up" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Status.ShouldBe(400);
+        problem.Title.ShouldBe("FeatureNotInQueue");
+        problem.Detail!.ShouldContain("hd-b");
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-a"]);
+    }
+
+    [Fact]
+    public async Task HumanDoorMove_UnknownFeature_Returns404NamingSlugInDetail()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/hd-ghost/queue-move", new { Move = "up" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain("hd-ghost");
+    }
+
+    [Theory]
+    [InlineData("toPosition", null, "Position")]
+    [InlineData("up", 2, "Position")]
+    [InlineData("sideways", null, "Move")]
+    [InlineData("toPosition", 0, "Position")]
+    public async Task HumanDoorMove_InvalidMoveShape_Returns400ValidationProblem(
+        string move, int? position, string expectedField)
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "hd-a", "Human door A");
+        await CreateFeature(project.Id, "hd-b", "Human door B");
+
+        var body = new Dictionary<string, object?> { ["Move"] = move };
+        if (position.HasValue)
+        {
+            body["Position"] = position.Value;
+        }
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/hd-a/queue-move", body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey(expectedField);
+        (await QueueOrderAsync(project.Id)).ShouldBe(["hd-a", "hd-b"]);
+    }
+
+    private async Task<QueueItemJson> HumanMoveAsync(Guid projectId, string slug, string move, int? position = null)
+    {
+        var body = new Dictionary<string, object?> { ["Move"] = move };
+        if (position.HasValue)
+        {
+            body["Position"] = position.Value;
+        }
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}/queue-move", body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<QueueItemJson>(JsonOptions))!;
+    }
+
     private async Task<HttpResponseMessage> ReorderAsync(Guid projectId, string priority, string[] slugs) =>
         await _client.PostAsJsonAsync(
             $"/api/projects/{projectId}/planning/queue/reorder",

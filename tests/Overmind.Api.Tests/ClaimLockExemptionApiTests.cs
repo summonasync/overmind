@@ -91,6 +91,33 @@ public sealed class ClaimLockExemptionApiTests : IDisposable
     }
 
     [Fact]
+    public async Task QueueMove_AgentDoor_ForeignSessionLocks_WhileHumanDoorMoves()
+    {
+        var project = await CreateProjectAsync();
+        var (slug, _, _) = await SeedClaimedFeatureAsync(project.Id, "queue_move");
+
+        var locked = await SendAsync("queue_move", project.Id, slug, Guid.Empty, null, ForeignSessionId);
+        locked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var lockedProblem = await locked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        lockedProblem!.Title.ShouldBe("FeatureClaimHeld");
+
+        var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/projects/{project.Id}/planning/features/{slug}/queue-move")
+        {
+            Content = JsonContent.Create(new { Move = "last" }, options: JsonOptions),
+        };
+        request.Headers.Add(SessionHeader.Name, ForeignSessionId.ToString());
+
+        var moved = await _client.SendAsync(request);
+
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var movedItem = await moved.Content.ReadFromJsonAsync<QueueMoveJson>(JsonOptions);
+        movedItem!.Slug.ShouldBe(slug);
+        movedItem.Priority.ShouldBe("p2");
+        movedItem.QueuePosition.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task DirectiveEndpoints_HeaderlessHumanDoor_NeverLocks()
     {
         var project = await CreateProjectAsync();
@@ -245,6 +272,8 @@ public sealed class ClaimLockExemptionApiTests : IDisposable
         Guid Id, string Text, string? AuthorAlias, string? AuthorVendor, DateTime CreatedAt, bool Ack);
 
     private sealed record AckJson(Guid Id, bool Ack, string? AckByAlias, string? AckVendor, DateTime? AckAt);
+
+    private sealed record QueueMoveJson(string Slug, string Priority, int QueuePosition);
 
     private sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }
