@@ -203,6 +203,7 @@ export interface UpdatePlanningFeatureValues {
   body?: string;
   status?: PlanningFeatureStatus;
   priority?: PlanningFeaturePriority;
+  lane?: string;
 }
 
 export interface CreatePlanningArtifactValues {

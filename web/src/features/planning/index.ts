@@ -39,6 +39,7 @@ export {
   planningKeys,
   workflowQueryOptions,
 } from "./queries";
+export { updatePlanningFeature } from "./api";
 export {
   BOARD_ARTIFACT_FILTERS,
   EMPTY_BOARD_FILTERS,

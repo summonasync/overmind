@@ -21,6 +21,7 @@ import { useProjectNumbering } from "@/features/projects";
 import { LaneCard } from "@/features/lanes/components/lane-card";
 import { LaneAddDialog } from "@/features/lanes/components/lane-add-dialog";
 import { LaneDeleteDialog } from "@/features/lanes/components/lane-delete-dialog";
+import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import { LaneStatusChips } from "@/features/lanes/components/lane-status-chips";
 import { isStatusVisible, toggleStatus } from "@/features/lanes/lib/lane-filters";
 import { priorityBySlug, sortBoardItems } from "@/features/lanes/lib/lane-order";
@@ -40,21 +41,24 @@ function UnlanedFeatureRow({
   item: PlanningFeatureBoardItem;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
-      <a
-        href={`/dashboard?project=${projectId}&feature=${item.slug}`}
-        className="group flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-      >
-        <FeatureNumberBadge slug={item.slug} numbering={numbering} />
-        <span className="min-w-0 truncate text-sm font-semibold text-foreground group-hover:text-primary">
-          {item.title}
+    <li className="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href={`/dashboard?project=${projectId}&feature=${item.slug}`}
+          className="group flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <FeatureNumberBadge slug={item.slug} numbering={numbering} />
+          <span className="min-w-0 truncate text-sm font-semibold text-foreground group-hover:text-primary">
+            {item.title}
+          </span>
+        </a>
+        <Badge tone={featureStatusTone(item.status)}>{item.status}</Badge>
+        {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
+        <span className="ml-auto min-w-0 truncate">
+          <FeatureClaimChip item={item} />
         </span>
-      </a>
-      <Badge tone={featureStatusTone(item.status)}>{item.status}</Badge>
-      {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
-      <span className="ml-auto min-w-0 truncate">
-        <FeatureClaimChip item={item} />
-      </span>
+      </div>
+      <FeatureLaneActions projectId={projectId} slug={item.slug} currentLane={null} />
     </li>
   );
 }
@@ -129,6 +133,7 @@ export function LaneBoard() {
             <LaneCard
               key={lane.name}
               lane={lane}
+              projectId={projectId}
               priorities={priorities}
               statusFilter={statusFilter}
               onDelete={setDeletingLane}

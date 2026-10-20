@@ -8,38 +8,45 @@ import { isStatusVisible } from "@/features/lanes/lib/lane-filters";
 import { lanePriorityFromValue } from "@/features/lanes/lib/lane-priority";
 import { sortLaneFeatures } from "@/features/lanes/lib/lane-order";
 import { LaneClaimChip } from "@/features/lanes/components/lane-claim-chip";
+import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import type { LaneFeatureSummary, LaneRow } from "@/features/lanes/types";
 
 interface LaneCardProps {
   lane: LaneRow;
+  projectId: string;
   priorities: ReadonlyMap<string, PlanningFeaturePriority>;
   statusFilter: ReadonlySet<PlanningFeatureStatus>;
   onDelete: (lane: LaneRow) => void;
 }
 
 interface LaneFeatureRowProps {
+  projectId: string;
   feature: LaneFeatureSummary;
+  laneName: string;
   priority: PlanningFeaturePriority | undefined;
 }
 
-function LaneFeatureRow({ feature, priority }: LaneFeatureRowProps) {
+function LaneFeatureRow({ projectId, feature, laneName, priority }: LaneFeatureRowProps) {
   return (
-    <li className="flex items-center gap-2">
-      <span className="min-w-0 truncate font-mono text-xs text-foreground">{feature.slug}</span>
-      {priority !== undefined ? <Badge tone={priorityTone(priority)}>{priority}</Badge> : null}
-      <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
-      <span className="ml-auto min-w-0 truncate">
-        <LaneClaimChip
-          alias={feature.claimedByAlias}
-          vendor={feature.claimedByVendor}
-          claimState={feature.claimState}
-        />
-      </span>
+    <li className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 truncate font-mono text-xs text-foreground">{feature.slug}</span>
+        {priority !== undefined ? <Badge tone={priorityTone(priority)}>{priority}</Badge> : null}
+        <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
+        <span className="ml-auto min-w-0 truncate">
+          <LaneClaimChip
+            alias={feature.claimedByAlias}
+            vendor={feature.claimedByVendor}
+            claimState={feature.claimState}
+          />
+        </span>
+      </div>
+      <FeatureLaneActions projectId={projectId} slug={feature.slug} currentLane={laneName} />
     </li>
   );
 }
 
-export function LaneCard({ lane, priorities, statusFilter, onDelete }: LaneCardProps) {
+export function LaneCard({ lane, projectId, priorities, statusFilter, onDelete }: LaneCardProps) {
   const visibleFeatures = sortLaneFeatures(
     lane.features.filter((feature) => isStatusVisible(statusFilter, feature.status)),
     priorities,
@@ -91,7 +98,9 @@ export function LaneCard({ lane, priorities, statusFilter, onDelete }: LaneCardP
           {visibleFeatures.map((feature) => (
             <LaneFeatureRow
               key={feature.slug}
+              projectId={projectId}
               feature={feature}
+              laneName={lane.name}
               priority={priorities.get(feature.slug)}
             />
           ))}

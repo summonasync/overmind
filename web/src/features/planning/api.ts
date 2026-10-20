@@ -50,6 +50,7 @@ export function updatePlanningFeature(
     body: values.body ?? null,
     status: values.status ?? null,
     priority: values.priority ?? null,
+    lane: values.lane ?? null,
   });
 }
 
