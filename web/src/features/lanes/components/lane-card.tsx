@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { featureStatusTone, priorityTone } from "@/features/planning";
 import type { PlanningFeaturePriority, PlanningFeatureStatus } from "@/features/planning";
@@ -16,6 +16,7 @@ interface LaneCardProps {
   projectId: string;
   priorities: ReadonlyMap<string, PlanningFeaturePriority>;
   statusFilter: ReadonlySet<PlanningFeatureStatus>;
+  onEdit: (lane: LaneRow) => void;
   onDelete: (lane: LaneRow) => void;
 }
 
@@ -46,7 +47,7 @@ function LaneFeatureRow({ projectId, feature, laneName, priority }: LaneFeatureR
   );
 }
 
-export function LaneCard({ lane, projectId, priorities, statusFilter, onDelete }: LaneCardProps) {
+export function LaneCard({ lane, projectId, priorities, statusFilter, onEdit, onDelete }: LaneCardProps) {
   const visibleFeatures = sortLaneFeatures(
     lane.features.filter((feature) => isStatusVisible(statusFilter, feature.status)),
     priorities,
@@ -67,6 +68,14 @@ export function LaneCard({ lane, projectId, priorities, statusFilter, onDelete }
           <Badge tone={lane.openFeatureCount > 0 ? "warning" : "neutral"}>
             {lane.openFeatureCount} open
           </Badge>
+          <button
+            type="button"
+            aria-label={`Edit lane ${lane.name}`}
+            onClick={() => onEdit(lane)}
+            className="rounded p-1 text-muted transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <Pencil size={13} aria-hidden />
+          </button>
           <button
             type="button"
             aria-label={`Delete lane ${lane.name}`}

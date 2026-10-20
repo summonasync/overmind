@@ -9,15 +9,14 @@ import type { LaneRow } from "@/features/lanes/types";
 interface LaneDeleteDialogProps {
   projectId: string;
   lane: LaneRow;
-  roster: LaneRow[];
   onClose: () => void;
 }
 
-export function LaneDeleteDialog({ projectId, lane, roster, onClose }: LaneDeleteDialogProps) {
-  const { deleteLane } = useLaneMutations(projectId);
+export function LaneDeleteDialog({ projectId, lane, onClose }: LaneDeleteDialogProps) {
+  const { removeLane } = useLaneMutations(projectId);
 
   function handleConfirm() {
-    deleteLane.mutate({ name: lane.name, roster }, { onSuccess: onClose });
+    removeLane.mutate(lane.name, { onSuccess: onClose });
   }
 
   return (
@@ -27,13 +26,13 @@ export function LaneDeleteDialog({ projectId, lane, roster, onClose }: LaneDelet
           Delete lane &quot;{lane.name}&quot;? Its features become unassigned and move to the
           &quot;Without lane&quot; pool. This cannot be undone.
         </p>
-        <ErrorText error={deleteLane.error} />
+        <ErrorText error={removeLane.error} />
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="danger" disabled={deleteLane.isPending} onClick={handleConfirm}>
-            {deleteLane.isPending ? "Deleting…" : "Delete"}
+          <Button variant="danger" disabled={removeLane.isPending} onClick={handleConfirm}>
+            {removeLane.isPending ? "Deleting…" : "Delete"}
           </Button>
         </div>
       </div>

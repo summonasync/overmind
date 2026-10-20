@@ -1,37 +1,18 @@
-import type { LaneRow, LaneUpsertInput } from "@/features/lanes/types";
+import type { LaneRow } from "@/features/lanes/types";
 
 export const LANE_NAME_MAX_LENGTH = 64;
 
-export function toUpsertRows(lanes: LaneRow[]): LaneUpsertInput[] {
-  return lanes.map((lane) => ({
-    name: lane.name,
-    contour: lane.contour,
-    serialOrder: lane.serialOrder,
-    priority: lane.priority,
-  }));
-}
+export const LANE_NAME_SHAPE_HINT =
+  "A lane name addresses itself in the URL, so it cannot contain / or \\, control characters, or be . and ..";
 
-export function appendLane(
-  lanes: LaneRow[],
-  name: string,
-  contour: string | null,
-  priority: number | null,
-): LaneUpsertInput[] {
-  const trimmedName = name.trim();
-  const trimmedContour = contour?.trim() ?? "";
-  return [
-    ...toUpsertRows(lanes),
-    {
-      name: trimmedName,
-      contour: trimmedContour.length > 0 ? trimmedContour : null,
-      serialOrder: null,
-      priority,
-    },
-  ];
-}
-
-export function removeLane(lanes: LaneRow[], name: string): LaneUpsertInput[] {
-  return toUpsertRows(lanes.filter((lane) => lane.name !== name));
+export function isAddressableLaneName(name: string): boolean {
+  if (name === "." || name === "..") {
+    return false;
+  }
+  return ![...name].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 0x1f || (code >= 0x7f && code <= 0x9f);
+  });
 }
 
 export function validateLaneName(name: string, lanes: LaneRow[]): string | null {
@@ -41,6 +22,12 @@ export function validateLaneName(name: string, lanes: LaneRow[]): string | null 
   }
   if (trimmed.length > LANE_NAME_MAX_LENGTH) {
     return `Lane name must be ${LANE_NAME_MAX_LENGTH} characters or fewer.`;
+  }
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    return 'Lane name cannot contain "/" or "\\".';
+  }
+  if (!isAddressableLaneName(trimmed)) {
+    return "Lane name cannot be a bare dot or carry control characters.";
   }
   if (lanes.some((lane) => lane.name.toLowerCase() === trimmed.toLowerCase())) {
     return `Lane "${trimmed}" already exists.`;

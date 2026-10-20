@@ -30,9 +30,12 @@ export interface LanesRoster {
   lanes: LaneRow[];
 }
 
-export interface LaneUpsertInput {
-  name: string;
+export interface LaneMutableFields {
   contour: string | null;
   serialOrder: number | null;
   priority: number | null;
+}
+
+export interface LaneUpsertInput extends LaneMutableFields {
+  name: string;
 }

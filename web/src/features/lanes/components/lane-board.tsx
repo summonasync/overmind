@@ -21,6 +21,7 @@ import { useProjectNumbering } from "@/features/projects";
 import { LaneCard } from "@/features/lanes/components/lane-card";
 import { LaneAddDialog } from "@/features/lanes/components/lane-add-dialog";
 import { LaneDeleteDialog } from "@/features/lanes/components/lane-delete-dialog";
+import { LaneEditDialog } from "@/features/lanes/components/lane-edit-dialog";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import { LaneStatusChips } from "@/features/lanes/components/lane-status-chips";
 import { isStatusVisible, toggleStatus } from "@/features/lanes/lib/lane-filters";
@@ -29,7 +30,7 @@ import { useLanes } from "@/features/lanes/lib/use-lanes";
 import type { LaneRow } from "@/features/lanes/types";
 
 const LANES_DESCRIPTION =
-  "Wave view of the planning board: one card per lane with its holder, open-feature count and the features inside. Lanes are managed here — changes replace the whole roster.";
+  "Wave view of the planning board: one card per lane with its holder, open-feature count and the features inside. Lanes are managed here — each card edits or deletes its own lane, and a deleted lane leaves its features in the without-lane pool.";
 
 function UnlanedFeatureRow({
   projectId,
@@ -69,6 +70,7 @@ export function LaneBoard() {
   const numbering = useProjectNumbering(projectId);
   const [statusFilter, setStatusFilter] = useState<ReadonlySet<PlanningFeatureStatus>>(new Set());
   const [deletingLane, setDeletingLane] = useState<LaneRow | null>(null);
+  const [editingLane, setEditingLane] = useState<LaneRow | null>(null);
   const [adding, setAdding] = useState(false);
 
   const { data: roster, loading, error } = useLanes(projectId);
@@ -136,6 +138,7 @@ export function LaneBoard() {
               projectId={projectId}
               priorities={priorities}
               statusFilter={statusFilter}
+              onEdit={setEditingLane}
               onDelete={setDeletingLane}
             />
           ))}
@@ -182,8 +185,15 @@ export function LaneBoard() {
         <LaneDeleteDialog
           projectId={projectId}
           lane={deletingLane}
-          roster={lanes}
           onClose={() => setDeletingLane(null)}
+        />
+      ) : null}
+
+      {editingLane !== null && roster !== null ? (
+        <LaneEditDialog
+          projectId={projectId}
+          lane={editingLane}
+          onClose={() => setEditingLane(null)}
         />
       ) : null}
     </div>

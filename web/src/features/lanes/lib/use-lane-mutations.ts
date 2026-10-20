@@ -1,40 +1,33 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { setLanes } from "@/features/lanes/api";
-import { appendLane, removeLane } from "@/features/lanes/lib/lane-roster";
+import { createLane, deleteLane, updateLane } from "@/features/lanes/api";
+import { planningKeys } from "@/features/planning";
 import { lanesKeys } from "@/features/lanes/queries";
-import type { LaneRow } from "@/features/lanes/types";
-
-interface CreateLaneInput {
-  name: string;
-  contour: string | null;
-  priority: number | null;
-  roster: LaneRow[];
-}
-
-interface DeleteLaneInput {
-  name: string;
-  roster: LaneRow[];
-}
+import type { LaneUpsertInput } from "@/features/lanes/types";
 
 export function useLaneMutations(projectId: string) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: lanesKeys.project(projectId) });
+    queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
   };
 
-  const createLane = useMutation({
-    mutationFn: (input: CreateLaneInput) =>
-      setLanes(projectId, appendLane(input.roster, input.name, input.contour, input.priority)),
+  const addLane = useMutation({
+    mutationFn: (lane: LaneUpsertInput) => createLane(projectId, lane),
     onSuccess: invalidate,
   });
 
-  const deleteLane = useMutation({
-    mutationFn: (input: DeleteLaneInput) => setLanes(projectId, removeLane(input.roster, input.name)),
+  const editLane = useMutation({
+    mutationFn: (lane: LaneUpsertInput) => updateLane(projectId, lane),
     onSuccess: invalidate,
   });
 
-  return { createLane, deleteLane };
+  const removeLane = useMutation({
+    mutationFn: (name: string) => deleteLane(projectId, name),
+    onSuccess: invalidate,
+  });
+
+  return { addLane, editLane, removeLane };
 }

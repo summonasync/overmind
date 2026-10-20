@@ -4,11 +4,12 @@ export { LaneClaimChip } from "./components/lane-claim-chip";
 export { useLaneMutations } from "./lib/use-lane-mutations";
 export { useLanes } from "./lib/use-lanes";
 export { lanesKeys, lanesQueryOptions } from "./queries";
-export { listLanes, setLanes } from "./api";
+export { createLane, deleteLane, listLanes, setLanes, updateLane } from "./api";
 export type {
   LaneClaimState,
   LaneFeatureSummary,
   LaneHolder,
+  LaneMutableFields,
   LaneRow,
   LaneUpsertInput,
   LanesRoster,
