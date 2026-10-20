@@ -112,7 +112,6 @@ export function LaneCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {lane.contour !== null ? <Badge>{lane.contour}</Badge> : null}
           <Badge tone={lane.openFeatureCount > 0 ? "warning" : "neutral"}>
             {lane.openFeatureCount} open
           </Badge>
@@ -134,6 +133,10 @@ export function LaneCard({
           </button>
         </div>
       </div>
+
+      {lane.contour !== null ? (
+        <Badge className="max-w-full self-start whitespace-normal break-all">{lane.contour}</Badge>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-muted">holder</span>
