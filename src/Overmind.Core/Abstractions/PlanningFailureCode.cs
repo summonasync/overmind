@@ -63,5 +63,7 @@ public enum PlanningFailureCode
     LaneClaimHeld,
     LaneSerialBusy,
     MissingDirective,
-    MissingEntry
+    MissingEntry,
+    MissingLane,
+    InvalidLaneName
 }

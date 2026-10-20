@@ -313,6 +313,247 @@ public sealed class LaneServiceTests : IDisposable
         names.ShouldBe(["alpha", "zeta"]);
     }
 
+    [Fact]
+    public async Task UpsertLane_Create_InsertsAndEchoesTheRoster()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "web/src", 1, 0)]);
+
+        var roster = await service.UpsertLaneAsync(_projectId, new LaneUpsert("backend", "api/src", 2, 1), LaneWriteMode.Create);
+
+        roster.Select(l => l.Name).ShouldBe(["frontend", "backend"]);
+        var created = roster.Single(l => l.Name == "backend");
+        created.Contour.ShouldBe("api/src");
+        created.SerialOrder.ShouldBe(2);
+        created.Priority.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Create_ExistingName_ThrowsLaneNameDuplicate()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            service.UpsertLaneAsync(_projectId, new LaneUpsert("Frontend", null, null), LaneWriteMode.Create));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneNameDuplicate);
+        ex.Kind.ShouldBe(PlanningFailureKind.Duplicate);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Create_OverTheCap_Throws()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId,
+            [.. Enumerable.Range(0, LaneService.MaxLanesPerProject).Select(i => new LaneUpsert($"lane-{i}", null, null))]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            service.UpsertLaneAsync(_projectId, new LaneUpsert("overflow", null, null), LaneWriteMode.Create));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneRosterTooLarge);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Create_TheSixtyFourthLane_IsAccepted()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId,
+            [.. Enumerable.Range(0, LaneService.MaxLanesPerProject - 1).Select(i => new LaneUpsert($"lane-{i}", null, null))]);
+
+        var roster = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("the-last-one", null, null), LaneWriteMode.Create);
+
+        roster.Count.ShouldBe(LaneService.MaxLanesPerProject);
+    }
+
+    [Theory]
+    [InlineData("A. Domain")]
+    [InlineData("edge-pi")]
+    [InlineData("Фронтенд")]
+    [InlineData("a.b")]
+    [InlineData("Q3.plan")]
+    [InlineData("..edge")]
+    public async Task UpsertLane_Create_AddressableNames_AreAccepted(string name)
+    {
+        var roster = await CreateService()
+            .UpsertLaneAsync(_projectId, new LaneUpsert(name, null, null), LaneWriteMode.Create);
+
+        roster.ShouldHaveSingleItem().Name.ShouldBe(name);
+    }
+
+    [Theory]
+    [InlineData("web/src")]
+    [InlineData(@"infra\win")]
+    [InlineData("edge\ttail")]
+    [InlineData(".")]
+    [InlineData("..")]
+    public async Task UpsertLane_Create_NameTheRouteCannotAddress_ThrowsInvalidLaneName(string name)
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(() => CreateService()
+            .UpsertLaneAsync(_projectId, new LaneUpsert(name, null, null), LaneWriteMode.Create));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain(name.Trim());
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("web/src")]
+    [InlineData(@"infra\win")]
+    [InlineData("..")]
+    public async Task SetLanes_NameTheRouteCannotAddress_ThrowsInvalidLaneName_AndWritesNothing(string name)
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.SetLanesAsync(_projectId,
+            [new LaneUpsert("frontend", null, null), new LaneUpsert(name, null, null)]));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("web/src")]
+    [InlineData(@"infra\win")]
+    [InlineData("..")]
+    public async Task UpsertLane_Update_NameTheRouteCannotAddress_ThrowsInvalidLaneNameBeforeTheRosterLookup(
+        string name)
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.UpsertLaneAsync(
+            _projectId, new LaneUpsert(name, "web/src", null), LaneWriteMode.Update));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
+        (await _context.PlanningLanes.SingleAsync(l => l.ProjectId == _projectId)).Name.ShouldBe("frontend");
+    }
+
+    [Fact]
+    public async Task UpsertLane_Update_EditsMutableFields_KeepsTheStoredName()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "old contour", 1, 0)]);
+
+        var roster = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("frontend", "web/src", 4, 2), LaneWriteMode.Update);
+
+        var lane = roster.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("frontend");
+        lane.Contour.ShouldBe("web/src");
+        lane.SerialOrder.ShouldBe(4);
+        lane.Priority.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Update_OmittedFields_ClearThem()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "web/src", 1, 2)]);
+
+        var roster = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("frontend", null, null, null), LaneWriteMode.Update);
+
+        var lane = roster.ShouldHaveSingleItem();
+        lane.Contour.ShouldBeNull();
+        lane.SerialOrder.ShouldBeNull();
+        lane.Priority.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task UpsertLane_Update_CaseOnlyName_EditsInPlaceWithoutRenaming()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        var roster = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("Frontend", "web/src", null, null), LaneWriteMode.Update);
+
+        roster.ShouldHaveSingleItem().Name.ShouldBe("frontend");
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Update_UnknownLane_ThrowsMissingLane()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            service.UpsertLaneAsync(_projectId, new LaneUpsert("ghost", null, null), LaneWriteMode.Update));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingLane);
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Create_UnknownProject_ThrowsNotFound()
+    {
+        var missingProject = Guid.NewGuid();
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => CreateService()
+            .UpsertLaneAsync(missingProject, new LaneUpsert("frontend", null, null), LaneWriteMode.Create));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+        ex.Message.ShouldContain($"Project '{missingProject}' was not found.");
+    }
+
+    [Fact]
+    public async Task DeleteLane_RemovesTheLaneAndUnassignsOnlyItsFeatures()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId,
+            [
+                new LaneUpsert("gone", "gone contour", null),
+                new LaneUpsert("kept", "kept contour", 3)
+            ]);
+        await CreateFeatureAsync("011-gone-a", "gone");
+        await CreateFeatureAsync("012-gone-b", "gone");
+        await CreateFeatureAsync("013-kept-a", "kept");
+
+        var roster = await service.DeleteLaneAsync(_projectId, "GONE");
+
+        var kept = roster.ShouldHaveSingleItem();
+        kept.Name.ShouldBe("kept");
+        kept.Contour.ShouldBe("kept contour");
+        kept.SerialOrder.ShouldBe(3);
+        kept.Features.Select(f => f.Slug).ShouldBe(["013-kept-a"]);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+
+        var orphans = await _context.PlanningFeatures
+            .Where(f => f.Slug == "011-gone-a" || f.Slug == "012-gone-b")
+            .ToListAsync();
+        orphans.ShouldAllBe(f => f.Lane == null);
+    }
+
+    [Fact]
+    public async Task DeleteLane_UnknownLane_ThrowsMissingLane()
+    {
+        var service = CreateService();
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.DeleteLaneAsync(_projectId, "ghost"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingLane);
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task DeleteLane_UnknownProject_ThrowsNotFound()
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            CreateService().DeleteLaneAsync(Guid.NewGuid(), "frontend"));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
     private async Task CreateFeatureAsync(string slug, string? lane)
     {
         await CreateFeatureService().CreateAsync(_projectId, slug, "Title", "body");

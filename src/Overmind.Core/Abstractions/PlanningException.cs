@@ -319,6 +319,12 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneRosterTooLarge,
             $"The roster carries {count} lanes; a project holds at most {cap}.");
 
+    public static PlanningException InvalidLaneName(string name) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidLaneName,
+            $"Lane name '{name}' is not addressable: '/', '\\', a bare '.' or '..' and control characters are refused, because the " +
+            "edit and delete routes carry the name as a single path segment — a lane named that way would be " +
+            "created but never addressable by those routes. Pick a name without those characters.");
+
     public static PlanningException LaneNotInRoster(string lane, IReadOnlyList<string> rosterNames) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneNotInRoster,
             $"Lane '{lane}' is not in the project roster; features join a lane only by roster name. " +
@@ -331,6 +337,12 @@ public sealed class PlanningException : Exception
             $"Lane '{lane}' is busy: feature '{slug}' holds an alive claim by {alias} by {vendor} " +
             $"({liveness.ToString().ToLowerInvariant()}). One agent owns a lane at a time — " +
             "pick a feature outside this lane, or resend with overrideLaneCheck=true to claim anyway.");
+
+    public static PlanningException MissingLane(string name) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingLane,
+            $"Lane '{name}' was not found in this project's roster — lane names are the identity and are matched " +
+            "case-insensitively, so this is either a lane that was never created or one that was already deleted; " +
+            "planning_list_lanes shows the roster that is live now.");
 
     public static PlanningException MissingDirective(Guid directiveId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingDirective,

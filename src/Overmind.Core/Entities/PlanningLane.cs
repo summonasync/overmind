@@ -48,6 +48,24 @@ public sealed class PlanningLane
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public static bool IsAddressableName(string name)
+    {
+        if (name.Trim() is "." or "..")
+        {
+            return false;
+        }
+
+        foreach (var character in name)
+        {
+            if (character is '/' or '\\' || char.IsControl(character))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static string NormalizeName(string name) => name.Trim();
 
     private static string? NormalizeContour(string? contour) =>

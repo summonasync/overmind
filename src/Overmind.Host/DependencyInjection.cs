@@ -95,6 +95,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<PlanningQueueMoveRequest>, PlanningQueueMoveRequestValidator>();
         services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
         services.AddSingleton<IValidator<SetLanesRequest>, SetLanesRequestValidator>();
+        services.AddSingleton<IValidator<LaneUpsertRequest>, CreateLaneRequestValidator>();
+        services.AddSingleton<IValidator<UpdateLaneRequest>, UpdateLaneRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveRequest>, AppendPlanningDirectiveRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveHumanRequest>, AppendPlanningDirectiveHumanRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();

@@ -122,11 +122,15 @@ public sealed class LanesApiTests : IDisposable
     [Fact]
     public async Task PutLanes_UnknownProject_Returns404()
     {
+        var ghostProject = Guid.NewGuid();
+
         var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{Guid.NewGuid()}/planning/lanes",
+            $"/api/agent/projects/{ghostProject}/planning/lanes",
             new { Lanes = Array.Empty<object>() });
 
         put.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await put.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain($"Project '{ghostProject}' was not found.");
     }
 
     [Fact]
@@ -323,6 +327,311 @@ public sealed class LanesApiTests : IDisposable
         lane.Features[1].ClaimedByAlias.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PostLane_CreatesLane_OnBothDoors(bool agentDoor)
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"{Door(agentDoor)}/projects/{project.Id}/planning/lanes",
+            new { Name = "frontend", Contour = "web/src", SerialOrder = 1, Priority = 2 });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var created = await post.Content.ReadFromJsonAsync<LanesJson>(JsonOptions);
+        created!.Lanes.ShouldHaveSingleItem();
+        created.Lanes[0].Name.ShouldBe("frontend");
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: !agentDoor);
+        var lane = roster!.Lanes.ShouldHaveSingleItem();
+        lane.Contour.ShouldBe("web/src");
+        lane.SerialOrder.ShouldBe(1);
+        lane.Priority.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task PostLane_ExistingName_Returns409WithLaneNameDuplicate()
+    {
+        var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes",
+            new { Name = "Frontend" });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await post.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LaneNameDuplicate");
+    }
+
+    [Fact]
+    public async Task PostLane_PriorityOutOfRange_Returns400()
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = "frontend", Priority = 4 });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await post.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Priority");
+    }
+
+    [Fact]
+    public async Task PostLane_BlankName_Returns400()
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = "   " });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostLane_UnknownProject_Returns404()
+    {
+        var ghostProject = Guid.NewGuid();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{ghostProject}/planning/lanes",
+            new { Name = "frontend" });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await post.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain($"Project '{ghostProject}' was not found.");
+    }
+
+    [Theory]
+    [InlineData("web/src")]
+    [InlineData(@"infra\win")]
+    [InlineData("edge\ttail")]
+    [InlineData("..")]
+    public async Task PostLane_NameTheRouteCannotAddress_Returns400InvalidLaneName_AndWritesNothing(string name)
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = name });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await post.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidLaneName");
+        problem.Detail!.ShouldContain(name.Trim());
+
+        (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("A. Domain")]
+    [InlineData("edge-pi")]
+    [InlineData("Фронтенд")]
+    public async Task PostLane_AddressableNames_AreAcceptedOnBothDoors(string name)
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes",
+            new { Name = name });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await GetRosterAsync(project.Id, agentDoor: false))!.Lanes.ShouldHaveSingleItem().Name.ShouldBe(name);
+    }
+
+    [Theory]
+    [InlineData(3, HttpStatusCode.OK)]
+    [InlineData(4, HttpStatusCode.BadRequest)]
+    public async Task PostLane_PriorityBoundary_AnswersByTheCap(int priority, HttpStatusCode expected)
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = "frontend", Priority = priority });
+
+        post.StatusCode.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task PostLane_ContourOverTheCap_Returns400NamingTheField()
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = "frontend", Contour = new string('x', 2001) });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await post.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Contour");
+    }
+
+    [Fact]
+    public async Task PostLane_NegativeSerialOrder_Returns400NamingTheField()
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = "frontend", SerialOrder = -1 });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await post.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("SerialOrder");
+    }
+
+    [Fact]
+    public async Task PutLanes_NameTheRouteCannotAddress_Returns400InvalidLaneName_AndKeepsTheStoredRoster()
+    {
+        var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes",
+            new { Lanes = new[] { new { Name = "frontend" }, new { Name = @"infra\win" } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await put.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidLaneName");
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
+        roster!.Lanes.Select(l => l.Name).ShouldBe(["frontend"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PutLane_EditsMutableFields_KeepsIdentity_OnBothDoors(bool agentDoor)
+    {
+        var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
+
+        var put = await _client.PutAsJsonAsync(
+            $"{Door(agentDoor)}/projects/{project.Id}/planning/lanes/frontend",
+            new { Contour = "web/src/**", SerialOrder = 5, Priority = 1 });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var roster = await GetRosterAsync(project.Id, agentDoor: !agentDoor);
+        var lane = roster!.Lanes.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("frontend");
+        lane.Contour.ShouldBe("web/src/**");
+        lane.SerialOrder.ShouldBe(5);
+        lane.Priority.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task PutLane_UnknownLane_Returns404NamingTheLane()
+    {
+        var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes/ghost",
+            new { Contour = "web/src" });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await put.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain("'ghost'");
+        problem.Detail!.ShouldContain("roster");
+    }
+
+    [Fact]
+    public async Task PutLane_DoesNotCreateTheLane()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes/frontend",
+            new { Contour = "web/src" });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await put.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("Not Found");
+        problem.Detail!.ShouldContain("Lane 'frontend' was not found");
+        (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteLane_RemovesLaneAndUnassignsFeatures_OnBothDoors(bool agentDoor)
+    {
+        var project = await CreateProjectAsync();
+        await PutLanesAsync(project.Id, "frontend", "backend");
+        await CreateFeature(project.Id, "011-a", "A");
+        await CreateFeature(project.Id, "012-b", "B");
+        await SetLane(project.Id, "011-a", "frontend");
+        await SetLane(project.Id, "012-b", "backend");
+
+        var delete = await _client.DeleteAsync(
+            $"{Door(agentDoor)}/projects/{project.Id}/planning/lanes/Frontend");
+
+        delete.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = await delete.Content.ReadFromJsonAsync<LanesJson>(JsonOptions);
+        echoed!.Lanes.Select(l => l.Name).ShouldBe(["backend"]);
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: !agentDoor);
+        var lane = roster!.Lanes.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("backend");
+        lane.Features.ShouldHaveSingleItem();
+        lane.Features[0].Slug.ShouldBe("012-b");
+
+        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
+            $"/api/agent/projects/{project.Id}/planning/features", JsonOptions);
+        var rows = board!;
+        rows.Single(i => i.Slug == "011-a").Lane.ShouldBeNull();
+        rows.Single(i => i.Slug == "012-b").Lane.ShouldBe("backend");
+    }
+
+    [Fact]
+    public async Task DeleteLane_UnknownLane_Returns404NamingTheLane()
+    {
+        var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
+
+        var delete = await _client.DeleteAsync($"/api/projects/{project.Id}/planning/lanes/ghost");
+
+        delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain("'ghost'");
+        (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task DeleteLane_UnknownProject_Returns404()
+    {
+        var ghostProject = Guid.NewGuid();
+
+        var delete = await _client.DeleteAsync($"/api/agent/projects/{ghostProject}/planning/lanes/frontend");
+
+        delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail!.ShouldContain($"Project '{ghostProject}' was not found.");
+    }
+
+    [Fact]
+    public async Task LaneLifecycle_GranularCreatesAndEditsAccumulate()
+    {
+        var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "backend");
+
+        var edit = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes/frontend",
+            new { Contour = "web/src" });
+        edit.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
+        roster!.Lanes.Select(l => l.Name).ShouldBe(["backend", "frontend"]);
+        roster.Lanes.Single(l => l.Name == "frontend").Contour.ShouldBe("web/src");
+    }
+
+    private static string Door(bool agentDoor) => agentDoor ? "/api/agent" : "/api";
+
     private async Task<ProjectJson> CreateProjectAsync()
     {
         var response = await _client.PostAsJsonAsync("/api/projects", new
@@ -344,6 +653,14 @@ public sealed class LanesApiTests : IDisposable
             $"/api/agent/projects/{projectId}/planning/lanes",
             new { Lanes = new[] { new { Name = name } } });
         put.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task PostLaneAsync(Guid projectId, string name)
+    {
+        var post = await _client.PostAsJsonAsync(
+            $"{Door(agentDoor: true)}/projects/{projectId}/planning/lanes",
+            new { Name = name });
+        post.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task PutLanesAsync(Guid projectId, params string[] names)

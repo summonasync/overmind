@@ -105,6 +105,9 @@ public sealed record LaneUpsertRequest(
 
 public sealed record SetLanesRequest(LaneUpsertRequest[] Lanes);
 
+public sealed record UpdateLaneRequest(
+    string? Contour = null, int? SerialOrder = null, int? Priority = null);
+
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
 public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs);

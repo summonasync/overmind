@@ -76,6 +76,82 @@ public sealed class LaneService
         return await ProjectAsync(projectId, ct);
     }
 
+    public async Task<IReadOnlyList<LaneRow>> UpsertLaneAsync(
+        Guid projectId, LaneUpsert lane, LaneWriteMode mode, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(lane);
+        ValidateRoster([lane]);
+        await RequireProjectAsync(projectId, ct);
+
+        var existing = await _db.PlanningLanes
+            .Where(l => l.ProjectId == projectId)
+            .ToListAsync(ct);
+        var current = existing.FirstOrDefault(l => Matches(lane.Name, l.Name));
+
+        if (mode == LaneWriteMode.Create)
+        {
+            if (current is not null)
+            {
+                throw PlanningException.LaneNameDuplicate(current.Name);
+            }
+
+            if (existing.Count >= MaxLanesPerProject)
+            {
+                throw PlanningException.LaneRosterTooLarge(existing.Count + 1, MaxLanesPerProject);
+            }
+
+            _db.PlanningLanes.Add(PlanningLane.Create(
+                projectId, lane.Name, lane.Contour, lane.SerialOrder, lane.Priority));
+        }
+        else
+        {
+            var target = current ?? throw PlanningException.MissingLane(lane.Name.Trim());
+
+            // The route carries the name as the locator only: identity stays on the stored spelling,
+            // so a case-different PUT edits the lane instead of renaming it.
+            target.Update(target.Name, lane.Contour, lane.SerialOrder, lane.Priority);
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
+        {
+            throw PlanningException.LaneNameDuplicate(lane.Name.Trim());
+        }
+
+        return await ProjectAsync(projectId, ct);
+    }
+
+    public async Task<IReadOnlyList<LaneRow>> DeleteLaneAsync(
+        Guid projectId, string name, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        await RequireProjectAsync(projectId, ct);
+
+        var existing = await _db.PlanningLanes
+            .Where(l => l.ProjectId == projectId)
+            .ToListAsync(ct);
+        var lane = existing.FirstOrDefault(l => Matches(name, l.Name))
+            ?? throw PlanningException.MissingLane(name.Trim());
+
+        _db.PlanningLanes.Remove(lane);
+
+        var assigned = await _db.PlanningFeatures
+            .Where(f => f.ProjectId == projectId && f.Lane != null)
+            .ToListAsync(ct);
+
+        foreach (var feature in assigned.Where(f => Matches(lane.Name, f.Lane!)))
+        {
+            feature.SetLane(null);
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        return await ProjectAsync(projectId, ct);
+    }
+
     public async Task<IReadOnlyList<LaneRow>> ListLanesAsync(Guid projectId, CancellationToken ct = default)
     {
         await RequireProjectAsync(projectId, ct);
@@ -163,6 +239,11 @@ public sealed class LaneService
             {
                 throw new ArgumentException(
                     $"Lane name '{name}' exceeds the {PlanningLane.MaxNameLength} character cap.");
+            }
+
+            if (!PlanningLane.IsAddressableName(name))
+            {
+                throw PlanningException.InvalidLaneName(name);
             }
 
             if (lane.Contour is { } contour && contour.Trim().Length > PlanningLane.MaxContourLength)
