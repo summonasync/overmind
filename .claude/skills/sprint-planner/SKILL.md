@@ -101,11 +101,14 @@ What the board actually enforces (verified against the implementation, not the t
   priority 0-3 (mirrors p0-p3, sorts lane columns, null = unprioritized = last).
 - `serialOrder` is reserved — **no behavior**. Never promise an ordering that comes from it;
   order inside a lane comes from priority band + board queue position.
-- One claim per lane: `planning_claim_feature` refuses 409 `LaneClaimHeld` when another alias
-  holds an alive claim in the lane, and `LaneSerialBusy` when another non-`done` feature is still
-  open in it. So a lane holds **exactly one open feature**; a lane with two non-`done` features is
-  unclaimable on both — the head blocks the tail and the tail blocks the head. Queue the rest
-  unlaned; bind the next one only when the head closes.
+- Binding model (owner decision 2026-10-21): **1 agent — 1 lane — 1 feature — one by one.** Bind
+  the lane's WHOLE queue to the lane; the lane agent works it head to tail. A feature parked in
+  review is the human's court: unclaim it and claim the next one — never wait for the `done` flip.
+- Claim gates: `planning_claim_feature` refuses 409 `LaneClaimHeld` when another alias holds an
+  alive claim in the lane. A second arm, `LaneSerialBusy`, still refuses claims while another
+  non-`done` feature sits open in the lane; board feature `157-claim-aware-lanes` (p0) replaces
+  it with the own-claim rule. Until 157 lands, the first claim in a fully bound lane needs
+  `overrideLaneCheck=true` once.
 - `overrideLaneCheck=true` is an escape hatch for a human's decision, never a planning device.
 - The human door skips lane checks; your writes are not the human's — do not assume a lane state
   you see is enforced the same way from the UI.
@@ -116,7 +119,7 @@ What the board actually enforces (verified against the implementation, not the t
   in-flight features (claimed, or in progress/review).
 
 Grooming procedure:
-1. Propose the lane map as a table: lane name | contour | head feature | declared surfaces.
+1. Propose the lane map as a table: lane name | contour | queue | declared surfaces.
    Contours follow the repo's real seams (read the project docs/structure), and two lanes'
    surfaces must not intersect — a shared file is a dependency or a merge order, not a lane.
 2. Size it to the wave, not to the backlog: default 3 lanes, hard ceiling ~5 concurrent agents.
@@ -124,8 +127,8 @@ Grooming procedure:
 3. Get the user's explicit pick (SOCRATIC: the map plus 2-3 concrete variants + your
    recommendation) — roster writes and lane bindings change how other agents can work, they are
    authority-gated moves, never silent ones.
-4. Apply: `planning_list_lanes` → build the FULL roster → `planning_set_lanes` → per head feature
-   `planning_update_feature(lane=, codeSurfaces=)` with a `logNote` on each.
+4. Apply: `planning_list_lanes` → build the FULL roster → `planning_set_lanes` → bind EVERY lane member
+   `planning_update_feature(lane=, codeSurfaces=)` with a `logNote` on each — not just heads.
 5. Verify with a fresh `planning_list_lanes`: every lane ≤1 open feature, holder empty before the
    wave, contours readable. Report the map you actually landed, not the one you proposed.
 

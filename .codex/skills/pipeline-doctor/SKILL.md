@@ -32,4 +32,4 @@ whenToUse: |
 
 ## Output Contract
 Per AGENTS.md: **Done** (root cause, fix diff summary, iterations used, pipeline URL) → **Next step** (usually: user reviews and merges) → **Alternatives** (e.g. audit-orchestrator if failure smells systemic). Then STOP.
-- No auto-commits/pushes beyond the fix branch trigger — the merge decision is always the user's.
+- Git discipline: commits live on the doctor's fix branch at the commit-by-feature checkpoints; pushes and the merge decision are always the user's.

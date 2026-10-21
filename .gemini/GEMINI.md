@@ -146,7 +146,7 @@ Mandatory workflow gates (e.g. review after Complex) proceed without asking; all
   - Orchestration, audit of long-context tasks, AI-code detection (`ai-code-detector`), AI-trace obfuscation (`ai-obfuscator`), obfuscation review → the **strongest reasoning model** available.
   - `ai-obfuscator` must NEVER run on the same model that wrote the code being obfuscated.
 - If a suitable model is unavailable — STOP and report to the user. Do NOT silently substitute.
-- Delegated agents inherit this file's rules: communication style, code conventions, workflow and no-auto-commits apply to them too.
+- Delegated agents inherit this file's rules: communication style, code conventions, workflow, commit-by-feature and no-auto-push apply to them too.
 - Sub-agents receive their task as an Overmind artifact reference (projectId/featureSlug/artifactId) and work it through `mcp__overmind__*` tools — reads via `planning_read_artifact`, logs/obstacles/AC-ticks via `planning_append_log` / `planning_patch_artifact`, statuses via `planning_set_status`. Full contract: `overmind-ceremony` skill.
 - <!-- augur-crew:start -->**Exception — augur-crew (pre-sales lane):** its sub-agents receive artifact PATHS under `audits/`, not board artifacts; Overmind is optional for the whole lane (see Overmind Integration, rule 1).<!-- augur-crew:end -->
 
@@ -155,7 +155,7 @@ Antigravity has no hook engine, so these rules are binding behavioral constraint
 
 **Forbidden unconditionally (any agent, any skill):**
 - `git push --force`, `git reset --hard`, `git clean -f`, `git checkout -- .` — destructive git
-- `git commit` / `git push` — unless the user explicitly asked in THIS session
+- `git push` — unless the user explicitly asked in THIS session; `git commit` allowed ONLY at the commit-by-feature checkpoints (task close, review handoff — Development Workflow #6)
 - `rm -rf` outside `node_modules`/`bin`/`obj` build output; any `rm` on `.git/`
 - Reading or printing `.env*`, `*secrets*`, `*.pfx`, `*.key` files into chat
 - Writing to IDE/agent config files, or this file's own enforcement sections — config self-modification is human-only
@@ -208,7 +208,7 @@ read-only client inputs) lives in that skill and in `augur-method` — do NOT du
 3. **Complex tasks** — MUST follow: Coder → Reviewer → Fix (if BLOCKERS).
 4. **Review Trigger** — After complex task completion, agent MUST run matching reviewer skill before considering task done.
 5. **No task is "done" until review passes or user explicitly overrides.**
-6. **No auto-commits.** Agents must NOT run `git commit` or `git push` unless user explicitly asks.
+6. **Commit by feature.** Agents commit their own work at two checkpoints: every task close and the feature's handoff into review — work is never left uncommitted and the lane conveyor never waits on a human tap. Push stays gated: only on the user's explicit ask. The feature's `done` flip is the human's door (approval notification or manual flip), never the agent's.
 7. **Features live on the Overmind board.** Complex work = a board feature: `planning_create_feature` (durable what/why in the body) → OPTIONAL requirements intake → spec artifact → user validation gate (`planning_validate`) → plan artifact → user validation gate → task artifacts per task. Validated spec/plan are FROZEN — changes via `planning_patch_artifact` with `logNote` or re-validation, never silent edits. The executing sub-agent gets ONLY its task artifact as input; `<acceptance-criteria>` plus spec-compliance is the review gate; any agent that hits a workaround/quirk MUST patch it into the task artifact's `<obstacles>` section. Mechanics: `overmind-ceremony` skill. Create refuses a slug whose NNN number prefix is already taken (`409 NumberCollision`, numeric compare — 7 ≡ 007, next free number in the detail); import restores verbatim and never guards.
 8. **Tombstoning (context-clash defense).** When a requirement, feature, or decision is REMOVED from any doc or artifact body (CONTEXT.md, feature body, spec/plan), it is never silently deleted — mark it `<removed YYYY-MM-DD — reason>`. Agents resurrect deleted things from conversation/context history unless they see an explicit tombstone. A visible "this is dead" beats an absent trace.
 9. **Explicit dependencies, not prose.** Any forward/backward reference between tasks or features ("this logic is done when X is ready") MUST be materialized as a `<refs>` entry in the artifact body — never left as free text. Agents silently ignore prose cross-references; structured dependencies they follow.

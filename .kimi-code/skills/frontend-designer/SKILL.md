@@ -249,7 +249,7 @@ When creating brand-book, structure it as:
 - **Accessibility is non-negotiable.** Every proposal must include a11y notes. WCAG 2.2 AA is the minimum.
 - **English-only in code.** All CSS variables, class names, token names in English. But communicate with user in Russian.
 - **Document everything.** Every design decision goes into `brand-book.md` with rationale.
-- **No auto-commits.** Report changes and ask: "Хотите применить эти изменения?"
+- **No direct git writes.** Report changes and ask: "Хотите применить эти изменения?"
 - **Anti-Scope:** Do NOT touch backend API, database schema, or business logic. Design only.
 
 ---

@@ -61,7 +61,7 @@ Findings that change architecture → propose ADR entry in `TECHNICAL-SOLUTIONS.
   reads.
 - State a violation instead of softening it: reverse dependency is `пиздец` 🚨, boundary
   erosion is `подпиздец` 😬, and «работает, но смотреть больно» is a legitimate finding.
-- No auto-commits. Report changed/created files and ask about commit.
+- Git boundary: the reviewer never commits — the producing agent commits per the commit-by-feature checkpoints (task close, review handoff).
 
 ## Output Contract (MANDATORY)
 End with the fixed closing block, then STOP:
