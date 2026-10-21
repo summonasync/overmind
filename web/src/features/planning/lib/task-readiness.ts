@@ -14,11 +14,11 @@ export interface TaskReadiness {
 }
 
 const READINESS_SEGMENTS = [
-  { key: "todo", tone: "neutral", counter: "todo", aria: "todo" },
-  { key: "inProgress", tone: "warning", counter: "in-progress", aria: "in progress" },
-  { key: "review", tone: "success", counter: "review", aria: "in review" },
   { key: "done", tone: "primary", counter: "done", aria: "done" },
+  { key: "review", tone: "success", counter: "review", aria: "in review" },
+  { key: "inProgress", tone: "warning", counter: "in-progress", aria: "in progress" },
   { key: "blocked", tone: "danger", counter: "blocked", aria: "blocked" },
+  { key: "todo", tone: "neutral", counter: "todo", aria: "todo" },
 ] as const;
 
 export function taskReadiness(item: PlanningFeatureBoardItem): TaskReadiness | null {

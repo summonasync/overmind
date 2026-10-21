@@ -31,32 +31,32 @@ test("full counts yield five ordered segments with the status tones and proporti
   const readiness = taskReadiness(item({}));
   assert.ok(readiness !== null);
   assert.deepEqual(readiness.segments, [
-    { tone: "neutral", count: 2, fraction: 0.2 },
-    { tone: "warning", count: 3, fraction: 0.3 },
-    { tone: "success", count: 1, fraction: 0.1 },
     { tone: "primary", count: 4, fraction: 0.4 },
+    { tone: "success", count: 1, fraction: 0.1 },
+    { tone: "warning", count: 3, fraction: 0.3 },
     { tone: "danger", count: 0, fraction: 0 },
+    { tone: "neutral", count: 2, fraction: 0.2 },
   ]);
 });
 
 test("counter line omits blocked when there is none", () => {
   const readiness = taskReadiness(item({}));
   assert.ok(readiness !== null);
-  assert.equal(readiness.countersLine, "todo 2|10 · in-progress 3|10 · review 1|10 · done 4|10");
+  assert.equal(readiness.countersLine, "done 4|10 · review 1|10 · in-progress 3|10 · todo 2|10");
 });
 
 test("aria value text names every count including zero blocked", () => {
   const readiness = taskReadiness(item({}));
   assert.ok(readiness !== null);
-  assert.equal(readiness.ariaValueText, "2 todo, 3 in progress, 1 in review, 4 done, 0 blocked");
+  assert.equal(readiness.ariaValueText, "4 done, 1 in review, 3 in progress, 0 blocked, 2 todo");
 });
 
-test("counter line appends blocked only when blocked is above zero", () => {
+test("counter line shows the blocked slot only when blocked is above zero", () => {
   const readiness = taskReadiness(item({ taskCounts: { todo: 1, inProgress: 2, review: 3, done: 2, blocked: 2 } }));
   assert.ok(readiness !== null);
   assert.equal(
     readiness.countersLine,
-    "todo 1|10 · in-progress 2|10 · review 3|10 · done 2|10 · blocked 2|10",
+    "done 2|10 · review 3|10 · in-progress 2|10 · blocked 2|10 · todo 1|10",
   );
 });
 
