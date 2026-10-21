@@ -68,7 +68,7 @@ Known machine flake: transient `Internal CLR error 0x80131506` on cold dotnet in
 - The Host↔MCP contract is additive-only: no renames or removals of DTO fields the adapter reads.
 - All planning writes go through the `Infrastructure/Planning` services; planning failures translate only in `PlanningErrors.Map`.
 - No new NuGet/npm packages without OSI license vetting and central version pinning (`Directory.Packages.props`).
-- No git commits or pushes from agents unless the user explicitly asked in the current session.
+- Commit by feature: agents commit at every task close and at the feature's handoff into review; push only on explicit user ask. The done flip is the human door (approval notification or manual flip).
 - Structural nits discovered but not fixed get recorded (BACKLOG hardening / `audits/`), never silently "fixed" mid-task.
 
 ## Working process
