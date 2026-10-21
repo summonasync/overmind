@@ -266,13 +266,13 @@ public sealed class FeatureClaimService
                 AgentSessionLiveness.Alive);
         }
 
-        var open = laneFeatures
-            .Where(f => f.Status != PlanningFeatureStatus.Done)
-            .OrderBy(f => f.Slug, StringComparer.Ordinal)
-            .FirstOrDefault();
-        if (open is not null)
+        var ownClaim = laneFeatures.FirstOrDefault(f =>
+            f.ClaimSessionId is not null &&
+            liveness.GetValueOrDefault(f.Id) == AgentSessionLiveness.Alive &&
+            string.Equals(f.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal));
+        if (ownClaim is not null)
         {
-            throw PlanningException.LaneSerialBusy(lane, open.Slug);
+            throw PlanningException.LaneSerialBusy(lane, ownClaim.Slug);
         }
     }
 
