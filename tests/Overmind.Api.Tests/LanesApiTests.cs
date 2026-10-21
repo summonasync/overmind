@@ -550,7 +550,7 @@ public sealed class LanesApiTests : IDisposable
 
         put.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var problem = await put.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Title.ShouldBe("Not Found");
+        problem!.Title.ShouldBe("MissingLane");
         problem.Detail!.ShouldContain("Lane 'frontend' was not found");
         (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldBeEmpty();
     }

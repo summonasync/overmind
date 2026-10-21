@@ -140,7 +140,7 @@ public sealed class PlanningExportApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
-        problem!.Title.ShouldBe("Not Found");
+        problem!.Title.ShouldBe("MissingProject");
         problem.Detail.ShouldNotBeNull();
         problem.Detail!.ShouldContain(projectId.ToString());
     }

@@ -144,7 +144,7 @@ public sealed class FeatureDependencyApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Title.ShouldBe("Not Found");
+        problem!.Title.ShouldBe("MissingFeature");
         problem.Detail!.ShouldContain("'nope' was not found");
     }
 
