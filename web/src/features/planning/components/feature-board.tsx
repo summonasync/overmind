@@ -21,6 +21,8 @@ import {
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { featureStatusTone } from "@/features/planning/lib/status-tone";
 import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
+import { taskReadiness } from "@/features/planning/lib/task-readiness";
+import type { TaskReadinessSegment } from "@/features/planning/lib/task-readiness";
 import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
 import { FeatureClaimChip } from "@/features/planning/components/feature-claim-chip";
 import { useDragAutoscroll } from "@/features/planning/lib/use-drag-autoscroll";
@@ -56,6 +58,18 @@ function artifactChip(label: string, status: PlanningArtifactStatus | null) {
     </Badge>
   );
 }
+
+const segmentToneClasses: Record<TaskReadinessSegment["tone"], string> = {
+  neutral: "bg-muted",
+  muted: "bg-muted",
+  info: "bg-info",
+  warning: "bg-warning",
+  success: "bg-success",
+  danger: "bg-danger",
+  skill: "bg-type-skill",
+  idea: "bg-type-featureRequest",
+  audit: "bg-type-audit",
+};
 
 interface FeatureStatusSelectProps {
   projectId: string;
@@ -180,6 +194,7 @@ export function FeatureBoard({
           const brief = cardBriefLine(item);
           const claimLine = cardClaimLine(item);
           const phaseLabel = cardPhaseLabel(item);
+          const readiness = taskReadiness(item);
           return (
             <li
               key={item.slug}
@@ -270,7 +285,7 @@ export function FeatureBoard({
 
               {brief !== null ? <p className="text-xs text-muted">{brief}</p> : null}
 
-              {item.taskTotal > 0 ? (
+              {readiness !== null ? (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-xs text-muted">
                     <span>
@@ -285,9 +300,19 @@ export function FeatureBoard({
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-label={`Tasks done for ${item.title}`}
+                    aria-valuetext={readiness.ariaValueText}
                   >
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${taskPercent}%` }} />
+                    <div className="flex h-full">
+                      {readiness.segments.map((segment) => (
+                        <div
+                          key={segment.tone}
+                          className={cn("h-full", segmentToneClasses[segment.tone])}
+                          style={{ width: `${segment.fraction * 100}%` }}
+                        />
+                      ))}
+                    </div>
                   </div>
+                  <p className="text-xs text-muted">{readiness.countersLine}</p>
                 </div>
               ) : null}
 
