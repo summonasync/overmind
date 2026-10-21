@@ -33,8 +33,8 @@ test("full counts yield five ordered segments with the status tones and proporti
   assert.deepEqual(readiness.segments, [
     { tone: "neutral", count: 2, fraction: 0.2 },
     { tone: "warning", count: 3, fraction: 0.3 },
-    { tone: "info", count: 1, fraction: 0.1 },
-    { tone: "success", count: 4, fraction: 0.4 },
+    { tone: "success", count: 1, fraction: 0.1 },
+    { tone: "primary", count: 4, fraction: 0.4 },
     { tone: "danger", count: 0, fraction: 0 },
   ]);
 });
@@ -71,7 +71,7 @@ test("missing counts fall back to done vs rest with fractions of the total", () 
   const readiness = taskReadiness(item({ taskCounts: undefined }));
   assert.ok(readiness !== null);
   assert.deepEqual(readiness.segments, [
-    { tone: "success", count: 4, fraction: 0.4 },
+    { tone: "primary", count: 4, fraction: 0.4 },
     { tone: "neutral", count: 6, fraction: 0.6 },
   ]);
   assert.equal(readiness.countersLine, "done 4|10 · rest 6|10");
@@ -82,7 +82,7 @@ test("fully done feature renders a full done segment over an empty rest", () => 
   const readiness = taskReadiness(item({ taskDone: 10, taskCounts: undefined }));
   assert.ok(readiness !== null);
   assert.deepEqual(readiness.segments, [
-    { tone: "success", count: 10, fraction: 1 },
+    { tone: "primary", count: 10, fraction: 1 },
     { tone: "neutral", count: 0, fraction: 0 },
   ]);
 });

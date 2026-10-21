@@ -13,6 +13,7 @@ import type {
 const TONE_DOTS: Record<BadgeTone, string> = {
   neutral: "bg-border-strong",
   muted: "bg-border",
+  primary: "bg-primary",
   info: "bg-info",
   warning: "bg-warning",
   success: "bg-success",

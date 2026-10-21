@@ -3,6 +3,7 @@ import type { BadgeTone } from "@/shared/ui/badge";
 export const selectToneClasses: Record<BadgeTone, string> = {
   neutral: "border-border text-muted",
   muted: "border-border/50 text-muted/70",
+  primary: "border-primary/40 text-primary",
   info: "border-info/40 text-info",
   warning: "border-warning/40 text-warning",
   success: "border-success/40 text-success",

@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/shared/lib/cn";
 import type { EntryTone } from "@/shared/lib/entry-type";
 
-export type BadgeTone = "neutral" | EntryTone;
+export type BadgeTone = "neutral" | "primary" | EntryTone;
 
 interface BadgeProps {
   tone?: BadgeTone;
@@ -13,6 +13,7 @@ interface BadgeProps {
 
 const toneClasses: Record<BadgeTone, string> = {
   neutral: "border border-border bg-surface-raised text-muted",
+  primary: "bg-primary/10 text-primary",
   muted: "border border-border/50 text-muted/70",
   info: "bg-info/10 text-info",
   warning: "bg-warning/10 text-warning",

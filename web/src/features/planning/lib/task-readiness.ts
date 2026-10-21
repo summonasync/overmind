@@ -16,8 +16,8 @@ export interface TaskReadiness {
 const READINESS_SEGMENTS = [
   { key: "todo", tone: "neutral", counter: "todo", aria: "todo" },
   { key: "inProgress", tone: "warning", counter: "in-progress", aria: "in progress" },
-  { key: "review", tone: "info", counter: "review", aria: "in review" },
-  { key: "done", tone: "success", counter: "done", aria: "done" },
+  { key: "review", tone: "success", counter: "review", aria: "in review" },
+  { key: "done", tone: "primary", counter: "done", aria: "done" },
   { key: "blocked", tone: "danger", counter: "blocked", aria: "blocked" },
 ] as const;
 
@@ -47,7 +47,7 @@ function doneRestReadiness(done: number, total: number): TaskReadiness {
   const rest = total - done;
   return {
     segments: [
-      { tone: "success", count: done, fraction: done / total },
+      { tone: "primary", count: done, fraction: done / total },
       { tone: "neutral", count: rest, fraction: rest / total },
     ],
     countersLine: `done ${done}|${total} · rest ${rest}|${total}`,
