@@ -141,6 +141,7 @@ public sealed class PlanningFeatureTools
         [Description("New status: done or inProgress — the only agent-door targets.")] string status,
         [Description("Required note recorded as a dated log line; carries the provenance, e.g. 'by user request in-session'.")] string logNote,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
@@ -157,7 +158,7 @@ public sealed class PlanningFeatureTools
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/status",
             new { status = normalized, logNote },
-            ct), FeatureLogReadback(projectId.Value, slug, logNote), ct);
+            ct, operationId), FeatureLogReadback(projectId.Value, slug, logNote), ct);
         return MutationEcho(echo, "slug");
     }
 
@@ -172,6 +173,7 @@ public sealed class PlanningFeatureTools
         [Description("Lane roster name to assign (must exist); empty string clears the lane; omit to keep the current one.")] string? lane = null,
         [Description("Repo-relative glob patterns declaring the file surfaces this feature touches (e.g. [\"src/web/**\"]; only * and ** wildcards are supported — ?, [, ], {, } are rejected); empty array clears; omit to keep the current ones.")] string[]? codeSurfaces = null,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
@@ -209,7 +211,7 @@ public sealed class PlanningFeatureTools
         return _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/update",
             payload,
-            ct), FeatureLogReadback(projectId.Value, slug, logNote), ct);
+            ct, operationId), FeatureLogReadback(projectId.Value, slug, logNote), ct);
     }
 
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
@@ -366,6 +368,7 @@ public sealed class PlanningFeatureTools
         [Description("Slug of the feature to re-prioritize, as shown on the board.")] string slug,
         [Description("New priority: p0 (critical), p1 (high), p2 (normal), p3 (low).")] string priority,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
@@ -377,7 +380,7 @@ public sealed class PlanningFeatureTools
         var feature = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(slug)}/priority",
             new { priority = normalized },
-            ct), readback: null, ct);
+            ct, operationId), readback: null, ct);
         return CompactFeature(feature);
     }
 

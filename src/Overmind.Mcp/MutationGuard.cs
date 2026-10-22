@@ -30,7 +30,7 @@ public sealed class MutationGuard(OvermindApiClient api)
         }
         catch (ApiUnreachableException)
         {
-            throw new McpException(await SettleAsync(() => resolveReadback(ct), ct));
+            throw new McpException($"{OvermindApiClient.RetryableMarker} {await SettleAsync(() => resolveReadback(ct), ct)}");
         }
     }
 

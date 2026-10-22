@@ -103,6 +103,19 @@ UI открывается на `http://overmind.localhost:<port>` — хостн
 
 `OVERMIND_PROJECT_ID` — id проекта (виден в UI или через `GET /api/projects/`); без него адаптер возьмёт единственный существующий проект. Адрес API задавать не нужно: адаптер сам находит хост через `~/.overmind/host.port`. Контекст читается агентом по URI-схеме `overmind://projects/<id>/gates`, `overmind://projects/<id>/guards` и т.д.
 
+#### Идемпотентные повторы мутаций (X-Operation-Id)
+
+Мутирующие planning-инструменты принимают опциональный параметр `operationId` (GUID): `planning_upsert_artifact`, `planning_upsert_tasks`, `planning_patch_artifact`, `planning_set_status`, `planning_append_log`, `planning_edit_log`, `planning_set_feature_status`, `planning_update_feature`, `planning_set_feature_priority`. Он уезжает заголовком `X-Operation-Id`, и Host ведёт реестр ответов (24 часа):
+
+- **тот же `operationId` + тот же payload** → Host вернёт сохранённый ответ с `"replayed": true`; повторного применения нет, версия не растёт;
+- **тот же `operationId` + другой payload** → `409 OperationIdConflict` — id минтся заново под каждую логическую операцию;
+- **не-GUID** → `400 InvalidOperationId`;
+- сохраняются только ответы 2xx — упавшая мутация не запоминается, повтор с тем же id выполнится по-настоящему.
+
+Контракт ретраев для агента: транспортная ошибка адаптера всегда содержит маркер `retryable transport failure:` — только этот класс ошибок стоит ретраить, и только повтором **того же** вызова с тем же `operationId`. Бизнес-ошибки (4xx, `STOP:`-гейты) маркер не несут — их ретраить бессмысленно. С `operationId` повтор идемпотентен в любом исходе: Host либо replayнет сохранённый ответ, либо честно ответит `409`. Текст ошибки после маркера может добавлять вердикт read-back-а адаптера («write committed at vN — do not resend» / «no trace» / «outcome unknown») — при живом `operationId` он ни на что не влияет, replay защищает и так.
+
+Провода совместимы в обе стороны: без `operationId` заголовок вообще не отправляется; **старый Host** просто игнорирует незнакомый заголовок; **новый Host со старым адаптером** работает как раньше. Lockstep не требуется — но replay возможен только когда обе стороны новые.
+
 ## Repository layout
 
 ```

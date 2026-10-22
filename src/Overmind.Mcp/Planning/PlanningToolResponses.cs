@@ -57,6 +57,11 @@ internal static class PlanningToolResponses
     internal const string MigratedNoteRequired =
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
 
+    internal const string OperationIdDescription =
+        "Optional idempotency key: the same GUID with an identical payload replays the stored response with replayed=true — " +
+        "the safe recovery after a transport failure; the same GUID with a different payload is a 409 OperationIdConflict; " +
+        "omit to send no header (old Hosts ignore it harmlessly).";
+
     internal const string TaskItemsAcceptedForm =
         "tasks must be a JSON array of task items, each an object with a required body string — " +
         "e.g. tasks=[{\"body\":\"<goal>Fix the login redirect.</goal>\",\"order\":0}].";
@@ -129,6 +134,14 @@ internal static class PlanningToolResponses
                 "the server swaps with the adjacent non-done feature or jumps to the band edges itself.";
     }
 
+    internal static void CarryReplayedFlag(JsonObject echo, JsonElement payload)
+    {
+        if (payload.TryGetProperty("replayed", out var replayed) && replayed.ValueKind == JsonValueKind.True)
+        {
+            echo["replayed"] = true;
+        }
+    }
+
     internal static JsonElement MutationEcho(JsonElement payload, string idKey)
     {
         var echo = new JsonObject
@@ -152,6 +165,7 @@ internal static class PlanningToolResponses
             echo["featureStatusChanged"] = featureStatusChanged.GetString();
         }
 
+        CarryReplayedFlag(echo, payload);
         return echo.Deserialize<JsonElement>();
     }
 
@@ -218,6 +232,7 @@ internal static class PlanningToolResponses
             compact["validationProofVoided"] = validationProofVoided.GetString();
         }
 
+        CarryReplayedFlag(compact, artifact);
         return compact.Deserialize<JsonElement>();
     }
 
@@ -232,6 +247,7 @@ internal static class PlanningToolResponses
             ["updatedAt"] = feature.GetProperty("updatedAt").GetString(),
             ["bodyChars"] = feature.GetProperty("body").GetString()?.Length ?? 0
         };
+        CarryReplayedFlag(compact, feature);
         return compact.Deserialize<JsonElement>();
     }
 

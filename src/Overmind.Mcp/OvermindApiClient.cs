@@ -41,7 +41,11 @@ public sealed class ApiStatusException : Exception
 
 public sealed class OvermindApiClient
 {
+    public const string RetryableMarker = "retryable transport failure:";
+
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+    private const string OperationIdHeader = "X-Operation-Id";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -71,25 +75,30 @@ public sealed class OvermindApiClient
     public Task<JsonElement> GetAsync(string pathAndQuery, CancellationToken ct) =>
         SendAsync(() => _http.GetAsync(pathAndQuery, HttpCompletionOption.ResponseHeadersRead, ct), "GET " + pathAndQuery, ct);
 
-    public Task<JsonElement> PostAsync(string path, object body, CancellationToken ct) =>
-        SendAsync(() => _http.PostAsJsonAsync(path, body, JsonOptions, ct), "POST " + path, ct);
+    public Task<JsonElement> PostAsync(string path, object body, CancellationToken ct, Guid? operationId = null) =>
+        SendAsync(() => SendJsonAsync(HttpMethod.Post, path, body, operationId, ct), "POST " + path, ct);
 
     public Task<JsonElement> DeleteAsync(string path, CancellationToken ct) =>
         SendAsync(() => _http.DeleteAsync(path, ct), "DELETE " + path, ct);
 
     public Task<JsonElement> DeleteAsync(string path, object body, CancellationToken ct) =>
-        SendAsync(() => SendJsonAsync(HttpMethod.Delete, path, body, ct), "DELETE " + path, ct);
+        SendAsync(() => SendJsonAsync(HttpMethod.Delete, path, body, operationId: null, ct), "DELETE " + path, ct);
 
-    public Task<JsonElement> PutAsync(string path, object body, CancellationToken ct) =>
-        SendAsync(() => _http.PutAsJsonAsync(path, body, JsonOptions, ct), "PUT " + path, ct);
+    public Task<JsonElement> PutAsync(string path, object body, CancellationToken ct, Guid? operationId = null) =>
+        SendAsync(() => SendJsonAsync(HttpMethod.Put, path, body, operationId, ct), "PUT " + path, ct);
 
     private async Task<HttpResponseMessage> SendJsonAsync(
-        HttpMethod method, string path, object body, CancellationToken ct)
+        HttpMethod method, string path, object body, Guid? operationId, CancellationToken ct)
     {
         var request = new HttpRequestMessage(method, path)
         {
             Content = JsonContent.Create(body, options: JsonOptions)
         };
+
+        if (operationId is not null)
+        {
+            request.Headers.Add(OperationIdHeader, operationId.Value.ToString("D"));
+        }
 
         return await _http.SendAsync(request, ct);
     }
@@ -106,7 +115,7 @@ public sealed class OvermindApiClient
         }
         catch (Exception ex) when (ex is HttpRequestException || ex is OperationCanceledException && !ct.IsCancellationRequested)
         {
-            throw new ApiUnreachableException($"overmind API is unreachable ({operation}): {ex.Message}");
+            throw new ApiUnreachableException($"{RetryableMarker} overmind API is unreachable ({operation}): {ex.Message}");
         }
 
         try

@@ -106,6 +106,7 @@ public sealed class PlanningArtifactTools
         [Description("Optional task-only blockedBy: sibling task orders of the same feature this task waits on. Re-upsert replaces the edge set declaratively (empty array clears); omitted preserves the current edges on update and sets none on create.")] int[]? blockedBy = null,
         [Description("Validate the full payload and persist nothing — the response echoes the would-be id and version marked dryRun; default false.")] bool? dryRun = null,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
@@ -150,7 +151,7 @@ public sealed class PlanningArtifactTools
         var artifact = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
             payload,
-            ct), Probe, ct);
+            ct, operationId), Probe, ct);
         return CompactArtifact(artifact);
     }
 
@@ -161,6 +162,7 @@ public sealed class PlanningArtifactTools
         [Description("Array of task items, each an object: body (required), order, review, logNote, brief, blockedBy.")] JsonElement tasks,
         [Description("Validate the whole batch and persist nothing — the response echoes the would-be orders and ids marked dryRun; default false.")] bool? dryRun = null,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         if (projectId is null)
@@ -181,7 +183,7 @@ public sealed class PlanningArtifactTools
         var batch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts/tasks",
             payload,
-            ct), readback: null, ct);
+            ct, operationId), readback: null, ct);
         return CompactTaskBatch(batch);
     }
 
@@ -332,6 +334,7 @@ public sealed class PlanningArtifactTools
             result["dryRun"] = true;
         }
 
+        CarryReplayedFlag(result, batch);
         return result.Deserialize<JsonElement>();
     }
 
@@ -343,6 +346,7 @@ public sealed class PlanningArtifactTools
         [Description("Id of the artifact to move; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(logNote))
@@ -355,7 +359,7 @@ public sealed class PlanningArtifactTools
         var payload = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/status",
             new { status = normalized, logNote },
-            ct), ArtifactLogReadback(id, logNote), ct);
+            ct, operationId), ArtifactLogReadback(id, logNote), ct);
 
         return MutationEcho(payload, "id");
     }
@@ -367,13 +371,14 @@ public sealed class PlanningArtifactTools
         [Description("Id of the artifact to append the note to; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         var id = await _aliases.AddressArtifactAsync(artifactId, projectId, alias, ct);
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/log",
             new { note, source = DoorSource },
-            ct), ArtifactLogReadback(id, note), ct);
+            ct, operationId), ArtifactLogReadback(id, note), ct);
         return MutationEcho(echo, "id");
     }
 
@@ -384,13 +389,14 @@ public sealed class PlanningArtifactTools
         [Description("Id of the artifact whose newest log line is edited; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         var id = await _aliases.AddressArtifactAsync(artifactId, projectId, alias, ct);
         var echo = await _mutations.SendAsync(() => _api.PutAsync(
             $"/api/agent/planning/artifacts/{id}/log",
             new { text },
-            ct), ArtifactLogReadback(id, text), ct);
+            ct, operationId), ArtifactLogReadback(id, text), ct);
         return MutationEcho(echo, "id");
     }
 
@@ -408,6 +414,7 @@ public sealed class PlanningArtifactTools
         [Description("Change note recorded in the artifact log; required when the artifact is validated.")] string? logNote = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
         var op = PatchOpOf(section, content, acIndex, acText, brief, untick, amend);
@@ -415,7 +422,7 @@ public sealed class PlanningArtifactTools
         var patch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/patch",
             new { op, section, content, acIndex, acText, brief, logNote, source = DoorSource },
-            ct), PatchReadback(id, logNote), ct);
+            ct, operationId), PatchReadback(id, logNote), ct);
 
         if (patch.TryGetProperty("noChange", out var noChange) &&
             noChange.ValueKind == JsonValueKind.True)
@@ -469,6 +476,7 @@ public sealed class PlanningArtifactTools
             echo["validationProofVoided"] = validationProofVoided.GetString();
         }
 
+        CarryReplayedFlag(echo, patch);
         return new CallToolResult
         {
             Content = [new TextContentBlock { Text = echo.ToJsonString() }]
