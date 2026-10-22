@@ -76,9 +76,15 @@ public static class PlanningArtifactsApi
                 feature.Id, request.Kind, request.Body, request.Order, request.Review, request.LogNote, ct,
                 brief: request.Brief,
                 source: PlanningDoorSource.Resolve(request.Source, fallbackSource),
-                blockedBy: request.BlockedBy);
+                blockedBy: request.BlockedBy,
+                dryRun: request.DryRun);
 
             var response = PlanningMapper.ToArtifactResponse(artifact);
+            if (request.DryRun)
+            {
+                return Results.Ok(response with { DryRun = true });
+            }
+
             var isNew = artifact.Version == 1;
             return isNew
                 ? Results.Created($"/api/planning/artifacts/{artifact.Id}", response)
@@ -124,7 +130,8 @@ public static class PlanningArtifactsApi
                         new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief, t.BlockedBy))
                     .ToArray(),
                 ct,
-                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
+                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent),
+                request.DryRun);
 
             var blockedStates = (await taskDependencies.BlockedOrdersAsync(feature.Id, ct))
                 .ToDictionary(s => s.Order);
@@ -132,7 +139,8 @@ public static class PlanningArtifactsApi
             return Results.Ok(new CreatePlanningTasksResponse(
                 batch.Created,
                 batch.Updated,
-                batch.Artifacts.Select(a => PlanningMapper.ToArtifactResponse(a, blockedStates)).ToArray()));
+                batch.Artifacts.Select(a => PlanningMapper.ToArtifactResponse(a, blockedStates)).ToArray(),
+                request.DryRun ? true : null));
         }
         catch (PlanningException ex)
         {

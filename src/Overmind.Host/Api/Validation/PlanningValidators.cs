@@ -127,7 +127,9 @@ public sealed class CreatePlanningArtifactRequestValidator : AbstractValidator<C
 {
     public CreatePlanningArtifactRequestValidator()
     {
-        RuleFor(x => x.Body).NotEmpty();
+        RuleFor(x => x.Body).NotEmpty().WithMessage(
+            "Body is required — send the full markdown body, " +
+            "e.g. { \"kind\": \"task\", \"body\": \"<goal>Fix the login redirect.</goal>\" }.");
         RuleFor(x => x.Order).GreaterThanOrEqualTo(0).When(x => x.Order.HasValue);
         RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
             .WithMessage("Brief must be a single line.")
@@ -152,8 +154,11 @@ public sealed class CreatePlanningTasksRequestValidator : AbstractValidator<Crea
 {
     public CreatePlanningTasksRequestValidator()
     {
-        RuleFor(x => x.Tasks).NotEmpty().WithMessage("A task batch needs at least one item.");
-        RuleForEach(x => x.Tasks).NotNull().WithMessage("Each task item must be an object.");
+        RuleFor(x => x.Tasks).NotEmpty().WithMessage(
+            "A task batch needs at least one item — the batch rides the 'tasks' array: " +
+            "{ \"tasks\": [ { \"body\": \"<goal>Fix the login redirect.</goal>\", \"order\": 0 } ] }.");
+        RuleForEach(x => x.Tasks).NotNull().WithMessage(
+            "Each task item must be an object: { \"body\": \"<goal>…</goal>\", \"order\": 0 }.");
         RuleForEach(x => x.Tasks).SetValidator(new PlanningTaskUpsertRequestValidator());
     }
 }
@@ -162,7 +167,8 @@ public sealed class PlanningTaskUpsertRequestValidator : AbstractValidator<Plann
 {
     public PlanningTaskUpsertRequestValidator()
     {
-        RuleFor(x => x.Body).NotEmpty();
+        RuleFor(x => x.Body).NotEmpty().WithMessage(
+            "Body is required on every task item — e.g. { \"body\": \"<goal>Fix the login redirect.</goal>\", \"order\": 0 }.");
         RuleFor(x => x.Order).GreaterThanOrEqualTo(0).When(x => x.Order.HasValue);
         RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
             .WithMessage("Brief must be a single line.")

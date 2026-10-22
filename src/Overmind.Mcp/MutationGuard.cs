@@ -8,6 +8,12 @@ public sealed class MutationGuard(OvermindApiClient api)
     public async Task<JsonElement> SendAsync(
         Func<Task<JsonElement>> mutation,
         MutationReadback? readback,
+        CancellationToken ct) =>
+        await SendAsync(mutation, _ => Task.FromResult(readback), ct);
+
+    public async Task<JsonElement> SendAsync(
+        Func<Task<JsonElement>> mutation,
+        Func<CancellationToken, Task<MutationReadback?>> resolveReadback,
         CancellationToken ct)
     {
         try
@@ -24,12 +30,23 @@ public sealed class MutationGuard(OvermindApiClient api)
         }
         catch (ApiUnreachableException)
         {
-            throw new McpException(await SettleAsync(readback, ct));
+            throw new McpException(await SettleAsync(() => resolveReadback(ct), ct));
         }
     }
 
-    private async Task<string> SettleAsync(MutationReadback? readback, CancellationToken ct)
+    private async Task<string> SettleAsync(Func<Task<MutationReadback?>> resolveReadback, CancellationToken ct)
     {
+        MutationReadback? readback;
+        try
+        {
+            readback = await resolveReadback();
+        }
+        catch (Exception resolveFailure) when (!ct.IsCancellationRequested)
+        {
+            return UnknownOutcome(
+                $"the verify read-back address could not be resolved ({ProbeFailureReason(resolveFailure)})");
+        }
+
         if (readback is null)
         {
             return UnknownOutcome(

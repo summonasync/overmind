@@ -169,7 +169,7 @@ public class MutationTimeoutContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task UpsertArtifact_Timeout_NoVerifiableMarker_AnswersUnknownWithoutProbe()
+    public async Task UpsertArtifact_Timeout_WithoutLogNote_AnswersUnknownWithoutProbe()
     {
         HangPost($"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts");
 
@@ -178,8 +178,7 @@ public class MutationTimeoutContractTests : McpSessionTestBase
             ["projectId"] = Canned.ProjectId.ToString(),
             ["featureSlug"] = Canned.PlanningSlug,
             ["kind"] = "task",
-            ["body"] = "# Task body",
-            ["logNote"] = "upsert written during the timeout drill"
+            ["body"] = "# Task body"
         });
 
         var result = response["result"]!;
@@ -189,6 +188,92 @@ public class MutationTimeoutContractTests : McpSessionTestBase
         Stub.Requests.Any(r =>
             r.Method == "GET" &&
             r.Path.StartsWith("/api/agent/planning/artifacts", StringComparison.Ordinal)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_Timeout_LogNoteEndsTheNewestLog_AnswersCommittedAtVersion()
+    {
+        HangPost($"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts");
+        RegisterRosterRoute();
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+",
+            req => req.Query.Contains("sections=log")
+                ? new StubOvermindApi.Response(200, SectionedArtifact(
+                    7,
+                    "- 2026-10-01 [agent] — some earlier note",
+                    "- 2026-10-05 [agent] — upsert written during the timeout drill"))
+                : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
+
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["order"] = 3,
+            ["body"] = "# Task body",
+            ["logNote"] = "upsert written during the timeout drill"
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("committed at v7 — do not resend");
+        text.ShouldContain($"the task at order 3 of '{Canned.PlanningSlug}'");
+
+        Stub.Requests.Count(r =>
+            r.Method == "GET" &&
+            r.Path.EndsWith("/artifacts", StringComparison.Ordinal) &&
+            r.Query.Contains("kind=task")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_Timeout_LogNoteAbsentFromEveryCandidate_AnswersNoTrace()
+    {
+        HangPost($"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts");
+        RegisterRosterRoute();
+        Stub.Route(
+            "GET",
+            "/api/agent/planning/artifacts/[^/]+",
+            req => req.Query.Contains("sections=log")
+                ? new StubOvermindApi.Response(200, SectionedArtifact(
+                    7,
+                    "- 2026-10-01 [agent] — some earlier note"))
+                : new StubOvermindApi.Response(200, Canned.PlanningArtifactReadJson));
+
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["order"] = 3,
+            ["body"] = "# Task body",
+            ["logNote"] = "upsert written during the timeout drill"
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        Canned.ToolResultText(response).ShouldContain("no trace — resend safe");
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_Timeout_NothingAtTheWantedOrder_AnswersUnknown()
+    {
+        HangPost($"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts");
+
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["order"] = 9,
+            ["body"] = "# Task body",
+            ["logNote"] = "upsert written during the timeout drill"
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        Canned.ToolResultText(response).ShouldContain("unknown — read before resending");
     }
 
     [Fact]
@@ -227,6 +312,28 @@ public class MutationTimeoutContractTests : McpSessionTestBase
             Thread.Sleep(HangMilliseconds);
             return new StubOvermindApi.Response(200, "{}");
         });
+
+    private void RegisterRosterRoute() =>
+        Stub.Route(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/artifacts",
+            200,
+            new JsonObject
+            {
+                ["artifacts"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+                        ["kind"] = "task",
+                        ["status"] = "inProgress",
+                        ["version"] = 6,
+                        ["order"] = 3,
+                        ["updatedAt"] = "2026-10-05T10:00:00Z",
+                        ["pointers"] = new JsonArray()
+                    }
+                }
+            }.ToJsonString());
 
     private static string SectionedArtifact(int version, params string[] logLines) =>
         LogPayload(logLines, version, ("kind", "task"), ("status", "review"));

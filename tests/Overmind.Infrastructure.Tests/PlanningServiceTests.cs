@@ -3224,4 +3224,102 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
     }
+
+    [Fact]
+    public async Task UpsertArtifact_DryRunCreate_EchoesWouldBeAndPersistsNothing()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var staged = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec", null, null, null, default, dryRun: true);
+
+        staged.Id.ShouldNotBe(Guid.Empty);
+        staged.Version.ShouldBe(1);
+
+        var persisted = await _context.PlanningArtifacts
+            .AsNoTracking()
+            .Where(a => a.FeatureId == feature.Id)
+            .ToListAsync();
+        persisted.ShouldBeEmpty();
+
+        var reloaded = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        reloaded.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        PlanningLog.Parse(reloaded.Body).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_DryRunUpdate_DoesNotVersionOrTouchStored()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "v1", null, null, null, default);
+
+        var staged = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "v2", null, null, "dry edit", default, dryRun: true);
+
+        staged.Id.ShouldBe(spec.Id);
+        staged.Version.ShouldBe(2);
+        staged.Body.ShouldContain("v2");
+
+        await _context.Entry(spec).ReloadAsync();
+        spec.Version.ShouldBe(1);
+        spec.Body.ShouldBe("v1");
+
+        var versions = await _context.PlanningArtifactVersions
+            .Where(v => v.ArtifactId == spec.Id)
+            .ToListAsync();
+        versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_DryRun_StillRejectsMalformedPointer()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Spec,
+                "# Spec\n\npointer: src/Auth/Keys.cs (see below)\n",
+                null, null, null, default, dryRun: true));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidPointerMarker);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_DryRun_EchoesOrdersAndPersistsNothing()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+        _materializer.ClearReceivedCalls();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task zero"), new PlanningTaskUpsert("task one")],
+            default,
+            dryRun: true);
+
+        batch.Created.ShouldBe(2);
+        batch.Updated.ShouldBe(0);
+        batch.Artifacts.Select(a => a.Order).ToArray().ShouldBe([0, 1]);
+
+        var persisted = await _context.PlanningArtifacts
+            .AsNoTracking()
+            .Where(a => a.FeatureId == feature.Id)
+            .ToListAsync();
+        persisted.ShouldBeEmpty();
+
+        var reloaded = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        reloaded.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        PlanningLog.Parse(reloaded.Body).ShouldBeEmpty();
+
+        await _materializer.DidNotReceive().SyncAsync(
+            _projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
 }

@@ -223,7 +223,8 @@ public sealed record CreatePlanningArtifactRequest(
     string? LogNote,
     string? Brief = null,
     string? Source = null,
-    IReadOnlyList<int>? BlockedBy = null);
+    IReadOnlyList<int>? BlockedBy = null,
+    bool DryRun = false);
 
 public sealed record UpdatePlanningArtifactRequest(
     string Body,
@@ -239,12 +240,14 @@ public sealed record PlanningTaskUpsertRequest(
     string? Brief = null,
     IReadOnlyList<int>? BlockedBy = null);
 
-public sealed record CreatePlanningTasksRequest(PlanningTaskUpsertRequest[] Tasks, string? Source = null);
+public sealed record CreatePlanningTasksRequest(
+    PlanningTaskUpsertRequest[] Tasks, string? Source = null, bool DryRun = false);
 
 public sealed record CreatePlanningTasksResponse(
     int Created,
     int Updated,
-    PlanningArtifactResponse[] Artifacts);
+    PlanningArtifactResponse[] Artifacts,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null);
 
 public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Status, string LogNote);
 
@@ -361,7 +364,8 @@ public sealed record PlanningArtifactResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
-    PlanningArtifactPointerResponse[] Pointers = null!);
+    PlanningArtifactPointerResponse[] Pointers = null!,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 

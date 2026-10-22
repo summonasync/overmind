@@ -286,7 +286,8 @@ public sealed class PlanningException : Exception
             $"Malformed pointer line '{line}': {rule} A pointer line is " +
             "'pointer: <repo-relative-path>[#anchor]' — the case-sensitive marker 'pointer:' as the " +
             "first token, whitespace, then a repo-relative path (no leading '/', forward slashes only, " +
-            "no '..' segments) with an optional non-empty '#anchor'.");
+            "no '..' segments) with an optional non-empty '#anchor'. " +
+            "Example: 'pointer: src/Overmind.Core/Entities/PlanningArtifact.cs#L81'.");
 
     public static PlanningException LogEditNotNewest(
         PlanningLogSource actor, PlanningLogSource? newestMarker, int ownedPosition, int lineCount) =>

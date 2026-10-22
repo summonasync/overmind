@@ -449,6 +449,30 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningUpsertTools_ExposeDryRun_AsOptionalBoolean()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        foreach (var name in new[] { "planning_upsert_artifact", "planning_upsert_tasks" })
+        {
+            var properties = tools[name]!["inputSchema"]!["properties"]!.AsObject();
+            properties.ShouldContainKey("dryRun");
+            properties["dryRun"]!["description"]!.GetValue<string>().ShouldContain("persist nothing");
+
+            var required = tools[name]!["inputSchema"]!["required"]?.AsArray();
+            if (required is not null)
+            {
+                required.ShouldNotContain(node => node!.GetValue<string>() == "dryRun");
+            }
+
+            tools[name]!["description"]!.GetValue<string>().ShouldContain("dryRun=true");
+        }
+    }
+
+    [Fact]
     public async Task PlanningReadArtifact_WithSections_PassesTheQueryAndMirrorsTheProjection()
     {
         var response = await Driver.CallToolAsync("planning_read_artifact", new JsonObject

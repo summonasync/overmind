@@ -25,7 +25,7 @@ public sealed class PlanningArtifactService
         Guid featureId, PlanningArtifactKind kind, string body, int? order,
         PlanningReviewLevel? review, string? logNote, CancellationToken ct = default,
         string? brief = null, PlanningLogSource? source = null,
-        IReadOnlyList<int>? blockedBy = null)
+        IReadOnlyList<int>? blockedBy = null, bool dryRun = false)
     {
         body = PlanningSectionCanonicalizer.Canonicalize(body);
         PointerMarkerGrammar.EnsureValid(body);
@@ -95,14 +95,23 @@ public sealed class PlanningArtifactService
         {
             created = PlanningArtifact.Create(
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
-            _db.PlanningArtifacts.Add(created);
-            TransitionOnArtifactCreate(feature, kind);
+            if (!dryRun)
+            {
+                _db.PlanningArtifacts.Add(created);
+                TransitionOnArtifactCreate(feature, kind);
+            }
+
             mutated = true;
         }
 
         if (blockedBy is not null)
         {
             mutated |= await _taskDependencies.StageBlockedByAsync(existing ?? created!, blockedBy, ct);
+        }
+
+        if (dryRun)
+        {
+            return existing ?? created!;
         }
 
         if (mutated)
@@ -157,7 +166,7 @@ public sealed class PlanningArtifactService
 
     public async Task<PlanningTaskBatchResult> UpsertTasksAsync(
         Guid featureId, IReadOnlyList<PlanningTaskUpsert> tasks, CancellationToken ct = default,
-        PlanningLogSource? source = null)
+        PlanningLogSource? source = null, bool dryRun = false)
     {
         var feature = await _db.PlanningFeatures.FirstOrDefaultAsync(f => f.Id == featureId, ct);
         if (feature is null)
@@ -185,7 +194,7 @@ public sealed class PlanningArtifactService
             {
                 PointerMarkerGrammar.EnsureValid(task.Body);
 
-                var (artifact, isNew, changed) = StageTask(featureId, task, siblings, source);
+                var (artifact, isNew, changed) = StageTask(featureId, task, siblings, source, dryRun);
                 staged.Add(artifact);
                 mutated |= changed;
                 if (isNew)
@@ -221,6 +230,11 @@ public sealed class PlanningArtifactService
             }
         }
 
+        if (dryRun)
+        {
+            return new PlanningTaskBatchResult(staged, created, staged.Count - created);
+        }
+
         if (created > 0)
         {
             TransitionOnArtifactCreate(feature, PlanningArtifactKind.Task);
@@ -246,7 +260,8 @@ public sealed class PlanningArtifactService
     }
 
     private (PlanningArtifact Artifact, bool IsNew, bool Mutated) StageTask(
-        Guid featureId, PlanningTaskUpsert task, List<PlanningArtifact> siblings, PlanningLogSource? source)
+        Guid featureId, PlanningTaskUpsert task, List<PlanningArtifact> siblings,
+        PlanningLogSource? source, bool dryRun)
     {
         var resolvedOrder = task.Order ?? (siblings.Count == 0 ? 0 : siblings.Max(a => a.Order) + 1);
         var existing = siblings.FirstOrDefault(a => a.Order == resolvedOrder);
@@ -279,7 +294,11 @@ public sealed class PlanningArtifactService
         var artifact = PlanningArtifact.Create(
             featureId, PlanningArtifactKind.Task, task.Body, resolvedOrder,
             task.Review ?? PlanningReviewLevel.Light, task.Brief);
-        _db.PlanningArtifacts.Add(artifact);
+        if (!dryRun)
+        {
+            _db.PlanningArtifacts.Add(artifact);
+        }
+
         siblings.Add(artifact);
         return (artifact, true, true);
     }

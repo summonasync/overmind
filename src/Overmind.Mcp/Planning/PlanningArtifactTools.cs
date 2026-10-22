@@ -94,7 +94,7 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). Features cannot be deleted or archived via MCP — the UI owns feature deletion. Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). dryRun=true runs the full validation path (canonicalization, pointer lint, kind guards, order resolution) and persists NOTHING — no row, no version snapshot, no feature transition, no materialization dispatch; the response echoes the would-be artifact id and version marked dryRun, so a huge body can be shape-checked before the real send. Features cannot be deleted or archived via MCP — the UI owns feature deletion. Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
         [Description("Artifact kind: spec, plan, task or result.")] string kind,
@@ -104,6 +104,7 @@ public sealed class PlanningArtifactTools
         [Description("Change note recorded in the artifact log; required when editing a validated artifact.")] string? logNote = null,
         [Description("Optional one-line brief of a task artifact, max 500 chars; not allowed for other kinds.")] string? brief = null,
         [Description("Optional task-only blockedBy: sibling task orders of the same feature this task waits on. Re-upsert replaces the edge set declaratively (empty array clears); omitted preserves the current edges on update and sets none on create.")] int[]? blockedBy = null,
+        [Description("Validate the full payload and persist nothing — the response echoes the would-be id and version marked dryRun; default false.")] bool? dryRun = null,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
@@ -112,9 +113,12 @@ public sealed class PlanningArtifactTools
             throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
+        UpsertPayloadLint.PointerLines("body", body);
+
+        var normalizedKind = NormalizeKind(kind);
         var payload = new JsonObject
         {
-            ["kind"] = NormalizeKind(kind),
+            ["kind"] = normalizedKind,
             ["body"] = body,
             ["order"] = order,
             ["review"] = review is null ? null : NormalizeReview(review),
@@ -132,18 +136,30 @@ public sealed class PlanningArtifactTools
             payload["blockedBy"] = new JsonArray([.. blockedBy.Select(o => JsonValue.Create(o))]);
         }
 
+        if (dryRun == true)
+        {
+            payload["dryRun"] = true;
+        }
+
+        async Task<MutationReadback?> Probe(CancellationToken probeCt) =>
+            string.IsNullOrWhiteSpace(logNote)
+                ? null
+                : await UpsertArtifactReadback.ResolveAsync(
+                    _api, projectId.Value, featureSlug, normalizedKind, order, logNote, probeCt);
+
         var artifact = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
             payload,
-            ct), readback: null, ct);
+            ct), Probe, ct);
         return CompactArtifact(artifact);
     }
 
     [McpServerTool(Name = "planning_upsert_tasks", Destructive = false, Idempotent = false)]
-    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization pass is enqueued after the batch — it runs shortly after, in the background, never per item — and one feature auto-transition evaluation runs; creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order, review light/hard, brief (task-only, one line, max 500 chars), blockedBy (sibling task orders this task waits on; empty array clears, omitted preserves the current edges), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. An item whose order hits an existing task updates that task in place.")]
+    [Description("Creates or updates N task artifacts of a feature in one call — the batch counterpart of planning_upsert_artifact, for decomposing a plan into tasks. Atomic: all-or-nothing — items are staged and committed together, and any failing item rolls back the whole batch, so a retry starts clean; a failing item is reported with its index (tasks[2]: …). Exactly one materialization pass is enqueued after the batch — it runs shortly after, in the background, never per item — and one feature auto-transition evaluation runs; creating tasks while the feature is in review reopens it once. Each item carries the single-upsert fields: body (required), order, review light/hard, brief (task-only, one line, max 500 chars), blockedBy (sibling task orders this task waits on; empty array clears, omitted preserves the current edges), and logNote under the same rules as planning_upsert_artifact — optional, required only when the item edits an existing body that demands one. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. An item whose order hits an existing task updates that task in place. dryRun=true validates the whole batch (canonicalization, pointer lint, order resolution, edge staging) and persists NOTHING — would-be orders and ids come back marked dryRun; the adapter also lints the envelope (tasks must be an array of objects with body) and pointer lines client-side, before any HTTP call.")]
     public async Task<JsonElement> UpsertTasks(
         [Description("Slug of the feature to create or update tasks in.")] string featureSlug,
         [Description("Array of task items, each an object: body (required), order, review, logNote, brief, blockedBy.")] JsonElement tasks,
+        [Description("Validate the whole batch and persist nothing — the response echoes the would-be orders and ids marked dryRun; default false.")] bool? dryRun = null,
         [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
@@ -156,6 +172,11 @@ public sealed class PlanningArtifactTools
         {
             ["tasks"] = BuildTaskItems(tasks)
         };
+
+        if (dryRun == true)
+        {
+            payload["dryRun"] = true;
+        }
 
         var batch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts/tasks",
@@ -177,18 +198,19 @@ public sealed class PlanningArtifactTools
             }
             catch (JsonException)
             {
-                throw new McpException("tasks must be an array of task items.");
+                throw new McpException($"tasks must be a JSON array, not an encoded string. {TaskItemsAcceptedForm}");
             }
         }
 
         if (tasks.ValueKind != JsonValueKind.Array)
         {
-            throw new McpException("tasks must be an array of task items.");
+            throw new McpException(
+                $"tasks must be a JSON array of task items — item fields never sit at the call's top level. {TaskItemsAcceptedForm}");
         }
 
         if (tasks.GetArrayLength() == 0)
         {
-            throw new McpException("tasks must carry at least one item.");
+            throw new McpException($"tasks must carry at least one item. {TaskItemsAcceptedForm}");
         }
 
         var items = new JsonArray();
@@ -215,15 +237,19 @@ public sealed class PlanningArtifactTools
     {
         if (item.ValueKind != JsonValueKind.Object)
         {
-            throw new McpException("each item must be an object with body, order, review, logNote, brief, blockedBy.");
+            throw new McpException(
+                $"each item must be an object with body, order, review, logNote, brief, blockedBy. {TaskItemsAcceptedForm}");
         }
 
         if (!item.TryGetProperty("body", out var body) ||
             body.ValueKind != JsonValueKind.String ||
             string.IsNullOrWhiteSpace(body.GetString()))
         {
-            throw new McpException("body is required and must be a non-blank string.");
+            throw new McpException(
+                $"body is required on every item and must be a non-blank string. {TaskItemsAcceptedForm}");
         }
+
+        UpsertPayloadLint.PointerLines("body", body.GetString());
 
         var payload = new JsonObject { ["body"] = body.GetString() };
 
@@ -294,6 +320,12 @@ public sealed class PlanningArtifactTools
             ["updated"] = batch.GetProperty("updated").GetInt32(),
             ["tasks"] = tasks
         };
+
+        if (batch.TryGetProperty("dryRun", out var dryRun) && dryRun.ValueKind == JsonValueKind.True)
+        {
+            result["dryRun"] = true;
+        }
+
         return result.Deserialize<JsonElement>();
     }
 

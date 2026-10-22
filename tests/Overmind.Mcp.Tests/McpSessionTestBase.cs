@@ -202,6 +202,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                     ["updatedAt"] = "2026-09-20T10:00:00Z",
                     ["log"] = new JsonArray { new JsonObject { ["date"] = "2026-09-20", ["text"] = "stubbed creation log line" } }
                 };
+                if (submitted["dryRun"]?.GetValue<bool>() == true)
+                {
+                    artifact["dryRun"] = true;
+                }
+
                 return new StubOvermindApi.Response(201, artifact.ToJsonString());
             });
         stub.Route(
@@ -209,7 +214,8 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts/tasks",
             req =>
             {
-                var submitted = JsonNode.Parse(req.Body)!["tasks"]!.AsArray();
+                var root = JsonNode.Parse(req.Body)!;
+                var submitted = root["tasks"]!.AsArray();
                 var artifacts = new JsonArray();
                 for (var i = 0; i < submitted.Count; i++)
                 {
@@ -237,6 +243,11 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                     ["updated"] = 0,
                     ["artifacts"] = artifacts
                 };
+                if (root["dryRun"]?.GetValue<bool>() == true)
+                {
+                    result["dryRun"] = true;
+                }
+
                 return new StubOvermindApi.Response(200, result.ToJsonString());
             });
         stub.Route(

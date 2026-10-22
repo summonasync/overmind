@@ -57,6 +57,10 @@ internal static class PlanningToolResponses
     internal const string MigratedNoteRequired =
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
 
+    internal const string TaskItemsAcceptedForm =
+        "tasks must be a JSON array of task items, each an object with a required body string — " +
+        "e.g. tasks=[{\"body\":\"<goal>Fix the login redirect.</goal>\",\"order\":0}].";
+
     internal static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
     {
         try
@@ -185,6 +189,11 @@ internal static class PlanningToolResponses
             ["bodyChars"] = artifact.GetProperty("body").GetString()?.Length ?? 0,
             ["lastLogLine"] = LastLogLineOf(artifact)
         };
+
+        if (artifact.TryGetProperty("dryRun", out var dryRun) && dryRun.ValueKind == JsonValueKind.True)
+        {
+            compact["dryRun"] = true;
+        }
 
         if (artifact.TryGetProperty("brief", out var brief) && brief.ValueKind == JsonValueKind.String)
         {
