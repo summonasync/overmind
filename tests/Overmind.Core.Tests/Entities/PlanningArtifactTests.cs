@@ -996,6 +996,61 @@ shipped behind the flag; totals below.
     }
 
     [Fact]
+    public void AmendResult_AnchoredSectionPairInText_ThrowsAndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        var ex = Should.Throw<PlanningException>(() =>
+            artifact.AmendResult("see the shape below\n<goal>\nquoted goal\n</goal>", "note"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentSectionPairRefused);
+        ex.Message.ShouldContain("<goal>");
+        ex.Message.ShouldContain("&lt;goal&gt;");
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+        artifact.Body.ShouldBe(ResultBody);
+    }
+
+    [Fact]
+    public void AmendResult_InlineSectionOneLinerInText_ThrowsTheSameRefusal()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        var ex = Should.Throw<PlanningException>(() =>
+            artifact.AmendResult("shape:\n<goal>quoted</goal>", "note"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentSectionPairRefused);
+        artifact.Version.ShouldBe(1);
+        artifact.Body.ShouldBe(ResultBody);
+    }
+
+    [Fact]
+    public void AmendResult_FencedSectionPairInText_IsRefusedToo()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        var ex = Should.Throw<PlanningException>(() =>
+            artifact.AmendResult("```xml\n<goal>\nquoted\n</goal>\n```", "note"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentSectionPairRefused);
+        artifact.Version.ShouldBe(1);
+        artifact.Body.ShouldBe(ResultBody);
+    }
+
+    [Fact]
+    public void AmendResult_EscapedSectionQuote_IsAccepted_AndNeverShadowsTheRealSection()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        artifact.AmendResult("quote: &lt;goal&gt;quoted&lt;/goal&gt; stays prose", "note");
+
+        artifact.Version.ShouldBe(2);
+        artifact.Body.ShouldContain("&lt;goal&gt;quoted&lt;/goal&gt;");
+        PlanningSections.Find("goal", artifact.Body)!
+            .Content.ShouldBe("close out the feature");
+    }
+
+    [Fact]
     public void TickAc_ByIndex_FlipsMarker_SnapshotsPreviousBody_AndBumpsVersion()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);

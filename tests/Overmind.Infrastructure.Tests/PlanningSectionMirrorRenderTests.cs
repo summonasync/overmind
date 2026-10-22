@@ -196,6 +196,31 @@ public sealed class PlanningSectionMirrorRenderTests : IDisposable, IAsyncLifeti
             .ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Sync_AmendedResult_WithEscapedSectionQuote_MirrorStaysIntact()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var resultId = await SeedResultAsync(projectId);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var service = CreateArtifactService(ctx);
+            await service.PatchAsync(resultId, new PlanningArtifactPatch(
+                Amend: true,
+                Content: "quote: &lt;goal&gt;quoted&lt;/goal&gt; stays prose",
+                LogNote: "human pre-approved"), CancellationToken.None);
+        }
+
+        var resultPath = Path.Combine(_projectDir, "BACKLOG", "104-demo", "result.md");
+        var rendered = await File.ReadAllTextAsync(resultPath);
+        rendered.ShouldContain("&lt;goal&gt;quoted&lt;/goal&gt;");
+        CountTagLines(rendered, "<goal>").ShouldBe(1);
+        CountTagLines(rendered, "</goal>").ShouldBe(1);
+        var body = StripFrontmatter(rendered);
+        PlanningSections.Find("goal", body)!.Content.ShouldBe("Ship it.");
+        rendered.ShouldContain("close-out totals: 41h");
+    }
+
     private async Task<Guid> SeedTaskAsync(Guid projectId, string? body = null)
     {
         using var ctx = _db.CreateContext();

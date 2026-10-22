@@ -13,6 +13,7 @@ public enum PlanningFailureCode
     BriefNotAllowedForKind,
     AmendmentNotAllowedForKind,
     AmendmentNoteRequired,
+    AmendmentSectionPairRefused,
     InvalidBrief,
     ChangeNoteRequired,
     FeatureLogNoteRequired,

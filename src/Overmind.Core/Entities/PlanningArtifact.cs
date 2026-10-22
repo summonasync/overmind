@@ -237,8 +237,11 @@ public sealed class PlanningArtifact
         FeatureStatusChanged = null;
         ValidationProofVoided = null;
 
+        amendmentText = PlanningSectionCanonicalizer.Canonicalize(amendmentText);
+
         var withBlock = AppendAmendmentBlock(Body, amendmentText);
         EnsureSingleLogBlock(withBlock);
+        EnsureNoSectionPairs(amendmentText);
 
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 
@@ -404,6 +407,20 @@ public sealed class PlanningArtifact
     {
         var lineBreak = body.EndsWith('\n') ? string.Empty : "\n";
         return $"{body}{lineBreak}\n## {AmendmentMarker} {DateTime.UtcNow:yyyy-MM-dd}\n{amendmentText.TrimEnd()}\n";
+    }
+
+    // A quoted wrapper would become the section: reads and the mirror locate by the last anchored
+    // pair, so the real section's wrapper and content zone get evicted on render. Fences are
+    // invisible to that grammar, which is why even fenced quoting is refused here.
+    private static void EnsureNoSectionPairs(string amendmentText)
+    {
+        foreach (var name in PlanningSections.List(amendmentText))
+        {
+            if (name != "log")
+            {
+                throw PlanningException.AmendmentSectionPairRefused(name);
+            }
+        }
     }
 
     public void ReplaceBlockedEdges(IReadOnlyCollection<Guid> blockingIds)

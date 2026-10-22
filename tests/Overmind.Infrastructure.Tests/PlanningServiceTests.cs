@@ -2049,6 +2049,29 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task PatchAsync_AmendmentCarryingAnInlineSectionOneLiner_ThrowsAndPersistsNothing()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var result = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "# Result\n\nclose-out\n", null, null, null, default);
+        var bodyBefore = result.Body;
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                result.Id,
+                new PlanningArtifactPatch(Amend: true, Content: "shape:\n<goal>quoted</goal>", LogNote: "note"),
+                source: PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentSectionPairRefused);
+        var reloaded = await _context.PlanningArtifacts.FirstAsync(a => a.Id == result.Id);
+        reloaded.Body.ShouldBe(bodyBefore);
+        reloaded.Version.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task PatchAsync_AmendingSpec_ThrowsNamingTheResultScope()
     {
         var featureService = CreateFeatureService();

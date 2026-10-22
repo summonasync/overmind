@@ -76,6 +76,12 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentNoteRequired,
             "An amendment records the human's pre-approval in the log: pass the logNote carrying that provenance, e.g. 'human pre-approved via notification reply'.");
 
+    public static PlanningException AmendmentSectionPairRefused(string name) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentSectionPairRefused,
+            $"Amendment text must not carry an anchored '<{name}>…</{name}>' pair: sections are located by their " +
+            "last wrapper, so a quoted pair would shadow the real section on reads and evict it from the mirror render. " +
+            $"Quote it escaped instead ('&lt;{name}&gt;…&lt;/{name}&gt;') — a fenced code block does not protect, the grammar reads raw lines.");
+
     public static PlanningException InvalidBrief() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidBrief,
             $"A brief must be single-line text of at most {PlanningArtifact.BriefMaxLength} characters (a blank brief clears it).");
