@@ -1083,6 +1083,66 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         _context.PlanningTaskDependencies.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task UpsertTasks_ResponseEchoesResultingBlockedOrdersPerItem()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("task zero"),
+                new PlanningTaskUpsert("task one", BlockedBy: [0]),
+                new PlanningTaskUpsert("task two", BlockedBy: [0, 1])
+            ],
+            default);
+
+        batch.BlockedOrders.Count.ShouldBe(3);
+        batch.BlockedOrders[0].ShouldBeEmpty();
+        batch.BlockedOrders[1].ShouldBe([0]);
+        batch.BlockedOrders[2].ShouldBe([0, 1]);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ReupsertWithEmptyArray_EchoesTheClearedSet()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task zero"), new PlanningTaskUpsert("task one", BlockedBy: [0])],
+            default);
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task one", Order: 1, BlockedBy: [])],
+            default);
+
+        batch.BlockedOrders.Single().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ReupsertWithoutBlockedBy_EchoesPreservedEdges()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task zero"), new PlanningTaskUpsert("task one", BlockedBy: [0])],
+            default);
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("task one retitled", Order: 1)],
+            default);
+
+        batch.BlockedOrders.Single().ShouldBe([0]);
+    }
+
     private TaskDependencyService CreateDependencyReader() =>
         new(_context, TestPlanningDispatcher.Create(_context, _materializer));
 
@@ -3308,6 +3368,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         batch.Created.ShouldBe(2);
         batch.Updated.ShouldBe(0);
         batch.Artifacts.Select(a => a.Order).ToArray().ShouldBe([0, 1]);
+        batch.BlockedOrders[1].ShouldBeEmpty();
 
         var persisted = await _context.PlanningArtifacts
             .AsNoTracking()
@@ -3321,5 +3382,27 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         await _materializer.DidNotReceive().SyncAsync(
             _projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpsertTasks_DryRun_EchoesStagedEdgesBeforeTheyExistInStorage()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("task zero"),
+                new PlanningTaskUpsert("task one", BlockedBy: [0])
+            ],
+            default,
+            dryRun: true);
+
+        batch.BlockedOrders[1].ShouldBe([0]);
+
+        _context.ChangeTracker.Clear();
+        (await CreateDependencyReader().BlockedOrdersAsync(feature.Id)).ShouldBeEmpty();
     }
 }

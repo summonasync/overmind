@@ -328,6 +328,7 @@ public sealed record PlanningArtifactReadResponse(
     DateTime UpdatedAt,
     string? Brief,
     string Body,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? MissingSections = null);
 
 public sealed record PlanningArtifactRosterResponse(PlanningArtifactRosterItemResponse[] Artifacts);

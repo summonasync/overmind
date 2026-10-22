@@ -314,7 +314,8 @@ public static class AgentPlanningApi
     }
 
     internal static async Task<IResult> GetArtifact(
-        Guid id, string? sections, OvermindDbContext db, CancellationToken ct)
+        Guid id, string? sections, OvermindDbContext db,
+        TaskDependencyService taskDependencies, CancellationToken ct)
     {
         var artifact = await db.PlanningArtifacts
             .FirstOrDefaultAsync(a => a.Id == id, ct);
@@ -325,12 +326,14 @@ public static class AgentPlanningApi
                 $"Artifact '{id}' was not found. {PlanningException.ArtifactNotFoundHint}");
         }
 
+        var blockedBy = await BlockedOrdersForReadAsync(taskDependencies, artifact, ct);
+
         var requested = RequestedSections(sections);
         if (requested.Count == 0)
         {
             return Results.Ok(new PlanningArtifactReadResponse(
                 artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
-                artifact.Order, artifact.UpdatedAt, artifact.Brief, artifact.Body));
+                artifact.Order, artifact.UpdatedAt, artifact.Brief, artifact.Body, blockedBy));
         }
 
         var filtered = PlanningSections.FilteredRead(artifact.Body, requested);
@@ -338,7 +341,21 @@ public static class AgentPlanningApi
         return Results.Ok(new PlanningArtifactReadResponse(
             artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
             artifact.Order, artifact.UpdatedAt, artifact.Brief,
-            filtered.Body, [.. filtered.MissingNames]));
+            filtered.Body, blockedBy, [.. filtered.MissingNames]));
+    }
+
+    private static async Task<int[]?> BlockedOrdersForReadAsync(
+        TaskDependencyService taskDependencies, PlanningArtifact artifact, CancellationToken ct)
+    {
+        if (artifact.Kind != PlanningArtifactKind.Task)
+        {
+            return null;
+        }
+
+        var state = (await taskDependencies.BlockedOrdersAsync(artifact.FeatureId, ct))
+            .First(s => s.Order == artifact.Order);
+
+        return [.. state.BlockedBy];
     }
 
     private static List<string> RequestedSections(string? sections)

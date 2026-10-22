@@ -328,6 +328,122 @@ public sealed class TaskDependencyApiTests : IDisposable
         tasks[2]["blockedBy"]!.AsArray().Select(b => b!.GetValue<int>()).ShouldBe([0, 1]);
     }
 
+    [Fact]
+    public async Task Batch_EdgelessItem_EchoesEmptyBlockedByArray()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeatureAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            TasksUrl(project.Id, "feat"),
+            new { Tasks = new object[] { new { Body = "task zero" } } });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var item = JsonNode.Parse(await response.Content.ReadAsStringAsync())!
+            ["artifacts"]![0]!.AsObject();
+        item.ContainsKey("blockedBy").ShouldBeTrue();
+        item["blockedBy"]!.AsArray().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Batch_ClearViaEmptyArray_EchoesTheClearedSet()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeatureAsync(project.Id, "feat");
+        await CreateAgentTaskAsync(project.Id, "feat", "task zero");
+        await CreateAgentTaskAsync(project.Id, "feat", "task one", blockedBy: new[] { 0 });
+
+        var response = await _client.PostAsJsonAsync(
+            TasksUrl(project.Id, "feat"),
+            new
+            {
+                Tasks = new object[] { new { Body = "task one", Order = 1, BlockedBy = Array.Empty<int>() } }
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var item = JsonNode.Parse(await response.Content.ReadAsStringAsync())!
+            ["artifacts"]![0]!.AsObject();
+        item["blockedBy"]!.AsArray().ShouldBeEmpty();
+
+        var roster = JsonNode.Parse(await _client.GetStringAsync(RosterUrl(project.Id, "feat")))!;
+        var one = roster["artifacts"]!.AsArray()
+            .Single(a => a!["order"]!.GetValue<int>() == 1)!.AsObject();
+        one.ContainsKey("blockedBy").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Batch_OmitBlockedBy_EchoesPreservedSet()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeatureAsync(project.Id, "feat");
+        await CreateAgentTaskAsync(project.Id, "feat", "task zero");
+        await CreateAgentTaskAsync(project.Id, "feat", "task one", blockedBy: new[] { 0 });
+
+        var response = await _client.PostAsJsonAsync(
+            TasksUrl(project.Id, "feat"),
+            new { Tasks = new object[] { new { Body = "task one retitled", Order = 1 } } });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var item = JsonNode.Parse(await response.Content.ReadAsStringAsync())!
+            ["artifacts"]![0]!.AsObject();
+        item["blockedBy"]!.AsArray().Select(b => b!.GetValue<int>()).ShouldBe([0]);
+    }
+
+    [Fact]
+    public async Task Batch_DryRun_EchoesStagedEdgesWithoutPersistingThem()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeatureAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            TasksUrl(project.Id, "feat"),
+            new
+            {
+                DryRun = true,
+                Tasks = new object[]
+                {
+                    new { Body = "task zero" },
+                    new { Body = "task one", BlockedBy = new[] { 0 } },
+                }
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var batch = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        batch["dryRun"]!.GetValue<bool>().ShouldBeTrue();
+        var edged = batch["artifacts"]!.AsArray()
+            .Single(a => a!["order"]!.GetValue<int>() == 1)!.AsObject();
+        edged["blockedBy"]!.AsArray().Select(b => b!.GetValue<int>()).ShouldBe([0]);
+
+        var roster = JsonNode.Parse(await _client.GetStringAsync(RosterUrl(project.Id, "feat")))!;
+        roster["artifacts"]!.AsArray().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ArtifactRead_BlockedByIsTaskOnly_EmptyArrayWhenEdgeless()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeatureAsync(project.Id, "feat");
+        var plain = await CreateAgentTaskAsync(project.Id, "feat", "task zero");
+        var edged = await CreateAgentTaskAsync(project.Id, "feat", "task one", blockedBy: new[] { 0 });
+        var spec = await CreateAgentArtifactAsync(project.Id, new { Kind = "spec", Body = "# Spec" });
+
+        var plainRead = JsonNode.Parse(
+            await _client.GetStringAsync($"/api/agent/planning/artifacts/{plain.Id}"))!.AsObject();
+        plainRead["blockedBy"]!.AsArray().ShouldBeEmpty();
+
+        var edgedRead = JsonNode.Parse(
+            await _client.GetStringAsync($"/api/agent/planning/artifacts/{edged.Id}"))!.AsObject();
+        edgedRead["blockedBy"]!.AsArray().Select(b => b!.GetValue<int>()).ShouldBe([0]);
+
+        var sectioned = JsonNode.Parse(await _client.GetStringAsync(
+            $"/api/agent/planning/artifacts/{edged.Id}?sections=goal"))!.AsObject();
+        sectioned["blockedBy"]!.AsArray().Select(b => b!.GetValue<int>()).ShouldBe([0]);
+
+        var specRead = JsonNode.Parse(
+            await _client.GetStringAsync($"/api/agent/planning/artifacts/{spec.Id}"))!.AsObject();
+        specRead.ContainsKey("blockedBy").ShouldBeFalse();
+    }
+
     private async Task<ArtifactPayload> CreateChainAsync(Guid projectId, string slug)
     {
         var zero = await CreateAgentTaskAsync(projectId, slug, "task zero");

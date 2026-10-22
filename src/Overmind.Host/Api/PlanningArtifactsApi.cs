@@ -136,16 +136,30 @@ public static class PlanningArtifactsApi
             var blockedStates = (await taskDependencies.BlockedOrdersAsync(feature.Id, ct))
                 .ToDictionary(s => s.Order);
 
+            var items = batch.Artifacts
+                .Zip(batch.BlockedOrders)
+                .Select(pair => ToBatchItem(pair.First, blockedStates, pair.Second))
+                .ToArray();
+
             return Results.Ok(new CreatePlanningTasksResponse(
                 batch.Created,
                 batch.Updated,
-                batch.Artifacts.Select(a => PlanningMapper.ToArtifactResponse(a, blockedStates)).ToArray(),
+                items,
                 request.DryRun ? true : null));
         }
         catch (PlanningException ex)
         {
             return PlanningErrors.Map(ex);
         }
+    }
+
+    private static PlanningArtifactResponse ToBatchItem(
+        PlanningArtifact artifact,
+        IReadOnlyDictionary<int, TaskBlockedState> blockedStates,
+        IReadOnlyList<int> blockedOrders)
+    {
+        var response = PlanningMapper.ToArtifactResponse(artifact, blockedStates);
+        return response with { BlockedBy = [.. blockedOrders] };
     }
 
     internal static async Task<IResult> GetArtifact(

@@ -179,10 +179,10 @@ public static class Canned
         """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"task","section":"acceptance-criteria","version":3,"bodyChars":412,"status":"inProgress","lastLogLine":"patch recorded on the board","tickedIndex":1,"tickedText":"first thing","noChange":true}""";
 
     public const string PlanningArtifactReadJson =
-        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"}""";
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","blockedBy":[1],"body":"# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"}""";
 
     public const string PlanningArtifactSectionedJson =
-        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","body":"<goal>\nExpose the endpoints.\n</goal>","missingSections":["obstacles"]}""";
+        """{"id":"99999999-9999-9999-9999-999999999999","kind":"task","status":"inProgress","review":"hard","version":1,"order":2,"updatedAt":"2026-09-10T07:30:00Z","brief":"Wire the endpoints","blockedBy":[1],"body":"<goal>\nExpose the endpoints.\n</goal>","missingSections":["obstacles"]}""";
 
     public const string PlanningArtifactSpecReadJson =
         """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"validated","review":"light","version":2,"order":0,"updatedAt":"2026-09-09T10:00:00Z","body":"# Demo spec\n\nShip the demo."}""";

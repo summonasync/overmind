@@ -241,7 +241,7 @@ public sealed class TaskDependencyService
         return null;
     }
 
-    private static IReadOnlyList<int> BlockedOrdersOf(
+    public static IReadOnlyList<int> BlockedOrdersOf(
         PlanningArtifact task, IReadOnlyDictionary<Guid, PlanningArtifact> siblings) =>
         task.BlockedBy
             .Where(d => siblings.ContainsKey(d.BlockingId))

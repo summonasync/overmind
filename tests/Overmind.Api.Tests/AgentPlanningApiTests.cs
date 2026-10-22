@@ -2543,7 +2543,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var raw = await response.Content.ReadAsStringAsync();
         JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
-            .ShouldBe(["id", "kind", "status", "version", "order", "updatedAt", "brief", "body"]);
+            .ShouldBe(["id", "kind", "status", "version", "order", "updatedAt", "brief", "body", "blockedBy"]);
 
         var read = JsonSerializer.Deserialize<ArtifactReadJson>(raw, JsonOptions);
         read!.Id.ShouldBe(task.Id);
@@ -2578,7 +2578,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var raw = await response.Content.ReadAsStringAsync();
         JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
-            .ShouldBe(["id", "kind", "status", "version", "order", "updatedAt", "brief", "body", "missingSections"]);
+            .ShouldBe(["id", "kind", "status", "version", "order", "updatedAt", "brief", "body", "blockedBy", "missingSections"]);
 
         var read = JsonSerializer.Deserialize<ArtifactReadJson>(raw, JsonOptions);
         read!.Body.ShouldBe("<goal>\nModel it.\n</goal>\n<obstacles>\nA hard one.\n</obstacles>");

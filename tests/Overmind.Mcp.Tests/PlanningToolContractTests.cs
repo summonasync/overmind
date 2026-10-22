@@ -95,6 +95,14 @@ public class PlanningToolContractTests : McpSessionTestBase
             "Gaps in order numbering are legal and meaningful");
         tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
             .ShouldContain("never renumber existing tasks to close a hole");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
+            .ShouldContain("every response item echoes the resulting edge set as blockedBy");
+        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
+            .ShouldContain("[] when the item ends with no edges");
+        tools["planning_read_artifact"]!["description"]!.GetValue<string>()
+            .ShouldContain("Task payloads also carry blockedBy");
+        tools["planning_read_artifact"]!["description"]!.GetValue<string>()
+            .ShouldContain("non-task kinds omit the field");
         tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
         tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
@@ -308,6 +316,33 @@ public class PlanningToolContractTests : McpSessionTestBase
         var artifact = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
         artifact["kind"]!.GetValue<string>().ShouldBe("spec");
         artifact.ContainsKey("review").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningReadArtifact_CarriesBlockedByOnTasksOnly()
+    {
+        var taskRead = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync(
+            "planning_read_artifact",
+            new JsonObject { ["artifactId"] = Canned.PlanningTaskTwoId.ToString() })))!.AsObject();
+        taskRead["blockedBy"]!.ToJsonString().ShouldBe("[1]");
+
+        var sectioned = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync(
+            "planning_read_artifact",
+            new JsonObject
+            {
+                ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+                ["sections"] = "goal"
+            })))!.AsObject();
+        sectioned["blockedBy"]!.ToJsonString().ShouldBe("[1]");
+
+        Stub.RouteGet(
+            "/api/agent/planning/artifacts/[^/]+",
+            Canned.PlanningArtifactSpecReadJson);
+
+        var specRead = JsonNode.Parse(Canned.ToolResultText(await Driver.CallToolAsync(
+            "planning_read_artifact",
+            new JsonObject { ["artifactId"] = Canned.PlanningSpecArtifactId.ToString() })))!.AsObject();
+        specRead.ContainsKey("blockedBy").ShouldBeFalse();
     }
 
     [Fact]
@@ -959,7 +994,9 @@ public class PlanningToolContractTests : McpSessionTestBase
             "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. " +
             "Sections reads are deterministic: located on the canonicalized form (the same one writes produce), found sections return in body order regardless of request order, and a name the body carries never lands in missingSections; the full read stays byte-faithful to storage. " +
             "missingSections names requested-but-absent sections; a read never fails on a missing one. " +
-            "The review field appears on task payloads only. Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. " +
+            "The review field appears on task payloads only. " +
+            "Task payloads also carry blockedBy — the sibling task orders this task waits on, [] when it has no edges; non-task kinds omit the field. " +
+            "Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. " +
             "Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.");
     }
 
@@ -1606,7 +1643,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     [Fact]
     public async Task PlanningUpsertTasks_ItemsForwardBlockedBy_IncludingEmptyToClear()
     {
-        await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
+        var response = await Driver.CallToolAsync("planning_upsert_tasks", new JsonObject
         {
             ["projectId"] = Canned.ProjectId.ToString(),
             ["featureSlug"] = Canned.PlanningSlug,
@@ -1638,6 +1675,11 @@ public class PlanningToolContractTests : McpSessionTestBase
         posted[0]!["blockedBy"]!.ToJsonString().ShouldBe("[2]");
         posted[1]!["blockedBy"]!.ToJsonString().ShouldBe("[]");
         posted[2]!.AsObject().ContainsKey("blockedBy").ShouldBeFalse();
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!["tasks"]!.AsArray();
+        echo[0]!["blockedBy"]!.ToJsonString().ShouldBe("[2]");
+        echo[1]!["blockedBy"]!.ToJsonString().ShouldBe("[]");
+        echo[2]!["blockedBy"]!.ToJsonString().ShouldBe("[]");
     }
 
     [Fact]

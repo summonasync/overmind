@@ -233,7 +233,8 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                         ["version"] = 1,
                         ["createdAt"] = "2026-09-24T10:00:00Z",
                         ["updatedAt"] = "2026-09-24T10:00:00Z",
-                        ["log"] = new JsonArray()
+                        ["log"] = new JsonArray(),
+                        ["blockedBy"] = item["blockedBy"]?.DeepClone() ?? new JsonArray()
                     });
                 }
 

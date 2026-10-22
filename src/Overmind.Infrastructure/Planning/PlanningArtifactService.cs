@@ -230,9 +230,13 @@ public sealed class PlanningArtifactService
             }
         }
 
+        var blockedOrders = staged
+            .Select(s => TaskDependencyService.BlockedOrdersOf(s, siblingsById))
+            .ToArray();
+
         if (dryRun)
         {
-            return new PlanningTaskBatchResult(staged, created, staged.Count - created);
+            return new PlanningTaskBatchResult(staged, created, staged.Count - created, blockedOrders);
         }
 
         if (created > 0)
@@ -256,7 +260,7 @@ public sealed class PlanningArtifactService
 
         await _materialization.DispatchAsync(feature.ProjectId, ct);
 
-        return new PlanningTaskBatchResult(staged, created, staged.Count - created);
+        return new PlanningTaskBatchResult(staged, created, staged.Count - created, blockedOrders);
     }
 
     private (PlanningArtifact Artifact, bool IsNew, bool Mutated) StageTask(
