@@ -164,6 +164,38 @@ public sealed class PlanningSectionMirrorRenderTests : IDisposable, IAsyncLifeti
         return project.Id;
     }
 
+    [Fact]
+    public async Task Sync_AmendedResult_RendersAmendmentBlocks_UntouchedByCanonicalization()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        var resultId = await SeedResultAsync(projectId);
+
+        using (var ctx = _db.CreateContext())
+        {
+            var service = CreateArtifactService(ctx);
+            await service.ValidateAsync(resultId, default);
+            await service.PatchAsync(resultId, new PlanningArtifactPatch(
+                Amend: true,
+                Content: "totals corrected: 41h -> 42h\nSupersedes: the 41h figure above",
+                LogNote: "human pre-approved the correction"), CancellationToken.None);
+        }
+
+        var resultPath = Path.Combine(_projectDir, "BACKLOG", "104-demo", "result.md");
+        var rendered = await File.ReadAllTextAsync(resultPath);
+        rendered.ShouldContain("status: validated");
+        rendered.ShouldContain("## <amendment> ");
+        rendered.ShouldContain("totals corrected: 41h -> 42h");
+        rendered.ShouldContain("Supersedes: the 41h figure above");
+        rendered.ShouldContain("- 2026-10-04 — seeded");
+
+        var body = StripFrontmatter(rendered);
+        var canonical = PlanningSectionCanonicalizer.Canonicalize(body);
+        canonical.ShouldContain("totals corrected: 41h -> 42h\nSupersedes: the 41h figure above");
+        canonical.Split('\n')
+            .Count(line => line.StartsWith("## <amendment> ", StringComparison.Ordinal))
+            .ShouldBe(1);
+    }
+
     private async Task<Guid> SeedTaskAsync(Guid projectId, string? body = null)
     {
         using var ctx = _db.CreateContext();
@@ -179,6 +211,22 @@ public sealed class PlanningSectionMirrorRenderTests : IDisposable, IAsyncLifeti
         ctx.PlanningArtifacts.Add(task);
         await ctx.SaveChangesAsync();
         return task.Id;
+    }
+
+    private async Task<Guid> SeedResultAsync(Guid projectId)
+    {
+        using var ctx = _db.CreateContext();
+        var feature = PlanningFeature.Create(projectId, "104-demo", "Section Render", "<goal>\nShip it.\n</goal>");
+        feature.SetStatus(PlanningFeatureStatus.InProgress);
+        ctx.PlanningFeatures.Add(feature);
+
+        var result = PlanningArtifact.Create(
+            feature.Id,
+            PlanningArtifactKind.Result,
+            "# Result\n\n<goal>\nShip it.\n</goal>\n\nclose-out totals: 41h\n\n<log>\n- 2026-10-04 — seeded\n</log>\n");
+        ctx.PlanningArtifacts.Add(result);
+        await ctx.SaveChangesAsync();
+        return result.Id;
     }
 
     private PlanningArtifactService CreateArtifactService(OvermindDbContext ctx) =>

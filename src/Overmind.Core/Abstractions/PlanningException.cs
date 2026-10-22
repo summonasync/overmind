@@ -67,6 +67,15 @@ public sealed class PlanningException : Exception
     public static PlanningException BriefNotAllowedForKind(PlanningArtifactKind kind) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BriefNotAllowedForKind, $"A brief is only allowed on task artifacts; kind '{kind}' cannot carry one.");
 
+    public static PlanningException AmendmentNotAllowedForKind(PlanningArtifactKind kind) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentNotAllowedForKind,
+            $"The amendment door appends to result artifacts only; kind '{kind}' is refused — " +
+            "patch a section or edit and re-validate instead.");
+
+    public static PlanningException AmendmentNoteRequired() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentNoteRequired,
+            "An amendment records the human's pre-approval in the log: pass the logNote carrying that provenance, e.g. 'human pre-approved via notification reply'.");
+
     public static PlanningException InvalidBrief() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidBrief,
             $"A brief must be single-line text of at most {PlanningArtifact.BriefMaxLength} characters (a blank brief clears it).");

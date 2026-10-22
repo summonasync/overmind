@@ -389,12 +389,15 @@ public sealed class PlanningArtifactService
     {
         ArgumentNullException.ThrowIfNull(patch);
 
+        var wantsAmend = patch.Amend;
         var wantsSection = patch.Section is not null;
         var wantsTick = patch.TickIndex.HasValue || patch.TickText is not null;
         var wantsBrief = patch.Brief is not null;
-        var actionCount = (wantsSection ? 1 : 0) + (wantsTick ? 1 : 0) + (wantsBrief ? 1 : 0);
+        var actionCount = (wantsAmend ? 1 : 0) + (wantsSection ? 1 : 0) + (wantsTick ? 1 : 0) + (wantsBrief ? 1 : 0);
 
-        if (actionCount != 1 || (wantsBrief && string.IsNullOrWhiteSpace(patch.Brief)))
+        if (actionCount != 1 ||
+            (wantsBrief && string.IsNullOrWhiteSpace(patch.Brief)) ||
+            (wantsAmend && string.IsNullOrWhiteSpace(patch.Content)))
         {
             throw PlanningException.InvalidPatchRequest();
         }
@@ -408,7 +411,18 @@ public sealed class PlanningArtifactService
 
         try
         {
-            if (wantsSection)
+            if (wantsAmend)
+            {
+                if (string.IsNullOrWhiteSpace(patch.LogNote))
+                {
+                    throw PlanningException.AmendmentNoteRequired();
+                }
+
+                var amendmentText = PlanningSectionCanonicalizer.Canonicalize(patch.Content!);
+                PointerMarkerGrammar.EnsureValid(amendmentText);
+                artifact.AmendResult(amendmentText, patch.LogNote, source);
+            }
+            else if (wantsSection)
             {
                 var content = patch.Content is null
                     ? null

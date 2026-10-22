@@ -72,6 +72,20 @@ ship the guard
 </log>
 """;
 
+    private const string ResultBody = """
+# Result
+
+<goal>
+close out the feature
+</goal>
+
+shipped behind the flag; totals below.
+
+<log>
+- 2026-09-01 — seeded
+</log>
+""";
+
     [Theory]
     [InlineData(PlanningArtifactKind.Spec, PlanningArtifactStatus.Draft)]
     [InlineData(PlanningArtifactKind.Plan, PlanningArtifactStatus.Draft)]
@@ -858,6 +872,127 @@ ship the guard
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
 
         Should.Throw<ArgumentException>(() => artifact.PatchSection(section, "content"));
+    }
+
+    [Fact]
+    public void AmendResult_AppendsDatedBlock_LeavesExistingTextUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        artifact.AmendResult("total corrected to 42h", "human pre-approved the correction");
+
+        var prose = ResultBody[..ResultBody.IndexOf("<log>", StringComparison.Ordinal)];
+        artifact.Body.ShouldStartWith(prose);
+        artifact.Body.ShouldContain($"## {PlanningArtifact.AmendmentMarker} ");
+        artifact.Body.TrimEnd().ShouldEndWith("total corrected to 42h");
+        var log = PlanningLog.Parse(artifact.Body);
+        log.First().Text.ShouldBe("seeded");
+        log.ShouldContain(line => line.Text == "human pre-approved the correction");
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(ResultBody);
+    }
+
+    [Fact]
+    public void AmendResult_TrailingNewlineBody_AppendsWithExactlyOneBlankLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody + "\n");
+
+        artifact.AmendResult("corrected", "note");
+
+        artifact.Body.ShouldContain("</log>\n\n## <amendment> ");
+    }
+
+    [Fact]
+    public void AmendResult_ValidatedResult_StaysValidated_RecordsApprovalLogLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+        artifact.Validate("human tapped the result");
+        var frozenAt = artifact.FrozenAt;
+        var validatedBody = artifact.Body;
+
+        artifact.AmendResult("corrected the total to 42h", "human pre-approved via notification reply");
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.FrozenAt.ShouldBe(frozenAt);
+        artifact.StatusChanged.ShouldBeNull();
+        artifact.FeatureStatusChanged.ShouldBeNull();
+        artifact.ValidationProofVoided.ShouldBeNull();
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(validatedBody);
+        PlanningLog.Parse(artifact.Body).Last().Text.ShouldBe("human pre-approved via notification reply");
+    }
+
+    [Fact]
+    public void AmendResult_DraftResult_WorksTheSame()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        artifact.AmendResult("draft-stage addendum", "mid-session note");
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        artifact.Body.ShouldContain("draft-stage addendum");
+        PlanningLog.Parse(artifact.Body).Last().Text.ShouldBe("mid-session note");
+    }
+
+    [Theory]
+    [InlineData(PlanningArtifactKind.Spec)]
+    [InlineData(PlanningArtifactKind.Plan)]
+    [InlineData(PlanningArtifactKind.Task)]
+    public void AmendResult_NonResultKind_ThrowsNamingTheResultScope(PlanningArtifactKind kind)
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, kind, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.AmendResult("text", "note"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentNotAllowedForKind);
+        ex.Message.ShouldContain("result");
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AmendResult_RepeatedCalls_AccumulateBlocks()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        artifact.AmendResult("first correction", "first note");
+        artifact.AmendResult("second correction\nSupersedes: the first correction", "second note");
+
+        artifact.Body.Split('\n')
+            .Count(line => line.StartsWith($"## {PlanningArtifact.AmendmentMarker} ", StringComparison.Ordinal))
+            .ShouldBe(2);
+        artifact.Body.IndexOf("second correction", StringComparison.Ordinal)
+            .ShouldBeGreaterThan(artifact.Body.IndexOf("first correction", StringComparison.Ordinal));
+        artifact.Version.ShouldBe(3);
+    }
+
+    [Theory]
+    [InlineData("", "note")]
+    [InlineData("  ", "note")]
+    [InlineData("text", "")]
+    [InlineData("text", "  ")]
+    public void AmendResult_BlankTextOrNote_Throws(string amendmentText, string logNote)
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        Should.Throw<ArgumentException>(() => artifact.AmendResult(amendmentText, logNote));
+
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AmendResult_TextCarryingALogBlock_ThrowsAndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+
+        var ex = Should.Throw<PlanningException>(() =>
+            artifact.AmendResult("see below\n<log>\n- 2026-10-01 — smuggled\n</log>", "note"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogBlocksDuplicated);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+        artifact.Body.ShouldBe(ResultBody);
     }
 
     [Fact]

@@ -17,6 +17,8 @@ public sealed class PlanningArtifact
 
     public const int BriefMaxLength = 500;
 
+    public const string AmendmentMarker = "<amendment>";
+
     private static readonly FrozenSet<PlanningArtifactStatus> SpecPlanResultStatuses =
         new HashSet<PlanningArtifactStatus>
         {
@@ -221,6 +223,30 @@ public sealed class PlanningArtifact
     public PlanningAcTickResult UntickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null) =>
         FlipAc(index, text, checking: false, logNote, source);
 
+    public void AmendResult(string amendmentText, string logNote, PlanningLogSource? source = null)
+    {
+        if (Kind != PlanningArtifactKind.Result)
+        {
+            throw PlanningException.AmendmentNotAllowedForKind(Kind);
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(amendmentText);
+        ArgumentException.ThrowIfNullOrWhiteSpace(logNote);
+
+        StatusChanged = null;
+        FeatureStatusChanged = null;
+        ValidationProofVoided = null;
+
+        var withBlock = AppendAmendmentBlock(Body, amendmentText);
+        EnsureSingleLogBlock(withBlock);
+
+        Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
+
+        Body = PlanningLog.Append(withBlock, logNote, source: source);
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void SetStatus(PlanningArtifactStatus status, string? logNote = null, PlanningLogSource? source = null)
     {
         if (!AllowedStatuses(Kind).Contains(status))
@@ -370,6 +396,14 @@ public sealed class PlanningArtifact
         }
 
         return brief;
+    }
+
+    // Amendments append after everything, log block included: one heading per amendment, dated,
+    // and the caller's lines verbatim — a later upsert can never confuse the block with a section.
+    private static string AppendAmendmentBlock(string body, string amendmentText)
+    {
+        var lineBreak = body.EndsWith('\n') ? string.Empty : "\n";
+        return $"{body}{lineBreak}\n## {AmendmentMarker} {DateTime.UtcNow:yyyy-MM-dd}\n{amendmentText.TrimEnd()}\n";
     }
 
     public void ReplaceBlockedEdges(IReadOnlyCollection<Guid> blockingIds)

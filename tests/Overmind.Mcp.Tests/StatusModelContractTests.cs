@@ -189,7 +189,7 @@ public class StatusModelContractTests : McpSessionTestBase
     [Theory]
     [InlineData("planning_append_log", "cheapest write: one dated line, body is not resent")]
     [InlineData("planning_edit_log", "cheap write tier: one line changes, body is not resent")]
-    [InlineData("planning_patch_artifact", "middle tier: replaces one XML section, flips one acceptance item, or sets the task brief; rest of the body untouched")]
+    [InlineData("planning_patch_artifact", "middle tier: replaces one XML section, flips one acceptance item, sets the task brief, or appends a result amendment; rest of the body untouched")]
     [InlineData("planning_upsert_artifact", "most expensive write: resends the full body")]
     public async Task WriteToolDescriptions_StateTheirCostTierVerbatim(string toolName, string tierPhrase)
     {

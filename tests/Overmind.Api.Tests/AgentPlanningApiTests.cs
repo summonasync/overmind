@@ -359,6 +359,105 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_AmendResult_AppendsBlockWithoutDemotion()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var result = await CreateAgentArtifactAsync(
+            project.Id, "feat", new { Kind = "result", Body = "# Result\n\nclose-out\n" });
+        await FreezeViaHumanDoorAsync(result.Id);
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(result.Id),
+            new { Op = "amend_result", Content = "totals corrected to 42h", LogNote = "human pre-approved" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["section"]!.GetValue<string>().ShouldBe("amendment");
+        echoed["status"]!.GetValue<string>().ShouldBe("validated");
+        echoed["statusChanged"].ShouldBeNull();
+        echoed["featureStatusChanged"].ShouldBeNull();
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{result.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("## <amendment> ");
+        artifact.Body.ShouldContain("totals corrected to 42h");
+        artifact.FrozenAt.ShouldNotBeNull();
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Patch_AmendResult_AfterApprovalReply_ReportsTheVoidedProof()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var result = await CreateAgentArtifactAsync(
+            project.Id, "feat", new { Kind = "result", Body = "# Result\n\nclose-out\n" });
+        await FreezeViaHumanDoorAsync(result.Id);
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(result.Id),
+            new { Op = "amend_result", Content = "totals corrected to 42h", LogNote = "human pre-approved" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["statusChanged"].ShouldBeNull();
+        echoed["validationProofVoided"].ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Patch_AmendResult_OnSpec_Returns400NamingTheResultScope()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "amend_result", Content = "text", LogNote = "note" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("AmendmentNotAllowedForKind");
+        problem.Detail!.ShouldContain("result");
+    }
+
+    [Fact]
+    public async Task Patch_AmendResult_WithSection_Returns400InvalidPatchRequest()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var result = await CreateAgentArtifactAsync(
+            project.Id, "feat", new { Kind = "result", Body = "# Result\n\nclose-out\n" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(result.Id),
+            new { Op = "amend_result", Section = "goal", Content = "text", LogNote = "note" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("InvalidPatchRequest");
+    }
+
+    [Fact]
+    public async Task Patch_AmendResult_WithoutLogNote_Returns400AmendmentNoteRequired()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var result = await CreateAgentArtifactAsync(
+            project.Id, "feat", new { Kind = "result", Body = "# Result\n\nclose-out\n" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(result.Id),
+            new { Op = "amend_result", Content = "totals corrected to 42h" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("AmendmentNoteRequired");
+    }
+
+    [Fact]
     public async Task Validate_WithRepliedApproval_SucceedsAndWritesTheProofLine()
     {
         var project = await CreateProjectAsync();

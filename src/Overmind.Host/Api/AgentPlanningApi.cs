@@ -546,7 +546,8 @@ public static class AgentPlanningApi
                 new PlanningArtifactPatch(
                     request.Section, request.Content, request.AcIndex, request.AcText,
                     request.Brief, request.LogNote,
-                    Untick: op == "untick_ac"),
+                    Untick: op == "untick_ac",
+                    Amend: op == "amend_result"),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
             var artifact = result.Artifact;
@@ -554,7 +555,7 @@ public static class AgentPlanningApi
             return Results.Ok(new PlanningArtifactPatchResponse(
                 artifact.Id,
                 artifact.Kind,
-                flipsAc ? "acceptance-criteria" : op == "set_brief" ? "brief" : request.Section!,
+                flipsAc ? "acceptance-criteria" : op == "set_brief" ? "brief" : op == "amend_result" ? "amendment" : request.Section!,
                 artifact.Version,
                 artifact.Body.Length,
                 artifact.Status,
@@ -583,6 +584,15 @@ public static class AgentPlanningApi
                    request.AcIndex is null &&
                    request.AcText is null &&
                    !string.IsNullOrWhiteSpace(request.Brief);
+        }
+
+        if (op == "amend_result")
+        {
+            return request.Section is null &&
+                   request.AcIndex is null &&
+                   request.AcText is null &&
+                   request.Brief is null &&
+                   !string.IsNullOrWhiteSpace(request.Content);
         }
 
         if (op == "replace_section")

@@ -7,4 +7,5 @@ public sealed record PlanningArtifactPatch(
     string? TickText = null,
     string? Brief = null,
     string? LogNote = null,
-    bool Untick = false);
+    bool Untick = false,
+    bool Amend = false);

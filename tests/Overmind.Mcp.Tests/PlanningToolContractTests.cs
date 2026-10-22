@@ -142,6 +142,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("untick=true");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("already unticked — no change");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("tickedIndex + tickedText");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("amendment door");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("'## <amendment> yyyy-MM-dd'");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("NO demotion");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("kind=result");
         tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("newest <log> line");
         tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("own actor marker");
         tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("[agent] on this door, [ui] on the human door");
@@ -2893,6 +2897,64 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         response["result"]!["isError"].ShouldBeNull();
         Canned.ToolResultText(response).ShouldBe("already unticked — no change");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_AmendsResult_PostsAmendResultOp()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            200,
+            """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"result","section":"amendment","version":2,"bodyChars":380,"status":"validated","lastLogLine":"human pre-approved the correction"}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["amend"] = true,
+            ["content"] = "totals corrected to 42h\nSupersedes: the 41h figure",
+            ["logNote"] = "human pre-approved the correction"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("amend_result");
+        body["section"].ShouldBeNull();
+        body["content"]!.GetValue<string>().ShouldContain("totals corrected to 42h");
+        body["logNote"]!.GetValue<string>().ShouldBe("human pre-approved the correction");
+        body["source"]!.GetValue<string>().ShouldBe("agent");
+
+        response["result"]!["isError"].ShouldBeNull();
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["section"]!.GetValue<string>().ShouldBe("amendment");
+        echo["status"]!.GetValue<string>().ShouldBe("validated");
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("human pre-approved the correction");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_AmendWithSectionOrBlankContent_RejectedWithoutHttpCall()
+    {
+        var withSection = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["amend"] = true,
+            ["section"] = "goal",
+            ["content"] = "text"
+        });
+
+        ToolErrorText(withSection).ShouldContain("never several and never none");
+
+        var blankContent = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["amend"] = true,
+            ["content"] = " "
+        });
+
+        ToolErrorText(blankContent).ShouldContain("non-blank content");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
     }
 
     [Fact]

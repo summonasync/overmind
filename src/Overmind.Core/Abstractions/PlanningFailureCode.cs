@@ -11,6 +11,8 @@ public enum PlanningFailureCode
     InvalidStatusForKind,
     InvalidFeatureTransition,
     BriefNotAllowedForKind,
+    AmendmentNotAllowedForKind,
+    AmendmentNoteRequired,
     InvalidBrief,
     ChangeNoteRequired,
     FeatureLogNoteRequired,

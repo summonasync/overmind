@@ -1997,6 +1997,103 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task PatchAsync_AmendingValidatedResult_StaysValidated_AndFeatureStaysDone()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var result = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "# Result\n\nclose-out\n", null, null, null, default);
+        await artifactService.ValidateAsync(result.Id, default);
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "closing the feature", ct: default);
+
+        var done = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        var featureLogLinesBefore = PlanningLog.Parse(done.Body).Count;
+
+        var amended = await artifactService.PatchAsync(
+            result.Id,
+            new PlanningArtifactPatch(Amend: true, Content: "totals corrected to 42h", LogNote: "human pre-approved"),
+            source: PlanningLogSource.Agent);
+
+        amended.Artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        amended.Artifact.FrozenAt.ShouldNotBeNull();
+        amended.Artifact.StatusChanged.ShouldBeNull();
+        amended.Artifact.FeatureStatusChanged.ShouldBeNull();
+        amended.Artifact.Body.ShouldContain("## <amendment> ");
+        amended.Artifact.Body.ShouldContain("totals corrected to 42h");
+
+        await _context.Entry(done).ReloadAsync();
+        done.Status.ShouldBe(PlanningFeatureStatus.Done);
+        PlanningLog.Parse(done.Body).Count.ShouldBe(featureLogLinesBefore);
+    }
+
+    [Fact]
+    public async Task PatchAsync_AmendWithoutLogNote_ThrowsAmendmentNoteRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var result = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                result.Id,
+                new PlanningArtifactPatch(Amend: true, Content: "totals corrected"),
+                source: PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentNoteRequired);
+    }
+
+    [Fact]
+    public async Task PatchAsync_AmendingSpec_ThrowsNamingTheResultScope()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                spec.Id,
+                new PlanningArtifactPatch(Amend: true, Content: "text", LogNote: "note"),
+                source: PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.AmendmentNotAllowedForKind);
+        ex.Message.ShouldContain("result");
+    }
+
+    [Fact]
+    public async Task PatchAsync_AmendingValidatedResultAfterReply_ReportsVoidedProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var result = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "# Result\n\nclose-out\n", null, null, null, default);
+        await artifactService.ValidateAsync(result.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the result", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var amended = await artifactService.PatchAsync(
+            result.Id,
+            new PlanningArtifactPatch(Amend: true, Content: "totals corrected to 42h", LogNote: "human pre-approved"),
+            source: PlanningLogSource.Agent);
+
+        amended.Artifact.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+        amended.Artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
     public async Task UpsertAsync_DemotingValidatedSpec_OnReviewFeature_DemotesFeatureToInProgress()
     {
         var featureService = CreateFeatureService();

@@ -395,21 +395,22 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
-    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section, flips one acceptance item, or sets the task brief; rest of the body untouched. A section absent from the body is instead INSERTED — with the content, or declared-empty when content is omitted (tasks accept the declared vocabulary only, spec/plan/result any tag name). Alternatively acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. Text matching is entity-normalized: acText '&lt;key&gt;' matches a stored '<key>' and the reverse, so escaped and readable forms are interchangeable on either side. A miss never succeeds silently: an out-of-range acIndex or an unmatched acText is a 400 listing the visible items. A section-replace of an existing section without content, and an unknown section name on a task, are 400s — the latter lists sections present plus the accepted vocabulary. The log section is append-only: patching it is a 400 that points at planning_append_log / planning_edit_log, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced or inserted section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote.")]
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section, flips one acceptance item, sets the task brief, or appends a result amendment; rest of the body untouched. A section absent from the body is instead INSERTED — with the content, or declared-empty when content is omitted (tasks accept the declared vocabulary only, spec/plan/result any tag name). Alternatively acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. Text matching is entity-normalized: acText '&lt;key&gt;' matches a stored '<key>' and the reverse, so escaped and readable forms are interchangeable on either side. A miss never succeeds silently: an out-of-range acIndex or an unmatched acText is a 400 listing the visible items. A section-replace of an existing section without content, and an unknown section name on a task, are 400s — the latter lists sections present plus the accepted vocabulary. The log section is append-only: patching it is a 400 that points at planning_append_log / planning_edit_log, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced or inserted section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote. The amendment door: amend=true together with content, on a kind=result artifact only — content is appended to the body tail as a dated block '## <amendment> yyyy-MM-dd' followed by the content lines, one block per call, existing text untouched; a supersede note is just a line of the content ('Supersedes: <what and why>'). NO demotion — a validated result stays validated untouched, a done feature stays done — and no human proof is required: logNote is mandatory and records the pre-approval; when the append stales a live approval reply the response's validationProofVoided names it. Works on draft results too; on spec/plan/task the door is refused with a 400 naming the result-only scope.")]
     public async Task<CallToolResult> PatchArtifact(
         [Description("Id of the artifact to patch; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
         [Description("Name of the XML section to replace or insert, e.g. goal.")] string? section = null,
-        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty.")] string? content = null,
+        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty. With amend=true this carries the amendment text appended as the dated block instead.")] string? content = null,
         [Description("1-based index of the acceptance-criteria item; numbering matches the materialized mirror and the 400 diagnostics.")] int? acIndex = null,
         [Description("Exact text of the acceptance-criteria item, without the checkbox marker — the recommended selector; entity-escaped and readable forms match alike.")] string? acText = null,
         [Description("Set true together with acIndex or acText to clear the checkbox ([x] to [ ]) instead of ticking it.")] bool untick = false,
         [Description("One-line brief to set on a task artifact, max 500 chars; task-only — spec/plan/result reject it; no version bump.")] string? brief = null,
+        [Description("Set true together with content to use the amendment door: content becomes a dated '## <amendment> yyyy-MM-dd' block at the body tail of a kind=result artifact — no demotion, logNote records the pre-approval.")] bool amend = false,
         [Description("Change note recorded in the artifact log; required when the artifact is validated.")] string? logNote = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)
     {
-        var op = PatchOpOf(section, content, acIndex, acText, brief, untick);
+        var op = PatchOpOf(section, content, acIndex, acText, brief, untick, amend);
         var id = await _aliases.AddressArtifactAsync(artifactId, projectId, alias, ct);
         var patch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/patch",
@@ -532,10 +533,27 @@ public sealed class PlanningArtifactTools
         }
     }
 
-    private static string PatchOpOf(string? section, string? content, int? acIndex, string? acText, string? brief, bool untick)
+    private static string PatchOpOf(
+        string? section, string? content, int? acIndex, string? acText, string? brief, bool untick, bool amend)
     {
         var wantsSection = section is not null || content is not null;
         var wantsAc = acIndex is not null || acText is not null;
+
+        if (amend)
+        {
+            if (brief is not null || section is not null || acIndex is not null || acText is not null || untick)
+            {
+                throw new McpException(PatchShapeError);
+            }
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                throw new McpException(
+                    "The amendment door needs non-blank content: the text appended to the result as the dated <amendment> block.");
+            }
+
+            return "amend_result";
+        }
 
         if (brief is not null)
         {
