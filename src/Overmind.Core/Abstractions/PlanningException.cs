@@ -402,4 +402,15 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingEntry,
             $"Entry '{entryId}' was not found in this project — it may belong to another project, " +
             "or it was never written; list_entries lists the project's entries with their ids.");
+
+    public static PlanningException InvalidOperationId(string raw) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidOperationId,
+            $"The 'X-Operation-Id' header must carry a GUID; '{raw}' does not parse as one. " +
+            "Omit the header for fire-and-forget writes, or send a fresh GUID per logical operation.");
+
+    public static PlanningException OperationIdConflict(Guid operationId) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.OperationIdConflict,
+            $"Operation id '{operationId}' was already used with a different request (method, path or body differ). " +
+            "An operation id replays only its own request: resend the identical payload to get the stored response, " +
+            "or mint a new id for a different operation.");
 }

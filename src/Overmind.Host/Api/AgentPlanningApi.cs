@@ -42,7 +42,8 @@ public static class AgentPlanningApi
         PlanningArtifactsApi.EditLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
 
     private static RouteHandlerBuilder LockToClaim(this RouteHandlerBuilder builder) =>
-        builder.AddEndpointFilter(ClaimLockFilter.Instance);
+        builder.AddEndpointFilter(OperationReplayFilter.Instance)
+            .AddEndpointFilter(ClaimLockFilter.Instance);
 
     public static RouteGroupBuilder MapAgentPlanningApi(this IEndpointRouteBuilder routes)
     {

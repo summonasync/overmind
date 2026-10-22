@@ -108,6 +108,8 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     var app = builder.Build();
 
     app.UseMiddleware<SessionTouchMiddleware>();
+    app.UseMiddleware<RequestBufferingMiddleware>();
+    app.UseMiddleware<OperationStorageMiddleware>();
 
     var webRootOverride = Environment.GetEnvironmentVariable("OVERMIND_WEB_ROOT");
     var webRoot = webRootOverride is { Length: > 0 } ? webRootOverride : ResolveWebRoot();

@@ -36,6 +36,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningLane> PlanningLanes => Set<PlanningLane>();
     public DbSet<PlanningDirective> PlanningDirectives => Set<PlanningDirective>();
     public DbSet<EntryAck> EntryAcks => Set<EntryAck>();
+    public DbSet<PlanningOperationRecord> PlanningOperationRecords => Set<PlanningOperationRecord>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -361,6 +362,16 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(a => a.Vendor).HasMaxLength(EntryAck.MaxIdentityLength);
 
             builder.HasIndex(a => a.ContextEntryId);
+        });
+
+        modelBuilder.Entity<PlanningOperationRecord>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(r => r.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(r => new { r.ProjectId, r.OperationId }).IsUnique();
         });
     }
 }

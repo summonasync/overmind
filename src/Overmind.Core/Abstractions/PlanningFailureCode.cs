@@ -72,5 +72,7 @@ public enum PlanningFailureCode
     MissingEntry,
     MissingLane,
     InvalidLaneName,
-    LaneRosterWriteRetired
+    LaneRosterWriteRetired,
+    OperationIdConflict,
+    InvalidOperationId
 }

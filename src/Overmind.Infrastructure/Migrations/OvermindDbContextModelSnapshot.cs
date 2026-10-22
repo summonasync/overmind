@@ -616,6 +616,40 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("PlanningMaterializedFiles");
                 });
 
+            modelBuilder.Entity("Overmind.Core.PlanningOperationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponseBody")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "OperationId")
+                        .IsUnique();
+
+                    b.ToTable("PlanningOperationRecords");
+                });
+
             modelBuilder.Entity("Overmind.Core.PlanningTaskDependency", b =>
                 {
                     b.Property<Guid>("BlockedById")
@@ -1015,6 +1049,15 @@ namespace Overmind.Infrastructure.Migrations
                         .HasForeignKey("FeatureId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.PlanningOperationRecord", b =>
+                {
                     b.HasOne("Overmind.Core.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")

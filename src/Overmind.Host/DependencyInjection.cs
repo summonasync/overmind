@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<TaskDependencyService>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<PlanningArtifactDiffService>();
+        services.AddScoped<PlanningOperationStore>();
         services.AddScoped<NotificationsService>();
         services.AddScoped<CeremoniesService>();
         services.AddScoped<ManifestImporter>();
