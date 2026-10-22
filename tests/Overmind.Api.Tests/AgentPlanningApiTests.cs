@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using Overmind.Core;
+using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
 
@@ -2607,6 +2609,44 @@ public sealed class AgentPlanningApiTests : IDisposable
             await allMissing.Content.ReadAsStringAsync(), JsonOptions);
         allMissingRead!.Body.ShouldBe("");
         allMissingRead.MissingSections.ShouldBe(["nope"]);
+    }
+
+    [Fact]
+    public async Task Read_Sections_InlineWrapperBodies_FoundAcrossKindsWhileFullReadStaysRaw()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task" });
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        await SetTaskStatusAsync(task.Id, "review");
+
+        const string rawTask = "# Task\n\n<goal>Model it.</goal>\n\n<obstacles>\nA hard one.\n</obstacles>\n";
+        const string rawSpec = "# Spec\n\n<goal>Spec it.</goal>\n";
+        SeedRawBody(task.Id, rawTask);
+        SeedRawBody(spec.Id, rawSpec);
+
+        var fullTask = await _client.GetFromJsonAsync<ArtifactReadJson>(AgentReadUrl(task.Id), JsonOptions);
+        fullTask!.Body.ShouldBe(rawTask);
+        fullTask.MissingSections.ShouldBeNull();
+
+        var filteredTask = await _client.GetFromJsonAsync<ArtifactReadJson>(
+            $"{AgentReadUrl(task.Id)}?sections=obstacles,goal", JsonOptions);
+        filteredTask!.Body.ShouldBe("<goal>\nModel it.\n</goal>\n<obstacles>\nA hard one.\n</obstacles>");
+        filteredTask.MissingSections.ShouldBe([]);
+
+        var filteredSpec = await _client.GetFromJsonAsync<ArtifactReadJson>(
+            $"{AgentReadUrl(spec.Id)}?sections=goal", JsonOptions);
+        filteredSpec!.Body.ShouldBe("<goal>\nSpec it.\n</goal>");
+        filteredSpec.MissingSections.ShouldBe([]);
+    }
+
+    private void SeedRawBody(Guid artifactId, string body)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        var stored = db.PlanningArtifacts.Single(a => a.Id == artifactId);
+        db.Entry(stored).Property(a => a.Body).CurrentValue = body;
+        db.SaveChanges();
     }
 
     [Fact]

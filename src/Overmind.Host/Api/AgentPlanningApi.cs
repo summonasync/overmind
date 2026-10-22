@@ -333,31 +333,12 @@ public static class AgentPlanningApi
                 artifact.Order, artifact.UpdatedAt, artifact.Brief, artifact.Body));
         }
 
-        var narrowed = new StringBuilder();
-        var missing = new List<string>();
-
-        foreach (var name in requested)
-        {
-            if (PlanningSections.Find(name, artifact.Body) is not { } section)
-            {
-                missing.Add(name);
-                continue;
-            }
-
-            if (narrowed.Length > 0)
-            {
-                narrowed.Append('\n');
-            }
-
-            narrowed.Append('<').Append(section.Name).Append(">\n")
-                .Append(section.Content)
-                .Append("\n</").Append(section.Name).Append('>');
-        }
+        var filtered = PlanningSections.FilteredRead(artifact.Body, requested);
 
         return Results.Ok(new PlanningArtifactReadResponse(
             artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
             artifact.Order, artifact.UpdatedAt, artifact.Brief,
-            narrowed.ToString(), [.. missing]));
+            filtered.Body, [.. filtered.MissingNames]));
     }
 
     private static List<string> RequestedSections(string? sections)

@@ -42,10 +42,10 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only. Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.")]
+    [Description("Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. Sections reads are deterministic: located on the canonicalized form (the same one writes produce), found sections return in body order regardless of request order, and a name the body carries never lands in missingSections; the full read stays byte-faithful to storage. missingSections names requested-but-absent sections; a read never fails on a missing one. The review field appears on task payloads only. Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.")]
     public async Task<JsonElement> ReadArtifact(
         [Description("Id of the artifact to read, as handed out by planning_current_task; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
-        [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections.")] string? sections = null,
+        [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections, returned in body order.")] string? sections = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
         CancellationToken ct = default)

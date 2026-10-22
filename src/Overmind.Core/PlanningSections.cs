@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Overmind.Core;
@@ -151,6 +152,51 @@ public static partial class PlanningSections
         }
 
         return names;
+    }
+
+    // Read-door twin of the write-side canonicalization: locating on the canonical form is what
+    // makes sections reads deterministic for one-line/inline wrappers. The raw body still decides
+    // missingSections, so a tag the body carries is never reported absent.
+    public static PlanningFilteredRead FilteredRead(string body, IEnumerable<string> requestedNames)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        ArgumentNullException.ThrowIfNull(requestedNames);
+
+        var canonical = PlanningSectionCanonicalizer.Canonicalize(body);
+        var found = new List<PlanningSection>();
+        var missing = new List<string>();
+
+        foreach (var name in requestedNames.Distinct())
+        {
+            if (Find(name, canonical) is not { } section)
+            {
+                // A name HasInlineSection sees but canonical locate misses only lives past the
+                // canonicalizer caps — the same blind spot the write door has. Never missing.
+                if (!PlanningSectionCanonicalizer.HasInlineSection(name, body))
+                {
+                    missing.Add(name);
+                }
+
+                continue;
+            }
+
+            found.Add(section);
+        }
+
+        var narrowed = new StringBuilder();
+        foreach (var section in found.OrderBy(s => s.OpenIndex))
+        {
+            if (narrowed.Length > 0)
+            {
+                narrowed.Append('\n');
+            }
+
+            narrowed.Append('<').Append(section.Name).Append(">\n")
+                .Append(section.Content)
+                .Append("\n</").Append(section.Name).Append('>');
+        }
+
+        return new PlanningFilteredRead(narrowed.ToString(), missing);
     }
 
     public static IReadOnlyList<PlanningAcItem> ParseAcceptanceCriteria(string body)
@@ -380,5 +426,7 @@ public static partial class PlanningSections
 }
 
 public sealed record PlanningSection(string Name, string Content, int OpenIndex, int OpenLength, int CloseIndex);
+
+public sealed record PlanningFilteredRead(string Body, IReadOnlyList<string> MissingNames);
 
 public sealed record PlanningAcItem(int Index, bool? Checked, string RawText);

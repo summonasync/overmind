@@ -329,6 +329,57 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
     }
 
     [Fact]
+    public void FilteredRead_AnchoredSections_ReturnInBodyOrderRegardlessOfRequestOrder()
+    {
+        var body = "# Task\n\n<goal>\nModel it.\n</goal>\n\n<obstacles>\nA hard one.\n</obstacles>\n";
+
+        var read = PlanningSections.FilteredRead(body, ["obstacles", "goal"]);
+
+        read.Body.ShouldBe("<goal>\nModel it.\n</goal>\n<obstacles>\nA hard one.\n</obstacles>");
+        read.MissingNames.ShouldBe([]);
+    }
+
+    [Fact]
+    public void FilteredRead_OneLineWrapper_IsFoundAndExpandedNotMissing()
+    {
+        var body = "# Task\n\n<goal>Model it.</goal>\n\n<obstacles>\nA hard one.\n</obstacles>\n";
+
+        var read = PlanningSections.FilteredRead(body, ["goal"]);
+
+        read.Body.ShouldBe("<goal>\nModel it.\n</goal>");
+        read.MissingNames.ShouldBe([]);
+    }
+
+    [Fact]
+    public void FilteredRead_AbsentName_IsMissing()
+    {
+        var read = PlanningSections.FilteredRead("<goal>\nModel it.\n</goal>\n", ["goal", "banana"]);
+
+        read.Body.ShouldBe("<goal>\nModel it.\n</goal>");
+        read.MissingNames.ShouldBe(["banana"]);
+    }
+
+    [Fact]
+    public void FilteredRead_FencedExample_StaysMissing()
+    {
+        var body = "Prose:\n\n```xml\n<goal>Example only.</goal>\n```\n";
+
+        var read = PlanningSections.FilteredRead(body, ["goal"]);
+
+        read.Body.ShouldBe("");
+        read.MissingNames.ShouldBe(["goal"]);
+    }
+
+    [Fact]
+    public void FilteredRead_DuplicateRequest_RendersOnce()
+    {
+        var read = PlanningSections.FilteredRead("<goal>\nOne.\n</goal>\n", ["goal", "goal"]);
+
+        read.Body.ShouldBe("<goal>\nOne.\n</goal>");
+        read.MissingNames.ShouldBe([]);
+    }
+
+    [Fact]
     public void ParseAcceptanceCriteria_MixedMarkers_ExposesIndexStateAndRawText()
     {
         var body = "<acceptance-criteria>\n- [ ] first todo\n- [x] done one\n- plain bullet\nintro text\n- [X] upper x\n</acceptance-criteria>\n";
