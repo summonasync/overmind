@@ -116,6 +116,29 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Upsert_EditAfterReply_ReportsTheVoidedProof()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOriginal.\n</goal>\n"
+        });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentArtifactsUrl(project.Id, "feat"),
+            new { Kind = "spec", Body = "# Spec\n\n<goal>\nAmended.\n</goal>", LogNote = "edited after the reply" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ArtifactJson>(JsonOptions);
+        updated!.ValidationProofVoided.ShouldNotBeNull();
+        updated.Status.ShouldBe("draft");
+    }
+
+    [Fact]
     public async Task AppendLog_AgentDoor_WritesTheAgentMarker()
     {
         var project = await CreateProjectAsync();
@@ -289,6 +312,50 @@ public sealed class AgentPlanningApiTests : IDisposable
             $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
         feature!.Status.ShouldBe("inProgress");
         feature.Body.ShouldContain("[auto] — feature demoted: review → inProgress (spec no longer validated)");
+    }
+
+    [Fact]
+    public async Task Patch_AfterApprovalReply_ReportsTheVoidedProof()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOriginal.\n</goal>\n"
+        });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "<goal>\nAmended.\n</goal>", LogNote = "edited after the reply" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["statusChanged"]!.GetValue<string>().ShouldBe("validated → draft");
+        echoed["validationProofVoided"].ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Patch_WithoutLiveProof_OmitsValidationProofVoided()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOriginal.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "goal", Content = "<goal>\nAmended.\n</goal>" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        echoed["statusChanged"].ShouldBeNull();
+        echoed["validationProofVoided"].ShouldBeNull();
     }
 
     [Fact]
@@ -3077,7 +3144,8 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record ArtifactJson(
         Guid Id, string Kind, string Status, string Review,
         int Order, string Body, DateTime? FrozenAt, int Version,
-        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null);
+        DateTime CreatedAt, DateTime UpdatedAt, LogLineJson[] Log, string? Brief = null,
+        DateTime? ValidationProofVoided = null);
 
     public sealed record TaskBatchJson(int Created, int Updated, ArtifactJson[] Artifacts);
 

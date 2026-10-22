@@ -3061,6 +3061,53 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningPatchArtifact_VoidedProof_EchoesValidationProofVoided()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            200,
+            """{"artifactId":"99999999-9999-9999-9999-999999999999","kind":"spec","section":"goal","version":4,"bodyChars":88,"status":"draft","lastLogLine":"reopened for rework","statusChanged":"validated → draft","validationProofVoided":"2026-10-22T10:14:06Z"}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "goal",
+            ["content"] = "<goal>\nReworked after review.\n</goal>",
+            ["logNote"] = "reopened for rework"
+        });
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "version", "status", "lastLogLine", "section", "bodyChars", "statusChanged", "validationProofVoided"]);
+        echo["validationProofVoided"]!.GetValue<string>().ShouldBe("2026-10-22T10:14:06Z");
+    }
+
+    [Fact]
+    public async Task PlanningUpsertArtifact_VoidedProof_EchoCarriesValidationProofVoided()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/artifacts",
+            200,
+            """{"id":"66666666-6666-6666-6666-666666666666","kind":"spec","status":"draft","review":"light","order":0,"body":"# Demo spec\n\n<goal>\nReworked after review.\n</goal>","frozenAt":null,"version":3,"createdAt":"2026-09-08T10:05:00Z","updatedAt":"2026-10-22T10:20:00Z","log":[{"date":"2026-10-22","text":"artifact demoted: validated → draft"}],"statusChanged":"validated → draft","validationProofVoided":"2026-10-22T10:14:06Z"}""");
+
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "spec",
+            ["body"] = "# Spec\n\n<goal>\nReworked after review.\n</goal>",
+            ["logNote"] = "reopened for rework"
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation.Select(p => p.Key).ToArray()
+            .ShouldBe(["id", "kind", "status", "version", "order", "frozenAt", "updatedAt", "bodyChars", "lastLogLine", "statusChanged", "validationProofVoided"]);
+        confirmation["validationProofVoided"]!.GetValue<string>().ShouldBe("2026-10-22T10:14:06Z");
+    }
+
+    [Fact]
     public async Task PlanningPatchArtifact_UntickWithSectionOrAlone_RejectedWithoutHttpCall()
     {
         var withSection = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject

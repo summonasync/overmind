@@ -68,9 +68,14 @@ public sealed class PlanningArtifact
     public string? FeatureStatusChanged { get; private set; }
 
     [NotMapped]
+    public DateTime? ValidationProofVoided { get; private set; }
+
+    [NotMapped]
     public string LastLogLine => PlanningLog.Parse(Body).LastOrDefault()?.Text ?? string.Empty;
 
     public void RecordFeatureDemotion() => FeatureStatusChanged = FeatureDemotedStatusEcho;
+
+    public void RecordValidationProofVoided(DateTime? repliedAt) => ValidationProofVoided = repliedAt;
 
     public static IReadOnlySet<PlanningArtifactStatus> AllowedStatuses(PlanningArtifactKind kind) => kind switch
     {
@@ -158,7 +163,7 @@ public sealed class PlanningArtifact
         };
     }
 
-    public void UpdateBody(string body, string? logNote = null, PlanningLogSource? source = null)
+    public bool UpdateBody(string body, string? logNote = null, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
         EnsureSingleLogBlock(body);
@@ -166,11 +171,12 @@ public sealed class PlanningArtifact
         var merged = SpliceLogHistory(body);
         if (merged == Body && string.IsNullOrWhiteSpace(logNote))
         {
-            return;
+            return false;
         }
 
         RequireChangeNoteWhenFrozen(logNote);
         ApplyBodyMutation(merged, logNote, source);
+        return true;
     }
 
     public void PatchSection(string section, string? content, string? logNote = null, PlanningLogSource? source = null)
@@ -465,6 +471,7 @@ public sealed class PlanningArtifact
         var wasValidated = IsFrozen;
         StatusChanged = null;
         FeatureStatusChanged = null;
+        ValidationProofVoided = null;
 
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 

@@ -383,7 +383,8 @@ public static class PlanningMapper
             artifact.FeatureStatusChanged,
             blocked,
             blockedBy,
-            Pointers(artifact));
+            Pointers(artifact),
+            ValidationProofVoided: artifact.ValidationProofVoided);
     }
 
     private static PlanningArtifactPointerResponse[] Pointers(PlanningArtifact artifact) =>

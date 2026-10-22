@@ -212,6 +212,12 @@ internal static class PlanningToolResponses
             compact["featureStatusChanged"] = featureStatusChanged.GetString();
         }
 
+        if (artifact.TryGetProperty("validationProofVoided", out var validationProofVoided) &&
+            validationProofVoided.ValueKind == JsonValueKind.String)
+        {
+            compact["validationProofVoided"] = validationProofVoided.GetString();
+        }
+
         return compact.Deserialize<JsonElement>();
     }
 

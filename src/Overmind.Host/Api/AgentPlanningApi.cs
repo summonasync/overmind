@@ -563,7 +563,8 @@ public static class AgentPlanningApi
                 artifact.FeatureStatusChanged,
                 flipsAc ? result.TickedIndex : null,
                 flipsAc ? result.TickedText : null,
-                flipsAc ? result.NoChange : null));
+                flipsAc ? result.NoChange : null,
+                artifact.ValidationProofVoided));
         }
         catch (PlanningException ex)
         {

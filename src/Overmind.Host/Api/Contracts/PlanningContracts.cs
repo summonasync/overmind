@@ -317,7 +317,8 @@ public sealed record PlanningArtifactPatchResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? TickedIndex = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TickedText = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? NoChange = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? NoChange = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null);
 
 public sealed record PlanningArtifactReadResponse(
     Guid Id,
@@ -366,7 +367,8 @@ public sealed record PlanningArtifactResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
     PlanningArtifactPointerResponse[] Pointers = null!,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 

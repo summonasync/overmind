@@ -62,9 +62,11 @@ public sealed class PlanningArtifactService
         {
             if (existing.Body != body || !string.IsNullOrWhiteSpace(logNote))
             {
+                var preMutationUpdatedAt = existing.UpdatedAt;
+                bool bodyMutated;
                 try
                 {
-                    existing.UpdateBody(body, logNote, source);
+                    bodyMutated = existing.UpdateBody(body, logNote, source);
                 }
                 catch (InvalidOperationException)
                 {
@@ -72,6 +74,13 @@ public sealed class PlanningArtifactService
                 }
 
                 mutated = true;
+
+                if (bodyMutated)
+                {
+                    var voidedProof = await FindLiveApprovalProofAsync(
+                        feature.ProjectId, feature.Slug, preMutationUpdatedAt, ct);
+                    existing.RecordValidationProofVoided(voidedProof?.RepliedAt);
+                }
 
                 if (existing.StatusChanged is not null)
                 {
@@ -392,6 +401,7 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        var preMutationUpdatedAt = artifact.UpdatedAt;
         var noChange = false;
         int? tickedIndex = null;
         string? tickedText = null;
@@ -439,6 +449,13 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
+        if (!noChange && !wantsBrief)
+        {
+            var voidedProof = await FindLiveApprovalProofAsync(
+                feature.ProjectId, feature.Slug, preMutationUpdatedAt, ct);
+            artifact.RecordValidationProofVoided(voidedProof?.RepliedAt);
+        }
+
         if (!noChange)
         {
             feature.Touch();
@@ -479,6 +496,23 @@ public sealed class PlanningArtifactService
         return artifact;
     }
 
+    private async Task<(Guid NotificationId, DateTime? RepliedAt)?> FindLiveApprovalProofAsync(
+        Guid projectId, string featureSlug, DateTime asOf, CancellationToken ct)
+    {
+        var proof = await _db.AgentNotifications
+            .AsNoTracking()
+            .Where(n => n.Kind == NotificationKind.Approval
+                && n.ProjectId == projectId
+                && n.FeatureSlug == featureSlug
+                && n.ReplyText != null && n.ReplyText != string.Empty
+                && n.RepliedAt >= asOf)
+            .OrderByDescending(n => n.RepliedAt)
+            .Select(n => new { n.Id, n.RepliedAt })
+            .FirstOrDefaultAsync(ct);
+
+        return proof is null ? null : (proof.Id, proof.RepliedAt);
+    }
+
     private async Task<string> BuildHumanProofLineAsync(PlanningArtifact artifact, CancellationToken ct)
     {
         var feature = await _db.PlanningFeatures
@@ -487,23 +521,14 @@ public sealed class PlanningArtifactService
             .Select(f => new { f.Slug, f.ProjectId })
             .FirstAsync(ct);
 
-        var proof = await _db.AgentNotifications
-            .AsNoTracking()
-            .Where(n => n.Kind == NotificationKind.Approval
-                && n.ProjectId == feature.ProjectId
-                && n.FeatureSlug == feature.Slug
-                && n.ReplyText != null && n.ReplyText != string.Empty
-                && n.RepliedAt >= artifact.UpdatedAt)
-            .OrderByDescending(n => n.RepliedAt)
-            .Select(n => new { n.Id, n.RepliedAt })
-            .FirstOrDefaultAsync(ct);
+        var proof = await FindLiveApprovalProofAsync(feature.ProjectId, feature.Slug, artifact.UpdatedAt, ct);
 
         if (proof is null)
         {
             throw PlanningException.ValidationProofRequired(feature.Slug);
         }
 
-        return $"validated with human proof: notification {proof.Id} replied {proof.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
+        return $"validated with human proof: notification {proof.Value.NotificationId} replied {proof.Value.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
     }
 
     public async Task<PlanningArtifact> DeclineAsync(Guid artifactId, string? reason, CancellationToken ct = default)

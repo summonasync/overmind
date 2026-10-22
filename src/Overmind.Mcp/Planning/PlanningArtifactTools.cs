@@ -462,6 +462,12 @@ public sealed class PlanningArtifactTools
             echo["featureStatusChanged"] = featureStatusChanged.GetString();
         }
 
+        if (patch.TryGetProperty("validationProofVoided", out var validationProofVoided) &&
+            validationProofVoided.ValueKind == JsonValueKind.String)
+        {
+            echo["validationProofVoided"] = validationProofVoided.GetString();
+        }
+
         return new CallToolResult
         {
             Content = [new TextContentBlock { Text = echo.ToJsonString() }]

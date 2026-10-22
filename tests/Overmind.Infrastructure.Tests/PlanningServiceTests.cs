@@ -2025,6 +2025,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         inReview.Status.ShouldBe(PlanningFeatureStatus.InProgress);
         PlanningLog.Parse(inReview.Body).Last().Text
             .ShouldBe("feature demoted: review → inProgress (spec no longer validated)");
+        updated.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
         updated.FeatureStatusChanged.ShouldBe(PlanningArtifact.FeatureDemotedStatusEcho);
     }
 
@@ -2232,6 +2233,158 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
 
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task PatchAsync_EditingValidatedSpecAfterReply_ReportsVoidedProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\noriginal\n</goal>\n",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(Section: "goal", Content: "new", LogNote: "reopened for rework"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+        patched.Artifact.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
+    }
+
+    [Fact]
+    public async Task PatchAsync_ApprovalReplyWithinTheSameSecond_StillReportsVoidedProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\noriginal\n</goal>\n",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var replyAt = notification.RepliedAt!.Value;
+        _context.Entry(spec).Property(a => a.UpdatedAt).CurrentValue = replyAt;
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(Section: "goal", Content: "new", LogNote: "reopened for rework"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBe(replyAt);
+    }
+
+    [Fact]
+    public async Task PatchAsync_TickingAcAfterReply_ReportsVoidedProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec,
+            "# Spec\n\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking after the tap"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+    }
+
+    [Fact]
+    public async Task PatchAsync_WithoutLiveProof_ValidationProofVoidedStaysNull()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\noriginal\n</goal>\n",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(Section: "goal", Content: "new", LogNote: "reopened for rework"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task UpsertAsync_EditingValidatedSpecAfterReply_ReportsVoidedProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\noriginal\n</goal>\n",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var updated = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nrewritten\n</goal>\n",
+            null, null, "rewriting after the tap", default);
+
+        updated.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+        updated.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_SpliceIdenticalResend_AfterReply_KeepsProofLive()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, "seeded", default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var resent = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, null, default);
+
+        resent.ValidationProofVoided.ShouldBeNull();
+        resent.Version.ShouldBe(1);
     }
 
     [Fact]
