@@ -582,11 +582,41 @@ ship the guard
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
 
-        artifact.PatchSection("refs", "- keep this line");
+        artifact.PatchSection("my-tag", "- keep this line");
 
-        artifact.Body.ShouldContain("<refs>\n- keep this line\n</refs>");
+        artifact.Body.ShouldContain("<my-tag>\n- keep this line\n</my-tag>");
         artifact.Version.ShouldBe(2);
         artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(PatchBody);
+    }
+
+    [Theory]
+    [InlineData("Goal")]
+    [InlineData("2fa")]
+    [InlineData("has_underscore")]
+    [InlineData("a.b")]
+    public void PatchSection_NameOutsideTheTagGrammar_ThrowsWithoutWriting(string section)
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection(section, "content"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNameNotParseable);
+        ex.Message.ShouldContain(section);
+        ex.Message.ShouldContain("lowercase letters, digits and hyphens");
+        artifact.Body.ShouldBe(PatchBody);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void PatchSection_UppercaseName_OnTask_ThrowsNamingTheGrammar()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("Goal", "content"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNameNotParseable);
+        artifact.Version.ShouldBe(1);
     }
 
     [Fact]

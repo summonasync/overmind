@@ -13,6 +13,12 @@ public static partial class PlanningSections
     [GeneratedRegex(@"(?m)^[ \t]*</(?<name>[a-z][a-z0-9-]*)>[ \t]*\r?$", RegexOptions.None, 2000)]
     private static partial Regex CloseTagPattern();
 
+    [GeneratedRegex(@"^[a-z][a-z0-9-]*$", RegexOptions.None, 200)]
+    private static partial Regex NamePattern();
+
+    public static bool IsNameParseable(string name) =>
+        !string.IsNullOrEmpty(name) && NamePattern().IsMatch(name);
+
     public static PlanningSection? Find(string name, string body)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

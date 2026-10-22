@@ -615,4 +615,19 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
 
         PlanningSections.Insert("log", body, null).ShouldStartWith(body);
     }
+
+    [Theory]
+    [InlineData("goal", true)]
+    [InlineData("anti-scope", true)]
+    [InlineData("my-tag", true)]
+    [InlineData("a0", true)]
+    [InlineData("Goal", false)]
+    [InlineData("2fa", false)]
+    [InlineData("a_b", false)]
+    [InlineData("a.b", false)]
+    [InlineData("", false)]
+    public void IsNameParseable_MatchesTheFindGrammar(string name, bool expected)
+    {
+        PlanningSections.IsNameParseable(name).ShouldBe(expected);
+    }
 }

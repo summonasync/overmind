@@ -194,6 +194,11 @@ public sealed class PlanningArtifact
             return;
         }
 
+        if (!PlanningSections.IsNameParseable(section))
+        {
+            throw PlanningException.PatchSectionNameNotParseable(section);
+        }
+
         if (PlanningSectionCanonicalizer.HasInlineSection(section, Body) ||
             (Kind == PlanningArtifactKind.Task && !PlanningTaskSections.IsDeclared(section)))
         {

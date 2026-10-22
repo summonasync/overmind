@@ -128,6 +128,11 @@ public sealed class PlanningException : Exception
             hint is null ? message : $"{message} {hint}");
     }
 
+    public static PlanningException PatchSectionNameNotParseable(string section) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchSectionNameNotParseable,
+            $"Section name '{section}' does not match the tag grammar the parser reads: lowercase letters, digits and hyphens, starting with a letter (e.g. 'goal', 'anti-scope', 'my-tag'). " +
+            "A section inserted under any other name could never be found again — rename it to a lowercase tag.");
+
     public static string InlineSectionHint(string section) =>
         $"A one-line '<{section}>…</{section}>' section exists in the body — one-line sections need " +
         "the canonical multi-line form; re-send the body once (any upsert canonicalizes it).";

@@ -21,6 +21,7 @@ public enum PlanningFailureCode
     MigratedNoteRequired,
     ImportFailed,
     PatchSectionNotFound,
+    PatchSectionNameNotParseable,
     TickItemNotFound,
     TickTextAmbiguous,
     TickItemNotCheckable,
