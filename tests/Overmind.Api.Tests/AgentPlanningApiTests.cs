@@ -1802,6 +1802,28 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertArtifact_TwoLogBlocks_Returns400WithMergeHint()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentArtifactsUrl(project.Id, "feat"),
+            new
+            {
+                Kind = "task",
+                Body = "# Task\n\n<log>\n- 2026-09-01 — seeded\n</log>\n\n<log>\n- 2026-09-02 — later\n</log>\n",
+                Order = 1
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LogBlocksDuplicated");
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("single <log> block");
+    }
+
+    [Fact]
     public async Task UpdateFeature_WritesAgentMarkerThenHumanPutStillWorksWithoutLogNote()
     {
         var project = await CreateProjectAsync();

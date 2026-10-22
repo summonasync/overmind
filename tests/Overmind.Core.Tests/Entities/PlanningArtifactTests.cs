@@ -281,7 +281,7 @@ ship the guard
     }
 
     [Fact]
-    public void UpdateBody_ResentIdenticalBodyWithLog_Passes()
+    public void UpdateBody_ResentIdenticalBodyWithLog_IsNoOp()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
         var original = artifact.Body;
@@ -289,7 +289,8 @@ ship the guard
         artifact.UpdateBody(LoggedBody);
 
         artifact.Body.ShouldBe(original);
-        artifact.Version.ShouldBe(2);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
     }
 
     [Fact]
@@ -349,12 +350,11 @@ ship the guard
     }
 
     [Fact]
-    public void UpdateBody_ModifiedStoredLogLine_ThrowsWithDivergenceDiagnostics()
+    public void UpdateBody_RewrittenStoredLogLine_AppendsRewriteAfterStoredHistory()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
-        var original = artifact.Body;
 
-        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody("""
+        artifact.UpdateBody("""
             # Task
 
             <goal>
@@ -365,26 +365,19 @@ ship the guard
             - 2026-09-01 — seeded
             - 2026-09-02 — history was polished
             </log>
-            """));
+            """);
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
-        ex.Message.ShouldContain("log line 1");
-        ex.Message.ShouldContain("stored 2");
-        ex.Message.ShouldContain("incoming 2");
-        ex.Message.ShouldContain("planning_append_log");
-        ex.Message.ShouldContain("planning_patch_artifact");
-        artifact.Body.ShouldBe(original);
-        artifact.Version.ShouldBe(1);
-        artifact.Versions.ShouldBeEmpty();
+        PlanningLog.Parse(artifact.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "review feedback applied", "history was polished"]);
     }
 
     [Fact]
-    public void UpdateBody_RemovedStoredLogLine_ThrowsNamingFirstDroppedLine()
+    public void UpdateBody_StaleBodyWithoutAppendedLines_IsByteIdenticalNoOp()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+        var original = artifact.Body;
 
-        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody("""
+        artifact.UpdateBody("""
             # Task
 
             <goal>
@@ -394,20 +387,19 @@ ship the guard
             <log>
             - 2026-09-01 — seeded
             </log>
-            """));
+            """);
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Message.ShouldContain("log line 1");
-        ex.Message.ShouldContain("stored 2");
-        ex.Message.ShouldContain("incoming 1");
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
     }
 
     [Fact]
-    public void UpdateBody_ReorderedLogLines_ThrowsAtFirstDivergence()
+    public void UpdateBody_ReorderedLogLines_KeepsStoredHistoryAndAppendsIncomingLines()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
 
-        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody("""
+        artifact.UpdateBody("""
             # Task
 
             <goal>
@@ -418,39 +410,132 @@ ship the guard
             - 2026-09-02 — review feedback applied
             - 2026-09-01 — seeded
             </log>
-            """));
+            """);
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Message.ShouldContain("log line 0");
+        PlanningLog.Parse(artifact.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "review feedback applied", "review feedback applied", "seeded"]);
     }
 
     [Fact]
-    public void UpdateBody_LogSectionDropped_Throws()
+    public void UpdateBody_LogSectionDropped_RestoresStoredLines()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
 
-        var ex = Should.Throw<PlanningException>(() =>
-            artifact.UpdateBody("# Task\n\n<goal>\nship the guard\n</goal>\n"));
+        artifact.UpdateBody("# Task\n\n<goal>\nship the guard\n</goal>\n");
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Message.ShouldContain("log line 0");
-        ex.Message.ShouldContain("stored 2");
-        ex.Message.ShouldContain("incoming 0");
+        artifact.Body.ShouldContain("<log>");
+        PlanningLog.Parse(artifact.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "review feedback applied"]);
+        artifact.Version.ShouldBe(2);
     }
 
     [Fact]
-    public void UpdateBody_SourceMarkerStrippedFromStoredLine_Throws()
+    public void UpdateBody_SourceMarkerStrippedFromStoredLine_PreservesMarkerAndAppendsBareLine()
     {
         var artifact = PlanningArtifact.Create(
             FeatureId,
             PlanningArtifactKind.Task,
             "# Task\n\n<log>\n- 2026-09-01 — seeded\n- 2026-09-02 [agent] — hit a wall mid-task\n</log>\n");
 
-        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody(
-            "# Task\n\n<log>\n- 2026-09-01 — seeded\n- 2026-09-02 — hit a wall mid-task\n</log>\n"));
+        artifact.UpdateBody(
+            "# Task\n\n<log>\n- 2026-09-01 — seeded\n- 2026-09-02 — hit a wall mid-task\n</log>\n");
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Message.ShouldContain("log line 1");
+        var lines = PlanningLog.Parse(artifact.Body);
+        lines.Count.ShouldBe(3);
+        lines[1].Source.ShouldBe(PlanningLogSource.Agent);
+        lines[2].Text.ShouldBe("hit a wall mid-task");
+        lines[2].Source.ShouldBeNull();
+    }
+
+    [Fact]
+    public void UpdateBody_NewLinesOnlyOnResend_AppendsAfterStoredHistory()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        artifact.UpdateBody(PlanningLog.Append(artifact.Body, "freshly appended line"));
+
+        PlanningLog.Parse(artifact.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "review feedback applied", "freshly appended line"]);
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UpdateBody_StoredLinesRepeatedWithTail_StoresNoDuplicates()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+
+        artifact.UpdateBody("""
+            # Task
+
+            <goal>
+            ship the guard
+            </goal>
+
+            <log>
+            - 2026-09-01 — seeded
+            - 2026-09-02 — review feedback applied
+            - 2026-09-03 — shipped
+            </log>
+            """);
+
+        PlanningLog.Parse(artifact.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "review feedback applied", "shipped"]);
+    }
+
+    [Fact]
+    public void UpdateBody_EmptyLogSectionOnResend_PreservesStoredLinesAsNoOp()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, LoggedBody);
+        var original = artifact.Body;
+
+        artifact.UpdateBody("# Task\n\n<goal>\nship the guard\n</goal>\n\n<log>\n</log>");
+
+        artifact.Body.ShouldBe(original);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void UpdateBody_PreviousUpsertLogNote_NeverNeedsRequotingOnResend()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId, PlanningArtifactKind.Spec, "# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n");
+
+        artifact.UpdateBody("# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n", "first edit");
+        artifact.UpdateBody("# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n", "second edit");
+
+        PlanningLog.Parse(artifact.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "first edit", "second edit"]);
+    }
+
+    [Fact]
+    public void UpdateBody_TwoLogBlocks_ThrowsPointingAtMergingIntoOneBlock()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId, PlanningArtifactKind.Spec, "# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n");
+
+        var ex = Should.Throw<PlanningException>(() => artifact.UpdateBody(
+            "# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n\n<log>\n- 2026-09-02 — later\n</log>\n"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogBlocksDuplicated);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("2 <log> blocks");
+        ex.Message.ShouldContain("single <log> block");
+        artifact.Body.ShouldNotContain("later");
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Create_TwoLogBlocks_ThrowsPointingAtMergingIntoOneBlock()
+    {
+        var ex = Should.Throw<PlanningException>(() => PlanningArtifact.Create(
+            FeatureId,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n\n<log>\n- 2026-09-02 — later\n</log>\n"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogBlocksDuplicated);
+        ex.Message.ShouldContain("single <log> block");
     }
 
     [Fact]

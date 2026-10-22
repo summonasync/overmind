@@ -399,7 +399,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpsertArtifact_StaleBodyDroppingStoredLogLine_ThrowsLogHistoryNotAppendable()
+    public async Task UpsertArtifact_ResendWithoutQuotingAppendedLine_SplicesStoredLogBack()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -411,18 +411,76 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             null, null, null, default);
         await artifactService.AppendLogAsync(spec.Id, "progress that must survive", default);
 
+        var resent = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\noriginal\n</goal>\n\n<log>\n- 2026-09-01 — seeded\n</log>\n",
+            null, null, null, default);
+
+        await _context.Entry(spec).ReloadAsync();
+        resent.Id.ShouldBe(spec.Id);
+        resent.Version.ShouldBe(2);
+        PlanningLog.Parse(resent.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "progress that must survive"]);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_EmptyLogSectionOnResend_SucceedsAndKeepsStoredLog()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\noriginal\n</goal>\n\n<log>\n- 2026-09-01 — seeded\n</log>\n",
+            null, null, null, default);
+        await artifactService.AppendLogAsync(spec.Id, "progress that must survive", default);
+
+        var resent = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\nedited without quoting the log\n</goal>\n\n<log>\n</log>\n",
+            null, null, null, default);
+
+        await _context.Entry(spec).ReloadAsync();
+        resent.Body.ShouldContain("edited without quoting the log");
+        PlanningLog.Parse(resent.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "progress that must survive"]);
+        resent.Version.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_LogNoteFromEarlierCall_NeverNeedsRequotingOnResend()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var body = "# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n";
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, body, null, null, null, default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, body, null, null, "first edit", default);
+
+        var resent = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, body, null, null, "second edit", default);
+
+        PlanningLog.Parse(resent.Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "first edit", "second edit"]);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_TwoLogBlocks_RejectedWithMergeHint()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
         var ex = await Should.ThrowAsync<PlanningException>(
             () => artifactService.UpsertAsync(
                 feature.Id, PlanningArtifactKind.Spec,
-                "# Spec\n\n<goal>\noriginal\n</goal>\n\n<log>\n- 2026-09-01 — seeded\n</log>\n",
+                "# Spec\n\n<log>\n- 2026-09-01 — seeded\n</log>\n\n<log>\n- 2026-09-02 — later\n</log>\n",
                 null, null, null, default));
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
-        ex.Message.ShouldContain("planning_append_log");
-
-        await _context.Entry(spec).ReloadAsync();
-        PlanningLog.Parse(spec.Body).Count(l => l.Text == "progress that must survive").ShouldBe(1);
+        ex.Code.ShouldBe(PlanningFailureCode.LogBlocksDuplicated);
+        ex.Message.ShouldContain("single <log> block");
     }
 
     [Fact]
@@ -1029,7 +1087,38 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         new(_context, TestPlanningDispatcher.Create(_context, _materializer));
 
     [Fact]
-    public async Task UpsertTasks_RewrittenStoredLogLine_ThrowsWrappedAsBatchItemAndRollsBack()
+    public async Task UpsertTasks_TwoLogBlocks_ThrowsWrappedAsBatchItemAndRollsBack()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "# Task one\n\n<log>\n- 2026-09-01 — seeded\n</log>\n", 0, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.UpsertTasksAsync(
+                feature.Id,
+                [
+                    new PlanningTaskUpsert(
+                        "# Task one\n\n<log>\n- 2026-09-01 — seeded\n</log>\n\n<log>\n- 2026-09-02 — later\n</log>\n",
+                        Order: 0),
+                    new PlanningTaskUpsert("# Task two\n", Order: 1)
+                ],
+                default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LogBlocksDuplicated);
+        ex.Message.ShouldStartWith("tasks[0]:");
+        ex.Message.ShouldContain("single <log> block");
+
+        var persisted = await _context.PlanningArtifacts
+            .CountAsync(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Task);
+        persisted.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertTasks_StaleBodyWithoutAppendedLines_SplicesStoredLogBack()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -1040,22 +1129,17 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             "# Task one\n\n<log>\n- 2026-09-01 — seeded\n</log>\n", 0, null, null, default);
         await artifactService.AppendLogAsync(task.Id, "progress that must survive", default);
 
-        var ex = await Should.ThrowAsync<PlanningException>(
-            () => artifactService.UpsertTasksAsync(
-                feature.Id,
-                [
-                    new PlanningTaskUpsert("# Task one\n\n<log>\n- 2026-09-01 — seeded\n</log>\n", Order: 0),
-                    new PlanningTaskUpsert("# Task two\n", Order: 1)
-                ],
-                default));
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("# Task one\n\n<log>\n- 2026-09-01 — seeded\n</log>\n", Order: 0),
+                new PlanningTaskUpsert("# Task two\n", Order: 1)
+            ],
+            default);
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Message.ShouldContain("tasks[0]:");
-        ex.Message.ShouldContain("planning_append_log");
-
-        var persisted = await _context.PlanningArtifacts
-            .CountAsync(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Task);
-        persisted.ShouldBe(1);
+        batch.Created.ShouldBe(1);
+        PlanningLog.Parse(batch.Artifacts.Single(a => a.Order == 0).Body).Select(l => l.Text).ToList()
+            .ShouldBe(["seeded", "progress that must survive"]);
     }
 
     [Fact]

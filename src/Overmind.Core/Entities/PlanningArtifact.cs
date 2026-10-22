@@ -87,6 +87,7 @@ public sealed class PlanningArtifact
         string? brief = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
+        EnsureSingleLogBlock(body);
 
         var now = DateTime.UtcNow;
         return new PlanningArtifact
@@ -160,9 +161,16 @@ public sealed class PlanningArtifact
     public void UpdateBody(string body, string? logNote = null, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
-        RequireLogHistoryAppendable(body);
+        EnsureSingleLogBlock(body);
+
+        var merged = SpliceLogHistory(body);
+        if (merged == Body && string.IsNullOrWhiteSpace(logNote))
+        {
+            return;
+        }
+
         RequireChangeNoteWhenFrozen(logNote);
-        ApplyBodyMutation(body, logNote, source);
+        ApplyBodyMutation(merged, logNote, source);
     }
 
     public void PatchSection(string section, string? content, string? logNote = null, PlanningLogSource? source = null)
@@ -385,28 +393,56 @@ public sealed class PlanningArtifact
                 : null,
             Kind == PlanningArtifactKind.Task ? string.Join(", ", PlanningTaskSections.Declared) : null);
 
-    private void RequireLogHistoryAppendable(string incomingBody)
+    // The log is append-only across resends: stored lines are the truth, and the incoming body's
+    // log section carries new lines only. Line k of the incoming parse either continues the stored
+    // sequence or opens the new tail — a rewrite, a drop or a reorder all collapse into "new tail",
+    // so a resend never needs to quote history and never truncates it either.
+    private string SpliceLogHistory(string incomingBody)
     {
         var stored = PlanningLog.Parse(Body);
         if (stored.Count == 0)
         {
-            return;
+            return incomingBody;
         }
 
         var incoming = PlanningLog.Parse(incomingBody);
-        var shared = Math.Min(stored.Count, incoming.Count);
-
-        for (var i = 0; i < shared; i++)
+        var shared = 0;
+        while (shared < incoming.Count && shared < stored.Count && incoming[shared] == stored[shared])
         {
-            if (stored[i] != incoming[i])
-            {
-                throw PlanningException.LogHistoryNotAppendable(i, stored.Count, incoming.Count);
-            }
+            shared++;
         }
 
-        if (incoming.Count < stored.Count)
+        if (shared == incoming.Count && incoming.Count == stored.Count)
         {
-            throw PlanningException.LogHistoryNotAppendable(incoming.Count, stored.Count, incoming.Count);
+            return incomingBody;
+        }
+
+        var lines = new List<string>(stored.Count + incoming.Count - shared);
+        lines.AddRange(stored.Select(RenderLogLine));
+        for (var i = shared; i < incoming.Count; i++)
+        {
+            lines.Add(RenderLogLine(incoming[i]));
+        }
+
+        var content = string.Join("\n", lines);
+        return PlanningSections.TryFind("log", incomingBody, out _)
+            ? PlanningSections.Replace("log", incomingBody, content)
+            : PlanningSections.Insert("log", incomingBody, content);
+    }
+
+    private static string RenderLogLine(PlanningLogLine line) =>
+        line.Date is null
+            ? $"- {line.Text}"
+            : line.Source is { } source
+                ? $"- {line.Date:yyyy-MM-dd} [{source.ToString().ToLowerInvariant()}] — {line.Text}"
+                : $"- {line.Date:yyyy-MM-dd} — {line.Text}";
+
+    private static void EnsureSingleLogBlock(string body)
+    {
+        var blocks = PlanningSections.CountAnchoredBlocks("log", body);
+        if (blocks > 1)
+        {
+            throw PlanningException.LogBlocksDuplicated(blocks);
         }
     }
 

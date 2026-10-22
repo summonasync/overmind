@@ -28,6 +28,7 @@ public enum PlanningFailureCode
     SectionContentRequiredForReplace,
     PatchLogSectionNotReplaceable,
     LogHistoryNotAppendable,
+    LogBlocksDuplicated,
     DependencyCycle,
     FeatureBlocked,
     FeatureNotInQueue,

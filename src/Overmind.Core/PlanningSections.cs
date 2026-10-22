@@ -109,6 +109,25 @@ public static partial class PlanningSections
         return result;
     }
 
+    public static int CountAnchoredBlocks(string name, string body)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(body);
+
+        var closes = CloseTagPattern().Matches(body);
+        var count = 0;
+
+        foreach (Match open in OpenTagPattern().Matches(body))
+        {
+            if (open.Groups["name"].Value == name && HasCloseAfter(open, closes))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     public static IReadOnlyList<string> List(string body)
     {
         ArgumentNullException.ThrowIfNull(body);

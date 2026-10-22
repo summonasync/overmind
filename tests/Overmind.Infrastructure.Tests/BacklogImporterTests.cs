@@ -144,7 +144,7 @@ public sealed class BacklogImporterTests : IDisposable
     }
 
     [Fact]
-    public async Task ImportFeature_ReimportAfterStatusDrift_StaleMirrorRejectedAndLogIntact()
+    public async Task ImportFeature_ReimportAfterStatusDrift_StaleMirrorKeepsBoardLogLine()
     {
         WriteFullFeature();
         await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
@@ -154,16 +154,16 @@ public sealed class BacklogImporterTests : IDisposable
         task.SetStatus(PlanningArtifactStatus.Blocked, "hit a wall mid-task", PlanningLogSource.Agent);
         await _context.SaveChangesAsync();
 
-        var ex = await Should.ThrowAsync<PlanningException>(
-            () => ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo")));
+        var report = await ImportFeatureAsync(Path.Combine(_repo.Root, "BACKLOG", "010-demo"));
 
-        ex.Code.ShouldBe(PlanningFailureCode.LogHistoryNotAppendable);
-        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        report.Created.ShouldBeFalse();
+        report.ArtifactsCreated.ShouldBe(0);
 
         feature = await LoadFeatureAsync("010-demo");
         task = feature!.Artifacts.Single(a => a.Kind == PlanningArtifactKind.Task && a.Order == 2);
-        task.Status.ShouldBe(PlanningArtifactStatus.Blocked);
+        task.Status.ShouldBe(PlanningArtifactStatus.InProgress);
         task.Body.ShouldContain("hit a wall mid-task");
+        task.Body.ShouldContain("[import] — re-imported from");
     }
 
     [Fact]

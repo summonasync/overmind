@@ -171,6 +171,11 @@ public sealed class PlanningException : Exception
             "Append via planning_append_log, edit other sections via planning_patch_artifact, or resend the full body " +
             "with every stored log line untouched and new lines only at the end.");
 
+    public static PlanningException LogBlocksDuplicated(int blockCount) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LogBlocksDuplicated,
+            $"The body carries {blockCount} <log> blocks; only the last one is read, so lines in the earlier " +
+            "blocks would silently vanish from the journal. Merge the history into a single <log> block and resend.");
+
     public static PlanningException DependencyCycle(string slug, string blockedBySlug, IReadOnlyList<string> chain) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DependencyCycle,
             $"Adding '{blockedBySlug}' as a blocker of '{slug}' would create a dependency cycle: {string.Join(" -> ", chain)}.");
