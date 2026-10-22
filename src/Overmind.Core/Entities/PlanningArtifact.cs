@@ -528,10 +528,11 @@ public sealed class PlanningArtifact
 
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
+        var wanted = DecodeEntities(text);
         var matches = new List<int>();
         for (var j = 0; j < items.Count; j++)
         {
-            if (string.Equals(BareAcText(items[j]), text, StringComparison.Ordinal))
+            if (string.Equals(DecodeEntities(BareAcText(items[j])), wanted, StringComparison.Ordinal))
             {
                 matches.Add(items[j].Index);
             }
@@ -598,4 +599,11 @@ public sealed class PlanningArtifact
 
         return item.RawText.Length > 4 ? item.RawText[4..] : string.Empty;
     }
+
+    // Single decode pass, so a stored "&amp;lt;" stays "&lt;" — decoding &amp; first would
+    // collapse a double-escaped literal into the readable form and match an item it must not.
+    private static string DecodeEntities(string text) =>
+        text.Replace("&lt;", "<", StringComparison.Ordinal)
+            .Replace("&gt;", ">", StringComparison.Ordinal)
+            .Replace("&amp;", "&", StringComparison.Ordinal);
 }

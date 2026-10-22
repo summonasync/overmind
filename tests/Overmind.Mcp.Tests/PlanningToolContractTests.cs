@@ -127,6 +127,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
             "acIndex is 1-based; numbering matches the materialized mirror; acText is the recommended selector");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "acText '&lt;key&gt;' matches a stored '<key>' and the reverse");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "an out-of-range acIndex or an unmatched acText is a 400 listing the visible items");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("untick=true");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("already unticked — no change");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("tickedIndex + tickedText");

@@ -2311,6 +2311,7 @@ public sealed class AgentPlanningApiTests : IDisposable
         problem!.Title.ShouldBe("PatchLogSectionNotReplaceable");
         problem.Detail!.ShouldContain("append-only");
         problem.Detail!.ShouldContain("planning_append_log");
+        problem.Detail!.ShouldContain("planning_edit_log");
         problem.Detail!.ShouldContain("planning_upsert_artifact");
 
         var artifact = await _client.GetFromJsonAsync<ArtifactJson>(

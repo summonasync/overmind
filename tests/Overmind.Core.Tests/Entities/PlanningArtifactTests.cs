@@ -38,6 +38,27 @@ original goal text
 </acceptance-criteria>
 """;
 
+    private const string EscapedAcBody = """
+<acceptance-criteria>
+- [ ] &lt;key&gt; is required
+- [ ] plain item
+</acceptance-criteria>
+""";
+
+    private const string ReadableAcBody = """
+<acceptance-criteria>
+- [ ] <key> is required
+- [ ] plain item
+</acceptance-criteria>
+""";
+
+    private const string MixedEscapedAcBody = """
+<acceptance-criteria>
+- [ ] &lt;alpha&gt; step
+- [ ] <alpha> step
+</acceptance-criteria>
+""";
+
     private const string LoggedBody = """
 # Task
 
@@ -872,6 +893,84 @@ ship the guard
         var ex = Should.Throw<PlanningException>(() => artifact.TickAc(null, "Write the parser"));
 
         ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+    }
+
+    [Fact]
+    public void TickAc_ByText_ReadableAcText_MatchesStoredEscapedItem()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, EscapedAcBody);
+
+        var ticked = artifact.TickAc(null, "<key> is required");
+
+        ticked.Changed.ShouldBeTrue();
+        ticked.Index.ShouldBe(1);
+        ticked.Text.ShouldBe("&lt;key&gt; is required");
+        artifact.Body.ShouldContain("[x] &lt;key&gt; is required");
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void TickAc_ByText_EscapedAcText_MatchesStoredReadableItem()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, ReadableAcBody);
+
+        var ticked = artifact.TickAc(null, "&lt;key&gt; is required");
+
+        ticked.Changed.ShouldBeTrue();
+        ticked.Index.ShouldBe(1);
+        ticked.Text.ShouldBe("<key> is required");
+        artifact.Body.ShouldContain("[x] <key> is required");
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void TickAc_ByText_EscapedAcText_MatchesStoredEscapedItem_ThroughTheSameNormalization()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, EscapedAcBody);
+
+        artifact.TickAc(null, "&lt;key&gt; is required");
+
+        artifact.Body.ShouldContain("[x] &lt;key&gt; is required");
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void TickAc_ByText_NormalizedAmbiguity_ThrowsListingMatchingIndices()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, MixedEscapedAcBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.TickAc(null, "<alpha> step"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickTextAmbiguous);
+        ex.Message.ShouldContain("<alpha> step");
+        ex.Message.ShouldContain("indices 1, 2");
+    }
+
+    [Fact]
+    public void TickAc_ByText_DoubleEscapedAcText_MissesWithVisibleItems()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, EscapedAcBody);
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.TickAc(null, "&amp;lt;key&amp;gt; is required"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.TickItemNotFound);
+        ex.Message.ShouldContain("Visible items");
+        ex.Message.ShouldContain("1: [ ] &lt;key&gt; is required");
+    }
+
+    [Fact]
+    public void UntickAc_ByText_EscapedAcText_ClearsStoredEscapedItem()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, EscapedAcBody);
+        artifact.TickAc(null, "<key> is required");
+
+        var unticked = artifact.UntickAc(null, "&lt;key&gt; is required");
+
+        unticked.Changed.ShouldBeTrue();
+        unticked.Index.ShouldBe(1);
+        artifact.Body.ShouldContain("[ ] &lt;key&gt; is required");
+        artifact.Version.ShouldBe(3);
     }
 
     [Fact]
