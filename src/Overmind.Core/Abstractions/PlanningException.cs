@@ -113,11 +113,16 @@ public sealed class PlanningException : Exception
             $"Importing '{source}' failed: {inner?.Message ?? "unknown error"}", inner);
 
     public static PlanningException PatchSectionNotFound(
-        string section, IEnumerable<string> presentSections, string? hint = null)
+        string section, IEnumerable<string> presentSections, string? hint = null, string? acceptedSections = null)
     {
         var present = string.Join(", ", presentSections.Distinct());
         var message =
             $"Section '{section}' was not found in the artifact body. Sections present: {(present.Length == 0 ? "(none)" : present)}.";
+
+        if (acceptedSections is not null)
+        {
+            message += $" Accepted sections for tasks: {acceptedSections}.";
+        }
 
         return new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchSectionNotFound,
             hint is null ? message : $"{message} {hint}");
@@ -153,7 +158,11 @@ public sealed class PlanningException : Exception
 
     public static PlanningException PatchLogSectionNotReplaceable() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchLogSectionNotReplaceable,
-            "The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or the artifact log endpoint; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.");
+            "The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or correct the newest own line via planning_edit_log; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.");
+
+    public static PlanningException SectionContentRequiredForReplace(string section) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.SectionContentRequiredForReplace,
+            $"Section '{section}' already exists — a content-less section patch only inserts a missing section; resend it with the replacement content.");
 
     public static PlanningException LogHistoryNotAppendable(int divergentIndex, int storedCount, int incomingCount) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LogHistoryNotAppendable,

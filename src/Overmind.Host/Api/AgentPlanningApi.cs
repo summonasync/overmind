@@ -590,7 +590,7 @@ public static class AgentPlanningApi
         {
             return request.Brief is null &&
                    !string.IsNullOrWhiteSpace(request.Section) &&
-                   !string.IsNullOrWhiteSpace(request.Content) &&
+                   (request.Content is null || !string.IsNullOrWhiteSpace(request.Content)) &&
                    request.AcIndex is null &&
                    request.AcText is null;
         }

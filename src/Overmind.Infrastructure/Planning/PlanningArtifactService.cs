@@ -29,6 +29,10 @@ public sealed class PlanningArtifactService
     {
         body = PlanningSectionCanonicalizer.Canonicalize(body);
         PointerMarkerGrammar.EnsureValid(body);
+        if (kind == PlanningArtifactKind.Task)
+        {
+            body = PlanningTaskSections.WithSkeleton(body);
+        }
 
         if (brief is not null && kind != PlanningArtifactKind.Task)
         {
@@ -172,7 +176,11 @@ public sealed class PlanningArtifactService
 
         for (var i = 0; i < tasks.Count; i++)
         {
-            var task = tasks[i] with { Body = PlanningSectionCanonicalizer.Canonicalize(tasks[i].Body) };
+            var task = tasks[i] with
+            {
+                Body = PlanningTaskSections.WithSkeleton(
+                    PlanningSectionCanonicalizer.Canonicalize(tasks[i].Body))
+            };
             try
             {
                 PointerMarkerGrammar.EnsureValid(task.Body);
@@ -354,8 +362,7 @@ public sealed class PlanningArtifactService
         var wantsBrief = patch.Brief is not null;
         var actionCount = (wantsSection ? 1 : 0) + (wantsTick ? 1 : 0) + (wantsBrief ? 1 : 0);
 
-        if (actionCount != 1 || (wantsSection && patch.Content is null) ||
-            (wantsBrief && string.IsNullOrWhiteSpace(patch.Brief)))
+        if (actionCount != 1 || (wantsBrief && string.IsNullOrWhiteSpace(patch.Brief)))
         {
             throw PlanningException.InvalidPatchRequest();
         }
@@ -370,8 +377,14 @@ public sealed class PlanningArtifactService
         {
             if (wantsSection)
             {
-                var content = PlanningSectionCanonicalizer.Canonicalize(patch.Content!);
-                PointerMarkerGrammar.EnsureValid(content);
+                var content = patch.Content is null
+                    ? null
+                    : PlanningSectionCanonicalizer.Canonicalize(patch.Content);
+                if (content is not null)
+                {
+                    PointerMarkerGrammar.EnsureValid(content);
+                }
+
                 artifact.PatchSection(patch.Section!, content, patch.LogNote, source);
             }
             else if (wantsBrief)

@@ -2739,6 +2739,26 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningPatchArtifact_SectionWithoutContent_PostsReplaceSectionWithoutContent()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["section"] = "obstacles"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("replace_section");
+        body["section"]!.GetValue<string>().ShouldBe("obstacles");
+        body["content"].ShouldBeNull();
+
+        response["result"]!["isError"].ShouldBeNull();
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task PlanningPatchArtifact_TicksByIndex_PostsTickOp()
     {
         var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
@@ -2995,7 +3015,6 @@ public class PlanningToolContractTests : McpSessionTestBase
     [Theory]
     [InlineData(" ", "x", null, null, null, "non-blank section")]
     [InlineData("goal", " ", null, null, null, "replacement content")]
-    [InlineData("goal", null, null, null, null, "replacement content")]
     [InlineData(null, null, 1, "first", null, "not both")]
     [InlineData(null, null, null, "", null, "non-blank acText")]
     [InlineData(null, null, null, null, null, "never several and never none")]
@@ -3098,7 +3117,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "POST",
             $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/patch",
             400,
-            """{"title":"PatchLogSectionNotReplaceable","detail":"The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or the artifact log endpoint; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.","status":400}""");
+            """{"title":"PatchLogSectionNotReplaceable","detail":"The log section is append-only; replace_section cannot rewrite it. Append a dated line via planning_append_log or correct the newest own line via planning_edit_log; if history genuinely must be rewritten, resend the full body via planning_upsert_artifact.","status":400}""");
 
         var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
         {

@@ -391,7 +391,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             .Where(v => v.ArtifactId == updated.Id)
             .ToListAsync();
         versions.Count.ShouldBe(1);
-        versions[0].Body.ShouldBe("v1");
+        versions[0].Body.ShouldBe(PlanningTaskSections.WithSkeleton("v1"));
 
         var log = PlanningLog.Parse(updated.Body);
         log.Count.ShouldBe(1);
@@ -465,6 +465,35 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpsertArtifact_TaskCreate_MaterializesTheDeclaredSkeleton()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var task = await CreateArtifactService().UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "# Task\n\n<goal>\nWire it.\n</goal>\n", null, null, null, default);
+
+        PlanningSections.List(task.Body).ShouldBe(PlanningTaskSections.Declared);
+        PlanningSections.Find("goal", task.Body)!.Content.ShouldBe("Wire it.");
+        foreach (var section in PlanningTaskSections.Declared.Where(s => s != "goal"))
+        {
+            PlanningSections.Find(section, task.Body)!.Content.ShouldBe(PlanningSections.EmptyMarker);
+        }
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_SpecCreate_LeavesTheBodyVerbatim()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var spec = await CreateArtifactService().UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        spec.Body.ShouldBe("# Spec\n\n<goal>\nold\n</goal>\n");
+    }
+
+    [Fact]
     public async Task UpsertArtifact_ConcatenatedTaskSections_RegisterAndPatch()
     {
         var featureService = CreateFeatureService();
@@ -477,7 +506,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             + "<acceptance-criteria>- [x] sections parse</acceptance-criteria><log></log>",
             0, null, null, default);
 
-        PlanningSections.List(task.Body).ShouldBe(new[] { "goal", "scope", "acceptance-criteria", "log" });
+        PlanningSections.List(task.Body).ShouldBe(new[]
+        {
+            "goal", "scope", "acceptance-criteria", "log", "anti-scope", "constraints", "refs", "obstacles"
+        });
 
         var patched = await artifactService.PatchAsync(
             task.Id,
@@ -2313,7 +2345,28 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task PatchAsync_UnknownSection_ThrowsPatchSectionNotFound()
+    public async Task PatchAsync_UnknownSection_OnTask_ThrowsWithVocabulary()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "# Task\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id, new PlanningArtifactPatch(Section: "banana", Content: "x"), default));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("goal");
+        ex.Message.ShouldContain("Accepted sections for tasks");
+        ex.Message.ShouldContain("obstacles");
+    }
+
+    [Fact]
+    public async Task PatchAsync_UnknownSection_OnSpec_InsertsTheTag()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -2322,13 +2375,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var artifact = await artifactService.UpsertAsync(
             feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
 
-        var ex = await Should.ThrowAsync<PlanningException>(
-            () => artifactService.PatchAsync(
-                artifact.Id, new PlanningArtifactPatch(Section: "refs", Content: "x"), default));
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(Section: "refs", Content: "- the spec"), default);
 
-        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
-        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
-        ex.Message.ShouldContain("goal");
+        PlanningSections.Find("refs", patched.Artifact.Body)!.Content.ShouldBe("- the spec");
     }
 
     [Fact]
@@ -2400,7 +2450,46 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var batch = await CreateArtifactService().UpsertTasksAsync(
             feature.Id, [new PlanningTaskUpsert("# T\n\n<goal>Ship.</goal>")], default);
 
-        batch.Artifacts.ShouldHaveSingleItem().Body.ShouldBe("# T\n\n<goal>\nShip.\n</goal>");
+        var body = batch.Artifacts.ShouldHaveSingleItem().Body;
+        body.ShouldStartWith("# T\n\n<goal>\nShip.\n</goal>");
+        PlanningSections.Find("goal", body)!.Content.ShouldBe("Ship.");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ItemWithoutObstacles_YieldsTaskWithDeclaredEmptyObstacles()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var batch = await CreateArtifactService().UpsertTasksAsync(
+            feature.Id, [new PlanningTaskUpsert("# T\n\n<goal>\nShip.\n</goal>\n")], default);
+
+        var task = batch.Artifacts.ShouldHaveSingleItem();
+        PlanningSections.Find("obstacles", task.Body)!.Content.ShouldBe(PlanningSections.EmptyMarker);
+        PlanningSections.List(task.Body).ShouldBe(PlanningTaskSections.Declared);
+
+        var patched = await CreateArtifactService().PatchAsync(
+            task.Id,
+            new PlanningArtifactPatch(Section: "obstacles", Content: "- the index is flaky", LogNote: "recording obstacles"),
+            default);
+
+        PlanningSections.Find("obstacles", patched.Artifact.Body)!.Content.ShouldBe("- the index is flaky");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ResendingTheSameBatch_LeavesVersionsUntouched()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        const string body = "# T\n\n<goal>\nShip.\n</goal>\n";
+        await artifactService.UpsertTasksAsync(feature.Id, [new PlanningTaskUpsert(body, 0)], default);
+        var resent = await artifactService.UpsertTasksAsync(feature.Id, [new PlanningTaskUpsert(body, 0)], default);
+
+        var task = resent.Artifacts.ShouldHaveSingleItem();
+        task.Version.ShouldBe(1);
+        _context.PlanningArtifactVersions.Count(v => v.ArtifactId == task.Id).ShouldBe(0);
     }
 
     [Fact]
@@ -2741,7 +2830,41 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task PatchAsync_SectionWithoutContent_ThrowsInvalidPatchRequest()
+    public async Task PatchAsync_SectionWithoutContent_OnMissingSection_InsertsDeclaredEmpty()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(Section: "scope"), default);
+
+        PlanningSections.Find("scope", patched.Artifact.Body)!.Content.ShouldBe(PlanningSections.EmptyMarker);
+        patched.Artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task PatchAsync_SectionWithoutContent_OnTaskMissingSection_InsertsDeclaredEmpty()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var stored = PlanningArtifact.Create(
+            feature.Id, PlanningArtifactKind.Task, "# Task\n\n<goal>\nold\n</goal>\n");
+        _context.PlanningArtifacts.Add(stored);
+        await _context.SaveChangesAsync();
+
+        var patched = await CreateArtifactService().PatchAsync(
+            stored.Id, new PlanningArtifactPatch(Section: "obstacles"), default);
+
+        PlanningSections.Find("obstacles", patched.Artifact.Body)!.Content.ShouldBe(PlanningSections.EmptyMarker);
+        patched.Artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task PatchAsync_SectionWithoutContent_OnExistingSection_ThrowsContentRequired()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -2754,7 +2877,8 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             () => artifactService.PatchAsync(
                 artifact.Id, new PlanningArtifactPatch(Section: "goal"), default));
 
-        ex.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
+        ex.Code.ShouldBe(PlanningFailureCode.SectionContentRequiredForReplace);
+        ex.Message.ShouldContain("goal");
     }
 
     [Fact]

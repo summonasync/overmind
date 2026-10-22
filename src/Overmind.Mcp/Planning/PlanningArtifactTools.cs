@@ -357,11 +357,11 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
-    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section, flips one acceptance item, or sets the task brief; rest of the body untouched. Give section plus content to replace one section, acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. A missing section or item is a 400 that lists what is available with the same 1-based numbering. The log section is append-only: patching it is a 400 that points at planning_append_log, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote.")]
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section, flips one acceptance item, or sets the task brief; rest of the body untouched. A section absent from the body is instead INSERTED — with the content, or declared-empty when content is omitted (tasks accept the declared vocabulary only, spec/plan/result any tag name). Alternatively acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. A section-replace of an existing section without content, and an unknown section name on a task, are 400s — the latter lists sections present plus the accepted vocabulary. The log section is append-only: patching it is a 400 that points at planning_append_log / planning_edit_log, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced or inserted section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote.")]
     public async Task<CallToolResult> PatchArtifact(
         [Description("Id of the artifact to patch; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
-        [Description("Name of the XML section to replace, e.g. goal.")] string? section = null,
-        [Description("Full replacement content of the section.")] string? content = null,
+        [Description("Name of the XML section to replace or insert, e.g. goal.")] string? section = null,
+        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty.")] string? content = null,
         [Description("1-based index of the acceptance-criteria item; numbering matches the materialized mirror and the 400 diagnostics.")] int? acIndex = null,
         [Description("Exact text of the acceptance-criteria item, without the checkbox marker — the recommended selector.")] string? acText = null,
         [Description("Set true together with acIndex or acText to clear the checkbox ([x] to [ ]) instead of ticking it.")] bool untick = false,
@@ -520,9 +520,10 @@ public sealed class PlanningArtifactTools
                 throw new McpException(PatchShapeError);
             }
 
-            if (string.IsNullOrWhiteSpace(section) || string.IsNullOrWhiteSpace(content))
+            if (string.IsNullOrWhiteSpace(section) || content is not null && string.IsNullOrWhiteSpace(content))
             {
-                throw new McpException("Replacing a section needs a non-blank section and its full replacement content.");
+                throw new McpException(
+                    "A section patch needs a non-blank section; omit content to insert a missing section declared-empty, or carry the replacement content.");
             }
 
             return "replace_section";

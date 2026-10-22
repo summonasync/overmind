@@ -165,7 +165,7 @@ public sealed class PlanningArtifact
         ApplyBodyMutation(body, logNote, source);
     }
 
-    public void PatchSection(string section, string content, string? logNote = null, PlanningLogSource? source = null)
+    public void PatchSection(string section, string? content, string? logNote = null, PlanningLogSource? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(section);
 
@@ -174,13 +174,26 @@ public sealed class PlanningArtifact
             throw PlanningException.PatchLogSectionNotReplaceable();
         }
 
-        if (!PlanningSections.TryFind(section, Body, out _))
+        if (PlanningSections.TryFind(section, Body, out _))
+        {
+            if (content is null)
+            {
+                throw PlanningException.SectionContentRequiredForReplace(section);
+            }
+
+            RequireChangeNoteWhenFrozen(logNote);
+            ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote, source);
+            return;
+        }
+
+        if (PlanningSectionCanonicalizer.HasInlineSection(section, Body) ||
+            (Kind == PlanningArtifactKind.Task && !PlanningTaskSections.IsDeclared(section)))
         {
             throw SectionNotFound(section);
         }
 
         RequireChangeNoteWhenFrozen(logNote);
-        ApplyBodyMutation(PlanningSections.Replace(section, Body, content), logNote, source);
+        ApplyBodyMutation(PlanningSections.Insert(section, Body, content), logNote, source);
     }
 
     public PlanningAcTickResult TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null) =>
@@ -369,7 +382,8 @@ public sealed class PlanningArtifact
             PlanningSections.List(Body),
             PlanningSectionCanonicalizer.HasInlineSection(section, Body)
                 ? PlanningException.InlineSectionHint(section)
-                : null);
+                : null,
+            Kind == PlanningArtifactKind.Task ? string.Join(", ", PlanningTaskSections.Declared) : null);
 
     private void RequireLogHistoryAppendable(string incomingBody)
     {

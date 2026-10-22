@@ -5,6 +5,8 @@ namespace Overmind.Core;
 
 public static partial class PlanningSections
 {
+    public const string EmptyMarker = "(none)";
+
     [GeneratedRegex(@"(?m)^[ \t]*<(?<name>[a-z][a-z0-9-]*)>[ \t]*\r?$", RegexOptions.None, 2000)]
     private static partial Regex OpenTagPattern();
 
@@ -52,6 +54,28 @@ public static partial class PlanningSections
         var wrapped = sanitized.Length == 0 ? newLine : string.Concat(newLine, sanitized, newLine);
 
         return string.Concat(body.AsSpan(0, openEnd), wrapped, body.AsSpan(section.CloseIndex));
+    }
+
+    // Insert is the append-side twin of Replace: patch cannot create a section, so a patch of a
+    // declared-but-absent section lands here. Absent or blank content renders the declared-empty
+    // marker so every task section is either caller-written or visibly empty — never missing.
+    public static string Insert(string name, string body, string? content)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(body);
+
+        var sanitized = string.IsNullOrWhiteSpace(content)
+            ? EmptyMarker
+            : StripWrapperTags(name, content);
+        if (sanitized.Length == 0)
+        {
+            sanitized = EmptyMarker;
+        }
+
+        var section = string.Concat("<", name, ">\n", sanitized, "\n</", name, ">\n");
+        return body.Length == 0 || body.EndsWith('\n')
+            ? string.Concat(body, section)
+            : string.Concat(body, "\n", section);
     }
 
     public static string Normalize(string body)

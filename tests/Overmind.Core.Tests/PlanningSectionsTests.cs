@@ -560,4 +560,59 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
         logLines[0].Date.ShouldBe(new DateOnly(2026, 9, 14));
         logLines[0].Text.ShouldStartWith("done. `ReimportAsync` three-way diff");
     }
+
+    [Fact]
+    public void Insert_AppendsSectionWithContent_AfterExistingBody()
+    {
+        var body = PlanningSections.Insert("obstacles", "<goal>\nShip.\n</goal>\n", "- none yet");
+
+        body.ShouldBe("<goal>\nShip.\n</goal>\n<obstacles>\n- none yet\n</obstacles>\n");
+    }
+
+    [Fact]
+    public void Insert_BodyWithoutTrailingNewline_AddsTheSeparator()
+    {
+        var body = PlanningSections.Insert("refs", "<goal>\nShip.\n</goal>", "docs/plans/x.md");
+
+        body.ShouldBe("<goal>\nShip.\n</goal>\n<refs>\ndocs/plans/x.md\n</refs>\n");
+    }
+
+    [Fact]
+    public void Insert_EmptyBody_RendersTheSectionAlone()
+    {
+        PlanningSections.Insert("scope", string.Empty, "Everything.").ShouldBe("<scope>\nEverything.\n</scope>\n");
+    }
+
+    [Fact]
+    public void Insert_WithoutContent_RendersTheDeclaredEmptyMarker()
+    {
+        var body = PlanningSections.Insert("obstacles", "<goal>\nShip.\n</goal>\n", null);
+
+        body.ShouldBe("<goal>\nShip.\n</goal>\n<obstacles>\n(none)\n</obstacles>\n");
+        PlanningSections.Find("obstacles", body)!.Content.ShouldBe("(none)");
+    }
+
+    [Fact]
+    public void Insert_ContentThatStripsToEmpty_FallsBackToTheMarker()
+    {
+        var body = PlanningSections.Insert("refs", string.Empty, "<refs>\n</refs>");
+
+        body.ShouldBe("<refs>\n(none)\n</refs>\n");
+    }
+
+    [Fact]
+    public void Insert_WhitespaceContent_RendersTheDeclaredEmptyMarker()
+    {
+        var body = PlanningSections.Insert("scope", string.Empty, "   \n  ");
+
+        body.ShouldBe("<scope>\n(none)\n</scope>\n");
+    }
+
+    [Fact]
+    public void Insert_PreservesEveryExistingByte()
+    {
+        const string body = "# Task\r\n\r\n<goal>\nShip.\n</goal>\n";
+
+        PlanningSections.Insert("log", body, null).ShouldStartWith(body);
+    }
 }

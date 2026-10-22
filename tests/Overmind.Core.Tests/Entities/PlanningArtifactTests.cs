@@ -472,20 +472,71 @@ ship the guard
     }
 
     [Fact]
-    public void PatchSection_MissingSection_ThrowsWithPresentSectionNames()
+    public void PatchSection_MissingSection_OnDocumentKind_InsertsAnyRequestedTag()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
 
-        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("refs", "content"));
+        artifact.PatchSection("refs", "- keep this line");
+
+        artifact.Body.ShouldContain("<refs>\n- keep this line\n</refs>");
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(PatchBody);
+    }
+
+    [Fact]
+    public void PatchSection_UnknownSection_OnTask_ThrowsListingPresentAndVocabulary()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("banana", "content"));
 
         ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
         ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
-        ex.Message.ShouldContain("refs");
+        ex.Message.ShouldContain("banana");
         ex.Message.ShouldContain("goal");
         ex.Message.ShouldContain("scope");
         ex.Message.ShouldContain("acceptance-criteria");
         ex.Message.ShouldContain("log");
+        ex.Message.ShouldContain("Accepted sections for tasks");
+        ex.Message.ShouldContain("obstacles");
         ex.Message.ShouldNotContain("one-line");
+    }
+
+    [Fact]
+    public void PatchSection_MissingDeclaredSection_OnTask_InsertsWithContent()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
+
+        artifact.PatchSection("obstacles", "- the parser rejects fenced tags");
+
+        artifact.Body.ShouldContain("<obstacles>\n- the parser rejects fenced tags\n</obstacles>");
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(PatchBody);
+    }
+
+    [Fact]
+    public void PatchSection_MissingDeclaredSection_OnTask_WithoutContent_InsertsDeclaredEmpty()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
+
+        artifact.PatchSection("obstacles", null);
+
+        PlanningSections.Find("obstacles", artifact.Body)!.Content.ShouldBe(PlanningSections.EmptyMarker);
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void PatchSection_ExistingSection_WithoutContent_ThrowsContentRequired()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("goal", null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.SectionContentRequiredForReplace);
+        ex.Message.ShouldContain("goal");
+        artifact.Body.ShouldBe(PatchBody);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
     }
 
     [Fact]
@@ -501,6 +552,21 @@ ship the guard
         ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
         ex.Message.ShouldContain("A one-line '<anti-scope>…</anti-scope>' section exists");
         ex.Message.ShouldContain("re-send the body once");
+    }
+
+    [Fact]
+    public void PatchSection_MissingDeclaredSection_OnTask_WithInlineCandidate_DoesNotInsertADuplicate()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId,
+            PlanningArtifactKind.Task,
+            "<goal>\nShip.\n</goal>\n\n<obstacles>None yet.</obstacles>");
+
+        var ex = Should.Throw<PlanningException>(() => artifact.PatchSection("obstacles", "the real list"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        artifact.Body.ShouldNotContain("<obstacles>\n");
+        artifact.Version.ShouldBe(1);
     }
 
     [Fact]

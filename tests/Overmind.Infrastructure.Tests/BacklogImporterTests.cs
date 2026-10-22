@@ -1337,7 +1337,8 @@ public sealed class BacklogImporterTests : IDisposable
         var feature = await LoadFeatureAsync("010-demo");
         feature.ShouldNotBeNull();
         feature.Title.ShouldBe("Demo feature title");
-        feature!.Artifacts.Single(a => a.Order == 5).Body.ShouldBe("ui-created task");
+        feature!.Artifacts.Single(a => a.Order == 5).Body.ShouldBe(
+            PlanningTaskSections.WithSkeleton("ui-created task"));
     }
 
     [Fact]

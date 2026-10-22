@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Overmind.Core;
 using Shouldly;
 using Xunit;
 
@@ -2118,14 +2119,14 @@ public sealed class AgentPlanningApiTests : IDisposable
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
-        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
         {
-            Kind = "spec",
-            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n\n<scope>\nEverything.\n</scope>\n"
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nOld goal.\n</goal>\n\n<scope>\nEverything.\n</scope>\n"
         });
 
         var response = await _client.PostAsJsonAsync(
-            AgentPatchUrl(spec.Id),
+            AgentPatchUrl(task.Id),
             new { Op = "replace_section", Section = "banana", Content = "nope" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -2134,6 +2135,117 @@ public sealed class AgentPlanningApiTests : IDisposable
         problem.Detail!.ShouldContain("Sections present");
         problem.Detail!.ShouldContain("goal");
         problem.Detail!.ShouldContain("scope");
+        problem.Detail!.ShouldContain("Accepted sections for tasks");
+        problem.Detail!.ShouldContain("obstacles");
+    }
+
+    [Fact]
+    public async Task Patch_UnknownTagName_OnSpec_InsertsTheSection()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nOld goal.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "refs", Content = "- the spec doc" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("<refs>\n- the spec doc\n</refs>");
+    }
+
+    [Fact]
+    public async Task Patch_SectionWithoutContent_OnMissingSection_InsertsDeclaredEmpty()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<goal>\nWire it.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id), new { Op = "replace_section", Section = "scope" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Version.ShouldBe(2);
+        artifact.Body.ShouldContain("<scope>\n(none)\n</scope>");
+    }
+
+    [Fact]
+    public async Task Patch_ExistingSectionWithoutContent_Returns400SectionContentRequired()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nWire it.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id), new { Op = "replace_section", Section = "goal" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("SectionContentRequiredForReplace");
+        problem.Detail!.ShouldContain("goal");
+    }
+
+    [Fact]
+    public async Task Upsert_TaskCreate_MaterializesTheDeclaredSkeleton()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nWire it.\n</goal>\n"
+        });
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        artifact!.Body.ShouldStartWith("# Task\n\n<goal>\nWire it.\n</goal>");
+        foreach (var section in PlanningTaskSections.Declared)
+        {
+            artifact.Body.ShouldContain($"<{section}>");
+        }
+        artifact.Body.ShouldContain("<obstacles>\n(none)\n</obstacles>");
+    }
+
+    [Fact]
+    public async Task UpsertTasks_ItemWithoutObstacles_YieldsObstaclesSectionAndPatchSucceeds()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var batch = await _client.PostAsJsonAsync(
+            AgentTasksUrl(project.Id, "feat"),
+            new { Tasks = new[] { new { Body = "# T\n\n<goal>\nShip.\n</goal>\n" } } });
+        batch.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var created = await batch.Content.ReadFromJsonAsync<TaskBatchJson>(JsonOptions);
+        var task = created!.Artifacts.ShouldHaveSingleItem();
+
+        task.Body.ShouldContain("<obstacles>\n(none)\n</obstacles>");
+
+        var patched = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "replace_section", Section = "obstacles", Content = "- the index is flaky" });
+
+        patched.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var after = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{task.Id}", JsonOptions);
+        after!.Body.ShouldContain("<obstacles>\n- the index is flaky\n</obstacles>");
     }
 
     [Fact]
@@ -2253,7 +2365,6 @@ public sealed class AgentPlanningApiTests : IDisposable
     [Theory]
     [InlineData("replace_section", "   ", "content", null, null)]
     [InlineData("replace_section", "goal", "   ", null, null)]
-    [InlineData("replace_section", "goal", null, null, null)]
     [InlineData("tick_ac", null, null, null, "")]
     [InlineData("tick_ac", null, null, null, "   ")]
     [InlineData("tick_ac", null, null, null, null)]
@@ -2289,11 +2400,11 @@ public sealed class AgentPlanningApiTests : IDisposable
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
-        var body = "# Task\n\n<goal>\nWire it.\n</goal>\n";
+        var body = PlanningTaskSections.WithSkeleton("# Task\n\n<goal>\nWire it.\n</goal>\n");
         var task = await CreateAgentArtifactAsync(project.Id, "feat", new
         {
             Kind = "task",
-            Body = body,
+            Body = "# Task\n\n<goal>\nWire it.\n</goal>\n",
             Brief = "first brief"
         });
 
@@ -2417,7 +2528,8 @@ public sealed class AgentPlanningApiTests : IDisposable
         read.Order.ShouldBe(2);
         read.UpdatedAt.ShouldNotBe(default);
         read.Brief.ShouldBe("Wire the endpoints");
-        read.Body.ShouldBe("# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n");
+        read.Body.ShouldBe(PlanningTaskSections.WithSkeleton(
+            "# Wire the API\n\n<goal>\nExpose the endpoints.\n</goal>\n\n<obstacles>\nNone yet.\n</obstacles>\n"));
         read.MissingSections.ShouldBeNull();
     }
 

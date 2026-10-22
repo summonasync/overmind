@@ -328,7 +328,7 @@ public sealed class PlanningApiTests : IDisposable
 
         var task = artifacts[1];
         task.GetProperty("kind").GetString().ShouldBe("task");
-        task.GetProperty("body").GetString().ShouldBe("task body");
+        task.GetProperty("body").GetString().ShouldBe(Overmind.Core.PlanningTaskSections.WithSkeleton("task body"));
         task.GetProperty("brief").GetString().ShouldBe("Wire the endpoints");
     }
 
