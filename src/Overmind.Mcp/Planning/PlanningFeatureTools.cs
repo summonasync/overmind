@@ -251,31 +251,45 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_claim_feature", Destructive = false, Idempotent = false)]
-    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. Lane discipline rides on the claim: a feature whose lane already holds an alive claim by a DIFFERENT alias, or whose lane still carries another open feature (serial lane), refuses with 409 — overrideLaneCheck=true is the explicit escape hatch and is echoed back. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
+    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. alias and vendor are optional — omitted values fall back to the identity the session registered with (OVERMIND_ALIAS/OVERMIND_VENDOR), and a claim-locked write that finds a stale/ended claim held by the caller's own alias+vendor adopts it and proceeds instead of 409ing. Lane discipline rides on the claim: a feature whose lane already holds an alive claim by a DIFFERENT alias, or whose lane still carries another open feature (serial lane), refuses with 409 — overrideLaneCheck=true is the explicit escape hatch and is echoed back. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
     public async Task<CallToolResult> ClaimFeature(
         [Description("Slug of the feature to claim, as shown on the board.")] string slug,
-        [Description("Your display alias, max 32 chars (e.g. Dan).")] string alias,
-        [Description("Your vendor string, max 32 chars (e.g. qwen, claude).")] string vendor,
+        [Description("Your display alias, max 32 chars (e.g. Dan); omit to use the alias the adapter session registered with.")] string? alias = null,
+        [Description("Your vendor string, max 32 chars (e.g. qwen, claude); omit to use the vendor the adapter session registered with.")] string? vendor = null,
         [Description("True to skip the lane busy/serial checks — the explicit escape hatch, echoed in the response.")] bool overrideLaneCheck = false,
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        if (alias.Trim().Length > ClaimIdentityCap)
+        var trimmedAlias = BlankToNull(alias);
+        var trimmedVendor = BlankToNull(vendor);
+
+        if (trimmedAlias?.Length > ClaimIdentityCap)
         {
             throw new McpException(
-                $"Alias '{alias.Trim()}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
+                $"Alias '{trimmedAlias}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
         }
 
-        if (vendor.Trim().Length > ClaimIdentityCap)
+        if (trimmedVendor?.Length > ClaimIdentityCap)
         {
             throw new McpException(
-                $"Vendor '{vendor.Trim()}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
+                $"Vendor '{trimmedVendor}' exceeds the {ClaimIdentityCap}-character cap — shorten it and retry.");
         }
 
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
+        var payload = new JsonObject { ["overrideLaneCheck"] = overrideLaneCheck };
+        if (trimmedAlias is not null)
+        {
+            payload["alias"] = trimmedAlias;
+        }
+
+        if (trimmedVendor is not null)
+        {
+            payload["vendor"] = trimmedVendor;
+        }
+
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}/claim",
-            new { alias = alias.Trim(), vendor = vendor.Trim(), overrideLaneCheck },
+            payload,
             ct), readback: null, ct);
 
         var claim = new JsonObject

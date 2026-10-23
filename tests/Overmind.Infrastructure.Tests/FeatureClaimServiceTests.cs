@@ -64,6 +64,14 @@ public sealed class FeatureClaimServiceTests : IDisposable
         await _context.SaveChangesAsync();
     }
 
+    private async Task<Guid> AddSessionAsync(string alias, string vendor, DateTime lastSeenAt)
+    {
+        var session = AgentSession.Restore(Guid.NewGuid(), alias, vendor, lastSeenAt, lastSeenAt);
+        _context.AgentSessions.Add(session);
+        await _context.SaveChangesAsync();
+        return session.Id;
+    }
+
     [Fact]
     public async Task Claim_FreeFeature_ClaimsAndLogs()
     {
@@ -206,6 +214,54 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Claim_ZeroIdentityParams_BindsTheSessionIdentity()
+    {
+        await CreateFeatureAsync();
+        var callerId = await AddSessionAsync("Tucker", "qwen", DateTime.UtcNow);
+
+        var claimed = await CreateClaimService().ClaimAsync(_projectId, "feat-a", null, null, callerId);
+
+        claimed.ClaimedByAlias.ShouldBe("Tucker");
+        claimed.ClaimedByVendor.ShouldBe("qwen");
+        claimed.ClaimSessionId.ShouldBe(callerId);
+        PlanningLog.Parse(claimed.Body).Last().Text.ShouldBe("Tucker by qwen claimed the feature");
+    }
+
+    [Fact]
+    public async Task Claim_VendorOnly_FillsAliasFromTheSession()
+    {
+        await CreateFeatureAsync();
+        var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
+
+        var claimed = await CreateClaimService().ClaimAsync(_projectId, "feat-a", "Dan", null, callerId);
+
+        claimed.ClaimedByAlias.ShouldBe("Dan");
+        claimed.ClaimedByVendor.ShouldBe("qwen");
+    }
+
+    [Fact]
+    public async Task Claim_UnregisteredSessionWithZeroIdentity_Throws()
+    {
+        await CreateFeatureAsync();
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => CreateClaimService()
+            .ClaimAsync(_projectId, "feat-a", null, null, Guid.NewGuid()));
+
+        ex.Message.ShouldContain("not registered");
+    }
+
+    [Fact]
+    public async Task Claim_HumanDoorWithoutIdentity_Throws()
+    {
+        await CreateFeatureAsync();
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => CreateClaimService()
+            .ClaimAsync(_projectId, "feat-a", null, null, null));
+
+        ex.Message.ShouldContain("human door");
+    }
+
+    [Fact]
     public async Task Claim_ZeroThreshold_DisablesStale()
     {
         await CreateFeatureAsync();
@@ -345,6 +401,97 @@ public sealed class FeatureClaimServiceTests : IDisposable
 
         ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
         ex.Message.ShouldContain("Dan by qwen (alive)");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_StaleSelfClaim_AdoptsAndProceeds()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+        var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", callerId);
+
+        var adopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        adopted.ClaimSessionId.ShouldBe(callerId);
+        adopted.ClaimedByAlias.ShouldBe("Dan");
+        PlanningLog.Parse(adopted.Body).Last().Text
+            .ShouldBe("session restarted, claim adopted by Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_EndedSelfClaim_AdoptsAndProceeds()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+        var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", callerId);
+
+        var adopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        adopted.ClaimSessionId.ShouldBe(callerId);
+        PlanningLog.Parse(adopted.Body).Last().Text
+            .ShouldBe("session restarted, claim adopted by Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_AliveSelfIdentityClaim_ThrowsNamingHolder()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.EnsureHolderAsync(_projectId, "feat-a", callerId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
+        ex.Message.ShouldContain("Dan by qwen (alive)");
+        var untouched = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        untouched.ClaimSessionId.ShouldBe(HolderSessionId);
+        PlanningLog.Parse(untouched.Body).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task EnsureHolder_StaleForeignClaim_RefusesWrites()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+        var callerId = await AddSessionAsync("Bobby", "claude", DateTime.UtcNow);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.EnsureHolderAsync(_projectId, "feat-a", callerId));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
+        ex.Message.ShouldContain("Dan by qwen (stale)");
+        var untouched = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        untouched.ClaimSessionId.ShouldBe(HolderSessionId);
+        PlanningLog.Parse(untouched.Body).Single().Text.ShouldBe("Dan by qwen claimed the feature");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_UnregisteredCallerOnStaleClaim_StillRefuses()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.EnsureHolderAsync(_projectId, "feat-a", Guid.NewGuid()));
+
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
+        ex.Message.ShouldContain("(stale)");
     }
 
     [Fact]

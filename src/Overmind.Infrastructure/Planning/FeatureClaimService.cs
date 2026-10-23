@@ -24,11 +24,12 @@ public sealed class FeatureClaimService
     // after the alive-holder throw, and never gate the restart-adopt of a feature already claimed
     // by the same alias — the agent keeps its lane across adapter restarts.
     public async Task<PlanningFeature> ClaimAsync(
-        Guid projectId, string slug, string alias, string vendor, Guid? sessionId = null,
+        Guid projectId, string slug, string? alias, string? vendor, Guid? sessionId = null,
         bool overrideLaneCheck = false, CancellationToken ct = default)
     {
         var project = await RequireProjectAsync(projectId, ct);
         var feature = await RequireFeatureAsync(projectId, slug, ct);
+        (alias, vendor) = await ResolveIdentityAsync(alias, vendor, sessionId, ct);
         var now = DateTime.UtcNow;
         var isHuman = sessionId is null;
         var source = isHuman ? PlanningLogSource.Ui : PlanningLogSource.Agent;
@@ -58,8 +59,7 @@ public sealed class FeatureClaimService
                     slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
             }
 
-            var sameAlias = string.Equals(
-                feature.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal);
+            var sameAlias = string.Equals(feature.ClaimedByAlias, alias, StringComparison.Ordinal);
 
             if (!isHuman && !sameAlias && !overrideLaneCheck && feature.Lane is not null)
             {
@@ -67,7 +67,7 @@ public sealed class FeatureClaimService
             }
 
             var adopted = !isHuman && liveness == AgentSessionLiveness.Ended && sameAlias
-                          && string.Equals(feature.ClaimedByVendor, vendor.Trim(), StringComparison.Ordinal);
+                          && string.Equals(feature.ClaimedByVendor, vendor, StringComparison.Ordinal);
             var note = adopted
                 ? $"session restarted, claim adopted by {alias} by {vendor}"
                 : $"{alias} by {vendor} took over {liveness.ToString().ToLowerInvariant()} claim " +
@@ -200,6 +200,10 @@ public sealed class FeatureClaimService
         await EnsureHolderCoreAsync(feature, sessionId, ct);
     }
 
+    // Write-path gate behind the ClaimLockFilter. A stale/ended claim held by the caller's own
+    // alias+vendor is adopted on the spot (fresh session binding, feature log line) so an adapter
+    // restart never blocks its own writes; a foreign holder keeps the explicit claim call as the
+    // only takeover door, alive or stale.
     private async Task EnsureHolderCoreAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
     {
         if (feature.ClaimSessionId is not { } holderId || holderId == sessionId)
@@ -208,8 +212,68 @@ public sealed class FeatureClaimService
         }
 
         var project = await RequireProjectAsync(feature.ProjectId, ct);
-        throw await ClaimHeldAsync(feature, project, holderId, ct);
+        var holder = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == holderId, ct);
+        var liveness = holder?.Liveness(DateTime.UtcNow, project.ClaimStaleThresholdMinutes)
+                       ?? AgentSessionLiveness.Ended;
+
+        if (liveness != AgentSessionLiveness.Alive && await TryAdoptAsync(feature, sessionId, ct))
+        {
+            return;
+        }
+
+        throw PlanningException.FeatureClaimHeld(
+            feature.Slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
     }
+
+    private async Task<bool> TryAdoptAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
+    {
+        if (sessionId is not { } callerId)
+        {
+            return false;
+        }
+
+        var caller = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == callerId, ct);
+        if (caller is null ||
+            !string.Equals(feature.ClaimedByAlias, caller.Alias, StringComparison.Ordinal) ||
+            !string.Equals(feature.ClaimedByVendor, caller.Vendor, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        feature.Claim(caller.Alias, caller.Vendor, callerId, now);
+        feature.AppendLog(
+            $"session restarted, claim adopted by {caller.Alias} by {caller.Vendor}",
+            PlanningLogSource.Agent);
+        await PersistAsync(feature.ProjectId, caller.Alias, caller.Vendor, callerId, now, ct);
+        return true;
+    }
+
+    private async Task<(string Alias, string Vendor)> ResolveIdentityAsync(
+        string? alias, string? vendor, Guid? sessionId, CancellationToken ct)
+    {
+        var knownAlias = BlankToIdentity(alias);
+        var knownVendor = BlankToIdentity(vendor);
+
+        if (knownAlias is not null && knownVendor is not null)
+        {
+            return (knownAlias, knownVendor);
+        }
+
+        if (sessionId is not { } callerId)
+        {
+            throw new ArgumentException("Alias and vendor are required to claim through the human door.");
+        }
+
+        var session = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == callerId, ct)
+                      ?? throw new ArgumentException(
+                          $"Session '{callerId}' is not registered — claim with explicit alias and vendor.");
+
+        return (knownAlias ?? session.Alias, knownVendor ?? session.Vendor);
+    }
+
+    private static string? BlankToIdentity(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private async Task<PlanningException> ClaimHeldAsync(
         PlanningFeature feature, Project project, Guid holderId, CancellationToken ct)

@@ -88,7 +88,7 @@ public sealed record PlanningFeatureCodePinResponse(
     int Version,
     string LastLogLine);
 
-public sealed record ClaimPlanningFeatureRequest(string Alias, string Vendor, bool OverrideLaneCheck = false);
+public sealed record ClaimPlanningFeatureRequest(string? Alias, string? Vendor, bool OverrideLaneCheck = false);
 
 public sealed record PlanningFeatureClaimResponse(
     string Slug,

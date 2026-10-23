@@ -2673,6 +2673,75 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningClaimFeature_Schema_MakesIdentityOptional()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_claim_feature")!;
+
+        var required = tool["inputSchema"]!["required"]!.AsArray()
+            .Select(r => r!.GetValue<string>())
+            .ToArray();
+        required.ShouldContain("slug");
+        required.ShouldNotContain("alias");
+        required.ShouldNotContain("vendor");
+        required.ShouldNotContain("projectId");
+
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("slug");
+        properties.ShouldContainKey("alias");
+        properties.ShouldContainKey("vendor");
+        properties.ShouldContainKey("overrideLaneCheck");
+        properties.ShouldContainKey("projectId");
+    }
+
+    [Fact]
+    public async Task PlanningClaimFeature_ZeroIdentity_OmitsIdentityFromThePayload()
+    {
+        var response = await Driver.CallToolAsync("planning_claim_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/claim", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body.ContainsKey("alias").ShouldBeFalse();
+        body.ContainsKey("vendor").ShouldBeFalse();
+        body["overrideLaneCheck"]!.GetValue<bool>().ShouldBeFalse();
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["claimedByAlias"]!.GetValue<string>().ShouldBe("Dan");
+        echo["claimState"]!.GetValue<string>().ShouldBe("alive");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningClaimFeature_BlankIdentity_TreatedAsOmitted()
+    {
+        var response = await Driver.CallToolAsync("planning_claim_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["alias"] = "   ",
+            ["vendor"] = ""
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var request = Stub.Requests.Single(r => r.Method == "POST"
+            && r.Path.EndsWith("/claim", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body.ContainsKey("alias").ShouldBeFalse();
+        body.ContainsKey("vendor").ShouldBeFalse();
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task PlanningClaimFeature_HeldByLiveForeignSession_NamesTheHolder()
     {
         Stub.Route(

@@ -72,6 +72,16 @@ public sealed class AgentSessionLockApiTests : IDisposable
             """);
     }
 
+    private async Task<Guid> SeedCallerSessionAsync(string alias, string vendor, DateTime lastSeenAt)
+    {
+        var callerId = Guid.NewGuid();
+        await ExecuteAsync($"""
+            INSERT OR REPLACE INTO AgentSessions (Id, Alias, Vendor, StartedAt, LastSeenAt, EndedAt)
+            VALUES ('{callerId.ToString().ToUpperInvariant()}', '{alias}', '{vendor}', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', '{lastSeenAt:yyyy-MM-dd HH:mm:ss}', NULL)
+            """);
+        return callerId;
+    }
+
     private async Task ClaimFeatureAsync(Guid projectId, string slug)
     {
         await ExecuteAsync($"""
@@ -450,6 +460,95 @@ public sealed class AgentSessionLockApiTests : IDisposable
         var echo = await response.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
         echo!.ClaimedByAlias.ShouldBe("Bobby");
         echo.ClaimState.ShouldBe("alive");
+    }
+
+    [Fact]
+    public async Task Claim_AgentDoor_ZeroIdentity_BindsTheSessionIdentity()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        var callerId = await SeedCallerSessionAsync("Tucker", "qwen", DateTime.UtcNow);
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/claim",
+            new { }, callerId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<ClaimJson>(JsonOptions);
+        echo!.ClaimedByAlias.ShouldBe("Tucker");
+        echo.ClaimedByVendor.ShouldBe("qwen");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{callerId.ToString().ToUpperInvariant()}'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Write_StaleSelfClaim_AdoptsAndProceeds()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow.AddHours(-2));
+        await ClaimFeatureAsync(project.Id, "claimable");
+        var callerId = await SeedCallerSessionAsync("Dan", "qwen", DateTime.UtcNow);
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/status",
+            new { Status = "inProgress", LogNote = "resuming" }, callerId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/claimable", JsonOptions);
+        feature!.Body.ShouldContain("session restarted, claim adopted by Dan by qwen");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{callerId.ToString().ToUpperInvariant()}'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Write_AliveSelfIdentityClaim_StillRefused()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow);
+        await ClaimFeatureAsync(project.Id, "claimable");
+        var callerId = await SeedCallerSessionAsync("Dan", "qwen", DateTime.UtcNow);
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/status",
+            new { Status = "inProgress", LogNote = "resuming" }, callerId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureClaimHeld");
+        problem.Detail!.ShouldContain("claim held by Dan by qwen (alive)");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{HolderSessionId.ToString().ToUpperInvariant()}'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Write_StaleForeignClaim_StillRefused()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow.AddHours(-2));
+        await ClaimFeatureAsync(project.Id, "claimable");
+        var callerId = await SeedCallerSessionAsync("Bobby", "claude", DateTime.UtcNow);
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/status",
+            new { Status = "inProgress", LogNote = "resuming" }, callerId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("FeatureClaimHeld");
+        problem.Detail!.ShouldContain("claim held by Dan by qwen (stale)");
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/claimable", JsonOptions);
+        feature!.Body.ShouldNotContain("session restarted");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{HolderSessionId.ToString().ToUpperInvariant()}'"))
+            .ShouldBe(1);
     }
 
     [Fact]
