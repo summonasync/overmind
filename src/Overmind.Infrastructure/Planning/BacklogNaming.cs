@@ -33,6 +33,7 @@ internal static class BacklogNaming
 
         foreach (var raw in source)
         {
+            lossless &= char.IsAscii(raw);
             var c = char.ToLowerInvariant(raw);
             if (c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-')
             {
@@ -46,7 +47,6 @@ internal static class BacklogNaming
             }
             else
             {
-                lossless &= char.IsAscii(raw);
                 dashPending = builder.Length > 0;
             }
         }

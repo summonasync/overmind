@@ -56,6 +56,20 @@ public sealed class BacklogNamingTests
         BacklogNaming.MirrorSlug("🚀 Launch 🚀", "fallback").ShouldBe("launch-fd57b9d5");
     }
 
+    [Theory]
+    [InlineData("Kelvin K units")]
+    [InlineData("İstanbul node")]
+    [InlineData("ſharp long s")]
+    public void MirrorSlug_NonAsciiTitleChars_MarkTheLossDeterministically(string title)
+    {
+        var slug = BacklogNaming.MirrorSlug(title, "fallback");
+
+        slug.Length.ShouldBeGreaterThan(9);
+        slug[^9].ShouldBe('-');
+        slug[^8..].All(char.IsAsciiHexDigit).ShouldBeTrue();
+        slug.ShouldBe(BacklogNaming.MirrorSlug(title, "fallback"));
+    }
+
     [Fact]
     public void MirrorSlug_EmptySlug_FallsBackWithMarker()
     {
