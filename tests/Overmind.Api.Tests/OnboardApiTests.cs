@@ -122,7 +122,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     {
         var name = $"onboard-{Guid.NewGuid():N}";
 
-        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.RegisteredDiskPath(name) });
 
         onboard.ProjectId.ShouldNotBe(Guid.Empty);
         onboard.ProjectName.ShouldBe(name);
@@ -134,7 +134,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     public async Task Onboard_SecondCallWithSameCwd_ReturnsCreatedFalseWithSameProject()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
-        var cwd = TestPaths.DiskPath(name);
+        var cwd = TestPaths.RegisteredDiskPath(name);
         var first = await OnboardAsync(new { Cwd = cwd });
 
         var second = await OnboardAsync(new { Cwd = cwd });
@@ -152,7 +152,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 
         var onboard = await OnboardAsync(new
         {
-            Cwd = Path.Combine(TestPaths.DiskPath($"parent-{Guid.NewGuid():N}"), "dup"),
+            Cwd = Path.Combine(TestPaths.RegisteredDiskPath($"parent-{Guid.NewGuid():N}"), "dup"),
         });
 
         onboard.Created.ShouldBeTrue();
@@ -167,7 +167,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 
         var onboard = await OnboardAsync(new
         {
-            Cwd = Path.Combine(TestPaths.DiskPath($"parent-{Guid.NewGuid():N}"), "dup"),
+            Cwd = Path.Combine(TestPaths.RegisteredDiskPath($"parent-{Guid.NewGuid():N}"), "dup"),
         });
 
         onboard.Created.ShouldBeTrue();
@@ -232,12 +232,73 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         onboard.Created.ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("/tmp")]
+    [InlineData("/var/tmp")]
+    public async Task Onboard_CreateFromTransientSystemTempCwd_ReturnsGuidanceAndLeavesListUnchanged(string root)
+    {
+        var before = await _client.GetFromJsonAsync<ProjectJson[]>("/api/projects", JsonOptions);
+        var cwd = Path.Combine(root, $"onboard-{Guid.NewGuid():N}");
+
+        var response = await _client.PostAsJsonAsync("/api/onboard", new { Cwd = cwd });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain(cwd);
+        problem.Detail.ShouldContain("project root");
+        problem.Detail.ShouldContain("OVERMIND_PROJECT_ID");
+        var after = await _client.GetFromJsonAsync<ProjectJson[]>("/api/projects", JsonOptions);
+        after!.Length.ShouldBe(before!.Length);
+    }
+
+    [Fact]
+    public async Task Onboard_CreateFromTmpDirEnvCwd_ReturnsGuidanceAndLeavesListUnchanged()
+    {
+        var previous = Environment.GetEnvironmentVariable("TMPDIR");
+        var tmpRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            $"overmind-tmpdir-{Guid.NewGuid():N}");
+        Environment.SetEnvironmentVariable("TMPDIR", tmpRoot);
+        try
+        {
+            var before = await _client.GetFromJsonAsync<ProjectJson[]>("/api/projects", JsonOptions);
+            var cwd = Path.Combine(tmpRoot, $"onboard-{Guid.NewGuid():N}");
+
+            var response = await _client.PostAsJsonAsync("/api/onboard", new { Cwd = cwd });
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+            problem!.Detail.ShouldNotBeNull();
+            problem.Detail.ShouldContain(cwd);
+            var after = await _client.GetFromJsonAsync<ProjectJson[]>("/api/projects", JsonOptions);
+            after!.Length.ShouldBe(before!.Length);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TMPDIR", previous);
+        }
+    }
+
+    [Fact]
+    public async Task Onboard_CreateFromTempCwdWithExplicitProjectId_ResolvesWithoutCreating()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var project = await CreateProjectAsync(name, TestPaths.RegisteredDiskPath(name));
+        var tempCwd = Path.Combine(Path.GetTempPath(), $"onboard-{Guid.NewGuid():N}");
+
+        var onboard = await OnboardAsync(new { Cwd = tempCwd, ProjectId = project.Id });
+
+        onboard.ProjectId.ShouldBe(project.Id);
+        onboard.Created.ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Onboard_CreateOmittedWithUnregisteredCwd_StillCreatesProject()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
 
-        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.RegisteredDiskPath(name) });
 
         onboard.Created.ShouldBeTrue();
         onboard.ProjectName.ShouldBe(name);

@@ -71,7 +71,7 @@ public sealed class OnboardSemanticBlockTests
             }));
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/onboard", new { Cwd = TestPaths.DiskPath(name) });
+        var response = await client.PostAsJsonAsync("/api/onboard", new { Cwd = TestPaths.RegisteredDiskPath(name) });
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var onboard = await response.Content.ReadFromJsonAsync<OnboardSemanticPayloadJson>(JsonOptions);

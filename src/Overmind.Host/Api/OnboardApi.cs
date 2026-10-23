@@ -72,6 +72,11 @@ public static class OnboardApi
                 return HttpErrors.NotFound(
                     $"No project is registered for the working directory '{normalizedCwd}'. Call overmind_onboard to register it, or pass projectId explicitly.");
             }
+            else if (TransientPathClassifier.IsTransient(normalizedCwd))
+            {
+                return HttpErrors.BadRequest(
+                    $"The working directory '{normalizedCwd}' is a transient path; projects are never registered from there. Run from the project root or set OVERMIND_PROJECT_ID.");
+            }
             else
             {
                 var name = await ResolveUniqueNameAsync(new DirectoryInfo(normalizedCwd).Name, db, ct);
