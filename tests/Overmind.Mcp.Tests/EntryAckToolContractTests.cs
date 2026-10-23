@@ -27,12 +27,12 @@ public sealed class EntryAckToolContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MissingProjectId_ThrowsThePlanningGuard()
+    public async Task MissingProjectId_ThrowsTheGuard()
     {
         var ex = await Should.ThrowAsync<McpException>(() => Tool().AckEntry(Canned.EntryId));
 
         ex.Message.ShouldBe(
-            "projectId is required for planning_* tools — entries tools resolve the project from cwd, planning tools do not.");
+            "projectId is required for this tool — unlike most tools it does not fall back to OVERMIND_PROJECT_ID or the working directory.");
         _stub.Requests.ShouldBeEmpty();
     }
 

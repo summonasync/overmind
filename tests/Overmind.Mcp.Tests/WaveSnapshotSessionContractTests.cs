@@ -15,7 +15,7 @@ public sealed class WaveSnapshotSessionContractTests : McpSessionTestBase
 
         var result = response["result"]!;
         result["isError"]!.GetValue<bool>().ShouldBeTrue();
-        Canned.ToolResultText(response).ShouldContain("projectId is required for planning_* tools");
+        Canned.ToolResultText(response).ShouldContain("projectId is required for this tool");
     }
 
     [Fact]

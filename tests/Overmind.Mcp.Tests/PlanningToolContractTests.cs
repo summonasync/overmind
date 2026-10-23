@@ -212,60 +212,128 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Theory]
-    [InlineData("planning_list_features")]
-    [InlineData("planning_task_queue")]
-    [InlineData("planning_materialize_status")]
-    public async Task PlanningReads_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper(string tool)
-    {
-        var response = await Driver.CallToolAsync(tool, new JsonObject());
-
-        var text = ToolErrorText(response);
-        text.ShouldContain("projectId is required");
-        text.ShouldContain("planning_");
-        text.ShouldContain("cwd");
-        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task PlanningMaterialize_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper()
-    {
-        var response = await Driver.CallToolAsync("planning_materialize", new JsonObject());
-
-        var text = ToolErrorText(response);
-        text.ShouldContain("projectId is required");
-        text.ShouldContain("planning_");
-        text.ShouldContain("cwd");
-        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
-    }
-
-    [Theory]
-    [InlineData("planning_read_feature", """{"slug":"demo-feature"}""")]
-    [InlineData("planning_list_artifacts", """{"slug":"demo-feature"}""")]
-    [InlineData("planning_current_task", """{"slug":"demo-feature"}""")]
-    [InlineData("planning_create_feature", """{"slug":"demo-feature","title":"Demo"}""")]
-    [InlineData("planning_upsert_artifact", """{"featureSlug":"demo-feature","kind":"spec","body":"<goal>body</goal>"}""")]
-    [InlineData("planning_upsert_tasks", """{"featureSlug":"demo-feature","tasks":[]}""")]
-    [InlineData("planning_set_feature_status", """{"slug":"demo-feature","status":"inProgress","logNote":"note"}""")]
-    [InlineData("planning_update_feature", """{"slug":"demo-feature","logNote":"note"}""")]
-    [InlineData("planning_move_feature", """{"slug":"demo-feature","move":"up"}""")]
-    [InlineData("planning_claim_feature", """{"slug":"demo-feature","alias":"Dan","vendor":"claude"}""")]
-    [InlineData("planning_unclaim_feature", """{"slug":"demo-feature"}""")]
-    [InlineData("planning_set_feature_priority", """{"slug":"demo-feature","priority":"p1"}""")]
-    [InlineData("planning_pin_feature_code", """{"slug":"demo-feature"}""")]
-    [InlineData("planning_list_feature_dependencies", """{"slug":"demo-feature"}""")]
-    [InlineData("planning_add_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""")]
-    [InlineData("planning_remove_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""")]
-    [InlineData("planning_import_feature", """{"path":"/repo/BACKLOG/058-agent-side-import"}""")]
-    [InlineData("planning_export_backlog", """{"targetPath":"/tmp/demo-snapshot"}""")]
-    public async Task PlanningRequiredProjectIdTools_MissingProjectId_NamesTheArgumentInsteadOfTheBlandWrapper(
-        string tool, string arguments)
+    [InlineData("planning_list_features", "{}", "GET",
+        "/api/agent/projects/{projectId}/planning/features")]
+    [InlineData("planning_task_queue", "{}", "GET",
+        "/api/agent/projects/{projectId}/planning/task-queue")]
+    [InlineData("planning_materialize_status", "{}", "GET",
+        "/api/agent/projects/{projectId}/planning/materialization-status")]
+    [InlineData("planning_read_feature", """{"slug":"demo-feature"}""", "GET",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature")]
+    [InlineData("planning_list_artifacts", """{"slug":"demo-feature"}""", "GET",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/artifacts")]
+    [InlineData("planning_current_task", """{"slug":"demo-feature"}""", "GET",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/current")]
+    [InlineData("planning_create_feature", """{"slug":"new-feature","title":"Demo"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features")]
+    [InlineData("planning_upsert_artifact", """{"featureSlug":"demo-feature","kind":"spec","body":"<goal>body</goal>"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/artifacts")]
+    [InlineData("planning_upsert_tasks", """{"featureSlug":"demo-feature","tasks":[{"body":"# Task"}]}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/artifacts/tasks")]
+    [InlineData("planning_set_feature_status", """{"slug":"demo-feature","status":"inProgress","logNote":"note"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/status")]
+    [InlineData("planning_update_feature", """{"slug":"demo-feature","logNote":"note"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/update")]
+    [InlineData("planning_move_feature", """{"slug":"demo-feature","move":"up"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/queue-move")]
+    [InlineData("planning_claim_feature", """{"slug":"demo-feature","alias":"Dan","vendor":"claude"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/claim")]
+    [InlineData("planning_unclaim_feature", """{"slug":"demo-feature"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/unclaim")]
+    [InlineData("planning_set_feature_priority", """{"slug":"demo-feature","priority":"p1"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/priority")]
+    [InlineData("planning_pin_feature_code", """{"slug":"demo-feature"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/pin-code")]
+    [InlineData("planning_list_feature_dependencies", """{"slug":"demo-feature"}""", "GET",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/dependencies")]
+    [InlineData("planning_add_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/dependencies")]
+    [InlineData("planning_remove_feature_dependency", """{"slug":"demo-feature","blockedBySlug":"other-feature"}""", "DELETE",
+        "/api/agent/projects/{projectId}/planning/features/demo-feature/dependencies/other-feature")]
+    [InlineData("planning_import_feature", """{"path":"/repo/BACKLOG/058-agent-side-import"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/import")]
+    [InlineData("planning_export_backlog", """{"targetPath":"/tmp/demo-snapshot"}""", "POST",
+        "/api/agent/projects/{projectId}/planning/export")]
+    [InlineData("planning_materialize", """{"force":true}""", "POST",
+        "/api/projects/{projectId}/planning/materialize")]
+    public async Task PlanningTools_WithoutProjectId_ResolveThroughTheOnboardCwdThenProxy(
+        string tool, string arguments, string method, string expectedPath)
     {
         var response = await Driver.CallToolAsync(tool, JsonNode.Parse(arguments)!.AsObject());
 
+        response["result"]!["isError"].ShouldBeNull();
+
+        var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        var onboardBody = JsonNode.Parse(onboard.Body)!;
+        onboardBody["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        onboardBody["create"]!.GetValue<bool>().ShouldBeFalse();
+
+        Stub.Requests.ShouldContain(r =>
+            r.Method == method && r.Path == expectedPath.Replace("{projectId}", Canned.ProjectId.ToString()));
+    }
+
+    [Fact]
+    public async Task PlanningTools_ExplicitProjectId_SkipsTheOnboardRoundTrip()
+    {
+        var response = await Driver.CallToolAsync("planning_list_features", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
+        FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features");
+    }
+
+    [Fact]
+    public async Task PlanningTools_ProjectIdEnvFallback_SkipsTheOnboardRoundTrip()
+    {
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_PROJECT_ID"] = Canned.ProjectId.ToString()
+        });
+        await driver.InitializeAsync();
+
+        var response = await driver.CallToolAsync("planning_task_queue", new JsonObject());
+
+        response["result"]!["isError"].ShouldBeNull();
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
+        FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/task-queue");
+    }
+
+    [Fact]
+    public async Task PlanningTools_ExplicitProjectId_WinsOverTheEnvFallback()
+    {
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_PROJECT_ID"] = Canned.SecondProjectId.ToString()
+        });
+        await driver.InitializeAsync();
+
+        var response = await driver.CallToolAsync("planning_list_features", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
+        FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Path == $"/api/agent/projects/{Canned.SecondProjectId}/planning/features");
+    }
+
+    [Fact]
+    public async Task PlanningTools_UnresolvableCwd_ReturnsTheGuidanceWithoutHittingPlanning()
+    {
+        Stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+
+        var response = await Driver.CallToolAsync("planning_list_features", new JsonObject());
+
         var text = ToolErrorText(response);
-        text.ShouldContain("projectId is required");
-        text.ShouldContain("planning_");
-        text.ShouldContain("cwd");
+        text.ShouldContain("Could not resolve the project for the working directory");
+        text.ShouldContain("No project is registered for the working directory");
+        text.ShouldContain("Pass projectId explicitly");
+        text.ShouldContain("overmind_onboard");
         Stub.Requests.ShouldNotContain(r => r.Path.Contains("/planning/", StringComparison.Ordinal));
     }
 

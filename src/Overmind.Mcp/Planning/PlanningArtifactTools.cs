@@ -30,15 +30,18 @@ public sealed class PlanningArtifactTools
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
     private readonly PlanningArtifactAliasResolver _aliases;
+    private readonly ProjectResolver _projects;
 
     public PlanningArtifactTools(
         OvermindApiClient api,
         MutationGuard mutations,
-        PlanningArtifactAliasResolver aliases)
+        PlanningArtifactAliasResolver aliases,
+        ProjectResolver projects)
     {
         _api = api;
         _mutations = mutations;
         _aliases = aliases;
+        _projects = projects;
     }
 
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
@@ -105,18 +108,14 @@ public sealed class PlanningArtifactTools
         [Description("Optional one-line brief of a task artifact, max 500 chars; not allowed for other kinds.")] string? brief = null,
         [Description("Optional task-only blockedBy: sibling task orders of the same feature this task waits on. Re-upsert replaces the edge set declaratively (empty array clears); omitted preserves the current edges on update and sets none on create.")] int[]? blockedBy = null,
         [Description("Validate the full payload and persist nothing — the response echoes the would-be id and version marked dryRun; default false.")] bool? dryRun = null,
-        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
-        if (projectId is null)
-        {
-            throw new McpException(PlanningToolText.ProjectIdRequired);
-        }
-
         UpsertPayloadLint.PointerLines("body", body);
 
         var normalizedKind = NormalizeKind(kind);
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var payload = new JsonObject
         {
             ["kind"] = normalizedKind,
@@ -146,10 +145,10 @@ public sealed class PlanningArtifactTools
             string.IsNullOrWhiteSpace(logNote)
                 ? null
                 : await UpsertArtifactReadback.ResolveAsync(
-                    _api, projectId.Value, featureSlug, normalizedKind, order, logNote, probeCt);
+                    _api, resolved, featureSlug, normalizedKind, order, logNote, probeCt);
 
         var artifact = await _mutations.SendAsync(() => _api.PostAsync(
-            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
+            $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts",
             payload,
             ct, operationId), Probe, ct);
         return CompactArtifact(artifact);
@@ -161,15 +160,10 @@ public sealed class PlanningArtifactTools
         [Description("Slug of the feature to create or update tasks in.")] string featureSlug,
         [Description("Array of task items, each an object: body (required), order, review, logNote, brief, blockedBy.")] JsonElement tasks,
         [Description("Validate the whole batch and persist nothing — the response echoes the would-be orders and ids marked dryRun; default false.")] bool? dryRun = null,
-        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
-        if (projectId is null)
-        {
-            throw new McpException(PlanningToolText.ProjectIdRequired);
-        }
-
         var payload = new JsonObject
         {
             ["tasks"] = BuildTaskItems(tasks)
@@ -180,8 +174,9 @@ public sealed class PlanningArtifactTools
             payload["dryRun"] = true;
         }
 
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var batch = await _mutations.SendAsync(() => _api.PostAsync(
-            $"/api/agent/projects/{projectId}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts/tasks",
+            $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(featureSlug)}/artifacts/tasks",
             payload,
             ct, operationId), readback: null, ct);
         return CompactTaskBatch(batch);

@@ -10,11 +10,13 @@ public sealed class DirectiveTools
 {
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
+    private readonly ProjectResolver _projects;
 
-    public DirectiveTools(OvermindApiClient api, MutationGuard mutations)
+    public DirectiveTools(OvermindApiClient api, MutationGuard mutations, ProjectResolver projects)
     {
         _api = api;
         _mutations = mutations;
+        _projects = projects;
     }
 
     [McpServerTool(Name = "planning_append_directive", Destructive = false, Idempotent = false)]
@@ -25,21 +27,17 @@ public sealed class DirectiveTools
         "stamped with the sender's session identity. Nothing else is touched — no artifacts, no statuses, no " +
         "version bumps, the 409 claim lock itself stays intact. The holder sees open directives on " +
         "planning_current_task and planning_read_feature payloads (openDirectives, oldest first) and on queue " +
-        "rows as openDirectiveCount; the holder acknowledges with planning_ack_directive. projectId is required.")]
+        "rows as openDirectiveCount; the holder acknowledges with planning_ack_directive.")]
     public async Task<CallToolResult> AppendDirective(
         [Description("Slug of the feature the directive targets.")] string slug,
         [Description("Directive text, e.g. 'HOLD: proxy.ts is shared with 134 — sync before the next push'. " +
             "Trimmed, max 500 chars.")] string text,
-        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        if (projectId is null)
-        {
-            throw new McpException(PlanningToolText.ProjectIdRequired);
-        }
-
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var directive = await _mutations.SendAsync(() => _api.PostAsync(
-            $"/api/agent/projects/{projectId}/planning/features/{slug}/directives",
+            $"/api/agent/projects/{resolved}/planning/features/{slug}/directives",
             new { text },
             ct), readback: null, ct);
 
@@ -62,21 +60,17 @@ public sealed class DirectiveTools
         "as seen. Acknowledged directives leave the openDirectives projections and the openDirectiveCount drops; " +
         "the ack is attributed to the calling session. Acking an already-acked directive is an idempotent no-op " +
         "success. Append-only channel: an ack flips only the ack stamp, never the directive text, the artifacts, " +
-        "statuses or versions. projectId is required.")]
+        "statuses or versions.")]
     public async Task<CallToolResult> AckDirective(
         [Description("Slug of the feature carrying the directive.")] string slug,
         [Description("Id of the directive to acknowledge — take it from openDirectives on planning_current_task " +
             "or planning_read_feature.")] Guid directiveId,
-        [Description("Id of the project the feature belongs to.")] Guid? projectId = null,
+        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        if (projectId is null)
-        {
-            throw new McpException(PlanningToolText.ProjectIdRequired);
-        }
-
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var ack = await _mutations.SendAsync(() => _api.PostAsync(
-            $"/api/agent/projects/{projectId}/planning/features/{slug}/directives/{directiveId}/ack",
+            $"/api/agent/projects/{resolved}/planning/features/{slug}/directives/{directiveId}/ack",
             new { },
             ct), readback: null, ct);
 

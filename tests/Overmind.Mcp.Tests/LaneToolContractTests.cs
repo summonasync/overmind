@@ -45,14 +45,53 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task MissingProjectId_ThrowsThePlanningGuard(bool mutating)
+    public async Task MissingProjectId_ResolvesThroughTheOnboardCwd(bool mutating)
     {
-        var ex = await (mutating
-            ? Should.ThrowAsync<McpException>(() => Tool().SetLanes(default))
-            : Should.ThrowAsync<McpException>(() => Tool().ListLanes()));
+        _stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
+        _stub.Route("PUT", RosterRoute, 200, RosterJson);
+        _stub.RouteGet(LanesRoute, RosterJson);
 
-        ex.Message.ShouldBe(
-            "projectId is required for planning_* tools — entries tools resolve the project from cwd, planning tools do not.");
+        if (mutating)
+        {
+            var confirmation = await Tool().SetLanes(Element("""[{"name":"frontend"}]"""));
+            Text(confirmation).ShouldBe("Lane roster holds 1 lane(s): frontend.");
+        }
+        else
+        {
+            var roster = await Tool().ListLanes();
+            roster.GetProperty("lanes").GetArrayLength().ShouldBe(1);
+        }
+
+        var onboard = _stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        var body = JsonNode.Parse(onboard.Body)!;
+        body["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        body["create"]!.GetValue<bool>().ShouldBeFalse();
+
+        _stub.Requests.ShouldContain(r =>
+            r.Method == (mutating ? "PUT" : "GET") &&
+            r.Path == (mutating ? RosterRoute : LanesRoute));
+    }
+
+    [Fact]
+    public async Task UnresolvableCwd_ReturnsTheGuidanceWithoutHittingLanes()
+    {
+        _stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+
+        var ex = await Should.ThrowAsync<McpException>(() => Tool().ListLanes());
+
+        ex.Message.ShouldContain("Could not resolve the project for the working directory");
+        ex.Message.ShouldContain("Pass projectId explicitly");
+        _stub.Requests.ShouldNotContain(r => r.Path == LanesRoute);
+    }
+
+    [Fact]
+    public async Task ExplicitProjectId_SkipsTheOnboardRoundTrip()
+    {
+        _stub.RouteGet(LanesRoute, RosterJson);
+
+        await Tool().ListLanes(Canned.ProjectId);
+
+        _stub.Requests.ShouldNotContain(r => r.Path == "/api/onboard");
     }
 
     [Fact]
@@ -142,5 +181,5 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     private static JsonElement Element(string json) =>
         JsonDocument.Parse(json).RootElement.Clone();
 
-    private LaneTools Tool() => new(_api, new MutationGuard(_api));
+    private LaneTools Tool() => new(_api, new MutationGuard(_api), new ProjectResolver(_api));
 }

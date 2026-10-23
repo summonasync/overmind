@@ -14,29 +14,27 @@ public sealed class LaneTools
 
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
+    private readonly ProjectResolver _projects;
 
-    public LaneTools(OvermindApiClient api, MutationGuard mutations)
+    public LaneTools(OvermindApiClient api, MutationGuard mutations, ProjectResolver projects)
     {
         _api = api;
         _mutations = mutations;
+        _projects = projects;
     }
 
     [McpServerTool(Name = "planning_set_lanes", Destructive = false, Idempotent = false)]
     [Description("Replaces the project's lane roster wholesale — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Full replace: lanes missing from the payload are deleted, known names (case-insensitive) are updated in place, new names are inserted; features keep their lane string when a lane is deleted — the field is a plain name reference, never an FK. Each item: name (required, max 64, unique per project, and addressable as a single URL path segment — a lane is edited granularly at its name, so no slash, backslash or control character, and never a bare dot or dot-dot: those are refused with 400 InvalidLaneName before anything is written), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet), priority (optional int 0-3, mirroring feature priorities p0-p3 — lane columns sort priority asc, nulls last; null = no priority). An empty array clears the roster. Features join a lane via planning_update_feature's lane field, which must name a roster entry. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
     public async Task<CallToolResult> SetLanes(
         [Description("Full replacement roster: an array of lane objects — name (required), contour, serialOrder, priority (optional 0-3, omit for none). An empty array clears the roster.")] JsonElement lanes,
-        [Description("Id of the project the roster belongs to.")] Guid? projectId = null,
+        [Description("Id of the project the roster belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        if (projectId is null)
-        {
-            throw new McpException(PlanningToolText.ProjectIdRequired);
-        }
-
         var payload = new JsonObject { ["lanes"] = BuildLaneItems(lanes) };
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
 
         var roster = await _mutations.SendAsync(() => _api.PutAsync(
-            $"/api/agent/projects/{projectId}/planning/lanes-roster",
+            $"/api/agent/projects/{resolved}/planning/lanes-roster",
             payload,
             ct), readback: null, ct);
 
@@ -62,17 +60,13 @@ public sealed class LaneTools
     [McpServerTool(Name = "planning_list_lanes", ReadOnly = true, Idempotent = true)]
     [Description("Reads the project's lane roster with the live projection per lane: name, contour, serialOrder (reserved, no behavior yet), priority (0-3, null = no priority — the board sorts lanes priority asc, nulls last), openFeatureCount (non-done features currently in the lane), holder (alias + vendor + claimState of the alive claim on any feature in the lane), and the features themselves (slug, status, claim identity, claimState). The wave marshal reads this before deciding who moves — a busy lane is one holder and serial lanes are one open feature at a time.")]
     public async Task<JsonElement> ListLanes(
-        [Description("Id of the project whose roster to read.")] Guid? projectId = null,
+        [Description("Id of the project whose roster to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        if (projectId is null)
-        {
-            throw new McpException(PlanningToolText.ProjectIdRequired);
-        }
-
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         try
         {
-            return await _api.GetAsync($"/api/agent/projects/{projectId}/planning/lanes", ct);
+            return await _api.GetAsync($"/api/agent/projects/{resolved}/planning/lanes", ct);
         }
         catch (ApiStatusException ex)
         {

@@ -66,7 +66,7 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         var ex = await Should.ThrowAsync<McpException>(() => Tool(new StubGitCli()).WaveSnapshot(null));
 
         ex.Message.ShouldBe(
-            "projectId is required for planning_* tools — entries tools resolve the project from cwd, planning tools do not.");
+            "projectId is required for this tool — unlike most tools it does not fall back to OVERMIND_PROJECT_ID or the working directory.");
     }
 
     [Fact]
