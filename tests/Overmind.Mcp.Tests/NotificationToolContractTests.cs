@@ -28,6 +28,7 @@ public class NotificationToolContractTests : McpSessionTestBase
         replies.ShouldContain("answers");
         replies.ShouldContain("never creates a project row");
         replies.ShouldContain("guidance");
+        replies.ShouldContain("offset-less values are read as UTC");
     }
 
     [Fact]
@@ -231,9 +232,38 @@ public class NotificationToolContractTests : McpSessionTestBase
 
         var request = FindRequest("GET", "/api/agent/notifications/replies");
         request.Query.ShouldBe(
-            $"projectId={Canned.ProjectId}&since=2026-10-23T07%3A55%3A33Z&kind=question&featureSlug=151-notify-replies-surface");
+            $"projectId={Canned.ProjectId}&since=2026-10-23T07%3A55%3A33.0000000Z&kind=question&featureSlug=151-notify-replies-surface");
 
         Canned.ToolResultText(response).ShouldContain("Ship it as planned.");
+    }
+
+    [Fact]
+    public async Task Replies_OffsetLessSince_IsSentAsAnExplicitUtcInstant()
+    {
+        await Driver.CallToolAsync("overmind_replies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["since"] = "2026-10-23T13:26:17.75"
+        });
+
+        var request = FindRequest("GET", "/api/agent/notifications/replies");
+        request.Query.ShouldBe($"projectId={Canned.ProjectId}&since=2026-10-23T13%3A26%3A17.7500000Z");
+    }
+
+    [Fact]
+    public async Task Replies_UnparseableSince_RejectedBeforeAnyHttpCall()
+    {
+        var response = await Driver.CallToolAsync("overmind_replies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["since"] = "after the last artifact update"
+        });
+
+        ToolErrorText(response).ShouldContain("Invalid since timestamp 'after the last artifact update'");
+        ToolErrorText(response).ShouldContain("ISO-8601");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Path.StartsWith("/api/agent/notifications", StringComparison.Ordinal));
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
     }
 
     [Fact]

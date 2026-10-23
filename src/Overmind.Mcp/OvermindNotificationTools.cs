@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol;
@@ -60,16 +61,17 @@ public sealed class OvermindNotificationTools
     }
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]
-    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision. Optional combinable filters cut the backlog: since (ISO-8601 timestamp — only replies newer than it, e.g. the artifact's last update when hunting a validation proof), kind (info/question/approval), featureSlug. An over-narrow filter returns an empty array, not an error. Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
+    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision. Optional combinable filters cut the backlog: since (ISO-8601 timestamp — only replies newer than it, e.g. the artifact's last update when hunting a validation proof; the zone offset is optional, offset-less values are read as UTC the way artifact timestamps are emitted), kind (info/question/approval), featureSlug. An over-narrow filter returns an empty array, not an error. Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
     public async Task<JsonElement> Replies(
         [Description("Id of the project whose replies to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description("A reply marks its notification read, so false matches nothing — poll with the default true.")] bool? includeRead = null,
-        [Description("ISO-8601 timestamp; only notifications the human replied to after it, e.g. the artifact's last update before you requested a proof.")] string? since = null,
+        [Description("ISO-8601 timestamp; only notifications the human replied to after it, e.g. the artifact's last update before you requested a proof. The zone offset is optional: an offset-less value is read as UTC, matching how artifact timestamps are emitted.")] string? since = null,
         [Description("Notification kind: info, question or approval.")] string? kind = null,
         [Description("Feature slug to narrow to, as shown on the planning board.")] string? featureSlug = null,
         CancellationToken ct = default)
     {
         var kindFilter = kind is null ? null : NormalizeKind(kind);
+        var sinceFilter = string.IsNullOrWhiteSpace(since) ? null : NormalizeSince(since);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the notification", ct);
         var query = new List<string> { $"projectId={resolved}" };
         if (includeRead is { } read)
@@ -77,9 +79,9 @@ public sealed class OvermindNotificationTools
             query.Add($"includeRead={(read ? "true" : "false")}");
         }
 
-        if (!string.IsNullOrWhiteSpace(since))
+        if (sinceFilter is { } from)
         {
-            query.Add($"since={Uri.EscapeDataString(since.Trim())}");
+            query.Add($"since={Uri.EscapeDataString(from)}");
         }
 
         if (kindFilter is { } narrowed)
@@ -116,5 +118,18 @@ public sealed class OvermindNotificationTools
         }
 
         return trimmed.ToLowerInvariant();
+    }
+
+    private static string NormalizeSince(string since)
+    {
+        var trimmed = since.Trim();
+        if (!DateTime.TryParse(trimmed, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+        {
+            throw new McpException(
+                $"Invalid since timestamp '{since}'. Expected an ISO-8601 timestamp, e.g. 2026-10-23T13:26:17Z or the artifact's updatedAt as emitted.");
+        }
+
+        return parsed.ToString("O", CultureInfo.InvariantCulture);
     }
 }
