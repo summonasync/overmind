@@ -38,7 +38,11 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         description.ShouldContain("materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt");
         description.ShouldContain("skipped-file count");
-        description.ShouldContain("validation block (humanGate)");
+        description.ShouldContain("a validation block (humanGate plus the state-truthful gate sentence");
+        description.ShouldContain(
+            "off: agent validate requires a live approval proof, overmind_notify(kind=approval) with a human reply " +
+            "newer than the artifact's last update, 409 ValidationProofRequired without it");
+        description.ShouldContain("on: agents STOP until a human validates the artifact in the UI");
     }
 
     [Fact]
@@ -104,7 +108,7 @@ public class OnboardingToolContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldContain("Materialization: strategy=on, targetDir=/repo/BACKLOG, " +
             "lastSuccess=2026-09-23T10:15:00Z, lastAttempt=2026-09-23T10:15:00Z");
-        text.ShouldContain("Validation: humanGate=off");
+        text.ShouldContain($"Validation: humanGate=off — {Canned.OnboardGateGuidanceOff}");
     }
 
     [Fact]
@@ -180,7 +184,19 @@ public class OnboardingToolContractTests : McpSessionTestBase
         text.ShouldContain("Materialization: strategy=off, targetDir=/repo/BACKLOG, lastSuccess=never, lastAttempt=never");
         text.ShouldContain("Materialization is off for this project — the materializer will not run.");
         text.ShouldContain("Enable it via the planning.materializationDefault setting or the per-project override.");
-        text.ShouldContain("Validation: humanGate=on");
+        text.ShouldContain("Validation: humanGate=on — agents STOP until a human validates the artifact in the UI.");
+    }
+
+    [Fact]
+    public async Task Onboard_PayloadWithoutGuidance_RendersTheBareGateLine()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardSemanticUnavailableJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("Validation: humanGate=off");
+        text.ShouldNotContain("live approval proof");
     }
 
     [Fact]

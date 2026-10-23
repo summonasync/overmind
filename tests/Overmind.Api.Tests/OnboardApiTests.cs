@@ -372,6 +372,54 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task Onboard_ValidationBlock_OffState_SaysLiveApprovalProofIsRequired()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Validation.HumanGate.ShouldBeFalse();
+        onboard.Validation.Guidance.ShouldContain("agent validate requires a live approval proof");
+        onboard.Validation.Guidance.ShouldContain("overmind_notify(kind=approval)");
+        onboard.Validation.Guidance.ShouldContain("a human reply newer than the artifact's last update");
+        onboard.Validation.Guidance.ShouldContain("409 ValidationProofRequired");
+        onboard.Validation.Guidance.ShouldContain("humanGate=on would STOP agents at the UI door instead");
+    }
+
+    [Fact]
+    public async Task Onboard_ValidationBlock_OnState_SaysAgentsStopUntilTheHumanValidates()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var project = await CreateProjectAsync(name, TestPaths.DiskPath(name));
+        await SetWorkflowAsync(project.Id, validation: "on");
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Validation.HumanGate.ShouldBeTrue();
+        onboard.Validation.Guidance.ShouldBe("agents STOP until a human validates the artifact in the UI.");
+    }
+
+    [Fact]
+    public async Task Onboard_Quickstart_DocumentsTheValidationGateModel()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Quickstart.ShouldContain("Validation gates: three doors");
+        onboard.Quickstart.ShouldContain(
+            "agent validate requires a live approval proof: overmind_notify(kind=approval) with a human reply " +
+            "newer than the artifact's last update, without it planning_validate returns 409 ValidationProofRequired");
+        onboard.Quickstart.ShouldContain("the UI validate door takes no proof, the human validates the artifact directly");
+        onboard.Quickstart.ShouldContain(
+            "the UI done tap needs a result artifact plus a fresh approval proof newer than the result's last update");
+        onboard.Quickstart.ShouldContain("Any body mutation of the artifact voids a standing approval proof");
+        onboard.Quickstart.ShouldContain("asMigrated=true is the escape hatch for artifacts already validated on disk before an import");
+    }
+
+    [Fact]
     public async Task Onboard_MaterializationBlock_OnStrategy_ResolvesWithTargetDirAndNeverSplit()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
@@ -753,7 +801,7 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
         string Strategy, string TargetDir, string Trigger, DateTime? LastSuccess, DateTime? LastAttempt,
         string? Error, DateTime? FailedAt, int? SkippedCount, IReadOnlyList<string>? Skipped);
 
-    public sealed record OnboardValidationJson(bool HumanGate);
+    public sealed record OnboardValidationJson(bool HumanGate, string Guidance);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
 }

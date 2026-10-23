@@ -387,9 +387,14 @@ public static class Canned
     public const string RepliesJson =
         """{"items":[{"id":"13131313-1313-1313-1313-131313131313","projectId":"11111111-1111-1111-1111-111111111111","kind":"question","featureSlug":"demo-feature","tab":"spec","text":"Spec gate wants your call on the persistence model.","agent":"coder","createdAt":"2026-09-20T10:00:00Z","readAt":"2026-09-20T10:05:00Z","replyText":"Ship it as planned.","repliedAt":"2026-09-20T10:05:00Z"}]}""";
 
+    public const string OnboardGateGuidanceOff =
+        "agent validate requires a live approval proof: overmind_notify(kind=approval) with a human reply " +
+        "newer than the artifact's last update; without it planning_validate returns 409 ValidationProofRequired. " +
+        "humanGate=on would STOP agents at the UI door instead.";
+
     public const string OnboardJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T10:15:00Z"},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":true,"board":{"countsByStatus":{"inProgress":1,"draft":1},"currentSlug":"demo-feature"},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-23T10:15:00Z","lastAttempt":"2026-09-23T10:15:00Z"},"validation":{"humanGate":false,"guidance":"agent validate requires a live approval proof: overmind_notify(kind=approval) with a human reply newer than the artifact's last update; without it planning_validate returns 409 ValidationProofRequired. humanGate=on would STOP agents at the UI door instead."},"semantic":{"available":true,"reason":null},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardSemanticUnavailableJson =
@@ -399,7 +404,7 @@ public static class Canned
 
     public const string OnboardOffStrategyJson =
         """
-        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"off","targetDir":"/repo/BACKLOG","trigger":"Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":true},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"off","targetDir":"/repo/BACKLOG","trigger":"Materialization is off for this project — the materializer will not run. Enable it via the planning.materializationDefault setting or the per-project override.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":true,"guidance":"agents STOP until a human validates the artifact in the UI."},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
     public const string OnboardFailedMaterializationJson =

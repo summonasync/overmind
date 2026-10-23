@@ -18,7 +18,7 @@ public sealed record OnboardMaterializationBlock(
     int? SkippedCount,
     IReadOnlyList<string>? Skipped);
 
-public sealed record OnboardValidationBlock(bool HumanGate);
+public sealed record OnboardValidationBlock(bool HumanGate, string Guidance);
 
 public sealed record OnboardSemanticBlock(bool Available, string? Reason);
 

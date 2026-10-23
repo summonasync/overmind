@@ -19,7 +19,7 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate), an agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate plus the state-truthful gate sentence — off: agent validate requires a live approval proof, overmind_notify(kind=approval) with a human reply newer than the artifact's last update, 409 ValidationProofRequired without it; on: agents STOP until a human validates the artifact in the UI), an agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
     public async Task<string> Onboard(CancellationToken ct)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));
@@ -205,10 +205,18 @@ public sealed class OvermindOnboardingTools
             _ => null
         };
 
-        if (state is not null)
+        if (state is null)
         {
-            output.AppendLine($"Validation: humanGate={state}");
+            return;
         }
+
+        var guidance = block.TryGetProperty("guidance", out var text) &&
+                       text.ValueKind == JsonValueKind.String &&
+                       text.GetString() is { Length: > 0 } guidanceText
+            ? $" — {guidanceText}"
+            : string.Empty;
+
+        output.AppendLine($"Validation: humanGate={state}{guidance}");
     }
 
     private static void AppendIdentity(JsonElement payload, StringBuilder output)

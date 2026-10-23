@@ -112,7 +112,7 @@ public static class OnboardApi
                 project.LastMaterializationFailedAt,
                 project.LastMaterializationSkipCount,
                 SkipHeadLines(project.LastMaterializationSkipHead)),
-            new OnboardValidationBlock(humanGate),
+            new OnboardValidationBlock(humanGate, ValidationGateGuidance(humanGate)),
             new OnboardSemanticBlock(vectorHealth.Up, SemanticUnavailableReason(vectorHealth)),
             new OnboardAgentIdentityBlock(
                 AgentIdentityDefaults.Alias,
@@ -163,6 +163,12 @@ public static class OnboardApi
             : inline
                 ? "Event-driven: every planning mutation runs the mirror pass inline before returning (planning.materializationSync=on) — the manual planning_materialize tool does the same and waits for its report."
                 : "Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.";
+
+    private static string ValidationGateGuidance(bool humanGate) => humanGate
+        ? "agents STOP until a human validates the artifact in the UI."
+        : "agent validate requires a live approval proof: overmind_notify(kind=approval) with a human reply " +
+          "newer than the artifact's last update; without it planning_validate returns 409 ValidationProofRequired. " +
+          "humanGate=on would STOP agents at the UI door instead.";
 
     private static IReadOnlyList<string>? SkipHeadLines(string? skipHead) =>
         skipHead is null
