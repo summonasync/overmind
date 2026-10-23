@@ -99,7 +99,32 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             await RemoveStaleTrackedFilesAsync(
                 root, strategy == PlanningMaterialization.On, rows, plannedPaths, warnings, ct);
 
-            await WritePlansAsync(projectId, plans, rows, ct);
+            var written = await WritePlansAsync(projectId, root, plans, rows, warnings, ct);
+
+            var finishedAt = DateTime.UtcNow;
+            var complete = written.Count == plans.Count;
+            var run = new MaterializationRunReport(
+                startedAt,
+                finishedAt,
+                Atomic: complete,
+                written.Select(p => p.RelativePath).ToArray(),
+                skipped.ToArray(),
+                []);
+            project.RecordMaterializationRun(MaterializationRunJson.Serialize(run));
+            project.MarkMaterialized(skipped);
+            await _db.SaveChangesAsync(ct);
+
+            return new PlanningMaterializationReport(
+                projectId,
+                strategy,
+                written.Select(p => new PlanningMaterializedFileInfo(p.RelativePath, p.Sha256)).ToArray(),
+                warnings,
+                skipped,
+                Refused: [],
+                Atomic: complete,
+                startedAt,
+                finishedAt,
+                GitHygiene: gitHygiene);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -109,30 +134,6 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             await _db.SaveChangesAsync(ct);
             throw;
         }
-
-        var finishedAt = DateTime.UtcNow;
-        var run = new MaterializationRunReport(
-            startedAt,
-            finishedAt,
-            Atomic: true,
-            plans.Select(p => p.RelativePath).ToArray(),
-            skipped.ToArray(),
-            []);
-        project.RecordMaterializationRun(MaterializationRunJson.Serialize(run));
-        project.MarkMaterialized(skipped);
-        await _db.SaveChangesAsync(ct);
-
-        return new PlanningMaterializationReport(
-            projectId,
-            strategy,
-            plans.Select(p => new PlanningMaterializedFileInfo(p.RelativePath, p.Sha256)).ToArray(),
-            warnings,
-            skipped,
-            Refused: [],
-            Atomic: true,
-            startedAt,
-            finishedAt,
-            GitHygiene: gitHygiene);
     }
 
     public async Task RecordSyncFailureAsync(Guid projectId, string error, CancellationToken ct = default)
@@ -533,10 +534,14 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
-    private async Task WritePlansAsync(
-        Guid projectId, List<MirrorFilePlan> plans, List<PlanningMaterializedFile> rows, CancellationToken ct)
+    // One unreadable or unwritable target must not kill the pass: a per-plan failure lands as a
+    // warning, its row mutation is dropped so the tracked row keeps describing the disk, and the
+    // remaining plans still commit. Only a transaction-level failure (the save itself) aborts.
+    private async Task<List<MirrorFilePlan>> WritePlansAsync(
+        Guid projectId, string root, List<MirrorFilePlan> plans, List<PlanningMaterializedFile> rows,
+        List<string> warnings, CancellationToken ct)
     {
-        var written = new List<string>();
+        var written = new List<MirrorFilePlan>();
         var preExisting = new HashSet<string>(PathGuard.PathComparer);
         string? failedPath = null;
 
@@ -546,25 +551,39 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             foreach (var plan in plans)
             {
                 failedPath = plan.AbsolutePath;
-                if (File.Exists(plan.AbsolutePath) || Directory.Exists(plan.AbsolutePath))
+                var existed = File.Exists(plan.AbsolutePath) || Directory.Exists(plan.AbsolutePath);
+                if (existed)
                 {
                     preExisting.Add(plan.AbsolutePath);
                 }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(plan.AbsolutePath)!);
-                await File.WriteAllTextAsync(
-                    plan.AbsolutePath, ContentHash.Normalize(plan.Content), ContentHash.Utf8NoBom, ct);
-                written.Add(plan.AbsolutePath);
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(plan.AbsolutePath)!);
+                    await File.WriteAllTextAsync(
+                        plan.AbsolutePath, ContentHash.Normalize(plan.Content), ContentHash.Utf8NoBom, ct);
+                    written.Add(plan);
 
-                var existingRow = rows.FirstOrDefault(r => PathGuard.PathsEqual(r.RelativePath, plan.RelativePath));
-                if (existingRow is not null)
-                {
-                    existingRow.Refresh(plan.Sha256);
+                    var existingRow = rows.FirstOrDefault(r => PathGuard.PathsEqual(r.RelativePath, plan.RelativePath));
+                    if (existingRow is not null)
+                    {
+                        existingRow.Refresh(plan.Sha256);
+                    }
+                    else
+                    {
+                        _db.PlanningMaterializedFiles.Add(PlanningMaterializedFile.Create(
+                            projectId, plan.FeatureId, plan.RelativePath, plan.Sha256));
+                    }
                 }
-                else
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _db.PlanningMaterializedFiles.Add(PlanningMaterializedFile.Create(
-                        projectId, plan.FeatureId, plan.RelativePath, plan.Sha256));
+                    warnings.Add($"Skipped '{plan.RelativePath}': {ex.Message}");
+                    DetachPlanRow(plan.RelativePath);
+                    if (!existed && File.Exists(plan.AbsolutePath))
+                    {
+                        DirectoryPruner.TryDelete(plan.AbsolutePath);
+                        DirectoryPruner.PruneEmptyDirectories(plan.AbsolutePath, root);
+                    }
                 }
             }
 
@@ -581,7 +600,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 entry.State = EntityState.Detached;
             }
 
-            foreach (var path in written)
+            foreach (var path in written.Select(p => p.AbsolutePath))
             {
                 if (!preExisting.Contains(path))
                 {
@@ -590,6 +609,18 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             }
 
             throw MaterializationException.IoFailure(failedPath ?? "database", ex);
+        }
+
+        return written;
+    }
+
+    private void DetachPlanRow(string relativePath)
+    {
+        foreach (var entry in _db.ChangeTracker.Entries<PlanningMaterializedFile>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified &&
+                                 PathGuard.PathsEqual(e.Entity.RelativePath, relativePath)))
+        {
+            entry.State = EntityState.Detached;
         }
     }
 

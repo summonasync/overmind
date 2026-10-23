@@ -35,15 +35,15 @@ internal static class MirrorPlanRenderer
                          .Where(a => a.Kind == PlanningArtifactKind.Task)
                          .OrderBy(a => a.Order))
             {
-                var relative = PinnedTaskPath(rows, feature.Id, directory, task.Order);
-                if (relative is null)
-                {
-                    var title = FirstHeading(task.Body) ?? task.Brief;
-                    var taskSlug = title is null
-                        ? $"task-{task.Order:D2}"
-                        : Slug.From(title, $"task-{task.Order:D2}");
-                    relative = $"{directory}/tasks/{BacklogNaming.TaskFileName(task.Order, taskSlug)}";
-                }
+                var title = FirstHeading(task.Body) ?? task.Brief;
+                var freshSlug = title is null
+                    ? $"task-{task.Order:D2}"
+                    : BacklogNaming.MirrorSlug(title, $"task-{task.Order:D2}");
+                var trackedName = TrackedTaskFileName(rows, feature.Id, directory, task.Order);
+                var fileName = BacklogNaming.KeepsTaskFileName(trackedName, task.Order, freshSlug)
+                    ? trackedName!
+                    : BacklogNaming.TaskFileName(task.Order, freshSlug);
+                var relative = $"{directory}/tasks/{fileName}";
 
                 blockerOrders.TryGetValue(task.Id, out var taskBlockers);
                 plans.Add(MirrorFilePlan.Create(
@@ -71,15 +71,14 @@ internal static class MirrorPlanRenderer
         {
             var id8 = entry.Id.ToString("N")[..8];
             var document = EntryDocument(entry);
-            var relative =
-                $"ENTRIES/{EntryMirrorNaming.Directory(entry.Type)}/{Slug.From(entry.Title, "entry")}-{id8}.md";
-
-            // Slug rules changed over time, so a board-identical pass keeps the tracked filename;
-            // legacy non-ASCII names converge to the fresh slug only once the entry content moves.
-            if (TrackedEntryPath(rows, entry.Type, id8, ContentHash.Sha256(document)) is { } tracked)
-            {
-                relative = tracked;
-            }
+            var freshSlug = BacklogNaming.MirrorSlug(entry.Title, "entry");
+            var freshRelative =
+                $"ENTRIES/{EntryMirrorNaming.Directory(entry.Type)}/{freshSlug}-{id8}.md";
+            var trackedRelative = TrackedEntryPath(rows, entry.Type, id8, ContentHash.Sha256(document));
+            var relative = trackedRelative is not null
+                && BacklogNaming.KeepsEntryFileName(Path.GetFileName(trackedRelative), freshSlug, id8)
+                ? trackedRelative
+                : freshRelative;
 
             plans.Add(MirrorFilePlan.Create(root, featureId: null, relative, document));
         }
@@ -95,16 +94,16 @@ internal static class MirrorPlanRenderer
         return plans;
     }
 
-    private static string? PinnedTaskPath(
+    private static string? TrackedTaskFileName(
         List<PlanningMaterializedFile> rows, Guid featureId, string directory, int order)
     {
         var prefix = $"{directory}/tasks/{order:D2}-";
-        var row = rows.FirstOrDefault(r =>
-            r.FeatureId == featureId &&
-            r.RelativePath.StartsWith(prefix, StringComparison.Ordinal) &&
-            r.RelativePath.EndsWith(".md", StringComparison.Ordinal));
-
-        return row?.RelativePath;
+        return rows.FirstOrDefault(r =>
+                r.FeatureId == featureId &&
+                r.RelativePath.StartsWith(prefix, StringComparison.Ordinal) &&
+                r.RelativePath.EndsWith(".md", StringComparison.Ordinal)) is { } row
+            ? Path.GetFileName(row.RelativePath)
+            : null;
     }
 
     private static string? TrackedEntryPath(

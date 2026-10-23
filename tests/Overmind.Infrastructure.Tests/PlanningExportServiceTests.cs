@@ -143,7 +143,7 @@ public sealed class PlanningExportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Export_PinnedRowEscapingTheTarget_RefusesThroughPathGuard()
+    public async Task Export_TrackedRowEscapingTheTarget_IsIgnoredInFavorOfFreshNames()
     {
         var projectId = await SeedProjectAsync();
         Guid featureId;
@@ -165,11 +165,12 @@ public sealed class PlanningExportServiceTests : IDisposable
         }
 
         var target = Path.Combine(_sandboxDir, "snapshot");
-        var failure = await Should.ThrowAsync<MaterializationException>(
-            () => CreateService().ExportAsync(projectId, target, CancellationToken.None));
+        var result = await CreateService().ExportAsync(projectId, target, CancellationToken.None);
 
-        failure.Kind.ShouldBe(MaterializationFailureKind.PathTraversal);
-        Directory.Exists(target).ShouldBeFalse();
+        result.FileCount.ShouldBe(2);
+        File.Exists(Path.Combine(target, "BACKLOG", "006-demo", "feature.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(target, "BACKLOG", "006-demo", "tasks", "02-task-02.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(target, "BACKLOG", "006-demo", "tasks", "escape.md")).ShouldBeFalse();
     }
 
     private PlanningExportService CreateService() => new(_db.CreateContext());

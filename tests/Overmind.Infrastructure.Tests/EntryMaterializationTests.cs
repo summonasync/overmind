@@ -475,7 +475,7 @@ public sealed class EntryMaterializationTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_CyrillicEntryTitle_WritesTransliteratedAsciiFilename()
+    public async Task Sync_CyrillicEntryTitle_WritesBoundedAsciiFilename()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Решение по кэшированию");
@@ -483,14 +483,14 @@ public sealed class EntryMaterializationTests : IDisposable
         using var ctx = _db.CreateContext();
         var report = await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
 
-        var relative = $"ENTRIES/decision/reshenie-po-keshirovaniyu-{entryId.ToString("N")[..8]}.md";
+        var relative = $"ENTRIES/decision/entry-75f09372-{entryId.ToString("N")[..8]}.md";
         report.Files.ShouldContain(f => f.RelativePath == relative);
         File.Exists(Path.Combine(_projectDir, relative.Replace('/', Path.DirectorySeparatorChar))).ShouldBeTrue();
         Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "decision")).ShouldHaveSingleItem();
     }
 
     [Fact]
-    public async Task Sync_TitleUnchangedEntryWithLegacyNonAsciiName_StaysByteIdentical()
+    public async Task Sync_TitleUnchangedEntryWithLegacyNonAsciiName_ConvergesOnTheNextPass()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Решение по кэшированию");
@@ -503,7 +503,7 @@ public sealed class EntryMaterializationTests : IDisposable
         var id8 = entryId.ToString("N")[..8];
         var legacyRelative = $"ENTRIES/decision/решение-по-кэшированию-{id8}.md";
         File.Move(
-            Path.Combine(_projectDir, "ENTRIES", "decision", $"reshenie-po-keshirovaniyu-{id8}.md"),
+            Path.Combine(_projectDir, "ENTRIES", "decision", $"entry-75f09372-{id8}.md"),
             Path.Combine(_projectDir, "ENTRIES", "decision", $"решение-по-кэшированию-{id8}.md"));
 
         using (var track = _db.CreateContext())
@@ -513,30 +513,29 @@ public sealed class EntryMaterializationTests : IDisposable
             await track.SaveChangesAsync();
         }
 
-        var before = await SnapshotTreeAsync(_projectDir);
-
         using var resync = _db.CreateContext();
         var report = await CreateMaterializer(resync).SyncAsync(projectId, ct: CancellationToken.None);
 
         report.Warnings.ShouldBeEmpty();
         report.Refused.ShouldBeEmpty();
-        report.Skipped.ShouldContain(s =>
-            s.RelativePath == legacyRelative &&
-            s.Reason.Contains("already matches", StringComparison.Ordinal));
-
-        var after = await SnapshotTreeAsync(_projectDir);
-        after.Keys.ShouldBe(before.Keys, ignoreOrder: true);
-        foreach (var (file, hash) in before)
-        {
-            after[file].ShouldBe(hash);
-        }
-
         File.Exists(Path.Combine(_projectDir, legacyRelative.Replace('/', Path.DirectorySeparatorChar)))
-            .ShouldBeTrue();
+            .ShouldBeFalse();
+        var convergedRelative = $"ENTRIES/decision/entry-75f09372-{id8}.md";
+        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "decision"))
+            .ShouldHaveSingleItem()
+            .ShouldBe(Path.Combine(_projectDir, "ENTRIES", "decision", $"entry-75f09372-{id8}.md"));
+
+        var rows = await resync.PlanningMaterializedFiles
+            .Where(m => m.ProjectId == projectId)
+            .Select(m => m.RelativePath)
+            .ToListAsync();
+        rows.Where(p => p.StartsWith("ENTRIES/", StringComparison.Ordinal))
+            .ShouldHaveSingleItem()
+            .ShouldBe(convergedRelative);
     }
 
     [Fact]
-    public async Task Sync_TitleChangeOnLegacyNonAsciiName_ConvergesToTransliteratedFilename()
+    public async Task Sync_TitleChangeOnLegacyNonAsciiName_ConvergesToBoundedFilename()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         var entryId = await SeedEntryIdAsync(projectId, EntryType.Decision, "Решение по кэшированию");
@@ -549,7 +548,7 @@ public sealed class EntryMaterializationTests : IDisposable
         var id8 = entryId.ToString("N")[..8];
         var legacyRelative = $"ENTRIES/decision/решение-по-кэшированию-{id8}.md";
         File.Move(
-            Path.Combine(_projectDir, "ENTRIES", "decision", $"reshenie-po-keshirovaniyu-{id8}.md"),
+            Path.Combine(_projectDir, "ENTRIES", "decision", $"entry-75f09372-{id8}.md"),
             Path.Combine(_projectDir, "ENTRIES", "decision", $"решение-по-кэшированию-{id8}.md"));
 
         using (var track = _db.CreateContext())
@@ -622,7 +621,7 @@ public sealed class EntryMaterializationTests : IDisposable
         new(ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)), _dataDir);
 
     private static string EntryRelativePath(EntryType type, string title, Guid entryId) =>
-        $"ENTRIES/{type.ToString().ToLowerInvariant()}/{Slug.From(title, "entry")}-{entryId.ToString("N")[..8]}.md";
+        $"ENTRIES/{type.ToString().ToLowerInvariant()}/{BacklogNaming.MirrorSlug(title, "entry")}-{entryId.ToString("N")[..8]}.md";
 
     private async Task<Guid> SeedEntryIdAsync(Guid projectId, EntryType type, string title)
     {
