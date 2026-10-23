@@ -10,7 +10,8 @@ public sealed class CreateNotificationRequestValidator : AbstractValidator<Creat
     {
         RuleFor(x => x.Kind).NotEmpty()
             .IsEnumName(typeof(NotificationKind), caseSensitive: false);
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000);
+        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000)
+            .WithMessage(x => $"Text exceeds the 2000 character limit (got {x.Text!.Length}).");
         RuleFor(x => x.FeatureSlug).MaximumLength(64)
             .When(x => x.FeatureSlug is not null);
         RuleFor(x => x.Tab)
@@ -24,6 +25,7 @@ public sealed class ReplyNotificationRequestValidator : AbstractValidator<ReplyN
 {
     public ReplyNotificationRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000);
+        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000)
+            .WithMessage(x => $"Text exceeds the 2000 character limit (got {x.Text!.Length}).");
     }
 }

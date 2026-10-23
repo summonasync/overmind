@@ -243,6 +243,52 @@ public sealed class NotificationApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_TextOverLimit_Returns400NamingFieldLimitAndActualSize()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/agent/notifications", new { Kind = "info", Text = new string('x', 2143) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.Keys.ShouldContain("Text");
+        problem.Errors["Text"].ShouldBe(["Text exceeds the 2000 character limit (got 2143)."]);
+    }
+
+    [Fact]
+    public async Task Create_TextExactlyAtLimit_Succeeds()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/agent/notifications", new { Kind = "info", Text = new string('x', 2000) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task Reply_TextOverLimit_Returns400NamingFieldLimitAndActualSize()
+    {
+        var notification = await NotifyAsync("question", "Anyone there?");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/notifications/{notification.Id}/reply", new { Text = new string('y', 2143) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.Keys.ShouldContain("Text");
+        problem.Errors["Text"].ShouldBe(["Text exceeds the 2000 character limit (got 2143)."]);
+    }
+
+    [Fact]
+    public async Task Reply_TextExactlyAtLimit_Succeeds()
+    {
+        var notification = await NotifyAsync("question", "Anyone there?");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/notifications/{notification.Id}/reply", new { Text = new string('y', 2000) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Delete_RemovesRow_AndSecondCallReturns404()
     {
         var removed = await NotifyAsync("info", "delete me");
@@ -628,4 +674,6 @@ public sealed class NotificationApiTests : IDisposable
     public sealed record ClearReadJson(int Deleted);
 
     public sealed record HiddenJson(int Hidden);
+
+    private sealed record ValidationProblemJson(Dictionary<string, string[]> Errors);
 }
