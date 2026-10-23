@@ -154,6 +154,60 @@ public sealed class PlanningQueueApiTests : IDisposable
         truncated!.Items.Select(i => i.Slug).ShouldBe(["lim-a", "lim-b"]);
     }
 
+    [Fact]
+    public async Task QueueRead_RowsCarryMirrorLagAfterALandedPass()
+    {
+        var project = await CreateProjectAsync();
+        await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = "on" });
+        await CreateFeature(project.Id, "lag-a", "Lag A");
+
+        using var raw = await _client.GetFromJsonAsync<JsonDocument>(
+            $"/api/agent/projects/{project.Id}/planning/task-queue", JsonOptions);
+        var row = raw!.RootElement.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("slug").GetString() == "lag-a");
+
+        row.GetProperty("pendingMutations").GetInt32().ShouldBe(0);
+        row.GetProperty("stale").GetBoolean().ShouldBeFalse();
+        row.GetProperty("lastAttemptAt").GetDateTime().ShouldNotBe(default);
+        row.GetProperty("lastSuccessAt").GetDateTime().ShouldNotBe(default);
+    }
+
+    [Fact]
+    public async Task QueueRead_FailedAttemptReportsStaleUntilTheNextPassLands()
+    {
+        var project = await CreateProjectAsync();
+        await _client.PutAsJsonAsync("/api/settings", new { PlanningMaterializationSync = "on" });
+        await CreateFeature(project.Id, "lag-stale", "Lag stale");
+
+        var clean = await GetQueueAsync(project.Id);
+        var cleanRow = clean!.Items.Single(i => i.Slug == "lag-stale");
+        cleanRow.Stale.ShouldBeFalse();
+
+        var featureFile = Path.Combine(
+            Directory.GetDirectories(Path.Combine(_projectDir, "BACKLOG"))
+                .Single(d => Path.GetFileName(d).EndsWith("lag-stale")),
+            "feature.md");
+        await File.AppendAllTextAsync(featureFile, "\nhand edit\n");
+
+        await CreateFeature(project.Id, "lag-second", "Lag second");
+
+        var failed = await GetQueueAsync(project.Id);
+        var failedRow = failed!.Items.Single(i => i.Slug == "lag-stale");
+        failedRow.Stale.ShouldBeTrue();
+        failedRow.PendingMutations.ShouldBe(0);
+        failedRow.LastAttemptAt.ShouldNotBeNull();
+        failedRow.LastSuccessAt.ShouldNotBeNull();
+        failedRow.LastAttemptAt!.Value.ShouldBeGreaterThan(failedRow.LastSuccessAt!.Value);
+
+        var mirrored = await File.ReadAllTextAsync(featureFile);
+        await File.WriteAllTextAsync(featureFile, mirrored.Replace("\nhand edit\n", string.Empty));
+
+        await CreateFeature(project.Id, "lag-third", "Lag third");
+
+        var recovered = await GetQueueAsync(project.Id);
+        recovered!.Items.Single(i => i.Slug == "lag-stale").Stale.ShouldBeFalse();
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-3)]
@@ -751,7 +805,9 @@ public sealed class PlanningQueueApiTests : IDisposable
         string Slug, string? Number, string Title, string Priority, string Status, int QueuePosition,
         string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal,
         TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked,
-        DateTime CreatedAt, DateTime UpdatedAt);
+        DateTime CreatedAt, DateTime UpdatedAt,
+        int PendingMutations = 0, DateTime? LastAttemptAt = null, DateTime? LastSuccessAt = null,
+        bool Stale = false);
 
     public sealed record TaskCountsJson(int Todo, int InProgress, int Review, int Done, int Blocked);
 

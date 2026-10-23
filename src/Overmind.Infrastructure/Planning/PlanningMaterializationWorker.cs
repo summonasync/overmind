@@ -14,7 +14,7 @@ public sealed class PlanningMaterializationWorker(
         List<Guid> interrupted = [];
         try
         {
-            await foreach (var projectId in queue.Reader.ReadAllAsync(stoppingToken))
+            await foreach (var projectId in queue.DequeueAllAsync(stoppingToken))
             {
                 if (await RunPassAsync(projectId, stoppingToken))
                 {
@@ -31,7 +31,7 @@ public sealed class PlanningMaterializationWorker(
             await RunPassAsync(projectId, CancellationToken.None);
         }
 
-        while (queue.Reader.TryRead(out var pending))
+        while (queue.TryDequeue(out var pending))
         {
             await RunPassAsync(pending, CancellationToken.None);
         }

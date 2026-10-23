@@ -136,6 +136,7 @@ public static class DependencyInjection
             provider.GetRequiredService<PlanningPolicy>(),
             provider.GetRequiredService<IPlanningMaterializer>(),
             OvermindPaths.DataDirectory));
+        services.AddScoped<PlanningMaterializationLagReader>();
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningStatusBackfill>();
         services.AddScoped<FeatureClaimService>();

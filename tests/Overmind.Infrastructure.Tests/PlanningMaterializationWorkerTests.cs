@@ -184,6 +184,31 @@ public sealed class PlanningMaterializationWorkerTests
         await worker.ExecuteAsync(cts.Token);
     }
 
+    [Fact]
+    public async Task Execute_AfterThePassLands_PerProjectPendingClears()
+    {
+        var (worker, queue, materializer) = BuildWorker();
+        var projectId = Guid.NewGuid();
+        var landed = new TaskCompletionSource();
+
+        materializer
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []))
+            .AndDoes(_ => landed.TrySetResult());
+
+        queue.TryEnqueue(projectId).ShouldBeTrue();
+        queue.PendingCountFor(projectId).ShouldBe(1);
+
+        using var cts = new CancellationTokenSource();
+        var run = Task.Run(() => worker.ExecuteAsync(cts.Token));
+        await landed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        queue.PendingCountFor(projectId).ShouldBe(0);
+
+        cts.Cancel();
+        await run;
+    }
+
     private static (
         PlanningMaterializationWorker Worker,
         PlanningMaterializationQueue Queue,

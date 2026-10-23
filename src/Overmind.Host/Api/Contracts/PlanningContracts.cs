@@ -57,7 +57,11 @@ public sealed record PlanningQueueItem(
     DateTime UpdatedAt,
     string? Lane = null,
     LaneHolderResponse? LaneHolder = null,
-    PotentialOverlap[]? PotentialOverlaps = null);
+    PotentialOverlap[]? PotentialOverlaps = null,
+    int PendingMutations = 0,
+    DateTime? LastAttemptAt = null,
+    DateTime? LastSuccessAt = null,
+    bool Stale = false);
 
 public sealed record PlanningTaskCounts(int Todo, int InProgress, int Review, int Done, int Blocked);
 

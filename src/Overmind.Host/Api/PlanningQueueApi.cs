@@ -12,7 +12,7 @@ public static class PlanningQueueApi
 {
     internal static async Task<IResult> QueueRead(
         Guid projectId, int? limit, OvermindDbContext db, FeatureClaimService claims,
-        DirectiveService directives, CancellationToken ct)
+        DirectiveService directives, PlanningMaterializationLagReader mirrorLag, CancellationToken ct)
     {
         if (limit is < 1)
         {
@@ -34,6 +34,7 @@ public static class PlanningQueueApi
             .ThenBy(f => f.Slug)
             .ToList();
 
+        var lag = await mirrorLag.ReadAsync(projectId, ct);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
         var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
@@ -44,7 +45,8 @@ public static class PlanningQueueApi
                 f, graph, claimLiveness.GetValueOrDefault(f.Id),
                 laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
                 overlapIndex.GetValueOrDefault(f.Id),
-                directiveCounts.GetValueOrDefault(f.Id)))
+                directiveCounts.GetValueOrDefault(f.Id),
+                lag))
             .ToArray()));
     }
 
@@ -56,6 +58,7 @@ public static class PlanningQueueApi
         FeatureQueueService queue,
         FeatureClaimService claims,
         DirectiveService directives,
+        PlanningMaterializationLagReader mirrorLag,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -89,6 +92,7 @@ public static class PlanningQueueApi
             return HttpErrors.NotFound($"Feature '{slug}' was not found.");
         }
 
+        var lag = await mirrorLag.ReadAsync(projectId, ct);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
         var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
@@ -97,7 +101,8 @@ public static class PlanningQueueApi
             moved, features.ToDictionary(f => f.Id), claimLiveness.GetValueOrDefault(moved.Id),
             laneHolders.GetValueOrDefault(moved.Lane ?? string.Empty),
             overlapIndex.GetValueOrDefault(moved.Id),
-            directiveCounts.GetValueOrDefault(moved.Id)));
+            directiveCounts.GetValueOrDefault(moved.Id),
+            lag));
     }
 
     internal static async Task<IResult> Reorder(
@@ -107,6 +112,7 @@ public static class PlanningQueueApi
         FeatureQueueService queue,
         FeatureClaimService claims,
         DirectiveService directives,
+        PlanningMaterializationLagReader mirrorLag,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -134,6 +140,7 @@ public static class PlanningQueueApi
 
         var features = await LoadProjectFeatures(db, projectId, ct);
         var graph = features.ToDictionary(f => f.Id);
+        var lag = await mirrorLag.ReadAsync(projectId, ct);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
         var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
@@ -145,7 +152,8 @@ public static class PlanningQueueApi
                 f, graph, claimLiveness.GetValueOrDefault(f.Id),
                 laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
                 overlapIndex.GetValueOrDefault(f.Id),
-                directiveCounts.GetValueOrDefault(f.Id)))
+                directiveCounts.GetValueOrDefault(f.Id),
+                lag))
             .ToArray()));
     }
 

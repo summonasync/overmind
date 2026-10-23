@@ -53,7 +53,8 @@ public static class PlanningMapper
         PlanningFeature feature, IReadOnlyDictionary<Guid, PlanningFeature> projectFeatures,
         AgentSessionLiveness? claimState = null, LaneHolderResponse? laneHolder = null,
         IReadOnlyList<FeatureOverlapRow>? overlaps = null,
-        int openDirectiveCount = 0)
+        int openDirectiveCount = 0,
+        PlanningMaterializationLag? lag = null)
     {
         var blockers = OpenBlockerSlugs(feature, projectFeatures);
         var artifacts = feature.Artifacts;
@@ -89,7 +90,11 @@ public static class PlanningMapper
             feature.UpdatedAt,
             feature.Lane,
             laneHolder ?? LaneHolderOf(feature, claimState),
-            Overlaps(overlaps));
+            Overlaps(overlaps),
+            lag?.PendingMutations ?? 0,
+            lag?.LastAttemptAt,
+            lag?.LastSuccessAt,
+            lag?.Stale ?? false);
     }
 
     public static OpenDirectiveResponse[] ToOpenDirectives(

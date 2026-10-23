@@ -117,6 +117,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("briefExcerpt");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("createdAt");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("updatedAt");
+        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("pendingMutations");
         tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("plan validated");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("band-scoped");
         tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("toPosition");
