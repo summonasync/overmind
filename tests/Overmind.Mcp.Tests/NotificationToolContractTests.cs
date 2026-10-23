@@ -218,6 +218,39 @@ public class NotificationToolContractTests : McpSessionTestBase
         Stub.Requests.ShouldNotContain(r => r.Path.StartsWith("/api/agent/notifications/replies", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Replies_Filters_PlumbIntoTheQuery()
+    {
+        var response = await Driver.CallToolAsync("overmind_replies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["since"] = "2026-10-23T07:55:33Z",
+            ["kind"] = "Question",
+            ["featureSlug"] = "151-notify-replies-surface"
+        });
+
+        var request = FindRequest("GET", "/api/agent/notifications/replies");
+        request.Query.ShouldBe(
+            $"projectId={Canned.ProjectId}&since=2026-10-23T07%3A55%3A33Z&kind=question&featureSlug=151-notify-replies-surface");
+
+        Canned.ToolResultText(response).ShouldContain("Ship it as planned.");
+    }
+
+    [Fact]
+    public async Task Replies_UnknownKind_RejectedBeforeAnyHttpCall()
+    {
+        var response = await Driver.CallToolAsync("overmind_replies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["kind"] = "urgent"
+        });
+
+        ToolErrorText(response).ShouldContain("Invalid notification kind 'urgent'");
+        ToolErrorText(response).ShouldContain("info, question, approval");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Path.StartsWith("/api/agent/notifications", StringComparison.Ordinal));
+    }
+
     private static string ToolErrorText(JsonNode response)
     {
         var result = response["result"];

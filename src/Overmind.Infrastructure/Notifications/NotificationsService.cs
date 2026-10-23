@@ -58,7 +58,12 @@ public sealed class NotificationsService(OvermindDbContext db)
     }
 
     public async Task<IReadOnlyList<AgentNotification>> ListRepliesAsync(
-        Guid? projectId, bool includeRead, CancellationToken ct)
+        Guid? projectId,
+        bool includeRead,
+        DateTime? since,
+        NotificationKind? kind,
+        string? featureSlug,
+        CancellationToken ct)
     {
         var replied = db.AgentNotifications
             .AsNoTracking()
@@ -72,6 +77,21 @@ public sealed class NotificationsService(OvermindDbContext db)
         if (projectId is { } scoped)
         {
             replied = replied.Where(n => n.ProjectId == scoped);
+        }
+
+        if (since is { } after)
+        {
+            replied = replied.Where(n => n.RepliedAt > after);
+        }
+
+        if (kind is { } wanted)
+        {
+            replied = replied.Where(n => n.Kind == wanted);
+        }
+
+        if (featureSlug is { } slug)
+        {
+            replied = replied.Where(n => n.FeatureSlug == slug);
         }
 
         return await replied

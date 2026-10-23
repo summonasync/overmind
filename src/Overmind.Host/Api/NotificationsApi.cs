@@ -61,9 +61,32 @@ public static class NotificationsApi
         NotificationsService service,
         Guid? projectId,
         bool includeRead = true,
+        DateTime? since = null,
+        string? kind = null,
+        string? featureSlug = null,
         CancellationToken ct = default)
     {
-        var replies = await service.ListRepliesAsync(projectId, includeRead, ct);
+        NotificationKind? kindFilter = null;
+        if (!string.IsNullOrWhiteSpace(kind))
+        {
+            var trimmed = kind.Trim();
+            if (!Enum.TryParse<NotificationKind>(trimmed, ignoreCase: true, out var parsed)
+                || !string.Equals(parsed.ToString(), trimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                return HttpErrors.BadRequest(
+                    $"Invalid notification kind '{kind}'. Expected one of: info, question, approval.");
+            }
+
+            kindFilter = parsed;
+        }
+
+        var replies = await service.ListRepliesAsync(
+            projectId,
+            includeRead,
+            since?.ToUniversalTime(),
+            kindFilter,
+            string.IsNullOrWhiteSpace(featureSlug) ? null : featureSlug.Trim(),
+            ct);
 
         return Results.Ok(new RepliesResponse(replies.Select(NotificationMapper.ToResponse).ToArray()));
     }

@@ -60,17 +60,39 @@ public sealed class OvermindNotificationTools
     }
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]
-    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision. Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
+    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision. Optional combinable filters cut the backlog: since (ISO-8601 timestamp — only replies newer than it, e.g. the artifact's last update when hunting a validation proof), kind (info/question/approval), featureSlug. An over-narrow filter returns an empty array, not an error. Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
     public async Task<JsonElement> Replies(
         [Description("Id of the project whose replies to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description("A reply marks its notification read, so false matches nothing — poll with the default true.")] bool? includeRead = null,
+        [Description("ISO-8601 timestamp; only notifications the human replied to after it, e.g. the artifact's last update before you requested a proof.")] string? since = null,
+        [Description("Notification kind: info, question or approval.")] string? kind = null,
+        [Description("Feature slug to narrow to, as shown on the planning board.")] string? featureSlug = null,
         CancellationToken ct = default)
     {
+        var kindFilter = kind is null ? null : NormalizeKind(kind);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the notification", ct);
-        var query = includeRead is null
-            ? $"projectId={resolved}"
-            : $"projectId={resolved}&includeRead={(includeRead.Value ? "true" : "false")}";
-        return await Guarded(() => _api.GetAsync($"/api/agent/notifications/replies?{query}", ct));
+        var query = new List<string> { $"projectId={resolved}" };
+        if (includeRead is { } read)
+        {
+            query.Add($"includeRead={(read ? "true" : "false")}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(since))
+        {
+            query.Add($"since={Uri.EscapeDataString(since.Trim())}");
+        }
+
+        if (kindFilter is { } narrowed)
+        {
+            query.Add($"kind={narrowed}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(featureSlug))
+        {
+            query.Add($"featureSlug={featureSlug.Trim()}");
+        }
+
+        return await Guarded(() => _api.GetAsync($"/api/agent/notifications/replies?{string.Join("&", query)}", ct));
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
