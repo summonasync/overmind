@@ -1,93 +1,123 @@
-# Overmind
+```
+{  ·  ·  ·  ·  ·  }
+ |    .-----.    |
+· ----(  ·  )---- ·
+ |    '-----'    |
+{  ·  ·  ·  ·  ·  }
 
-> Один разум на весь рой. All your agents share one mind — finally on purpose.
+ ██████╗ ██╗   ██╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
+██╔═══██╗██║   ██║██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗
+███████╗██║   ██║█████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║██║  ██║
+██║   ██║╚██╗ ██╔╝██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██║  ██║
+╚██████╔╝ ╚████╔╝ ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
+ ╚═════╝   ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝
+```
 
-## RU — Что это вообще
+**The board each project thinks on.**  
+*The circle you draw around one summoning.*
 
-**Overmind** — десктопное приложение (Windows/macOS/Linux, .NET), которое даёт твоим AI-агентам — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — общий постоянный контекст. Заметки, архитектурные решения, гейты, гварды и скилл-киты живут в одной локальной базе, а не пересказываются каждому агенту в каждой сессии заново.
-
-### История
-
-Как-то раз один разработчик увидел [OpenViking](https://github.com/volcengine/OpenViking) — контекстную базу для агентов от Volcengine с файловой парадигмой `viking://`. Идея понравилась настолько, что захотелось свою. Не понравилась только настройка: внешние сервисы, ключи, конфиги — слишком много движений ради «запомни, что мы решили».
-
-Так родился план: та же идея, но **download-and-run**. Скачал — запустил — работает. Без обязательного Docker'а, без ключей, без квестов.
-
-### Имя
-
-Название выбиралось турниром на четыре раунда. В финале сражались `shared-braincell`, `the-agents-dungeon`, `mimirs-head`, `the-construct` и другие достойные. Победил **Overmind** — разум из StarCraft, который управляет роем зерглингов. Потому что ровно это и происходит: твои Клоды и Кими — зерглинги, а тут у них одна голова на всех.
-
-### Фишка
-
-- **Один процесс** — трей-апп на .NET, который поднимает локальный HTTP API и отдаёт веб-UI. Браузер — это и есть окно приложения.
-- **Агенты подключаются по стандарту** — тонкий stdio MCP-адаптер, который любой MCP-клиент спавнит одной строкой в конфиге. Контекст адресуется своей URI-схемой: `overmind://projects/<id>/gates`.
-- **Скилл-киты** — поименованные наборы скиллов/гейтов/гвардов. Активировал кит на проект — приложение само материализует файлы в `.claude/skills/`, `.kimi-code/skills/` и т.д. База — источник правды, диск — управляемый кэш. Переключил кит — файлы пересобрались.
-- **Поиск всегда работает** — SQLite FTS5 из коробки, офлайн, ноль зависимостей. Хочешь семантику — подними Qdrant в Docker, выбери embedding-провайдера в настройках (локальный ONNX / Ollama / OpenAI-совместимый). Нет Docker'а — честный баннер «векторный поиск выключен», FTS продолжает пахать.
-- **Проекты как дерево папок** — в сайдбаре живое дерево диска: обычные папки приглушены, проекты кликабельны, регистрация проекта прямо на месте. Корни дерева задаёт пользователь, клик по проекту делает его активным — записи дальше открываются в его контексте.
-
-### Статус
-
-Альфа. MVP отгружен (`001-overmind-mvp`, 9 тасков: HTTP API, скилл-киты с материализацией, FTS + опциональная семантика, MCP-адаптер, веб-UI, трей-хост), сверху легли `004-projects-tree-view` и `005-tree-workspace`. В работе `006-planning` — церемония feature → spec → plan → task → result как сущность первого класса (готовы 3 из 11 тасков: домен, схема, human door API). Дальше `002-kit-library`, затем `003-bundled-installer`. Живой срез — на борде планирования (веб-UI или MCP); `BACKLOG/` — материализованное зеркало контрактов.
-
-### Roadmap
-
-| Прио | Скоп | Статус |
-|------|------|--------|
-| v1 (MVP) | Мульти-проектное хранилище контекста, заметки/решения/гейты/гварды/скиллы, FTS + опциональная семантика, трей + веб-UI, stdio MCP-адаптер, материализация китов в проект | ✅ отгружен (`001`) |
-| Дерево проектов | Сайдбар-дерево реальных папок, регистрация на месте, пользовательские корни + активный проект | ✅ отгружен (`004`, `005`) |
-| Церемония планирования | feature → spec → plan → task → result в БД, agent door + MCP-поверхность, веб-редактор, материализация в репо (off/on/archive), импорт существующего `BACKLOG/` | 🔄 в работе (`006`, 3/11) |
-| Библиотека китов | Импорт китов из локальной папки или git-ссылки (включая приватные репо с сохранёнными креденшелами) | ⬜ в плане (`002`) |
-| Установщик | Инсталлятор win/mac с курируемыми китами в комплекте, едет на пайплайне импорта `002` | 🔒 заблокирован (`003`) |
-| P1 | Материализация китов во внешнюю папку + лаунчер агентов (`claude --add-dir`, `kimi --skills-dir`) | ⬜ отложен |
-| P2 | Рантайм-доставка скиллов через MCP (`get_skill`, `overmind://skills/`, bootstrap-скилл) | ⬜ отложен |
-| P2/P3 | Флоу инициализации агентов, онбординг проектов | ⬜ отложен |
+`await SummonAsync();` — part of the summoner's kit  
+**▸ overmind** · grimoire · squeezr · mindlash studio
 
 ---
 
-## EN — Short version
+## What it is
 
-**Overmind** is a Windows/macOS/Linux desktop app (.NET) that gives AI coding agents — Claude Code, Kimi Code, Codex, Gemini CLI, Antigravity — a shared, persistent context store. Project notes, decisions, gates, guards, and skill-kits live in one local database instead of being re-explained to every agent in every session.
+Overmind is project intelligence for one project: the planning board, tasks,
+decisions, gates, guards and skill kits, served to every MCP-capable agent
+from one local process. Claude Code, Kimi Code, Codex, Gemini CLI,
+Antigravity — they all stop being re-explained the same architecture in
+every session, because the context lives here: notes, architectural
+decisions, gates, guards and skill kits in one local database.
 
-- Single tray app process hosting a localhost HTTP API and a web UI — the browser is the window.
-- Agents connect via a thin stdio MCP adapter; context is addressable through a `overmind://` URI scheme (`overmind://projects/<id>/gates`).
-- Skill-kits are managed in the DB and materialized into projects' native skill directories (`.claude/skills/`, `.kimi-code/skills/`, …). Disk is a managed cache, the DB is the source of truth.
-- Full-text search (SQLite FTS5) always works, offline, zero setup. Semantic search via local Qdrant (Docker) is optional — pick an embedding provider in settings (local ONNX / Ollama / OpenAI-compatible).
-- Projects are browsed as a real disk folder tree in the sidebar, with user-defined roots and register-in-place; clicking a project makes it the active context.
+A desktop app (Windows/macOS/Linux, .NET). One tray process hosts a loopback
+HTTP API and a web UI — the browser is the window. Agents attach through a
+thin stdio MCP adapter with one config line; context is addressable through
+the `overmind://` URI scheme (`overmind://projects/<id>/gates`).
 
-Inspired by [OpenViking](https://github.com/volcengine/OpenViking)'s context-as-a-filesystem idea, rebuilt to be download-and-run.
+- **Skill kits** — named sets of skills/gates/guards. Activate a kit on a
+  project and the app materializes the files into `.claude/skills/`,
+  `.kimi-code/skills/` and the rest. The database is the source of truth,
+  the disk is a managed cache — switch the kit, the files rebuild.
+- **Search that always works** — SQLite FTS5 out of the box, offline, zero
+  dependencies. Want semantics — bring up Qdrant in Docker and pick an
+  embedding provider in settings (local ONNX / Ollama / OpenAI-compatible).
+  No Docker — an honest "vector search is off" banner, and FTS keeps
+  working.
+- **Projects as a disk tree** — the sidebar shows the real folder tree:
+  plain folders dimmed, projects clickable, register-in-place. The user sets
+  the tree roots; clicking a project makes it the active context for
+  everything that follows.
 
-**Status:** alpha — the MVP is shipped (`001-overmind-mvp`), plus the projects tree (`004`, `005`) and the planning ceremony (`006` and successors). The latest wave (`137`) shipped parallel-wave coordination — lane rosters, claim-time lane checks, a one-call wave snapshot, the directive channel and entry read-acks — bringing the MCP surface to 55 tools. The planning board (web UI / MCP) is the live index; the `BACKLOG/` tree holds the materialized contracts.
+## Why it exists
 
-## Запуск
+One day a developer saw
+[OpenViking](https://github.com/volcengine/OpenViking) — Volcengine's
+context base for agents with the `viking://` filesystem paradigm. The idea
+landed so well he wanted his own. What did not land was the setup: external
+services, keys, configs — too many movements for "remember what we
+decided".
+
+So the plan became: the same idea, but **download-and-run**. Download, run,
+it works. No mandatory Docker, no keys, no quests.
+
+## The name
+
+Chosen by a four-round tournament. The finalists: `shared-braincell`,
+`the-agents-dungeon`, `mimirs-head`, `the-construct` and other worthy
+contenders. **Overmind** won — the mind of the StarCraft swarm that commands
+the zergling broods. Because that is exactly what happens: your Claudes and
+Kimis are the zerglings, and here they finally share a head.
+
+## Quickstart
 
 ```bash
 dotnet run --project src/Overmind.Host
 ```
 
-Хост — один процесс: проверка единственного экземпляра, SQLite, выбор порта, Kestrel, трей. Повторный запуск при живом инстансе не поднимает второй процесс — он открывает браузер на адресе существующего и завершается.
+The host is one process: single-instance check, SQLite, port pick, Kestrel,
+tray. Running it again while an instance is alive does not spawn a second
+process — it opens the browser on the existing one and exits.
 
-Что происходит при старте: создаётся `~/.overmind/` → база SQLite (миграции автоматически) → порт (по умолчанию 4761, если занят — первый свободный) → запись `~/.overmind/host.port` → Kestrel → иконка в трее. Меню трея: **Open Overmind** (веб-UI в браузере по умолчанию) и **Quit** (плановая остановка, порт освобождается). Остановка также работает по Ctrl+C / SIGTERM. Любая ошибка старта — сообщение в консоль и ненулевой код выхода.
+What happens at startup: `~/.overmind/` is created → the SQLite database
+(migrations applied automatically) → the port (4761 by default, else the
+first free one) → the port is written to `~/.overmind/host.port` → Kestrel →
+the tray icon. Tray menu: **Open Overmind** (web UI in the default browser)
+and **Quit** (a planned stop, the port is released). Ctrl+C / SIGTERM stop
+it too. Any startup failure — a console message and a non-zero exit code.
 
-UI открывается на `http://overmind.localhost:<port>` — хостнейм `.localhost` резолвится в loopback во всех современных браузерах без настройки. API и MCP-адаптер продолжают ходить на `127.0.0.1` напрямую.
+The UI opens at `http://overmind.localhost:<port>` — the `.localhost`
+hostname resolves to loopback in every modern browser with no setup. The
+API and the MCP adapter keep talking to `127.0.0.1` directly.
 
-- **База данных**: `~/.overmind/overmind.db` (SQLite + FTS5, создаётся сама).
-- **Файл порта**: `~/.overmind/host.port` — по нему MCP-адаптер и повторный запуск находят живой инстанс.
-- **Headless-режим** (без трея, для отладки/CI): `dotnet run --project src/Overmind.Host -- --no-tray`.
-- **Известное ограничение macOS**: иконка трея не появляется при запуске через `dotnet run` вне подписанного `.app`-бандла. Упаковка — post-MVP.
+- **Database**: `~/.overmind/overmind.db` (SQLite + FTS5, created for you).
+- **Port file**: `~/.overmind/host.port` — how the MCP adapter and a second
+  launch find the live instance.
+- **Headless** (no tray, for debugging/CI): `dotnet run --project
+  src/Overmind.Host -- --no-tray`.
+- **Known macOS limitation**: the tray icon does not appear when launched
+  via `dotnet run` outside a signed `.app` bundle. Packaging is post-MVP.
 
-## Установка на Windows
+## Trade-offs
 
-Готовый инсталлятор — `overmind-<версия>-setup.exe` (Inno Setup), собирается `build/windows/pack-win.ps1` на Windows-машине.
+Read these before you adopt. They are the same weight as the feature list —
+that is the deal.
 
-- **Скачивание и SmartScreen.** Билд не подписан (нет сертификата — личный инструмент, не коммерческий продукт), поэтому при запуске Windows покажет "Windows protected your PC" / SmartScreen. Это ожидаемо, не баг: жми **More info** → **Run anyway**, чтобы продолжить установку.
-- **Мастер установки.** По умолчанию — установка для текущего пользователя (`%LocalAppData%\Programs\Overmind`, без прав администратора); есть опция поставить на всю машину (`C:\Program Files\Overmind`, требует UAC). Четыре задачи в визарде: **автозапуск при входе в систему** (галка по умолчанию — добавляет `Overmind` в `HKCU\...\Run`), **добавить `overmind-mcp` в PATH** (галка по умолчанию — чтобы `overmind-mcp` можно было запустить из любой оболочки по короткому имени), **зарегистрировать Overmind у AI-агентов на этой машине** (галка по умолчанию — запускает `overmind-mcp install`, который **пишет в конфиг-файлы агентов**: адаптер детектит, какие из шести поддерживаемых агентов реально стоят на машине, и правит конфиг только у них; в типичном случае это Claude Code и/или Kimi Code — конкретный набор зависит от того, что у тебя установлено), **ярлык на рабочем столе** (без галки по умолчанию). Ярлык в Пуск создаётся всегда. Регистрацию можно потом добавить или снять вручную в любой момент: `overmind-mcp install` / `overmind-mcp install --remove` (лежит в `{папка установки}\mcp\`, после установки на PATH — если включена задача PATH — доступен как `overmind-mcp` из любой оболочки). **Уже запущенный агент новую регистрацию не увидит** — конфиг он читает при старте, так что после установки (или после ручного `install`) агента (напр. Claude Code) нужно перезапустить. **Важно для установки на всю машину:** подтверждай UAC-запрос своим собственным админ-аккаунтом, а не чужим — автозапуск, поиск порт-файла при апгрейде и диалог удаления данных при аноинсталле ориентируются на `%USERPROFILE%`/`HKCU` того аккаунта, который согласился на элевацию, а не на аккаунт, из-под которого реально работаешь; если это разные аккаунты, автозапуск тихо зарегистрируется не туда, а плавная остановка Host'а при апгрейде молча не сработает.
-- **Удаление и регистрация агентов.** Деинсталлятор перед удалением файлов сам вызывает `overmind-mcp install --remove`, снимая регистрацию у тех же агентов — так после удаления Overmind ни один агент не остаётся с записью на уже не существующий exe. Если сама регистрация/снятие регистрации у агента не удалась (например, конфиг-файл занят другим процессом) — это не блокирует ни установку, ни удаление: приложение прекрасно работает и без регистрации у агентов, это просто дополнительное удобство.
-- **Обновление.** Повторный запуск `setup.exe` поверх существующей установки — апгрейд на месте: инсталлятор сам останавливает работающий Host через `POST /api/shutdown` (плановая остановка, не `taskkill`) перед заменой файлов, затем может перезапустить.
-- **Удаление.** Через "Установленные приложения" / Панель управления, как обычная программа. Инсталлятор спрашивает отдельным диалогом, удалять ли пользовательские данные (`%USERPROFILE%\.overmind` — база, настройки, скачанные ONNX-модели); **по умолчанию — Нет**, данные остаются на диске для следующей установки. Тихое удаление (`/VERYSILENT`) никогда не трогает `~/.overmind`, если явно не передан `/DELETEDATA`.
-- **Данные пользователя** всегда лежат в `%USERPROFILE%\.overmind`, а не в папке установки — переживают и апгрейд, и обычное удаление.
+- **Local and loopback by design**: no multi-user, no team server, no
+  remote access. One machine, one summoner.
+- **The ceremony is deliberate overhead.** For a one-line fix, a full
+  spec → plan → tasks cycle is too much — the tool is for work that outlives
+  a session.
+- **Value scales with how many MCP-capable agents you actually run.** With
+  a single agent and a small repo, a README does most of the job.
+- **Vector search needs Docker + Qdrant + an embedding provider.**
+  Optional, but "optional" still means extra setup for the good search.
+- **Desktop-first.** The tray app is the entry point, which is unusual for a
+  tool people expect to be a CLI or a SaaS.
 
-### Подключение агентов (MCP)
+## Attach an agent (MCP)
 
-Пример конфигурации MCP-клиента (Claude Code, Kimi Code и т.д.):
+MCP client configuration example (Claude Code, Kimi Code, etc.):
 
 ```json
 {
@@ -101,20 +131,128 @@ UI открывается на `http://overmind.localhost:<port>` — хостн
 }
 ```
 
-`OVERMIND_PROJECT_ID` — id проекта (виден в UI или через `GET /api/projects/`); без него адаптер возьмёт единственный существующий проект. Адрес API задавать не нужно: адаптер сам находит хост через `~/.overmind/host.port`. Контекст читается агентом по URI-схеме `overmind://projects/<id>/gates`, `overmind://projects/<id>/guards` и т.д.
+`OVERMIND_PROJECT_ID` — the project id (visible in the UI or via
+`GET /api/projects/`); without it the adapter takes the only existing
+project. No API address needed: the adapter finds the host through
+`~/.overmind/host.port`. The agent reads context through the URI scheme:
+`overmind://projects/<id>/gates`, `overmind://projects/<id>/guards`, and so
+on.
 
-#### Идемпотентные повторы мутаций (X-Operation-Id)
+### Idempotent mutation retries (X-Operation-Id)
 
-Мутирующие planning-инструменты принимают опциональный параметр `operationId` (GUID): `planning_upsert_artifact`, `planning_upsert_tasks`, `planning_patch_artifact`, `planning_set_status`, `planning_append_log`, `planning_edit_log`, `planning_set_feature_status`, `planning_update_feature`, `planning_set_feature_priority`. Он уезжает заголовком `X-Operation-Id`, и Host ведёт реестр ответов (24 часа):
+The mutating planning tools accept an optional `operationId` parameter (a
+GUID): `planning_upsert_artifact`, `planning_upsert_tasks`,
+`planning_patch_artifact`, `planning_set_status`, `planning_append_log`,
+`planning_edit_log`, `planning_set_feature_status`,
+`planning_update_feature`, `planning_set_feature_priority`. It travels as
+the `X-Operation-Id` header, and the Host keeps a response registry (24
+hours):
 
-- **тот же `operationId` + тот же payload** → Host вернёт сохранённый ответ с `"replayed": true`; повторного применения нет, версия не растёт;
-- **тот же `operationId` + другой payload** → `409 OperationIdConflict` — id минтся заново под каждую логическую операцию;
-- **не-GUID** → `400 InvalidOperationId`;
-- сохраняются только ответы 2xx — упавшая мутация не запоминается, повтор с тем же id выполнится по-настоящему.
+- **same `operationId` + same payload** → the Host returns the stored
+  answer with `"replayed": true`; nothing is re-applied, the version does
+  not grow;
+- **same `operationId` + a different payload** → `409
+  OperationIdConflict` — mint a fresh id per logical operation;
+- **not a GUID** → `400 InvalidOperationId`;
+- only 2xx answers are stored — a failed mutation is not remembered, a
+  retry with the same id executes for real.
 
-Контракт ретраев для агента: транспортная ошибка адаптера всегда содержит маркер `retryable transport failure:` — только этот класс ошибок стоит ретраить, и только повтором **того же** вызова с тем же `operationId`. Бизнес-ошибки (4xx, `STOP:`-гейты) маркер не несут — их ретраить бессмысленно. С `operationId` повтор идемпотентен в любом исходе: Host либо replayнет сохранённый ответ, либо честно ответит `409`. Текст ошибки после маркера может добавлять вердикт read-back-а адаптера («write committed at vN — do not resend» / «no trace» / «outcome unknown») — при живом `operationId` он ни на что не влияет, replay защищает и так.
+The retry contract for an agent: a transport failure always carries the
+marker `retryable transport failure:` — only this error class is worth
+retrying, and only by repeating **the same** call with the same
+`operationId`. Business errors (4xx, `STOP:` gates) carry no marker —
+retrying them is pointless. With an `operationId` a retry is idempotent in
+any outcome: the Host either replays the stored answer or honestly answers
+`409`. The error text after the marker may add the adapter's read-back
+verdict ("write committed at vN — do not resend" / "no trace" / "outcome
+unknown") — with a live `operationId` it changes nothing, replay protects
+anyway.
 
-Провода совместимы в обе стороны: без `operationId` заголовок вообще не отправляется; **старый Host** просто игнорирует незнакомый заголовок; **новый Host со старым адаптером** работает как раньше. Lockstep не требуется — но replay возможен только когда обе стороны новые.
+The wire is compatible both ways: without `operationId` the header is not
+sent at all; an **old Host** simply ignores the unknown header; a **new
+Host with an old adapter** works as before. No lockstep required — but
+replay is only possible when both sides are new.
+
+## Windows: the installer
+
+The ready installer — `overmind-<version>-setup.exe` (Inno Setup), built by
+`build/windows/pack-win.ps1` on a Windows machine.
+
+- **Download and SmartScreen.** The build is unsigned (no certificate — a
+  personal tool, not a commercial product), so Windows shows "Windows
+  protected your PC" / SmartScreen on first run. Expected, not a bug:
+  **More info** → **Run anyway**.
+- **The wizard.** Default — per-user install
+  (`%LocalAppData%\Programs\Overmind`, no admin rights); an option exists
+  for a per-machine install (`C:\Program Files\Overmind`, requires UAC).
+  Four wizard tasks: **run at login** (on by default — adds `Overmind` to
+  `HKCU\...\Run`), **add `overmind-mcp` to PATH** (on by default — so
+  `overmind-mcp` runs from any shell by its short name), **register
+  Overmind with the AI agents on this machine** (on by default — runs
+  `overmind-mcp install`, which **writes to agent config files**: the
+  adapter detects which of the six supported agents are actually installed
+  and edits only those configs; typically that is Claude Code and/or Kimi
+  Code — the exact set depends on what you have installed), **desktop
+  shortcut** (off by default). A Start Menu shortcut is always created.
+  Registration can be added or removed manually at any time: `overmind-mcp
+  install` / `overmind-mcp install --remove` (lives in `{install
+  dir}\mcp\`, available as `overmind-mcp` from any shell when the PATH task
+  is on). **An already-running agent will not see the new registration** —
+  it reads its config at startup, so after installing (or a manual
+  `install`) the agent (e.g. Claude Code) needs a restart. **Per-machine
+  install caveat:** confirm the UAC prompt with your own admin account, not
+  someone else's — autostart, the port-file search during upgrade and the
+  uninstall data dialog all key off `%USERPROFILE%`/`HKCU` of the account
+  that accepted the elevation, not the account you actually work from; if
+  those differ, autostart quietly registers in the wrong profile and the
+  graceful Host stop during an upgrade silently does nothing.
+- **Uninstall and agent registration.** Before removing files, the
+  uninstaller itself calls `overmind-mcp install --remove`, unregistering
+  from the same agents — so after removal no agent keeps an entry pointing
+  at an exe that no longer exists. If the registration/unregistration
+  itself fails (e.g. the config file is locked by another process) — it
+  blocks neither install nor uninstall: the app works perfectly fine
+  without agent registrations, that is just a convenience.
+- **Upgrading.** Running `setup.exe` again over an existing install is an
+  in-place upgrade: the installer stops a running Host itself via
+  `POST /api/shutdown` (a planned stop, not `taskkill`) before replacing
+  files, then may restart it.
+- **Uninstalling.** Through "Apps & features" / Control Panel, like any
+  program. The installer asks in a separate dialog whether to delete user
+  data (`%USERPROFILE%\.overmind` — the database, settings, downloaded
+  ONNX models); **the default is No**, the data stays on disk for the next
+  install. A silent uninstall (`/VERYSILENT`) never touches `~/.overmind`
+  unless `/DELETEDATA` is passed explicitly.
+- **User data** always lives in `%USERPROFILE%\.overmind`, never in the
+  install dir — it survives both an upgrade and a plain uninstall.
+
+## Status
+
+Alpha. The MVP is shipped (`001-overmind-mvp`, 9 tasks: HTTP API, skill
+kits with materialization, FTS + optional semantics, the MCP adapter, the
+web UI, the tray host), with `004-projects-tree-view` and
+`005-tree-workspace` on top. `006-planning` is in flight — the feature →
+spec → plan → task → result ceremony as a first-class entity (3 of 11
+tasks done: domain, schema, the human door API). Next: `002-kit-library`,
+then `003-bundled-installer`. The live slice is the planning board (web UI
+or MCP); `BACKLOG/` is the materialized mirror of the contracts.
+
+The latest wave (`137`) shipped parallel-wave coordination — lane rosters,
+claim-time lane checks, a one-call wave snapshot, the directive channel and
+entry read-acks — bringing the MCP surface to 55 tools.
+
+## Roadmap
+
+| Prio | Scope | Status |
+|------|-------|--------|
+| v1 (MVP) | Multi-project context store, notes/decisions/gates/guards/skills, FTS + optional semantics, tray + web UI, stdio MCP adapter, kit materialization into projects | ✅ shipped (`001`) |
+| Projects tree | Sidebar tree of real folders, register-in-place, user roots + active project | ✅ shipped (`004`, `005`) |
+| Planning ceremony | feature → spec → plan → task → result in the DB, agent door + MCP surface, web editor, repo materialization (off/on/archive), import of an existing `BACKLOG/` | 🔄 in work (`006`, 3/11) |
+| Kit library | Import kits from a local folder or a git reference (private repos included, credentials preserved) | ⬜ planned (`002`) |
+| Installer | win/mac installer with curated kits bundled, rides the `002` import pipeline | 🔒 blocked (`003`) |
+| P1 | Kit materialization into an external folder + an agent launcher (`claude --add-dir`, `kimi --skills-dir`) | ⬜ deferred |
+| P2 | Runtime skill delivery over MCP (`get_skill`, `overmind://skills/`, a bootstrap skill) | ⬜ deferred |
+| P2/P3 | Agent initialization flow, project onboarding | ⬜ deferred |
 
 ## Repository layout
 
@@ -140,3 +278,11 @@ web/                          Next.js 16 static-export SPA (FSD), served by the 
 ## License
 
 TBD
+
+---
+
+*summonasync — one dev, a swarm of agents, nothing leaves the machine.*  
+overmind · grimoire · squeezr · mindlash studio
+
+Everything here runs on your machine: the database lives in `~/.overmind`,
+the HTTP face binds loopback only. If it does not — that is a bug, file it.
