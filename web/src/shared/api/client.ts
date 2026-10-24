@@ -1,9 +1,11 @@
 export class ApiError extends Error {
   readonly status: number;
+  readonly code: string | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code: string | null = null) {
     super(message);
     this.status = status;
+    this.code = code;
     this.name = "ApiError";
   }
 }
@@ -31,13 +33,15 @@ async function readError(response: Response): Promise<ApiError> {
   const body: unknown = await response.json().catch(() => null);
   if (body !== null && typeof body === "object" && !Array.isArray(body)) {
     const record = body as Record<string, unknown>;
+    const code = typeof record.title === "string" && record.title.length > 0 ? record.title : null;
     if (typeof record.detail === "string") {
-      return new ApiError(response.status, record.detail);
+      return new ApiError(response.status, record.detail, code);
     }
     const messages = validationMessages(record);
     if (messages.length > 0) {
-      return new ApiError(response.status, messages.join("; "));
+      return new ApiError(response.status, messages.join("; "), code);
     }
+    return new ApiError(response.status, response.statusText || `Request failed (${response.status})`, code);
   }
   return new ApiError(response.status, response.statusText || `Request failed (${response.status})`);
 }

@@ -8,9 +8,19 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
+import { Modal } from "@/shared/ui/modal";
 import { updatePlanningFeature } from "@/features/planning/api";
+import { FeatureDoneDialog } from "@/features/planning/components/feature-done-dialog";
 import { FeatureNumberBadge } from "@/features/planning/components/feature-number-badge";
 import { FeaturePrioritySelect } from "@/features/planning/components/feature-priority-select";
+import {
+  decideDoneGate,
+  doneGateDialogTitle,
+  doneGateRefusal,
+  type DoneGateDecision,
+  type DoneGateScenario,
+} from "@/features/planning/lib/done-gate";
+import { useApproveAndDone } from "@/features/planning/lib/use-approve-and-done";
 import { compareBoardItems } from "@/features/planning/lib/board-order";
 import {
   cardBriefLine,
@@ -27,7 +37,7 @@ import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-ti
 import { FeatureClaimChip } from "@/features/planning/components/feature-claim-chip";
 import { useDragAutoscroll } from "@/features/planning/lib/use-drag-autoscroll";
 import { useQueueReorder } from "@/features/planning/lib/use-queue-reorder";
-import { planningKeys } from "@/features/planning/queries";
+import { featureQueryOptions, planningKeys } from "@/features/planning/queries";
 import type {
   PlanningArtifactStatus,
   PlanningFeatureBoardItem,
@@ -89,9 +99,17 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   );
 }
 
+interface DoneGateState {
+  scenario: DoneGateScenario;
+  resultArtifactId: string | null;
+  refusal: string | null;
+}
+
 function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
   const queryClient = useQueryClient();
   const boardKey = planningKeys.board(projectId);
+  const [gate, setGate] = useState<DoneGateState | null>(null);
+  const approveAndDone = useApproveAndDone(projectId, item.slug);
 
   const setStatus = useMutation({
     mutationFn: (status: PlanningFeatureStatus) =>
@@ -108,9 +126,13 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
       );
       return { snapshot };
     },
-    onError: (_error, _status, context) => {
+    onError: (error, _status, context) => {
       if (context?.snapshot !== undefined) {
         queryClient.setQueryData(boardKey, context.snapshot);
+      }
+      const refusalText = doneGateRefusal(error);
+      if (refusalText !== null) {
+        setGate({ scenario: "refused", resultArtifactId: null, refusal: refusalText });
       }
     },
     onSettled: () => {
@@ -118,6 +140,50 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
       queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, item.slug) });
     },
   });
+
+  const closeGate = () => {
+    setGate(null);
+    setStatus.reset();
+    approveAndDone.reset();
+  };
+
+  const requestDone = async () => {
+    let decision: DoneGateDecision;
+    try {
+      const feature = await queryClient.fetchQuery(featureQueryOptions(projectId, item.slug));
+      decision = decideDoneGate(feature.artifacts);
+    } catch {
+      decision = { kind: "ready" };
+    }
+    if (decision.kind === "ready") {
+      setStatus.mutate("done");
+      return;
+    }
+    if (decision.kind === "missing-result") {
+      setGate({ scenario: "missing-result", resultArtifactId: null, refusal: null });
+      return;
+    }
+    setGate({
+      scenario: "unvalidated-result",
+      resultArtifactId: decision.resultArtifactId,
+      refusal: null,
+    });
+  };
+
+  const handleStatusChange = (status: PlanningFeatureStatus) => {
+    if (status !== "done") {
+      setStatus.mutate(status);
+      return;
+    }
+    void requestDone();
+  };
+
+  const approve = () => {
+    if (gate === null || gate.resultArtifactId === null) {
+      return;
+    }
+    approveAndDone.mutate(gate.resultArtifactId, { onSuccess: closeGate });
+  };
 
   return (
     <span className="flex flex-col items-end gap-1">
@@ -130,7 +196,7 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
         )}
         value={item.status}
         disabled={setStatus.isPending || allowedTransitions(item.status).length === 0}
-        onChange={(event) => setStatus.mutate(event.target.value as PlanningFeatureStatus)}
+        onChange={(event) => handleStatusChange(event.target.value as PlanningFeatureStatus)}
       >
         {featureStatusOptions(item.status).map((status) => (
           <option key={status} value={status}>
@@ -139,6 +205,25 @@ function FeatureStatusSelect({ projectId, item }: FeatureStatusSelectProps) {
         ))}
       </select>
       <ErrorText error={setStatus.error} />
+      <Modal
+        title={gate !== null ? doneGateDialogTitle(gate.scenario) : ""}
+        open={gate !== null}
+        onClose={closeGate}
+      >
+        {gate !== null ? (
+          <FeatureDoneDialog
+            scenario={gate.scenario}
+            projectId={projectId}
+            slug={item.slug}
+            title={item.title}
+            refusal={gate.refusal}
+            pending={approveAndDone.isPending}
+            error={approveAndDone.error as Error | null}
+            onApprove={approve}
+            onCancel={closeGate}
+          />
+        ) : null}
+      </Modal>
     </span>
   );
 }
