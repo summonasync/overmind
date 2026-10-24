@@ -5,33 +5,143 @@
     "merge": "per-child mirror: each immediate child of the source is mirrored separately, so third-party content sitting next to it in the destination home survives. Required for ~/.qwen, which hosts non-crew skills."
   },
   "entries": [
-    { "source": ".kimi-code/agents", "home": "kimi", "type": "dir", "mode": "mirror" },
-    { "source": ".kimi-code/skills", "home": "kimi", "type": "dir", "mode": "mirror" },
-    { "source": ".kimi-code/AGENTS.md", "home": "kimi", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SKILLFLOW.md", "home": "kimi", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "kimi", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/config.toml", "home": "kimi", "type": "file", "mode": "mirror" },
-    { "source": ".claude/agents", "home": "claude", "type": "dir", "mode": "mirror" },
-    { "source": ".claude/skills", "home": "claude", "type": "dir", "mode": "merge" },
-    { "source": ".claude/CLAUDE.md", "home": "claude", "type": "file", "mode": "mirror" },
-    { "source": ".claude/SKILLFLOW.md", "home": "claude", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "claude", "type": "file", "mode": "mirror" },
-    { "source": ".gemini/GEMINI.md", "home": "gemini", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "gemini", "type": "file", "mode": "mirror" },
-    { "source": ".gemini/antigravity/skills", "home": "antigravity", "type": "dir", "mode": "mirror" },
-    { "source": ".gemini/antigravity/agents", "home": "antigravity", "type": "dir", "mode": "mirror" },
-    { "source": ".gemini/antigravity/SKILLFLOW.md", "home": "antigravity", "type": "file", "mode": "mirror" },
-    { "source": ".qwen/agents", "home": "qwen", "type": "dir", "mode": "merge" },
-    { "source": ".qwen/skills", "home": "qwen", "type": "dir", "mode": "merge" },
-    { "source": ".qwen/hooks", "home": "qwen", "type": "dir", "mode": "merge" },
-    { "source": ".qwen/QWEN.md", "home": "qwen", "type": "file", "mode": "mirror" },
-    { "source": ".qwen/SKILLFLOW.md", "home": "qwen", "type": "file", "mode": "mirror" },
-    { "source": ".qwen/settings-snippet.jsonc", "home": "qwen", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "qwen", "type": "file", "mode": "mirror" },
-    { "source": ".codex/agents", "home": "codex", "type": "dir", "mode": "mirror" },
-    { "source": ".codex/skills", "home": "codex", "type": "dir", "mode": "mirror" },
-    { "source": ".codex/AGENTS.md", "home": "codex", "type": "file", "mode": "mirror" },
-    { "source": ".codex/SKILLFLOW.md", "home": "codex", "type": "file", "mode": "mirror" },
-    { "source": ".kimi-code/SOCIAL_DICTIONARY.md", "home": "codex", "type": "file", "mode": "mirror" }
+    {
+      "source": ".kimi-code/agents",
+      "home": "kimi",
+      "type": "dir",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/skills",
+      "home": "kimi",
+      "type": "dir",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/AGENTS.md",
+      "home": "kimi",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/SKILLFLOW.md",
+      "home": "kimi",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/SOCIAL_DICTIONARY.md",
+      "home": "kimi",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/config.toml",
+      "home": "kimi",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".claude/agents",
+      "home": "claude",
+      "type": "dir",
+      "mode": "mirror"
+    },
+    {
+      "source": ".claude/skills",
+      "home": "claude",
+      "type": "dir",
+      "mode": "merge"
+    },
+    {
+      "source": ".claude/CLAUDE.md",
+      "home": "claude",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".claude/SKILLFLOW.md",
+      "home": "claude",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/SOCIAL_DICTIONARY.md",
+      "home": "claude",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".qwen/agents",
+      "home": "qwen",
+      "type": "dir",
+      "mode": "merge"
+    },
+    {
+      "source": ".qwen/skills",
+      "home": "qwen",
+      "type": "dir",
+      "mode": "merge"
+    },
+    {
+      "source": ".qwen/hooks",
+      "home": "qwen",
+      "type": "dir",
+      "mode": "merge"
+    },
+    {
+      "source": ".qwen/QWEN.md",
+      "home": "qwen",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".qwen/SKILLFLOW.md",
+      "home": "qwen",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".qwen/settings-snippet.jsonc",
+      "home": "qwen",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/SOCIAL_DICTIONARY.md",
+      "home": "qwen",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".codex/agents",
+      "home": "codex",
+      "type": "dir",
+      "mode": "mirror"
+    },
+    {
+      "source": ".codex/skills",
+      "home": "codex",
+      "type": "dir",
+      "mode": "mirror"
+    },
+    {
+      "source": ".codex/AGENTS.md",
+      "home": "codex",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".codex/SKILLFLOW.md",
+      "home": "codex",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/SOCIAL_DICTIONARY.md",
+      "home": "codex",
+      "type": "file",
+      "mode": "mirror"
+    }
   ]
 }

@@ -105,11 +105,10 @@ What the board actually enforces (verified against the implementation, not the t
   the lane's WHOLE queue to the lane; the lane agent works it head to tail. A feature parked in
   review is the human's court: unclaim it and claim the next one — never wait for the `done` flip.
 - Claim gates: `planning_claim_feature` refuses 409 `LaneClaimHeld` when another alias holds an
-  alive claim in the lane. A second arm, `LaneSerialBusy`, still refuses claims while another
-  non-`done` feature sits open in the lane; board feature `157-claim-aware-lanes` (p0) replaces
-  it with the own-claim rule. Until 157 lands, the first claim in a fully bound lane needs
-  `overrideLaneCheck=true` once.
-- `overrideLaneCheck=true` is an escape hatch for a human's decision, never a planning device.
+  alive claim in the lane. Board feature `157-claim-aware-lanes` is DEPLOYED (owner-confirmed
+  2026-10-24): the own-claim rule replaced `LaneSerialBusy` — a fully bound lane claims
+  normally, whole-queue binding is the standard model. `overrideLaneCheck=true` stays an escape
+  hatch for a human's explicit call, never a planning device.
 - The human door skips lane checks; your writes are not the human's — do not assume a lane state
   you see is enforced the same way from the UI.
 - Features join a lane by name via `planning_update_feature(slug, lane=..., logNote=...)`; an
@@ -129,8 +128,9 @@ Grooming procedure:
    authority-gated moves, never silent ones.
 4. Apply: `planning_list_lanes` → build the FULL roster → `planning_set_lanes` → bind EVERY lane member
    `planning_update_feature(lane=, codeSurfaces=)` with a `logNote` on each — not just heads.
-5. Verify with a fresh `planning_list_lanes`: every lane ≤1 open feature, holder empty before the
-   wave, contours readable. Report the map you actually landed, not the one you proposed.
+5. Verify with a fresh `planning_list_lanes`: every lane's queue fully bound, heads unclaimed
+   (holder empty) before the wave, contours readable. Report the map you actually landed, not
+   the one you proposed.
 
 Boundaries: the contour DESIGN is `product-strategist` + the human when a new seam appears — you
 slice into the seams that exist; binding an agent to a lane is the CLAIM, not the roster; the
@@ -189,8 +189,9 @@ Refusal = handoff, not failure:
 - You are about to open a spec/plan/task artifact for editing — you left your lane.
 - A `planning_set_lanes` payload you did not build from a fresh `planning_list_lanes` — that is a
   full replace writing over lanes you never looked at, and it unbinds their features on the way.
-- Two non-`done` features landing in one lane — neither will be claimable; queue the second one
-  unlaned until the head closes.
+- Whole-queue binding is the norm (157 live): lane seriality means the lane AGENT works its
+  features one at a time — order comes from priority band + queue position, never from
+  unbinding tails.
 - A lane invented because "we have 12 features and want to look parallel" — lanes follow agents
   and disjoint contours, not backlog size.
 - Anyone (you or another agent) reaching for `planning_set_current` — the door does not exist;

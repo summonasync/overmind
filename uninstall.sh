@@ -12,7 +12,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; gemini) echo "$HOME/.gemini";; antigravity) echo "$HOME/.gemini/antigravity";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
 
 # Every manifest entry carries all four fields in this exact order — the no-python fallback
 # below groups grep hits four at a time, so a missing "mode" would desynchronise the whole list.
@@ -77,7 +77,7 @@ for t in "${targets[@]:-}"; do
     [[ -e "$t" ]] && { rm -rf "$t"; echo "Removed $t"; }
     parent="$(dirname "$t")"
     case "$parent" in
-        "$HOME/.kimi-code"|"$HOME/.claude"|"$HOME/.gemini"|"$HOME/.gemini/antigravity"|"$HOME/.qwen"|"$HOME/.codex") ;;  # never touch home root
+        "$HOME/.kimi-code"|"$HOME/.claude"|"$HOME/.qwen"|"$HOME/.codex") ;;  # never touch home root
         *) [[ -d "$parent" ]] && [[ -z "$(ls -A "$parent")" ]] && { rm -rf "$parent"; echo "Removed empty dir $parent"; } ;;
     esac
 done

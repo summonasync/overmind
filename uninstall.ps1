@@ -10,8 +10,6 @@ $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Jso
 $homePaths = @{
     kimi        = Join-Path $HOME '.kimi-code'
     claude      = Join-Path $HOME '.claude'
-    gemini      = Join-Path $HOME '.gemini'
-    antigravity = Join-Path $HOME '.gemini\antigravity'
     qwen        = Join-Path $HOME '.qwen'
     codex       = Join-Path $HOME '.codex'
 }

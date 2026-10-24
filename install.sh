@@ -11,7 +11,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; gemini) echo "$HOME/.gemini";; antigravity) echo "$HOME/.gemini/antigravity";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
 
 # Every manifest entry carries all four fields in this exact order — the no-python fallback
 # below groups grep hits four at a time, so a missing "mode" would desynchronise the whole list.
@@ -53,7 +53,6 @@ while read -r src home type mode; do
     hp="$(home_path "$home")"
     if [[ -z "${HOME_OK[$home]:-}" ]]; then
         if [[ -d "$hp" ]]; then HOME_OK[$home]=1
-        elif [[ "$home" == "antigravity" && -d "$(dirname "$hp")" ]]; then HOME_OK[$home]=1
         else HOME_OK[$home]=0; echo "Home $hp not found, skipping its entries."; fi
     fi
     [[ "${HOME_OK[$home]}" == "0" ]] && continue

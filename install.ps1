@@ -7,14 +7,12 @@ $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Jso
 $homePaths = @{
     kimi        = Join-Path $HOME '.kimi-code'
     claude      = Join-Path $HOME '.claude'
-    gemini      = Join-Path $HOME '.gemini'
-    antigravity = Join-Path $HOME '.gemini\antigravity'
     qwen        = Join-Path $HOME '.qwen'
     codex       = Join-Path $HOME '.codex'
 }
 $homeExists = @{}
 foreach ($key in $homePaths.Keys) {
-    $homeExists[$key] = (Test-Path $homePaths[$key]) -or ($key -eq 'antigravity' -and (Test-Path (Join-Path $HOME '.gemini')))
+    $homeExists[$key] = Test-Path $homePaths[$key]
     if (-not $homeExists[$key]) {
         Write-Host "Home $($homePaths[$key]) not found, skipping its entries."
     }
