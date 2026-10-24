@@ -2,7 +2,7 @@
 
 import { Badge } from "@/shared/ui/badge";
 import { cn } from "@/shared/lib/cn";
-import { ALL_ROOM } from "@/features/wave-chat/lib/room-order";
+import { roomLabel } from "@/features/wave-chat/lib/room-order";
 import type { WaveRoom } from "@/features/wave-chat/types";
 
 interface WaveRoomListProps {
@@ -38,8 +38,4 @@ export function WaveRoomList({ rooms, activeRoom, counts, onOpen }: WaveRoomList
       })}
     </nav>
   );
-}
-
-function roomLabel(room: string): string {
-  return room === ALL_ROOM ? "All lanes" : `#${room}`;
 }

@@ -20,3 +20,7 @@ export function sortRooms(rooms: WaveRoom[]): WaveRoom[] {
 function roomRank(room: string): number {
   return room === ALL_ROOM ? 0 : 1;
 }
+
+export function roomLabel(room: string): string {
+  return room === ALL_ROOM ? "All lanes" : `#${room}`;
+}

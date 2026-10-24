@@ -4,12 +4,22 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { postWaveMessage } from "@/features/wave-chat/api";
 import { sortRooms } from "@/features/wave-chat/lib/room-order";
-import { waveChatKeys, waveRoomsQueryOptions } from "@/features/wave-chat/queries";
+import {
+  waveChatKeys,
+  waveParticipantsQueryOptions,
+  waveRoomsQueryOptions,
+} from "@/features/wave-chat/queries";
 
 export function useWaveRooms(projectId: string) {
   const query = useQuery(waveRoomsQueryOptions(projectId));
   const rooms = useMemo(() => (query.data ? sortRooms(query.data.items) : []), [query.data]);
   return { rooms, loading: query.isPending, error: query.error };
+}
+
+export function useWaveParticipants(projectId: string) {
+  const query = useQuery(waveParticipantsQueryOptions(projectId));
+  const participants = useMemo(() => query.data?.items ?? [], [query.data]);
+  return { participants, loading: query.isPending, error: query.error };
 }
 
 export function useWaveMessageMutations(projectId: string) {

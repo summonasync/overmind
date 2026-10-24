@@ -9,11 +9,17 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { WaveComposer } from "@/features/wave-chat/components/wave-composer";
 import { WaveMessageList } from "@/features/wave-chat/components/wave-message-list";
+import { WaveRoomHeader } from "@/features/wave-chat/components/wave-room-header";
 import { WaveRoomList } from "@/features/wave-chat/components/wave-room-list";
+import { WaveRoster } from "@/features/wave-chat/components/wave-roster";
 import { DEFAULT_OWNER_ALIAS, loadOwnerAlias, saveOwnerAlias } from "@/features/wave-chat/lib/owner-alias";
 import { ALL_ROOM } from "@/features/wave-chat/lib/room-order";
 import { unreadCounts, type RoomStreams, type SeenCounts } from "@/features/wave-chat/lib/unread-counts";
-import { useWaveMessageMutations, useWaveRooms } from "@/features/wave-chat/lib/use-wave-chat";
+import {
+  useWaveMessageMutations,
+  useWaveParticipants,
+  useWaveRooms,
+} from "@/features/wave-chat/lib/use-wave-chat";
 import { waveFeedQueryOptions } from "@/features/wave-chat/queries";
 
 const PANEL_DESCRIPTION =
@@ -34,6 +40,7 @@ export function WaveChatPanel() {
   }, []);
 
   const board = useWaveRooms(projectId);
+  const roster = useWaveParticipants(projectId);
   const { post } = useWaveMessageMutations(projectId);
   const queryClient = useQueryClient();
 
@@ -85,13 +92,21 @@ export function WaveChatPanel() {
         <LoadingState label="Loading rooms…" />
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <WaveRoomList
-            rooms={board.rooms}
-            activeRoom={activeRoom}
-            counts={badgeCounts}
-            onOpen={openRoom}
-          />
+          <div className="flex min-w-0 flex-col gap-3">
+            <WaveRoster
+              participants={roster.participants}
+              loading={roster.loading}
+              error={roster.error}
+            />
+            <WaveRoomList
+              rooms={board.rooms}
+              activeRoom={activeRoom}
+              counts={badgeCounts}
+              onOpen={openRoom}
+            />
+          </div>
           <section aria-label={`Messages in ${activeRoom}`} className="flex min-w-0 flex-col gap-3">
+            <WaveRoomHeader room={activeRoom} participants={roster.participants} />
             <WaveMessageList messages={activeStream} ownerAlias={ownerAlias} />
             <WaveComposer
               room={activeRoom}

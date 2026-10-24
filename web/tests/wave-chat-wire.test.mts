@@ -18,8 +18,11 @@ const wholeSlice = () =>
     "lib/composer.ts",
     "lib/feed-store.ts",
     "lib/owner-alias.ts",
+    "lib/roster.ts",
     "lib/use-wave-chat.ts",
     "components/wave-chat-panel.tsx",
+    "components/wave-roster.tsx",
+    "components/wave-room-header.tsx",
     "components/wave-room-list.tsx",
     "components/wave-message-list.tsx",
     "components/wave-composer.tsx",
@@ -50,10 +53,29 @@ test("the composer posts exactly the owner identity and the text", () => {
   assert.ok(sliceFile("api.ts").includes("{ authorAlias, text }"));
 });
 
-test("rooms and feeds poll on the shared live-sync interval", () => {
+test("rooms, feeds and the roster poll on the shared live-sync interval", () => {
   const queries = sliceFile("queries.ts");
-  assert.equal(queries.split("refetchInterval: LIVE_SYNC_INTERVAL_MS").length - 1, 2);
+  assert.equal(queries.split("refetchInterval: LIVE_SYNC_INTERVAL_MS").length - 1, 3);
   assert.ok(queries.includes('import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync"'));
+});
+
+test("the roster reads the participants endpoint through the shared client", () => {
+  const api = sliceFile("api.ts");
+  assert.ok(api.includes("`/projects/${projectId}/wave/participants`"));
+});
+
+test("the roster keys off the project beside rooms and feeds", () => {
+  assert.ok(
+    sliceFile("queries.ts").includes('[...waveChatKeys.all, "participants", projectId]'),
+  );
+});
+
+test("the sidebar stacks the roster above the rooms and the header carries presence", () => {
+  const panel = sliceFile("components/wave-chat-panel.tsx");
+  const rosterAt = panel.indexOf("<WaveRoster");
+  const roomsAt = panel.indexOf("<WaveRoomList");
+  assert.ok(rosterAt !== -1 && roomsAt !== -1 && rosterAt < roomsAt);
+  assert.ok(panel.includes("<WaveRoomHeader"));
 });
 
 test("feeds key off the alias so a changed owner re-reads from its own watermark", () => {

@@ -1,8 +1,17 @@
 import { apiGet, apiPost } from "@/shared/api/client";
-import type { WaveMessage, WaveRoomsPayload, WaveUnreadPayload } from "@/features/wave-chat/types";
+import type {
+  WaveMessage,
+  WaveParticipantsPayload,
+  WaveRoomsPayload,
+  WaveUnreadPayload,
+} from "@/features/wave-chat/types";
 
 export function listWaveRooms(projectId: string): Promise<WaveRoomsPayload> {
   return apiGet<WaveRoomsPayload>(`/projects/${projectId}/wave/rooms`);
+}
+
+export function listWaveParticipants(projectId: string): Promise<WaveParticipantsPayload> {
+  return apiGet<WaveParticipantsPayload>(`/projects/${projectId}/wave/participants`);
 }
 
 export function listWaveUnread(projectId: string, alias: string, room: string): Promise<WaveUnreadPayload> {
