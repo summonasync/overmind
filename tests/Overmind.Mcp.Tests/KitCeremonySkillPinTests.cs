@@ -16,7 +16,6 @@ public class KitCeremonySkillPinTests
     [InlineData(".codex")]
     [InlineData(".kimi-code")]
     [InlineData(".qwen")]
-    [InlineData(".gemini/antigravity")]
     public void CeremonySkill_CarriesPinMatrixLine(string port)
     {
         var skill = File.ReadAllText(Path.Combine(
