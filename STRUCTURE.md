@@ -87,7 +87,7 @@ Layers and allowed import direction — **never import upward**:
 app        → pages, widgets, features, shared   (Next routes, providers, globals)
 pages      → widgets, features, shared          (page compositions, one per route)
 widgets    → features, shared                   (app-shell, kit-workspace, degraded-banner, grimoire-banner)
-features   → shared                             (domain slices: entries, kits, projects, search, settings, health, planning, grimoire)
+features   → shared                             (domain slices: entries, kits, projects, search, settings, health, planning, grimoire, wave-chat)
 shared     → (nothing above)                    (api client, ui primitives, lib, assets)
 ```
 

@@ -13,6 +13,7 @@ const PROJECT_TAB_ROUTES = [
   { key: "entries", label: "Entries", pathname: "/entries" },
   { key: "issues", label: "Issues", pathname: "/issues" },
   { key: "lanes", label: "Lanes", pathname: "/lanes" },
+  { key: "chat", label: "Chat", pathname: "/wave-chat" },
 ] as const;
 
 type ProjectTabKey = (typeof PROJECT_TAB_ROUTES)[number]["key"];
