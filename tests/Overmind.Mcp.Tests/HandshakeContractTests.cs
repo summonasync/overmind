@@ -66,7 +66,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheFiftyFiveTools()
+    public async Task ToolsList_ExposesExactlyTheFiftySevenTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -97,7 +97,7 @@ public class HandshakeContractTests : McpSessionTestBase
             "planning_task_queue", "planning_unclaim_feature", "planning_update_feature",
             "planning_upsert_artifact",
             "planning_upsert_tasks", "planning_validate",
-            "read_entry", "read_project_manifest", "search", "update_entry", "write_entry"
+            "read_entry", "read_project_manifest", "search", "update_entry", "wave_chat_post", "wave_chat_unread", "write_entry"
         ]);
     }
 

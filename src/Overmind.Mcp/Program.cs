@@ -107,6 +107,7 @@ builder.Services.AddSingleton<PlanningArtifactAliasResolver>();
 builder.Services.AddSingleton<FeatureCodeTools>();
 builder.Services.AddSingleton<WaveListingCache>();
 builder.Services.AddSingleton<WaveSnapshotTools>();
+builder.Services.AddSingleton<WaveChatTools>();
 builder.Services.AddSingleton<LaneTools>();
 builder.Services.AddSingleton<DirectiveTools>();
 builder.Services.AddSingleton<EntryAckTools>();
@@ -139,6 +140,7 @@ builder.Services
     .WithTools<PlanningMaterializationTools>()
     .WithTools<FeatureCodeTools>()
     .WithTools<WaveSnapshotTools>()
+    .WithTools<WaveChatTools>()
     .WithTools<LaneTools>()
     .WithTools<DirectiveTools>()
     .WithTools<EntryAckTools>()
