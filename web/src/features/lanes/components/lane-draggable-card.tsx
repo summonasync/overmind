@@ -1,8 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { laneFeatureDragData, laneFeatureDragId } from "@/features/lanes/lib/lane-dnd-data";
+import {
+  laneDragTransform,
+  laneFeatureDragData,
+  laneFeatureDragId,
+} from "@/features/lanes/lib/lane-dnd-data";
 
 interface LaneDraggableCardState {
   isDragging: boolean;
@@ -23,14 +27,15 @@ export function LaneDraggableCard({
   className,
   children,
 }: LaneDraggableCardProps) {
-  const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
+  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: laneFeatureDragId(slug),
     data: laneFeatureDragData(slug, fromLane),
     disabled,
   });
+  const style: CSSProperties | undefined = transform === null ? undefined : { transform: laneDragTransform(transform) };
 
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={className}>
+    <div ref={setNodeRef} {...listeners} {...attributes} style={style} className={className}>
       {children({ isDragging })}
     </div>
   );

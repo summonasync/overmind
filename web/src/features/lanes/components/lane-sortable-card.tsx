@@ -1,8 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
-import { laneFeatureDragData, laneFeatureDragId } from "@/features/lanes/lib/lane-dnd-data";
+import {
+  laneDragTransform,
+  laneFeatureDragData,
+  laneFeatureDragId,
+} from "@/features/lanes/lib/lane-dnd-data";
 
 interface LaneSortableCardState {
   isDragging: boolean;
@@ -24,14 +28,17 @@ export function LaneSortableCard({
   className,
   children,
 }: LaneSortableCardProps) {
-  const { attributes, isDragging, isOver, listeners, setNodeRef } = useSortable({
-    id: laneFeatureDragId(slug),
-    data: laneFeatureDragData(slug, laneName),
-    disabled,
-  });
+  const { attributes, isDragging, isOver, listeners, setNodeRef, transform, transition } =
+    useSortable({
+      id: laneFeatureDragId(slug),
+      data: laneFeatureDragData(slug, laneName),
+      disabled,
+    });
+  const style: CSSProperties | undefined =
+    transform === null ? undefined : { transform: laneDragTransform(transform), transition };
 
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={className}>
+    <div ref={setNodeRef} {...listeners} {...attributes} style={style} className={className}>
       {children({ isDragging, isOver })}
     </div>
   );

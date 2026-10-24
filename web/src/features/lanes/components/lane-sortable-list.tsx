@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { cn } from "@/shared/lib/cn";
 import { laneDroppableData, laneDroppableId } from "@/features/lanes/lib/lane-dnd-data";
 
 interface LaneSortableListState {
@@ -14,6 +15,7 @@ interface LaneSortableListProps {
   slugs: readonly string[];
   disabled?: boolean;
   className?: string;
+  dropClassName?: string;
   children: (state: LaneSortableListState) => ReactNode;
 }
 
@@ -22,6 +24,7 @@ export function LaneSortableList({
   slugs,
   disabled = false,
   className,
+  dropClassName,
   children,
 }: LaneSortableListProps) {
   const { isOver, setNodeRef } = useDroppable({
@@ -33,7 +36,7 @@ export function LaneSortableList({
 
   return (
     <SortableContext items={[...slugs]} strategy={verticalListSortingStrategy}>
-      <ul ref={setNodeRef} className={className}>
+      <ul ref={setNodeRef} className={cn(className, isDropActive && dropClassName)}>
         {children({ isDropActive })}
       </ul>
     </SortableContext>

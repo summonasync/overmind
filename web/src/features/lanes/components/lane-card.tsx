@@ -1,20 +1,22 @@
 "use client";
 
-import { useMemo } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
+import { cn } from "@/shared/lib/cn";
 import { featureStatusTone, priorityTone } from "@/features/planning";
 import type {
   PlanningFeatureBoardItem,
-  PlanningFeatureStatus,
 } from "@/features/planning";
-import { isStatusVisible } from "@/features/lanes/lib/lane-filters";
 import { lanePriorityFromValue } from "@/features/lanes/lib/lane-priority";
-import { sortLaneFeatures } from "@/features/lanes/lib/lane-order";
 import type { LaneMoveTarget } from "@/features/lanes/lib/lane-order";
+import type { LaneDropBlockReason } from "@/features/lanes/lib/lane-drop-resolution";
+import type { LaneDropError } from "@/features/lanes/lib/use-lane-drop";
 import { LaneClaimChip } from "@/features/lanes/components/lane-claim-chip";
 import { LaneFeatureMove } from "@/features/lanes/components/lane-feature-move";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
+import { LaneDropNote } from "@/features/lanes/components/lane-drop-note";
+import { LaneSortableCard } from "@/features/lanes/components/lane-sortable-card";
+import { LaneSortableList } from "@/features/lanes/components/lane-sortable-list";
 import type { LaneMoveController } from "@/features/lanes/lib/use-feature-queue-move";
 import type { LaneFeatureSummary, LaneRow } from "@/features/lanes/types";
 
@@ -22,9 +24,12 @@ interface LaneCardProps {
   lane: LaneRow;
   projectId: string;
   boardItems: ReadonlyMap<string, PlanningFeatureBoardItem>;
+  features: LaneFeatureSummary[];
   moveTargets: ReadonlyMap<string, LaneMoveTarget>;
   queueMove: LaneMoveController;
-  statusFilter: ReadonlySet<PlanningFeatureStatus>;
+  blockReason: LaneDropBlockReason | null;
+  draggedSlug: string | null;
+  dropError: LaneDropError | null;
   onEdit: (lane: LaneRow) => void;
   onDelete: (lane: LaneRow) => void;
 }
@@ -36,6 +41,14 @@ interface LaneFeatureRowProps {
   boardItem: PlanningFeatureBoardItem | undefined;
   target: LaneMoveTarget | undefined;
   queueMove: LaneMoveController;
+  sortableDisabled: boolean;
+  dropMessage: string | null;
+}
+
+function blockChipLabel(lane: LaneRow, reason: LaneDropBlockReason): string {
+  return reason === "claim"
+    ? `held by ${lane.holder?.alias ?? "another session"}`
+    : "serial — one open feature at a time";
 }
 
 function LaneFeatureRow({
@@ -45,6 +58,8 @@ function LaneFeatureRow({
   boardItem,
   target,
   queueMove,
+  sortableDisabled,
+  dropMessage,
 }: LaneFeatureRowProps) {
   const priority = boardItem?.priority;
   const reorderable = boardItem !== undefined && target !== undefined;
@@ -52,32 +67,50 @@ function LaneFeatureRow({
 
   return (
     <li className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 truncate font-mono text-xs text-foreground">{feature.slug}</span>
-        {priority !== undefined ? <Badge tone={priorityTone(priority)}>{priority}</Badge> : null}
-        <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
-        <span className="ml-auto min-w-0 truncate">
-          <LaneClaimChip
-            alias={feature.claimedByAlias}
-            vendor={feature.claimedByVendor}
-            claimState={feature.claimState}
-          />
-        </span>
-      </div>
-      {reorderable ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-1">
-          <LaneFeatureMove
-            slug={feature.slug}
-            laneName={laneName}
-            priority={boardItem.priority}
-            target={target}
-            queueMove={queueMove}
-          />
-          {actions}
-        </div>
-      ) : (
-        actions
-      )}
+      <LaneSortableCard
+        slug={feature.slug}
+        laneName={laneName}
+        disabled={sortableDisabled}
+        className="rounded-md"
+      >
+        {({ isDragging, isOver }) => (
+          <div
+            className={cn(
+              "flex flex-col gap-1 rounded-md px-1 py-0.5 transition-colors",
+              isDragging && "opacity-40 ring-1 ring-primary/50",
+              isOver && !isDragging && "bg-primary/10",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 truncate font-mono text-xs text-foreground">{feature.slug}</span>
+              {priority !== undefined ? <Badge tone={priorityTone(priority)}>{priority}</Badge> : null}
+              <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
+              <span className="ml-auto min-w-0 truncate">
+                <LaneClaimChip
+                  alias={feature.claimedByAlias}
+                  vendor={feature.claimedByVendor}
+                  claimState={feature.claimState}
+                />
+              </span>
+            </div>
+            {reorderable ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                <LaneFeatureMove
+                  slug={feature.slug}
+                  laneName={laneName}
+                  priority={boardItem.priority}
+                  target={target}
+                  queueMove={queueMove}
+                />
+                {actions}
+              </div>
+            ) : (
+              actions
+            )}
+          </div>
+        )}
+      </LaneSortableCard>
+      {dropMessage !== null ? <LaneDropNote message={dropMessage} /> : null}
     </li>
   );
 }
@@ -86,21 +119,17 @@ export function LaneCard({
   lane,
   projectId,
   boardItems,
+  features,
   moveTargets,
   queueMove,
-  statusFilter,
+  blockReason,
+  draggedSlug,
+  dropError,
   onEdit,
   onDelete,
 }: LaneCardProps) {
-  const visibleFeatures = useMemo(
-    () =>
-      sortLaneFeatures(
-        lane.features.filter((feature) => isStatusVisible(statusFilter, feature.status)),
-        boardItems,
-      ),
-    [lane.features, boardItems, statusFilter],
-  );
   const lanePriority = lane.priority === null ? undefined : lanePriorityFromValue(lane.priority);
+  const slugs = features.map((feature) => feature.slug);
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong">
@@ -149,25 +178,50 @@ export function LaneCard({
             claimState={lane.holder.claimState}
           />
         )}
+        {blockReason !== null ? (
+          <Badge tone="warning" className="whitespace-normal">
+            {blockChipLabel(lane, blockReason)}
+          </Badge>
+        ) : null}
       </div>
 
-      {visibleFeatures.length === 0 ? (
-        <p className="text-xs text-muted">No features in this lane yet.</p>
-      ) : (
-        <ul className="space-y-1.5 border-t border-border pt-2">
-          {visibleFeatures.map((feature) => (
-            <LaneFeatureRow
-              key={feature.slug}
-              projectId={projectId}
-              feature={feature}
-              laneName={lane.name}
-              boardItem={boardItems.get(feature.slug)}
-              target={moveTargets.get(feature.slug)}
-              queueMove={queueMove}
-            />
-          ))}
-        </ul>
-      )}
+      <LaneSortableList
+        laneName={lane.name}
+        slugs={slugs}
+        disabled={blockReason !== null}
+        className={cn(
+          "space-y-1.5 rounded-md border-t border-border pt-2 transition-opacity",
+          blockReason !== null && "opacity-50",
+        )}
+        dropClassName="bg-primary/5"
+      >
+        {({ isDropActive }) =>
+          features.length === 0 ? (
+            <li
+              className={cn(
+                "rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted",
+                isDropActive && "border-primary text-primary",
+              )}
+            >
+              Drop a feature here to assign it to {lane.name}
+            </li>
+          ) : (
+            features.map((feature) => (
+              <LaneFeatureRow
+                key={feature.slug}
+                projectId={projectId}
+                feature={feature}
+                laneName={lane.name}
+                boardItem={boardItems.get(feature.slug)}
+                target={moveTargets.get(feature.slug)}
+                queueMove={queueMove}
+                sortableDisabled={blockReason !== null && feature.slug !== draggedSlug}
+                dropMessage={dropError?.slug === feature.slug ? dropError.message : null}
+              />
+            ))
+          )
+        }
+      </LaneSortableList>
     </li>
   );
 }

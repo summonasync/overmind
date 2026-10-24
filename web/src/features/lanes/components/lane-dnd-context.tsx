@@ -13,9 +13,10 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import {
   describeLaneDropTarget,
-  parseLaneDropTarget,
+  laneDropTargetFromOver,
   parseLaneFeatureDrag,
 } from "@/features/lanes/lib/lane-dnd-data";
+
 import type {
   LaneDropTargetData,
   LaneFeatureDragData,
@@ -23,7 +24,12 @@ import type {
 
 interface LaneDndProviderProps {
   children: ReactNode;
-  onDrop?: (drag: LaneFeatureDragData, target: LaneDropTargetData | null) => void;
+  onDrop?: (
+    drag: LaneFeatureDragData,
+    target: LaneDropTargetData | null,
+    overId: unknown,
+  ) => void;
+  onDragChange?: (drag: LaneFeatureDragData | null) => void;
 }
 
 const LANE_DND_INSTRUCTIONS =
@@ -43,7 +49,7 @@ const announcements: Announcements = {
     if (drag === null) {
       return "Dragging an item.";
     }
-    const target = over === null ? null : parseLaneDropTarget(over.data.current);
+    const target = over === null ? null : laneDropTargetFromOver(over.data.current);
     return target === null
       ? `Feature ${drag.slug} is not over a drop target.`
       : `Feature ${drag.slug} is over ${describeLaneDropTarget(target)}.`;
@@ -53,7 +59,7 @@ const announcements: Announcements = {
     if (drag === null) {
       return "Drag finished.";
     }
-    const target = over === null ? null : parseLaneDropTarget(over.data.current);
+    const target = over === null ? null : laneDropTargetFromOver(over.data.current);
     return target === null
       ? `Feature ${drag.slug} was dropped outside any target and stays where it was.`
       : `Feature ${drag.slug} dropped onto ${describeLaneDropTarget(target)}.`;
@@ -66,7 +72,7 @@ const announcements: Announcements = {
   },
 };
 
-export function LaneDndProvider({ children, onDrop }: LaneDndProviderProps) {
+export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProviderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -77,14 +83,23 @@ export function LaneDndProvider({ children, onDrop }: LaneDndProviderProps) {
       sensors={sensors}
       collisionDetection={closestCenter}
       accessibility={{ announcements, screenReaderInstructions: { draggable: LANE_DND_INSTRUCTIONS } }}
+      onDragStart={(event) => {
+        const drag = parseLaneFeatureDrag(event.active.data.current);
+        if (drag !== null) {
+          onDragChange?.(drag);
+        }
+      }}
       onDragEnd={(event) => {
         const drag = parseLaneFeatureDrag(event.active.data.current);
+        onDragChange?.(null);
         if (drag === null) {
           return;
         }
-        const target = event.over === null ? null : parseLaneDropTarget(event.over.data.current);
-        onDrop?.(drag, target);
+        const over = event.over;
+        const target = over === null ? null : laneDropTargetFromOver(over.data.current);
+        onDrop?.(drag, target, over?.id ?? null);
       }}
+      onDragCancel={() => onDragChange?.(null)}
     >
       {children}
     </DndContext>

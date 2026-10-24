@@ -254,8 +254,12 @@ test("mates come from the displayed slice, the slot number comes from the full b
     "if the filter reached the numbering, the sent position would address a different slot than the server's",
   );
   assert.ok(
-    laneCard().includes("isStatusVisible(statusFilter, feature.status)"),
-    "the column and the mate walk must share one visibility predicate",
+    laneBoard().includes("isStatusVisible(statusFilter, feature.status)"),
+    "the column slice is built next to the mate walk, so both share one visibility predicate",
+  );
+  assert.ok(
+    !laneCard().includes("statusFilter"),
+    "the card renders the slice it is handed; a second filter read would let column and targets diverge",
   );
 });
 
@@ -294,7 +298,7 @@ test("the board derives its joins once per input, not once per render", () => {
   );
   assert.ok(board.includes("[roster]"), "the done-stripped lane list is rebuilt only when the roster moves");
   assert.ok(
-    laneCard().includes("[lane.features, boardItems, statusFilter]"),
-    "one card going busy repaints every column, so the column sort is memoized on its own three inputs",
+    board.includes("[lanes, boardItems, statusFilter]"),
+    "one drop re-slicing a column repaints every column, so the slice map is memoized on its three inputs",
   );
 });

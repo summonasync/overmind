@@ -72,6 +72,27 @@ export function parseLaneDropTarget(data: unknown): LaneDropTargetData | null {
   return target.kind === LANE_DND_POOL ? { kind: LANE_DND_POOL } : null;
 }
 
+export function parseLaneFeatureDragId(id: unknown): string | null {
+  if (typeof id !== "string" || !id.startsWith(`${LANE_DND_FEATURE}:`)) {
+    return null;
+  }
+  const slug = id.slice(LANE_DND_FEATURE.length + 1);
+  return slug.length > 0 ? slug : null;
+}
+
+export function laneDropTargetFromOver(data: unknown): LaneDropTargetData | null {
+  const target = parseLaneDropTarget(data);
+  if (target !== null) {
+    return target;
+  }
+  const drag = parseLaneFeatureDrag(data);
+  return drag !== null && drag.fromLane !== null ? laneDroppableData(drag.fromLane) : null;
+}
+
 export function describeLaneDropTarget(target: LaneDropTargetData): string {
   return target.kind === LANE_DND_LANE ? `lane ${target.laneName}` : "the unassigned pool";
+}
+
+export function laneDragTransform(transform: { x: number; y: number } | null): string | undefined {
+  return transform === null ? undefined : `translate3d(${transform.x}px, ${transform.y}px, 0)`;
 }
