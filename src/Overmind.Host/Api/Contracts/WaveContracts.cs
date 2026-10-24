@@ -1,3 +1,5 @@
+using Overmind.Core;
+
 namespace Overmind.Host.Api.Contracts;
 
 public sealed record PostWaveMessageRequest(string Text);
@@ -17,3 +19,16 @@ public sealed record WaveUnreadResponse(WaveMessageResponse[] Items, DateTime Wa
 public sealed record WaveRoomResponse(string Room, DateTime? LastActivityAt);
 
 public sealed record WaveRoomsResponse(WaveRoomResponse[] Items);
+
+public sealed record WaveParticipantResponse(
+    string Kind,
+    string? Lane,
+    string Alias,
+    string? Vendor,
+    AgentSessionLiveness? ClaimState)
+{
+    public const string OwnerKind = "owner";
+    public const string AgentKind = "agent";
+}
+
+public sealed record WaveParticipantsResponse(WaveParticipantResponse[] Items);
