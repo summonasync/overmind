@@ -193,6 +193,19 @@ Rules:
   change both together — and identity comparison is case-sensitive (`Billy` and `billy` are
   different readers).
 
+### Coordination transport map (162)
+
+Four channels with different jobs — pick by intent, do not mix them up:
+
+- `wave_chat_post` / `wave_chat_unread` — **flow**: the per-lane append-only room (plus the
+  project `all` room) for signal-only coordination; etiquette lives in `wave-marshal`.
+- `planning_append_directive` — **addressed**: one feature, one claim holder, a command the
+  holder acks.
+- `overmind_notify` — **personal**: agent↔human gates only (questions, approvals), never
+  agent↔agent.
+- `overmind_wave_snapshot` — **state**: the one-call read of who holds what and where code
+  lives — a picture, not a message stream.
+
 ## Gates (human approval points)
 
 1. **Spec gate** — spec artifact `draft` → user approves (in chat, or `overmind_notify`

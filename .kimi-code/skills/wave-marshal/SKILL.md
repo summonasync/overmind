@@ -128,14 +128,31 @@ log lines, entries, dependencies, notifications. If your runtime offers direct s
 messaging, a heads-up to a live same-runtime session is a best-effort courtesy, never a
 substitute for the board write.
 
-### 6. Wave report
+### 6. Lane chat etiquette (the flow channel)
+Lane chat (`wave_chat_post` / `wave_chat_unread`) is the wave's FLOW channel — the room the
+whole lane reads; it complements the addressed directive channel, never replaces it. Etiquette
+is enforced by prompt, not code:
+- **Signal only.** Four message kinds belong in a room: blocker (you are stopped, and what
+  unblocks you), critical spot (a shared file or contract is about to change — coordinate),
+  handoff (claim released or passed on), broadcast (context the lane or project needs).
+  Progress chatter, status noise and discussion stay out — chat is signal, not a diary.
+- **An `@alias` mention means "you must read this".** Mention an alias only when that agent
+  has to act; a mention lands in its unread feed across rooms.
+- **Cap mirrors directives: 500 chars.** One fact per message, slugs and links over prose.
+
+Do not confuse the channels: chat is the open stream everyone reads when they choose to (the
+marshal arbitrates in the open there), a directive is an addressed command a specific claim
+holder must ack. A blocker that needs one holder to act is BOTH — post the signal in the room
+AND append the directive to that feature.
+
+### 7. Wave report
 Every pass ends with a compact Russian report to the user: wave state per lane, conflicts
 found, decisions issued and where each landed, what needs the human. When decisions were
 non-trivial, persist the pass as a `write_entry` note (tag `wave-sync`) on the target
 project. A deep report file is explicit-request only → `audits/wave-marshal-YYYY-MM-DD.md`
 in the target project.
 
-### 7. Cadence
+### 8. Cadence
 One pass per invocation, stateless: read everything fresh, decide, report, stop. For
 continuous cover the user loops the invocation — you never self-schedule a watchdog.
 

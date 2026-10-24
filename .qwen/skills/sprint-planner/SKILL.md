@@ -89,6 +89,9 @@ separate sprint document.
 ### 6. Lane grooming (parallel-wave slicing)
 Lanes are board data (137): a named code contour, one agent per lane, strictly serial inside.
 You set the roster and the bindings BEFORE the wave starts; running it belongs to `wave-marshal`.
+Grooming a wave opens the lane chat room (162): each lane in the roster gets its room, the
+project gets the shared `all` room — once lanes are live the wave coordinates over
+`wave_chat_post` / `wave_chat_unread` flow, signal-only etiquette in `wave-marshal`.
 
 What the board actually enforces (verified against the implementation, not the tool blurbs):
 - `planning_set_lanes` is a **FULL REPLACE**. Lanes missing from your payload are DELETED, and a
