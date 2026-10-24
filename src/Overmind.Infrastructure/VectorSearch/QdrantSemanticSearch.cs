@@ -152,6 +152,13 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
                 grpcTimeout: CallTimeout)
             : new QdrantClient(endpoint, grpcTimeout: CallTimeout);
 
+    internal async Task<EmbeddingFingerprint> CurrentFingerprintAsync(CancellationToken ct)
+    {
+        var provider = await _providerFactory.ResolveAsync(ct);
+        var vector = await EmbedAsync(provider, "overmind reindex fingerprint probe", ct);
+        return EmbeddingFingerprint.From(provider.Name, provider.Model, vector.Length);
+    }
+
     private static async Task<float[]> EmbedAsync(IEmbeddingProvider provider, string text, CancellationToken ct)
     {
         try
@@ -180,7 +187,7 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         return filter;
     }
 
-    private async Task<QdrantClient> ClientAsync(CancellationToken ct)
+    internal async Task<QdrantClient> ClientAsync(CancellationToken ct)
     {
         var endpoint = await _settings.GetOrDefaultAsync(
             SettingKeys.QdrantEndpoint, SettingDefaults.QdrantEndpoint, ct);

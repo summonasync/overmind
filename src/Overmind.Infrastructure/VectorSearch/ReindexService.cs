@@ -4,12 +4,17 @@ using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.VectorSearch;
 
-public sealed record ReindexReport(int Total, int Indexed, int Failed);
+public sealed record ReindexReport(
+    int Total,
+    int Indexed,
+    int Failed,
+    CollectionRebuildReport? Collection = null);
 
 public sealed class ReindexService
 {
     private readonly OvermindDbContext _dbContext;
     private readonly QdrantSemanticSearch _semanticSearch;
+    private readonly QdrantCollectionSync _collectionSync;
     private readonly ILogger<ReindexService> _logger;
 
     public ReindexService(
@@ -19,7 +24,15 @@ public sealed class ReindexService
     {
         _dbContext = dbContext;
         _semanticSearch = semanticSearch;
+        _collectionSync = new QdrantCollectionSync(QdrantCollection.Name, logger);
         _logger = logger;
+    }
+
+    public async Task<ReindexReport> RebuildAllAsync(CancellationToken ct)
+    {
+        var rebuild = await RebuildCollectionAsync(ct);
+        var report = await ReindexAllAsync(ct);
+        return report with { Collection = rebuild };
     }
 
     public async Task<ReindexReport> ReindexAllAsync(CancellationToken ct)
@@ -44,5 +57,27 @@ public sealed class ReindexService
         }
 
         return new ReindexReport(entries.Count, indexed, failed);
+    }
+
+    private async Task<CollectionRebuildReport?> RebuildCollectionAsync(CancellationToken ct)
+    {
+        try
+        {
+            var fingerprint = await _semanticSearch.CurrentFingerprintAsync(ct);
+            var client = await _semanticSearch.ClientAsync(ct);
+            return await _collectionSync.RebuildAsync(client, fingerprint, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Vector collection rebuild skipped, reindexing the existing collection in place: {Reason}",
+                ex.Message);
+            return null;
+        }
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Overmind.Core;
+using Overmind.Infrastructure.VectorSearch;
 using Shouldly;
 using Xunit;
 
@@ -42,6 +43,29 @@ public sealed class SemanticUnavailableTests
         detail.ShouldContain("384");
         detail.ShouldContain("768");
         detail.ShouldContain("reindex");
+    }
+
+    [Fact]
+    public async Task SemanticMode_RefusesWithNamedConflict_WhenFingerprintMismatched()
+    {
+        var expected = EmbeddingFingerprint.From("ollama", "nomic-embed-text", 768);
+        var found = EmbeddingFingerprint.From("ollama", "all-minilm", 768);
+        var search = StubSearch(
+            healthy: true,
+            () => throw new EmbeddingFingerprintMismatchException(expected.Display, found.Display));
+        using var response = await SemanticSearchAsync(search);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        root.GetProperty("title").GetString().ShouldBe("EmbeddingFingerprintMismatch");
+        var detail = root.GetProperty("detail").GetString().ShouldNotBeNull();
+        detail.ShouldContain("nomic-embed-text");
+        detail.ShouldContain("all-minilm");
+        detail.ShouldContain("reindex required");
+        detail.ShouldContain("POST /api/search/reindex");
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
+using static Qdrant.Client.Grpc.Conditions;
 
 namespace Overmind.Infrastructure.VectorSearch;
 
@@ -34,6 +35,35 @@ public sealed class QdrantCollectionSync(string collection, ILogger logger)
     {
         using var cts = LinkedTimeout(ct);
         return await ReadMarkerAsync(client, cts.Token);
+    }
+
+    public async Task<CollectionRebuildReport> RebuildAsync(
+        QdrantClient client, EmbeddingFingerprint fingerprint, CancellationToken ct)
+    {
+        using var existsCts = LinkedTimeout(ct);
+        var existed = await client.CollectionExistsAsync(collection, existsCts.Token);
+
+        EmbeddingFingerprint? previous = null;
+        ulong dropped = 0;
+        if (existed)
+        {
+            using var readCts = LinkedTimeout(ct);
+            previous = await ReadMarkerAsync(client, readCts.Token);
+            dropped = await CountEntryPointsAsync(client, ct);
+
+            using var deleteCts = LinkedTimeout(ct);
+            await client.DeleteCollectionAsync(collection, cancellationToken: deleteCts.Token);
+        }
+
+        await CreateAsync(client, fingerprint, ct);
+        logger.LogWarning(
+            "Rebuilt Qdrant collection {Collection}: discarded {DroppedPoints} entry points, fingerprint {OldFingerprint} -> {NewFingerprint}",
+            collection,
+            dropped,
+            previous?.Display ?? "none",
+            fingerprint.Display);
+
+        return new CollectionRebuildReport(previous, fingerprint, dropped, existed);
     }
 
     private async Task<CollectionSyncReport> RecreateAsync(
@@ -83,6 +113,15 @@ public sealed class QdrantCollectionSync(string collection, ILogger logger)
         {
             throw new EmbeddingFingerprintMismatchException(expected.Display, stored.Display);
         }
+    }
+
+    private async Task<ulong> CountEntryPointsAsync(QdrantClient client, CancellationToken ct)
+    {
+        var filter = new Filter();
+        filter.MustNot.Add(HasId(EmbeddingFingerprint.MarkerPointId));
+
+        using var cts = LinkedTimeout(ct);
+        return await client.CountAsync(collection, filter, exact: true, cancellationToken: cts.Token);
     }
 
     private async Task<EmbeddingFingerprint?> ReadMarkerAsync(QdrantClient client, CancellationToken ct)

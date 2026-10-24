@@ -195,6 +195,70 @@ public sealed class QdrantCollectionSyncLiveTests
         }
     }
 
+    [Fact]
+    public async Task RebuildAsync_ExistingCollection_DropsPointsAndReseedsFingerprint()
+    {
+        if (!await IsQdrantAvailable())
+        {
+            _output.WriteLine("Qdrant is not reachable; skipping live test.");
+            return;
+        }
+
+        var (client, collection) = await NewScratchAsync();
+        try
+        {
+            var sync = NewSync(collection);
+            var stored = EmbeddingFingerprint.From("ollama", "nomic-embed-text", 768);
+            await sync.EnsureAsync(client, stored, CancellationToken.None);
+            var entry = ContextEntry.Create(Guid.NewGuid(), EntryType.Note, "stale", "vector of the old model");
+            await client.UpsertAsync(
+                collection, [EntryPayload.ToPoint(entry, Enumerable.Repeat(0.25f, 768).ToArray())]);
+
+            var refreshed = EmbeddingFingerprint.From("ollama", "all-minilm", 768);
+            var report = await sync.RebuildAsync(client, refreshed, CancellationToken.None);
+
+            report.Existed.ShouldBeTrue();
+            report.Previous.ShouldBe(stored);
+            report.Seeded.ShouldBe(refreshed);
+            report.DroppedPoints.ShouldBe(1UL);
+            (await sync.ReadAsync(client, CancellationToken.None)).ShouldBe(refreshed);
+            (await client.CountAsync(collection, cancellationToken: CancellationToken.None)).ShouldBe(1UL);
+        }
+        finally
+        {
+            await client.DeleteCollectionAsync(collection);
+        }
+    }
+
+    [Fact]
+    public async Task RebuildAsync_MissingCollection_CreatesAndSeedsWithoutDiscard()
+    {
+        if (!await IsQdrantAvailable())
+        {
+            _output.WriteLine("Qdrant is not reachable; skipping live test.");
+            return;
+        }
+
+        var (client, collection) = await NewScratchAsync();
+        try
+        {
+            var sync = NewSync(collection);
+            var fingerprint = EmbeddingFingerprint.From("onnx", "all-MiniLM-L6-v2", 384);
+
+            var report = await sync.RebuildAsync(client, fingerprint, CancellationToken.None);
+
+            report.Existed.ShouldBeFalse();
+            report.Previous.ShouldBeNull();
+            report.Seeded.ShouldBe(fingerprint);
+            report.DroppedPoints.ShouldBe(0UL);
+            (await sync.ReadAsync(client, CancellationToken.None)).ShouldBe(fingerprint);
+        }
+        finally
+        {
+            await client.DeleteCollectionAsync(collection);
+        }
+    }
+
     private static QdrantCollectionSync NewSync(string collection) =>
         new(collection, NullLogger.Instance);
 

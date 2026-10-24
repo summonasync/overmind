@@ -80,6 +80,13 @@ public static class SearchApi
                     $"Semantic search is unavailable because the vector collection was recreated: {ex.Message} " +
                     "Run POST /api/search/reindex to repopulate it, or use mode=fulltext.");
             }
+            catch (EmbeddingFingerprintMismatchException ex)
+            {
+                return HttpErrors.Conflict(
+                    $"{ex.Message} Run POST /api/search/reindex to rebuild the collection with the current model, " +
+                    "or use mode=fulltext.",
+                    title: "EmbeddingFingerprintMismatch");
+            }
             catch (Exception)
             {
                 return SemanticUnavailable(VectorStoreDownDetail);
@@ -98,7 +105,7 @@ public static class SearchApi
 
     private static async Task<IResult> Reindex(ReindexService reindexService, CancellationToken ct)
     {
-        var report = await reindexService.ReindexAllAsync(ct);
+        var report = await reindexService.RebuildAllAsync(ct);
         return Results.Ok(report);
     }
 
