@@ -17,6 +17,7 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
     private readonly AppSettingsService _settings;
     private readonly EmbeddingProviderFactory _providerFactory;
     private readonly VectorSearchHealthCache _healthCache;
+    private readonly QdrantCollectionSync _collectionSync;
     private readonly ILogger<QdrantSemanticSearch> _logger;
 
     private readonly object _gate = new();
@@ -32,6 +33,7 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         _settings = settings;
         _providerFactory = providerFactory;
         _healthCache = healthCache;
+        _collectionSync = new QdrantCollectionSync(QdrantCollection.Name, logger);
         _logger = logger;
     }
 
@@ -98,28 +100,18 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         var vector = await EmbedAsync(provider, query, ct);
 
         var client = await ClientAsync(ct);
-        var sync = await EnsureCollectionAsync(client, vector.Length, ct);
+        var sync = await _collectionSync.EnsureAsync(
+            client, EmbeddingFingerprint.From(provider.Name, provider.Model, vector.Length), ct);
         if (sync.Recreated)
         {
             throw new VectorDimensionMismatchException((int?)sync.PreviousDimensions, vector.Length);
         }
 
         using var cts = LinkedTimeout(ct);
-        if (projectId.HasValue)
-        {
-            var filter = Filter(MatchKeyword(EntryPayload.ProjectId, projectId.Value.ToString()));
-            var filtered = await client.QueryAsync(
-                QdrantCollection.Name,
-                vector,
-                filter: filter,
-                limit: (ulong)Math.Clamp(limit, 1, 100),
-                cancellationToken: cts.Token);
-            return filtered.Select(EntryPayload.ToHit).ToArray();
-        }
-
         var results = await client.QueryAsync(
             QdrantCollection.Name,
             vector,
+            filter: EntryFilter(projectId),
             limit: (ulong)Math.Clamp(limit, 1, 100),
             cancellationToken: cts.Token);
 
@@ -132,7 +124,8 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         var vector = await EmbedAsync(provider, $"{entry.Title}\n\n{entry.Content}", ct);
 
         var client = await ClientAsync(ct);
-        await EnsureCollectionAsync(client, vector.Length, ct);
+        await _collectionSync.EnsureAsync(
+            client, EmbeddingFingerprint.From(provider.Name, provider.Model, vector.Length), ct);
 
         var point = EntryPayload.ToPoint(entry, vector);
 
@@ -175,43 +168,16 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         }
     }
 
-    private async Task<CollectionSync> EnsureCollectionAsync(QdrantClient client, int dimensions, CancellationToken ct)
+    private static Filter EntryFilter(Guid? projectId)
     {
-        using var cts = LinkedTimeout(ct);
-        if (!await client.CollectionExistsAsync(QdrantCollection.Name, cts.Token))
+        var filter = new Filter();
+        if (projectId.HasValue)
         {
-            await client.CreateCollectionAsync(
-                QdrantCollection.Name,
-                QdrantCollection.CreateVectorParams(dimensions),
-                cancellationToken: cts.Token);
-            return new CollectionSync(Recreated: false, PreviousDimensions: null);
+            filter.Must.Add(MatchKeyword(EntryPayload.ProjectId, projectId.Value.ToString()));
         }
 
-        using var infoCts = LinkedTimeout(ct);
-        var info = await client.GetCollectionInfoAsync(QdrantCollection.Name, cancellationToken: infoCts.Token);
-        if (QdrantCollection.HasMatchingDimensions(info.Config.Params.VectorsConfig, dimensions))
-        {
-            return new CollectionSync(Recreated: false, PreviousDimensions: null);
-        }
-
-        var actualSize = info.Config.Params.VectorsConfig.Params?.Size;
-        _logger.LogWarning(
-            "Recreating Qdrant collection {Collection} because vector dimensions changed from {OldDimensions} to {NewDimensions}; " +
-            "run POST /api/search/reindex to repopulate it",
-            QdrantCollection.Name,
-            actualSize?.ToString() ?? "unknown",
-            dimensions);
-
-        using var deleteCts = LinkedTimeout(ct);
-        await client.DeleteCollectionAsync(QdrantCollection.Name, cancellationToken: deleteCts.Token);
-
-        using var createCts = LinkedTimeout(ct);
-        await client.CreateCollectionAsync(
-            QdrantCollection.Name,
-            QdrantCollection.CreateVectorParams(dimensions),
-            cancellationToken: createCts.Token);
-
-        return new CollectionSync(Recreated: true, PreviousDimensions: actualSize);
+        filter.MustNot.Add(HasId(EmbeddingFingerprint.MarkerPointId));
+        return filter;
     }
 
     private async Task<QdrantClient> ClientAsync(CancellationToken ct)
@@ -249,6 +215,4 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
         cts.CancelAfter(CallTimeout);
         return cts;
     }
-
-    private sealed record CollectionSync(bool Recreated, ulong? PreviousDimensions);
 }
