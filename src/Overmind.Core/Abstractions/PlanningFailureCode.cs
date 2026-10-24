@@ -74,5 +74,7 @@ public enum PlanningFailureCode
     InvalidLaneName,
     LaneRosterWriteRetired,
     OperationIdConflict,
-    InvalidOperationId
+    InvalidOperationId,
+    MissingWaveRoom,
+    WaveTextTooLong
 }

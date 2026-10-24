@@ -18,8 +18,8 @@ How the repo is organized and the rules for writing code in it. System design li
 │                              #   overmind.iss, pack-win.ps1, make-icon.ps1 + overmind.ico, smoke-installer.ps1)
 ├── src/
 │   ├── Overmind.Core/        # domain: Entities/, Enums/, Abstractions/ — zero dependencies
-│   ├── Overmind.Infrastructure/  # Persistence/, Search/, VectorSearch/, Embeddings/, Materialization/, Planning/, Configuration/, Grimoire/ (detection + integration for the external Grimoire companion), Migrations/
-│   ├── Overmind.Host/        # composition root: Program.cs, DependencyInjection.cs, Api/ (slices incl. Planning*Api.cs + AgentPlanningApi.cs + GrimoireApi.cs), BacklogImportCli.cs (run-and-exit --import-backlog) + BacklogImportCommand.cs (boot-time import), tray+lifecycle at root
+│   ├── Overmind.Infrastructure/  # Persistence/, Search/, VectorSearch/, Embeddings/, Materialization/, Planning/, Wave/ (wave chat store: WaveChatService rooms/unread/watermarks + WaveChatRetentionSweeper), Configuration/, Grimoire/ (detection + integration for the external Grimoire companion), Migrations/
+│   ├── Overmind.Host/        # composition root: Program.cs, DependencyInjection.cs, Api/ (slices incl. Planning*Api.cs + AgentPlanningApi.cs + GrimoireApi.cs + WaveChatApi.cs), WaveChatRetentionSweepService.cs (background purge, Wave:ChatRetentionDays), BacklogImportCli.cs (run-and-exit --import-backlog) + BacklogImportCommand.cs (boot-time import), tray+lifecycle at root
 │   └── Overmind.Mcp/         # stdio MCP adapter, no project references — planning tools under Planning/:
 │                             #   PlanningFeatureTools / PlanningArtifactTools / PlanningMaterializationTools
 │                             #   (tool classes, one per domain), PlanningArtifactAliasResolver (alias→artifactId),

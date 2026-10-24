@@ -37,6 +37,8 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningDirective> PlanningDirectives => Set<PlanningDirective>();
     public DbSet<EntryAck> EntryAcks => Set<EntryAck>();
     public DbSet<PlanningOperationRecord> PlanningOperationRecords => Set<PlanningOperationRecord>();
+    public DbSet<WaveMessage> WaveMessages => Set<WaveMessage>();
+    public DbSet<WaveWatermark> WaveWatermarks => Set<WaveWatermark>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -372,6 +374,34 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(r => new { r.ProjectId, r.OperationId }).IsUnique();
+        });
+
+        modelBuilder.Entity<WaveMessage>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(m => m.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(m => m.Room).HasMaxLength(PlanningLane.MaxNameLength).UseCollation("NOCASE");
+            builder.Property(m => m.AuthorAlias).HasMaxLength(WaveMessage.MaxIdentityLength);
+            builder.Property(m => m.Text).HasMaxLength(WaveMessage.MaxTextLength);
+            builder.Property(m => m.Mentions).HasMaxLength(WaveMessage.MaxMentionsLength);
+
+            builder.HasIndex(m => new { m.ProjectId, m.Room, m.CreatedAt });
+            builder.HasIndex(m => m.CreatedAt);
+        });
+
+        modelBuilder.Entity<WaveWatermark>(builder =>
+        {
+            builder.HasKey(w => new { w.ProjectId, w.Alias });
+
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(w => w.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(w => w.Alias).HasMaxLength(WaveWatermark.MaxIdentityLength).UseCollation("NOCASE");
         });
     }
 }

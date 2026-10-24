@@ -865,6 +865,66 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("Tags");
                 });
 
+            modelBuilder.Entity("Overmind.Core.WaveMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorAlias")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Mentions")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Room")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ProjectId", "Room", "CreatedAt");
+
+                    b.ToTable("WaveMessages");
+                });
+
+            modelBuilder.Entity("Overmind.Core.WaveWatermark", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<DateTime>("LastReadAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ProjectId", "Alias");
+
+                    b.ToTable("WaveWatermarks");
+                });
+
             modelBuilder.Entity("Overmind.Infrastructure.Materialization.MaterializedFile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1125,6 +1185,24 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("Entry");
 
                     b.Navigation("Kit");
+                });
+
+            modelBuilder.Entity("Overmind.Core.WaveMessage", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.WaveWatermark", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Overmind.Infrastructure.Materialization.MaterializedFile", b =>

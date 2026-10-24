@@ -15,6 +15,7 @@ using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
 using Overmind.Infrastructure.VectorSearch;
+using Overmind.Infrastructure.Wave;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -25,6 +26,7 @@ public static class DependencyInjection
     public static IServiceCollection AddOvermind(this IServiceCollection services)
     {
         services.AddBacklogImportPipeline();
+        services.AddHostedService<WaveChatRetentionSweepService>();
 
         services.AddScoped<FtsSearchService>();
 
@@ -100,6 +102,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<UpdateLaneRequest>, UpdateLaneRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveRequest>, AppendPlanningDirectiveRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveHumanRequest>, AppendPlanningDirectiveHumanRequestValidator>();
+        services.AddSingleton<IValidator<PostWaveMessageRequest>, PostWaveMessageRequestValidator>();
+        services.AddSingleton<IValidator<PostWaveMessageHumanRequest>, PostWaveMessageHumanRequestValidator>();
         services.AddSingleton<IValidator<OnboardRequest>, OnboardRequestValidator>();
         services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
         services.AddSingleton<IValidator<CreateNotificationRequest>, CreateNotificationRequestValidator>();
@@ -150,6 +154,8 @@ public static class DependencyInjection
         services.AddScoped<PlanningCurrentService>();
         services.AddScoped<WaveSnapshotService>();
         services.AddScoped<FrontmatterKeyRegistry>();
+        services.AddScoped<WaveChatService>();
+        services.AddScoped<WaveChatRetentionSweeper>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();
         services.AddScoped<BacklogFeatureScanner>();

@@ -387,6 +387,15 @@ public sealed class PlanningException : Exception
             "case-insensitively, so this is either a lane that was never created or one that was already deleted; " +
             "planning_list_lanes shows the roster that is live now.");
 
+    public static PlanningException MissingWaveRoom(string room, IReadOnlyList<string> rosterNames) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingWaveRoom,
+            $"Wave room '{room}' does not exist in this project: rooms are the lane roster plus the shared 'all' room. " +
+            $"Rooms live now: {(rosterNames.Count == 0 ? "'all' only (the roster is empty)" : string.Join(", ", rosterNames.Select(n => $"'{n}'")))}.");
+
+    public static PlanningException WaveTextTooLong(int length, int cap) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.WaveTextTooLong,
+            $"Wave message text is {length} characters; the cap is {cap}.");
+
     public static PlanningException MissingDirective(Guid directiveId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingDirective,
             $"Directive '{directiveId}' was not found on this feature — it may live on another feature, " +

@@ -174,6 +174,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapClaimSettingsApi();
     app.MapLanesApi();
     app.MapPlanningDirectivesApi();
+    app.MapWaveChatApi();
     app.MapPlanningMaterializationApi();
     app.MapPlanningImportApi();
     app.MapPlanningExportApi();
