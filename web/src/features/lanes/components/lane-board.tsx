@@ -23,6 +23,7 @@ import { LaneAddDialog } from "@/features/lanes/components/lane-add-dialog";
 import { LaneDeleteDialog } from "@/features/lanes/components/lane-delete-dialog";
 import { LaneEditDialog } from "@/features/lanes/components/lane-edit-dialog";
 import { LaneFeatureWidget } from "@/features/lanes/components/lane-feature-widget";
+import { featureHref } from "@/features/lanes/lib/lane-feature-href";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import { LaneDropNote } from "@/features/lanes/components/lane-drop-note";
 import { LaneDndProvider } from "@/features/lanes/components/lane-dnd-context";
@@ -87,7 +88,9 @@ function UnlanedFeatureRow({ projectId, numbering, item, dropMessage }: UnlanedF
               blocked={item.isBlocked}
               taskDone={item.taskDone}
               taskTotal={item.taskTotal}
-              href={`/dashboard?project=${projectId}&feature=${item.slug}`}
+              href={featureHref(projectId, item.slug)}
+              claimAlias={item.claimedByAlias}
+              claimState={item.claimState}
               claim={<FeatureClaimChip item={item} />}
             >
               <FeatureLaneActions projectId={projectId} slug={item.slug} currentLane={null} />

@@ -50,17 +50,62 @@ test("lane columns and the pool both render the widget; the row markup is gone",
   );
 });
 
-test("the pool keeps its dashboard link; lane cards stay link-free until T1", () => {
+test("the pool keeps its dashboard link; lane cards join it through the same helper", () => {
   const board = laneBoard();
+  const card = laneCard();
   assert.ok(
-    board.includes('href={`/dashboard?project=${projectId}&feature=${item.slug}`}'),
-    "the existing pool click-through survives the re-render",
+    board.includes("href={featureHref(projectId, item.slug)}"),
+    "the pool click-through survives the re-render, now via the shared route builder",
   );
-  assert.ok(!laneCard().includes("href="), "lane widgets expose the T1 seam, they do not pre-empt it");
+  assert.ok(
+    card.includes("href={featureHref(projectId, feature.slug)}"),
+    "lane cards pick up the T1 deep link",
+  );
 });
 
 test("the widget leaves named data seams for the T1 navigation slice", () => {
   const source = widget();
   assert.ok(source.includes("data-lane-feature-widget={slug}"), "the card root is addressable by name");
   assert.ok(source.includes("data-lane-widget-actions"), "the action strip is addressable for drag exclusions");
+});
+
+test("the number is a deep link: click navigates, the press never reaches the drag sensors", () => {
+  const source = widget();
+  assert.ok(source.includes("href={href}"), "the key navigates to the route the consumer hands in");
+  assert.ok(
+    source.includes("onPointerDown={keepPressLocal}"),
+    "the anchor press is excluded from the drag sensors per element",
+  );
+  assert.ok(
+    source.includes("onClick={keepPressLocal}"),
+    "the click stops at the anchor, no upstream listener reacts to it",
+  );
+});
+
+test("a press on the card body stays drag territory: the title is plain text, not a link", () => {
+  const source = widget();
+  assert.ok(
+    source.includes(
+      '<span className="min-w-0 truncate text-sm font-semibold text-foreground">{label}</span>',
+    ),
+    "no navigation affordance on the body, a threshold press there drags instead",
+  );
+  const rootLine = source.split("\n").find((line) => line.includes("data-lane-feature-widget"));
+  assert.ok(
+    rootLine !== undefined && !rootLine.includes("onPointerDown"),
+    "the drag exclusion is per affordance element, the card root still feeds the sensors",
+  );
+});
+
+test("the chevron menu rides the widget and carries the claim identity for its readout", () => {
+  const source = widget();
+  assert.ok(source.includes("<LaneWidgetMenu"), "the affordance zone lives with the card");
+  assert.ok(
+    source.includes("href !== null ? ("),
+    "a widget without a route keeps neither link nor menu",
+  );
+  assert.ok(
+    source.includes("claimAlias={claimAlias}") && source.includes("claimState={claimState}"),
+    "the menu readout gets the holder alias and claim state from the consumers",
+  );
 });
