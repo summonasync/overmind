@@ -2,10 +2,15 @@ export const ISSUE_STATUSES = ["open", "triaged", "promoted", "closed"] as const
 
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
+export const ISSUE_KINDS = ["issue", "request"] as const;
+
+export type IssueKind = (typeof ISSUE_KINDS)[number];
+
 export interface IssueRow {
   id: string;
   title: string;
   status: IssueStatus;
+  kind: IssueKind;
   authorProjectId: string;
   createdAt: string;
   closedAt: string | null;
@@ -30,6 +35,7 @@ export interface CrossProjectIssueRow {
   projectId: string;
   title: string;
   status: IssueStatus;
+  kind: IssueKind;
   authorProjectId: string;
   createdAt: string;
   closedAt: string | null;
@@ -39,6 +45,7 @@ export interface CrossProjectIssueRow {
 
 export interface IssueListFilter {
   status: IssueStatus | null;
+  kind: IssueKind | null;
   authorProjectId: string | null;
 }
 

@@ -1,4 +1,5 @@
 import { Select } from "@/shared/ui/select";
+import { IssueKindFilter } from "@/features/issues/components/issue-kind-filter";
 import { ISSUE_STATUSES } from "@/features/issues/types";
 import type { IssueListFilter, IssueStatus } from "@/features/issues/types";
 
@@ -31,6 +32,7 @@ export function IssueFilters({ filter, projects, onChange }: IssueFiltersProps) 
           ))}
         </Select>
       </label>
+      <IssueKindFilter kind={filter.kind} onChange={(kind) => onChange({ ...filter, kind })} />
       <label className="flex items-center gap-2 text-xs text-muted">
         Author project
         <Select

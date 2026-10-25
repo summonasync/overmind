@@ -1,5 +1,6 @@
 import { formatBacklogAge } from "@/shared/lib/relative-time";
 import { issueHref } from "@/features/issues/lib/issue-href";
+import { IssueKindBadge } from "@/features/issues/components/issue-kind-badge";
 import { IssueStatusChip } from "@/features/issues/components/issue-status-chip";
 import type { IssueRow } from "@/features/issues/types";
 
@@ -34,6 +35,7 @@ export function IssueListRow({ projectId, issue, authorName }: IssueListRowProps
           {issue.appendCount} {issue.appendCount === 1 ? "append" : "appends"}
         </span>
       ) : null}
+      <IssueKindBadge kind={issue.kind} />
       <IssueStatusChip status={issue.status} />
     </a>
   );

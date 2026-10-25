@@ -38,6 +38,7 @@ function IssuesPageContent() {
 
   const [filter, setFilter] = useState<IssueListFilter>({
     status: null,
+    kind: null,
     authorProjectId: null,
   });
   const { data: issues, loading, error } = useIssueList(projectId, filter);
@@ -106,10 +107,10 @@ function IssuesPageContent() {
                   : "Agents file issues through the agent API — foreign-created ones land here with a notification."
               }
               action={
-                filter.status !== null || filter.authorProjectId !== null ? (
+                filter.status !== null || filter.kind !== null || filter.authorProjectId !== null ? (
                   <Button
                     variant="secondary"
-                    onClick={() => setFilter({ status: null, authorProjectId: null })}
+                    onClick={() => setFilter({ status: null, kind: null, authorProjectId: null })}
                   >
                     Clear filters
                   </Button>

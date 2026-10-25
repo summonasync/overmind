@@ -1,4 +1,4 @@
-import { IssueStatusChip, issueHref } from "@/features/issues";
+import { IssueKindBadge, IssueStatusChip, issueHref } from "@/features/issues";
 import type { CrossProjectIssueRow } from "@/features/issues";
 import { ProjectNameBadge } from "@/features/projects";
 import { formatBacklogAge } from "@/shared/lib/relative-time";
@@ -26,6 +26,7 @@ export function GlobalIssueRow({ issue }: GlobalIssueRowProps) {
           {issue.appendCount} {issue.appendCount === 1 ? "append" : "appends"}
         </span>
       ) : null}
+      <IssueKindBadge kind={issue.kind} />
       <IssueStatusChip status={issue.status} />
     </a>
   );

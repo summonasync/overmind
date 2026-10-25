@@ -17,6 +17,6 @@ test("issues is the third project tab after dashboard and entries", () => {
 
 test("the issues tab rides the same project deep link as the other tabs", () => {
   const source = tabs();
-  assert.ok(source.includes('{ key: "issues", label: "Issues", pathname: "/issues" }'));
+  assert.ok(source.includes('{ key: "issues", label: "Issues & requests", pathname: "/issues" }'));
   assert.ok(source.includes("href: projectId !== null ? `${route.pathname}?project="));
 });

@@ -3,6 +3,7 @@ import type {
   AppendIssueValues,
   CrossProjectIssueRow,
   IssueCard,
+  IssueKind,
   IssueListFilter,
   IssueRow,
   IssueStatus,
@@ -13,6 +14,9 @@ function listPath(projectId: string, filter: IssueListFilter): string {
   const params = new URLSearchParams();
   if (filter.status !== null) {
     params.set("status", filter.status);
+  }
+  if (filter.kind !== null) {
+    params.set("kind", filter.kind);
   }
   if (filter.authorProjectId !== null && filter.authorProjectId.length > 0) {
     params.set("authorProjectId", filter.authorProjectId);
@@ -25,8 +29,9 @@ export function listIssues(projectId: string, filter: IssueListFilter): Promise<
   return apiGet<IssueRow[]>(listPath(projectId, filter));
 }
 
-export function listAllIssues(): Promise<CrossProjectIssueRow[]> {
-  return apiGet<CrossProjectIssueRow[]>("/issues");
+export function listAllIssues(kind: IssueKind | null): Promise<CrossProjectIssueRow[]> {
+  const query = kind !== null ? `?kind=${kind}` : "";
+  return apiGet<CrossProjectIssueRow[]>(`/issues${query}`);
 }
 
 export function getIssueCard(projectId: string, issueId: string): Promise<IssueCard> {

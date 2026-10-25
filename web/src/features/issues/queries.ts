@@ -1,14 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getIssueCard, listAllIssues, listIssues } from "@/features/issues/api";
-import type { IssueListFilter } from "@/features/issues/types";
+import type { IssueKind, IssueListFilter } from "@/features/issues/types";
 import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
 
 export const issueKeys = {
   all: ["issues"] as const,
   lists: () => [...issueKeys.all, "list"] as const,
   list: (projectId: string, filter: IssueListFilter) =>
-    [...issueKeys.lists(), projectId, filter.status, filter.authorProjectId] as const,
-  crossProject: () => [...issueKeys.lists(), "cross-project"] as const,
+    [...issueKeys.lists(), projectId, filter.status, filter.kind, filter.authorProjectId] as const,
+  crossProject: (kind: IssueKind | null) => [...issueKeys.lists(), "cross-project", kind] as const,
   details: () => [...issueKeys.all, "detail"] as const,
   detail: (projectId: string, issueId: string) =>
     [...issueKeys.details(), projectId, issueId] as const,
@@ -22,10 +22,10 @@ export const issueListQueryOptions = (projectId: string, filter: IssueListFilter
     refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 
-export const crossProjectIssueListQueryOptions = () =>
+export const crossProjectIssueListQueryOptions = (kind: IssueKind | null) =>
   queryOptions({
-    queryKey: issueKeys.crossProject(),
-    queryFn: listAllIssues,
+    queryKey: issueKeys.crossProject(kind),
+    queryFn: () => listAllIssues(kind),
     refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 
