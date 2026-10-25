@@ -2,9 +2,22 @@ import { mergeMessages } from "./message-stream.ts";
 import type { WaveMessage } from "@/features/wave-chat/types";
 
 const streams = new Map<string, WaveMessage[]>();
+const drained = new Map<string, boolean>();
 
 export function roomStream(projectId: string, room: string): WaveMessage[] {
   return streams.get(storeKey(projectId, room)) ?? [];
+}
+
+export function roomHistoryDrained(projectId: string, room: string): boolean {
+  return drained.get(storeKey(projectId, room)) ?? false;
+}
+
+export function markRoomHistoryDrained(projectId: string, room: string): void {
+  drained.set(storeKey(projectId, room), true);
+}
+
+export function clearRoomHistoryDrained(projectId: string, room: string): void {
+  drained.set(storeKey(projectId, room), false);
 }
 
 export function absorbMessages(projectId: string, incoming: WaveMessage[]): void {

@@ -19,9 +19,8 @@ export interface WaveRoomsPayload {
   items: WaveRoom[];
 }
 
-export interface WaveUnreadPayload {
+export interface WaveHistoryPayload {
   items: WaveMessage[];
-  watermarkAt: string;
 }
 
 export type WaveParticipantKind = "owner" | "agent";
