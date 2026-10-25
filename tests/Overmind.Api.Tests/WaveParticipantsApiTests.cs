@@ -176,6 +176,24 @@ public sealed class WaveParticipantsApiTests : IDisposable
         participants.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task Get_ClaimedLane_AgentRowCarriesSessionLastSeenAndOwnerStaysNull()
+    {
+        var projectId = await CreateProjectAsync(_client);
+        await ClaimLaneFeatureAsync(_client, projectId, 1, "backend", "guldan", "claude");
+
+        var response = await _client.GetAsync($"/api/projects/{projectId}/wave/participants");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        var items = json["items"]!.AsArray();
+        items.Count.ShouldBe(2);
+        items[0]!["lastSeenAt"].ShouldBeNull();
+        var seenAt = DateTimeOffset.Parse(items[1]!["lastSeenAt"]!.GetValue<string>());
+        seenAt.ShouldBeGreaterThan(DateTimeOffset.UtcNow.AddMinutes(-5));
+        seenAt.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow.AddMinutes(1));
+    }
+
     private static async Task ClaimLaneFeatureAsync(
         HttpClient client, Guid projectId, int number, string lane, string alias, string vendor)
     {
