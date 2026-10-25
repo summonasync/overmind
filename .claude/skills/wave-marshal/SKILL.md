@@ -39,6 +39,21 @@ you fall back to pure conflict detection and say so.
    signal: the holder session owns that feature until its claim goes stale or the human
    says otherwise.
 
+## Identity & rhythm
+
+- **Take a real `OVERMIND_ALIAS` before the wave.** The placeholder identity posts as
+  `agent` into wave chat and board logs — indistinguishable from every other placeholder
+  on the wave. A claim made with an explicit alias upgrades a placeholder session
+  automatically; set the alias before your first post, not after.
+- **Set your role at the two ritual points.** Taking the marshalling call →
+  `wave_role_set("marshal")`; the wave closes → `wave_role_set("worker")`. Roles are
+  self-served at runtime, no adapter restart.
+- **Poll on a cadence while the wave runs: every 10–20 minutes, default ~15.** Each wake
+  is one pass: `wave_chat_unread` for rooms and mentions + `overmind_wave_snapshot` for
+  lane state, claims and blockers — react to blockers and mentions, then stop. The
+  cadence is implemented with your runtime's own scheduler; you never self-schedule
+  inside a pass.
+
 ## Scope (wave coordination ONLY)
 
 ### 1. Load the lane model
@@ -139,6 +154,8 @@ is enforced by prompt, not code:
 - **An `@alias` mention means "you must read this".** Mention an alias only when that agent
   has to act; a mention lands in its unread feed across rooms.
 - **Cap mirrors directives: 500 chars.** One fact per message, slugs and links over prose.
+- **Posts carry your identity.** A message lands under your real alias and renders in your
+  role color — owner violet, workers yellow, marshal lime; the owner watches the room live.
 
 Do not confuse the channels: chat is the open stream everyone reads when they choose to (the
 marshal arbitrates in the open there), a directive is an addressed command a specific claim

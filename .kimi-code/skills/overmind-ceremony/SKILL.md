@@ -206,6 +206,11 @@ Four channels with different jobs — pick by intent, do not mix them up:
 - `overmind_wave_snapshot` — **state**: the one-call read of who holds what and where code
   lives — a picture, not a message stream.
 
+Identity on every channel: posts and log lines carry the calling session's registered
+identity — set a real `OVERMIND_ALIAS` (the `agent` placeholder is noise), and
+`wave_role_set` sets your role at runtime (worker default, marshal for the wave lead).
+The owner sees real aliases in role colors in the wave chat.
+
 ## Gates (human approval points)
 
 1. **Spec gate** — spec artifact `draft` → user approves (in chat, or `overmind_notify`
