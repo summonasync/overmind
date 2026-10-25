@@ -222,6 +222,7 @@ function PlanningPageContent() {
             initial={editing ? (editingFeature ?? undefined) : undefined}
             pending={createFeature.isPending || updateFeature.isPending}
             error={(createFeature.error as Error | null) ?? (updateFeature.error as Error | null)}
+            takenSlugs={features.map((item) => item.slug)}
             onSubmit={handleSubmit}
             onCancel={() => setFormOpen(false)}
           />

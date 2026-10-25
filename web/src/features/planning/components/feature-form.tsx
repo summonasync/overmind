@@ -9,6 +9,7 @@ import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
 import { Textarea } from "@/shared/ui/textarea";
 import { WritePreviewToggle } from "@/shared/ui/write-preview-toggle";
+import { slugPreview } from "@/features/planning/lib/slug-preview";
 import { FEATURE_PRIORITIES } from "@/features/planning/types";
 import type {
   PlanningFeatureFormValues,
@@ -29,11 +30,12 @@ interface FeatureFormProps {
   initial?: PlanningFeatureResponse;
   pending: boolean;
   error: Error | null;
+  takenSlugs?: readonly string[];
   onSubmit: (values: PlanningFeatureFormValues) => void;
   onCancel: () => void;
 }
 
-export function FeatureForm({ initial, pending, error, onSubmit, onCancel }: FeatureFormProps) {
+export function FeatureForm({ initial, pending, error, takenSlugs = [], onSubmit, onCancel }: FeatureFormProps) {
   const [slug, setSlug] = useState(initial?.slug ?? "");
   const [title, setTitle] = useState(initial?.title ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
@@ -41,12 +43,14 @@ export function FeatureForm({ initial, pending, error, onSubmit, onCancel }: Fea
   const [showPreview, setShowPreview] = useState(false);
   const [validationError, setValidationError] = useState<Error | null>(null);
 
+  const preview = slugPreview({ title, slug, takenSlugs });
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     const nextSlug = slug.trim();
     const nextTitle = title.trim();
 
-    if (!SLUG_PATTERN.test(nextSlug) || nextSlug.length > 64) {
+    if (nextSlug.length > 0 && (!SLUG_PATTERN.test(nextSlug) || nextSlug.length > 64)) {
       setValidationError(new Error("Slug must be lowercase kebab-case (1-64 chars), e.g. 007-web-planning-board."));
       return;
     }
@@ -95,8 +99,14 @@ export function FeatureForm({ initial, pending, error, onSubmit, onCancel }: Fea
           </Select>
         </Field>
       </div>
+      {initial === undefined && preview !== null ? (
+        <p aria-live="polite" className="text-xs text-muted">
+          {preview}
+        </p>
+      ) : null}
       <p className="text-xs text-muted">
-        Lowercase kebab-case, e.g. 007-web-planning-board. Becomes the feature folder name under BACKLOG/.
+        Lowercase kebab-case, e.g. 007-web-planning-board. Blank auto-generates from the title on create. Becomes the
+        feature folder name under BACKLOG/.
       </p>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between">
