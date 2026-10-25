@@ -28,7 +28,7 @@ export function LaneSortableCard({
   className,
   children,
 }: LaneSortableCardProps) {
-  const { attributes, isDragging, isOver, listeners, setNodeRef, transform, transition } =
+  const { attributes, isDragging, isOver, listeners, setNodeRef, setActivatorNodeRef, transform, transition } =
     useSortable({
       id: laneFeatureDragId(slug),
       data: laneFeatureDragData(slug, laneName),
@@ -38,7 +38,16 @@ export function LaneSortableCard({
     transform === null ? undefined : { transform: laneDragTransform(transform), transition };
 
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} style={style} className={className}>
+    <div
+      ref={(element) => {
+        setNodeRef(element);
+        setActivatorNodeRef(element);
+      }}
+      {...listeners}
+      {...attributes}
+      style={style}
+      className={className}
+    >
       {children({ isDragging, isOver })}
     </div>
   );

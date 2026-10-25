@@ -22,7 +22,7 @@ const itemClasses = cn(
 
 export function LaneWidgetMenu({ slug, href, claimAlias, claimState }: LaneWidgetMenuProps) {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const zoneRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -52,18 +52,22 @@ export function LaneWidgetMenu({ slug, href, claimAlias, claimState }: LaneWidge
   }, [open]);
 
   useEffect(() => {
-    if (!copied) {
+    if (copyState === "idle") {
       return;
     }
-    const timer = window.setTimeout(() => setCopied(false), 2000);
+    const timer = window.setTimeout(() => setCopyState("idle"), 2000);
     return () => window.clearTimeout(timer);
-  }, [copied]);
+  }, [copyState]);
 
   const copyLink = () => {
     const url = new URL(href, window.location.origin).href;
+    if (navigator.clipboard === undefined) {
+      setCopyState("failed");
+      return;
+    }
     navigator.clipboard.writeText(url).then(
-      () => setCopied(true),
-      () => setCopied(false),
+      () => setCopyState("copied"),
+      () => setCopyState("failed"),
     );
   };
 
@@ -108,7 +112,7 @@ export function LaneWidgetMenu({ slug, href, claimAlias, claimState }: LaneWidge
             Open feature
           </a>
           <button type="button" role="menuitem" onClick={copyLink} className={itemClasses}>
-            {copied ? "Copied" : "Copy link"}
+            {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy link"}
           </button>
           <div className="mt-1 border-t border-border px-3 py-1.5 text-xs text-muted">
             {claimReadout}

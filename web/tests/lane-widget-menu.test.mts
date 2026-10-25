@@ -34,6 +34,18 @@ test("copy link writes the absolute url and reports the copy in place", () => {
   assert.ok(source.includes('"Copied"'), "the click gets feedback without leaving the menu");
 });
 
+test("copy link survives an insecure origin with feedback instead of a silent throw", () => {
+  const source = menu();
+  assert.ok(
+    source.includes("navigator.clipboard === undefined"),
+    "the missing clipboard api is a handled case, checked before the write",
+  );
+  assert.ok(
+    source.includes('"Copy failed"'),
+    "an unavailable or rejected copy is reported in place, the button never looks dead",
+  );
+});
+
 test("the menu closes on Escape and on a press outside, a press inside keeps it open", () => {
   const source = menu();
   assert.ok(source.includes('"Escape"'), "Escape is a close path");

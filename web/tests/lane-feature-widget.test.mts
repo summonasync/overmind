@@ -77,8 +77,8 @@ test("the number is a deep link: click navigates, the press never reaches the dr
     "the anchor press is excluded from the drag sensors per element",
   );
   assert.ok(
-    source.includes("onClick={keepPressLocal}"),
-    "the click stops at the anchor, no upstream listener reacts to it",
+    !source.includes("onClick={keepPressLocal}"),
+    "no dead click guard: no ancestor listens for click, the activation stays native",
   );
 });
 

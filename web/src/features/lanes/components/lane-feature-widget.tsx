@@ -52,7 +52,6 @@ export function LaneFeatureWidget({
         <a
           href={href}
           onPointerDown={keepPressLocal}
-          onClick={keepPressLocal}
           className="shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <span className={cn(KEY_CLASSES, "hover:text-primary/80")}>{number}</span>
