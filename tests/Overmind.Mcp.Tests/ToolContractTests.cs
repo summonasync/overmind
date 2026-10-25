@@ -56,27 +56,27 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ListEntries_FeatureRequestType_PassesThroughAndProjectsLikeAnyEntry()
+    public async Task ListEntries_IdeaType_PassesThroughAndProjectsLikeAnyEntry()
     {
         Stub.RouteGet($"/api/projects/{Canned.ProjectId}/entries", """
-            [{"id":"14141414-1414-1414-1414-141414141414","projectId":"11111111-1111-1111-1111-111111111111","type":"featureRequest","title":"Vector cache","content":"Origin: chat, 2026-10-13.","currentVersion":0,"createdAt":"2026-10-13T09:00:00Z","updatedAt":"2026-10-13T09:00:00Z","tags":["idea"],"skillFiles":[]}]
+            [{"id":"14141414-1414-1414-1414-141414141414","projectId":"11111111-1111-1111-1111-111111111111","type":"idea","title":"Vector cache","content":"Unformed product thinking.","currentVersion":0,"createdAt":"2026-10-13T09:00:00Z","updatedAt":"2026-10-13T09:00:00Z","tags":["intake"],"skillFiles":[]}]
             """);
 
         var response = await Driver.CallToolAsync("list_entries", new JsonObject
         {
             ["projectId"] = Canned.ProjectId.ToString(),
-            ["type"] = "featureRequest"
+            ["type"] = "idea"
         });
 
         response["result"]!["isError"].ShouldBeNull();
 
         var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
-        ParseQuery(request.Query)["type"].ShouldBe("featureRequest");
+        ParseQuery(request.Query)["type"].ShouldBe("idea");
 
         var entry = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray().Single()!.AsObject();
-        entry["type"]!.GetValue<string>().ShouldBe("featureRequest");
+        entry["type"]!.GetValue<string>().ShouldBe("idea");
         entry["title"]!.GetValue<string>().ShouldBe("Vector cache");
-        entry["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["idea"]);
+        entry["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["intake"]);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
             "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill, featureRequest, audit, tombstone), tag and q (fulltext). " +
+            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag and q (fulltext). " +
             "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
 
         var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
@@ -459,7 +459,7 @@ public class ToolContractTests : McpSessionTestBase
     [InlineData("decision")]
     [InlineData("gate")]
     [InlineData("guard")]
-    [InlineData("featureRequest")]
+    [InlineData("idea")]
     [InlineData("audit")]
     [InlineData("tombstone")]
     public async Task WriteEntry_AllowedTypes_ProxyToApi(string type)
@@ -477,13 +477,15 @@ public class ToolContractTests : McpSessionTestBase
         JsonNode.Parse(request.Body)!["type"]!.GetValue<string>().ShouldBe(type);
     }
 
-    [Fact]
-    public async Task WriteEntry_InvalidType_ReturnsFriendlyToolErrorAndProcessSurvives()
+    [Theory]
+    [InlineData("banana")]
+    [InlineData("featureRequest")]
+    public async Task WriteEntry_InvalidType_ReturnsFriendlyToolErrorAndProcessSurvives(string type)
     {
         var response = await Driver.CallToolAsync("write_entry", new JsonObject
         {
             ["projectId"] = Canned.ProjectId.ToString(),
-            ["type"] = "banana",
+            ["type"] = type,
             ["title"] = "Nope",
             ["content"] = "body"
         });
@@ -491,7 +493,7 @@ public class ToolContractTests : McpSessionTestBase
         var result = response["result"]!;
         result["isError"]!.GetValue<bool>().ShouldBeTrue();
         var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
-        text.ShouldContain("Invalid entry type 'banana'");
+        text.ShouldContain($"Invalid entry type '{type}'");
         text.ShouldContain("note, decision, gate, guard");
 
         Driver.HasExited.ShouldBeFalse();

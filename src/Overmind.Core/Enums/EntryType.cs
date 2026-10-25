@@ -8,6 +8,6 @@ public enum EntryType
     Guard = 3,
     Skill = 4,
     Tombstone = 5,
-    FeatureRequest = 6,
+    Idea = 6,
     Audit = 7
 }

@@ -14,7 +14,7 @@ public sealed class EntryMirrorNamingTests
     [InlineData(EntryType.Guard, "guard")]
     [InlineData(EntryType.Skill, "skill")]
     [InlineData(EntryType.Tombstone, "tombstone")]
-    [InlineData(EntryType.FeatureRequest, "feature-request")]
+    [InlineData(EntryType.Idea, "idea")]
     [InlineData(EntryType.Audit, "audit")]
     public void Directory_MapsEveryTypeToItsMirrorFolder(EntryType type, string expected) =>
         EntryMirrorNaming.Directory(type).ShouldBe(expected);
@@ -26,7 +26,7 @@ public sealed class EntryMirrorNamingTests
     [InlineData(EntryType.Guard, "guard")]
     [InlineData(EntryType.Skill, "skill")]
     [InlineData(EntryType.Tombstone, "tombstone")]
-    [InlineData(EntryType.FeatureRequest, "featureRequest")]
+    [InlineData(EntryType.Idea, "idea")]
     [InlineData(EntryType.Audit, "audit")]
     public void Wire_MapsEveryTypeToItsWireToken(EntryType type, string expected) =>
         EntryMirrorNaming.Wire(type).ShouldBe(expected);

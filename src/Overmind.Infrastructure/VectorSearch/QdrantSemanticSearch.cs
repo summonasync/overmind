@@ -115,7 +115,24 @@ public sealed class QdrantSemanticSearch : ISemanticSearch
             limit: (ulong)Math.Clamp(limit, 1, 100),
             cancellationToken: cts.Token);
 
-        return results.Select(EntryPayload.ToHit).ToArray();
+        var hits = new List<EntrySearchHit>(results.Count);
+        foreach (var point in results)
+        {
+            if (EntryPayload.ToHit(point) is { } hit)
+            {
+                hits.Add(hit);
+            }
+        }
+
+        var dropped = results.Count - hits.Count;
+        if (dropped > 0)
+        {
+            _logger.LogWarning(
+                "Skipped {Dropped} vector points whose entry type payload no longer parses; the reindex door rebuilds them.",
+                dropped);
+        }
+
+        return hits;
     }
 
     public async Task UpsertEntryAsync(ContextEntry entry, CancellationToken ct)

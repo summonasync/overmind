@@ -48,16 +48,21 @@ public static class EntryPayload
         };
     }
 
-    public static EntrySearchHit ToHit(ScoredPoint point)
+    public static EntrySearchHit? ToHit(ScoredPoint point)
     {
         var payload = point.Payload;
         var content = payload[Content].StringValue;
         var snippet = content.Length <= SnippetLength ? content : content[..SnippetLength] + "…";
 
+        if (!Enum.TryParse<EntryType>(payload[Type].StringValue, ignoreCase: true, out var type))
+        {
+            return null;
+        }
+
         return new EntrySearchHit(
             Guid.Parse(payload[EntryId].StringValue),
             payload[Title].StringValue,
-            Enum.Parse<EntryType>(payload[Type].StringValue, ignoreCase: true),
+            type,
             snippet,
             point.Score);
     }

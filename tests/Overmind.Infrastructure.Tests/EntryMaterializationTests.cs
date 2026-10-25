@@ -82,14 +82,14 @@ public sealed class EntryMaterializationTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_FeatureRequestEntry_LandsInKebabDirectoryAndStaysPinnedOnResync()
+    public async Task Sync_IdeaEntry_LandsInIdeaDirectoryAndStaysPinnedOnResync()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.On);
         Guid entryId;
         using (var seed = _db.CreateContext())
         {
             var entry = ContextEntry.Create(
-                projectId, EntryType.FeatureRequest, "Vector Cache", "Origin: chat, 2026-10-13.");
+                projectId, EntryType.Idea, "Vector Cache", "Origin: chat, 2026-10-13.");
             seed.ContextEntries.Add(entry);
             await seed.SaveChangesAsync();
             entryId = entry.Id;
@@ -100,12 +100,12 @@ public sealed class EntryMaterializationTests : IDisposable
             var entry = await stored.ContextEntries.SingleAsync(e => e.Id == entryId);
             await CreateMaterializer(stored).SyncAsync(projectId, ct: CancellationToken.None);
 
-            var relative = $"ENTRIES/feature-request/vector-cache-{entryId.ToString("N")[..8]}.md";
+            var relative = $"ENTRIES/idea/vector-cache-{entryId.ToString("N")[..8]}.md";
             var doc = await File.ReadAllTextAsync(Path.Combine(_projectDir, relative));
             doc.ShouldBe(
                 "---\n" +
                 $"id: {entryId}\n" +
-                "type: featureRequest\n" +
+                "type: idea\n" +
                 "title: Vector Cache\n" +
                 $"createdAt: {entry.CreatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
                 $"updatedAt: {entry.UpdatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
@@ -119,11 +119,11 @@ public sealed class EntryMaterializationTests : IDisposable
 
             report.Refused.ShouldBeEmpty();
             report.Skipped.ShouldContain(s =>
-                s.RelativePath.StartsWith("ENTRIES/feature-request/", StringComparison.Ordinal) &&
+                s.RelativePath.StartsWith("ENTRIES/idea/", StringComparison.Ordinal) &&
                 s.Reason.Contains("already matches", StringComparison.Ordinal));
         }
 
-        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "feature-request"))
+        Directory.EnumerateFiles(Path.Combine(_projectDir, "ENTRIES", "idea"))
             .ShouldHaveSingleItem();
     }
 
