@@ -21,7 +21,7 @@ const TONE_DOTS: Record<BadgeTone, string> = {
   success: "bg-success",
   danger: "bg-danger",
   skill: "bg-type-skill",
-  idea: "bg-type-featureRequest",
+  idea: "bg-type-idea",
   audit: "bg-type-audit",
 };
 

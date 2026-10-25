@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { ENTRY_TYPES, type EntryType } from "@/shared/api/types";
+import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import { Markdown } from "@/shared/lib/markdown";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -58,7 +59,7 @@ export function EntryEditor({ initial, pending, error, onSubmit, onCancel }: Ent
           >
             {ENTRY_TYPES.map((entryType) => (
               <option key={entryType} value={entryType}>
-                {entryType}
+                {ENTRY_TYPE_META[entryType].label}
               </option>
             ))}
           </Select>

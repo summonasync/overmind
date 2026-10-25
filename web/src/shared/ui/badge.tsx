@@ -22,7 +22,7 @@ const toneClasses: Record<BadgeTone, string> = {
   success: "bg-success/10 text-success",
   danger: "bg-danger/10 text-danger",
   skill: "bg-type-skill/10 text-type-skill",
-  idea: "bg-type-featureRequest/10 text-type-featureRequest",
+  idea: "bg-type-idea/10 text-type-idea",
   audit: "bg-type-audit/10 text-type-audit",
 };
 

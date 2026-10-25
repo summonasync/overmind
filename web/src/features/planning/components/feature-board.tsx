@@ -80,7 +80,7 @@ const segmentToneClasses: Record<TaskReadinessSegment["tone"], string> = {
   marshal: "bg-marshal",
   danger: "bg-danger",
   skill: "bg-type-skill",
-  idea: "bg-type-featureRequest",
+  idea: "bg-type-idea",
   audit: "bg-type-audit",
 };
 
