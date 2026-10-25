@@ -31,12 +31,13 @@ public sealed class IssueService
 
     public async Task<Issue> CreateAsync(
         Guid projectId, Guid authorProjectId, string title, string body,
-        PlanningLogSource source = PlanningLogSource.Agent, CancellationToken ct = default)
+        PlanningLogSource source = PlanningLogSource.Agent, string kind = Issue.DefaultKind,
+        CancellationToken ct = default)
     {
         var board = await RequireProjectAsync(projectId, ct);
         var author = await RequireProjectAsync(authorProjectId, ct);
 
-        var issue = Issue.Create(projectId, authorProjectId, title, body, source);
+        var issue = Issue.Create(projectId, authorProjectId, title, body, source, kind);
         _db.Issues.Add(issue);
         await _db.SaveChangesAsync(ct);
 
@@ -44,7 +45,7 @@ public sealed class IssueService
         {
             await _notifications.CreateAsync(
                 NotificationKind.Info,
-                $"Project '{author.Name}' filed issue «{issue.Title}» on your board — it needs a fix in your code.",
+                $"Project '{author.Name}' filed {issue.Kind} «{issue.Title}» on your board — it needs a fix in your code.",
                 projectId,
                 issue.Id.ToString(),
                 "issues",
@@ -56,7 +57,8 @@ public sealed class IssueService
     }
 
     public async Task<IReadOnlyList<Issue>> ListAsync(
-        Guid projectId, IssueStatus? status, Guid? authorProjectId, CancellationToken ct = default)
+        Guid projectId, IssueStatus? status, Guid? authorProjectId,
+        string? kind = null, CancellationToken ct = default)
     {
         var issues = _db.Issues.AsNoTracking().Where(i => i.ProjectId == projectId);
         if (status.HasValue)
@@ -69,6 +71,12 @@ public sealed class IssueService
             issues = issues.Where(i => i.AuthorProjectId == authorProjectId.Value);
         }
 
+        if (kind is not null)
+        {
+            var kindFilter = Issue.NormalizeKind(kind);
+            issues = issues.Where(i => i.Kind == kindFilter);
+        }
+
         return await issues
             .OrderByDescending(i => i.CreatedAt)
             .ToListAsync(ct);
@@ -77,12 +85,18 @@ public sealed class IssueService
     // Cross-project board order: IssueStatus is declared open → triaged → promoted → closed,
     // so the numeric sort is the open-first order the 115 spec pins.
     public async Task<IReadOnlyList<IssueBoardRow>> ListAllAsync(
-        IssueStatus? status, CancellationToken ct = default)
+        IssueStatus? status, string? kind = null, CancellationToken ct = default)
     {
         var issues = _db.Issues.AsNoTracking();
         if (status.HasValue)
         {
             issues = issues.Where(i => i.Status == status.Value);
+        }
+
+        if (kind is not null)
+        {
+            var kindFilter = Issue.NormalizeKind(kind);
+            issues = issues.Where(i => i.Kind == kindFilter);
         }
 
         return await issues
@@ -97,7 +111,8 @@ public sealed class IssueService
                 i.CreatedAt,
                 i.ClosedAt,
                 i.PromotedToArtifactId,
-                _db.IssueAppends.Count(a => a.IssueId == i.Id)))
+                _db.IssueAppends.Count(a => a.IssueId == i.Id),
+                i.Kind))
             .ToListAsync(ct);
     }
 
@@ -169,7 +184,7 @@ public sealed class IssueService
         var artifact = await _artifacts.UpsertAsync(
             feature.Id, PlanningArtifactKind.Task, body, order: null,
             review: PlanningReviewLevel.Light,
-            logNote: $"promoted from issue {issue.Id}", ct, source: source);
+            logNote: $"promoted from {issue.Kind} {issue.Id}", ct, source: source);
         issue.Promote(artifact.Id, source);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

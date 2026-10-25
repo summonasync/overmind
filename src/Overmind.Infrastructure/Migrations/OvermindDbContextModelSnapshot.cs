@@ -269,6 +269,13 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("issue");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT");
 

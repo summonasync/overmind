@@ -331,13 +331,46 @@ public sealed class IssueDoorApiTests : IDisposable
         var filtered = await filteredResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var row = filtered.EnumerateArray().Single();
         row.EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
-            ["id", "title", "status", "authorProjectId", "createdAt", "closedAt", "promotedToArtifactId", "appendCount"]);
+            ["id", "title", "status", "authorProjectId", "createdAt", "closedAt", "promotedToArtifactId", "appendCount", "kind"]);
         row.GetProperty("appendCount").GetInt32().ShouldBe(1);
         row.GetRawText().ShouldNotContain("secret");
 
         var byStatus = await _client.GetFromJsonAsync<JsonElement>(
             $"/api/projects/{board.Id}/issues?status=closed", JsonOptions);
         byStatus.EnumerateArray().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Kind_FlowsThroughCreateListAndBoardFilter()
+    {
+        var board = await CreateProjectAsync("board");
+        var author = await CreateProjectAsync("author");
+
+        var created = await _client.PostAsJsonAsync(
+            $"/api/projects/{board.Id}/issues",
+            new { AuthorProjectId = author.Id, Title = "Add dark mode", Body = "Pretty please.", Kind = "request" },
+            JsonOptions);
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        createdBody.GetProperty("kind").GetString().ShouldBe("request");
+
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{board.Id}/issues",
+            new { AuthorProjectId = author.Id, Title = "Crash on save", Body = "body" }, JsonOptions);
+
+        var requests = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/projects/{board.Id}/issues?kind=request", JsonOptions);
+        requests.EnumerateArray().ShouldHaveSingleItem();
+        requests[0].GetProperty("kind").GetString().ShouldBe("request");
+
+        var junkKind = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/projects/{board.Id}/issues?kind=banana", JsonOptions);
+        junkKind.EnumerateArray().ShouldHaveSingleItem();
+        junkKind[0].GetProperty("title").GetString().ShouldBe("Crash on save");
+
+        var boardRows = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/issues?kind=request", JsonOptions);
+        boardRows.EnumerateArray().ShouldHaveSingleItem();
+        boardRows[0].GetProperty("kind").GetString().ShouldBe("request");
     }
 
     [Fact]

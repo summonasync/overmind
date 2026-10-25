@@ -306,6 +306,9 @@ public sealed class OvermindDbContext : DbContext
 
         modelBuilder.Entity<Issue>(builder =>
         {
+            builder.Property(i => i.Kind).HasMaxLength(Issue.MaxKindLength)
+                .HasDefaultValue(Issue.DefaultKind);
+
             builder.HasOne<Project>()
                 .WithMany()
                 .HasForeignKey(i => i.ProjectId)

@@ -91,7 +91,7 @@ public sealed class CrossProjectIssuesApiTests : IDisposable
 
         rows[1].EnumerateObject().Select(p => p.Name).ToArray().ShouldBe(
             ["id", "projectId", "title", "status", "authorProjectId",
-             "createdAt", "closedAt", "promotedToArtifactId", "appendCount"]);
+             "createdAt", "closedAt", "promotedToArtifactId", "appendCount", "kind"]);
         rows[1].GetProperty("projectId").GetString().ShouldBe(first.Id.ToString());
         rows[1].GetProperty("appendCount").GetInt32().ShouldBe(1);
         rows[2].GetProperty("status").GetString().ShouldBe("closed");

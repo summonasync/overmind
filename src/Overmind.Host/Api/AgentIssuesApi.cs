@@ -38,8 +38,9 @@ public static class AgentIssuesApi
         {
             var issue = await service.CreateAsync(
                 projectId, request.AuthorProjectId, request.Title, request.Body,
-                PlanningLogSource.Agent, ct);
-            return Results.Ok(new CreateIssueResponse(issue.Id, issue.Status, issue.Title));
+                PlanningLogSource.Agent, request.Kind, ct);
+            return Results.Ok(new CreateIssueResponse(
+                issue.Id, issue.Status, issue.Title, issue.Kind));
         }
         catch (PlanningException ex)
         {
@@ -55,6 +56,7 @@ public static class AgentIssuesApi
         Guid projectId,
         string? status,
         string? authorProjectId,
+        string? kind,
         IssueService service,
         CancellationToken ct)
     {
@@ -76,7 +78,7 @@ public static class AgentIssuesApi
             return HttpErrors.BadRequest(statusError);
         }
 
-        var issues = await service.ListAsync(projectId, parsedStatus, authorFilter, ct);
+        var issues = await service.ListAsync(projectId, parsedStatus, authorFilter, kind, ct);
         var counts = await service.AppendCountsAsync([.. issues.Select(i => i.Id)], ct);
         var rows = issues.Select(i => ToRow(i, counts.GetValueOrDefault(i.Id))).ToArray();
         return Results.Ok(rows);
@@ -255,10 +257,11 @@ public static class AgentIssuesApi
 
     internal static IssueRow ToRow(Issue issue, int appendCount) =>
         new(issue.Id, issue.Title, issue.Status, issue.AuthorProjectId,
-            issue.CreatedAt, issue.ClosedAt, issue.PromotedToArtifactId, appendCount);
+            issue.CreatedAt, issue.ClosedAt, issue.PromotedToArtifactId, appendCount, issue.Kind);
 
     internal static IssueCard ToCard(Issue issue, IReadOnlyList<IssueAppend> appends) =>
         new(issue.Id, issue.Title, issue.Body, issue.Status, issue.AuthorProjectId,
             issue.CreatedAt, issue.ClosedAt, issue.PromotedToArtifactId,
-            [.. appends.Select(a => new IssueAppendItem(a.Id, a.AuthorProjectId, a.Text, a.CreatedAt))]);
+            [.. appends.Select(a => new IssueAppendItem(a.Id, a.AuthorProjectId, a.Text, a.CreatedAt))],
+            issue.Kind);
 }

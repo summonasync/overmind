@@ -51,6 +51,54 @@ public class IssueTests
     }
 
     [Fact]
+    public void Create_SetsKindToIssueByDefault()
+    {
+        var issue = NewIssue();
+
+        issue.Kind.ShouldBe(Issue.DefaultKind);
+    }
+
+    [Fact]
+    public void Create_RequestKind_IsKept()
+    {
+        var issue = Issue.Create(BoardProjectId, AuthorProjectId, "Add dark mode", "Pretty please.", kind: "request");
+
+        issue.Kind.ShouldBe(Issue.RequestKind);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("banana")]
+    [InlineData("Request")]
+    [InlineData("ISSUE")]
+    public void Create_JunkKind_NormalizesToIssue(string? kind)
+    {
+        var issue = Issue.Create(BoardProjectId, AuthorProjectId, "Crash on save", "body", kind: kind!);
+
+        issue.Kind.ShouldBe(Issue.DefaultKind);
+    }
+
+    [Fact]
+    public void Create_TrimmedRequestKind_IsKept()
+    {
+        var issue = Issue.Create(BoardProjectId, AuthorProjectId, "Add dark mode", "Pretty please.", kind: "  request  ");
+
+        issue.Kind.ShouldBe(Issue.RequestKind);
+    }
+
+    [Fact]
+    public void ComposeTaskBody_RequestKind_LabelsTheRefsLine()
+    {
+        var issue = Issue.Create(BoardProjectId, AuthorProjectId, "Add dark mode", "It just blows up.", kind: "request");
+
+        var body = issue.ComposeTaskBody([]);
+
+        body.ShouldContain($"- Request {issue.Id}");
+    }
+
+    [Fact]
     public void Append_ReturnsEntryWithProvenanceInOrder()
     {
         var issue = NewIssue();
