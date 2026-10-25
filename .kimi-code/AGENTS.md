@@ -179,6 +179,8 @@ The Overmind MCP server owns ALL planning state: features, spec/plan/task/result
 4. **Techniques are inline.** Socratic spec questioning, plan decomposition, root-cause-first debugging, verification-before-completion, TDD scope — all live in `overmind-ceremony` as crew-owned rules. No external technique plugins are part of this kit.
 5. **Sub-agent spawns** inherit the Sub-Agent Rules above: pool `Kimi K2.7`/`Kimi K3` only, `primary` alias forbidden, STOP-and-report on unavailability — plus the artifact contract from `overmind-ceremony`.
 
+Idea (entry, zero ceremony) → matures → feature request card (board, triage) → promoted to a board feature. Entries hold the informal lane: the `idea` type is for unformed what's-next thinking ('наподумать, чтобы не забыть'); formal asks land on the issues board as request-kind cards.
+
 ## AI Coding Traces (applies to ALL agents)
 Write code like a human engineer, not like a language model. Full catalog of signatures and humanization techniques lives in the `ai-obfuscator` skill — these are the standing rules for everyday work:
 
