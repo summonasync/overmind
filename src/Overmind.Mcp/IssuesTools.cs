@@ -23,12 +23,13 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_create", Destructive = false, Idempotent = false)]
-    [Description("Files an issue on the board of project projectId — the cross-project protocol: working in project A and need a fix in project B (this board)? File an issue here and do not touch their repo; follow-ups = issues_append; the owner team triages/promotes. Every issue carries authorProjectId as provenance (validated against existing projects, not permission). Body recommendation: '## Repro' / '## Expected' / '## Actual' sections; free-form accepted. A foreign create (authorProjectId differs from the board) posts a notification-center entry on the owner project with a deep link — the owner team hears about it without polling.")]
+    [Description("Files an issue on the board of project projectId — the cross-project protocol: working in project A and need a fix in project B (this board)? File an issue here and do not touch their repo; follow-ups = issues_append; the owner team triages/promotes. Optional kind: 'issue' (default) or 'request' — a bug report vs a feature request; both carry authorProjectId as provenance (validated against existing projects, not permission) and both promote into tasks the same way; anything besides those two values fails with a named validation error. Body recommendation: '## Repro' / '## Expected' / '## Actual' sections; free-form accepted. A foreign create (authorProjectId differs from the board) posts a notification-center entry on the owner project with a deep link — the owner team hears about it without polling.")]
     public async Task<CallToolResult> Create(
         [Description("Id of the project whose board receives the issue.")] Guid projectId,
         [Description("Id of the project filing the issue (provenance; must exist).")] Guid authorProjectId,
         [Description("Short issue title.")] string title,
         [Description("Issue body markdown; recommended sections '## Repro', '## Expected', '## Actual'.")] string body,
+        [Description("Kind of card to file: 'issue' (default) or 'request'. Both promote into tasks the same way.")] string? kind = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -42,26 +43,40 @@ public sealed class IssuesTools
                 "body is required — a bug report without a description helps nobody. " + BodyTemplateRecommendation);
         }
 
+        var payload = new JsonObject
+        {
+            ["authorProjectId"] = authorProjectId,
+            ["title"] = title.Trim(),
+            ["body"] = body.Trim()
+        };
+        var normalizedKind = NormalizeKind(kind);
+        if (normalizedKind is not null)
+        {
+            payload["kind"] = normalizedKind;
+        }
+
         var echo = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{projectId}/issues",
-            new { authorProjectId, title = title.Trim(), body = body.Trim() },
+            payload,
             ct), readback: null, ct);
 
         var compact = new JsonObject
         {
             ["id"] = echo.GetProperty("id").GetString(),
             ["status"] = echo.GetProperty("status").GetString(),
-            ["title"] = echo.GetProperty("title").GetString()
+            ["title"] = echo.GetProperty("title").GetString(),
+            ["kind"] = echo.GetProperty("kind").GetString()
         };
         return EchoResult(compact.Deserialize<JsonElement>());
     }
 
     [McpServerTool(Name = "issues_list", ReadOnly = true, Idempotent = true)]
-    [Description("Lists issues on the board of project projectId — metadata rows only (no body, no append texts): id, title, status (open/triaged/promoted/closed), authorProjectId, createdAt, closedAt, promotedToArtifactId, appendCount. Optional filters: status and authorProjectId. Reads are open to any project — provenance, not permission.")]
+    [Description("Lists issues on the board of project projectId — metadata rows only (no body, no append texts): id, title, status (open/triaged/promoted/closed), authorProjectId, createdAt, closedAt, promotedToArtifactId, appendCount, kind. Optional filters: status, authorProjectId and kind (issue | request). Reads are open to any project — provenance, not permission.")]
     public async Task<CallToolResult> List(
         [Description("Id of the project whose board to read.")] Guid projectId,
         [Description("Filter by status: open, triaged, promoted or closed. Omit for all.")] string? status = null,
         [Description("Filter by filing project id. Omit for all.")] Guid? authorProjectId = null,
+        [Description("Filter by kind: 'issue' or 'request'. Omit for all.")] string? kind = null,
         CancellationToken ct = default)
     {
         var query = new List<string>();
@@ -74,6 +89,12 @@ public sealed class IssuesTools
         if (authorProjectId.HasValue)
         {
             query.Add("authorProjectId=" + authorProjectId.Value);
+        }
+
+        var normalizedKind = NormalizeKind(kind);
+        if (normalizedKind is not null)
+        {
+            query.Add("kind=" + Uri.EscapeDataString(normalizedKind));
         }
 
         var path = $"/api/agent/projects/{projectId}/issues";
@@ -153,7 +174,7 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_promote", Destructive = false, Idempotent = false)]
-    [Description("Machine promotion, one call — per crew rule 10 a bug report is a ready-made execution contract: composes a task artifact on featureSlug (goal from title+body, scope from the Repro/Expected/Actual sections, the append trail into <obstacles>, <refs> pointing at the issue) and sets the issue to promoted with a link to the artifact — traceable both ways. Only from open/triaged; promotion belongs to the board's team. A claimed target feature blocks promotion from any session that does not hold the claim — in any liveness state (promote is not take-over): resolve the claim with the holder or wait for the owner team. The append trail moves into <obstacles> verbatim.")]
+    [Description("Machine promotion, one call — per crew rule 10 an issue or a request is a ready-made execution contract: composes a task artifact on featureSlug (goal from title+body, scope from the Repro/Expected/Actual sections, the append trail into <obstacles>, <refs> pointing at the issue) and sets the issue to promoted with a link to the artifact — traceable both ways. Only from open/triaged; promotion belongs to the board's team. A claimed target feature blocks promotion from any session that does not hold the claim — in any liveness state (promote is not take-over): resolve the claim with the holder or wait for the owner team. The append trail moves into <obstacles> verbatim.")]
     public async Task<CallToolResult> Promote(
         [Description("Id of the issue to promote.")] Guid issueId,
         [Description("Slug of the feature on this board that receives the composed task.")] string featureSlug,
@@ -183,6 +204,27 @@ public sealed class IssuesTools
 
     private static string? Trimmed(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizeKind(string? kind)
+    {
+        var trimmed = Trimmed(kind);
+        if (trimmed is null)
+        {
+            return null;
+        }
+
+        if (trimmed.Equals("issue", StringComparison.OrdinalIgnoreCase))
+        {
+            return "issue";
+        }
+
+        if (trimmed.Equals("request", StringComparison.OrdinalIgnoreCase))
+        {
+            return "request";
+        }
+
+        throw new McpException($"Invalid kind '{kind}'. Expected one of: issue, request.");
+    }
 
     private static string NormalizeStatus(string status)
     {

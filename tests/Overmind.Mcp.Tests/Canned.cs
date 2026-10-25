@@ -260,7 +260,12 @@ public static class Canned
 
     public const string IssueCreatedJson =
         """
-        {"id":"14141414-1414-1414-1414-141414141414","status":"open","title":"Crash on save"}
+        {"id":"14141414-1414-1414-1414-141414141414","status":"open","title":"Crash on save","kind":"issue"}
+        """;
+
+    public const string RequestCreatedJson =
+        """
+        {"id":"14141414-1414-1414-1414-141414141414","status":"open","title":"Add dark mode","kind":"request"}
         """;
 
     public const string IssuesListJson =
