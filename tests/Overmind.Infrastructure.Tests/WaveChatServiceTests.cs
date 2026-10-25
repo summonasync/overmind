@@ -245,6 +245,126 @@ public sealed class WaveChatServiceTests : IDisposable
         ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
     }
 
+    [Fact]
+    public async Task History_ReturnsChronologicalOldestFirst()
+    {
+        var posted = await SeedHistoryAsync(Service(), 4);
+
+        var page = await Service().ListHistoryAsync(_projectId, "all");
+
+        page.Select(m => m.Id).ShouldBe(posted.Select(m => m.Id));
+    }
+
+    [Fact]
+    public async Task History_DefaultLimit_ReturnsTheLatestWindow()
+    {
+        var posted = await SeedHistoryAsync(Service(), WaveChatService.DefaultHistoryLimit + 5);
+
+        var page = await Service().ListHistoryAsync(_projectId, "all");
+
+        page.Count.ShouldBe(WaveChatService.DefaultHistoryLimit);
+        page.Select(m => m.Id).ShouldBe(posted.Skip(5).Select(m => m.Id));
+    }
+
+    [Fact]
+    public async Task History_LimitAboveCap_ClampsToMax()
+    {
+        _context.WaveMessages.AddRange(Enumerable.Range(0, WaveChatService.MaxHistoryLimit + 5)
+            .Select(_ => WaveMessage.Create(_projectId, "all", "Dan", AgentSession.DefaultRole, "bulk")));
+        await _context.SaveChangesAsync();
+        _context.ChangeTracker.Clear();
+
+        var page = await Service().ListHistoryAsync(
+            _projectId, "all", WaveChatService.MaxHistoryLimit + 100);
+
+        page.Count.ShouldBe(WaveChatService.MaxHistoryLimit);
+    }
+
+    [Fact]
+    public async Task History_LimitBelowOne_ClampsToOne()
+    {
+        await SeedHistoryAsync(Service(), 3);
+
+        var page = await Service().ListHistoryAsync(_projectId, "all", 0);
+
+        page.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task History_BeforeCursor_ReturnsStrictlyOlderMessages()
+    {
+        var posted = await SeedHistoryAsync(Service(), 5);
+
+        var page = await Service().ListHistoryAsync(_projectId, "all", 3);
+        page.Select(m => m.Id).ShouldBe(posted.Skip(2).Select(m => m.Id));
+
+        var older = await Service().ListHistoryAsync(_projectId, "all", before: page[0].CreatedAt);
+        older.Select(m => m.Id).ShouldBe(posted.Take(2).Select(m => m.Id));
+    }
+
+    [Fact]
+    public async Task History_IsolatedFromOtherRooms()
+    {
+        var service = Service();
+        await service.PostAsync(_projectId, "backend", "Dan", "lane talk");
+        var hall = await service.PostAsync(_projectId, "all", "Dan", "hall talk");
+
+        var page = await service.ListHistoryAsync(_projectId, "all");
+
+        page.Select(m => m.Id).ShouldBe([hall.Id]);
+    }
+
+    [Fact]
+    public async Task History_LeavesWatermarksUntouched()
+    {
+        var service = Service();
+        await service.PostAsync(_projectId, "all", "Dan", "history one");
+        var unread = await service.ListUnreadAsync(_projectId, "marshal", "all");
+
+        await service.ListHistoryAsync(_projectId, "all");
+        await service.ListHistoryAsync(_projectId, "all");
+
+        _context.ChangeTracker.Clear();
+        _context.WaveWatermarks.Count().ShouldBe(1);
+        var watermark = await _context.WaveWatermarks.SingleAsync(w => w.Alias == "marshal");
+        watermark.LastReadAt.ShouldBe(unread.WatermarkAt);
+    }
+
+    [Fact]
+    public async Task History_UnknownLane_ThrowsMissingWaveRoom()
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            Service().ListHistoryAsync(_projectId, "frontend"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingWaveRoom);
+    }
+
+    [Fact]
+    public async Task History_UnknownProject_ThrowsMissingProject()
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            Service().ListHistoryAsync(Guid.NewGuid(), "all"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
+    }
+
+    private async Task<List<WaveMessage>> SeedHistoryAsync(WaveChatService service, int count)
+    {
+        var posted = new List<WaveMessage>();
+        for (var i = 0; i < count; i++)
+        {
+            posted.Add(await service.PostAsync(_projectId, "all", "Dan", $"msg-{i:000}"));
+        }
+
+        var baseTime = DateTime.UtcNow.AddMinutes(-count - 10);
+        for (var i = 0; i < posted.Count; i++)
+        {
+            await BackdateAsync(posted[i].Id, baseTime.AddMinutes(i));
+        }
+
+        return posted;
+    }
+
     private WaveChatService Service() => new(_context);
 
     private async Task<int> CountAsync() =>

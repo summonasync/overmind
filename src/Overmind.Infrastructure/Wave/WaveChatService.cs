@@ -10,6 +10,9 @@ public sealed record WaveUnreadPage(IReadOnlyList<WaveMessage> Messages, DateTim
 
 public sealed class WaveChatService
 {
+    public const int DefaultHistoryLimit = 20;
+    public const int MaxHistoryLimit = 500;
+
     private readonly OvermindDbContext _db;
 
     public WaveChatService(OvermindDbContext db)
@@ -76,6 +79,30 @@ public sealed class WaveChatService
 
         await _db.SaveChangesAsync(ct);
         return new WaveUnreadPage(messages, readAt);
+    }
+
+    public async Task<IReadOnlyList<WaveMessage>> ListHistoryAsync(
+        Guid projectId,
+        string room,
+        int? limit = null,
+        DateTime? before = null,
+        CancellationToken ct = default)
+    {
+        await RequireProjectAsync(projectId, ct);
+        var normalizedRoom = await RequireRoomAsync(projectId, room, ct);
+        var capped = Math.Clamp(limit ?? DefaultHistoryLimit, 1, MaxHistoryLimit);
+
+        var page = await _db.WaveMessages
+            .AsNoTracking()
+            .Where(m => m.ProjectId == projectId && m.Room == normalizedRoom)
+            .Where(m => before == null || m.CreatedAt < before)
+            .OrderByDescending(m => m.CreatedAt)
+            .ThenByDescending(m => m.Id)
+            .Take(capped)
+            .ToListAsync(ct);
+
+        page.Reverse();
+        return page;
     }
 
     public async Task<IReadOnlyList<WaveRoomSummary>> ListRoomsAsync(Guid projectId, CancellationToken ct = default)

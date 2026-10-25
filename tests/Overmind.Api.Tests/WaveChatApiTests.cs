@@ -187,6 +187,91 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
+    public async Task History_HumanDoor_ReturnsChronologicalPage()
+    {
+        var projectId = await CreateProjectAsync();
+        await CreateLaneAsync(projectId, "backend");
+        await PostHumanAsync(projectId, "backend", "Dan", "one");
+        var second = await PostMessageToAsync(projectId, "backend", "two");
+        await PostHumanAsync(projectId, "backend", "Dan", "three");
+
+        var response = await _client.GetAsync(
+            $"/api/projects/{projectId}/wave/rooms/backend/messages?limit=2");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await response.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        page!.Items.Select(m => m.Text).ShouldBe(["two", "three"]);
+
+        var back = await _client.GetAsync(
+            $"/api/projects/{projectId}/wave/rooms/backend/messages?before={Uri.EscapeDataString(second.ToString("O"))}");
+        back.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var older = await back.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        older!.Items.Select(m => m.Text).ShouldBe(["one"]);
+    }
+
+    [Fact]
+    public async Task History_BeforeCursor_PagesBackward()
+    {
+        var projectId = await CreateProjectAsync();
+        var first = await PostMessageAsync(projectId, "one");
+        await PostMessageAsync(projectId, "two");
+        var third = await PostMessageAsync(projectId, "three");
+
+        var response = await _client.GetAsync(
+            $"/api/projects/{projectId}/wave/rooms/all/messages?limit=2&before={Uri.EscapeDataString(third.ToString("O"))}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await response.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        page!.Items.Select(m => m.Text).ShouldBe(["one", "two"]);
+        page.Items[0].CreatedAt.ShouldBe(first, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task History_AgentDoor_RequiresTheSessionHeader()
+    {
+        var projectId = await CreateProjectAsync();
+        await PostHumanAsync(projectId, "all", "Dan", "agent visible");
+
+        var anonymous = await _client.GetAsync(
+            $"/api/agent/projects/{projectId}/wave/rooms/all/messages");
+        anonymous.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var response = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/messages", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await response.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        page!.Items.Select(m => m.Text).ShouldBe(["agent visible"]);
+    }
+
+    [Fact]
+    public async Task History_UnknownLane_Returns404WithNamedCode()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/projects/{projectId}/wave/rooms/frontend/messages");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ProblemTitleAsync(response)).ShouldBe("MissingWaveRoom");
+    }
+
+    [Fact]
+    public async Task History_NeverAdvancesWatermarks()
+    {
+        var projectId = await CreateProjectAsync();
+        await PostHumanAsync(projectId, "all", "Dan", "history one");
+        var feed = await UnreadAsync(projectId, "guldan", "all");
+
+        await _client.GetAsync($"/api/projects/{projectId}/wave/rooms/all/messages");
+        await _client.GetAsync($"/api/projects/{projectId}/wave/rooms/all/messages");
+
+        var secondRead = await UnreadAsync(projectId, "guldan", "all");
+        secondRead.Items.ShouldBeEmpty();
+        secondRead.WatermarkAt.ShouldBe(feed.WatermarkAt);
+    }
+
+    [Fact]
     public async Task Rooms_ReturnsAllPlusLanes_WithLastActivity()
     {
         var projectId = await CreateProjectAsync();
@@ -219,6 +304,19 @@ public sealed class WaveChatApiTests : IDisposable
         await _client.PostAsJsonAsync(
             $"/api/projects/{projectId}/wave/rooms/{room}/messages",
             new { AuthorAlias = authorAlias, Text = text }, JsonOptions);
+
+    private async Task<DateTime> PostMessageAsync(Guid projectId, string text)
+    {
+        return await PostMessageToAsync(projectId, "all", text);
+    }
+
+    private async Task<DateTime> PostMessageToAsync(Guid projectId, string room, string text)
+    {
+        var response = await PostHumanAsync(projectId, room, "Dan", text);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await response.Content.ReadFromJsonAsync<MessageJson>(JsonOptions);
+        return message!.CreatedAt;
+    }
 
     private async Task<FeedJson> UnreadAsync(Guid projectId, string alias, string room)
     {
@@ -289,6 +387,8 @@ public sealed class WaveChatApiTests : IDisposable
         Guid Id, string Room, string AuthorAlias, string Text, string[] Mentions, DateTime CreatedAt);
 
     private sealed record FeedJson(MessageJson[] Items, DateTime WatermarkAt);
+
+    private sealed record HistoryJson(MessageJson[] Items);
 
     private sealed record RoomsJson(RoomJson[] Items);
 
