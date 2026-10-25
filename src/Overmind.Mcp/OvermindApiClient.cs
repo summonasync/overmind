@@ -59,8 +59,9 @@ public sealed class OvermindApiClient
     // Loopback is the security boundary: a system proxy would carry Host traffic off-machine.
     // The session stamp lives on the shared pipeline so every client built from here (adapter,
     // project resolver) identifies as the same agent session, never as a headerless human.
+    // The touch sits outside the stamp so the session reports liveness on every round-trip.
     public static HttpClient CreateHttpClient(string baseUrl) =>
-        new(new AdapterSessionHandler(new SocketsHttpHandler { UseProxy = false }))
+        new(new SessionTouchHandler(new AdapterSessionHandler(new SocketsHttpHandler { UseProxy = false })))
         {
             BaseAddress = new Uri(baseUrl),
             Timeout = Timeout

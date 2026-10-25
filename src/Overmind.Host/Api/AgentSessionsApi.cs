@@ -14,6 +14,7 @@ public static class AgentSessionsApi
         group.MapPost("/sessions", Register);
         group.MapPost("/sessions/{id:guid}/role", SetRole);
         group.MapPost("/sessions/{id:guid}/end", End);
+        group.MapPost("/sessions/{id:guid}/touch", Touch);
 
         return group;
     }
@@ -73,6 +74,19 @@ public static class AgentSessionsApi
         }
 
         session.End();
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> Touch(Guid id, OvermindDbContext db, CancellationToken ct)
+    {
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (session is null)
+        {
+            return HttpErrors.NotFound($"Session '{id}' was not found.");
+        }
+
+        session.Touch();
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
     }
