@@ -7,6 +7,9 @@ namespace Overmind.Mcp.Tests;
 
 public sealed class StubOvermindApi : IAsyncDisposable
 {
+    private static readonly System.Text.RegularExpressions.Regex SessionTouchPath =
+        new("^/api/agent/sessions/[0-9a-fA-F-]{36}/touch$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public sealed record Request(string Method, string Path, string Query, string Body, IReadOnlyDictionary<string, string> Headers);
 
     public sealed record Response(int Status, string JsonBody);
@@ -19,6 +22,8 @@ public sealed class StubOvermindApi : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
 
     public ConcurrentQueue<Request> Requests { get; } = new();
+
+    public ConcurrentQueue<Request> TouchRequests { get; } = new();
 
     public int Port { get; }
 
@@ -125,6 +130,15 @@ public sealed class StubOvermindApi : IAsyncDisposable
                 context.Request.Url?.Query.TrimStart('?') ?? string.Empty,
                 body,
                 headers);
+
+            if (request.Method == "POST" && SessionTouchPath.IsMatch(request.Path))
+            {
+                TouchRequests.Enqueue(request);
+                context.Response.StatusCode = (int)HttpStatusCode.NoContent;
+                context.Response.ContentLength64 = 0;
+                context.Response.Close();
+                return;
+            }
 
             Requests.Enqueue(request);
 

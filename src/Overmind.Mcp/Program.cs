@@ -60,6 +60,15 @@ catch (Exception ex)
     Console.Error.WriteLine($"[overmind-mcp] WARN: session registration failed, claims will be refused: {ex.Message}");
 }
 
+SessionHeartbeat? heartbeat = null;
+if (adapterSessionId != Guid.Empty)
+{
+    var period = HeartbeatPeriod.Resolve();
+    heartbeat = new SessionHeartbeat(http, period);
+    heartbeat.Start();
+    Console.Error.WriteLine($"[overmind-mcp] heartbeat every {period.TotalMinutes:0.#} min");
+}
+
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
 // source-generated JsonContext with its own options snapshot; the default HTML-safe encoder
 // bloats Cyrillic payloads ~4x (FEATURELIST/overmind-features-2026-09-23.md OM-1). The read-only
@@ -156,6 +165,12 @@ builder.Services
 var app = builder.Build();
 app.Services.GetRequiredService<IHostApplicationLifetime>()
     .ApplicationStopping.Register(() => lifecycle.MarkEnded(AdapterSession.Id));
+// Registration callbacks run LIFO: the heartbeat stops before the session end call goes out.
+if (heartbeat is not null)
+{
+    app.Services.GetRequiredService<IHostApplicationLifetime>()
+        .ApplicationStopping.Register(heartbeat.Dispose);
+}
 
 await app.RunAsync();
 return 0;
