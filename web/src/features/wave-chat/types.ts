@@ -34,6 +34,7 @@ export interface WaveParticipant {
   vendor: string | null;
   claimState: WaveClaimState | null;
   role: WaveRole;
+  lastSeenAt: string | null;
 }
 
 export interface WaveParticipantsPayload {

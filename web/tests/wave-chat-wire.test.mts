@@ -79,6 +79,34 @@ test("the roster keys off the project beside rooms and feeds", () => {
   );
 });
 
+test("the roster renders each participant as a bordered widget card", () => {
+  const roster = sliceFile("components/wave-roster.tsx");
+  assert.ok(roster.includes('gap-1.5 rounded-lg border border-border bg-surface p-2"'));
+  assert.equal(roster.split("rounded-md border border-border bg-surface-raised").length - 1, 2);
+});
+
+test("aliases wrap instead of truncating and carry the vendor beside them", () => {
+  const roster = sliceFile("components/wave-roster.tsx");
+  assert.ok(!roster.includes("truncate"));
+  assert.ok(roster.includes("min-w-0 break-words"));
+  assert.ok(roster.includes(" by {agent.vendor}"));
+});
+
+test("role and lane chips sit on their own line under the alias", () => {
+  const roster = sliceFile("components/wave-roster.tsx");
+  const aliasAt = roster.indexOf("{agent.alias}");
+  const chipsAt = roster.indexOf("{roleBadgeToneOf(agent.role)}");
+  assert.ok(aliasAt !== -1 && chipsAt !== -1 && chipsAt > aliasAt);
+  assert.ok(roster.includes('agent.lane ? <Badge tone="neutral">{agent.lane}</Badge> : null'));
+});
+
+test("agents show their last seen at the line edge and the owner row shows none", () => {
+  const roster = sliceFile("components/wave-roster.tsx");
+  assert.ok(roster.includes("{formatRelativeTime(agent.lastSeenAt)}"));
+  const ownerRow = roster.slice(roster.indexOf("function OwnerRow"), roster.indexOf("function AgentRow"));
+  assert.ok(!ownerRow.includes("lastSeenAt"));
+});
+
 test("the sidebar stacks the roster above the rooms and the header carries presence", () => {
   const panel = sliceFile("components/wave-chat-panel.tsx");
   const rosterAt = panel.indexOf("<WaveRoster");

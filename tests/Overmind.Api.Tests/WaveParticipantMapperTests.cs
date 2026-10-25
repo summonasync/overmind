@@ -60,6 +60,21 @@ public sealed class WaveParticipantMapperTests
         roster.Items[2].Role.ShouldBe("worker");
     }
 
+    [Fact]
+    public void ToResponse_HolderLastSeenAt_FlowsAsUtcInstantAndOwnerStaysNull()
+    {
+        var seenAt = new DateTime(2026, 10, 25, 9, 30, 0, DateTimeKind.Unspecified);
+        var lanes = new List<LaneRow>
+        {
+            Lane("backend", new LaneHolder("Van", "claude", AgentSessionLiveness.Alive, AgentSession.DefaultRole, seenAt)),
+        };
+
+        var roster = WaveParticipantMapper.ToResponse(lanes, "owner");
+
+        roster.Items[0].LastSeenAt.ShouldBeNull();
+        roster.Items[1].LastSeenAt.ShouldBe(new DateTimeOffset(2026, 10, 25, 9, 30, 0, TimeSpan.Zero));
+    }
+
     private static LaneRow Lane(string name, LaneHolder? holder) =>
         new(name, null, null, null, 1, holder, []);
 }

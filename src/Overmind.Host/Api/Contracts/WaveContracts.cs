@@ -29,7 +29,8 @@ public sealed record WaveParticipantResponse(
     string Alias,
     string? Vendor,
     AgentSessionLiveness? ClaimState,
-    string Role = AgentSession.DefaultRole)
+    string Role = AgentSession.DefaultRole,
+    DateTimeOffset? LastSeenAt = null)
 {
     public const string OwnerKind = "owner";
     public const string AgentKind = "agent";

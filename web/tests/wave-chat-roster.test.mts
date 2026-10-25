@@ -12,6 +12,7 @@ const owner = (alias = "johan"): WaveParticipant => ({
   vendor: null,
   claimState: null,
   role: "owner",
+  lastSeenAt: null,
 });
 
 const agent = (
@@ -26,6 +27,7 @@ const agent = (
   vendor,
   claimState: "alive",
   role,
+  lastSeenAt: "2026-10-25T09:30:00Z",
 });
 
 test("the owner stays pinned first no matter how the payload orders rows", () => {
@@ -46,11 +48,12 @@ test("an agent row carries its alias, vendor, lane and role", () => {
     vendor: "claude",
     claimState: "alive",
     role: "marshal",
+    lastSeenAt: "2026-10-25T09:30:00Z",
   });
 });
 
 test("rows of an unknown kind land neither in the owner slot nor the agent rows", () => {
-  const ghost = { kind: "ghost", lane: null, alias: "?", vendor: null, claimState: null };
+  const ghost = { kind: "ghost", lane: null, alias: "?", vendor: null, claimState: null, lastSeenAt: null };
   const participants = [owner(), ghost as WaveParticipant];
   assert.deepEqual(ownerOf(participants), owner());
   assert.deepEqual(agentsOf(participants), []);

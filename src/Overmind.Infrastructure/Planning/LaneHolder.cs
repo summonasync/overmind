@@ -6,4 +6,5 @@ public sealed record LaneHolder(
     string Alias,
     string Vendor,
     AgentSessionLiveness ClaimState,
-    string Role = AgentSession.DefaultRole);
+    string Role = AgentSession.DefaultRole,
+    DateTime? LastSeenAt = null);

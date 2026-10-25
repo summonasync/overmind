@@ -5,6 +5,11 @@ namespace Overmind.Host.Api.Mapping;
 
 public static class WaveParticipantMapper
 {
+    private static DateTimeOffset? LastSeenOf(DateTime? lastSeenAt) =>
+        lastSeenAt is { } seen
+            ? new DateTimeOffset(DateTime.SpecifyKind(seen, DateTimeKind.Utc))
+            : null;
+
     public static WaveParticipantsResponse ToResponse(IReadOnlyList<LaneRow> lanes, string ownerAlias) =>
         new(
         [
@@ -24,6 +29,7 @@ public static class WaveParticipantMapper
                     l.Holder!.Alias,
                     l.Holder.Vendor,
                     l.Holder.ClaimState,
-                    l.Holder.Role))
+                    l.Holder.Role,
+                    LastSeenOf(l.Holder.LastSeenAt)))
         ]);
 }
