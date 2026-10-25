@@ -8,7 +8,7 @@ public sealed class CreatePlanningFeatureRequestValidator : AbstractValidator<Cr
 {
     public CreatePlanningFeatureRequestValidator()
     {
-        RuleFor(x => x.Slug).NotEmpty().MaximumLength(64);
+        RuleFor(x => x.Slug).MaximumLength(64);
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
     }
 }
