@@ -221,6 +221,9 @@ The owner sees real aliases in role colors in the wave chat.
    kind=`approval` → the user's reply must be newer than the result's last update (same proof
    mechanics as validation gates; editing the result voids the tap). The done log line carries
    reviewed-by provenance automatically. The human UI door needs the result but no tap.
+   The code lands through a PR: result artifact → branch pushed and `gh pr create` into the
+   main GitHub repo → the human approves the PR (GitHub UI or explicit approval in chat) → the
+   agent merges (`gh pr merge --merge`, branch deleted) → the done tap closes the feature.
 4. When `humanGate=on` (validation block in onboard), `planning_validate` returns STOP —
    the human approves in the Overmind UI; do not retry in a loop, notify and wait.
 5. **Gate presentations are Socratic too** — an approval request is never a bare «ok?»: artifact

@@ -164,7 +164,8 @@ AND append the directive to that feature.
 
 ### 7. Wave report
 Every pass ends with a compact Russian report to the user: wave state per lane, conflicts
-found, decisions issued and where each landed, what needs the human. When decisions were
+found, decisions issued and where each landed, per-lane PR/merge state (PR opened, merged
+after approval, or pre-PR), what needs the human. When decisions were
 non-trivial, persist the pass as a `write_entry` note (tag `wave-sync`) on the target
 project. A deep report file is explicit-request only → `audits/wave-marshal-YYYY-MM-DD.md`
 in the target project.

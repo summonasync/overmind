@@ -39,7 +39,9 @@
       "Edit(~/.qwen/QWEN.md)"
     ],
     "ask": [
-      // commits and pushes only on explicit user request in THIS session
+      // commits at the crew checkpoints (task close, review handoff); pushes only at PR
+      // checkpoints on feature branches — never to main; merge via `gh pr merge` after the
+      // human approves the PR, auto-merge never
       "Bash(git commit*)",
       "Bash(git push*)",
 
