@@ -76,6 +76,8 @@ const segmentToneClasses: Record<TaskReadinessSegment["tone"], string> = {
   warning: "bg-warning",
   success: "bg-success",
   primary: "bg-primary",
+  agent: "bg-agent",
+  marshal: "bg-marshal",
   danger: "bg-danger",
   skill: "bg-type-skill",
   idea: "bg-type-featureRequest",

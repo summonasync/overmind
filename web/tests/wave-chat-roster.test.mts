@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { ALL_ROOM, roomLabel } from "../src/features/wave-chat/lib/room-order.ts";
-import { agentsOf, ownerOf, presenceLine } from "../src/features/wave-chat/lib/roster.ts";
+import { agentsOf, ownerOf, presenceSeats } from "../src/features/wave-chat/lib/roster.ts";
+import { roleBadgeToneOf, roleTextClassOf } from "../src/features/wave-chat/lib/role-color.ts";
 import type { WaveParticipant } from "../src/features/wave-chat/types.ts";
 
 const owner = (alias = "johan"): WaveParticipant => ({
@@ -10,14 +11,21 @@ const owner = (alias = "johan"): WaveParticipant => ({
   alias,
   vendor: null,
   claimState: null,
+  role: "owner",
 });
 
-const agent = (alias: string, lane: string, vendor = "claude"): WaveParticipant => ({
+const agent = (
+  alias: string,
+  lane: string,
+  vendor = "claude",
+  role: WaveParticipant["role"] = "worker",
+): WaveParticipant => ({
   kind: "agent",
   lane,
   alias,
   vendor,
   claimState: "alive",
+  role,
 });
 
 test("the owner stays pinned first no matter how the payload orders rows", () => {
@@ -29,14 +37,15 @@ test("the owner stays pinned first no matter how the payload orders rows", () =>
   );
 });
 
-test("an agent row carries its alias, vendor and lane", () => {
-  const [row] = agentsOf([owner(), agent("guldan", "frontend", "claude")]);
+test("an agent row carries its alias, vendor, lane and role", () => {
+  const [row] = agentsOf([owner(), agent("guldan", "frontend", "claude", "marshal")]);
   assert.deepEqual(row, {
     kind: "agent",
     lane: "frontend",
     alias: "guldan",
     vendor: "claude",
     claimState: "alive",
+    role: "marshal",
   });
 });
 
@@ -53,18 +62,27 @@ test("an owner-less payload still resolves to empty slots without throwing", () 
   assert.deepEqual(agentsOf([]), []);
 });
 
-test("presence counts agents plus the owner", () => {
-  assert.equal(presenceLine([owner("johan")]), "Owner in the wave");
-  assert.equal(presenceLine([owner(), agent("guldan", "backend")]), "1 agent + owner in the wave");
-  assert.equal(
-    presenceLine([owner(), agent("guldan", "backend"), agent("thrall", "frontend")]),
-    "2 agents + owner in the wave",
-  );
+test("presence seats list agents first and the owner last, roles attached", () => {
+  assert.deepEqual(presenceSeats([owner("johan")]), [{ alias: "johan", role: "owner" }]);
+  assert.deepEqual(presenceSeats([owner(), agent("guldan", "backend")]), [
+    { alias: "guldan", role: "worker" },
+    { alias: "johan", role: "owner" },
+  ]);
+  assert.deepEqual(presenceSeats([]), []);
 });
 
 test("presence ignores duplicate agent rows on different lanes as separate seats", () => {
   const participants = [owner(), agent("guldan", "backend"), agent("guldan", "frontend")];
-  assert.equal(presenceLine(participants), "2 agents + owner in the wave");
+  assert.equal(presenceSeats(participants).length, 3);
+});
+
+test("roles map onto their text and badge colors", () => {
+  assert.equal(roleTextClassOf("owner"), "text-primary");
+  assert.equal(roleTextClassOf("worker"), "text-agent");
+  assert.equal(roleTextClassOf("marshal"), "text-marshal");
+  assert.equal(roleBadgeToneOf("worker"), "agent");
+  assert.equal(roleBadgeToneOf("marshal"), "marshal");
+  assert.equal(roleBadgeToneOf("owner"), "primary");
 });
 
 test("the hall keeps its friendly label while lanes render as channels", () => {

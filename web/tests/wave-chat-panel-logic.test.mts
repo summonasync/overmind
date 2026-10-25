@@ -12,6 +12,7 @@ const message = (id: string, room: string, createdAt: string, text = "signal"): 
   id,
   room,
   authorAlias: "dan",
+  authorRole: "worker",
   text,
   mentions: [],
   createdAt,

@@ -19,6 +19,7 @@ const wholeSlice = () =>
     "lib/feed-store.ts",
     "lib/owner-alias.ts",
     "lib/roster.ts",
+    "lib/role-color.ts",
     "lib/use-wave-chat.ts",
     "components/wave-chat-panel.tsx",
     "components/wave-roster.tsx",
@@ -138,7 +139,7 @@ test("the chat rides the project tab bar next to lanes", () => {
     "utf8",
   );
   const lanes = tabs.indexOf('{ key: "lanes"');
-  const chat = tabs.indexOf('{ key: "chat", label: "Chat", pathname: "/wave-chat" }');
+  const chat = tabs.indexOf('{ key: "chat", label: "Wave chat", pathname: "/wave-chat" }');
   assert.ok(lanes > -1);
   assert.ok(chat > lanes);
 });

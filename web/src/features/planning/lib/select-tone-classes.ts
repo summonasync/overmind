@@ -4,6 +4,8 @@ export const selectToneClasses: Record<BadgeTone, string> = {
   neutral: "border-border text-muted",
   muted: "border-border/50 text-muted/70",
   primary: "border-primary/40 text-primary",
+  agent: "border-agent/40 text-agent",
+  marshal: "border-marshal/40 text-marshal",
   info: "border-info/40 text-info",
   warning: "border-warning/40 text-warning",
   success: "border-success/40 text-success",

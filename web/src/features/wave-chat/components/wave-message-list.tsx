@@ -3,6 +3,7 @@
 import { cn } from "@/shared/lib/cn";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
+import { roleTextClassOf } from "@/features/wave-chat/lib/role-color";
 import type { WaveMessage } from "@/features/wave-chat/types";
 
 interface WaveMessageListProps {
@@ -31,7 +32,12 @@ export function WaveMessageList({ messages, ownerAlias }: WaveMessageListProps) 
           )}
         >
           <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate font-mono text-xs font-semibold text-primary">
+            <span
+              className={cn(
+                "truncate font-mono text-xs font-semibold",
+                roleTextClassOf(message.authorRole),
+              )}
+            >
               {message.authorAlias}
             </span>
             <time dateTime={message.createdAt} className="shrink-0 text-xs text-muted">

@@ -1,3 +1,5 @@
+export type WaveRole = "owner" | "worker" | "marshal";
+
 export interface WaveRoom {
   room: string;
   lastActivityAt: string | null;
@@ -7,6 +9,7 @@ export interface WaveMessage {
   id: string;
   room: string;
   authorAlias: string;
+  authorRole: WaveRole;
   text: string;
   mentions: string[];
   createdAt: string;
@@ -31,6 +34,7 @@ export interface WaveParticipant {
   alias: string;
   vendor: string | null;
   claimState: WaveClaimState | null;
+  role: WaveRole;
 }
 
 export interface WaveParticipantsPayload {
