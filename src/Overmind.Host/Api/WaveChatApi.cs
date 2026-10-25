@@ -41,7 +41,7 @@ public static class WaveChatApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        return await PostAsync(projectId, room, request.AuthorAlias, request.Text, chat, ct);
+        return await PostAsync(projectId, room, request.AuthorAlias, WaveParticipantResponse.OwnerRole, request.Text, chat, ct);
     }
 
     private static async Task<IResult> PostForAgent(
@@ -71,7 +71,7 @@ public static class WaveChatApi
             return AgentIdentityRequired();
         }
 
-        return await PostAsync(projectId, room, session.Alias, request.Text, chat, ct);
+        return await PostAsync(projectId, room, session.Alias, session.Role, request.Text, chat, ct);
     }
 
     private static async Task<IResult> UnreadForHuman(
@@ -167,11 +167,11 @@ public static class WaveChatApi
     }
 
     private static async Task<IResult> PostAsync(
-        Guid projectId, string room, string authorAlias, string text, WaveChatService chat, CancellationToken ct)
+        Guid projectId, string room, string authorAlias, string authorRole, string text, WaveChatService chat, CancellationToken ct)
     {
         try
         {
-            var message = await chat.PostAsync(projectId, room, authorAlias, text, ct);
+            var message = await chat.PostAsync(projectId, room, authorAlias, authorRole, text, ct);
             return Results.Ok(ToResponse(message));
         }
         catch (PlanningException ex)

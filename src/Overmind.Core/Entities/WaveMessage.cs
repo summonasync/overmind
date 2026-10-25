@@ -9,6 +9,7 @@ public sealed partial class WaveMessage
     public const int MaxMentions = 16;
     public const int MaxMentionsLength = 600;
     public const string AllRooms = "all";
+    public const string OwnerRole = "owner";
 
     private WaveMessage()
     {
@@ -104,7 +105,9 @@ public sealed partial class WaveMessage
                 $"Agent identity '{trimmed}' exceeds the {MaxIdentityLength} character cap.", nameof(role));
         }
 
-        return AgentSession.NormalizeRole(trimmed);
+        return trimmed.Equals(OwnerRole, StringComparison.Ordinal)
+            ? OwnerRole
+            : AgentSession.NormalizeRole(trimmed);
     }
 
     [GeneratedRegex(@"(?<![A-Za-z0-9_-])@([A-Za-z0-9_-]{1,32})")]

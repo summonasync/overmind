@@ -33,7 +33,7 @@ public sealed record WaveParticipantResponse(
 {
     public const string OwnerKind = "owner";
     public const string AgentKind = "agent";
-    public const string OwnerRole = "owner";
+    public const string OwnerRole = WaveMessage.OwnerRole;
 }
 
 public sealed record WaveParticipantsResponse(WaveParticipantResponse[] Items);

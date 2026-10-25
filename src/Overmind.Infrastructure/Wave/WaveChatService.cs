@@ -21,7 +21,7 @@ public sealed class WaveChatService
     }
 
     public async Task<WaveMessage> PostAsync(
-        Guid projectId, string room, string authorAlias, string? text, CancellationToken ct = default)
+        Guid projectId, string room, string authorAlias, string authorRole, string? text, CancellationToken ct = default)
     {
         await RequireProjectAsync(projectId, ct);
         var normalizedRoom = await RequireRoomAsync(projectId, room, ct);
@@ -34,7 +34,7 @@ public sealed class WaveChatService
             throw PlanningException.WaveTextTooLong(trimmedText.Length, WaveMessage.MaxTextLength);
         }
 
-        var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, AgentSession.DefaultRole, text);
+        var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, authorRole, text);
         _db.WaveMessages.Add(message);
         await _db.SaveChangesAsync(ct);
         return message;

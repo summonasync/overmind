@@ -12,6 +12,7 @@ namespace Overmind.Api.Tests;
 public sealed class WaveChatApiTests : IDisposable
 {
     private static readonly Guid AgentSessionId = Guid.NewGuid();
+    private static readonly Guid MarshalSessionId = Guid.NewGuid();
 
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
@@ -49,7 +50,7 @@ public sealed class WaveChatApiTests : IDisposable
         message.AuthorAlias.ShouldBe("Dan");
         message.Text.ShouldBe("ping @marshal and @dan again");
         message.Mentions.ShouldBe(["marshal", "dan"]);
-        message.AuthorRole.ShouldBe("worker");
+        message.AuthorRole.ShouldBe("owner");
     }
 
     [Fact]
@@ -119,13 +120,34 @@ public sealed class WaveChatApiTests : IDisposable
 
         var feed = await UnreadAsync(projectId, "marshal", "all");
         feed.Items.Select(m => (m.AuthorAlias, m.AuthorRole))
-            .ShouldBe([("Marshal", "marshal"), ("Dan", "worker")]);
+            .ShouldBe([("Marshal", "marshal"), ("Dan", "owner")]);
 
         var page = await _client.GetFromJsonAsync<HistoryJson>(
             $"/api/projects/{projectId}/wave/rooms/all/messages", JsonOptions);
 
         page!.Items.Select(m => (m.AuthorAlias, m.AuthorRole))
-            .ShouldBe([("Marshal", "marshal"), ("Dan", "worker")]);
+            .ShouldBe([("Marshal", "marshal"), ("Dan", "owner")]);
+    }
+
+    [Fact]
+    public async Task Post_AgentDoor_MarshalSession_StampsTheMarshalRole()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var response = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/messages",
+            new { Text = "holding the wave" }, MarshalSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await response.Content.ReadFromJsonAsync<MessageJson>(JsonOptions);
+        message!.AuthorAlias.ShouldBe("Boss");
+        message.AuthorRole.ShouldBe("marshal");
+
+        var feed = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/unread", null, MarshalSessionId);
+        var page = await feed.Content.ReadFromJsonAsync<FeedJson>(JsonOptions);
+        page!.Items.Select(m => (m.AuthorAlias, m.AuthorRole))
+            .ShouldBe([("Boss", "marshal")]);
     }
 
     [Fact]
@@ -346,10 +368,11 @@ public sealed class WaveChatApiTests : IDisposable
         return (await response.Content.ReadFromJsonAsync<FeedJson>(JsonOptions))!;
     }
 
-    private async Task<HttpResponseMessage> SendAgentAsync(HttpMethod method, string url, object? body)
+    private async Task<HttpResponseMessage> SendAgentAsync(
+        HttpMethod method, string url, object? body, Guid? sessionId = null)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.Add(SessionHeader.Name, AgentSessionId.ToString());
+        request.Headers.Add(SessionHeader.Name, (sessionId ?? AgentSessionId).ToString());
         if (body is not null)
         {
             request.Content = JsonContent.Create(body, options: JsonOptions);
@@ -393,6 +416,10 @@ public sealed class WaveChatApiTests : IDisposable
         await ExecuteAsync($"""
             INSERT OR REPLACE INTO AgentSessions (Id, Alias, Vendor, StartedAt, LastSeenAt, EndedAt)
             VALUES ('{AgentSessionId.ToString().ToUpperInvariant()}', 'Dan', 'claude', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', NULL)
+            """);
+        await ExecuteAsync($"""
+            INSERT OR REPLACE INTO AgentSessions (Id, Alias, Vendor, Role, StartedAt, LastSeenAt, EndedAt)
+            VALUES ('{MarshalSessionId.ToString().ToUpperInvariant()}', 'Boss', 'claude', 'marshal', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', NULL)
             """);
     }
 
