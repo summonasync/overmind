@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import { cn } from "@/shared/lib/cn";
 import { roomLabel } from "@/features/wave-chat/lib/room-order";
 import { presenceSeats } from "@/features/wave-chat/lib/roster";
-import { roleTextClassOf } from "@/features/wave-chat/lib/role-color";
+import { authorLabel, roleTextClassOf } from "@/features/wave-chat/lib/role-color";
 import type { WaveParticipant } from "@/features/wave-chat/types";
 
 interface WaveRoomHeaderProps {
@@ -22,7 +22,7 @@ export function WaveRoomHeader({ room, participants }: WaveRoomHeaderProps) {
               <Fragment key={`${seat.alias}:${index}`}>
                 {index > 0 ? " · " : null}
                 <span className={cn("font-mono font-semibold", roleTextClassOf(seat.role))}>
-                  {seat.alias}
+                  {authorLabel(seat.alias, seat.role)}
                 </span>
               </Fragment>
             ))}

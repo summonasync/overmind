@@ -20,3 +20,10 @@ export function roleTextClassOf(role: WaveRole): string {
 export function roleBadgeToneOf(role: WaveRole): BadgeTone {
   return roleBadgeTones[role];
 }
+
+export function authorLabel(alias: string, role: WaveRole): string {
+  if (role === "owner") {
+    return alias;
+  }
+  return role === "marshal" ? `Marshal ${alias}` : `Agent ${alias}`;
+}

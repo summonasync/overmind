@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
+import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { LoadingState } from "@/shared/ui/loading-state";
@@ -177,6 +178,8 @@ export function WaveChatPanel() {
     to: anchor.room === activeRoom ? anchor.at : null,
   };
 
+  const [onlyUnread, setOnlyUnread] = useState(false);
+
   if (projectId === "") {
     return (
       <div>
@@ -209,6 +212,16 @@ export function WaveChatPanel() {
           </div>
           <section aria-label={`Messages in ${activeRoom}`} className="flex min-w-0 flex-col gap-3">
             <WaveRoomHeader room={activeRoom} participants={roster.participants} />
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                className="text-xs"
+                aria-pressed={onlyUnread}
+                onClick={() => setOnlyUnread((current) => !current)}
+              >
+                {onlyUnread ? "Showing unread only" : "Show only unread"}
+              </Button>
+            </div>
             <WaveMessageList
               messages={activeStream}
               window={unreadWindow}
@@ -216,6 +229,7 @@ export function WaveChatPanel() {
               canPageBack={activeStream.length > 0 && !roomHistoryDrained(projectId, activeRoom)}
               paging={paging}
               expanded={expandedRooms[activeRoom] === true || roomHistoryDrained(projectId, activeRoom)}
+              onlyUnread={onlyUnread}
               onShowMore={showMore}
               onShowAll={showAll}
               scrollKey={activeRoom}

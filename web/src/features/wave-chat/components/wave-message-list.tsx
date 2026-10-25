@@ -5,7 +5,7 @@ import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/cn";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
-import { roleTextClassOf } from "@/features/wave-chat/lib/role-color";
+import { authorLabel, roleTextClassOf } from "@/features/wave-chat/lib/role-color";
 import { sliceByUnread } from "@/features/wave-chat/lib/history-window";
 import type { UnreadWindow } from "@/features/wave-chat/lib/history-window";
 import type { WaveMessage } from "@/features/wave-chat/types";
@@ -19,6 +19,7 @@ interface WaveMessageListProps {
   canPageBack: boolean;
   paging: boolean;
   expanded: boolean;
+  onlyUnread: boolean;
   onShowMore: () => Promise<void>;
   onShowAll: () => Promise<void>;
   scrollKey: string;
@@ -31,6 +32,7 @@ export function WaveMessageList({
   canPageBack,
   paging,
   expanded,
+  onlyUnread,
   onShowMore,
   onShowAll,
   scrollKey,
@@ -39,7 +41,11 @@ export function WaveMessageList({
   const unreadAnchorRef = useRef<HTMLLIElement | null>(null);
   const { read, unread, live } = sliceByUnread(messages, window);
   const hasUnread = unread.length > 0;
-  const context = hasUnread && !expanded ? read.slice(-CONTEXT_TAIL_LIMIT) : read;
+  const context = onlyUnread
+    ? []
+    : hasUnread && !expanded
+      ? read.slice(-CONTEXT_TAIL_LIMIT)
+      : read;
 
   useEffect(() => {
     if (hasUnread) {
@@ -61,6 +67,12 @@ export function WaveMessageList({
     );
   }
 
+  if (onlyUnread && !hasUnread && live.length === 0) {
+    return (
+      <EmptyState title="No unread messages" hint="Everything in this room has been read." />
+    );
+  }
+
   const pageKeepingViewport = (load: () => Promise<void>) => async () => {
     const container = containerRef.current;
     const previousTop = container?.scrollTop ?? 0;
@@ -73,7 +85,7 @@ export function WaveMessageList({
 
   return (
     <div ref={containerRef} className="max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-surface">
-      {canPageBack ? (
+      {canPageBack && !onlyUnread ? (
         <div className="flex items-center justify-center gap-2 border-b border-border px-3 py-2">
           <Button variant="ghost" className="text-xs" disabled={paging} onClick={pageKeepingViewport(onShowMore)}>
             Show more
@@ -138,7 +150,7 @@ function MessageRow({ message, ownerAlias, dimmed = false, unread = false, ancho
             roleTextClassOf(message.authorRole),
           )}
         >
-          {message.authorAlias}
+          {authorLabel(message.authorAlias, message.authorRole)}
         </span>
         <time dateTime={message.createdAt} className="shrink-0 text-xs text-muted">
           {formatRelativeTime(message.createdAt)}
