@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Shouldly;
 using Xunit;
@@ -15,17 +16,22 @@ public sealed class WaveParticipantsApiTests : IDisposable
 
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
+    private readonly SqliteConnection _db;
 
     public WaveParticipantsApiTests()
     {
-        _factory = new ApiFactory();
+        var databasePath = Path.Combine(Path.GetTempPath(), $"overmind-participants-{Guid.NewGuid():N}.db");
+        _factory = new ApiFactory(databasePath);
         _client = _factory.CreateClient();
+        _db = new SqliteConnection($"Data Source={databasePath};Pooling=false");
+        _db.Open();
     }
 
     public void Dispose()
     {
         _client.Dispose();
         _factory.Dispose();
+        _db.Dispose();
     }
 
     [Fact]
@@ -40,9 +46,25 @@ public sealed class WaveParticipantsApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var roster = await ReadAsync(response);
         roster.Items.Length.ShouldBe(3);
-        roster.Items[0].ShouldBe(new ParticipantJson("owner", null, "owner", null, null));
-        roster.Items[1].ShouldBe(new ParticipantJson("agent", "backend", "marshal", "qwen", "alive"));
-        roster.Items[2].ShouldBe(new ParticipantJson("agent", "web", "guldan", "claude", "alive"));
+        roster.Items[0].ShouldBe(new ParticipantJson("owner", null, "owner", null, null, "owner"));
+        roster.Items[1].ShouldBe(new ParticipantJson("agent", "backend", "marshal", "qwen", "alive", "worker"));
+        roster.Items[2].ShouldBe(new ParticipantJson("agent", "web", "guldan", "claude", "alive", "worker"));
+    }
+
+    [Fact]
+    public async Task Get_MarshalSessionHoldingALane_AgentRowCarriesTheSessionRole()
+    {
+        var projectId = await CreateProjectAsync(_client);
+        await ClaimLaneFeatureAsync(_client, projectId, 1, "backend", "Marshal", "claude");
+        await ExecuteAsync("UPDATE AgentSessions SET Role = 'marshal' WHERE Alias = 'Marshal'");
+
+        var roster = await ReadAsync(
+            await _client.GetAsync($"/api/projects/{projectId}/wave/participants"));
+
+        roster.Items.Length.ShouldBe(2);
+        roster.Items[0].ShouldBe(new ParticipantJson("owner", null, "owner", null, null, "owner"));
+        roster.Items[1].ShouldBe(
+            new ParticipantJson("agent", "backend", "Marshal", "claude", "alive", "marshal"));
     }
 
     [Fact]
@@ -57,7 +79,7 @@ public sealed class WaveParticipantsApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var roster = await ReadAsync(response);
-        roster.Items.ShouldBe([new ParticipantJson("owner", null, "owner", null, null)]);
+        roster.Items.ShouldBe([new ParticipantJson("owner", null, "owner", null, null, "owner")]);
     }
 
     [Fact]
@@ -71,7 +93,7 @@ public sealed class WaveParticipantsApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var roster = await ReadAsync(response);
-        roster.Items.ShouldBe([new ParticipantJson("owner", null, "owner", null, null)]);
+        roster.Items.ShouldBe([new ParticipantJson("owner", null, "owner", null, null, "owner")]);
     }
 
     [Fact]
@@ -115,7 +137,7 @@ public sealed class WaveParticipantsApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var roster = await ReadAsync(response);
-        roster.Items[0].ShouldBe(new ParticipantJson("owner", null, "marshal", null, null));
+        roster.Items[0].ShouldBe(new ParticipantJson("owner", null, "marshal", null, null, "owner"));
     }
 
     [Fact]
@@ -204,8 +226,15 @@ public sealed class WaveParticipantsApiTests : IDisposable
     private static async Task<ParticipantsJson> ReadAsync(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<ParticipantsJson>(JsonOptions))!;
 
+    private async Task ExecuteAsync(string sql)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+
     private sealed record ParticipantJson(
-        string Kind, string? Lane, string Alias, string? Vendor, string? ClaimState);
+        string Kind, string? Lane, string Alias, string? Vendor, string? ClaimState, string Role);
 
     private sealed record ParticipantsJson(ParticipantJson[] Items);
 }

@@ -9,7 +9,12 @@ public static class WaveParticipantMapper
         new(
         [
             new WaveParticipantResponse(
-                WaveParticipantResponse.OwnerKind, null, ownerAlias, null, null),
+                WaveParticipantResponse.OwnerKind,
+                null,
+                ownerAlias,
+                null,
+                null,
+                WaveParticipantResponse.OwnerRole),
             .. lanes
                 .Where(l => l.Holder is not null)
                 .OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
@@ -18,6 +23,7 @@ public static class WaveParticipantMapper
                     l.Name,
                     l.Holder!.Alias,
                     l.Holder.Vendor,
-                    l.Holder.ClaimState))
+                    l.Holder.ClaimState,
+                    l.Holder.Role))
         ]);
 }

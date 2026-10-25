@@ -49,6 +49,7 @@ public sealed class WaveChatApiTests : IDisposable
         message.AuthorAlias.ShouldBe("Dan");
         message.Text.ShouldBe("ping @marshal and @dan again");
         message.Mentions.ShouldBe(["marshal", "dan"]);
+        message.AuthorRole.ShouldBe("worker");
     }
 
     [Fact]
@@ -106,6 +107,25 @@ public sealed class WaveChatApiTests : IDisposable
         var message = await response.Content.ReadFromJsonAsync<MessageJson>(JsonOptions);
         message!.AuthorAlias.ShouldBe("Dan");
         message.Text.ShouldBe("from the adapter");
+        message.AuthorRole.ShouldBe("worker");
+    }
+
+    [Fact]
+    public async Task History_SurfacesTheStoredAuthorRole()
+    {
+        var projectId = await CreateProjectAsync();
+        await SeedMessageAsync(projectId, "all", "Marshal", "marshal", "wave wide");
+        await PostHumanAsync(projectId, "all", "Dan", "from dan");
+
+        var feed = await UnreadAsync(projectId, "marshal", "all");
+        feed.Items.Select(m => (m.AuthorAlias, m.AuthorRole))
+            .ShouldBe([("Marshal", "marshal"), ("Dan", "worker")]);
+
+        var page = await _client.GetFromJsonAsync<HistoryJson>(
+            $"/api/projects/{projectId}/wave/rooms/all/messages", JsonOptions);
+
+        page!.Items.Select(m => (m.AuthorAlias, m.AuthorRole))
+            .ShouldBe([("Marshal", "marshal"), ("Dan", "worker")]);
     }
 
     [Fact]
@@ -376,6 +396,15 @@ public sealed class WaveChatApiTests : IDisposable
             """);
     }
 
+    private async Task SeedMessageAsync(
+        Guid projectId, string room, string authorAlias, string authorRole, string text)
+    {
+        await ExecuteAsync($"""
+            INSERT INTO WaveMessages (Id, ProjectId, Room, AuthorAlias, AuthorRole, Text, Mentions, CreatedAt)
+            VALUES ('{Guid.NewGuid().ToString().ToUpperInvariant()}', '{projectId.ToString().ToUpperInvariant()}', '{room}', '{authorAlias}', '{authorRole}', '{text}', ' {authorAlias.ToLowerInvariant()} ', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}')
+            """);
+    }
+
     private async Task ExecuteAsync(string sql)
     {
         using var command = _db.CreateCommand();
@@ -384,7 +413,8 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     private sealed record MessageJson(
-        Guid Id, string Room, string AuthorAlias, string Text, string[] Mentions, DateTime CreatedAt);
+        Guid Id, string Room, string AuthorAlias, string Text, string[] Mentions, DateTime CreatedAt,
+        string AuthorRole);
 
     private sealed record FeedJson(MessageJson[] Items, DateTime WatermarkAt);
 

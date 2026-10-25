@@ -228,7 +228,13 @@ public static class WaveChatApi
     }
 
     private static WaveMessageResponse ToResponse(WaveMessage message) =>
-        new(message.Id, message.Room, message.AuthorAlias, message.Text, message.MentionList, message.CreatedAt);
+        new(message.Id,
+            message.Room,
+            message.AuthorAlias,
+            message.Text,
+            message.MentionList,
+            message.CreatedAt,
+            message.AuthorRole);
 
     private static IResult AgentIdentityRequired() =>
         HttpErrors.BadRequest(
