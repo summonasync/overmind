@@ -108,6 +108,7 @@ builder.Services.AddSingleton<FeatureCodeTools>();
 builder.Services.AddSingleton<WaveListingCache>();
 builder.Services.AddSingleton<WaveSnapshotTools>();
 builder.Services.AddSingleton<WaveChatTools>();
+builder.Services.AddSingleton<WaveRoleTools>();
 builder.Services.AddSingleton<LaneTools>();
 builder.Services.AddSingleton<DirectiveTools>();
 builder.Services.AddSingleton<EntryAckTools>();
@@ -141,6 +142,7 @@ builder.Services
     .WithTools<FeatureCodeTools>()
     .WithTools<WaveSnapshotTools>()
     .WithTools<WaveChatTools>()
+    .WithTools<WaveRoleTools>()
     .WithTools<LaneTools>()
     .WithTools<DirectiveTools>()
     .WithTools<EntryAckTools>()

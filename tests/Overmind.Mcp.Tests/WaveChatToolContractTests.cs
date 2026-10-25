@@ -86,6 +86,7 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
         request.Path.ShouldBe($"{RoomsRoute}/lane-a/messages");
         request.Body.ShouldContain($"\"text\":\"@{SelfAlias} ping from the marshal\"");
         Text(posted).ShouldContain("posted to 'lane-a'");
+        Text(posted).ShouldContain($"as {AuthorAlias}");
         Text(posted).ShouldContain($"Mentions: {SelfAlias}");
     }
 
