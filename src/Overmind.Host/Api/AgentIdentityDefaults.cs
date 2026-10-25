@@ -1,8 +1,10 @@
+using Overmind.Core;
+
 namespace Overmind.Host.Api;
 
 public static class AgentIdentityDefaults
 {
-    public const string Alias = "agent";
+    public const string Alias = AgentSession.PlaceholderAlias;
     public const string Vendor = "unknown";
 
     public const string GenericNamingHint =

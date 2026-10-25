@@ -31,7 +31,7 @@ public sealed class WaveChatService
             throw PlanningException.WaveTextTooLong(trimmedText.Length, WaveMessage.MaxTextLength);
         }
 
-        var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, text);
+        var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, AgentSession.DefaultRole, text);
         _db.WaveMessages.Add(message);
         await _db.SaveChangesAsync(ct);
         return message;

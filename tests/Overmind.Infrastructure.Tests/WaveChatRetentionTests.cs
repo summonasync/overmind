@@ -31,8 +31,8 @@ public sealed class WaveChatRetentionTests : IDisposable
     [Fact]
     public async Task Sweep_PurgesMessagesPastRetention_KeepsFreshOnes()
     {
-        var ancient = WaveMessage.Create(_projectId, "all", "Dan", "ancient");
-        var fresh = WaveMessage.Create(_projectId, "all", "Dan", "fresh");
+        var ancient = WaveMessage.Create(_projectId, "all", "Dan", "worker", "ancient");
+        var fresh = WaveMessage.Create(_projectId, "all", "Dan", "worker", "fresh");
         _context.WaveMessages.AddRange(ancient, fresh);
         await _context.SaveChangesAsync();
         await BackdateAsync(ancient.Id, DateTime.UtcNow.AddDays(-8));
@@ -50,7 +50,7 @@ public sealed class WaveChatRetentionTests : IDisposable
         var feature = PlanningFeature.Create(_projectId, "kept-feature", "Kept", "body");
         _context.PlanningFeatures.Add(feature);
         _context.PlanningArtifacts.Add(PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Spec, "spec body"));
-        var message = WaveMessage.Create(_projectId, "all", "Dan", "ancient");
+        var message = WaveMessage.Create(_projectId, "all", "Dan", "worker", "ancient");
         _context.WaveMessages.Add(message);
         await _context.SaveChangesAsync();
         await BackdateAsync(message.Id, DateTime.UtcNow.AddDays(-30));
@@ -66,7 +66,7 @@ public sealed class WaveChatRetentionTests : IDisposable
     [Fact]
     public async Task Sweep_KeepsWatermarks_ForTheirAliases()
     {
-        var message = WaveMessage.Create(_projectId, "all", "Dan", "ancient");
+        var message = WaveMessage.Create(_projectId, "all", "Dan", "worker", "ancient");
         _context.WaveMessages.Add(message);
         await _context.SaveChangesAsync();
         await BackdateAsync(message.Id, DateTime.UtcNow.AddDays(-8));
