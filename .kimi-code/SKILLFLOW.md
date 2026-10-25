@@ -98,7 +98,7 @@ Hours and FTE only, never money. Deal won → `solution-architect` (ADRs, CONTEX
 
 ## Hard Rules (always on, any route)
 
-- Commit by feature: commit at every task close and at review handoff; `git push` only on explicit user request; the `done` flip is the human's door.
+- Commit by feature: commit at every task close and at review handoff; review handoff = the feature branch pushed and a PR opened; the feature closes when the PR is merged after the human's approval; the `done` flip is the human's door.
 - Sub-agents: `Kimi K2.7` (default) / `Kimi K3` (orchestration, audit, detection, obfuscation) only. `primary` alias forbidden.
 - Executing sub-agent reads ONLY its task artifact (via `planning_read_artifact` or the matching CLI verb — never from disk when MCP or the CLI is available). spec/plan artifacts belong to orchestrator + reviewer; the feature body is readable by all.
 - Frozen artifacts (validated spec/plan) change only via `planning_patch_artifact` with `logNote` or re-validation with the user. Removed content gets a `<removed>` tombstone, never silent deletion (context-clash defense).
