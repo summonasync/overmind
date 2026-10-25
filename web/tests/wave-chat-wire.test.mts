@@ -200,7 +200,9 @@ test("scroll anchors to the first unread message or the bottom when nothing is u
   const list = sliceFile("components/wave-message-list.tsx");
   assert.ok(list.includes('scrollIntoView({ block: "start" })'));
   assert.ok(list.includes("container.scrollTop = container.scrollHeight"));
-  assert.ok(list.includes("[scrollKey, hasUnread]"));
+  assert.ok(list.includes("[scrollKey, hasUnread, ready]"));
+  assert.ok(list.includes("const ready = messages.length > 0"));
+  assert.ok(list.includes("if (!ready)"));
 });
 
 test("paging keeps the viewport instead of jumping the reader around", () => {

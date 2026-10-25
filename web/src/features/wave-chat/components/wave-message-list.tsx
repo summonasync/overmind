@@ -47,7 +47,12 @@ export function WaveMessageList({
       ? read.slice(-CONTEXT_TAIL_LIMIT)
       : read;
 
+  const ready = messages.length > 0;
+
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
     if (hasUnread) {
       unreadAnchorRef.current?.scrollIntoView({ block: "start" });
       return;
@@ -56,7 +61,7 @@ export function WaveMessageList({
     if (container !== null) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [scrollKey, hasUnread]);
+  }, [scrollKey, hasUnread, ready]);
 
   if (messages.length === 0) {
     return (
