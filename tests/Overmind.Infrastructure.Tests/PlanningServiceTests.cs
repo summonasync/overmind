@@ -185,6 +185,64 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task CreateFeature_WithoutSlug_GeneratesFromEnglishTitle()
+    {
+        var service = CreateFeatureService();
+        var created = await service.CreateAsync(_projectId, null, "Fix Wave Roster", "body");
+
+        created.Slug.ShouldBe("001-fix-wave-roster");
+    }
+
+    [Fact]
+    public async Task CreateFeature_WithoutSlug_TransliteratesCyrillicTitle()
+    {
+        var service = CreateFeatureService();
+        var created = await service.CreateAsync(_projectId, null, "Привет, Мир!", "body");
+
+        created.Slug.ShouldBe("001-privet-mir");
+    }
+
+    [Fact]
+    public async Task CreateFeature_BlankSlug_GeneratesLikeOmitted()
+    {
+        var service = CreateFeatureService();
+        var created = await service.CreateAsync(_projectId, "   ", "Notes Ledger", "body");
+
+        created.Slug.ShouldBe("001-notes-ledger");
+    }
+
+    [Fact]
+    public async Task CreateFeature_WithoutSlug_TakesTheNextFreeNumber()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "168-ship", "Ship", "body");
+
+        var created = await service.CreateAsync(_projectId, null, "Wave Roster", "body");
+        created.Slug.ShouldBe("169-wave-roster");
+    }
+
+    [Fact]
+    public async Task CreateFeature_GeneratedSlug_CapsAtSixtyFourKeepingTheNumber()
+    {
+        var service = CreateFeatureService();
+        var created = await service.CreateAsync(
+            _projectId, null, "Wave Chat Roster Presence Line With A Very Long Descriptive Title", "body");
+
+        created.Slug.Length.ShouldBeLessThanOrEqualTo(64);
+        created.Slug.ShouldStartWith("001-");
+        created.Slug.ShouldNotEndWith("-");
+    }
+
+    [Fact]
+    public async Task CreateFeature_ExplicitSlug_WinsOverGeneration()
+    {
+        var service = CreateFeatureService();
+        var created = await service.CreateAsync(_projectId, "custom-slug", "Custom", "body");
+
+        created.Slug.ShouldBe("custom-slug");
+    }
+
+    [Fact]
     public async Task CreateFeature_MissingProject_ThrowsMissingProject()
     {
         var service = CreateFeatureService();

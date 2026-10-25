@@ -71,7 +71,7 @@ public sealed record PlanningQueueMoveRequest(string? Move, int? Position);
 
 public sealed record PlanningQueueReorderRequest(string Priority, string[] Slugs);
 
-public sealed record CreatePlanningFeatureRequest(string Slug, string Title, string? Body, string? Priority = null);
+public sealed record CreatePlanningFeatureRequest(string? Slug, string Title, string? Body, string? Priority = null);
 
 public sealed record UpdatePlanningFeatureRequest(
     string? Title, string? Body, PlanningFeatureStatus? Status, string? Priority = null, string? Lane = null,

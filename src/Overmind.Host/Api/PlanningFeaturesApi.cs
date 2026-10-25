@@ -86,20 +86,22 @@ public static class PlanningFeaturesApi
             priority = parsed;
         }
 
+        PlanningFeature created;
         try
         {
-            await service.CreateAsync(projectId, request.Slug, request.Title, request.Body ?? string.Empty, priority, ct);
+            created = await service.CreateAsync(
+                projectId, request.Slug, request.Title, request.Body ?? string.Empty, priority, ct);
         }
         catch (PlanningException ex)
         {
             return PlanningErrors.Map(ex);
         }
 
-        var feature = await LoadFeatureWithArtifacts(db, projectId, request.Slug, ct);
+        var feature = await LoadFeatureWithArtifacts(db, projectId, created.Slug, ct);
         return Results.Created(
-            $"/api/projects/{projectId}/planning/features/{request.Slug}",
+            $"/api/projects/{projectId}/planning/features/{created.Slug}",
             PlanningMapper.ToFeatureResponse(
-                feature!, await dependencies.ListDependenciesAsync(projectId, request.Slug, ct),
+                feature!, await dependencies.ListDependenciesAsync(projectId, created.Slug, ct),
                 await BlockedStatesAsync(taskDependencies, feature!, ct)));
     }
 

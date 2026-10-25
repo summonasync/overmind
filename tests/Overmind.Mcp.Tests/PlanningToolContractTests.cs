@@ -1437,6 +1437,49 @@ public class PlanningToolContractTests : McpSessionTestBase
         JsonNode.Parse(request.Body)!.AsObject().ContainsKey("priority").ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task PlanningCreateFeature_WithoutSlug_OmitsItFromThePostedJson()
+    {
+        await Driver.CallToolAsync("planning_create_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["title"] = "Generated feature"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/planning/features", StringComparison.Ordinal));
+        JsonNode.Parse(request.Body)!.AsObject().ContainsKey("slug").ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task PlanningCreateFeature_BlankSlug_OmitsItFromThePostedJson(string slug)
+    {
+        await Driver.CallToolAsync("planning_create_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = slug,
+            ["title"] = "Generated feature"
+        });
+
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path.EndsWith("/planning/features", StringComparison.Ordinal));
+        JsonNode.Parse(request.Body)!.AsObject().ContainsKey("slug").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningCreateFeature_Description_DocumentsSlugGeneration()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_create_feature"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("slug is optional");
+        description.ShouldContain("{next free NNN}-{title-derived slug}");
+        description.ShouldContain("an explicit slug always wins");
+    }
+
     [Theory]
     [InlineData("urgent")]
     [InlineData("p9")]

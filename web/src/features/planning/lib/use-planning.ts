@@ -21,6 +21,7 @@ import {
   updatePlanningWorkflow,
   validatePlanningArtifact,
 } from "@/features/planning/api";
+import { createFeatureWithCollisionRetry } from "@/features/planning/lib/feature-create-retry";
 import {
   boardOnceQueryOptions,
   boardQueryOptions,
@@ -65,7 +66,8 @@ export function usePlanningMutations(projectId: string) {
   };
 
   const createFeature = useMutation({
-    mutationFn: (values: PlanningFeatureFormValues) => createPlanningFeature(projectId, values),
+    mutationFn: (values: PlanningFeatureFormValues) =>
+      createFeatureWithCollisionRetry(projectId, values, createPlanningFeature),
     onSuccess: () => invalidate(),
   });
 

@@ -176,6 +176,39 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateFeature_WithoutSlug_GeneratesFromTheTitle()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Title = "Fix Wave Roster", Body = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature!.Slug.ShouldBe("001-fix-wave-roster");
+        response.Headers.Location!.ToString().ShouldEndWith("/001-fix-wave-roster");
+
+        var reloaded = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/{feature.Slug}", JsonOptions);
+        reloaded!.Title.ShouldBe("Fix Wave Roster");
+    }
+
+    [Fact]
+    public async Task CreateFeature_WithoutSlug_TransliteratesCyrillicTitle()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Title = "Привет, Мир", Body = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
+        feature!.Slug.ShouldBe("001-privet-mir");
+    }
+
+    [Fact]
     public async Task CreateFeature_ExplicitPriority_ReturnedLowercaseOnTheWire()
     {
         var project = await CreateProjectAsync();
