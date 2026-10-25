@@ -88,10 +88,10 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_create_feature", Destructive = false, Idempotent = false)]
-    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). The slug's NNN number prefix must be free: any feature holding that number (numeric compare, 7 = 007) earns a 409 NumberCollision whose detail names the colliding feature and suggests the next free number. Follow with planning_upsert_artifact(kind=spec), then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
+    [Description("Creates a new feature on the planning board, optionally with a priority (p0 critical, p1 high, p2 normal — the default, p3 low). slug is optional: omit it or pass a blank one and the Host generates {next free NNN}-{title-derived slug} — lowercase ASCII derived from the title (Cyrillic transliterated), non-alphanumerics collapsed to single dashes, the slug part shrinking so the total never exceeds 64 while the number survives; an explicit slug always wins. The slug's NNN number prefix must be free: any feature holding that number (numeric compare, 7 = 007) earns a 409 NumberCollision whose detail names the colliding feature and suggests the next free number. Follow with planning_upsert_artifact(kind=spec), then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first. Features cannot be deleted or archived via MCP — the UI owns feature deletion.")]
     public async Task<JsonElement> CreateFeature(
-        [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars.")] string slug,
         [Description("Human-readable feature title.")] string title,
+        [Description("Slug of the new feature: lowercase alphanumeric with hyphens, max 64 chars. Optional — omitted or blank generates {next free NNN}-{title-derived slug}; an explicit slug wins.")] string? slug = null,
         [Description("Optional markdown body of the feature document (goal, requirements, non-goals).")] string? body = null,
         [Description("Optional priority: p0 (critical), p1 (high), p2 (normal — the default when omitted), p3 (low).")] string? priority = null,
         [Description("Id of the project to create the feature in; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
@@ -102,10 +102,14 @@ public sealed class PlanningFeatureTools
 
         var payload = new JsonObject
         {
-            ["slug"] = slug,
             ["title"] = title,
             ["body"] = body
         };
+
+        if (!string.IsNullOrWhiteSpace(slug))
+        {
+            payload["slug"] = slug;
+        }
 
         if (normalizedPriority is not null)
         {
