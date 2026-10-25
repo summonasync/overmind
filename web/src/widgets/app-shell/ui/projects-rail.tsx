@@ -30,7 +30,7 @@ import {
   type RailView,
 } from "@/features/projects/lib/tree-session";
 
-const CONTOUR_PATHS = ["/", "/dashboard", "/entries", "/lanes", "/planning"];
+const CONTOUR_PATHS = ["/", "/dashboard", "/entries", "/lanes", "/planning", "/wave-chat"];
 
 interface ViewOption {
   value: RailView;
