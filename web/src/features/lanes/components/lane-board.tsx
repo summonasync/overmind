@@ -12,17 +12,17 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import {
   FeatureClaimChip,
-  FeatureNumberBadge,
-  featureStatusTone,
   usePlanningBoard,
 } from "@/features/planning";
 import type { PlanningFeatureBoardItem, PlanningFeatureStatus } from "@/features/planning";
+import { formatFeatureNumber } from "@/shared/lib/feature-number";
 import type { ProjectNumbering } from "@/shared/lib/feature-number";
 import { useProjectNumbering } from "@/features/projects";
 import { LaneCard } from "@/features/lanes/components/lane-card";
 import { LaneAddDialog } from "@/features/lanes/components/lane-add-dialog";
 import { LaneDeleteDialog } from "@/features/lanes/components/lane-delete-dialog";
 import { LaneEditDialog } from "@/features/lanes/components/lane-edit-dialog";
+import { LaneFeatureWidget } from "@/features/lanes/components/lane-feature-widget";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import { LaneDropNote } from "@/features/lanes/components/lane-drop-note";
 import { LaneDndProvider } from "@/features/lanes/components/lane-dnd-context";
@@ -71,31 +71,27 @@ interface UnlanedFeatureRowProps {
 function UnlanedFeatureRow({ projectId, numbering, item, dropMessage }: UnlanedFeatureRowProps) {
   return (
     <li className="flex flex-col gap-1">
-      <LaneDraggableCard slug={item.slug} fromLane={null} className="rounded-md">
+      <LaneDraggableCard slug={item.slug} fromLane={null}>
         {({ isDragging }) => (
           <div
             className={cn(
-              "flex flex-col gap-1 rounded-md bg-surface px-3 py-2 transition-opacity",
+              "rounded-lg transition-opacity",
               isDragging && "opacity-40 ring-1 ring-primary/50",
             )}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={`/dashboard?project=${projectId}&feature=${item.slug}`}
-                className="group flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              >
-                <FeatureNumberBadge slug={item.slug} numbering={numbering} />
-                <span className="min-w-0 truncate text-sm font-semibold text-foreground group-hover:text-primary">
-                  {item.title}
-                </span>
-              </a>
-              <Badge tone={featureStatusTone(item.status)}>{item.status}</Badge>
-              {item.isBlocked ? <Badge tone="danger">blocked</Badge> : null}
-              <span className="ml-auto min-w-0 truncate">
-                <FeatureClaimChip item={item} />
-              </span>
-            </div>
-            <FeatureLaneActions projectId={projectId} slug={item.slug} currentLane={null} />
+            <LaneFeatureWidget
+              slug={item.slug}
+              number={formatFeatureNumber(item.slug, numbering.style, numbering.prefix)}
+              title={item.title}
+              status={item.status}
+              blocked={item.isBlocked}
+              taskDone={item.taskDone}
+              taskTotal={item.taskTotal}
+              href={`/dashboard?project=${projectId}&feature=${item.slug}`}
+              claim={<FeatureClaimChip item={item} />}
+            >
+              <FeatureLaneActions projectId={projectId} slug={item.slug} currentLane={null} />
+            </LaneFeatureWidget>
           </div>
         )}
       </LaneDraggableCard>
@@ -259,6 +255,7 @@ export function LaneBoard() {
                 key={lane.name}
                 lane={lane}
                 projectId={projectId}
+                numbering={numbering}
                 boardItems={boardItems}
                 features={visibleByLane.get(lane.name)?.features ?? []}
                 moveTargets={moveTargets}
