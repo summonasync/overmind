@@ -33,10 +33,10 @@ public sealed partial class PlanningFeatureService
     }
 
     public async Task<PlanningFeature> CreateAsync(
-        Guid projectId, string slug, string title, string body,
+        Guid projectId, string? slug, string title, string body,
         FeaturePriority priority = FeaturePriority.P2, CancellationToken ct = default)
     {
-        if (!IsValidSlug(slug))
+        if (!string.IsNullOrWhiteSpace(slug) && !IsValidSlug(slug))
         {
             throw PlanningException.InvalidSlug(slug);
         }
@@ -55,18 +55,29 @@ public sealed partial class PlanningFeatureService
             .Select(f => new FeatureNumberEntry(f.Slug, f.Status))
             .ToListAsync(ct);
 
-        if (existing.Any(f => f.Slug == slug))
+        string resolvedSlug;
+        if (string.IsNullOrWhiteSpace(slug))
         {
-            throw PlanningException.DuplicateSlug(slug);
+            resolvedSlug = FeatureSlugGenerator.Compose(
+                existing.Select(f => f.Slug).ToArray(), title);
+        }
+        else
+        {
+            if (existing.Any(f => f.Slug == slug))
+            {
+                throw PlanningException.DuplicateSlug(slug);
+            }
+
+            if (FeatureNumberGuard.FindCollision(existing, slug) is { } collision)
+            {
+                throw PlanningException.NumberCollision(
+                    slug, collision.CollidingSlug, collision.CollidingStatus, collision.SuggestedNumber);
+            }
+
+            resolvedSlug = slug;
         }
 
-        if (FeatureNumberGuard.FindCollision(existing, slug) is { } collision)
-        {
-            throw PlanningException.NumberCollision(
-                slug, collision.CollidingSlug, collision.CollidingStatus, collision.SuggestedNumber);
-        }
-
-        var feature = PlanningFeature.Create(projectId, slug, title, body, priority);
+        var feature = PlanningFeature.Create(projectId, resolvedSlug, title, body, priority);
         _db.PlanningFeatures.Add(feature);
         await AssignQueueTailAsync(feature, ct);
 
@@ -77,7 +88,7 @@ public sealed partial class PlanningFeatureService
         }
         catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
         {
-            throw PlanningException.DuplicateSlug(slug);
+            throw PlanningException.DuplicateSlug(resolvedSlug);
         }
 
         await _materialization.DispatchAsync(projectId, ct);
