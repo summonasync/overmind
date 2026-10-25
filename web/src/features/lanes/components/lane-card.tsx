@@ -3,7 +3,9 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { cn } from "@/shared/lib/cn";
-import { featureStatusTone, priorityTone } from "@/features/planning";
+import { formatFeatureNumber } from "@/shared/lib/feature-number";
+import type { ProjectNumbering } from "@/shared/lib/feature-number";
+import { priorityTone } from "@/features/planning";
 import type {
   PlanningFeatureBoardItem,
 } from "@/features/planning";
@@ -13,6 +15,8 @@ import type { LaneDropBlockReason } from "@/features/lanes/lib/lane-drop-resolut
 import type { LaneDropError } from "@/features/lanes/lib/use-lane-drop";
 import { LaneClaimChip } from "@/features/lanes/components/lane-claim-chip";
 import { LaneFeatureMove } from "@/features/lanes/components/lane-feature-move";
+import { LaneFeatureWidget } from "@/features/lanes/components/lane-feature-widget";
+import { featureHref } from "@/features/lanes/lib/lane-feature-href";
 import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-actions";
 import { LaneDropNote } from "@/features/lanes/components/lane-drop-note";
 import { LaneSortableCard } from "@/features/lanes/components/lane-sortable-card";
@@ -23,6 +27,7 @@ import type { LaneFeatureSummary, LaneRow } from "@/features/lanes/types";
 interface LaneCardProps {
   lane: LaneRow;
   projectId: string;
+  numbering: ProjectNumbering;
   boardItems: ReadonlyMap<string, PlanningFeatureBoardItem>;
   features: LaneFeatureSummary[];
   moveTargets: ReadonlyMap<string, LaneMoveTarget>;
@@ -36,6 +41,7 @@ interface LaneCardProps {
 
 interface LaneFeatureRowProps {
   projectId: string;
+  numbering: ProjectNumbering;
   feature: LaneFeatureSummary;
   laneName: string;
   boardItem: PlanningFeatureBoardItem | undefined;
@@ -53,6 +59,7 @@ function blockChipLabel(lane: LaneRow, reason: LaneDropBlockReason): string {
 
 function LaneFeatureRow({
   projectId,
+  numbering,
   feature,
   laneName,
   boardItem,
@@ -61,40 +68,40 @@ function LaneFeatureRow({
   sortableDisabled,
   dropMessage,
 }: LaneFeatureRowProps) {
-  const priority = boardItem?.priority;
   const reorderable = boardItem !== undefined && target !== undefined;
-  const actions = <FeatureLaneActions projectId={projectId} slug={feature.slug} currentLane={laneName} />;
 
   return (
     <li className="flex flex-col gap-1">
-      <LaneSortableCard
-        slug={feature.slug}
-        laneName={laneName}
-        disabled={sortableDisabled}
-        className="rounded-md"
-      >
+      <LaneSortableCard slug={feature.slug} laneName={laneName} disabled={sortableDisabled}>
         {({ isDragging, isOver }) => (
           <div
             className={cn(
-              "flex flex-col gap-1 rounded-md px-1 py-0.5 transition-colors",
+              "rounded-lg transition-colors",
               isDragging && "opacity-40 ring-1 ring-primary/50",
               isOver && !isDragging && "bg-primary/10",
             )}
           >
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 truncate font-mono text-xs text-foreground">{feature.slug}</span>
-              {priority !== undefined ? <Badge tone={priorityTone(priority)}>{priority}</Badge> : null}
-              <Badge tone={featureStatusTone(feature.status)}>{feature.status}</Badge>
-              <span className="ml-auto min-w-0 truncate">
+            <LaneFeatureWidget
+              slug={feature.slug}
+              number={formatFeatureNumber(feature.slug, numbering.style, numbering.prefix)}
+              title={boardItem?.title ?? null}
+              status={feature.status}
+              priority={boardItem?.priority}
+              blocked={boardItem?.isBlocked ?? false}
+              taskDone={boardItem?.taskDone}
+              taskTotal={boardItem?.taskTotal}
+              href={featureHref(projectId, feature.slug)}
+              claimAlias={feature.claimedByAlias}
+              claimState={feature.claimState}
+              claim={
                 <LaneClaimChip
                   alias={feature.claimedByAlias}
                   vendor={feature.claimedByVendor}
                   claimState={feature.claimState}
                 />
-              </span>
-            </div>
-            {reorderable ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-1">
+              }
+            >
+              {reorderable ? (
                 <LaneFeatureMove
                   slug={feature.slug}
                   laneName={laneName}
@@ -102,11 +109,9 @@ function LaneFeatureRow({
                   target={target}
                   queueMove={queueMove}
                 />
-                {actions}
-              </div>
-            ) : (
-              actions
-            )}
+              ) : null}
+              <FeatureLaneActions projectId={projectId} slug={feature.slug} currentLane={laneName} />
+            </LaneFeatureWidget>
           </div>
         )}
       </LaneSortableCard>
@@ -118,6 +123,7 @@ function LaneFeatureRow({
 export function LaneCard({
   lane,
   projectId,
+  numbering,
   boardItems,
   features,
   moveTargets,
@@ -210,6 +216,7 @@ export function LaneCard({
               <LaneFeatureRow
                 key={feature.slug}
                 projectId={projectId}
+                numbering={numbering}
                 feature={feature}
                 laneName={lane.name}
                 boardItem={boardItems.get(feature.slug)}

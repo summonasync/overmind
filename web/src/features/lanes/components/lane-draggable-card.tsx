@@ -27,15 +27,25 @@ export function LaneDraggableCard({
   className,
   children,
 }: LaneDraggableCardProps) {
-  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
-    id: laneFeatureDragId(slug),
-    data: laneFeatureDragData(slug, fromLane),
-    disabled,
-  });
+  const { attributes, isDragging, listeners, setNodeRef, setActivatorNodeRef, transform } =
+    useDraggable({
+      id: laneFeatureDragId(slug),
+      data: laneFeatureDragData(slug, fromLane),
+      disabled,
+    });
   const style: CSSProperties | undefined = transform === null ? undefined : { transform: laneDragTransform(transform) };
 
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} style={style} className={className}>
+    <div
+      ref={(element) => {
+        setNodeRef(element);
+        setActivatorNodeRef(element);
+      }}
+      {...listeners}
+      {...attributes}
+      style={style}
+      className={className}
+    >
       {children({ isDragging })}
     </div>
   );
