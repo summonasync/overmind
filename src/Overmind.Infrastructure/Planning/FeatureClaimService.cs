@@ -295,6 +295,12 @@ public sealed class FeatureClaimService
         }
         else
         {
+            if (session.Alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal) &&
+                !session.Alias.Equals(alias, StringComparison.Ordinal))
+            {
+                session.RenameAlias(alias);
+            }
+
             session.Touch();
         }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { ENTRY_TYPES } from "@/shared/api/types";
+import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
@@ -24,7 +25,7 @@ export function EntryFilters({ filters, onChange }: EntryFiltersProps) {
         <option value="">All types</option>
         {ENTRY_TYPES.map((type) => (
           <option key={type} value={type}>
-            {type}
+            {ENTRY_TYPE_META[type].label}
           </option>
         ))}
       </Select>

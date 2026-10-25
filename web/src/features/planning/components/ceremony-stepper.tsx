@@ -14,12 +14,14 @@ const TONE_DOTS: Record<BadgeTone, string> = {
   neutral: "bg-border-strong",
   muted: "bg-border",
   primary: "bg-primary",
+  agent: "bg-agent",
+  marshal: "bg-marshal",
   info: "bg-info",
   warning: "bg-warning",
   success: "bg-success",
   danger: "bg-danger",
   skill: "bg-type-skill",
-  idea: "bg-type-featureRequest",
+  idea: "bg-type-idea",
   audit: "bg-type-audit",
 };
 

@@ -8,15 +8,15 @@ import {
   issueKeys,
   issueListQueryOptions,
 } from "@/features/issues/queries";
-import type { IssueListFilter, PromoteIssueValues } from "@/features/issues/types";
+import type { IssueKind, IssueListFilter, PromoteIssueValues } from "@/features/issues/types";
 
 export function useIssueList(projectId: string, filter: IssueListFilter) {
   const query = useQuery(issueListQueryOptions(projectId, filter));
   return { data: query.data ?? [], loading: query.isPending, error: query.error };
 }
 
-export function useCrossProjectIssues() {
-  const query = useQuery(crossProjectIssueListQueryOptions());
+export function useCrossProjectIssues(kind: IssueKind | null) {
+  const query = useQuery(crossProjectIssueListQueryOptions(kind));
   return { data: query.data ?? [], loading: query.isPending, error: query.error };
 }
 

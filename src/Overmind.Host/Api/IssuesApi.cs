@@ -31,10 +31,10 @@ public static class IssuesApi
         {
             var issue = await service.CreateAsync(
                 projectId, request.AuthorProjectId, request.Title, request.Body,
-                PlanningLogSource.Ui, ct);
+                PlanningLogSource.Ui, request.Kind, ct);
             return Results.Created(
                 $"/api/projects/{projectId}/issues/{issue.Id}",
-                new CreateIssueResponse(issue.Id, issue.Status, issue.Title));
+                new CreateIssueResponse(issue.Id, issue.Status, issue.Title, issue.Kind));
         }
         catch (PlanningException ex)
         {
@@ -50,6 +50,7 @@ public static class IssuesApi
         Guid projectId,
         string? status,
         string? authorProjectId,
+        string? kind,
         IssueService service,
         CancellationToken ct)
     {
@@ -71,7 +72,7 @@ public static class IssuesApi
             return HttpErrors.BadRequest(statusError);
         }
 
-        var issues = await service.ListAsync(projectId, parsedStatus, authorFilter, ct);
+        var issues = await service.ListAsync(projectId, parsedStatus, authorFilter, kind, ct);
         var counts = await service.AppendCountsAsync([.. issues.Select(i => i.Id)], ct);
         var rows = issues.Select(i => AgentIssuesApi.ToRow(i, counts.GetValueOrDefault(i.Id))).ToArray();
         return Results.Ok(rows);

@@ -12,6 +12,7 @@ public static class AgentSessionsApi
         var group = routes.MapGroup("/api/agent");
 
         group.MapPost("/sessions", Register);
+        group.MapPost("/sessions/{id:guid}/role", SetRole);
         group.MapPost("/sessions/{id:guid}/end", End);
 
         return group;
@@ -28,7 +29,7 @@ public static class AgentSessionsApi
         AgentSession session;
         try
         {
-            session = AgentSession.Create(request.Alias, request.Vendor);
+            session = AgentSession.Create(request.Alias, request.Vendor, request.Role ?? AgentSession.DefaultRole);
         }
         catch (ArgumentException ex)
         {
@@ -38,6 +39,29 @@ public static class AgentSessionsApi
         db.AgentSessions.Add(session);
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/agent/sessions/{session.Id}", ToResponse(session));
+    }
+
+    private static async Task<IResult> SetRole(
+        Guid id, SetAgentSessionRoleRequest request, OvermindDbContext db, CancellationToken ct)
+    {
+        var role = request.Role?.Trim();
+        if (role is null ||
+            (!role.Equals(AgentSession.DefaultRole, StringComparison.Ordinal) &&
+             !role.Equals(AgentSession.MarshalRole, StringComparison.Ordinal)))
+        {
+            return HttpErrors.BadRequest(
+                $"Role must be '{AgentSession.DefaultRole}' or '{AgentSession.MarshalRole}'.");
+        }
+
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (session is null)
+        {
+            return HttpErrors.NotFound($"Session '{id}' was not found.");
+        }
+
+        session.SetRole(role);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ToResponse(session));
     }
 
     private static async Task<IResult> End(Guid id, OvermindDbContext db, CancellationToken ct)

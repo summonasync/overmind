@@ -41,6 +41,7 @@ public sealed class WaveChatTools
 
         var id = message.GetProperty("id").GetString();
         var postedRoom = message.GetProperty("room").GetString();
+        var authorAlias = message.GetProperty("authorAlias").GetString();
         var mentions = message.GetProperty("mentions").EnumerateArray()
             .Select(m => m.GetString())
             .ToArray();
@@ -52,7 +53,7 @@ public sealed class WaveChatTools
             [
                 new TextContentBlock
                 {
-                    Text = $"Message {id} posted to '{postedRoom}'.{mentionNote}"
+                    Text = $"Message {id} posted to '{postedRoom}' as {authorAlias}.{mentionNote}"
                 }
             ]
         };

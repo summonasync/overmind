@@ -143,4 +143,83 @@ public class AgentSessionTests
 
         session.Liveness(DateTime.UtcNow, 0).ShouldBe(AgentSessionLiveness.Alive);
     }
+
+    [Fact]
+    public void Create_DefaultsRoleToWorker()
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        session.Role.ShouldBe(AgentSession.DefaultRole);
+    }
+
+    [Fact]
+    public void Create_AcceptsMarshalRole_AndTrimsIt()
+    {
+        var session = AgentSession.Create("Dan", "qwen", "  marshal  ");
+
+        session.Role.ShouldBe(AgentSession.MarshalRole);
+    }
+
+    [Theory]
+    [InlineData("worker")]
+    [InlineData("Marshal")]
+    [InlineData("admiral")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void Create_UnknownRoleNormalizesToWorker(string? role)
+    {
+        var session = AgentSession.Create("Dan", "qwen", role!);
+
+        session.Role.ShouldBe(AgentSession.DefaultRole);
+    }
+
+    [Fact]
+    public void SetRole_NormalizesAndUpdates()
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        session.SetRole(" marshal ");
+        session.Role.ShouldBe(AgentSession.MarshalRole);
+
+        session.SetRole("overlord");
+        session.Role.ShouldBe(AgentSession.DefaultRole);
+    }
+
+    [Fact]
+    public void RenameAlias_OnPlaceholderSession_Renames()
+    {
+        var session = AgentSession.Create(AgentSession.PlaceholderAlias, "unknown");
+
+        session.RenameAlias("  guldan  ");
+
+        session.Alias.ShouldBe("guldan");
+    }
+
+    [Fact]
+    public void RenameAlias_OnRealIdentity_Throws()
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        Should.Throw<InvalidOperationException>(() => session.RenameAlias("guldan"));
+        session.Alias.ShouldBe("Dan");
+    }
+
+    [Fact]
+    public void Restore_RoundTripsRole()
+    {
+        var session = AgentSession.Restore(Guid.NewGuid(), "Dan", "qwen",
+            DateTime.UtcNow.AddHours(-1), DateTime.UtcNow, null, "marshal");
+
+        session.Role.ShouldBe(AgentSession.MarshalRole);
+    }
+
+    [Fact]
+    public void Restore_DefaultsRoleToWorker()
+    {
+        var session = AgentSession.Restore(Guid.NewGuid(), "Dan", "qwen",
+            DateTime.UtcNow.AddHours(-1), DateTime.UtcNow);
+
+        session.Role.ShouldBe(AgentSession.DefaultRole);
+    }
 }

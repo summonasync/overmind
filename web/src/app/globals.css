@@ -18,6 +18,8 @@
   --color-danger: #ef4444;
   --color-warning: #f59e0b;
   --color-info: #60a5fa;
+  --color-agent: #facc15;
+  --color-marshal: #a3e635;
 
   --color-type-note: #60a5fa;
   --color-type-decision: #f59e0b;
@@ -25,7 +27,7 @@
   --color-type-guard: #ef4444;
   --color-type-skill: #a855f7;
   --color-type-tombstone: #71717a;
-  --color-type-featureRequest: #facc15;
+  --color-type-idea: #facc15;
   --color-type-audit: #2dd4bf;
 
   --color-ceremony-goal: var(--color-success);

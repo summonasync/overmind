@@ -2,6 +2,7 @@
 
 import { IssueActions } from "@/features/issues/components/issue-actions";
 import type { IssueActionPending } from "@/features/issues/components/issue-actions";
+import { IssueKindBadge } from "@/features/issues/components/issue-kind-badge";
 import { IssueStatusChip } from "@/features/issues/components/issue-status-chip";
 import { IssueTrail } from "@/features/issues/components/issue-trail";
 import { useIssueCard, useIssueMutations } from "@/features/issues/lib/use-issues";
@@ -45,6 +46,7 @@ export function IssueDetail({ projectId, issueId, features, authorNames }: Issue
     <article className="space-y-4">
       <header className="space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
+          <IssueKindBadge kind={issue.kind} />
           <IssueStatusChip status={issue.status} />
           <span className="text-xs text-muted">
             {authorNames[issue.authorProjectId] ?? issue.authorProjectId.slice(0, 8)}

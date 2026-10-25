@@ -75,7 +75,8 @@ public sealed class QdrantCollectionConfigTests
 
         var hit = EntryPayload.ToHit(ScoredPointWithPayload(entry.Id, 0.87f, point.Payload));
 
-        hit.EntryId.ShouldBe(entry.Id);
+        hit.ShouldNotBeNull();
+        hit!.EntryId.ShouldBe(entry.Id);
         hit.Title.ShouldBe("Quarterly plan");
         hit.Type.ShouldBe(EntryType.Note);
         hit.Snippet.ShouldBe("Ship the MVP and iterate");
@@ -90,8 +91,26 @@ public sealed class QdrantCollectionConfigTests
 
         var hit = EntryPayload.ToHit(ScoredPointWithPayload(entry.Id, 0f, point.Payload));
 
-        hit.Snippet.Length.ShouldBeLessThan(210);
+        hit.ShouldNotBeNull();
+        hit!.Snippet.Length.ShouldBeLessThan(210);
         hit.Snippet.ShouldEndWith("…");
+    }
+
+    [Fact]
+    public void EntryPayload_IdeaPayload_ParsesAndLegacyFeatureRequestDrops()
+    {
+        var idea = ContextEntry.Create(Guid.NewGuid(), EntryType.Idea, "Vector cache", "Origin: chat, 2026-10-13.");
+        var ideaPoint = EntryPayload.ToPoint(idea, [1f]);
+        ideaPoint.Payload[EntryPayload.Type].StringValue.ShouldBe("idea");
+
+        var ideaHit = EntryPayload.ToHit(ScoredPointWithPayload(idea.Id, 0.5f, ideaPoint.Payload));
+
+        ideaHit.ShouldNotBeNull();
+        ideaHit!.Type.ShouldBe(EntryType.Idea);
+
+        ideaPoint.Payload[EntryPayload.Type].StringValue = "featureRequest";
+
+        EntryPayload.ToHit(ScoredPointWithPayload(idea.Id, 0.5f, ideaPoint.Payload)).ShouldBeNull();
     }
 
     private static ScoredPoint ScoredPointWithPayload(Guid id, float score, MapField<string, Value> payload)

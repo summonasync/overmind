@@ -11,4 +11,5 @@ public sealed record IssueBoardRow(
     DateTime CreatedAt,
     DateTime? ClosedAt,
     Guid? PromotedToArtifactId,
-    int AppendCount);
+    int AppendCount,
+    string Kind = Issue.DefaultKind);

@@ -10,14 +10,14 @@ export {
   waveParticipantsQueryOptions,
   waveRoomsQueryOptions,
 } from "./queries";
-export { listWaveParticipants, listWaveRooms, listWaveUnread, postWaveMessage } from "./api";
+export { listWaveHistory, listWaveParticipants, listWaveRooms, postWaveMessage } from "./api";
 export type {
   WaveClaimState,
+  WaveHistoryPayload,
   WaveMessage,
   WaveParticipant,
   WaveParticipantKind,
   WaveParticipantsPayload,
   WaveRoom,
   WaveRoomsPayload,
-  WaveUnreadPayload,
 } from "./types";

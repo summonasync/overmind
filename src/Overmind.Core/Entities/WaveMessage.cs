@@ -9,6 +9,7 @@ public sealed partial class WaveMessage
     public const int MaxMentions = 16;
     public const int MaxMentionsLength = 600;
     public const string AllRooms = "all";
+    public const string OwnerRole = "owner";
 
     private WaveMessage()
     {
@@ -18,6 +19,7 @@ public sealed partial class WaveMessage
     public Guid ProjectId { get; private set; }
     public string Room { get; private set; } = string.Empty;
     public string AuthorAlias { get; private set; } = string.Empty;
+    public string AuthorRole { get; private set; } = AgentSession.DefaultRole;
     public string Text { get; private set; } = string.Empty;
     public string Mentions { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
@@ -25,7 +27,8 @@ public sealed partial class WaveMessage
     public IReadOnlyList<string> MentionList =>
         [.. Mentions.Split(' ', StringSplitOptions.RemoveEmptyEntries)];
 
-    public static WaveMessage Create(Guid projectId, string room, string authorAlias, string text)
+    public static WaveMessage Create(
+        Guid projectId, string room, string authorAlias, string authorRole, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
@@ -42,6 +45,7 @@ public sealed partial class WaveMessage
             ProjectId = projectId,
             Room = NormalizeRoom(room),
             AuthorAlias = NormalizeIdentity(authorAlias),
+            AuthorRole = NormalizeAuthorRole(authorRole),
             Text = trimmed,
             Mentions = FormatMentions(ParseMentions(trimmed)),
             CreatedAt = DateTime.UtcNow
@@ -88,6 +92,22 @@ public sealed partial class WaveMessage
         }
 
         return trimmed;
+    }
+
+    private static string NormalizeAuthorRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+
+        var trimmed = role.Trim();
+        if (trimmed.Length > MaxIdentityLength)
+        {
+            throw new ArgumentException(
+                $"Agent identity '{trimmed}' exceeds the {MaxIdentityLength} character cap.", nameof(role));
+        }
+
+        return trimmed.Equals(OwnerRole, StringComparison.Ordinal)
+            ? OwnerRole
+            : AgentSession.NormalizeRole(trimmed);
     }
 
     [GeneratedRegex(@"(?<![A-Za-z0-9_-])@([A-Za-z0-9_-]{1,32})")]

@@ -2,7 +2,8 @@ using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
 
-public sealed record CreateIssueRequest(Guid AuthorProjectId, string Title, string Body);
+public sealed record CreateIssueRequest(
+    Guid AuthorProjectId, string Title, string Body, string Kind = Issue.DefaultKind);
 
 public sealed record AppendIssueRequest(Guid AuthorProjectId, string Text);
 
@@ -10,7 +11,8 @@ public sealed record SetIssueStatusRequest(IssueStatus Status, PlanningLogSource
 
 public sealed record PromoteIssueRequest(string FeatureSlug, PlanningLogSource Source);
 
-public sealed record CreateIssueResponse(Guid Id, IssueStatus Status, string Title);
+public sealed record CreateIssueResponse(
+    Guid Id, IssueStatus Status, string Title, string Kind = Issue.DefaultKind);
 
 public sealed record SetIssueStatusResponse(
     Guid Id, IssueStatus Status, PlanningLogSource Source, DateTime? ClosedAt);
@@ -26,7 +28,8 @@ public sealed record IssueRow(
     DateTime CreatedAt,
     DateTime? ClosedAt,
     Guid? PromotedToArtifactId,
-    int AppendCount);
+    int AppendCount,
+    string Kind = Issue.DefaultKind);
 
 public sealed record CrossProjectIssueRow(
     Guid Id,
@@ -37,7 +40,8 @@ public sealed record CrossProjectIssueRow(
     DateTime CreatedAt,
     DateTime? ClosedAt,
     Guid? PromotedToArtifactId,
-    int AppendCount);
+    int AppendCount,
+    string Kind = Issue.DefaultKind);
 
 public sealed record IssueAppendItem(
     Guid Id,
@@ -54,4 +58,5 @@ public sealed record IssueCard(
     DateTime CreatedAt,
     DateTime? ClosedAt,
     Guid? PromotedToArtifactId,
-    IReadOnlyList<IssueAppendItem> Appends);
+    IReadOnlyList<IssueAppendItem> Appends,
+    string Kind = Issue.DefaultKind);

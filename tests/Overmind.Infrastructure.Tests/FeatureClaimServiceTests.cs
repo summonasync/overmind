@@ -240,6 +240,55 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Claim_PlaceholderAliasSession_UpgradeSessionToClaimAlias()
+    {
+        await CreateFeatureAsync();
+        var callerId = await AddSessionAsync(AgentSession.PlaceholderAlias, "unknown", DateTime.UtcNow);
+
+        var claimed = await CreateClaimService().ClaimAsync(_projectId, "feat-a", "Guldan", "qwen", callerId);
+
+        claimed.ClaimedByAlias.ShouldBe("Guldan");
+        var session = await _context.AgentSessions.AsNoTracking().SingleAsync(s => s.Id == callerId);
+        session.Alias.ShouldBe("Guldan");
+        session.Vendor.ShouldBe("unknown");
+    }
+
+    [Fact]
+    public async Task Claim_RealAliasSession_NeverRewritesTheIdentity()
+    {
+        await CreateFeatureAsync();
+        var callerId = await AddSessionAsync("Tucker", "qwen", DateTime.UtcNow);
+
+        var claimed = await CreateClaimService().ClaimAsync(_projectId, "feat-a", "Guldan", "qwen", callerId);
+
+        claimed.ClaimedByAlias.ShouldBe("Guldan");
+        var session = await _context.AgentSessions.AsNoTracking().SingleAsync(s => s.Id == callerId);
+        session.Alias.ShouldBe("Tucker");
+    }
+
+    [Fact]
+    public async Task Claim_StalePlaceholderClaim_TakeOverRenamesTheFreshSession()
+    {
+        await CreateFeatureAsync();
+        var staleHolderId = await AddSessionAsync(AgentSession.PlaceholderAlias, "unknown", DateTime.UtcNow);
+        await CreateClaimService().ClaimAsync(_projectId, "feat-a", "Guldan", "qwen", staleHolderId);
+        _context.ChangeTracker.Clear();
+        var holder = await _context.AgentSessions.SingleAsync(s => s.Id == staleHolderId);
+        _context.AgentSessions.Remove(holder);
+        _context.AgentSessions.Add(AgentSession.Restore(
+            staleHolderId, "Guldan", "qwen",
+            DateTime.UtcNow.AddHours(-3), DateTime.UtcNow.AddHours(-2), DateTime.UtcNow.AddMinutes(-90)));
+        await _context.SaveChangesAsync();
+        var freshSessionId = await AddSessionAsync(AgentSession.PlaceholderAlias, "unknown", DateTime.UtcNow);
+
+        var taken = await CreateClaimService().ClaimAsync(_projectId, "feat-a", "Bobby", "claude", freshSessionId);
+
+        taken.ClaimedByAlias.ShouldBe("Bobby");
+        var fresh = await _context.AgentSessions.AsNoTracking().SingleAsync(s => s.Id == freshSessionId);
+        fresh.Alias.ShouldBe("Bobby");
+    }
+
+    [Fact]
     public async Task Claim_UnregisteredSessionWithZeroIdentity_Throws()
     {
         await CreateFeatureAsync();

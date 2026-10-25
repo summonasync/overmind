@@ -12,6 +12,7 @@ const message = (id: string, room: string, createdAt: string, text = "signal"): 
   id,
   room,
   authorAlias: "dan",
+  authorRole: "worker",
   text,
   mentions: [],
   createdAt,
@@ -70,12 +71,12 @@ test("a zoneless stamp still parses as UTC", () => {
   assert.equal(instantOf("not a date"), 0);
 });
 
-test("a room counts the messages beyond what the reader has seen", () => {
+test("a room counts the messages newer than its last seen stamp", () => {
   const streams = {
     backend: [message("1", "backend", "2026-10-24T10:00:00Z"), message("2", "backend", "2026-10-24T10:01:00Z")],
     all: [message("3", "all", "2026-10-24T10:02:00Z")],
   };
-  const counts = unreadCounts(streams, { backend: 1 });
+  const counts = unreadCounts(streams, { backend: "2026-10-24T10:00:00Z" });
   assert.equal(counts.backend, 1);
   assert.equal(counts.all, 1);
 });
@@ -86,17 +87,18 @@ test("a room never opened counts its whole stream", () => {
   assert.equal(counts.backend, 1);
 });
 
-test("seeing more than the stream holds never drives a negative badge", () => {
+test("a stamp newer than the stream never drives a negative badge", () => {
   const streams = { backend: [message("1", "backend", "2026-10-24T10:00:00Z")] };
-  const counts = unreadCounts(streams, { backend: 5 });
+  const counts = unreadCounts(streams, { backend: "2026-10-24T23:00:00Z" });
   assert.equal(counts.backend, 0);
 });
 
-test("opening a room stamps its stream length, which clears the badge", () => {
+test("opening a room stamps its newest message, which clears the badge", () => {
   const streams = {
     backend: [message("1", "backend", "2026-10-24T10:00:00Z"), message("2", "backend", "2026-10-24T10:01:00Z")],
   };
-  const opened = unreadCounts(streams, { backend: streams.backend.length });
+  const newest = streams.backend[streams.backend.length - 1];
+  const opened = unreadCounts(streams, { backend: newest?.createdAt ?? "" });
   assert.equal(opened.backend, 0);
 });
 

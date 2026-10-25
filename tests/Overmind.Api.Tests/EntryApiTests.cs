@@ -440,19 +440,19 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
-    public async Task FeatureRequest_RoundTripsWriteUpdateAndFilter()
+    public async Task Idea_RoundTripsWriteUpdateAndFilter()
     {
         var created = await CreateEntryAsync(new
         {
             ProjectId = _projectId,
-            Type = "featureRequest",
+            Type = "idea",
             Title = "batched microbatch sweeper",
             Content = "Origin: chat, 2026-10-13.\n\nSweep non-blocking review findings in batches.",
-            Tags = new[] { "idea" },
+            Tags = new[] { "intake" },
             SkillFiles = (object[]?)null,
         });
 
-        created.Type.ShouldBe("featureRequest");
+        created.Type.ShouldBe("idea");
 
         var putResponse = await _client.PutAsJsonAsync($"/api/entries/{created.Id}", new
         {
@@ -462,7 +462,7 @@ public sealed class EntryApiTests : IDisposable
         putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var requested = await _client.GetFromJsonAsync<List<EntryJson>>(
-            $"/api/projects/{_projectId}/entries?type=featureRequest", JsonOptions);
+            $"/api/projects/{_projectId}/entries?type=idea", JsonOptions);
         requested.ShouldNotBeNull();
         requested!.Single().Id.ShouldBe(created.Id);
 
@@ -473,28 +473,44 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateEntry_FeatureRequestType_IsRejected()
+    {
+        var response = await _client.PostAsJsonAsync("/api/entries", new
+        {
+            ProjectId = _projectId,
+            Type = "featureRequest",
+            Title = "retired name",
+            Content = "body",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task CreateEntry_MixedCaseType_ParsesToCanonicalEnum()
     {
         var created = await CreateEntryAsync(new
         {
             ProjectId = _projectId,
-            Type = "FEATUREREQUEST",
+            Type = "IDEA",
             Title = "case pin",
             Content = "body",
             Tags = (string[]?)null,
             SkillFiles = (object[]?)null,
         });
 
-        created.Type.ShouldBe("featureRequest");
+        created.Type.ShouldBe("idea");
     }
 
     [Fact]
-    public async Task Delete_FeatureRequest_BuriesPlainTombstone()
+    public async Task Delete_Idea_BuriesPlainTombstone()
     {
         var created = await CreateEntryAsync(new
         {
             ProjectId = _projectId,
-            Type = "featureRequest",
+            Type = "idea",
             Title = "buried idea",
             Content = "wombats draft roadmaps",
             Tags = (string[]?)null,

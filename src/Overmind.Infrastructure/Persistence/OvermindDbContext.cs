@@ -300,10 +300,15 @@ public sealed class OvermindDbContext : DbContext
         {
             builder.Property(s => s.Alias).HasMaxLength(AgentSession.MaxIdentityLength);
             builder.Property(s => s.Vendor).HasMaxLength(AgentSession.MaxIdentityLength);
+            builder.Property(s => s.Role).HasMaxLength(AgentSession.MaxIdentityLength)
+                .HasDefaultValue(AgentSession.DefaultRole);
         });
 
         modelBuilder.Entity<Issue>(builder =>
         {
+            builder.Property(i => i.Kind).HasMaxLength(Issue.MaxKindLength)
+                .HasDefaultValue(Issue.DefaultKind);
+
             builder.HasOne<Project>()
                 .WithMany()
                 .HasForeignKey(i => i.ProjectId)
@@ -385,6 +390,8 @@ public sealed class OvermindDbContext : DbContext
 
             builder.Property(m => m.Room).HasMaxLength(PlanningLane.MaxNameLength).UseCollation("NOCASE");
             builder.Property(m => m.AuthorAlias).HasMaxLength(WaveMessage.MaxIdentityLength);
+            builder.Property(m => m.AuthorRole).HasMaxLength(WaveMessage.MaxIdentityLength)
+                .HasDefaultValue(AgentSession.DefaultRole);
             builder.Property(m => m.Text).HasMaxLength(WaveMessage.MaxTextLength);
             builder.Property(m => m.Mentions).HasMaxLength(WaveMessage.MaxMentionsLength);
 

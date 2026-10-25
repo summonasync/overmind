@@ -4,6 +4,10 @@ namespace Overmind.Core;
 
 public sealed class Issue
 {
+    public const string DefaultKind = "issue";
+    public const string RequestKind = "request";
+    public const int MaxKindLength = 16;
+
     private static readonly FrozenDictionary<IssueStatus, IssueStatus[]> AllowedTransitions =
         new Dictionary<IssueStatus, IssueStatus[]>
         {
@@ -21,6 +25,7 @@ public sealed class Issue
     public Guid ProjectId { get; private set; }
     public string Title { get; private set; } = string.Empty;
     public string Body { get; private set; } = string.Empty;
+    public string Kind { get; private set; } = DefaultKind;
     public IssueStatus Status { get; private set; }
     public Guid AuthorProjectId { get; private set; }
     public PlanningLogSource StatusSource { get; private set; }
@@ -30,7 +35,7 @@ public sealed class Issue
 
     public static Issue Create(
         Guid projectId, Guid authorProjectId, string title, string body,
-        PlanningLogSource source = PlanningLogSource.Agent)
+        PlanningLogSource source = PlanningLogSource.Agent, string kind = DefaultKind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
@@ -41,6 +46,7 @@ public sealed class Issue
             ProjectId = projectId,
             Title = title.Trim(),
             Body = body.Trim(),
+            Kind = NormalizeKind(kind),
             Status = IssueStatus.Open,
             AuthorProjectId = authorProjectId,
             StatusSource = source,
@@ -83,6 +89,14 @@ public sealed class Issue
         PromotedToArtifactId = artifactId;
     }
 
+    public static string NormalizeKind(string kind)
+    {
+        var trimmed = kind?.Trim();
+        return trimmed is not null && trimmed.Equals(RequestKind, StringComparison.Ordinal)
+            ? RequestKind
+            : DefaultKind;
+    }
+
     public string ComposeTaskBody(IReadOnlyList<IssueAppend> appends)
     {
         var (repro, expected, actual) = (ExtractSection(Body, "repro"), ExtractSection(Body, "expected"), ExtractSection(Body, "actual"));
@@ -109,10 +123,12 @@ public sealed class Issue
             </obstacles>
 
             <refs>
-            - Issue {Id} «{Title}» — filed by project {AuthorProjectId} on the Issues Board of project {ProjectId}; follow-ups live in the Issues Board append trail.
+            - {KindLabel} {Id} «{Title}» — filed by project {AuthorProjectId} on the Issues Board of project {ProjectId}; follow-ups live in the Issues Board append trail.
             </refs>
             """;
     }
+
+    private string KindLabel => Kind == RequestKind ? "Request" : "Issue";
 
     private static string Section(string prefix, string? content) =>
         content is null ? $"{prefix}(not provided)" : $"{prefix}{content.Trim()}";

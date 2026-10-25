@@ -177,6 +177,7 @@ public sealed class LaneService
             .Where(f => f.ProjectId == projectId && f.Lane != null)
             .ToListAsync(ct);
         var liveness = await _claims.ClaimLivenessAsync(projectId, features, ct);
+        var roles = await ClaimRolesAsync(features, ct);
 
         var byLane = features
             .GroupBy(f => f.Lane!, StringComparer.OrdinalIgnoreCase)
@@ -188,13 +189,34 @@ public sealed class LaneService
             .ThenBy(l => l.SerialOrder.HasValue ? 0 : 1)
             .ThenBy(l => l.SerialOrder)
             .ThenBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(l => ToRow(l, byLane.GetValueOrDefault(l.Name) ?? [], liveness))];
+            .Select(l => ToRow(l, byLane.GetValueOrDefault(l.Name) ?? [], liveness, roles))];
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, string>> ClaimRolesAsync(
+        List<PlanningFeature> features, CancellationToken ct)
+    {
+        var sessionIds = features
+            .Where(f => f.ClaimSessionId is not null)
+            .Select(f => f.ClaimSessionId!.Value)
+            .Distinct()
+            .ToList();
+        if (sessionIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _db.AgentSessions
+            .AsNoTracking()
+            .Where(s => sessionIds.Contains(s.Id))
+            .Select(s => new { s.Id, s.Role })
+            .ToDictionaryAsync(s => s.Id, s => s.Role, ct);
     }
 
     private static LaneRow ToRow(
         PlanningLane lane,
         List<PlanningFeature> features,
-        IReadOnlyDictionary<Guid, AgentSessionLiveness> liveness)
+        IReadOnlyDictionary<Guid, AgentSessionLiveness> liveness,
+        IReadOnlyDictionary<Guid, string> roles)
     {
         var summaries = features
             .OrderBy(f => f.Slug, StringComparer.Ordinal)
@@ -206,11 +228,13 @@ public sealed class LaneService
                 f.ClaimSessionId is null ? null : liveness.GetValueOrDefault(f.Id)))
             .ToList();
 
-        var holder = summaries
+        var holderSummary = summaries
             .Where(s => s.ClaimState == AgentSessionLiveness.Alive)
             .OrderByDescending(s => features.First(f => f.Slug == s.Slug).ClaimedAt)
-            .Select(s => new LaneHolder(s.ClaimedByAlias!, s.ClaimedByVendor!, s.ClaimState!.Value))
             .FirstOrDefault();
+        var holder = holderSummary is null
+            ? null
+            : HolderOf(holderSummary, features, roles);
 
         return new LaneRow(
             lane.Name,
@@ -220,6 +244,19 @@ public sealed class LaneService
             summaries.Count(s => s.Status != PlanningFeatureStatus.Done),
             holder,
             summaries);
+    }
+
+    private static LaneHolder HolderOf(
+        LaneFeatureSummary summary,
+        List<PlanningFeature> features,
+        IReadOnlyDictionary<Guid, string> roles)
+    {
+        var feature = features.First(f => f.Slug == summary.Slug);
+        return new LaneHolder(
+            summary.ClaimedByAlias!,
+            summary.ClaimedByVendor!,
+            summary.ClaimState!.Value,
+            roles.GetValueOrDefault(feature.ClaimSessionId!.Value, AgentSession.DefaultRole));
     }
 
     private static void ValidateRoster(IReadOnlyList<LaneUpsert> lanes)

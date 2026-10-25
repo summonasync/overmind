@@ -67,6 +67,22 @@ public sealed class IssuesToolsContractTests : McpSessionTestBase
         description.ShouldContain("triages/promotes");
         description.ShouldContain("## Repro");
         description.ShouldContain("notification-center");
+        description.ShouldContain("'issue' (default)");
+        description.ShouldContain("'request'");
+        description.ShouldContain("both promote into tasks the same way");
+    }
+
+    [Fact]
+    public async Task IssuesPromote_Description_IsKindAgnostic()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        var description = tools["issues_promote"]!["description"]!.GetValue<string>();
+        description.ShouldContain("an issue or a request");
+        description.ShouldNotContain("a bug report");
     }
 
     [Fact]
@@ -87,10 +103,62 @@ public sealed class IssuesToolsContractTests : McpSessionTestBase
         body["authorProjectId"]!.GetValue<string>().ShouldBe(Canned.IssueAuthorProjectId.ToString());
         body["title"]!.GetValue<string>().ShouldBe("Crash on save");
         body["body"]!.GetValue<string>().ShouldBe("## Repro\nOpen the file.");
+        body.AsObject().ShouldNotContainKey("kind");
 
         var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
-        echo.AsObject().Select(p => p.Key).ToArray().ShouldBe(["id", "status", "title"]);
+        echo.AsObject().Select(p => p.Key).ToArray().ShouldBe(["id", "status", "title", "kind"]);
         echo["title"]!.GetValue<string>().ShouldBe("Crash on save");
+        echo["kind"]!.GetValue<string>().ShouldBe("issue");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task IssuesCreate_RequestKind_IsPassedThroughAndEchoed()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/issues",
+            200,
+            Canned.RequestCreatedJson);
+
+        var response = await Driver.CallToolAsync("issues_create", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["authorProjectId"] = Canned.IssueAuthorProjectId.ToString(),
+            ["title"] = "Add dark mode",
+            ["body"] = "## Expected\nA dark theme.",
+            ["kind"] = " Request "
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/issues", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["title"]!.GetValue<string>().ShouldBe("Add dark mode");
+        body["kind"]!.GetValue<string>().ShouldBe("request");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.AsObject().Select(p => p.Key).ToArray().ShouldBe(["id", "status", "title", "kind"]);
+        echo["kind"]!.GetValue<string>().ShouldBe("request");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task IssuesCreate_JunkKind_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("issues_create", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["authorProjectId"] = Canned.IssueAuthorProjectId.ToString(),
+            ["title"] = "Crash on save",
+            ["body"] = "## Repro\nOpen the file.",
+            ["kind"] = "banana"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("Invalid kind 'banana'");
+        text.ShouldContain("issue, request");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/issues", StringComparison.Ordinal));
         Driver.HasExited.ShouldBeFalse();
     }
 
@@ -131,12 +199,46 @@ public sealed class IssuesToolsContractTests : McpSessionTestBase
             r.Method == "GET" && r.Path.EndsWith("/issues", StringComparison.Ordinal));
         request.Query.ShouldContain("status=open");
         request.Query.ShouldContain($"authorProjectId={Canned.IssueAuthorProjectId}");
+        request.Query.ShouldNotContain("kind");
 
         var rows = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray();
         rows.ShouldHaveSingleItem();
         rows[0]!["title"]!.GetValue<string>().ShouldBe("Crash on save");
         rows[0]!["appendCount"]!.GetValue<int>().ShouldBe(1);
         JsonNode.Parse(Canned.ToolResultText(response))!.ToJsonString().ShouldNotContain("secret body");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task IssuesList_KindFilter_ReachesQuery()
+    {
+        var response = await Driver.CallToolAsync("issues_list", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["kind"] = "request"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "GET" && r.Path.EndsWith("/issues", StringComparison.Ordinal));
+        request.Query.ShouldContain("kind=request");
+
+        var rows = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray();
+        rows.ShouldHaveSingleItem();
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task IssuesList_JunkKind_RejectedWithoutHttpCall()
+    {
+        var response = await Driver.CallToolAsync("issues_list", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["kind"] = "banana"
+        });
+
+        ToolErrorText(response).ShouldContain("Invalid kind 'banana'");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "GET" && r.Path.EndsWith("/issues", StringComparison.Ordinal));
         Driver.HasExited.ShouldBeFalse();
     }
 

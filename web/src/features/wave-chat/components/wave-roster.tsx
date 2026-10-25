@@ -1,6 +1,8 @@
 import { Badge } from "@/shared/ui/badge";
 import { ErrorText } from "@/shared/ui/error-text";
+import { cn } from "@/shared/lib/cn";
 import { agentsOf, ownerOf } from "@/features/wave-chat/lib/roster";
+import { roleBadgeToneOf, roleTextClassOf } from "@/features/wave-chat/lib/role-color";
 import type { WaveParticipant } from "@/features/wave-chat/types";
 
 interface WaveRosterProps {
@@ -25,7 +27,7 @@ export function WaveRoster({ participants, loading, error }: WaveRosterProps) {
         <p className="px-1.5 pb-1 text-xs text-muted">Loading roster…</p>
       ) : (
         <>
-          {owner ? <OwnerRow alias={owner.alias} /> : null}
+          {owner ? <OwnerRow participant={owner} /> : null}
           {agents.length === 0 ? (
             <p className="px-1.5 pb-1 text-xs text-muted">No agents on lanes right now</p>
           ) : (
@@ -39,10 +41,14 @@ export function WaveRoster({ participants, loading, error }: WaveRosterProps) {
   );
 }
 
-function OwnerRow({ alias }: { alias: string }) {
+function OwnerRow({ participant }: { participant: WaveParticipant }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1">
-      <span className="truncate font-mono text-xs font-semibold text-foreground">{alias}</span>
+      <span
+        className={cn("truncate font-mono text-xs font-semibold", roleTextClassOf(participant.role))}
+      >
+        {participant.alias}
+      </span>
       <Badge tone="primary">owner</Badge>
     </div>
   );
@@ -52,10 +58,15 @@ function AgentRow({ agent }: { agent: WaveParticipant }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-md px-1.5 py-1">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-xs font-semibold text-foreground">
+        <span
+          className={cn("truncate font-mono text-xs font-semibold", roleTextClassOf(agent.role))}
+        >
           {agent.alias}
         </span>
-        {agent.lane ? <Badge tone="neutral">{agent.lane}</Badge> : null}
+        <span className="flex shrink-0 items-center gap-1">
+          <Badge tone={roleBadgeToneOf(agent.role)}>{agent.role}</Badge>
+          {agent.lane ? <Badge tone="neutral">{agent.lane}</Badge> : null}
+        </span>
       </div>
       {agent.vendor ? <span className="truncate text-xs text-muted">{agent.vendor}</span> : null}
     </div>

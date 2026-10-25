@@ -117,6 +117,76 @@ public sealed class IssueServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_RequestKind_PersistsKind()
+    {
+        var issue = await CreateIssueService()
+            .CreateAsync(_boardProjectId, _authorProjectId, "Add dark mode", "Pretty please.", kind: Issue.RequestKind);
+
+        issue.Kind.ShouldBe(Issue.RequestKind);
+        var persisted = await _context.Issues.AsNoTracking().SingleAsync(i => i.Id == issue.Id);
+        persisted.Kind.ShouldBe(Issue.RequestKind);
+    }
+
+    [Fact]
+    public async Task Create_JunkKind_NormalizesToIssue()
+    {
+        var issue = await CreateIssueService()
+            .CreateAsync(_boardProjectId, _authorProjectId, "Crash on save", "Steps.", kind: "banana");
+
+        issue.Kind.ShouldBe(Issue.DefaultKind);
+    }
+
+    [Fact]
+    public async Task List_KindFilter_ReturnsOnlyMatchingKind()
+    {
+        var service = CreateIssueService();
+        var plain = await service.CreateAsync(_boardProjectId, _authorProjectId, "Crash on save", "body");
+        var request = await service.CreateAsync(
+            _boardProjectId, _authorProjectId, "Add dark mode", "body", kind: Issue.RequestKind);
+
+        var requests = await CreateIssueService().ListAsync(
+            _boardProjectId, status: null, authorProjectId: null, Issue.RequestKind);
+        var issues = await CreateIssueService().ListAsync(
+            _boardProjectId, status: null, authorProjectId: null, Issue.DefaultKind);
+        var all = await CreateIssueService().ListAsync(
+            _boardProjectId, status: null, authorProjectId: null, kind: null);
+
+        requests.Select(i => i.Id).ShouldBe([request.Id]);
+        issues.Select(i => i.Id).ShouldBe([plain.Id]);
+        all.Select(i => i.Id).ShouldBe([request.Id, plain.Id]);
+    }
+
+    [Fact]
+    public async Task ListAll_KindFilter_FiltersCrossProjectBoard()
+    {
+        var service = CreateIssueService();
+        await service.CreateAsync(_boardProjectId, _authorProjectId, "Crash on save", "body");
+        var request = await CreateIssueService()
+            .CreateAsync(_foreignProjectId, _authorProjectId, "Add dark mode", "body", kind: Issue.RequestKind);
+
+        var rows = await CreateIssueService().ListAllAsync(null, Issue.RequestKind);
+
+        rows.Select(r => r.Id).ShouldBe([request.Id]);
+        rows.Single().Kind.ShouldBe(Issue.RequestKind);
+    }
+
+    [Fact]
+    public async Task Promote_FromRequestKindCard_Promotes()
+    {
+        var issue = await CreateIssueService().CreateAsync(
+            _boardProjectId, _authorProjectId, "Add dark mode", "Pretty please.", kind: Issue.RequestKind);
+        SeedFeature("050-dark-mode");
+
+        var (promoted, artifact) = await CreateIssueService()
+            .PromoteAsync(issue.Id, "050-dark-mode", PlanningLogSource.Agent);
+
+        promoted.Kind.ShouldBe(Issue.RequestKind);
+        promoted.Status.ShouldBe(IssueStatus.Promoted);
+        promoted.PromotedToArtifactId.ShouldBe(artifact.Id);
+        artifact.Body.ShouldContain($"- Request {issue.Id}");
+    }
+
+    [Fact]
     public async Task Create_UnknownAuthorProject_ThrowsNotFound()
     {
         var ex = await Should.ThrowAsync<PlanningException>(() => CreateIssueService()

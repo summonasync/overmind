@@ -34,6 +34,6 @@ export const ENTRY_TYPE_META: Record<EntryType, EntryTypeMeta> = {
   guard: { tone: "danger", icon: Lock, label: "Guard" },
   skill: { tone: "skill", icon: Sparkles, label: "Skill" },
   tombstone: { tone: "muted", icon: Skull, label: "Tombstone" },
-  featureRequest: { tone: "idea", icon: Lightbulb, label: "Feature request" },
+  idea: { tone: "idea", icon: Lightbulb, label: "Idea" },
   audit: { tone: "audit", icon: ShieldHalf, label: "Audit" },
 };

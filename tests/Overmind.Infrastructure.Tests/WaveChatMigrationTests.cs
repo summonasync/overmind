@@ -23,7 +23,7 @@ public sealed class WaveChatMigrationTests : IDisposable
             db.Projects.Add(project);
             db.SaveChanges();
 
-            db.WaveMessages.Add(WaveMessage.Create(project.Id, "backend", "Dan", "hello @marshal"));
+            db.WaveMessages.Add(WaveMessage.Create(project.Id, "backend", "Dan", "worker", "hello @marshal"));
             db.WaveWatermarks.Add(WaveWatermark.Create(project.Id, "marshal", DateTime.UtcNow));
             db.SaveChanges();
         }
