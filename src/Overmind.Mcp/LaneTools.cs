@@ -57,7 +57,7 @@ public sealed class LaneTools
         };
     }
 
-    [McpServerTool(Name = "planning_remove_lane", Destructive = false, Idempotent = true)]
+    [McpServerTool(Name = "planning_remove_lane", Destructive = true, Idempotent = true)]
     [Description("Removes one lane from the project's lane roster — the only manual removal path: planning_set_lanes never deletes, and a lane whose last open feature leaves or closes retires itself. Refuses with 409 LaneStillOccupied while the lane still holds open features, naming their slugs — close them as done or move them to another lane first. A delete on an unknown name is an idempotent no-op. Removing a lane touches no features: the lane field is a plain name reference, never an FK. Returns the resulting roster with per-lane holder and open-feature counts.")]
     public async Task<CallToolResult> RemoveLane(
         [Description("Name of the lane to remove, as shown by planning_list_lanes.")] string name,

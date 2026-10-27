@@ -140,6 +140,28 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SetLanes_NameOverTheCap_Throws()
+    {
+        var service = CreateService();
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => service.SetLanesAsync(
+            _projectId, [new LaneUpsert(new string('x', PlanningLane.MaxNameLength + 1), null, null)]));
+
+        ex.Message.ShouldContain($"exceeds the {PlanningLane.MaxNameLength} character cap");
+    }
+
+    [Fact]
+    public async Task SetLanes_ContourOverTheCap_Throws()
+    {
+        var service = CreateService();
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => service.SetLanesAsync(
+            _projectId, [new LaneUpsert("frontend", new string('x', PlanningLane.MaxContourLength + 1), null)]));
+
+        ex.Message.ShouldContain($"exceeds the {PlanningLane.MaxContourLength} character cap");
+    }
+
+    [Fact]
     public async Task SetLanes_OverTheCap_Throws()
     {
         var roster = Enumerable.Range(0, LaneService.MaxLanesPerProject + 1)

@@ -75,6 +75,34 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
+    public async Task PutLanes_NameOverTheCap_Returns400()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = new string('x', PlanningLane.MaxNameLength + 1) } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await put.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Lanes[0].Name");
+    }
+
+    [Fact]
+    public async Task PutLanes_ContourOverTheCap_Returns400NamingTheField()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend", Contour = new string('x', PlanningLane.MaxContourLength + 1) } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await put.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Lanes[0].Contour");
+    }
+
+    [Fact]
     public async Task Lanes_AreVisibleOnBothDoors()
     {
         var project = await CreateProjectAsync();
