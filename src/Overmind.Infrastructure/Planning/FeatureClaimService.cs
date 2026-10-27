@@ -63,7 +63,7 @@ public sealed class FeatureClaimService
 
             if (!isHuman && !sameAlias && !overrideLaneCheck && feature.Lane is not null)
             {
-                await EnsureLaneFreeAsync(project, feature, alias, ct);
+                await EnsureLaneFreeAsync(project, feature, alias, vendor, ct);
             }
 
             var adopted = !isHuman && liveness == AgentSessionLiveness.Ended && sameAlias
@@ -81,7 +81,7 @@ public sealed class FeatureClaimService
 
         if (!isHuman && !overrideLaneCheck && feature.Lane is not null)
         {
-            await EnsureLaneFreeAsync(project, feature, alias, ct);
+            await EnsureLaneFreeAsync(project, feature, alias, vendor, ct);
         }
 
         feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
@@ -308,7 +308,8 @@ public sealed class FeatureClaimService
         await _materialization.DispatchAsync(projectId, ct);
     }
 
-    private async Task EnsureLaneFreeAsync(Project project, PlanningFeature target, string alias, CancellationToken ct)
+    private async Task EnsureLaneFreeAsync(
+        Project project, PlanningFeature target, string alias, string vendor, CancellationToken ct)
     {
         var lane = target.Lane!;
         var candidates = await _db.PlanningFeatures
@@ -328,23 +329,18 @@ public sealed class FeatureClaimService
         var foreignClaim = laneFeatures.FirstOrDefault(f =>
             f.ClaimSessionId is not null &&
             liveness.GetValueOrDefault(f.Id) == AgentSessionLiveness.Alive &&
-            !string.Equals(f.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal));
+            !HoldsCallerIdentity(f, alias, vendor));
         if (foreignClaim is not null)
         {
             throw PlanningException.LaneClaimHeld(
                 lane, foreignClaim.Slug, foreignClaim.ClaimedByAlias!, foreignClaim.ClaimedByVendor!,
                 AgentSessionLiveness.Alive);
         }
-
-        var ownClaim = laneFeatures.FirstOrDefault(f =>
-            f.ClaimSessionId is not null &&
-            liveness.GetValueOrDefault(f.Id) == AgentSessionLiveness.Alive &&
-            string.Equals(f.ClaimedByAlias, alias.Trim(), StringComparison.Ordinal));
-        if (ownClaim is not null)
-        {
-            throw PlanningException.LaneSerialBusy(lane, ownClaim.Slug);
-        }
     }
+
+    private static bool HoldsCallerIdentity(PlanningFeature feature, string alias, string vendor) =>
+        string.Equals(feature.ClaimedByAlias, alias, StringComparison.Ordinal) &&
+        string.Equals(feature.ClaimedByVendor, vendor, StringComparison.Ordinal);
 
     private async Task<Project> RequireProjectAsync(Guid projectId, CancellationToken ct) =>
         await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)

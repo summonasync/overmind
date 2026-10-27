@@ -167,7 +167,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
 
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(35);
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(36);
     }
 
     [Fact]
@@ -2297,12 +2297,60 @@ public class PlanningToolContractTests : McpSessionTestBase
             "Partial edit of a feature's title, body, priority, lane, or codeSurfaces — durable what/why stays correctable by agents. " +
             "logNote is mandatory and lands as a dated line in the feature log. " +
             "A priority change moves the feature to the tail of its priority band. " +
-            "lane assigns the feature to a lane roster entry by name (must exist — planning_set_lanes owns the roster; " +
-            "empty string clears the lane, omit to keep). " +
+            "lane assigns the feature to a lane roster entry by name — an unknown name auto-creates the lane row " +
+            "(empty contour, no priority): the assigning act is the birth, planning_set_lanes cannot create lanes; " +
+            "empty string clears the lane, omit to keep. " +
+            "A lane whose last open feature leaves or closes retires itself. " +
             "codeSurfaces declares the repo-relative glob patterns this feature touches (e.g. src/web/**) — advisory only: " +
             "the queue, board and wave-snapshot rows project potentialOverlaps between in-flight features so coordinators " +
             "see cross-lane collisions; an empty array clears the surfaces, omit to keep. " +
             "Status is not editable here — use planning_set_feature_status.");
+    }
+
+    [Fact]
+    public async Task PlanningSetLanes_Description_TeachesTheUpsertShift()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_set_lanes"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("UPSERT of known lanes");
+        description.ShouldContain("lanes absent from the payload are never touched");
+        description.ShouldContain("An empty array is an explicit no-op");
+        description.ShouldContain("planning_update_feature as the only birth path");
+        description.ShouldContain("planning_remove_lane");
+        description.ShouldNotContain("wholesale");
+        description.ShouldNotContain("clears the roster");
+    }
+
+    [Fact]
+    public async Task PlanningClaimFeature_Description_BlocksOnlyOnAliveForeignClaims()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_claim_feature"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("ALIVE claim by a different alias+vendor pair");
+        description.ShouldContain("unclaimed open features in the lane and the caller's own claims never block");
+        description.ShouldNotContain("serial");
+    }
+
+    [Fact]
+    public async Task PlanningRemoveLane_Description_NamesTheRemovalContract()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_remove_lane"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("the only manual removal path");
+        description.ShouldContain("409 LaneStillOccupied");
+        description.ShouldContain("idempotent no-op");
     }
 
     [Fact]

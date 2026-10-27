@@ -2,9 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/cn";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -19,7 +17,6 @@ import { formatFeatureNumber } from "@/shared/lib/feature-number";
 import type { ProjectNumbering } from "@/shared/lib/feature-number";
 import { useProjectNumbering } from "@/features/projects";
 import { LaneCard } from "@/features/lanes/components/lane-card";
-import { LaneAddDialog } from "@/features/lanes/components/lane-add-dialog";
 import { LaneDeleteDialog } from "@/features/lanes/components/lane-delete-dialog";
 import { LaneEditDialog } from "@/features/lanes/components/lane-edit-dialog";
 import { LaneFeatureWidget } from "@/features/lanes/components/lane-feature-widget";
@@ -110,7 +107,6 @@ export function LaneBoard() {
   const [statusFilter, setStatusFilter] = useState<ReadonlySet<PlanningFeatureStatus>>(new Set());
   const [deletingLane, setDeletingLane] = useState<LaneRow | null>(null);
   const [editingLane, setEditingLane] = useState<LaneRow | null>(null);
-  const [adding, setAdding] = useState(false);
   const [dragged, setDragged] = useState<LaneFeatureDragData | null>(null);
 
   const { data: roster, loading, error } = useLanes(projectId);
@@ -231,16 +227,7 @@ export function LaneBoard() {
   return (
     <LaneDndProvider onDrop={handleDrop} onDragChange={handleDragChange}>
       <div className="space-y-4">
-        <PageHeader
-          title="Lanes"
-          description={LANES_DESCRIPTION}
-          actions={
-            <Button onClick={() => setAdding(true)} disabled={roster === null}>
-              <Plus size={14} aria-hidden />
-              Add lane
-            </Button>
-          }
-        />
+        <PageHeader title="Lanes" description={LANES_DESCRIPTION} />
 
         <ErrorText error={error ?? boardError ?? queueMove.error} />
 
@@ -249,7 +236,7 @@ export function LaneBoard() {
         ) : lanes.length === 0 ? (
           <EmptyState
             title="No lanes defined"
-            hint="The project roster has no lanes yet. Use Add lane in the header to create the first one."
+            hint="The project roster has no lanes yet. Pick any feature from the pool below and move it to a new lane — the lane is created the moment a feature is assigned to its name."
           />
         ) : (
           <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
@@ -318,10 +305,6 @@ export function LaneBoard() {
             onClear={() => setStatusFilter(new Set())}
           />
         </div>
-
-        {adding && roster !== null ? (
-          <LaneAddDialog projectId={projectId} roster={lanes} onClose={() => setAdding(false)} />
-        ) : null}
 
         {deletingLane !== null && roster !== null ? (
           <LaneDeleteDialog

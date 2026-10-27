@@ -89,7 +89,7 @@ public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest
     public SetLanesRequestValidator()
     {
         RuleFor(x => x.Lanes).NotNull()
-            .WithMessage("The roster must be an array of lane objects; an empty array clears the roster.");
+            .WithMessage("The roster must be an array of lane objects; an empty array is a no-op — the roster is reshaped, never cleared.");
 
         RuleForEach(x => x.Lanes).ChildRules(lane =>
         {
@@ -99,17 +99,6 @@ public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest
             lane.RuleFor(l => l.Priority).InclusiveBetween(0, PlanningLane.MaxPriority)
                 .When(l => l.Priority.HasValue);
         });
-    }
-}
-
-public sealed class CreateLaneRequestValidator : AbstractValidator<LaneUpsertRequest>
-{
-    public CreateLaneRequestValidator()
-    {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
-        RuleFor(x => x.Contour).MaximumLength(PlanningLane.MaxContourLength);
-        RuleFor(x => x.SerialOrder).GreaterThanOrEqualTo(0).When(x => x.SerialOrder.HasValue);
-        RuleFor(x => x.Priority).InclusiveBetween(0, PlanningLane.MaxPriority).When(x => x.Priority.HasValue);
     }
 }
 

@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Overmind.Core;
+using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
 
@@ -167,7 +170,7 @@ public sealed class LaneRouteShapeTests : IDisposable
     [Theory]
     [InlineData("/api")]
     [InlineData("/api/agent")]
-    public async Task RosterWriter_AnswersOnItsOwnLiteral_AndReplacesTheRoster(string door)
+    public async Task RosterWriter_AnswersOnItsOwnLiteral_AndUpsertsKnownLanesOnly(string door)
     {
         var project = await CreateProjectAsync();
         await CreateLaneAsync(project.Id, "frontend");
@@ -176,8 +179,8 @@ public sealed class LaneRouteShapeTests : IDisposable
             $"{door}/projects/{project.Id}/planning/lanes-roster",
             """{"lanes":[{"name":"swapped","contour":"src/**"},{"name":"frontend"}]}""");
 
-        put.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend", "swapped"]);
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend"]);
     }
 
     [Fact]
@@ -202,10 +205,10 @@ public sealed class LaneRouteShapeTests : IDisposable
         var rosterPath = PointerFrom(problem);
 
         var write = await PutAsync(
-            rosterPath, """{"lanes":[{"name":"swapped","contour":"src/**"},{"name":"frontend"}]}""");
+            rosterPath, """{"lanes":[{"name":"frontend","contour":"src/**"}]}""");
 
         write.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend", "swapped"]);
+        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend"]);
     }
 
     [Theory]
@@ -285,8 +288,10 @@ public sealed class LaneRouteShapeTests : IDisposable
 
     private async Task CreateLaneAsync(Guid projectId, string name)
     {
-        var created = await _client.PostAsJsonAsync(LanesPath(projectId), new { Name = name });
-        created.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        db.PlanningLanes.Add(PlanningLane.Create(projectId, name, contour: null, serialOrder: null));
+        await db.SaveChangesAsync();
     }
 
     private async Task<string[]> RosterNamesAsync(Guid projectId)

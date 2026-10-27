@@ -24,44 +24,25 @@ public sealed class LaneService
         ValidateRoster(lanes);
         await RequireProjectAsync(projectId, ct);
 
+        if (lanes.Count == 0)
+        {
+            return await ProjectAsync(projectId, ct);
+        }
+
         var existing = await _db.PlanningLanes
             .Where(l => l.ProjectId == projectId)
             .ToListAsync(ct);
         var byName = existing.ToDictionary(
             l => l.Name, l => l, StringComparer.OrdinalIgnoreCase);
 
-        var removed = existing
-            .Where(l => !lanes.Any(u => Matches(u.Name, l.Name)))
-            .ToList();
-
-        foreach (var lane in removed)
-        {
-            _db.PlanningLanes.Remove(lane);
-        }
-
-        if (removed.Count > 0)
-        {
-            var orphans = await _db.PlanningFeatures
-                .Where(f => f.ProjectId == projectId && f.Lane != null)
-                .ToListAsync(ct);
-
-            foreach (var feature in orphans.Where(f => removed.Any(l => Matches(l.Name, f.Lane!))))
-            {
-                feature.SetLane(null);
-            }
-        }
-
         foreach (var upsert in lanes)
         {
-            if (byName.TryGetValue(upsert.Name, out var current))
+            if (!byName.TryGetValue(upsert.Name, out var current))
             {
-                current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority);
+                throw PlanningException.LaneBirthRestricted(upsert.Name.Trim());
             }
-            else
-            {
-                _db.PlanningLanes.Add(PlanningLane.Create(
-                    projectId, upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority));
-            }
+
+            current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority);
         }
 
         try
@@ -133,20 +114,29 @@ public sealed class LaneService
         var existing = await _db.PlanningLanes
             .Where(l => l.ProjectId == projectId)
             .ToListAsync(ct);
-        var lane = existing.FirstOrDefault(l => Matches(name, l.Name))
-            ?? throw PlanningException.MissingLane(name.Trim());
+        var lane = existing.FirstOrDefault(l => Matches(name, l.Name));
 
-        _db.PlanningLanes.Remove(lane);
-
-        var assigned = await _db.PlanningFeatures
-            .Where(f => f.ProjectId == projectId && f.Lane != null)
-            .ToListAsync(ct);
-
-        foreach (var feature in assigned.Where(f => Matches(lane.Name, f.Lane!)))
+        if (lane is null)
         {
-            feature.SetLane(null);
+            return await ProjectAsync(projectId, ct);
         }
 
+        var openFeatures = await _db.PlanningFeatures
+            .AsNoTracking()
+            .Where(f => f.ProjectId == projectId && f.Lane != null && f.Status != PlanningFeatureStatus.Done)
+            .Select(f => new { f.Slug, f.Lane })
+            .ToListAsync(ct);
+
+        var holding = openFeatures
+            .Where(f => Matches(lane.Name, f.Lane!))
+            .Select(f => f.Slug)
+            .ToList();
+        if (holding.Count > 0)
+        {
+            throw PlanningException.LaneStillOccupied(lane.Name, holding);
+        }
+
+        _db.PlanningLanes.Remove(lane);
         await _db.SaveChangesAsync(ct);
 
         return await ProjectAsync(projectId, ct);

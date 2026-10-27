@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createLane, deleteLane, updateLane } from "@/features/lanes/api";
+import { deleteLane, updateLane } from "@/features/lanes/api";
 import { planningKeys } from "@/features/planning";
 import { lanesKeys } from "@/features/lanes/queries";
 import type { LaneUpsertInput } from "@/features/lanes/types";
@@ -14,11 +14,6 @@ export function useLaneMutations(projectId: string) {
     queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
   };
 
-  const addLane = useMutation({
-    mutationFn: (lane: LaneUpsertInput) => createLane(projectId, lane),
-    onSuccess: invalidate,
-  });
-
   const editLane = useMutation({
     mutationFn: (lane: LaneUpsertInput) => updateLane(projectId, lane),
     onSuccess: invalidate,
@@ -29,5 +24,5 @@ export function useLaneMutations(projectId: string) {
     onSuccess: invalidate,
   });
 
-  return { addLane, editLane, removeLane };
+  return { editLane, removeLane };
 }

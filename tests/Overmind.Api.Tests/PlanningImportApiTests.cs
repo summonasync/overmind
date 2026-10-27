@@ -222,6 +222,48 @@ public sealed class PlanningImportApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Import_StatusRestoredToDone_RetiresTheLaneThroughTheEndpoint()
+    {
+        var backlog = Path.Combine(_root, "BACKLOG");
+        var closed = Path.Combine(backlog, "061-closed");
+        Directory.CreateDirectory(closed);
+        await File.WriteAllTextAsync(Path.Combine(closed, "feature.md"),
+            """
+            ---
+            feature: 061
+            slug: closed
+            status: done
+            priority: p2
+            version: 1
+            created: 2026-09-23
+            ---
+
+            # Feature 061 — Closed on disk
+
+            <goal>
+            Land as done.
+            </goal>
+            """);
+
+        var project = await CreateProjectWithBacklogAsync();
+        var created = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features",
+            new { Slug = "061-closed", Title = "Closed on disk", Body = "" });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var bound = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/061-closed",
+            new { Lane = "frontend" });
+        bound.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var import = await _client.PostAsJsonAsync(ImportUrl(project.Id), new { Folder = "061-closed" });
+        import.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var roster = await _client.GetFromJsonAsync<RosterJson>(
+            $"/api/projects/{project.Id}/planning/lanes", JsonOptions);
+        roster!.Lanes.ShouldBeEmpty();
+    }
+
     private static string ScanUrl(Guid projectId) =>
         $"/api/projects/{projectId}/planning/import/scan";
 
@@ -340,4 +382,8 @@ public sealed class PlanningImportApiTests : IDisposable
     public sealed record LogLineJson(string? Date, string Text);
 
     public sealed record ProblemJson(string? Title, int? Status, string? Detail);
+
+    public sealed record RosterJson(LaneRowJson[] Lanes);
+
+    public sealed record LaneRowJson(string Name);
 }

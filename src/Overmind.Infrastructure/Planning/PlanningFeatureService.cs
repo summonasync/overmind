@@ -121,11 +121,12 @@ public sealed partial class PlanningFeatureService
 
         var resolvedLane = lane is null ? null : await ResolveLaneAsync(projectId, lane, ct);
 
+        var laneMoved = false;
         feature.Update(title, body);
 
         if (lane is not null)
         {
-            feature.SetLane(resolvedLane);
+            laneMoved = feature.SetLane(resolvedLane);
         }
 
         if (codeSurfaces is not null)
@@ -133,6 +134,7 @@ public sealed partial class PlanningFeatureService
             feature.SetCodeSurfaces(CodeSurfacesJson.Serialize(codeSurfaces), PlanningLogSource.Ui);
         }
 
+        var doneFlip = false;
         if (status.HasValue && status.Value != feature.Status)
         {
             if (!PlanningFeatureTransitions.IsAllowed(feature.Status, status.Value))
@@ -145,6 +147,7 @@ public sealed partial class PlanningFeatureService
                 $"status moved to '{StatusText(status.Value)}' via ui",
                 PlanningLogSource.Ui);
             ReleaseClaimOnDone(feature, PlanningLogSource.Ui);
+            doneFlip = status.Value == PlanningFeatureStatus.Done;
         }
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -156,6 +159,12 @@ public sealed partial class PlanningFeatureService
         }
 
         await _db.SaveChangesAsync(ct);
+
+        if (doneFlip || laneMoved)
+        {
+            await RetireEmptyLanesAsync(projectId, feature, ct);
+        }
+
         await tx.CommitAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
         return feature;
@@ -187,11 +196,12 @@ public sealed partial class PlanningFeatureService
 
         var resolvedLane = lane is null ? null : await ResolveLaneAsync(projectId, lane, ct);
 
+        var laneMoved = false;
         feature.Update(title, body, logNote, source);
 
         if (lane is not null)
         {
-            feature.SetLane(resolvedLane);
+            laneMoved = feature.SetLane(resolvedLane);
         }
 
         if (codeSurfaces is not null)
@@ -208,6 +218,12 @@ public sealed partial class PlanningFeatureService
         }
 
         await _db.SaveChangesAsync(ct);
+
+        if (laneMoved)
+        {
+            await RetireEmptyLanesAsync(projectId, feature, ct);
+        }
+
         await tx.CommitAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
         return feature;
@@ -262,19 +278,22 @@ public sealed partial class PlanningFeatureService
             ReleaseClaimOnDone(feature, PlanningLogSource.Agent);
         }
 
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
         await _db.SaveChangesAsync(ct);
+
+        if (status == PlanningFeatureStatus.Done && feature.Status == PlanningFeatureStatus.Done)
+        {
+            await RetireEmptyLanesAsync(projectId, feature, ct);
+        }
+
+        await tx.CommitAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
 
     private async Task<string?> ResolveLaneAsync(Guid projectId, string lane, CancellationToken ct)
     {
-        var roster = await _db.PlanningLanes
-            .AsNoTracking()
-            .Where(l => l.ProjectId == projectId)
-            .Select(l => l.Name)
-            .ToListAsync(ct);
-
         var trimmed = lane.Trim();
         if (trimmed.Length == 0)
         {
@@ -287,6 +306,12 @@ public sealed partial class PlanningFeatureService
                 $"Lane '{trimmed}' exceeds the {PlanningLane.MaxNameLength} character cap.");
         }
 
+        var roster = await _db.PlanningLanes
+            .AsNoTracking()
+            .Where(l => l.ProjectId == projectId)
+            .Select(l => l.Name)
+            .ToListAsync(ct);
+
         var match = roster.FirstOrDefault(
             name => string.Equals(name, trimmed, StringComparison.OrdinalIgnoreCase));
         if (match is not null)
@@ -294,8 +319,63 @@ public sealed partial class PlanningFeatureService
             return match;
         }
 
-        throw PlanningException.LaneNotInRoster(
-            trimmed, [.. roster.OrderBy(n => n, StringComparer.OrdinalIgnoreCase)]);
+        return BirthLaneAsync(projectId, trimmed, roster);
+    }
+
+    private string BirthLaneAsync(Guid projectId, string name, IReadOnlyList<string> roster)
+    {
+        if (!PlanningLane.IsAddressableName(name))
+        {
+            throw PlanningException.InvalidLaneName(name);
+        }
+
+        if (roster.Count >= LaneService.MaxLanesPerProject)
+        {
+            throw PlanningException.LaneRosterTooLarge(roster.Count + 1, LaneService.MaxLanesPerProject);
+        }
+
+        var lane = PlanningLane.Create(projectId, name, contour: null, serialOrder: null);
+        _db.PlanningLanes.Add(lane);
+        return lane.Name;
+    }
+
+    private async Task RetireEmptyLanesAsync(Guid projectId, PlanningFeature? actor, CancellationToken ct)
+    {
+        var lanes = await _db.PlanningLanes
+            .Where(l => l.ProjectId == projectId)
+            .ToListAsync(ct);
+        if (lanes.Count == 0)
+        {
+            return;
+        }
+
+        var open = (await _db.PlanningFeatures
+                .AsNoTracking()
+                .Where(f => f.ProjectId == projectId
+                            && f.Lane != null
+                            && f.Status != PlanningFeatureStatus.Done)
+                .Select(f => f.Lane!)
+                .ToListAsync(ct))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var retired = lanes.Where(l => !open.Contains(l.Name)).ToList();
+        if (retired.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var lane in retired)
+        {
+            _db.PlanningLanes.Remove(lane);
+        }
+
+        if (actor?.Lane is { } name &&
+            retired.Any(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            actor.AppendLog($"lane '{name}' retired: no open features remain", PlanningLogSource.Auto);
+        }
+
+        await _db.SaveChangesAsync(ct);
     }
 
     private static void ReleaseClaimOnDone(PlanningFeature feature, PlanningLogSource source)
@@ -354,7 +434,10 @@ public sealed partial class PlanningFeatureService
         await PlanningServiceGuard.ClearMaterializationAsync(_materializer, _logger, projectId, featureId, ct);
 
         _db.PlanningFeatures.Remove(feature);
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
         await _db.SaveChangesAsync(ct);
+        await RetireEmptyLanesAsync(projectId, null, ct);
+        await tx.CommitAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
     }
 
@@ -387,6 +470,7 @@ public sealed partial class PlanningFeatureService
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == import.Slug, ct);
 
         bool featureCreated;
+        var statusRestored = false;
         if (feature is null)
         {
             feature = PlanningFeature.Restore(
@@ -410,6 +494,7 @@ public sealed partial class PlanningFeatureService
             {
                 feature.SetStatus(
                     import.Status, "status restored from imported file", PlanningLogSource.Import);
+                statusRestored = true;
             }
 
             if (feature.Priority != import.Priority)
@@ -543,6 +628,12 @@ public sealed partial class PlanningFeatureService
         {
             await _db.SaveChangesAsync(ct);
             kept.AddRange(await _taskDependencies.RestoreFromImportAsync(feature, taskDependencyImports, ct));
+
+            if (statusRestored)
+            {
+                await RetireEmptyLanesAsync(projectId, feature, ct);
+            }
+
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
