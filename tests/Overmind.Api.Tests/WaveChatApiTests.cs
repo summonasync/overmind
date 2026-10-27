@@ -256,6 +256,26 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Unread_AgentDoor_BindsSinceLimitAndReplayMentions()
+    {
+        var projectId = await CreateProjectAsync();
+        await CreateLaneAsync(projectId, "backend");
+        await PostHumanAsync(projectId, "all", "Dan", "first");
+        await PostHumanAsync(projectId, "all", "Dan", "second");
+
+        var capped = await AgentUnreadAsync(projectId, "all", limit: 1);
+        capped.Items.Select(m => m.Text).ShouldBe(["second"]);
+
+        var future = Uri.EscapeDataString(DateTime.UtcNow.AddMinutes(2).ToString("O"));
+        var narrowed = await AgentUnreadAsync(projectId, "all", since: future);
+        narrowed.Items.ShouldBeEmpty();
+
+        await SeedMessageAsync(projectId, "backend", "Dan", "worker", "ghost ping");
+        var replayed = await AgentUnreadAsync(projectId, "all", since: future, replayMentions: true);
+        replayed.Items.Select(m => m.Text).ShouldBe(["ghost ping"]);
+    }
+
+    [Fact]
     public async Task Peek_UnknownLane_Returns404WithNamedCode()
     {
         var projectId = await CreateProjectAsync();
@@ -403,6 +423,33 @@ public sealed class WaveChatApiTests : IDisposable
     {
         var response = await _client.GetAsync(
             $"/api/projects/{projectId}/wave/rooms/{room}/unread?alias={alias}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<FeedJson>(JsonOptions))!;
+    }
+
+    private async Task<FeedJson> AgentUnreadAsync(
+        Guid projectId, string room, string? since = null, int? limit = null, bool replayMentions = false)
+    {
+        var query = new List<string>();
+        if (since is not null)
+        {
+            query.Add($"since={since}");
+        }
+
+        if (limit is not null)
+        {
+            query.Add($"limit={limit}");
+        }
+
+        if (replayMentions)
+        {
+            query.Add("replayMentions=true");
+        }
+
+        var suffix = query.Count == 0 ? string.Empty : $"?{string.Join("&", query)}";
+        var response = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{room}/unread{suffix}", null);
+
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return (await response.Content.ReadFromJsonAsync<FeedJson>(JsonOptions))!;
     }

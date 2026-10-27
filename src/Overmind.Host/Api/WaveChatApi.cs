@@ -90,16 +90,19 @@ public static class WaveChatApi
             });
         }
 
-        return await UnreadAsync(projectId, alias, room, chat, ct);
+        return await UnreadAsync(projectId, alias, room, since: null, limit: null, replayMentions: false, chat, ct);
     }
 
     private static async Task<IResult> UnreadForAgent(
         Guid projectId,
         string room,
+        [FromQuery] DateTime? since,
+        [FromQuery] int? limit,
         WaveChatService chat,
         OvermindDbContext db,
         HttpRequest http,
-        CancellationToken ct)
+        [FromQuery] bool replayMentions = false,
+        CancellationToken ct = default)
     {
         if (!SessionHeader.TryRead(http, out var sessionId))
         {
@@ -112,7 +115,7 @@ public static class WaveChatApi
             return AgentIdentityRequired();
         }
 
-        return await UnreadAsync(projectId, session.Alias, room, chat, ct);
+        return await UnreadAsync(projectId, session.Alias, room, since, limit, replayMentions, chat, ct);
     }
 
     private static async Task<IResult> PeekForAgent(
@@ -208,11 +211,18 @@ public static class WaveChatApi
     }
 
     private static async Task<IResult> UnreadAsync(
-        Guid projectId, string alias, string room, WaveChatService chat, CancellationToken ct)
+        Guid projectId,
+        string alias,
+        string room,
+        DateTime? since,
+        int? limit,
+        bool replayMentions,
+        WaveChatService chat,
+        CancellationToken ct)
     {
         try
         {
-            var page = await chat.ListUnreadAsync(projectId, alias, room, ct: ct);
+            var page = await chat.ListUnreadAsync(projectId, alias, room, since, limit, replayMentions, ct);
             return Results.Ok(new WaveUnreadResponse(
             [
                 .. page.Messages.Select(ToResponse)
