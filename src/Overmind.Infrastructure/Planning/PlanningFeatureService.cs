@@ -262,10 +262,10 @@ public sealed partial class PlanningFeatureService
             DateTime? humanTap = null;
             if (status == PlanningFeatureStatus.Done)
             {
-                var resultUpdatedAt = await FeatureDoneGate.RequireResultAsync(_db, feature, ct);
+                var resultContentUpdatedAt = await FeatureDoneGate.RequireResultAsync(_db, feature, ct);
                 if (requireHumanTap)
                 {
-                    humanTap = await FeatureDoneGate.RequireHumanTapAsync(_db, feature, resultUpdatedAt, ct);
+                    humanTap = await FeatureDoneGate.RequireHumanTapAsync(_db, feature, resultContentUpdatedAt, ct);
                 }
             }
 
