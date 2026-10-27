@@ -381,6 +381,13 @@ public sealed class PlanningException : Exception
             "assign the lane to a feature via planning_update_feature (lane=...) and the row is auto-created " +
             "with an empty contour and no priority.");
 
+    public static PlanningException LanePostBirthRestricted(string path) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneBirthRestricted,
+            $"'POST {path}' writes nothing: a lane is born only when a feature joins it, so a roster row " +
+            "without features cannot be created directly. The assigning act is the birth — assign the lane " +
+            "to a feature via planning_update_feature (lane=...) and the row is auto-created with an empty " +
+            "contour and no priority.");
+
     public static PlanningException LaneStillOccupied(string lane, IReadOnlyList<string> slugs) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneStillOccupied,
             $"Lane '{lane}' still holds open features: {string.Join(", ", slugs)}. Removal is refused — " +

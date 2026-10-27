@@ -86,8 +86,8 @@ public sealed class WaveParticipantsApiTests : IDisposable
     public async Task Get_AllLanesUnclaimed_ReturnsOwnerOnlyWithoutErrors()
     {
         var projectId = await CreateProjectAsync(_client);
-        await CreateLaneAsync(_client, projectId, "backend");
-        await CreateLaneAsync(_client, projectId, "web");
+        await CreateLaneFeatureAsync(_client, projectId, 1, "backend");
+        await CreateLaneFeatureAsync(_client, projectId, 2, "web");
 
         var response = await _client.GetAsync($"/api/projects/{projectId}/wave/participants");
 
@@ -163,7 +163,7 @@ public sealed class WaveParticipantsApiTests : IDisposable
     public async Task Get_AfterParticipantsDoor_ChatSurfacesStillServe()
     {
         var projectId = await CreateProjectAsync(_client);
-        await CreateLaneAsync(_client, projectId, "backend");
+        await CreateLaneFeatureAsync(_client, projectId, 1, "backend");
 
         var post = await _client.PostAsJsonAsync(
             $"/api/projects/{projectId}/wave/rooms/backend/messages",
@@ -197,8 +197,18 @@ public sealed class WaveParticipantsApiTests : IDisposable
     private static async Task ClaimLaneFeatureAsync(
         HttpClient client, Guid projectId, int number, string lane, string alias, string vendor)
     {
-        await CreateLaneAsync(client, projectId, lane);
+        await CreateLaneFeatureAsync(client, projectId, number, lane);
 
+        var slug = $"{number:000}-{lane}-work";
+        var claim = await client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}/claim",
+            new { Alias = alias, Vendor = vendor }, JsonOptions);
+        claim.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static async Task CreateLaneFeatureAsync(
+        HttpClient client, Guid projectId, int number, string lane)
+    {
         var slug = $"{number:000}-{lane}-work";
         var create = await client.PostAsJsonAsync(
             $"/api/projects/{projectId}/planning/features",
@@ -209,11 +219,6 @@ public sealed class WaveParticipantsApiTests : IDisposable
             $"/api/projects/{projectId}/planning/features/{slug}",
             new { Lane = lane }, JsonOptions);
         bind.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var claim = await client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/planning/features/{slug}/claim",
-            new { Alias = alias, Vendor = vendor }, JsonOptions);
-        claim.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private static async Task<Guid> CreateProjectAsync(HttpClient client)
@@ -229,16 +234,6 @@ public sealed class WaveParticipantsApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         return body.GetProperty("id").GetGuid();
-    }
-
-    private static async Task CreateLaneAsync(
-        HttpClient client, Guid projectId, string name)
-    {
-        var response = await client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/planning/lanes",
-            new { Name = name, Contour = (string?)null, SerialOrder = (int?)null, Priority = (string?)null });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private static async Task<ParticipantsJson> ReadAsync(HttpResponseMessage response) =>

@@ -113,13 +113,70 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SetLanes_EmptyArrayClearsTheRoster()
+    public async Task SetLanes_EmptyArray_IsANoOpThatEchoesTheUnchangedRoster()
     {
         _stub.Route("PUT", RosterRoute, 200, """{"lanes":[]}""");
 
         var result = await Tool().SetLanes(Element("[]"), Canned.ProjectId);
 
-        Text(result).ShouldBe("Lane roster cleared.");
+        Text(result).ShouldBe(
+            "No lanes in the roster — the payload wrote nothing: an empty payload is a no-op, " +
+            "and lanes are born via planning_update_feature (lane=...).");
+    }
+
+    [Fact]
+    public async Task RemoveLane_DeletesTheLaneThroughTheHostDoor()
+    {
+        _stub.Route("DELETE", $"{LanesRoute}/frontend", 200, """{"lanes":[]}""");
+
+        var result = await Tool().RemoveLane("frontend", Canned.ProjectId);
+
+        var request = _stub.Requests.Single(r => r.Method == "DELETE");
+        request.Path.ShouldBe($"{LanesRoute}/frontend");
+        Text(result).ShouldBe("No lane named 'frontend' remains — the roster is empty.");
+    }
+
+    [Fact]
+    public async Task RemoveLane_NameIsTrimmedAndEscapedForTheRoute()
+    {
+        _stub.Route("DELETE", $"{LanesRoute}/web%20src", 200, RosterJson);
+
+        await Tool().RemoveLane(" web src ", Canned.ProjectId);
+
+        _stub.Requests.Single(r => r.Method == "DELETE").Path.ShouldBe($"{LanesRoute}/web%20src");
+    }
+
+    [Fact]
+    public async Task RemoveLane_UnknownLane_EchoesTheSurvivingRoster()
+    {
+        _stub.Route("DELETE", $"{LanesRoute}/ghost", 200, RosterJson);
+
+        var result = await Tool().RemoveLane("ghost", Canned.ProjectId);
+
+        Text(result).ShouldBe("No lane named 'ghost' remains; the roster holds 1 lane(s): frontend.");
+    }
+
+    [Fact]
+    public async Task RemoveLane_OccupiedLane_SurfacesTheRefusalDetail()
+    {
+        _stub.Route(
+            "DELETE",
+            $"{LanesRoute}/frontend",
+            409,
+            """{"title":"LaneStillOccupied","detail":"Lane 'frontend' still holds open features: 011-a."}""");
+
+        var ex = await Should.ThrowAsync<McpException>(() => Tool().RemoveLane("frontend", Canned.ProjectId));
+
+        ex.Message.ShouldContain("Lane 'frontend' still holds open features: 011-a");
+    }
+
+    [Fact]
+    public async Task RemoveLane_BlankName_IsRefusedBeforeTheWire()
+    {
+        var ex = await Should.ThrowAsync<McpException>(() => Tool().RemoveLane("   ", Canned.ProjectId));
+
+        ex.Message.ShouldBe("name is required: the lane to remove, as shown by planning_list_lanes.");
+        _stub.Requests.ShouldBeEmpty();
     }
 
     [Fact]

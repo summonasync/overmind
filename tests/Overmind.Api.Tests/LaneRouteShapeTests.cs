@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Overmind.Core;
+using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
 
@@ -285,8 +288,10 @@ public sealed class LaneRouteShapeTests : IDisposable
 
     private async Task CreateLaneAsync(Guid projectId, string name)
     {
-        var created = await _client.PostAsJsonAsync(LanesPath(projectId), new { Name = name });
-        created.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        db.PlanningLanes.Add(PlanningLane.Create(projectId, name, contour: null, serialOrder: null));
+        await db.SaveChangesAsync();
     }
 
     private async Task<string[]> RosterNamesAsync(Guid projectId)

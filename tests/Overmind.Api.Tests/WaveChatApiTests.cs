@@ -404,11 +404,16 @@ public sealed class WaveChatApiTests : IDisposable
 
     private async Task CreateLaneAsync(Guid projectId, string name)
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/planning/lanes",
-            new { Name = name, Contour = (string?)null, SerialOrder = (int?)null, Priority = (string?)null });
+        var slug = $"001-{name}-work";
+        var create = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features",
+            new { Slug = slug, Title = "Lane work" }, JsonOptions);
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var bind = await _client.PutAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}",
+            new { Lane = name }, JsonOptions);
+        bind.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task SeedAgentSessionAsync()

@@ -20,7 +20,7 @@ public static class LanesApi
     {
         var human = routes.MapGroup("/api");
         human.MapGet(LanePathPrefix + CollectionLiteral, List);
-        human.MapPost(LanePathPrefix + CollectionLiteral, Create);
+        human.MapPost(LanePathPrefix + CollectionLiteral, CreateRefused);
         human.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);
         human.MapPut(LanePathPrefix + RosterLiteral, Set);
         human.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
@@ -28,7 +28,7 @@ public static class LanesApi
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapGet(LanePathPrefix + CollectionLiteral, List);
-        agent.MapPost(LanePathPrefix + CollectionLiteral, Create);
+        agent.MapPost(LanePathPrefix + CollectionLiteral, CreateRefused);
         agent.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);
         agent.MapPut(LanePathPrefix + RosterLiteral, Set);
         agent.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
@@ -50,21 +50,8 @@ public static class LanesApi
         }
     }
 
-    internal static async Task<IResult> Create(
-        Guid projectId,
-        LaneUpsertRequest request,
-        IValidator<LaneUpsertRequest> validator,
-        LaneService lanes,
-        CancellationToken ct)
-    {
-        var validation = await validator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-        {
-            return Results.ValidationProblem(validation.ToDictionary());
-        }
-
-        return await WriteAsync(projectId, ToUpsert(request), LaneWriteMode.Create, lanes, ct);
-    }
+    internal static IResult CreateRefused(HttpRequest request) =>
+        PlanningErrors.Map(PlanningException.LanePostBirthRestricted(request.Path.ToString().TrimEnd('/')));
 
     internal static async Task<IResult> Set(
         Guid projectId,
@@ -174,9 +161,6 @@ public static class LanesApi
                 : null,
             [.. lane.Features.Select(f => new LaneFeatureResponse(
                 f.Slug, f.Status, f.ClaimedByAlias, f.ClaimedByVendor, f.ClaimState))]))]);
-
-    private static LaneUpsert ToUpsert(LaneUpsertRequest lane) =>
-        new(lane.Name, lane.Contour, lane.SerialOrder, lane.Priority);
 
     private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes) =>
     [
