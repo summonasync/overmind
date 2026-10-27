@@ -69,9 +69,9 @@ public sealed class WaveChatTools
         "room's watermark cannot blind a quieter room; rooms is a comma-separated filter (lane names and/or 'all'). " +
         "The merged feed is deduplicated by message id and ordered by createdAt. since (ISO datetime) narrows the " +
         "effective lower bound to max(watermark, since) and never widens delivery; limit caps the page to the " +
-        "NEWEST window — undelivered older traffic, including mentions from other rooms, is only reachable via " +
-        "replayMentions=true, which restores the legacy delivery of every message that ever mentioned the alias " +
-        "regardless of the watermark; compact projects each message to {id, room, authorAlias, createdAt, text} " +
+        "NEWEST window — replayMentions=true re-delivers the mention slice (every message that ever mentioned the " +
+        "alias) without the watermark bound, not older traffic in general; compact projects each message to " +
+        "{id, room, authorAlias, createdAt, text} " +
         "with text truncated to ~200 characters. An unknown filtered room fails with the named MissingWaveRoom error.")]
     public async Task<JsonElement> FetchUnread(
         [Description("Optional comma-separated room filter; omitted reads every room with activity, oldest activity first.")] string? rooms = null,
@@ -126,7 +126,9 @@ public sealed class WaveChatTools
     [Description("Counts the calling alias's undelivered wave chat traffic per room without advancing any watermark: " +
         "one {room, count, ids} entry per room, where count is the number of undelivered messages and ids lists " +
         "their message ids — read the full messages with wave_chat_unread only when count > 0. Same selection as " +
-        "an unread read: room traffic above the watermark plus watermark-scoped mentions. rooms is a comma-separated " +
+        "an unread read: room traffic above the watermark plus watermark-scoped mentions. Mentions (@alias) surface " +
+        "in the {room, count, ids} entry of every room they were posted to: ids can repeat across rooms, and summing " +
+        "the counts overstates what a single wave_chat_unread read delivers. rooms is a comma-separated " +
         "filter (lane names and/or 'all'); omitted reads every room with activity, oldest last-activity first. " +
         "An unknown filtered room fails with the named MissingWaveRoom error.")]
     public async Task<JsonElement> PeekRooms(
