@@ -447,7 +447,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(500)
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
