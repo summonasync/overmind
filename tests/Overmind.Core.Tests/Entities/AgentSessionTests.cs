@@ -206,6 +206,74 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void SetIdentity_RealToReal_ReplacesIdentity()
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        session.SetIdentity("  guldan  ", "  kimi  ");
+
+        session.Alias.ShouldBe("guldan");
+        session.Vendor.ShouldBe("kimi");
+    }
+
+    [Fact]
+    public void SetIdentity_PlaceholderToReal_Succeeds()
+    {
+        var session = AgentSession.Create(AgentSession.PlaceholderAlias, "unknown");
+
+        session.SetIdentity("guldan", "kimi");
+
+        session.Alias.ShouldBe("guldan");
+        session.Vendor.ShouldBe("kimi");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void SetIdentity_EmptyAlias_Throws(string? alias)
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        Should.Throw<ArgumentException>(() => session.SetIdentity(alias!, "kimi"));
+        session.Alias.ShouldBe("Dan");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void SetIdentity_EmptyVendor_Throws(string? vendor)
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        Should.Throw<ArgumentException>(() => session.SetIdentity("guldan", vendor!));
+        session.Vendor.ShouldBe("qwen");
+    }
+
+    [Theory]
+    [InlineData(33, 5)]
+    [InlineData(5, 33)]
+    public void SetIdentity_IdentityOverCap_Throws(int aliasLength, int vendorLength)
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        Should.Throw<ArgumentException>(() =>
+            session.SetIdentity(new string('a', aliasLength), new string('b', vendorLength)));
+    }
+
+    [Fact]
+    public void SetIdentity_InvalidVendor_KeepsOriginalAlias()
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        Should.Throw<ArgumentException>(() => session.SetIdentity("guldan", "  "));
+
+        session.Alias.ShouldBe("Dan");
+        session.Vendor.ShouldBe("qwen");
+    }
+
+    [Fact]
     public void Restore_RoundTripsRole()
     {
         var session = AgentSession.Restore(Guid.NewGuid(), "Dan", "qwen",
