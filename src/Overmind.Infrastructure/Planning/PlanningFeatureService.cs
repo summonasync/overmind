@@ -162,7 +162,7 @@ public sealed partial class PlanningFeatureService
 
         if (doneFlip || laneMoved)
         {
-            await RetireEmptyLanesAsync(feature, ct);
+            await RetireEmptyLanesAsync(projectId, feature, ct);
         }
 
         await tx.CommitAsync(ct);
@@ -221,7 +221,7 @@ public sealed partial class PlanningFeatureService
 
         if (laneMoved)
         {
-            await RetireEmptyLanesAsync(feature, ct);
+            await RetireEmptyLanesAsync(projectId, feature, ct);
         }
 
         await tx.CommitAsync(ct);
@@ -278,13 +278,16 @@ public sealed partial class PlanningFeatureService
             ReleaseClaimOnDone(feature, PlanningLogSource.Agent);
         }
 
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
         await _db.SaveChangesAsync(ct);
 
         if (status == PlanningFeatureStatus.Done && feature.Status == PlanningFeatureStatus.Done)
         {
-            await RetireEmptyLanesAsync(feature, ct);
+            await RetireEmptyLanesAsync(projectId, feature, ct);
         }
 
+        await tx.CommitAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
         return feature;
     }
@@ -336,10 +339,10 @@ public sealed partial class PlanningFeatureService
         return lane.Name;
     }
 
-    private async Task RetireEmptyLanesAsync(PlanningFeature actor, CancellationToken ct)
+    private async Task RetireEmptyLanesAsync(Guid projectId, PlanningFeature? actor, CancellationToken ct)
     {
         var lanes = await _db.PlanningLanes
-            .Where(l => l.ProjectId == actor.ProjectId)
+            .Where(l => l.ProjectId == projectId)
             .ToListAsync(ct);
         if (lanes.Count == 0)
         {
@@ -348,7 +351,7 @@ public sealed partial class PlanningFeatureService
 
         var open = (await _db.PlanningFeatures
                 .AsNoTracking()
-                .Where(f => f.ProjectId == actor.ProjectId
+                .Where(f => f.ProjectId == projectId
                             && f.Lane != null
                             && f.Status != PlanningFeatureStatus.Done)
                 .Select(f => f.Lane!)
@@ -366,7 +369,7 @@ public sealed partial class PlanningFeatureService
             _db.PlanningLanes.Remove(lane);
         }
 
-        if (actor.Lane is { } name &&
+        if (actor?.Lane is { } name &&
             retired.Any(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)))
         {
             actor.AppendLog($"lane '{name}' retired: no open features remain", PlanningLogSource.Auto);
@@ -431,7 +434,10 @@ public sealed partial class PlanningFeatureService
         await PlanningServiceGuard.ClearMaterializationAsync(_materializer, _logger, projectId, featureId, ct);
 
         _db.PlanningFeatures.Remove(feature);
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
         await _db.SaveChangesAsync(ct);
+        await RetireEmptyLanesAsync(projectId, null, ct);
+        await tx.CommitAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
     }
 
@@ -625,7 +631,7 @@ public sealed partial class PlanningFeatureService
 
             if (statusRestored)
             {
-                await RetireEmptyLanesAsync(feature, ct);
+                await RetireEmptyLanesAsync(projectId, feature, ct);
             }
 
             await _db.SaveChangesAsync(ct);

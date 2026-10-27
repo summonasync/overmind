@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
@@ -514,8 +515,6 @@ public sealed class LaneServiceTests : IDisposable
     {
         var service = CreateService();
         await SeedLaneAsync("frontend");
-        await CreateFeatureAsync("011-gone", "frontend");
-        await CreateFeatureService().DeleteAsync(_projectId, "011-gone");
 
         var roster = await service.DeleteLaneAsync(_projectId, "frontend");
 
@@ -593,6 +592,55 @@ public sealed class LaneServiceTests : IDisposable
 
         ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task DeleteFeature_LastOpenFeatureOfALane_RetiresTheLane()
+    {
+        await SeedLaneAsync("frontend", "web/src", 1, 0);
+        await CreateFeatureAsync("011-doomed", "frontend");
+
+        await CreateFeatureService().DeleteAsync(_projectId, "011-doomed");
+
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task DeleteFeature_LaneStillHasOpenFeatures_KeepsTheLane()
+    {
+        await SeedLaneAsync("frontend");
+        await CreateFeatureAsync("011-doomed", "frontend");
+        await CreateFeatureAsync("012-stays", "frontend");
+
+        await CreateFeatureService().DeleteAsync(_projectId, "011-doomed");
+
+        var roster = await CreateService().ListLanesAsync(_projectId);
+        roster.Select(l => l.Name).ShouldBe(["frontend"]);
+        roster.Single().Features.Select(f => f.Slug).ShouldBe(["012-stays"]);
+    }
+
+    [Fact]
+    public async Task SetStatus_DoneFlipWithFailingSweepSave_RollsBackTheWholeClose()
+    {
+        await SeedLaneAsync("frontend", "web/src");
+        await SeedDoneReadyFeatureAsync("011-closing", "frontend");
+        using var context = _db.CreateContext(new SecondSaveFails());
+        var features = new PlanningFeatureService(
+            context,
+            _materializer,
+            new BacklogImportSeeder(context, new PlanningPolicy(context, new AppSettingsService(context))),
+            new TaskDependencyService(context, TestPlanningDispatcher.Create(context, _materializer)),
+            TestPlanningDispatcher.Create(context, _materializer),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PlanningFeatureService>.Instance);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => features.SetStatusAsync(
+            _projectId, "011-closing", PlanningFeatureStatus.Done, "closing"));
+
+        using var verified = _db.CreateContext();
+        var feature = await verified.PlanningFeatures.SingleAsync(f => f.Slug == "011-closing");
+        feature.Status.ShouldBe(PlanningFeatureStatus.Draft);
+        PlanningLog.Parse(feature.Body).ShouldNotContain(l => l.Text == "closing");
+        (await verified.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
     }
 
     [Fact]
@@ -735,5 +783,21 @@ public sealed class LaneServiceTests : IDisposable
         var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == slug);
         feature.SetLane(lane);
         await _context.SaveChangesAsync();
+    }
+
+    private sealed class SecondSaveFails : SaveChangesInterceptor
+    {
+        private int _saves;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (++_saves == 2)
+            {
+                throw new InvalidOperationException("sweep save refused");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
     }
 }

@@ -69,7 +69,6 @@ public enum PlanningFailureCode
     LaneBirthRestricted,
     LaneStillOccupied,
     LaneClaimHeld,
-    LaneSerialBusy,
     MissingDirective,
     MissingEntry,
     MissingLane,

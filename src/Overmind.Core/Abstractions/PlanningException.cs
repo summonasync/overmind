@@ -413,12 +413,6 @@ public sealed class PlanningException : Exception
             $"Directive '{directiveId}' was not found on this feature — it may live on another feature, " +
             "or it was never appended; planning_read_feature lists the open directives with their ids.");
 
-    public static PlanningException LaneSerialBusy(string lane, string heldSlug) =>
-        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneSerialBusy,
-            $"Lane '{lane}' is serial: you already hold an alive claim on feature '{heldSlug}' " +
-            "in this lane. One claim at a time within a lane — release it first, or resend with " +
-            "overrideLaneCheck=true to claim anyway.");
-
     public static PlanningException MissingEntry(Guid entryId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingEntry,
             $"Entry '{entryId}' was not found in this project — it may belong to another project, " +
