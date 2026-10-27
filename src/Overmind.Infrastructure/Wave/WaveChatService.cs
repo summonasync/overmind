@@ -8,6 +8,8 @@ public sealed record WaveRoomSummary(string Room, DateTime? LastActivityAt);
 
 public sealed record WaveUnreadPage(IReadOnlyList<WaveMessage> Messages, DateTime WatermarkAt);
 
+public sealed record WaveUnreadPeek(string Room, int Count, IReadOnlyList<Guid> Ids);
+
 public sealed class WaveChatService
 {
     public const int DefaultHistoryLimit = 20;
@@ -41,7 +43,13 @@ public sealed class WaveChatService
     }
 
     public async Task<WaveUnreadPage> ListUnreadAsync(
-        Guid projectId, string alias, string room, CancellationToken ct = default)
+        Guid projectId,
+        string alias,
+        string room,
+        DateTime? since = null,
+        int? limit = null,
+        bool replayMentions = false,
+        CancellationToken ct = default)
     {
         await RequireProjectAsync(projectId, ct);
         var normalizedRoom = await RequireRoomAsync(projectId, room, ct);
@@ -49,21 +57,32 @@ public sealed class WaveChatService
 
         var watermark = await _db.WaveWatermarks
             .FirstOrDefaultAsync(w => w.ProjectId == projectId && w.Alias == normalizedAlias, ct);
-        var since = watermark?.LastReadAt ?? DateTime.MinValue;
+        var watermarkAt = watermark?.LastReadAt ?? DateTime.MinValue;
+        var effectiveSince = since is { } requested && requested > watermarkAt ? requested : watermarkAt;
 
-        var mentionPattern = $"% {normalizedAlias.Replace("_", "\\_")} %";
-        var messages = await _db.WaveMessages
-            .AsNoTracking()
-            .Where(m => m.ProjectId == projectId)
-            .Where(m => (m.Room == normalizedRoom && m.CreatedAt > since)
-                        || EF.Functions.Like(m.Mentions, mentionPattern, "\\"))
-            .OrderBy(m => m.CreatedAt)
-            .ThenBy(m => m.Id)
-            .ToListAsync(ct);
+        var feed = UnreadFeed(projectId, normalizedRoom, normalizedAlias, effectiveSince, replayMentions);
+        IReadOnlyList<WaveMessage> messages;
+        if (limit is { } pageLimit)
+        {
+            var page = await feed
+                .OrderByDescending(m => m.CreatedAt)
+                .ThenByDescending(m => m.Id)
+                .Take(Math.Clamp(pageLimit, 1, MaxHistoryLimit))
+                .ToListAsync(ct);
+            page.Reverse();
+            messages = page;
+        }
+        else
+        {
+            messages = await feed
+                .OrderBy(m => m.CreatedAt)
+                .ThenBy(m => m.Id)
+                .ToListAsync(ct);
+        }
 
         if (messages.Count == 0)
         {
-            return new WaveUnreadPage(messages, watermark?.LastReadAt ?? since);
+            return new WaveUnreadPage(messages, watermarkAt);
         }
 
         var readAt = messages[^1].CreatedAt;
@@ -79,6 +98,42 @@ public sealed class WaveChatService
 
         await _db.SaveChangesAsync(ct);
         return new WaveUnreadPage(messages, readAt);
+    }
+
+    public async Task<WaveUnreadPeek> PeekAsync(
+        Guid projectId, string alias, string room, CancellationToken ct = default)
+    {
+        await RequireProjectAsync(projectId, ct);
+        var normalizedRoom = await RequireRoomAsync(projectId, room, ct);
+        var normalizedAlias = WaveWatermark.NormalizeAlias(alias);
+
+        var watermarkAt = await _db.WaveWatermarks
+            .Where(w => w.ProjectId == projectId && w.Alias == normalizedAlias)
+            .Select(w => (DateTime?)w.LastReadAt)
+            .FirstOrDefaultAsync(ct) ?? DateTime.MinValue;
+
+        var ids = await UnreadFeed(projectId, normalizedRoom, normalizedAlias, watermarkAt, replayMentions: false)
+            .OrderBy(m => m.CreatedAt)
+            .ThenBy(m => m.Id)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+
+        return new WaveUnreadPeek(normalizedRoom, ids.Count, ids);
+    }
+
+    private IQueryable<WaveMessage> UnreadFeed(
+        Guid projectId, string room, string alias, DateTime since, bool replayMentions)
+    {
+        var mentionPattern = $"% {alias.Replace("_", "\\_")} %";
+        var projectFeed = _db.WaveMessages
+            .AsNoTracking()
+            .Where(m => m.ProjectId == projectId);
+
+        return replayMentions
+            ? projectFeed.Where(m => (m.Room == room && m.CreatedAt > since)
+                        || EF.Functions.Like(m.Mentions, mentionPattern, "\\"))
+            : projectFeed.Where(m => m.CreatedAt > since
+                        && (m.Room == room || EF.Functions.Like(m.Mentions, mentionPattern, "\\")));
     }
 
     public async Task<IReadOnlyList<WaveMessage>> ListHistoryAsync(

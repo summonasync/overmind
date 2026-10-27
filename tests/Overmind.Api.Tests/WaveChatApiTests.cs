@@ -175,7 +175,7 @@ public sealed class WaveChatApiTests : IDisposable
         laneFeed.WatermarkAt.ShouldNotBe(default);
 
         var secondRead = await UnreadAsync(projectId, "guldan", "backend");
-        secondRead.Items.Select(m => m.Text).ShouldBe(["hall ping @guldan"]);
+        secondRead.Items.ShouldBeEmpty();
 
         var otherAlias = await UnreadAsync(projectId, "marshal", "backend");
         otherAlias.Items.Length.ShouldBe(2);
@@ -226,6 +226,65 @@ public sealed class WaveChatApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var feed = await response.Content.ReadFromJsonAsync<FeedJson>(JsonOptions);
         feed!.Items.Select(m => m.AuthorAlias).ShouldBe(["Marshal"]);
+    }
+
+    [Fact]
+    public async Task Peek_AgentDoor_ReturnsRoomCountAndIds_WithoutAdvancingTheWatermark()
+    {
+        var projectId = await CreateProjectAsync();
+        await PostHumanAsync(projectId, "all", "Dan", "hello @Dan");
+        await PostHumanAsync(projectId, "all", "Dan", "plain talk");
+
+        var first = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/peek", null);
+
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var peek = await first.Content.ReadFromJsonAsync<PeekJson>(JsonOptions);
+        peek!.Room.ShouldBe("all");
+        peek.Count.ShouldBe(2);
+        peek.Ids.Length.ShouldBe(2);
+
+        var second = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/peek", null);
+        var repeat = await second.Content.ReadFromJsonAsync<PeekJson>(JsonOptions);
+        repeat!.Count.ShouldBe(2);
+        repeat.Ids.ShouldBe(peek.Ids);
+
+        var feed = await UnreadAsync(projectId, "dan", "all");
+        feed.Items.Select(m => m.Id).ShouldBe(peek.Ids);
+        feed.Items.Select(m => m.Text).ShouldBe(["hello @Dan", "plain talk"]);
+    }
+
+    [Fact]
+    public async Task Unread_AgentDoor_BindsSinceLimitAndReplayMentions()
+    {
+        var projectId = await CreateProjectAsync();
+        await CreateLaneAsync(projectId, "backend");
+        await PostHumanAsync(projectId, "all", "Dan", "first");
+        await PostHumanAsync(projectId, "all", "Dan", "second");
+
+        var capped = await AgentUnreadAsync(projectId, "all", limit: 1);
+        capped.Items.Select(m => m.Text).ShouldBe(["second"]);
+
+        var future = Uri.EscapeDataString(DateTime.UtcNow.AddMinutes(2).ToString("O"));
+        var narrowed = await AgentUnreadAsync(projectId, "all", since: future);
+        narrowed.Items.ShouldBeEmpty();
+
+        await SeedMessageAsync(projectId, "backend", "Dan", "worker", "ghost ping");
+        var replayed = await AgentUnreadAsync(projectId, "all", since: future, replayMentions: true);
+        replayed.Items.Select(m => m.Text).ShouldBe(["ghost ping"]);
+    }
+
+    [Fact]
+    public async Task Peek_UnknownLane_Returns404WithNamedCode()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var response = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/frontend/peek", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ProblemTitleAsync(response)).ShouldBe("MissingWaveRoom");
     }
 
     [Fact]
@@ -368,6 +427,33 @@ public sealed class WaveChatApiTests : IDisposable
         return (await response.Content.ReadFromJsonAsync<FeedJson>(JsonOptions))!;
     }
 
+    private async Task<FeedJson> AgentUnreadAsync(
+        Guid projectId, string room, string? since = null, int? limit = null, bool replayMentions = false)
+    {
+        var query = new List<string>();
+        if (since is not null)
+        {
+            query.Add($"since={since}");
+        }
+
+        if (limit is not null)
+        {
+            query.Add($"limit={limit}");
+        }
+
+        if (replayMentions)
+        {
+            query.Add("replayMentions=true");
+        }
+
+        var suffix = query.Count == 0 ? string.Empty : $"?{string.Join("&", query)}";
+        var response = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{room}/unread{suffix}", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<FeedJson>(JsonOptions))!;
+    }
+
     private async Task<HttpResponseMessage> SendAgentAsync(
         HttpMethod method, string url, object? body, Guid? sessionId = null)
     {
@@ -444,6 +530,8 @@ public sealed class WaveChatApiTests : IDisposable
         string AuthorRole);
 
     private sealed record FeedJson(MessageJson[] Items, DateTime WatermarkAt);
+
+    private sealed record PeekJson(string Room, int Count, Guid[] Ids);
 
     private sealed record HistoryJson(MessageJson[] Items);
 

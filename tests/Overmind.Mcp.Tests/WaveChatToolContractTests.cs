@@ -29,6 +29,8 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
         _stub.Route("GET", RoomsRoute, _ => new StubOvermindApi.Response(200, _fake.RoomsListingJson()));
         _stub.Route("GET", $"{RoomsRoute}/([^/]+)/unread",
             req => new StubOvermindApi.Response(200, _fake.UnreadJson(RoomOf(req.Path))));
+        _stub.Route("GET", $"{RoomsRoute}/([^/]+)/peek",
+            req => new StubOvermindApi.Response(200, _fake.PeekJson(RoomOf(req.Path))));
         _stub.Route("POST", $"{RoomsRoute}/([^/]+)/messages",
             req => new StubOvermindApi.Response(200, _fake.PostedJson(RoomOf(req.Path), TextOf(req.Body))));
 
@@ -194,15 +196,97 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
     [Fact]
     public async Task Unread_BlankRoomsFilter_IsRefusedWithoutReading()
     {
-        var ex = await Should.ThrowAsync<McpException>(() => Tool().FetchUnread(" ,", Canned.ProjectId));
+        var ex = await Should.ThrowAsync<McpException>(() => Tool().FetchUnread(" ,", projectId: Canned.ProjectId));
 
         ex.Message.ShouldContain("carries no room names");
         _stub.Requests.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task Peek_MergesPerRoomCounts_WithoutAdvancingWatermarks()
+    {
+        _fake.Post("lane-a", "standup notes");
+        _fake.Post("lane-b", $"@{SelfAlias} handoff: lane-b is green, moving to review");
+        _fake.Post("lane-a", "board moved again");
+
+        var first = await Peek("lane-a,lane-b");
+        var second = await Peek("lane-a,lane-b");
+
+        Rooms(first).ShouldBe(new[] { "lane-a", "lane-b" });
+        var peeks = first["peeks"]!.AsArray().Select(p => p!.AsObject()).ToArray();
+        peeks.Select(p => p["room"]!.GetValue<string>())
+            .ShouldBe(new[] { "lane-a", "lane-b" });
+        peeks.Select(p => p["count"]!.GetValue<int>()).ShouldBe(new[] { 3, 1 });
+        var ids = peeks.SelectMany(p => p["ids"]!.AsArray()).Select(i => i!.GetValue<string>()).ToArray();
+        ids.Length.ShouldBe(4);
+        ids.Distinct().Count().ShouldBe(3);
+
+        second.ToJsonString().ShouldBe(first.ToJsonString());
+        _stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/unread", StringComparison.Ordinal));
+        _stub.Requests.Count(r => r.Path.EndsWith("/peek", StringComparison.Ordinal)).ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task Peek_UnknownRoom_SurfacesTheNamedError()
+    {
+        _stub.Route("GET", $"{RoomsRoute}/([^/]+)/peek", 404,
+            """{"title":"MissingWaveRoom","detail":"Wave room 'ghost' does not exist in this project: rooms are the lane roster plus the shared 'all' room. Rooms live now: 'all', 'lane-a'."}""");
+
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().PeekRooms("ghost", Canned.ProjectId));
+
+        ex.Message.ShouldContain("Wave room 'ghost' does not exist");
+        ex.Message.ShouldContain("Rooms live now: 'all', 'lane-a'");
+    }
+
+    [Fact]
+    public async Task Unread_CompactMode_ProjectsMessagesToTheShortShape()
+    {
+        var longText = new string('x', 250);
+        _fake.Post("lane-a", longText);
+        _fake.Post("lane-b", longText);
+
+        var full = await Feed("lane-a");
+        Texts(full).ShouldBe([longText]);
+
+        var compactFeed = await Tool().FetchUnread("lane-b", compact: true, projectId: Canned.ProjectId);
+        var compact = JsonNode.Parse(compactFeed.GetRawText())!
+            ["messages"]!.AsArray().Select(n => n!.AsObject()).Single();
+
+        compact.Select(kv => kv.Key).ShouldBe(["id", "room", "authorAlias", "createdAt", "text"]);
+        compact["text"]!.GetValue<string>().ShouldBe($"{new string('x', 200)}…");
+        compact["room"]!.GetValue<string>().ShouldBe("lane-b");
+        compact["authorAlias"]!.GetValue<string>().ShouldBe(AuthorAlias);
+    }
+
+    [Fact]
+    public async Task Unread_PassesSinceLimitAndReplayMentionsToTheHost()
+    {
+        _fake.Post("lane-a", "traffic for the query probe");
+
+        await Tool().FetchUnread("lane-a",
+            since: Base.AddMinutes(-5), limit: 25, replayMentions: true, projectId: Canned.ProjectId);
+
+        var parameterized = _stub.Requests.Single(r => r.Path.EndsWith("/unread", StringComparison.Ordinal));
+        parameterized.Query.ShouldContain(Uri.EscapeDataString(Base.AddMinutes(-5).ToString("O")));
+        parameterized.Query.ShouldContain("limit=25");
+        parameterized.Query.ShouldContain("replayMentions=true");
+
+        await Tool().FetchUnread("lane-a", projectId: Canned.ProjectId);
+
+        var bare = _stub.Requests.Last(r => r.Path.EndsWith("/unread", StringComparison.Ordinal));
+        bare.Query.ShouldBeEmpty();
+    }
+
     private async Task<JsonObject> Feed(string? rooms)
     {
-        var element = await Tool().FetchUnread(rooms, Canned.ProjectId);
+        var element = await Tool().FetchUnread(rooms, projectId: Canned.ProjectId);
+        return JsonNode.Parse(element.GetRawText())!.AsObject();
+    }
+
+    private async Task<JsonObject> Peek(string? rooms)
+    {
+        var element = await Tool().PeekRooms(rooms, Canned.ProjectId);
         return JsonNode.Parse(element.GetRawText())!.AsObject();
     }
 
@@ -283,6 +367,23 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
             }
 
             return new JsonObject { ["items"] = items }.ToJsonString();
+        }
+
+        public string PeekJson(string room)
+        {
+            var ids = _messages
+                .Where(m => (Room(m) == room && At(m) > _watermark) || Mentions(m).Contains(SelfAlias))
+                .OrderBy(At)
+                .ThenBy(Id)
+                .Select(Id)
+                .ToArray();
+
+            return new JsonObject
+            {
+                ["room"] = room,
+                ["count"] = ids.Length,
+                ["ids"] = new JsonArray(ids.Select(id => (JsonNode?)id).ToArray())
+            }.ToJsonString();
         }
 
         public string UnreadJson(string room)
