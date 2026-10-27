@@ -1,0 +1,264 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Microsoft.Data.Sqlite;
+using Overmind.Host.Api;
+using Shouldly;
+using Xunit;
+
+namespace Overmind.Api.Tests;
+
+public sealed class AgentSessionIdentityApiTests : IDisposable
+{
+    private readonly ApiFactory _factory;
+    private readonly HttpClient _client;
+    private readonly SqliteConnection _db;
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    public AgentSessionIdentityApiTests()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"overmind-identity-{Guid.NewGuid():N}.db");
+        _factory = new ApiFactory(databasePath);
+        _client = _factory.CreateClient();
+        _db = new SqliteConnection($"Data Source={databasePath};Pooling=false");
+        _db.Open();
+    }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+        _db.Dispose();
+    }
+
+    [Fact]
+    public async Task SetIdentity_NewPair_PersistsAndReturnsTheSession()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        body.GetProperty("session").GetProperty("alias").GetString().ShouldBe("Van");
+        body.GetProperty("session").GetProperty("vendor").GetString().ShouldBe("qwen");
+        body.GetProperty("warnings").GetArrayLength().ShouldBe(0);
+        var (alias, vendor) = await ReadIdentityAsync(sessionId);
+        alias.ShouldBe("Van");
+        vendor.ShouldBe("qwen");
+    }
+
+    [Fact]
+    public async Task SetIdentity_TrimmedValues_AreStoredTrimmed()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "  Van  ", "  qwen  ");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (alias, vendor) = await ReadIdentityAsync(sessionId);
+        alias.ShouldBe("Van");
+        vendor.ShouldBe("qwen");
+    }
+
+    [Fact]
+    public async Task SetIdentity_AliasHeldByAliveSession_Returns409NamingTheHolder()
+    {
+        await SeedSessionAsync("Van", "qwen", lastSeenAgo: TimeSpan.Zero);
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "Van", "claude");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var detail = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["detail"]!
+            .GetValue<string>();
+        detail.ShouldContain("Van");
+        detail.ShouldContain("qwen");
+        var (alias, _) = await ReadIdentityAsync(sessionId);
+        alias.ShouldBe("Dan");
+    }
+
+    [Fact]
+    public async Task SetIdentity_AliasHeldByStaleSession_Succeeds()
+    {
+        await SeedSessionAsync("Van", "qwen", lastSeenAgo: TimeSpan.FromMinutes(20));
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "Van", "claude");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (alias, _) = await ReadIdentityAsync(sessionId);
+        alias.ShouldBe("Van");
+    }
+
+    [Fact]
+    public async Task SetIdentity_AliasHeldByEndedSession_Succeeds()
+    {
+        await SeedSessionAsync("Van", "qwen", lastSeenAgo: TimeSpan.Zero, endedAgo: TimeSpan.FromMinutes(1));
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "Van", "claude");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (alias, _) = await ReadIdentityAsync(sessionId);
+        alias.ShouldBe("Van");
+    }
+
+    [Fact]
+    public async Task SetIdentity_CaseDifferenceAgainstAliveHolder_Succeeds()
+    {
+        await SeedSessionAsync("van", "qwen", lastSeenAgo: TimeSpan.Zero);
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "Van", "claude");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task SetIdentity_PlaceholderPair_SucceedsWithWarning()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, "agent", "unknown");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var warnings = await ReadWarningsAsync(response);
+        warnings.ShouldNotBeEmpty();
+        warnings[0].ShouldContain("agent");
+        warnings[0].ShouldContain("unknown");
+    }
+
+    [Fact]
+    public async Task SetIdentity_MidHoldChange_WarnsNamingHeldClaims()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        var slug = await SeedHeldClaimAsync(sessionId);
+
+        var response = await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var warnings = await ReadWarningsAsync(response);
+        warnings.ShouldNotBeEmpty();
+        warnings.ShouldContain(w => w.Contains(slug));
+    }
+
+    [Fact]
+    public async Task SetIdentity_SameIdentityWhileHoldingClaims_NoWarning()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        await SeedHeldClaimAsync(sessionId);
+
+        var response = await SetIdentityAsync(sessionId, "Dan", "claude");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var warnings = await ReadWarningsAsync(response);
+        warnings.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("", "qwen")]
+    [InlineData("   ", "qwen")]
+    [InlineData("Van", "")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "qwen")]
+    [InlineData("Van", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")]
+    public async Task SetIdentity_EmptyOrOversize_Returns400(string alias, string vendor)
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+
+        var response = await SetIdentityAsync(sessionId, alias, vendor);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var (storedAlias, storedVendor) = await ReadIdentityAsync(sessionId);
+        storedAlias.ShouldBe("Dan");
+        storedVendor.ShouldBe("claude");
+    }
+
+    [Fact]
+    public async Task SetIdentity_UnknownSession_Returns404()
+    {
+        var response = await SetIdentityAsync(Guid.NewGuid(), "Van", "qwen");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private async Task<HttpResponseMessage> SetIdentityAsync(Guid sessionId, string alias, string vendor) =>
+        await _client.PostAsJsonAsync(
+            $"/api/agent/sessions/{sessionId}/identity", new { Alias = alias, Vendor = vendor }, JsonOptions);
+
+    private async Task<Guid> RegisterAsync(string alias, string vendor)
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/agent/sessions", new { Alias = alias, Vendor = vendor }, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        return body.GetProperty("id").GetGuid();
+    }
+
+    private async Task<string> SeedHeldClaimAsync(Guid sessionId)
+    {
+        var projectName = $"identity-hold-{Guid.NewGuid():N}";
+        var projectResponse = await _client.PostAsJsonAsync(
+            "/api/projects", new { Name = projectName, DiskPath = TestPaths.DiskPath(projectName) }, JsonOptions);
+        projectResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var project = await projectResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var slug = $"hold-{Guid.NewGuid():N}".Substring(0, 16);
+        var featureResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features",
+            new { Slug = slug, Title = "Identity hold", Body = string.Empty }, JsonOptions);
+        featureResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        await ExecuteAsync($"""
+            UPDATE PlanningFeatures
+            SET ClaimedByAlias = 'Dan',
+                ClaimedByVendor = 'claude',
+                ClaimedAt = '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}',
+                ClaimSessionId = '{sessionId.ToString().ToUpperInvariant()}'
+            WHERE ProjectId = '{projectId.ToString().ToUpperInvariant()}' AND Slug = '{slug}'
+            """);
+        return slug;
+    }
+
+    private async Task SeedSessionAsync(
+        string alias, string vendor, TimeSpan lastSeenAgo, TimeSpan? endedAgo = null)
+    {
+        var startedAt = DateTime.UtcNow.AddMinutes(-30);
+        await ExecuteAsync($"""
+            INSERT INTO AgentSessions (Id, Alias, Vendor, StartedAt, LastSeenAt, EndedAt)
+            VALUES ('{Guid.NewGuid().ToString().ToUpperInvariant()}', '{alias}', '{vendor}',
+                    '{startedAt:yyyy-MM-dd HH:mm:ss}', '{DateTime.UtcNow - lastSeenAgo:yyyy-MM-dd HH:mm:ss}',
+                    {FormatEnded(endedAgo)})
+            """);
+    }
+
+    private static string FormatEnded(TimeSpan? ago) =>
+        ago is null ? "NULL" : $"'{DateTime.UtcNow - ago:yyyy-MM-dd HH:mm:ss}'";
+
+    private async Task<(string Alias, string Vendor)> ReadIdentityAsync(Guid sessionId)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText =
+            $"SELECT Alias, Vendor FROM AgentSessions WHERE Id = '{sessionId.ToString().ToUpperInvariant()}'";
+        using var reader = await command.ExecuteReaderAsync();
+        reader.Read().ShouldBeTrue();
+        return (reader.GetString(0), reader.GetString(1));
+    }
+
+    private static async Task<string[]> ReadWarningsAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        return [.. body.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()!)];
+    }
+
+    private async Task ExecuteAsync(string sql)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+}
