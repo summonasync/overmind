@@ -47,7 +47,7 @@ export function EntryReadModal({ entry, onEdit, onClose }: EntryReadModalProps) 
                 formatRelativeTime(entry.updatedAt),
               )}
             </span>
-            <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => onEdit(entry)}>
+            <Button variant="secondary" size="sm" onClick={() => onEdit(entry)}>
               <Pencil size={12} aria-hidden />
               Edit
             </Button>

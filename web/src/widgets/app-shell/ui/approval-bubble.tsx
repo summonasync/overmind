@@ -93,7 +93,8 @@ export function ApprovalBubble() {
             <div className="mt-2.5 flex items-center gap-2">
               <Button
                 variant="secondary"
-                className="shrink-0 px-2 py-1 text-xs"
+                size="sm"
+                className="shrink-0"
                 disabled={replying}
                 onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.approve })}
                 aria-label={`Approve request from ${item.agent}`}
@@ -103,7 +104,8 @@ export function ApprovalBubble() {
               </Button>
               <Button
                 variant="danger"
-                className="shrink-0 px-2 py-1 text-xs"
+                size="sm"
+                className="shrink-0"
                 disabled={replying}
                 onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.reject })}
                 aria-label={`Reject request from ${item.agent}`}

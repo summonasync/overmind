@@ -65,7 +65,7 @@ export function BoardSearchInput({
           )}
         />
       </span>
-      <Button type="submit" variant="secondary" className="px-2.5 py-1 text-xs">
+      <Button type="submit" variant="secondary" size="sm">
         <Search size={12} aria-hidden />
         Search
       </Button>

@@ -183,13 +183,14 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
             priority={feature.priority}
           />
           <Badge>v{feature.version}</Badge>
-          <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setEditOpen(true)}>
+          <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
             <Pencil size={12} aria-hidden />
             Edit
           </Button>
           <Button
             variant="ghost"
-            className="px-2.5 py-1 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+            size="sm"
+            className="text-danger hover:bg-danger/10 hover:text-danger"
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 size={12} aria-hidden />
@@ -236,7 +237,7 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
           );
         })}
         {tab === "tasks" ? (
-          <Button variant="ghost" className="ml-auto px-2.5 py-1 text-xs" onClick={() => setTaskModal("new")}>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setTaskModal("new")}>
             <Plus size={12} aria-hidden />
             Add task
           </Button>
@@ -492,26 +493,27 @@ function DocumentPanel({
           <>
             <Button
               variant="accent"
-              className="px-2.5 py-1 text-xs"
+              size="sm"
               disabled={approvePending}
               onClick={onApprove}
             >
               <Check size={12} aria-hidden />
               {approvePending ? "Approving…" : "Approve"}
             </Button>
-            <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={declinePending} onClick={onDecline}>
+            <Button variant="secondary" size="sm" disabled={declinePending} onClick={onDecline}>
               <X size={12} aria-hidden />
               {declinePending ? "Declining…" : "Decline"}
             </Button>
           </>
         ) : null}
-        <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={onEdit}>
+        <Button variant="secondary" size="sm" onClick={onEdit}>
           <Pencil size={12} aria-hidden />
           Edit
         </Button>
         <Button
           variant="ghost"
-          className="px-2.5 py-1 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+          size="sm"
+          className="text-danger hover:bg-danger/10 hover:text-danger"
           onClick={onDelete}
         >
           <Trash2 size={12} aria-hidden />

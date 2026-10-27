@@ -117,7 +117,7 @@ export function FeatureDependenciesPanel({ projectId, feature }: FeatureDependen
             <span className="flex items-center gap-1.5">
               <Select
                 aria-label="Add blocker"
-                className="px-2 py-0.5 text-xs"
+                size="sm"
                 value={nextBlocker}
                 disabled={pending}
                 onChange={(event) => setNextBlocker(event.target.value)}
@@ -131,7 +131,7 @@ export function FeatureDependenciesPanel({ projectId, feature }: FeatureDependen
               </Select>
               <Button
                 variant="secondary"
-                className="px-2.5 py-1 text-xs"
+                size="sm"
                 disabled={nextBlocker.length === 0 || pending}
                 onClick={addBlocker}
               >

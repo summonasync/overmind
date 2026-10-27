@@ -21,7 +21,7 @@ export function InfoPanel({ collapsed, onToggle }: InfoPanelProps) {
   if (collapsed) {
     return (
       <div className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-10 shrink-0 items-start justify-center border-l border-border/60 pt-3 xl:flex">
-        <Button variant="ghost" onClick={onToggle} aria-label="Expand info panel" className="px-1.5 py-1.5">
+        <Button variant="ghost" onClick={onToggle} aria-label="Expand info panel">
           <PanelRightOpen size={16} aria-hidden />
         </Button>
       </div>
@@ -33,7 +33,7 @@ export function InfoPanel({ collapsed, onToggle }: InfoPanelProps) {
       <InfoPanelArt />
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         <div className="mb-3 flex items-center justify-end">
-          <Button variant="ghost" onClick={onToggle} aria-label="Collapse info panel" className="px-1.5 py-1.5">
+          <Button variant="ghost" onClick={onToggle} aria-label="Collapse info panel">
             <PanelRightClose size={16} aria-hidden />
           </Button>
         </div>

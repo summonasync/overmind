@@ -54,7 +54,7 @@ export function BacklogImportSection({ projectId }: BacklogImportSectionProps) {
         </p>
         <Button
           variant="secondary"
-          className="px-2.5 py-1 text-xs"
+          size="sm"
           disabled={scan.scanning}
           onClick={() => {
             setConfirmEntry(null);
@@ -72,11 +72,11 @@ export function BacklogImportSection({ projectId }: BacklogImportSectionProps) {
         <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           <p className="text-sm text-foreground">{importConfirmText(confirmEntry)}</p>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setConfirmEntry(null)}>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmEntry(null)}>
               Cancel
             </Button>
             <Button
-              className="px-2.5 py-1 text-xs"
+              size="sm"
               disabled={folderImport.pending}
               onClick={() => runImport(confirmEntry)}
             >

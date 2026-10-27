@@ -414,7 +414,7 @@ export function FeatureBoard({
                 <div className="flex shrink-0 gap-1">
                   <Button
                     variant="ghost"
-                    className="px-2 py-1 text-xs"
+                    size="sm"
                     disabled={claimPending}
                     onClick={() => (item.claimedByAlias === null ? onClaim(item) : onUnclaim(item))}
                   >
@@ -425,13 +425,14 @@ export function FeatureBoard({
                     )}
                     {item.claimedByAlias === null ? "Claim" : "Unclaim"}
                   </Button>
-                  <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onEdit(item)}>
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>
                     <Pencil size={12} aria-hidden />
                     Edit
                   </Button>
                   <Button
                     variant="ghost"
-                    className="px-2 py-1 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+                    size="sm"
+                    className="text-danger hover:bg-danger/10 hover:text-danger"
                     onClick={() => onDelete(item)}
                   >
                     <Trash2 size={12} aria-hidden />

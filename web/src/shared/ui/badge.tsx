@@ -4,8 +4,14 @@ import type { EntryTone } from "@/shared/lib/entry-type";
 
 export type BadgeTone = "neutral" | "primary" | "agent" | "marshal" | EntryTone;
 
+const SIZE_CLASSES = {
+  sm: "px-1.5 py-0.5 text-xs",
+  xs: "px-1 py-0.5 text-[10px] leading-4",
+} as const;
+
 interface BadgeProps {
   tone?: BadgeTone;
+  size?: keyof typeof SIZE_CLASSES;
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -26,12 +32,13 @@ const toneClasses: Record<BadgeTone, string> = {
   audit: "bg-type-audit/10 text-type-audit",
 };
 
-export function Badge({ tone = "neutral", children, className, style }: BadgeProps) {
+export function Badge({ tone = "neutral", size = "sm", children, className, style }: BadgeProps) {
   return (
     <span
       style={style}
       className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium capitalize",
+        "inline-flex items-center gap-1 rounded font-medium capitalize",
+        SIZE_CLASSES[size],
         toneClasses[tone],
         className,
       )}

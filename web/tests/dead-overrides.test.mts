@@ -161,12 +161,6 @@ function collectSites(): Site[] {
   return sites;
 }
 
-function firstCnLiteral(source: string, file: string): string {
-  const m = /cn\(\s*"([^"]*)"/.exec(source);
-  assert.ok(m, `${file}: first cn() call does not start with a string literal`);
-  return m[1];
-}
-
 function sizeClassLiterals(source: string, file: string): string[] {
   const m = /SIZE_CLASSES\s*=\s*\{([^}]*)\}/.exec(source);
   assert.ok(m, `${file}: SIZE_CLASSES map not found`);
@@ -177,10 +171,8 @@ function readPrimitiveBases(): Map<Primitive, Map<string, string[]>> {
   const bases = new Map<Primitive, Map<string, string[]>>();
   for (const [name, file] of Object.entries(PRIMITIVE_FILES) as [Primitive, string][]) {
     const source = readFileSync(join(uiDir, file), "utf8");
-    const literals =
-      name === "select" ? sizeClassLiterals(source, file) : [firstCnLiteral(source, file)];
     const byGroup = new Map<string, string[]>();
-    for (const literal of literals) {
+    for (const literal of sizeClassLiterals(source, file)) {
       for (const token of literal.split(/\s+/)) {
         const group = densityGroup(token);
         if (!group) continue;

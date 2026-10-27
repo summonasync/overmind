@@ -273,9 +273,10 @@ function ProjectListRows({ activeProjectId }: ProjectListRowsProps) {
         </div>
         <Select
           aria-label="Sort projects"
+          size="sm"
           value={sortField}
           onChange={(event) => handleSortField(event.target.value as ProjectSortField)}
-          className="w-full px-1.5 py-0.5 text-xs"
+          className="w-full"
         >
           <option value="name">Name</option>
           <option value="openFeatures">Open features</option>
