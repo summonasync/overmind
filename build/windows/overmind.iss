@@ -58,6 +58,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\host\{#AppExe}"; WorkingDir: 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Overmind"; ValueData: """{app}\host\{#AppExe}"""; Flags: uninsdeletevalue; Tasks: autostart
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\host\bundled\crew"
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\host"
 Type: filesandordirs; Name: "{app}\mcp"
