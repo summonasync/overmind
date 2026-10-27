@@ -125,7 +125,7 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Unread_MentionCrossesRooms_EvenInForeignLane()
+    public async Task Unread_MentionCrossesRooms_ThenIsAckedForTheLaneRead()
     {
         var service = Service();
         await service.PostAsync(_projectId, "backend", "Dan", AgentSession.DefaultRole, "need @marshal here");
@@ -135,7 +135,7 @@ public sealed class WaveChatServiceTests : IDisposable
 
         hall.Messages.Select(m => m.Text).ShouldBe(["need @marshal here"]);
         hall.Messages.Single().Room.ShouldBe("Backend");
-        backend.Messages.Select(m => m.Text).ShouldBe(["need @marshal here"]);
+        backend.Messages.ShouldBeEmpty();
     }
 
     [Fact]
@@ -165,22 +165,39 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Unread_SecondReadWithoutNewTraffic_ReturnsMentionsOnly()
+    public async Task Unread_MentionIsDeliveredOnce_SecondReadIsEmpty()
     {
         var service = Service();
         await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "plain note");
         await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "ping @marshal");
 
         var first = await service.ListUnreadAsync(_projectId, "marshal", "all");
-        first.Messages.Count.ShouldBe(2);
+        first.Messages.Select(m => m.Text).ShouldBe(["plain note", "ping @marshal"]);
 
         var second = await service.ListUnreadAsync(_projectId, "marshal", "all");
 
-        second.Messages.Select(m => m.Text).ShouldBe(["ping @marshal"]);
+        second.Messages.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Unread_MentionOlderThanWatermark_StillDelivered()
+    public async Task Unread_ReplayMentions_RestoresTheUnscopedDelivery()
+    {
+        var service = Service();
+        await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "ping @marshal");
+        var watermarkAt = (await service.ListUnreadAsync(_projectId, "marshal", "all")).WatermarkAt;
+
+        var stale = await service.PostAsync(_projectId, "backend", "Dan", AgentSession.DefaultRole, "stale ping @marshal");
+        await BackdateAsync(stale.Id, watermarkAt.AddMinutes(-30));
+
+        var scoped = await service.ListUnreadAsync(_projectId, "marshal", "backend");
+        var replayed = await service.ListUnreadAsync(_projectId, "marshal", "backend", replayMentions: true);
+
+        scoped.Messages.ShouldBeEmpty();
+        replayed.Messages.Select(m => m.Text).ShouldBe(["stale ping @marshal", "ping @marshal"]);
+    }
+
+    [Fact]
+    public async Task Unread_MentionOlderThanWatermark_IsSuppressed()
     {
         var service = Service();
         await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "read me");
@@ -191,7 +208,75 @@ public sealed class WaveChatServiceTests : IDisposable
 
         var feed = await service.ListUnreadAsync(_projectId, "marshal", "backend");
 
-        feed.Messages.Select(m => m.Text).ShouldBe(["late ping @marshal"]);
+        feed.Messages.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Unread_Since_NarrowsTheWindowAndNeverWidens()
+    {
+        var service = Service();
+        await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "read me");
+        var watermarkAt = (await service.ListUnreadAsync(_projectId, "marshal", "all")).WatermarkAt;
+
+        var hidden = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "hidden");
+        await BackdateAsync(hidden.Id, watermarkAt.AddMinutes(5));
+        var shown = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "shown");
+        await BackdateAsync(shown.Id, watermarkAt.AddMinutes(10));
+
+        var narrowed = await service.ListUnreadAsync(_projectId, "marshal", "all", since: watermarkAt.AddMinutes(7));
+        narrowed.Messages.Select(m => m.Text).ShouldBe(["shown"]);
+
+        var widened = await service.ListUnreadAsync(_projectId, "marshal", "all", since: watermarkAt.AddMinutes(-100));
+        widened.Messages.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Unread_Limit_KeepsTheNewestWindowInChronologicalOrder()
+    {
+        var service = Service();
+        var seeded = await SeedHistoryAsync(service, 5);
+
+        var page = await service.ListUnreadAsync(_projectId, "marshal", "all", limit: 2);
+
+        page.Messages.Select(m => m.Id).ShouldBe(seeded.Skip(3).Select(m => m.Id));
+
+        _context.ChangeTracker.Clear();
+        var stored = await _context.WaveWatermarks.SingleAsync(w => w.Alias == "marshal");
+        stored.LastReadAt.ShouldBe(page.Messages[^1].CreatedAt);
+    }
+
+    [Fact]
+    public async Task Unread_LimitBelowOne_ClampsToOne()
+    {
+        await SeedHistoryAsync(Service(), 3);
+
+        var page = await Service().ListUnreadAsync(_projectId, "marshal", "all", limit: 0);
+
+        page.Messages.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Unread_LimitAboveCap_ClampsToMax()
+    {
+        _context.WaveMessages.AddRange(Enumerable.Range(0, WaveChatService.MaxHistoryLimit + 5)
+            .Select(_ => WaveMessage.Create(_projectId, "all", "Dan", AgentSession.DefaultRole, "bulk")));
+        await _context.SaveChangesAsync();
+        _context.ChangeTracker.Clear();
+
+        var page = await Service().ListUnreadAsync(
+            _projectId, "marshal", "all", limit: WaveChatService.MaxHistoryLimit + 100);
+
+        page.Messages.Count.ShouldBe(WaveChatService.MaxHistoryLimit);
+    }
+
+    [Fact]
+    public async Task Unread_WithoutLimit_ThePageStaysUnbounded()
+    {
+        var seeded = await SeedHistoryAsync(Service(), WaveChatService.MaxHistoryLimit + 5);
+
+        var page = await Service().ListUnreadAsync(_projectId, "marshal", "all");
+
+        page.Messages.Count.ShouldBe(seeded.Count);
     }
 
     [Fact]
@@ -220,6 +305,62 @@ public sealed class WaveChatServiceTests : IDisposable
     {
         var ex = await Should.ThrowAsync<PlanningException>(() =>
             Service().ListUnreadAsync(Guid.NewGuid(), "marshal", "all"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
+    }
+
+    [Fact]
+    public async Task Peek_MirrorsTheUnreadSelection_WithoutAdvancingTheWatermark()
+    {
+        var service = Service();
+        await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "read me");
+        var watermarkAt = (await service.ListUnreadAsync(_projectId, "marshal", "all")).WatermarkAt;
+
+        var mentioned = await service.PostAsync(_projectId, "backend", "Dan", AgentSession.DefaultRole, "need @marshal here");
+
+        var first = await service.PeekAsync(_projectId, "marshal", "all");
+        var second = await service.PeekAsync(_projectId, "marshal", "all");
+
+        first.Room.ShouldBe("all");
+        first.Count.ShouldBe(1);
+        first.Ids.ShouldBe([mentioned.Id]);
+        second.Ids.ShouldBe(first.Ids);
+
+        _context.ChangeTracker.Clear();
+        var stored = await _context.WaveWatermarks.SingleAsync(w => w.Alias == "marshal");
+        stored.LastReadAt.ShouldBe(watermarkAt);
+
+        var unread = await service.ListUnreadAsync(_projectId, "marshal", "all");
+        unread.Messages.Select(m => m.Id).ShouldBe(first.Ids);
+    }
+
+    [Fact]
+    public async Task Peek_AfterRead_ReportsOnlyStillUnreadTraffic()
+    {
+        var service = Service();
+        await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "read me");
+        await service.ListUnreadAsync(_projectId, "marshal", "all");
+
+        var peek = await service.PeekAsync(_projectId, "marshal", "all");
+
+        peek.Count.ShouldBe(0);
+        peek.Ids.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Peek_UnknownLane_ThrowsMissingWaveRoom()
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            Service().PeekAsync(_projectId, "marshal", "frontend"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingWaveRoom);
+    }
+
+    [Fact]
+    public async Task Peek_UnknownProject_ThrowsMissingProject()
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            Service().PeekAsync(Guid.NewGuid(), "marshal", "all"));
 
         ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
     }

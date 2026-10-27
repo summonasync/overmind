@@ -189,7 +189,7 @@ public static class WaveChatApi
     {
         try
         {
-            var page = await chat.ListUnreadAsync(projectId, alias, room, ct);
+            var page = await chat.ListUnreadAsync(projectId, alias, room, ct: ct);
             return Results.Ok(new WaveUnreadResponse(
             [
                 .. page.Messages.Select(ToResponse)

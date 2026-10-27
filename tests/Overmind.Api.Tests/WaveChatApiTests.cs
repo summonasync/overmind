@@ -175,7 +175,7 @@ public sealed class WaveChatApiTests : IDisposable
         laneFeed.WatermarkAt.ShouldNotBe(default);
 
         var secondRead = await UnreadAsync(projectId, "guldan", "backend");
-        secondRead.Items.Select(m => m.Text).ShouldBe(["hall ping @guldan"]);
+        secondRead.Items.ShouldBeEmpty();
 
         var otherAlias = await UnreadAsync(projectId, "marshal", "backend");
         otherAlias.Items.Length.ShouldBe(2);
