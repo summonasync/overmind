@@ -147,6 +147,27 @@ public class BriefingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task Briefing_CarriesTheStaticMemoryLayerTeachingSection()
+    {
+        var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var memoryLayer = JsonNode.Parse(Canned.ToolResultText(response))!["memoryLayer"]!.AsObject();
+        var note = memoryLayer["note"]!.GetValue<string>();
+        note.ShouldContain("Memory layer (Grimoire)");
+        note.ShouldContain("memory_brief / memory_recall");
+        note.ShouldContain("teaching, not state");
+        memoryLayer["boardToMemory"]!.GetValue<string>().ShouldContain("pointer: grimoire://memory/<id>");
+        memoryLayer["memoryToBoard"]!.GetValue<string>().ShouldContain("overmind://entry/<uuid>");
+
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("grimoire"));
+    }
+
+    [Fact]
     public async Task Briefing_IncludeTombstonesFalse_TrimsTheSectionAndSkipsTheFetch()
     {
         var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject

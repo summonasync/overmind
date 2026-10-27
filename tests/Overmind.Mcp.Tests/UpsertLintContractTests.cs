@@ -29,7 +29,70 @@ public class UpsertLintContractTests : McpSessionTestBase
         var text = Canned.ToolResultText(response);
         text.ShouldContain("body: malformed pointer line");
         text.ShouldContain("'pointer: <repo-relative-path>[#anchor]'");
+        text.ShouldContain("'pointer: grimoire://memory/<id>'");
         text.ShouldContain("Example: 'pointer: src/Overmind.Core/Entities/PlanningArtifact.cs#L81'");
+
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" &&
+            (r.Path.EndsWith("/artifacts", StringComparison.Ordinal) ||
+             r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_GrimoirePointer_PassesTheLintAndReachesTheWire()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "<goal>Wire it.</goal>\n\n<refs>\npointer: grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4\n</refs>"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        Stub.Requests.Count(r =>
+            r.Method == "POST" &&
+            r.Path.EndsWith("/artifacts", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_GrimoirePointerWithoutId_RejectedBeforeAnyHttp()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "<goal>Wire it.</goal>\n\n<refs>\npointer: grimoire://memory/\n</refs>"
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("the memory id after 'grimoire://memory/' is missing");
+        text.ShouldContain("'pointer: grimoire://memory/<id>'");
+
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" &&
+            (r.Path.EndsWith("/artifacts", StringComparison.Ordinal) ||
+             r.Path.EndsWith("/artifacts/tasks", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task UpsertArtifact_AnchorOnGrimoirePointer_RejectedBeforeAnyHttp()
+    {
+        var response = await Driver.CallToolAsync("planning_upsert_artifact", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["featureSlug"] = Canned.PlanningSlug,
+            ["kind"] = "task",
+            ["body"] = "<goal>Wire it.</goal>\n\n<refs>\npointer: grimoire://memory/abc#today\n</refs>"
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        Canned.ToolResultText(response).ShouldContain("anchors don't apply to grimoire memory pointers");
 
         Stub.Requests.ShouldNotContain(r =>
             r.Method == "POST" &&

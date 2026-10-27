@@ -12,6 +12,10 @@ public sealed class OvermindBriefingTools
     private const int DefaultNotesLimit = 10;
     private const int SnippetCap = 200;
 
+    private const string MemoryLayerNote =
+        "Memory layer (Grimoire) — durable crew facts live in the local Grimoire store " +
+        "(memory_brief / memory_recall on the grimoire MCP server); this section is teaching, not state.";
+
     private const string BriefingDescription =
         "ONE call returns the start-of-work snapshot of a project — the guardrail picture an agent absorbs before any work: " +
         "guards and gates with full bodies, decisions and the latest notes as ~200-character snippets (read_entry for depth), " +
@@ -61,7 +65,15 @@ public sealed class OvermindBriefingTools
             ["guards"] = FullRows(guards),
             ["gates"] = FullRows(gates),
             ["decisions"] = SnippetRows(decisions, int.MaxValue),
-            ["notes"] = SnippetRows(notes, limit)
+            ["notes"] = SnippetRows(notes, limit),
+            ["memoryLayer"] = new JsonObject
+            {
+                ["note"] = MemoryLayerNote,
+                ["boardToMemory"] =
+                    "entries and artifacts carry 'pointer: grimoire://memory/<id>' lines toward the memory fact",
+                ["memoryToBoard"] =
+                    "grimoire memory records carry an 'overmind://entry/<uuid>' tag back to the entry"
+            }
         };
 
         if (includeTombstones ?? true)

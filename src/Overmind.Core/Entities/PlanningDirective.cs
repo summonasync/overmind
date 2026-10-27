@@ -2,7 +2,7 @@ namespace Overmind.Core;
 
 public sealed class PlanningDirective
 {
-    public const int MaxTextLength = 500;
+    public const int MaxTextLength = 2000;
     public const int MaxIdentityLength = AgentSession.MaxIdentityLength;
 
     private PlanningDirective()

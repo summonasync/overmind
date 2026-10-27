@@ -304,9 +304,10 @@ public sealed class PlanningException : Exception
     public static PlanningException InvalidPointerMarker(string line, string rule) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidPointerMarker,
             $"Malformed pointer line '{line}': {rule} A pointer line is " +
-            "'pointer: <repo-relative-path>[#anchor]' — the case-sensitive marker 'pointer:' as the " +
-            "first token, whitespace, then a repo-relative path (no leading '/', forward slashes only, " +
-            "no '..' segments) with an optional non-empty '#anchor'. " +
+            "'pointer: <repo-relative-path>[#anchor]' or 'pointer: grimoire://memory/<id>' — the " +
+            "case-sensitive marker 'pointer:' as the first token, whitespace, then either a repo-relative " +
+            "path (no leading '/', forward slashes only, no '..' segments) with an optional non-empty " +
+            "'#anchor', or a grimoire crew-memory id ('#' anchors don't apply to memory pointers). " +
             "Example: 'pointer: src/Overmind.Core/Entities/PlanningArtifact.cs#L81'.");
 
     public static PlanningException LogEditNotNewest(

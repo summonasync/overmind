@@ -536,6 +536,37 @@ public sealed class EntryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_EntryWithPointerLines_ReturnsPointersParsedLeniently()
+    {
+        var created = await CreateEntryAsync(new
+        {
+            ProjectId = _projectId,
+            Type = "decision",
+            Title = "storage decision",
+            Content =
+                "We picked SQLite.\n\n<refs>\n" +
+                "pointer: docs/storage-adr.md#decision\n" +
+                "pointer: grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4\n" +
+                "pointer: ../escape.md\n" +
+                "the pointer: convention is neat\n" +
+                "</refs>",
+            Tags = (string[]?)null,
+            SkillFiles = (object[]?)null,
+        });
+
+        var fetched = await _client.GetFromJsonAsync<EntryJson>($"/api/entries/{created.Id}", JsonOptions);
+        fetched.ShouldNotBeNull();
+        var pointers = fetched!.Pointers;
+        pointers.ShouldNotBeNull();
+        pointers!.Select(p => p.Path).ShouldBe([
+            "docs/storage-adr.md",
+            "grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4"
+        ]);
+        pointers[0].Anchor.ShouldBe("decision");
+        pointers[1].Anchor.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Audit_RoundTripsCreateFilterSearchAndAck()
     {
         var created = await CreateEntryAsync(new
@@ -616,7 +647,10 @@ public sealed class EntryApiTests : IDisposable
         DateTime CreatedAt,
         DateTime UpdatedAt,
         List<string> Tags,
-        List<SkillFileJson> SkillFiles);
+        List<SkillFileJson> SkillFiles,
+        List<EntryPointerJson>? Pointers = null);
+
+    public sealed record EntryPointerJson(string Path, string? Anchor);
 
     public sealed record VersionJson(int Version, string Content, DateTime CreatedAt);
 

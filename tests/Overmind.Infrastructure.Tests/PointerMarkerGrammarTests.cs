@@ -25,6 +25,30 @@ public sealed class PointerMarkerGrammarTests
         pointer.Anchor.ShouldBe(anchor);
     }
 
+    [Theory]
+    [InlineData("pointer: grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4",
+        "grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4")]
+    [InlineData("  pointer: grimoire://memory/storage-choice", "grimoire://memory/storage-choice")]
+    public void ParseLine_GrimoireTarget_ParsesTheUriWholeWithoutAnchor(string line, string path)
+    {
+        var parse = PointerMarkerGrammar.ParseLine(line);
+
+        parse.IsMarker.ShouldBeTrue();
+        parse.Error.ShouldBeNull();
+        var pointer = parse.Pointer.ShouldNotBeNull();
+        pointer.Path.ShouldBe(path);
+        pointer.Anchor.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ParseLine_UppercaseScheme_IsNotAGrimoirePointer()
+    {
+        var parse = PointerMarkerGrammar.ParseLine("pointer: Grimoire://memory/abc");
+
+        parse.Pointer.ShouldBeNull();
+        parse.Error.ShouldNotBeNull();
+    }
+
     [Fact]
     public void Parse_MultipleLinesAnywhere_CollectsAll()
     {
@@ -52,12 +76,32 @@ public sealed class PointerMarkerGrammarTests
     [InlineData("pointer: docs//x.md")]
     [InlineData("pointer: docs/")]
     [InlineData("pointer: #anchor-only")]
+    [InlineData("pointer: grimoire://memory/")]
+    [InlineData("pointer: grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4#today")]
     public void EnsureValid_MalformedMarker_ThrowsTypedInvalidInput(string line)
     {
         var ex = Should.Throw<PlanningException>(() => PointerMarkerGrammar.EnsureValid(line));
 
         ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
         ex.Code.ShouldBe(PlanningFailureCode.InvalidPointerMarker);
+    }
+
+    [Fact]
+    public void EnsureValid_GrimoireIdMissing_NamesTheMissingMemoryId()
+    {
+        var ex = Should.Throw<PlanningException>(
+            () => PointerMarkerGrammar.EnsureValid("pointer: grimoire://memory/"));
+
+        ex.Message.ShouldContain("the memory id after 'grimoire://memory/' is missing");
+    }
+
+    [Fact]
+    public void EnsureValid_GrimoireAnchor_SaysAnchorsDoNotApply()
+    {
+        var ex = Should.Throw<PlanningException>(
+            () => PointerMarkerGrammar.EnsureValid("pointer: grimoire://memory/abc#today"));
+
+        ex.Message.ShouldContain("anchors don't apply to grimoire memory pointers");
     }
 
     [Theory]
@@ -84,6 +128,21 @@ public sealed class PointerMarkerGrammarTests
     }
 
     [Fact]
+    public void Parse_GrimoireAmongRepoPointers_CollectsBothShapes()
+    {
+        var pointers = PointerMarkerGrammar.Parse(
+            "pointer: docs/plan.md#notes\n" +
+            "pointer: grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4\n" +
+            "pointer: grimoire://memory/");
+
+        pointers.Select(p => p.Path).ShouldBe([
+            "docs/plan.md",
+            "grimoire://memory/fc9186e8-e37d-4519-9db6-2de4af8f70d4"
+        ]);
+        pointers[1].Anchor.ShouldBeNull();
+    }
+
+    [Fact]
     public void EnsureValid_MalformedLine_TeachingMessageCarriesLineAndGrammar()
     {
         var ex = Should.Throw<PlanningException>(
@@ -92,6 +151,7 @@ public sealed class PointerMarkerGrammarTests
         ex.Message.ShouldContain("pointer: ../x.md");
         ex.Message.ShouldContain("'..'");
         ex.Message.ShouldContain("#anchor");
+        ex.Message.ShouldContain("'pointer: <repo-relative-path>[#anchor]' or 'pointer: grimoire://memory/<id>'");
     }
 
     [Theory]

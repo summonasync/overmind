@@ -29,9 +29,12 @@ public sealed record EntryResponse(
     DateTime UpdatedAt,
     IReadOnlyList<string> Tags,
     IReadOnlyList<SkillFileDto> SkillFiles,
-    IReadOnlyList<EntryReadAck> ReadBy);
+    IReadOnlyList<EntryReadAck> ReadBy,
+    IReadOnlyList<EntryPointerResponse> Pointers);
 
 public sealed record EntryReadAck(string? Alias, string? Vendor, DateTime At);
+
+public sealed record EntryPointerResponse(string Path, string? Anchor);
 
 public sealed record EntryAckHumanRequest(string? Alias, string? Vendor);
 

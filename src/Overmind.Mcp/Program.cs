@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using Overmind.Mcp;
 using Overmind.Mcp.Planning;
 using Overmind.Mcp.Registration;
@@ -69,6 +70,11 @@ if (adapterSessionId != Guid.Empty)
     heartbeat.Start();
     Console.Error.WriteLine($"[overmind-mcp] heartbeat every {period.TotalMinutes:0.#} min");
 }
+
+// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers with
+// the current OVERMIND_ALIAS/OVERMIND_VENDOR so identity never outlives the connection it was
+// resolved for (feature 179, spec D1).
+var identityRefresher = new SessionIdentityRefresher(lifecycle);
 
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
 // source-generated JsonContext with its own options snapshot; the default HTML-safe encoder
@@ -142,6 +148,8 @@ builder.Services
             "check tombstones before proposing anything that smells like a resurrect; the onboard payload names the active project. " +
             "Use tools for project/entry CRUD and fulltext or semantic search. " +
             "When overmind_notify returns a url, quote the url in chat when asking for an approval or reporting a question so the human can click through.";
+        options.Filters ??= new McpServerFilters();
+        options.Filters.Message.IncomingFilters.Add(identityRefresher.CreateIncomingFilter());
         options.Filters.Request.CallToolFilters.Add(ToolBindingErrorFilter.Create());
     })
     .WithStdioServerTransport()

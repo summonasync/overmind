@@ -5,6 +5,7 @@ namespace Overmind.Infrastructure.Planning;
 public static class PointerMarkerGrammar
 {
     private const string Marker = "pointer";
+    private const string GrimoireMemoryPrefix = "grimoire://memory/";
 
     public static void EnsureValid(string? body)
     {
@@ -76,6 +77,20 @@ public static class PointerMarkerGrammar
         {
             return PointerLineParse.Invalid(
                 "the target must be a single token — one pointer per line, no spaces in the path or anchor.");
+        }
+
+        if (target.StartsWith(GrimoireMemoryPrefix, StringComparison.Ordinal))
+        {
+            if (target.Contains('#'))
+            {
+                return PointerLineParse.Invalid(
+                    "anchors don't apply to grimoire memory pointers — the memory id ends the target.");
+            }
+
+            var memoryId = target[GrimoireMemoryPrefix.Length..];
+            return memoryId.Length == 0
+                ? PointerLineParse.Invalid("the memory id after 'grimoire://memory/' is missing.")
+                : PointerLineParse.Valid(new ArtifactPointer(target, null));
         }
 
         var hash = target.IndexOf('#');
