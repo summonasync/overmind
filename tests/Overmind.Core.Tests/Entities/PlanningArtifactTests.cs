@@ -1755,7 +1755,7 @@ shipped behind the flag; totals below.
 
         artifact.UpdateBody("spec v2", "reworked after review");
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThanOrEqualTo(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
         artifact.UpdatedAt.ShouldBeGreaterThanOrEqualTo(artifact.ContentUpdatedAt);
     }
 
@@ -1779,7 +1779,7 @@ shipped behind the flag; totals below.
 
         artifact.PatchSection("goal", "replaced goal", "scope tweak");
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThanOrEqualTo(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
     }
 
     [Fact]
@@ -1790,7 +1790,7 @@ shipped behind the flag; totals below.
 
         artifact.TickAc(1, null);
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThanOrEqualTo(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
     }
 
     [Fact]
@@ -1801,7 +1801,7 @@ shipped behind the flag; totals below.
 
         artifact.SetBrief("new brief");
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThanOrEqualTo(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
     }
 
     [Fact]
@@ -1824,7 +1824,7 @@ shipped behind the flag; totals below.
 
         artifact.AmendResult("corrected", "human pre-approved the correction");
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThanOrEqualTo(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
     }
 
     [Fact]

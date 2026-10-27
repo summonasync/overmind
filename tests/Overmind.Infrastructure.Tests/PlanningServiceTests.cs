@@ -2792,6 +2792,34 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpsertAsync_BodyChangeAfterStandingProof_VoidsItAndRefusesRevalidation()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.ValidateAsync(spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        var edited = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v2", null, null, "reworked after the standing proof", default);
+
+        edited.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
     public async Task ValidateAsync_AcTickedAfterReply_ThrowsValidationProofRequired()
     {
         var featureService = CreateFeatureService();
