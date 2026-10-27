@@ -2721,6 +2721,206 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task ValidateAsync_LogAppendAfterReply_StillValidates()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.AppendLogAsync(spec.Id, "service line after the reply", default, PlanningLogSource.Agent);
+
+        await artifactService.ValidateAsync(spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        await _context.Entry(spec).ReloadAsync();
+        spec.Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_LogEditAfterReply_StillValidates()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.AppendLogAsync(spec.Id, "agent line to reword", default, PlanningLogSource.Agent);
+        await artifactService.EditNewestLogAsync(spec.Id, "agent line reworded", PlanningLogSource.Agent);
+
+        await artifactService.ValidateAsync(spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        await _context.Entry(spec).ReloadAsync();
+        spec.Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_LogNoteOnlyUpsertAfterReply_StillValidates()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec", null, null, "service note, no content change", default);
+
+        await artifactService.ValidateAsync(spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        await _context.Entry(spec).ReloadAsync();
+        spec.Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_BodyChangeAfterStandingProof_VoidsItAndRefusesRevalidation()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.ValidateAsync(spec.Id, source: PlanningLogSource.Agent, requireHumanProof: true, ct: default);
+
+        var edited = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v2", null, null, "reworked after the standing proof", default);
+
+        edited.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AcTickedAfterReply_ThrowsValidationProofRequired()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<acceptance-criteria>\n- [ ] ship it\n</acceptance-criteria>\n",
+            null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.PatchAsync(
+            spec.Id, new PlanningArtifactPatch(TickIndex: 1), source: PlanningLogSource.Agent);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_Done_LogAppendOnResultAfterTap_StillCloses()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var result = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.AppendLogAsync(result.Id, "service line after the tap");
+
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "review cycle closed it",
+            requireHumanTap: true, ct: default);
+
+        var closed = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        closed.Status.ShouldBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_Done_ResultValidatedAfterTap_StillCloses()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var result = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.ValidateAsync(result.Id, source: PlanningLogSource.Agent);
+
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "review cycle closed it",
+            requireHumanTap: true, ct: default);
+
+        var closed = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        closed.Status.ShouldBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_Done_LogNoteOnlyUpsertAfterTap_StillCloses()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the close", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Result, "close-out", null, null, "service note, no content change", default);
+
+        await featureService.SetStatusAsync(
+            _projectId, "feat", PlanningFeatureStatus.Done, "review cycle closed it",
+            requireHumanTap: true, ct: default);
+
+        var closed = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat");
+        closed.Status.ShouldBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
     public async Task SetStatusAsync_NonDoneTarget_NeedsNoResultOrTap()
     {
         var featureService = CreateFeatureService();

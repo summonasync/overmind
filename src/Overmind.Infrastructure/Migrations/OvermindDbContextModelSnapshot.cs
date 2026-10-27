@@ -340,6 +340,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<string>("Brief")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime>("ContentUpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 

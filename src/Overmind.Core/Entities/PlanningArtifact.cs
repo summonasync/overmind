@@ -52,6 +52,7 @@ public sealed class PlanningArtifact
     public int Version { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
+    public DateTime ContentUpdatedAt { get; private set; }
     public string? PreservedFrontmatter { get; private set; }
     public DateTime? DeletedAt { get; private set; }
     public string? DeletedBy { get; private set; }
@@ -111,7 +112,8 @@ public sealed class PlanningArtifact
             Order = order,
             Version = 1,
             CreatedAt = now,
-            UpdatedAt = now
+            UpdatedAt = now,
+            ContentUpdatedAt = now
         };
     }
 
@@ -161,6 +163,7 @@ public sealed class PlanningArtifact
             Version = version,
             CreatedAt = createdAt,
             UpdatedAt = updatedAt,
+            ContentUpdatedAt = updatedAt,
             PreservedFrontmatter = preservedFrontmatter
         };
     }
@@ -248,6 +251,7 @@ public sealed class PlanningArtifact
         Body = PlanningLog.Append(withBlock, logNote, source: source);
         Version++;
         UpdatedAt = DateTime.UtcNow;
+        ContentUpdatedAt = UpdatedAt;
     }
 
     public void SetStatus(PlanningArtifactStatus status, string? logNote = null, PlanningLogSource? source = null)
@@ -382,8 +386,15 @@ public sealed class PlanningArtifact
 
     public void SetBrief(string? brief)
     {
-        Brief = NormalizeBrief(brief);
-        UpdatedAt = DateTime.UtcNow;
+        var normalized = NormalizeBrief(brief);
+        var now = DateTime.UtcNow;
+        if (normalized != Brief)
+        {
+            ContentUpdatedAt = now;
+        }
+
+        Brief = normalized;
+        UpdatedAt = now;
     }
 
     private static string? NormalizeBrief(string? brief)
@@ -526,9 +537,15 @@ public sealed class PlanningArtifact
 
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 
+        var now = DateTime.UtcNow;
+        if (newBody != Body)
+        {
+            ContentUpdatedAt = now;
+        }
+
         Body = newBody;
         Version++;
-        UpdatedAt = DateTime.UtcNow;
+        UpdatedAt = now;
 
         if (!string.IsNullOrWhiteSpace(logNote))
         {

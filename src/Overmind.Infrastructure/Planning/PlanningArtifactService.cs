@@ -62,7 +62,7 @@ public sealed class PlanningArtifactService
         {
             if (existing.Body != body || !string.IsNullOrWhiteSpace(logNote))
             {
-                var preMutationUpdatedAt = existing.UpdatedAt;
+                var preMutationContentUpdatedAt = existing.ContentUpdatedAt;
                 bool bodyMutated;
                 try
                 {
@@ -75,10 +75,10 @@ public sealed class PlanningArtifactService
 
                 mutated = true;
 
-                if (bodyMutated)
+                if (bodyMutated && existing.ContentUpdatedAt != preMutationContentUpdatedAt)
                 {
                     var voidedProof = await FindLiveApprovalProofAsync(
-                        feature.ProjectId, feature.Slug, preMutationUpdatedAt, ct);
+                        feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, ct);
                     existing.RecordValidationProofVoided(voidedProof?.RepliedAt);
                 }
 
@@ -404,7 +404,7 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
-        var preMutationUpdatedAt = artifact.UpdatedAt;
+        var preMutationContentUpdatedAt = artifact.ContentUpdatedAt;
         var noChange = false;
         int? tickedIndex = null;
         string? tickedText = null;
@@ -463,10 +463,10 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
-        if (!noChange && !wantsBrief)
+        if (!noChange && !wantsBrief && artifact.ContentUpdatedAt != preMutationContentUpdatedAt)
         {
             var voidedProof = await FindLiveApprovalProofAsync(
-                feature.ProjectId, feature.Slug, preMutationUpdatedAt, ct);
+                feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, ct);
             artifact.RecordValidationProofVoided(voidedProof?.RepliedAt);
         }
 
@@ -535,7 +535,7 @@ public sealed class PlanningArtifactService
             .Select(f => new { f.Slug, f.ProjectId })
             .FirstAsync(ct);
 
-        var proof = await FindLiveApprovalProofAsync(feature.ProjectId, feature.Slug, artifact.UpdatedAt, ct);
+        var proof = await FindLiveApprovalProofAsync(feature.ProjectId, feature.Slug, artifact.ContentUpdatedAt, ct);
 
         if (proof is null)
         {

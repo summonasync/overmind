@@ -1671,6 +1671,163 @@ shipped behind the flag; totals below.
     }
 
     [Fact]
+    public void Create_InitializesContentUpdatedAtToCreationTime()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "body content");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThanOrEqualTo(artifact.CreatedAt);
+        artifact.ContentUpdatedAt.ShouldBe(artifact.UpdatedAt);
+    }
+
+    [Fact]
+    public void Restore_InitializesContentUpdatedAtToUpdatedAt()
+    {
+        var updatedAt = new DateTime(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc);
+
+        var artifact = PlanningArtifact.Restore(
+            Guid.NewGuid(),
+            PlanningArtifactKind.Spec,
+            PlanningArtifactStatus.Draft,
+            PlanningReviewLevel.Light,
+            "body",
+            0,
+            null,
+            1,
+            DateTime.UtcNow,
+            updatedAt);
+
+        artifact.ContentUpdatedAt.ShouldBe(updatedAt);
+    }
+
+    [Fact]
+    public void AppendLog_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "body content");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.AppendLog("service line after the tap");
+
+        artifact.UpdatedAt.ShouldBeGreaterThanOrEqualTo(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void EditNewestLog_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "body content");
+        artifact.AppendLog("agent line", PlanningLogSource.Agent);
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.EditNewestLog("agent line reworded", PlanningLogSource.Agent);
+
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void SetStatus_WithLogLine_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanArtifact(PlanningArtifactKind.Task, PlanningArtifactStatus.Todo);
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.SetStatus(PlanningArtifactStatus.InProgress, "taking the task", PlanningLogSource.Agent);
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.InProgress);
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void Validate_WithProofLine_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "body content");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.Validate("validated with human proof: notification x replied y");
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void UpdateBody_WithBodyChange_BumpsContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "spec v1");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.UpdateBody("spec v2", "reworked after review");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+        artifact.UpdatedAt.ShouldBeGreaterThanOrEqualTo(artifact.ContentUpdatedAt);
+    }
+
+    [Fact]
+    public void UpdateBody_LogNoteOnly_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "spec v1");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.UpdateBody("spec v1", "service note, no content change");
+
+        artifact.Body.ShouldContain("service note, no content change");
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void PatchSection_BumpsContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.PatchSection("goal", "replaced goal", "scope tweak");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void TickAc_BumpsContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.TickAc(1, null);
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void SetBrief_WithChange_BumpsContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.SetBrief("new brief");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void SetBrief_WithSameValue_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+        artifact.SetBrief("same brief");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.SetBrief("same brief");
+
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void AmendResult_BumpsContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Result, ResultBody);
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.AmendResult("corrected", "human pre-approved the correction");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+    }
+
+    [Fact]
     public void Restore_InvalidStatus_Throws()
     {
         Should.Throw<ArgumentOutOfRangeException>(() =>

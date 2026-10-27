@@ -11,6 +11,7 @@ using ModelContextProtocol.Server;
 using Overmind.Mcp;
 using Overmind.Mcp.Planning;
 using Overmind.Mcp.Registration;
+using Overmind.Mcp.ToolBinding;
 
 if (args.Length > 0 && args[0] == "install")
 {
@@ -149,6 +150,7 @@ builder.Services
             "When overmind_notify returns a url, quote the url in chat when asking for an approval or reporting a question so the human can click through.";
         options.Filters ??= new McpServerFilters();
         options.Filters.Message.IncomingFilters.Add(identityRefresher.CreateIncomingFilter());
+        options.Filters.Request.CallToolFilters.Add(ToolBindingErrorFilter.Create());
     })
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()
