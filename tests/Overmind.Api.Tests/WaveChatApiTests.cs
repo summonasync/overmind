@@ -229,6 +229,45 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Peek_AgentDoor_ReturnsRoomCountAndIds_WithoutAdvancingTheWatermark()
+    {
+        var projectId = await CreateProjectAsync();
+        await PostHumanAsync(projectId, "all", "Dan", "hello @Dan");
+        await PostHumanAsync(projectId, "all", "Dan", "plain talk");
+
+        var first = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/peek", null);
+
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var peek = await first.Content.ReadFromJsonAsync<PeekJson>(JsonOptions);
+        peek!.Room.ShouldBe("all");
+        peek.Count.ShouldBe(2);
+        peek.Ids.Length.ShouldBe(2);
+
+        var second = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/peek", null);
+        var repeat = await second.Content.ReadFromJsonAsync<PeekJson>(JsonOptions);
+        repeat!.Count.ShouldBe(2);
+        repeat.Ids.ShouldBe(peek.Ids);
+
+        var feed = await UnreadAsync(projectId, "dan", "all");
+        feed.Items.Select(m => m.Id).ShouldBe(peek.Ids);
+        feed.Items.Select(m => m.Text).ShouldBe(["hello @Dan", "plain talk"]);
+    }
+
+    [Fact]
+    public async Task Peek_UnknownLane_Returns404WithNamedCode()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var response = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/frontend/peek", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ProblemTitleAsync(response)).ShouldBe("MissingWaveRoom");
+    }
+
+    [Fact]
     public async Task History_HumanDoor_ReturnsChronologicalPage()
     {
         var projectId = await CreateProjectAsync();
@@ -444,6 +483,8 @@ public sealed class WaveChatApiTests : IDisposable
         string AuthorRole);
 
     private sealed record FeedJson(MessageJson[] Items, DateTime WatermarkAt);
+
+    private sealed record PeekJson(string Room, int Count, Guid[] Ids);
 
     private sealed record HistoryJson(MessageJson[] Items);
 

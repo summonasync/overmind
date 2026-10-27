@@ -21,6 +21,7 @@ public static class WaveChatApi
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/wave/rooms/{room}/messages", PostForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/unread", UnreadForAgent);
+        agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/peek", PeekForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/messages", HistoryForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms", RoomsForHuman);
 
@@ -114,6 +115,28 @@ public static class WaveChatApi
         return await UnreadAsync(projectId, session.Alias, room, chat, ct);
     }
 
+    private static async Task<IResult> PeekForAgent(
+        Guid projectId,
+        string room,
+        WaveChatService chat,
+        OvermindDbContext db,
+        HttpRequest http,
+        CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var sessionId))
+        {
+            return AgentIdentityRequired();
+        }
+
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null)
+        {
+            return AgentIdentityRequired();
+        }
+
+        return await PeekAsync(projectId, session.Alias, room, chat, ct);
+    }
+
     private static async Task<IResult> HistoryForHuman(
         Guid projectId,
         string room,
@@ -194,6 +217,24 @@ public static class WaveChatApi
             [
                 .. page.Messages.Select(ToResponse)
             ], page.WatermarkAt));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+        catch (ArgumentException ex)
+        {
+            return HttpErrors.BadRequest(ex.Message);
+        }
+    }
+
+    private static async Task<IResult> PeekAsync(
+        Guid projectId, string alias, string room, WaveChatService chat, CancellationToken ct)
+    {
+        try
+        {
+            var peek = await chat.PeekAsync(projectId, alias, room, ct);
+            return Results.Ok(new WavePeekResponse(peek.Room, peek.Count, [.. peek.Ids]));
         }
         catch (PlanningException ex)
         {

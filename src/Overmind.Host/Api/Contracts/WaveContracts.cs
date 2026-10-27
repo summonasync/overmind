@@ -17,6 +17,8 @@ public sealed record WaveMessageResponse(
 
 public sealed record WaveUnreadResponse(WaveMessageResponse[] Items, DateTime WatermarkAt);
 
+public sealed record WavePeekResponse(string Room, int Count, Guid[] Ids);
+
 public sealed record WaveHistoryResponse(WaveMessageResponse[] Items);
 
 public sealed record WaveRoomResponse(string Room, DateTime? LastActivityAt);
