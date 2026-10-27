@@ -10,4 +10,5 @@ public sealed record WaveSnapshotData(
     IReadOnlyList<PlanningFeature> InFlightFeatures,
     IReadOnlyDictionary<Guid, AgentSessionLiveness> ClaimLiveness,
     IReadOnlyList<ContextEntry> CoordinationEntries,
-    IReadOnlyDictionary<Guid, int> OpenDirectiveCounts);
+    IReadOnlyDictionary<Guid, int> OpenDirectiveCounts,
+    IReadOnlyDictionary<string, string?> LaneBoundAliases);

@@ -55,9 +55,14 @@ public sealed class WaveSnapshotService
         var limit = Math.Min(entryLimit ?? DefaultEntryLimit, MaxEntryLimit);
         var entries = await CoordinationEntriesAsync(projectId, wantedTags, limit, ct);
         var directiveCounts = await _directives.OpenCountsAsync(projectId, ct);
+        var laneBoundAliases = await _db.PlanningLanes
+            .AsNoTracking()
+            .Where(l => l.ProjectId == projectId && l.BoundAlias != null)
+            .ToDictionaryAsync(l => l.Name, l => l.BoundAlias, StringComparer.OrdinalIgnoreCase, ct);
 
         return new WaveSnapshotData(
-            projectId, DateTime.UtcNow, wantedTags, queue, inFlight, liveness, entries, directiveCounts);
+            projectId, DateTime.UtcNow, wantedTags, queue, inFlight, liveness, entries, directiveCounts,
+            laneBoundAliases);
     }
 
     private async Task<List<ContextEntry>> CoordinationEntriesAsync(

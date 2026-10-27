@@ -57,6 +57,7 @@ public sealed record PlanningQueueItem(
     DateTime UpdatedAt,
     string? Lane = null,
     LaneHolderResponse? LaneHolder = null,
+    string? LaneBoundAlias = null,
     PotentialOverlap[]? PotentialOverlaps = null,
     int PendingMutations = 0,
     DateTime? LastAttemptAt = null,
@@ -105,12 +106,13 @@ public sealed record PlanningFeatureClaimResponse(
     bool OverrideLaneCheck = false);
 
 public sealed record LaneUpsertRequest(
-    string Name, string? Contour = null, int? SerialOrder = null, int? Priority = null);
+    string Name, string? Contour = null, int? SerialOrder = null, int? Priority = null,
+    string? BoundAlias = null);
 
 public sealed record SetLanesRequest(LaneUpsertRequest[] Lanes);
 
 public sealed record UpdateLaneRequest(
-    string? Contour = null, int? SerialOrder = null, int? Priority = null);
+    string? Contour = null, int? SerialOrder = null, int? Priority = null, string? BoundAlias = null);
 
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
@@ -128,6 +130,7 @@ public sealed record LaneRowResponse(
     string? Contour,
     int? SerialOrder,
     int? Priority,
+    string? BoundAlias,
     int OpenFeatureCount,
     LaneHolderResponse? Holder,
     LaneFeatureResponse[] Features);

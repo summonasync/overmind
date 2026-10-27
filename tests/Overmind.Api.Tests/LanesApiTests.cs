@@ -103,6 +103,44 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
+    public async Task PutLanes_BoundAlias_RoundTripsAndClearsOnOmission()
+    {
+        var project = await CreateProjectAsync();
+        await SeedLaneAsync(project.Id, "frontend");
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend", BoundAlias = "johan" } } });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var bound = await GetRosterAsync(project.Id, agentDoor: true);
+        bound!.Lanes.Single(l => l.Name == "frontend").BoundAlias.ShouldBe("johan");
+
+        var reupsert = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend", Contour = "web/src" } } });
+        reupsert.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var cleared = await GetRosterAsync(project.Id, agentDoor: true);
+        cleared!.Lanes.Single(l => l.Name == "frontend").BoundAlias.ShouldBeNull();
+        cleared.Lanes.Single(l => l.Name == "frontend").Contour.ShouldBe("web/src");
+    }
+
+    [Fact]
+    public async Task PutLanes_BoundAliasOverTheCap_Returns400NamingTheField()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend", BoundAlias = new string('x', PlanningLane.MaxBoundAliasLength + 1) } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await put.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Lanes[0].BoundAlias");
+    }
+
+    [Fact]
     public async Task Lanes_AreVisibleOnBothDoors()
     {
         var project = await CreateProjectAsync();
@@ -619,6 +657,7 @@ public sealed class LanesApiTests : IDisposable
         string? Contour,
         int? SerialOrder,
         int? Priority,
+        string? BoundAlias,
         int OpenFeatureCount,
         LaneHolderJson? Holder,
         LaneFeatureJson[] Features);

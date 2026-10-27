@@ -42,7 +42,7 @@ public sealed class LaneService
                 throw PlanningException.LaneBirthRestricted(upsert.Name.Trim());
             }
 
-            current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority);
+            current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority, upsert.BoundAlias);
         }
 
         try
@@ -82,7 +82,7 @@ public sealed class LaneService
             }
 
             _db.PlanningLanes.Add(PlanningLane.Create(
-                projectId, lane.Name, lane.Contour, lane.SerialOrder, lane.Priority));
+                projectId, lane.Name, lane.Contour, lane.SerialOrder, lane.Priority, lane.BoundAlias));
         }
         else
         {
@@ -90,7 +90,7 @@ public sealed class LaneService
 
             // The route carries the name as the locator only: identity stays on the stored spelling,
             // so a case-different PUT edits the lane instead of renaming it.
-            target.Update(target.Name, lane.Contour, lane.SerialOrder, lane.Priority);
+            target.Update(target.Name, lane.Contour, lane.SerialOrder, lane.Priority, lane.BoundAlias);
         }
 
         try
@@ -231,6 +231,7 @@ public sealed class LaneService
             lane.Contour,
             lane.SerialOrder,
             lane.Priority,
+            lane.BoundAlias,
             summaries.Count(s => s.Status != PlanningFeatureStatus.Done),
             holder,
             summaries);
@@ -281,6 +282,12 @@ public sealed class LaneService
             {
                 throw new ArgumentException(
                     $"Lane contour exceeds the {PlanningLane.MaxContourLength} character cap.");
+            }
+
+            if (lane.BoundAlias is { } boundAlias && boundAlias.Trim().Length > PlanningLane.MaxBoundAliasLength)
+            {
+                throw new ArgumentException(
+                    $"Lane boundAlias exceeds the {PlanningLane.MaxBoundAliasLength} character cap.");
             }
 
             if (lane.Priority is < 0 or > PlanningLane.MaxPriority)
