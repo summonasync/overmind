@@ -374,6 +374,18 @@ public sealed class PlanningException : Exception
             $"Roster present: {(rosterNames.Count == 0 ? "(empty)" : string.Join(", ", rosterNames))}. " +
             "Extend the roster via planning_set_lanes first.");
 
+    public static PlanningException LaneBirthRestricted(string name) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneBirthRestricted,
+            $"Lane '{name}' is not in the roster and set_lanes no longer births lanes — a payload may only " +
+            "reshape lanes that already exist, and an empty payload is a no-op. The assigning act is the birth: " +
+            "assign the lane to a feature via planning_update_feature (lane=...) and the row is auto-created " +
+            "with an empty contour and no priority.");
+
+    public static PlanningException LaneStillOccupied(string lane, IReadOnlyList<string> slugs) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneStillOccupied,
+            $"Lane '{lane}' still holds open features: {string.Join(", ", slugs)}. Removal is refused — " +
+            "close them as done or move them to another lane first; a lane with work in flight cannot be dropped.");
+
     public static PlanningException LaneClaimHeld(
         string lane, string slug, string alias, string vendor, AgentSessionLiveness liveness) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneClaimHeld,

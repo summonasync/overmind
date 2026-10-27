@@ -66,6 +66,8 @@ public enum PlanningFailureCode
     LaneNameDuplicate,
     LaneRosterTooLarge,
     LaneNotInRoster,
+    LaneBirthRestricted,
+    LaneStillOccupied,
     LaneClaimHeld,
     LaneSerialBusy,
     MissingDirective,

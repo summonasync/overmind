@@ -36,9 +36,10 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task PutLanes_OnAgentDoor_CreatesAndListsRoster()
+    public async Task PutLanes_OnAgentDoor_UpdatesAKnownLaneInPlace()
     {
         var project = await CreateProjectAsync();
+        await PostLaneAsync(project.Id, "frontend");
 
         var put = await _client.PutAsJsonAsync(
             $"/api/agent/projects/{project.Id}/planning/lanes-roster",
@@ -74,7 +75,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task Lanes_AreVisibleOnBothDoors()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
 
         var human = await GetRosterAsync(project.Id, agentDoor: false);
         var agent = await GetRosterAsync(project.Id, agentDoor: true);
@@ -84,15 +85,25 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task PutLanes_SecondCallReplacesTheRoster()
+    public async Task PutLanes_MissingLane_LeavesItIntact()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
-        await PutLaneAsync(project.Id, "backend");
+        await PostLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "backend");
+        await CreateFeature(project.Id, "011-a", "A");
+        await CreateFeature(project.Id, "012-b", "B");
+        await SetLane(project.Id, "011-a", "frontend");
+        await SetLane(project.Id, "012-b", "backend");
 
+        var put = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "backend", Contour = "api/src" } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
         var roster = await GetRosterAsync(project.Id, agentDoor: true);
-
-        roster!.Lanes.Select(l => l.Name).ShouldBe(["backend"]);
+        roster!.Lanes.Select(l => l.Name).ShouldBe(["backend", "frontend"]);
+        roster.Lanes.Single(l => l.Name == "backend").Contour.ShouldBe("api/src");
+        roster.Lanes.Single(l => l.Name == "frontend").Features.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -137,7 +148,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task UpdateFeature_SetsLaneFromRoster_AndClearsWithEmptyString()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-laned", "Laned");
 
         var set = await _client.PutAsJsonAsync(
@@ -155,7 +166,7 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdateFeature_UnknownLane_Returns409()
+    public async Task UpdateFeature_UnknownLane_BirthsTheLane()
     {
         var project = await CreateProjectAsync();
         await CreateFeature(project.Id, "011-laned", "Laned");
@@ -164,16 +175,21 @@ public sealed class LanesApiTests : IDisposable
             $"/api/projects/{project.Id}/planning/features/011-laned",
             new { Lane = "ghost-lane" });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Title.ShouldBe("LaneNotInRoster");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ReadFeatureAsync(response))!.Lane.ShouldBe("ghost-lane");
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
+        var lane = roster!.Lanes.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("ghost-lane");
+        lane.Contour.ShouldBeNull();
+        lane.Priority.ShouldBeNull();
+        lane.OpenFeatureCount.ShouldBe(1);
     }
 
     [Fact]
     public async Task UpdateFeature_OmitsLane_KeepsItUnchanged()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-laned", "Laned");
         await _client.PutAsJsonAsync(
             $"/api/projects/{project.Id}/planning/features/011-laned",
@@ -190,7 +206,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task AgentUpdateFeature_CarriesLaneThroughTheAgentDoor()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-laned", "Laned");
 
         var response = await _client.PostAsJsonAsync(
@@ -204,7 +220,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task Claim_IntoBusyLane_Returns409NamingTheLane()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-a", "A");
         await CreateFeature(project.Id, "012-b", "B");
         await SetLane(project.Id, "011-a", "frontend");
@@ -224,7 +240,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task Claim_WithOverrideLaneCheck_PassesAndEchoes()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-a", "A");
         await CreateFeature(project.Id, "012-b", "B");
         await SetLane(project.Id, "011-a", "frontend");
@@ -243,7 +259,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task QueueRows_CarryLaneAndLaneHolder()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-a", "A");
         await SetLane(project.Id, "011-a", "frontend");
         await Claim(project.Id, "011-a", "Van", "claude");
@@ -263,7 +279,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task QueueRows_UnclaimedRowInBusyLane_CarriesTheLaneHolder()
     {
         var project = await CreateProjectAsync();
-        await PutLanesAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-a", "A");
         await CreateFeature(project.Id, "012-b", "B");
         await SetLane(project.Id, "011-a", "frontend");
@@ -290,7 +306,8 @@ public sealed class LanesApiTests : IDisposable
     public async Task QueueRows_RowInQuietLane_HasNullHolder()
     {
         var project = await CreateProjectAsync();
-        await PutLanesAsync(project.Id, "frontend", "backend");
+        await PostLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "backend");
         await CreateFeature(project.Id, "011-a", "A");
         await CreateFeature(project.Id, "012-b", "B");
         await SetLane(project.Id, "011-a", "frontend");
@@ -309,7 +326,7 @@ public sealed class LanesApiTests : IDisposable
     public async Task LaneListing_ProjectionsCarryHolderAndCounts()
     {
         var project = await CreateProjectAsync();
-        await PutLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "frontend");
         await CreateFeature(project.Id, "011-a", "A");
         await CreateFeature(project.Id, "012-b", "B");
         await SetLane(project.Id, "011-a", "frontend");
@@ -558,10 +575,11 @@ public sealed class LanesApiTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task DeleteLane_RemovesLaneAndUnassignsFeatures_OnBothDoors(bool agentDoor)
+    public async Task DeleteLane_LaneWithOpenFeatures_IsRefused_OnBothDoors(bool agentDoor)
     {
         var project = await CreateProjectAsync();
-        await PutLanesAsync(project.Id, "frontend", "backend");
+        await PostLaneAsync(project.Id, "frontend");
+        await PostLaneAsync(project.Id, "backend");
         await CreateFeature(project.Id, "011-a", "A");
         await CreateFeature(project.Id, "012-b", "B");
         await SetLane(project.Id, "011-a", "frontend");
@@ -570,35 +588,27 @@ public sealed class LanesApiTests : IDisposable
         var delete = await _client.DeleteAsync(
             $"{Door(agentDoor)}/projects/{project.Id}/planning/lanes/Frontend");
 
-        delete.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var echoed = await delete.Content.ReadFromJsonAsync<LanesJson>(JsonOptions);
-        echoed!.Lanes.Select(l => l.Name).ShouldBe(["backend"]);
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LaneStillOccupied");
+        problem.Detail!.ShouldContain("011-a");
 
         var roster = await GetRosterAsync(project.Id, agentDoor: !agentDoor);
-        var lane = roster!.Lanes.ShouldHaveSingleItem();
-        lane.Name.ShouldBe("backend");
-        lane.Features.ShouldHaveSingleItem();
-        lane.Features[0].Slug.ShouldBe("012-b");
-
-        var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
-            $"/api/agent/projects/{project.Id}/planning/features", JsonOptions);
-        var rows = board!;
-        rows.Single(i => i.Slug == "011-a").Lane.ShouldBeNull();
-        rows.Single(i => i.Slug == "012-b").Lane.ShouldBe("backend");
+        roster!.Lanes.Select(l => l.Name).ShouldBe(["backend", "frontend"]);
+        roster.Lanes.Single(l => l.Name == "frontend").Features.ShouldHaveSingleItem();
     }
 
     [Fact]
-    public async Task DeleteLane_UnknownLane_Returns404NamingTheLane()
+    public async Task DeleteLane_UnknownLane_IsAnIdempotentNoOp()
     {
         var project = await CreateProjectAsync();
         await PostLaneAsync(project.Id, "frontend");
 
         var delete = await _client.DeleteAsync($"/api/projects/{project.Id}/planning/lanes/ghost");
 
-        delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        var problem = await delete.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Detail!.ShouldContain("'ghost'");
-        (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldHaveSingleItem();
+        delete.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = await delete.Content.ReadFromJsonAsync<LanesJson>(JsonOptions);
+        echoed!.Lanes.Single().Name.ShouldBe("frontend");
     }
 
     [Fact]
@@ -647,28 +657,12 @@ public sealed class LanesApiTests : IDisposable
         return project!;
     }
 
-    private async Task PutLaneAsync(Guid projectId, string name)
-    {
-        var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{projectId}/planning/lanes-roster",
-            new { Lanes = new[] { new { Name = name } } });
-        put.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
     private async Task PostLaneAsync(Guid projectId, string name)
     {
         var post = await _client.PostAsJsonAsync(
             $"{Door(agentDoor: true)}/projects/{projectId}/planning/lanes",
             new { Name = name });
         post.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
-    private async Task PutLanesAsync(Guid projectId, params string[] names)
-    {
-        var put = await _client.PutAsJsonAsync(
-            $"/api/agent/projects/{projectId}/planning/lanes-roster",
-            new { Lanes = names.Select(name => new { Name = name }) });
-        put.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task<LanesJson?> GetRosterAsync(Guid projectId, bool agentDoor)

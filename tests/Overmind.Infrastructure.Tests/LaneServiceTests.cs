@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
@@ -54,64 +53,79 @@ public sealed class LaneServiceTests : IDisposable
             TestPlanningDispatcher.Create(_context, _materializer),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PlanningFeatureService>.Instance);
 
-    [Fact]
-    public async Task SetLanes_OnEmptyRoster_InsertsAll()
+    private async Task SeedLaneAsync(
+        string name, string? contour = null, int? serialOrder = null, int? priority = null)
     {
-        var roster = await CreateService().SetLanesAsync(_projectId,
-            [new LaneUpsert("frontend", "web/src", 1), new LaneUpsert("backend", null, null)]);
+        _context.PlanningLanes.Add(PlanningLane.Create(_projectId, name, contour, serialOrder, priority));
+        await _context.SaveChangesAsync();
+    }
 
-        roster.Count.ShouldBe(2);
-        roster[0].Name.ShouldBe("frontend");
-        roster[0].Contour.ShouldBe("web/src");
-        roster[0].SerialOrder.ShouldBe(1);
-        roster[1].Name.ShouldBe("backend");
-        roster[1].Contour.ShouldBeNull();
-        roster[1].SerialOrder.ShouldBeNull();
+    private async Task<PlanningFeature> SeedDoneReadyFeatureAsync(string slug, string lane)
+    {
+        await CreateFeatureAsync(slug, lane);
+        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == slug);
+        _context.PlanningArtifacts.Add(PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Result, "close-out"));
+        await _context.SaveChangesAsync();
+        return feature;
     }
 
     [Fact]
-    public async Task SetLanes_ReplacesRemoved_UpdatesKnown_InsertsNew()
+    public async Task SetLanes_PayloadMissingALane_LeavesItIntact()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-            [new LaneUpsert("frontend", "old contour", 2), new LaneUpsert("obsolete", "gone", null)]);
-        await CreateFeatureAsync("010-old", "obsolete");
+        await SeedLaneAsync("frontend", "web/src", 1, 0);
+        await SeedLaneAsync("backend", "api/src", 2, 1);
+        await CreateFeatureAsync("011-lane-a", "frontend");
 
-        var roster = await service.SetLanesAsync(_projectId,
-        [
-            new LaneUpsert("frontend", "web/src", null),
-            new LaneUpsert("backend", "api/src", null)
-        ]);
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("backend", "api/src", 2, 1)]);
 
-        roster.Select(l => l.Name).ShouldBe(["backend", "frontend"]);
-        roster.Single(l => l.Name == "frontend").Contour.ShouldBe("web/src");
-        roster.Single(l => l.Name == "frontend").SerialOrder.ShouldBeNull();
-        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(2);
-        (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "010-old")).Lane.ShouldBeNull();
+        roster.Select(l => l.Name).ShouldBe(["frontend", "backend"]);
+        var frontend = roster.Single(l => l.Name == "frontend");
+        frontend.Contour.ShouldBe("web/src");
+        frontend.SerialOrder.ShouldBe(1);
+        frontend.Priority.ShouldBe(0);
+        frontend.Features.Select(f => f.Slug).ShouldBe(["011-lane-a"]);
+    }
+
+    [Fact]
+    public async Task SetLanes_EmptyArray_IsANoOp()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend", "web/src", 1);
+
+        var roster = await service.SetLanesAsync(_projectId, []);
+
+        roster.Select(l => l.Name).ShouldBe(["frontend"]);
+        roster.Single().Contour.ShouldBe("web/src");
+        roster.Single().SerialOrder.ShouldBe(1);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SetLanes_UnknownName_IsRefusedNamingTheBirthPath()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.SetLanesAsync(_projectId,
+            [new LaneUpsert("frontend", null, null), new LaneUpsert("ghost", null, null)]));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneBirthRestricted);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("planning_update_feature");
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
     }
 
     [Fact]
     public async Task SetLanes_CaseOnlyRename_UpdatesInPlaceWithoutViolation()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
 
         var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("Frontend", null, null)]);
 
         roster.Single().Name.ShouldBe("Frontend");
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task SetLanes_EmptyArray_ClearsTheRoster()
-    {
-        var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
-
-        var roster = await service.SetLanesAsync(_projectId, []);
-
-        roster.ShouldBeEmpty();
-        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
     }
 
     [Fact]
@@ -157,7 +171,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task ListLanes_ProjectionsCarryCountsHolderAndFeatures()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "web/src", null)]);
+        await SeedLaneAsync("frontend", "web/src");
         await CreateFeatureAsync("011-lane-a", "frontend");
         await CreateFeatureAsync("012-lane-b", "frontend");
         await CreateFeatureAsync("013-lane-c", null);
@@ -184,7 +198,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task ListLanes_StaleClaimIsNotAHolder()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
         await CreateFeatureAsync("011-lane-a", "frontend");
         await CreateClaimService().ClaimAsync(_projectId, "011-lane-a", "Van", "claude", SessionId);
 
@@ -203,12 +217,9 @@ public sealed class LaneServiceTests : IDisposable
     public async Task ListLanes_LanesOrder_SerialFirstThenName()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-        [
-            new LaneUpsert("zeta", null, 2),
-            new LaneUpsert("alpha", null, 1),
-            new LaneUpsert("beta", null, null)
-        ]);
+        await SeedLaneAsync("zeta", null, 2);
+        await SeedLaneAsync("alpha", null, 1);
+        await SeedLaneAsync("beta");
 
         var roster = await service.ListLanesAsync(_projectId);
 
@@ -219,6 +230,8 @@ public sealed class LaneServiceTests : IDisposable
     public async Task SetLanes_PriorityPersistsAndRoundTripsThroughTheRoster()
     {
         var service = CreateService();
+        await SeedLaneAsync("frontend");
+        await SeedLaneAsync("backend");
 
         var roster = await service.SetLanesAsync(_projectId,
             [new LaneUpsert("frontend", "web/src", 1, 0), new LaneUpsert("backend", null, null, 2)]);
@@ -232,7 +245,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task SetLanes_OmittedPriority_ClearsTheStoredOne()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null, 1)]);
+        await SeedLaneAsync("frontend", null, null, 1);
 
         var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
 
@@ -243,13 +256,10 @@ public sealed class LaneServiceTests : IDisposable
     public async Task ListLanes_PriorityFirst_NullsLast_SerialThenNameWithinEqualPriority()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-        [
-            new LaneUpsert("zeta", null, null, null),
-            new LaneUpsert("alpha", null, 2, 2),
-            new LaneUpsert("beta", null, null, 0),
-            new LaneUpsert("gamma", null, 1, 2)
-        ]);
+        await SeedLaneAsync("zeta");
+        await SeedLaneAsync("alpha", null, 2, 2);
+        await SeedLaneAsync("beta", null, null, 0);
+        await SeedLaneAsync("gamma", null, 1, 2);
 
         var roster = await service.ListLanesAsync(_projectId);
 
@@ -275,38 +285,11 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SetLanes_RemovingOneLane_UnassignsOnlyItsFeatures()
-    {
-        var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-        [
-            new LaneUpsert("gone", "gone contour", null),
-            new LaneUpsert("kept", "kept contour", 3)
-        ]);
-        await CreateFeatureAsync("011-gone-a", "gone");
-        await CreateFeatureAsync("012-gone-b", "gone");
-        await CreateFeatureAsync("013-kept-a", "kept");
-
-        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("kept", "kept contour", 3)]);
-
-        var kept = roster.ShouldHaveSingleItem();
-        kept.Name.ShouldBe("kept");
-        kept.Contour.ShouldBe("kept contour");
-        kept.SerialOrder.ShouldBe(3);
-        kept.Features.Select(f => f.Slug).ShouldBe(["013-kept-a"]);
-
-        var orphans = await _context.PlanningFeatures
-            .Where(f => f.Slug == "011-gone-a" || f.Slug == "012-gone-b")
-            .ToListAsync();
-        orphans.Select(f => f.Slug).ShouldBe(["011-gone-a", "012-gone-b"]);
-        orphans.ShouldAllBe(f => f.Lane == null);
-    }
-
-    [Fact]
     public async Task RosterNames_ReturnsSortedNames()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("zeta", null, null), new LaneUpsert("alpha", null, null)]);
+        await SeedLaneAsync("zeta");
+        await SeedLaneAsync("alpha");
 
         var names = await service.RosterNamesAsync(_projectId);
 
@@ -317,7 +300,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Create_InsertsAndEchoesTheRoster()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "web/src", 1, 0)]);
+        await SeedLaneAsync("frontend", "web/src", 1, 0);
 
         var roster = await service.UpsertLaneAsync(_projectId, new LaneUpsert("backend", "api/src", 2, 1), LaneWriteMode.Create);
 
@@ -332,7 +315,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Create_ExistingName_ThrowsLaneNameDuplicate()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
 
         var ex = await Should.ThrowAsync<PlanningException>(() =>
             service.UpsertLaneAsync(_projectId, new LaneUpsert("Frontend", null, null), LaneWriteMode.Create));
@@ -346,8 +329,10 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Create_OverTheCap_Throws()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-            [.. Enumerable.Range(0, LaneService.MaxLanesPerProject).Select(i => new LaneUpsert($"lane-{i}", null, null))]);
+        foreach (var index in Enumerable.Range(0, LaneService.MaxLanesPerProject))
+        {
+            await SeedLaneAsync($"lane-{index}");
+        }
 
         var ex = await Should.ThrowAsync<PlanningException>(() =>
             service.UpsertLaneAsync(_projectId, new LaneUpsert("overflow", null, null), LaneWriteMode.Create));
@@ -359,8 +344,10 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Create_TheSixtyFourthLane_IsAccepted()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-            [.. Enumerable.Range(0, LaneService.MaxLanesPerProject - 1).Select(i => new LaneUpsert($"lane-{i}", null, null))]);
+        foreach (var index in Enumerable.Range(0, LaneService.MaxLanesPerProject - 1))
+        {
+            await SeedLaneAsync($"lane-{index}");
+        }
 
         var roster = await service.UpsertLaneAsync(
             _projectId, new LaneUpsert("the-last-one", null, null), LaneWriteMode.Create);
@@ -407,7 +394,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task SetLanes_NameTheRouteCannotAddress_ThrowsInvalidLaneName_AndWritesNothing(string name)
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
 
         var ex = await Should.ThrowAsync<PlanningException>(() => service.SetLanesAsync(_projectId,
             [new LaneUpsert("frontend", null, null), new LaneUpsert(name, null, null)]));
@@ -425,7 +412,7 @@ public sealed class LaneServiceTests : IDisposable
         string name)
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
 
         var ex = await Should.ThrowAsync<PlanningException>(() => service.UpsertLaneAsync(
             _projectId, new LaneUpsert(name, "web/src", null), LaneWriteMode.Update));
@@ -438,7 +425,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Update_EditsMutableFields_KeepsTheStoredName()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "old contour", 1, 0)]);
+        await SeedLaneAsync("frontend", "old contour", 1, 0);
 
         var roster = await service.UpsertLaneAsync(
             _projectId, new LaneUpsert("frontend", "web/src", 4, 2), LaneWriteMode.Update);
@@ -454,7 +441,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Update_OmittedFields_ClearThem()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", "web/src", 1, 2)]);
+        await SeedLaneAsync("frontend", "web/src", 1, 2);
 
         var roster = await service.UpsertLaneAsync(
             _projectId, new LaneUpsert("frontend", null, null, null), LaneWriteMode.Update);
@@ -469,7 +456,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Update_CaseOnlyName_EditsInPlaceWithoutRenaming()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
 
         var roster = await service.UpsertLaneAsync(
             _projectId, new LaneUpsert("Frontend", "web/src", null, null), LaneWriteMode.Update);
@@ -482,7 +469,7 @@ public sealed class LaneServiceTests : IDisposable
     public async Task UpsertLane_Update_UnknownLane_ThrowsMissingLane()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
 
         var ex = await Should.ThrowAsync<PlanningException>(() =>
             service.UpsertLaneAsync(_projectId, new LaneUpsert("ghost", null, null), LaneWriteMode.Update));
@@ -505,43 +492,46 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteLane_RemovesTheLaneAndUnassignsOnlyItsFeatures()
+    public async Task DeleteLane_LaneWithOpenFeatures_IsRefused()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId,
-            [
-                new LaneUpsert("gone", "gone contour", null),
-                new LaneUpsert("kept", "kept contour", 3)
-            ]);
-        await CreateFeatureAsync("011-gone-a", "gone");
-        await CreateFeatureAsync("012-gone-b", "gone");
-        await CreateFeatureAsync("013-kept-a", "kept");
+        await SeedLaneAsync("frontend", "web/src", 1);
+        await CreateFeatureAsync("011-gone-a", "frontend");
+        await CreateFeatureAsync("012-gone-b", "frontend");
 
-        var roster = await service.DeleteLaneAsync(_projectId, "GONE");
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.DeleteLaneAsync(_projectId, "Frontend"));
 
-        var kept = roster.ShouldHaveSingleItem();
-        kept.Name.ShouldBe("kept");
-        kept.Contour.ShouldBe("kept contour");
-        kept.SerialOrder.ShouldBe(3);
-        kept.Features.Select(f => f.Slug).ShouldBe(["013-kept-a"]);
+        ex.Code.ShouldBe(PlanningFailureCode.LaneStillOccupied);
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Message.ShouldContain("011-gone-a");
+        ex.Message.ShouldContain("012-gone-b");
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
-
-        var orphans = await _context.PlanningFeatures
-            .Where(f => f.Slug == "011-gone-a" || f.Slug == "012-gone-b")
-            .ToListAsync();
-        orphans.ShouldAllBe(f => f.Lane == null);
+        (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-gone-a")).Lane.ShouldBe("frontend");
     }
 
     [Fact]
-    public async Task DeleteLane_UnknownLane_ThrowsMissingLane()
+    public async Task DeleteLane_EmptyLane_IsRemoved()
     {
         var service = CreateService();
-        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        await SeedLaneAsync("frontend");
+        await CreateFeatureAsync("011-gone", "frontend");
+        await CreateFeatureService().DeleteAsync(_projectId, "011-gone");
 
-        var ex = await Should.ThrowAsync<PlanningException>(() => service.DeleteLaneAsync(_projectId, "ghost"));
+        var roster = await service.DeleteLaneAsync(_projectId, "frontend");
 
-        ex.Code.ShouldBe(PlanningFailureCode.MissingLane);
-        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+        roster.ShouldBeEmpty();
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task DeleteLane_UnknownLane_IsAnIdempotentNoOp()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend");
+
+        var roster = await service.DeleteLaneAsync(_projectId, "ghost");
+
+        roster.Single().Name.ShouldBe("frontend");
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
     }
 
@@ -552,6 +542,186 @@ public sealed class LaneServiceTests : IDisposable
             CreateService().DeleteLaneAsync(Guid.NewGuid(), "frontend"));
 
         ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_UnknownLane_BirthsTheLaneRow()
+    {
+        var features = CreateFeatureService();
+        await features.CreateAsync(_projectId, "011-laned", "Laned", "body");
+
+        var updated = await features.UpdateAsync(
+            _projectId, "011-laned", null, null, null, "lane assigned", PlanningLogSource.Agent, lane: "brand-new");
+
+        updated.Lane.ShouldBe("brand-new");
+        var roster = await CreateService().ListLanesAsync(_projectId);
+        var lane = roster.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("brand-new");
+        lane.Contour.ShouldBeNull();
+        lane.Priority.ShouldBeNull();
+        lane.OpenFeatureCount.ShouldBe(1);
+        lane.Features.Single().Slug.ShouldBe("011-laned");
+    }
+
+    [Fact]
+    public async Task UpdateFeature_UnknownLane_OverTheCap_Throws()
+    {
+        foreach (var index in Enumerable.Range(0, LaneService.MaxLanesPerProject))
+        {
+            await SeedLaneAsync($"lane-{index}");
+        }
+
+        var features = CreateFeatureService();
+        await features.CreateAsync(_projectId, "011-laned", "Laned", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => features.UpdateAsync(
+            _projectId, "011-laned", null, null, null, "lane assigned", PlanningLogSource.Agent, lane: "overflow"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneRosterTooLarge);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId))
+            .ShouldBe(LaneService.MaxLanesPerProject);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_UnknownLane_UnaddressableName_ThrowsInvalidLaneName()
+    {
+        var features = CreateFeatureService();
+        await features.CreateAsync(_projectId, "011-laned", "Laned", "body");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => features.UpdateAsync(
+            _projectId, "011-laned", null, null, null, "lane assigned", PlanningLogSource.Agent, lane: "web/src"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task SetStatus_LastOpenFeatureDone_RetiresTheLaneAndLogsTheAutoLine()
+    {
+        await SeedLaneAsync("frontend", "web/src");
+        await SeedDoneReadyFeatureAsync("011-closing", "frontend");
+
+        await CreateFeatureService().SetStatusAsync(
+            _projectId, "011-closing", PlanningFeatureStatus.Done, "closing");
+
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+        var retired = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-closing");
+        var line = PlanningLog.Parse(retired.Body).Last();
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+        line.Text.ShouldBe("lane 'frontend' retired: no open features remain");
+    }
+
+    [Fact]
+    public async Task SetStatus_DoneFlip_KeepsTheLaneWhenAReviewFeatureRemains()
+    {
+        await SeedLaneAsync("frontend");
+        await SeedDoneReadyFeatureAsync("011-closing", "frontend");
+        await CreateFeatureAsync("012-review", "frontend");
+        var features = CreateFeatureService();
+        await features.SetStatusAsync(_projectId, "012-review", PlanningFeatureStatus.InProgress, "wip");
+        await features.SetStatusAsync(_projectId, "012-review", PlanningFeatureStatus.Review, "review");
+
+        await features.SetStatusAsync(_projectId, "011-closing", PlanningFeatureStatus.Done, "closing");
+
+        var roster = await CreateService().ListLanesAsync(_projectId);
+        var lane = roster.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("frontend");
+        lane.OpenFeatureCount.ShouldBe(1);
+        lane.Features.Select(f => f.Slug).ShouldBe(["011-closing", "012-review"]);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_ClearingTheLane_RetiresTheEmptiedLane()
+    {
+        await SeedLaneAsync("frontend");
+        await SeedLaneAsync("backend");
+        await CreateFeatureAsync("011-mover", "frontend");
+        await CreateFeatureAsync("012-stays", "backend");
+        var features = CreateFeatureService();
+
+        await features.UpdateAsync(
+            _projectId, "011-mover", null, null, null, "cleared", PlanningLogSource.Agent, lane: "");
+
+        (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-mover")).Lane.ShouldBeNull();
+        var roster = await CreateService().ListLanesAsync(_projectId);
+        roster.Select(l => l.Name).ShouldBe(["backend"]);
+        roster.Single().Features.Single().Slug.ShouldBe("012-stays");
+    }
+
+    [Fact]
+    public async Task UpdateFeature_MovingToANewLane_BirthsItAndRetiresTheEmptiedOne()
+    {
+        await SeedLaneAsync("frontend");
+        await SeedLaneAsync("backend");
+        await CreateFeatureAsync("011-mover", "frontend");
+        await CreateFeatureAsync("012-stays", "backend");
+        var features = CreateFeatureService();
+
+        await features.UpdateAsync(
+            _projectId, "011-mover", null, null, null, "moved", PlanningLogSource.Agent, lane: "brand-new");
+
+        var roster = await CreateService().ListLanesAsync(_projectId);
+        roster.Select(l => l.Name).ShouldBe(["backend", "brand-new"]);
+        roster.Single(l => l.Name == "backend").Features.Select(f => f.Slug).ShouldBe(["012-stays"]);
+        roster.Single(l => l.Name == "brand-new").Features.Select(f => f.Slug).ShouldBe(["011-mover"]);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Import_StatusRestoredToDone_RetiresTheLane()
+    {
+        await SeedLaneAsync("frontend");
+        await CreateFeatureAsync("011-imported", "frontend");
+        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-imported");
+        feature.SetStatus(PlanningFeatureStatus.InProgress);
+        await _context.SaveChangesAsync();
+
+        await CreateFeatureService().ImportAsync(
+            _projectId,
+            new BacklogFeatureImport(
+                "011-imported",
+                "Imported",
+                "<goal>imported</goal>",
+                PlanningFeatureStatus.Done,
+                FeaturePriority.P2,
+                1,
+                DateTime.UtcNow,
+                [],
+                [],
+                []),
+            CancellationToken.None);
+
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+        var body = (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-imported")).Body;
+        var line = PlanningLog.Parse(body).Last();
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+        line.Text.ShouldContain("lane 'frontend' retired");
+    }
+
+    [Fact]
+    public async Task Import_StatusUnchanged_KeepsTheLane()
+    {
+        await SeedLaneAsync("frontend");
+        await CreateFeatureAsync("011-imported", "frontend");
+
+        await CreateFeatureService().ImportAsync(
+            _projectId,
+            new BacklogFeatureImport(
+                "011-imported",
+                "Imported",
+                "<goal>imported</goal>",
+                PlanningFeatureStatus.Draft,
+                FeaturePriority.P2,
+                1,
+                DateTime.UtcNow,
+                [],
+                [],
+                []),
+            CancellationToken.None);
+
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+        var body = (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-imported")).Body;
+        PlanningLog.Parse(body).ShouldNotContain(l => l.Source == PlanningLogSource.Auto);
     }
 
     private async Task CreateFeatureAsync(string slug, string? lane)

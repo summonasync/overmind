@@ -167,7 +167,7 @@ public sealed class LaneRouteShapeTests : IDisposable
     [Theory]
     [InlineData("/api")]
     [InlineData("/api/agent")]
-    public async Task RosterWriter_AnswersOnItsOwnLiteral_AndReplacesTheRoster(string door)
+    public async Task RosterWriter_AnswersOnItsOwnLiteral_AndUpsertsKnownLanesOnly(string door)
     {
         var project = await CreateProjectAsync();
         await CreateLaneAsync(project.Id, "frontend");
@@ -176,8 +176,8 @@ public sealed class LaneRouteShapeTests : IDisposable
             $"{door}/projects/{project.Id}/planning/lanes-roster",
             """{"lanes":[{"name":"swapped","contour":"src/**"},{"name":"frontend"}]}""");
 
-        put.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend", "swapped"]);
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend"]);
     }
 
     [Fact]
@@ -202,10 +202,10 @@ public sealed class LaneRouteShapeTests : IDisposable
         var rosterPath = PointerFrom(problem);
 
         var write = await PutAsync(
-            rosterPath, """{"lanes":[{"name":"swapped","contour":"src/**"},{"name":"frontend"}]}""");
+            rosterPath, """{"lanes":[{"name":"frontend","contour":"src/**"}]}""");
 
         write.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend", "swapped"]);
+        (await RosterNamesAsync(project.Id)).ShouldBe(["frontend"]);
     }
 
     [Theory]

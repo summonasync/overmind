@@ -628,7 +628,8 @@ public sealed class FeatureClaimServiceTests : IDisposable
     public async Task Claim_CaseOnlyRosterRename_KeepsEnforcementOnTheLane()
     {
         var laneService = new LaneService(_context, CreateClaimService());
-        await laneService.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+        _context.PlanningLanes.Add(PlanningLane.Create(_projectId, "frontend", null, null));
+        await _context.SaveChangesAsync();
         await CreateFeatureAsync("feat-a");
         await CreateFeatureAsync("feat-b");
         await SetLaneAsync("feat-a", "frontend");
