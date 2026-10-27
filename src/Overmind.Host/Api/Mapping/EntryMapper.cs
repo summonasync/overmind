@@ -1,5 +1,6 @@
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
+using Overmind.Infrastructure.Planning;
 
 namespace Overmind.Host.Api.Mapping;
 
@@ -29,7 +30,9 @@ public static class EntryMapper
                 .OrderBy(a => a.At)
                 .ThenBy(a => a.Id)
                 .Select(a => new EntryReadAck(a.Alias, a.Vendor, a.At))
-                .ToArray());
+                .ToArray(),
+            [.. PointerMarkerGrammar.Parse(entry.Content)
+                .Select(p => new EntryPointerResponse(p.Path, p.Anchor))]);
     }
 
     public static SkillFile ToEntity(SkillFileDto dto) =>

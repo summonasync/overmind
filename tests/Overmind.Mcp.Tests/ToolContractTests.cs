@@ -6,7 +6,12 @@ namespace Overmind.Mcp.Tests;
 
 public class ToolContractTests : McpSessionTestBase
 {
-    protected override void RegisterRoutes(StubOvermindApi stub) => RegisterDefaultRoutes(stub);
+    protected override void RegisterRoutes(StubOvermindApi stub)
+    {
+        RegisterDefaultRoutes(stub);
+        stub.RouteGet($"/api/entries/{Canned.DecisionEntryId}", Canned.DecisionEntryJson);
+        stub.Route("PUT", $"/api/entries/{Canned.DecisionEntryId}", 200, Canned.DecisionEntryJson);
+    }
 
     [Fact]
     public async Task ListProjects_ReturnsStubbedProjects()
@@ -237,8 +242,27 @@ public class ToolContractTests : McpSessionTestBase
         confirmation["type"]!.GetValue<string>().ShouldBe("gate");
         confirmation["version"]!.GetValue<int>().ShouldBe(1);
         confirmation["bodyChars"]!.GetValue<int>().ShouldBe("Gate content body.".Length);
+        confirmation.ShouldNotContainKey("hint");
         text.ShouldNotContain("Gate content body.");
         text.ShouldNotContain("New gate");
+    }
+
+    [Fact]
+    public async Task WriteEntry_Decision_AppendsTheMemoryMirroringHint()
+    {
+        var response = await Driver.CallToolAsync("write_entry", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "decision",
+            ["title"] = "Storage choice",
+            ["content"] = "We picked SQLite for storage."
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation["type"]!.GetValue<string>().ShouldBe("decision");
+        var hint = confirmation["hint"]!.GetValue<string>();
+        hint.ShouldContain("grimoire memory_remember");
+        hint.ShouldContain("'pointer: grimoire://memory/<id>'");
     }
 
     [Fact]
@@ -261,8 +285,28 @@ public class ToolContractTests : McpSessionTestBase
         confirmation["type"]!.GetValue<string>().ShouldBe("note");
         confirmation["version"]!.GetValue<int>().ShouldBe(3);
         confirmation["bodyChars"]!.GetValue<int>().ShouldBe(Canned.StoredLength(Canned.EntryJson, "content"));
+        confirmation.ShouldNotContainKey("hint");
         text.ShouldNotContain("Updated content body.");
         text.ShouldNotContain("Entry One");
+    }
+
+    [Fact]
+    public async Task UpdateEntry_Decision_AppendsTheMemoryMirroringHint()
+    {
+        var response = await Driver.CallToolAsync("update_entry", new JsonObject
+        {
+            ["entryId"] = Canned.DecisionEntryId.ToString(),
+            ["content"] = "Revised: SQLite stays, WAL mode on."
+        });
+
+        var confirmation = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        confirmation["type"]!.GetValue<string>().ShouldBe("decision");
+        var hint = confirmation["hint"]!.GetValue<string>();
+        hint.ShouldContain("grimoire memory_remember");
+        hint.ShouldContain("'pointer: grimoire://memory/<id>'");
+
+        var put = FindRequest("PUT", $"/api/entries/{Canned.DecisionEntryId}");
+        put.Body.ShouldContain("Revised: SQLite stays, WAL mode on.");
     }
 
     [Fact]

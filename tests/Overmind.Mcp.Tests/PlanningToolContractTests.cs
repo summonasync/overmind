@@ -1069,7 +1069,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "missingSections names requested-but-absent sections; a read never fails on a missing one. " +
             "The review field appears on task payloads only. " +
             "Task payloads also carry blockedBy — the sibling task orders this task waits on, [] when it has no edges; non-task kinds omit the field. " +
-            "Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming a repo-relative path with an optional #anchor; the server never reads the targets. " +
+            "Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming either a repo-relative path with an optional #anchor or a grimoire crew-memory id ('grimoire://memory/<id>'); the server never reads the targets. " +
             "Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.");
     }
 

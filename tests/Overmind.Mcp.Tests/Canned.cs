@@ -8,6 +8,7 @@ public static class Canned
     public static readonly Guid ProjectId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     public static readonly Guid SecondProjectId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     public static readonly Guid EntryId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    public static readonly Guid DecisionEntryId = Guid.Parse("1d1d1d1d-1d1d-1d1d-1d1d-1d1d1d1d1d1d");
     public static readonly Guid MissingEntryId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     public static readonly Guid PlanningSpecArtifactId = Guid.Parse("66666666-6666-6666-6666-666666666666");
     public static readonly Guid PlanningPlanArtifactId = Guid.Parse("77777777-7777-7777-7777-777777777777");
@@ -47,6 +48,8 @@ public static class Canned
 
     public const string EntryJson =
         """{"id":"33333333-3333-3333-3333-333333333333","projectId":"11111111-1111-1111-1111-111111111111","type":"note","title":"Entry One","content":"Entry body here.","currentVersion":3,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-09-03T10:00:00Z","tags":["core"],"skillFiles":[]}""";
+    public const string DecisionEntryJson =
+        """{"id":"1d1d1d1d-1d1d-1d1d-1d1d-1d1d1d1d1d1d","projectId":"11111111-1111-1111-1111-111111111111","type":"decision","title":"Storage choice","content":"We picked SQLite for storage.","currentVersion":2,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-09-02T10:00:00Z","tags":["core"],"skillFiles":[]}""";
     public const string SkillEntryJson =
         """{"id":"33333333-3333-3333-3333-333333333333","projectId":"11111111-1111-1111-1111-111111111111","type":"skill","title":"Skill One","content":"Skill body here.","currentVersion":1,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-09-01T10:00:00Z","tags":[],"skillFiles":[{"platform":"claude","relativePath":"SKILL.md","content":"# Skill"}]}""";
     public const string KitsJson =

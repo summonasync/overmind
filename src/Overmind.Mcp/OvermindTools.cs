@@ -31,6 +31,10 @@ public sealed class OvermindTools
     private const string ProjectMismatch =
         "Entry '{0}' does not belong to the resolved project ({1}). Pass the projectId that owns the entry, or call overmind_onboard.";
 
+    private const string DecisionMemoryHint =
+        "Durable decision — consider mirroring it into the crew memory (grimoire memory_remember) " +
+        "and referencing it here with 'pointer: grimoire://memory/<id>'.";
+
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
@@ -282,14 +286,21 @@ public sealed class OvermindTools
 
     private static JsonElement CompactEntry(JsonElement entry)
     {
+        var type = entry.GetProperty("type").GetString();
         var compact = new JsonObject
         {
             ["id"] = entry.GetProperty("id").GetString(),
-            ["type"] = entry.GetProperty("type").GetString(),
+            ["type"] = type,
             ["version"] = entry.GetProperty("currentVersion").GetInt32(),
             ["updatedAt"] = entry.GetProperty("updatedAt").GetString(),
             ["bodyChars"] = entry.GetProperty("content").GetString()?.Length ?? 0
         };
+
+        if (string.Equals(type, "decision", StringComparison.OrdinalIgnoreCase))
+        {
+            compact["hint"] = DecisionMemoryHint;
+        }
+
         return compact.Deserialize<JsonElement>();
     }
 

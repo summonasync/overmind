@@ -8,6 +8,7 @@ namespace Overmind.Mcp.Planning;
 internal static class UpsertPayloadLint
 {
     private const string Marker = "pointer";
+    private const string GrimoireMemoryPrefix = "grimoire://memory/";
 
     internal static void PointerLines(string field, string? body)
     {
@@ -22,10 +23,11 @@ internal static class UpsertPayloadLint
             {
                 throw new McpException(
                     $"{field}: malformed pointer line '{line.Trim()}' — {error} " +
-                    "A pointer line is 'pointer: <repo-relative-path>[#anchor]': the case-sensitive " +
-                    "marker 'pointer:' as the first token, whitespace, then a single-token repo-relative " +
-                    "path (no leading '/', forward slashes only, no '..' segments) with an optional " +
-                    "non-empty '#anchor'. Example: 'pointer: src/Overmind.Core/Entities/PlanningArtifact.cs#L81'.");
+                    "A pointer line is 'pointer: <repo-relative-path>[#anchor]' or 'pointer: grimoire://memory/<id>': " +
+                    "the case-sensitive marker 'pointer:' as the first token, whitespace, then either a single-token " +
+                    "repo-relative path (no leading '/', forward slashes only, no '..' segments) with an optional " +
+                    "non-empty '#anchor', or a grimoire crew-memory id ('#' anchors don't apply to memory pointers). " +
+                    "Example: 'pointer: src/Overmind.Core/Entities/PlanningArtifact.cs#L81'.");
             }
         }
     }
@@ -69,6 +71,18 @@ internal static class UpsertPayloadLint
         if (target.Any(char.IsWhiteSpace))
         {
             return "the target must be a single token — one pointer per line, no spaces in the path or anchor.";
+        }
+
+        if (target.StartsWith(GrimoireMemoryPrefix, StringComparison.Ordinal))
+        {
+            if (target.Contains('#'))
+            {
+                return "anchors don't apply to grimoire memory pointers — the memory id ends the target.";
+            }
+
+            return target[GrimoireMemoryPrefix.Length..].Length == 0
+                ? "the memory id after 'grimoire://memory/' is missing."
+                : null;
         }
 
         var hash = target.IndexOf('#');
