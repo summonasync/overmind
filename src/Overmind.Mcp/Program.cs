@@ -10,6 +10,7 @@ using ModelContextProtocol.Protocol;
 using Overmind.Mcp;
 using Overmind.Mcp.Planning;
 using Overmind.Mcp.Registration;
+using Overmind.Mcp.ToolBinding;
 
 if (args.Length > 0 && args[0] == "install")
 {
@@ -141,6 +142,7 @@ builder.Services
             "check tombstones before proposing anything that smells like a resurrect; the onboard payload names the active project. " +
             "Use tools for project/entry CRUD and fulltext or semantic search. " +
             "When overmind_notify returns a url, quote the url in chat when asking for an approval or reporting a question so the human can click through.";
+        options.Filters.Request.CallToolFilters.Add(ToolBindingErrorFilter.Create());
     })
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()
