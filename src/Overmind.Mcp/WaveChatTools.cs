@@ -76,7 +76,7 @@ public sealed class WaveChatTools
     public async Task<JsonElement> FetchUnread(
         [Description("Optional comma-separated room filter; omitted reads every room with activity, oldest activity first.")] string? rooms = null,
         [Description("Optional ISO datetime; the effective lower bound becomes max(watermark, since), so delivery only narrows.")] DateTime? since = null,
-        [Description("Optional page cap delivering the NEWEST window; older undelivered traffic needs replayMentions=true.")] int? limit = null,
+        [Description("Optional page cap delivering the NEWEST window; the mention slice outside it needs replayMentions=true.")] int? limit = null,
         [Description("Project each message to {id, room, authorAlias, createdAt, text<=200 chars} to save tokens; default false keeps the full payload.")] bool compact = false,
         [Description("Opt out of mention scoping: re-deliver every message that ever mentioned the alias, legacy behavior; default false.")] bool replayMentions = false,
         [Description("Id of the project whose rooms to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
