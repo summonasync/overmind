@@ -79,9 +79,21 @@ public sealed class PlanningDirectivesApiTests : IDisposable
         await CreateAgentFeatureAsync(project.Id, "directed");
 
         var response = await SendAgentAppendAsync(
-            project.Id, "directed", new string('x', 501), HolderSessionId);
+            project.Id, "directed", new string('x', 2001), HolderSessionId);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Append_AgentDoor_At2000Chars_IsAccepted()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "directed");
+
+        var response = await SendAgentAppendAsync(
+            project.Id, "directed", new string('x', 2000), HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

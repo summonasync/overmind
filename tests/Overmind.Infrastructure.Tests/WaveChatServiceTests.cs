@@ -68,6 +68,19 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Post_CapStays500_LiteralBoundary()
+    {
+        var atCap = await Service().PostAsync(
+            _projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 500));
+        atCap.Text.Length.ShouldBe(500);
+
+        var ex = await Should.ThrowAsync<PlanningException>(() =>
+            Service().PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 501)));
+
+        ex.Code.ShouldBe(PlanningFailureCode.WaveTextTooLong);
+    }
+
+    [Fact]
     public async Task Post_AtTheCap_IsAccepted()
     {
         var message = await Service().PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', WaveMessage.MaxTextLength));

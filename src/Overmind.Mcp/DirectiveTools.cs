@@ -23,7 +23,7 @@ public sealed class DirectiveTools
     [Description("Appends a coordination directive to a feature's open directive channel — the one write that " +
         "crosses the claim lock. Any session may append to ANY feature regardless of claim ownership or feature " +
         "status (HOLD / SYNC / YIELD from a wave marshal or lane neighbor reaches a live holder without taking " +
-        "over the claim). Directives are append-only and attributed: text is trimmed, capped at 500 chars, and " +
+        "over the claim). Directives are append-only and attributed: text is trimmed, capped at 2000 chars, and " +
         "stamped with the sender's session identity. Nothing else is touched — no artifacts, no statuses, no " +
         "version bumps, the 409 claim lock itself stays intact. The holder sees open directives on " +
         "planning_current_task and planning_read_feature payloads (openDirectives, oldest first) and on queue " +
@@ -31,7 +31,7 @@ public sealed class DirectiveTools
     public async Task<CallToolResult> AppendDirective(
         [Description("Slug of the feature the directive targets.")] string slug,
         [Description("Directive text, e.g. 'HOLD: proxy.ts is shared with 134 — sync before the next push'. " +
-            "Trimmed, max 500 chars.")] string text,
+            "Trimmed, max 2000 chars.")] string text,
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {

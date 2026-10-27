@@ -85,6 +85,19 @@ public sealed class DirectiveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Append_Boundary_2000Accepted_2001Rejected()
+    {
+        var atCap = await Service().AppendAsync(
+            _projectId, _slug, new string('x', 2000), new DirectiveAuthor("Dan", "qwen", HolderSessionId));
+        atCap.Text.Length.ShouldBe(2000);
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => Service().AppendAsync(
+            _projectId, _slug, new string('x', 2001), new DirectiveAuthor("Dan", "qwen", HolderSessionId)));
+
+        ex.Message.ShouldContain("2000");
+    }
+
+    [Fact]
     public async Task Append_UnknownFeature_ThrowsMissingFeature()
     {
         var ex = await Should.ThrowAsync<PlanningException>(() => Service().AppendAsync(

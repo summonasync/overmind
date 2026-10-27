@@ -204,6 +204,24 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ToolsList_AppendDirective_DescriptionStatesThe2000Cap()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        var description = tools["planning_append_directive"]!["description"]!.GetValue<string>();
+        description.ShouldContain("capped at 2000 chars");
+        description.ShouldNotContain("capped at 500 chars");
+
+        var textProperty = tools["planning_append_directive"]!["inputSchema"]!["properties"]!["text"]!;
+        var parameterDescription = textProperty["description"]!.GetValue<string>();
+        parameterDescription.ShouldContain("max 2000 chars");
+        parameterDescription.ShouldNotContain("max 500 chars");
+    }
+
+    [Fact]
     public async Task ReadEntry_ReturnsStubbedEntry()
     {
         var response = await Driver.CallToolAsync("read_entry", new JsonObject
