@@ -52,6 +52,22 @@ public sealed class FeatureCodeTools
 
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var workspace = Environment.CurrentDirectory;
+        if (!GitRepositoryProbe.IsRepository(workspace))
+        {
+            var fallback = await ReadFeatureAsync(resolved, trimmed, workspace, ct);
+            var degraded = new JsonObject
+            {
+                ["slug"] = trimmed,
+                ["workspace"] = workspace,
+                ["matches"] = new JsonArray(),
+                ["hint"] = null,
+                ["discoveryError"] =
+                    $"code discovery skipped: {workspace} is not inside a git repository; the feature context is still answered"
+            };
+            AppendFeatureContext(degraded, fallback, workspace);
+            return JsonSerializer.SerializeToElement(degraded);
+        }
+
         var (candidates, heads) = await DiscoverAsync(trimmed, workspace, ct);
         var context = await ReadFeatureAsync(resolved, trimmed, workspace, ct);
         var (pinnedBranch, pinnedWorktreePath) = CodePinOf(context.Feature);

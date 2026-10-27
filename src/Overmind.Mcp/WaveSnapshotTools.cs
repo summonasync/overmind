@@ -91,6 +91,14 @@ public sealed class WaveSnapshotTools
 
         var workspace = Environment.CurrentDirectory;
         var payload = JsonNode.Parse(snapshot.GetRawText())!.AsObject();
+        if (!GitRepositoryProbe.IsRepository(workspace))
+        {
+            payload["workspace"] = workspace;
+            payload["discoveryError"] =
+                $"code discovery skipped: {workspace} is not inside a git repository; the rest of the snapshot is unaffected";
+            return payload.Deserialize<JsonElement>();
+        }
+
         try
         {
             var listing = await _listing.GetAsync(workspace, _git, ct);
