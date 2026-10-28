@@ -20,9 +20,10 @@ import { formatNotificationTime } from "@/shared/lib/relative-time";
 
 interface NotificationRowProps {
   item: NotificationItem;
+  highlighted?: boolean;
 }
 
-export function NotificationRow({ item }: NotificationRowProps) {
+export function NotificationRow({ item, highlighted }: NotificationRowProps) {
   const { markRead, reply, remove } = useNotificationMutations();
   const numbering = useProjectNumbering(notificationProjectId(item));
 
@@ -36,13 +37,15 @@ export function NotificationRow({ item }: NotificationRowProps) {
 
   return (
     <li
+      data-notification-id={item.id}
       className={cn(
-        "group rounded-lg border bg-surface p-3",
+        "group rounded-lg border bg-surface p-3 transition-shadow",
         archived
           ? "border-border/40 opacity-40"
           : unread
             ? "border-primary/30"
             : "border-border opacity-60",
+        highlighted && "ring-2 ring-primary/50",
       )}
     >
       <div className="flex items-center gap-2">

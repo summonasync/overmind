@@ -2,6 +2,7 @@
 
 import {
   NOTIFICATION_KIND_META,
+  attentionHref,
   notificationHref,
   notificationProjectId,
 } from "@/features/notifications";
@@ -39,16 +40,22 @@ export function BellNotificationCard({ item, marking, onMarkRead }: BellNotifica
 
   return (
     <li className="rounded-lg border border-primary/30 bg-surface p-3">
-      <div className="flex items-center gap-2">
-        {header}
-        <span className="ml-auto shrink-0 text-xs text-muted">
-          {formatNotificationTime(item.createdAt)}
-        </span>
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        <KindIcon size={14} aria-hidden className={cn("shrink-0", meta.iconClass)} />
-        <p className="min-w-0 flex-1 text-sm text-foreground">{item.text}</p>
-      </div>
+      <a
+        href={attentionHref(item.id)}
+        aria-label="Show in Attention"
+        className="-m-1 block rounded-md p-1 transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        <div className="flex items-center gap-2">
+          {header}
+          <span className="ml-auto shrink-0 text-xs text-muted">
+            {formatNotificationTime(item.createdAt)}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <KindIcon size={14} aria-hidden className={cn("shrink-0", meta.iconClass)} />
+          <p className="min-w-0 flex-1 text-sm text-foreground">{item.text}</p>
+        </div>
+      </a>
       <div className="mt-2 flex items-center gap-2">
         <span className="text-xs text-muted">{item.agent}</span>
         <Button
