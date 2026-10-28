@@ -71,9 +71,9 @@ if (adapterSessionId != Guid.Empty)
     Console.Error.WriteLine($"[overmind-mcp] heartbeat every {period.TotalMinutes:0.#} min");
 }
 
-// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers with
-// the current OVERMIND_ALIAS/OVERMIND_VENDOR so identity never outlives the connection it was
-// resolved for (feature 179, spec D1).
+// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
+// session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
+// and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
 var identityRefresher = new SessionIdentityRefresher(lifecycle);
 
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
@@ -125,6 +125,7 @@ builder.Services.AddSingleton<WaveListingCache>();
 builder.Services.AddSingleton<WaveSnapshotTools>();
 builder.Services.AddSingleton<WaveChatTools>();
 builder.Services.AddSingleton<WaveRoleTools>();
+builder.Services.AddSingleton<SessionIdentityTools>();
 builder.Services.AddSingleton<LaneTools>();
 builder.Services.AddSingleton<DirectiveTools>();
 builder.Services.AddSingleton<EntryAckTools>();
@@ -162,6 +163,7 @@ builder.Services
     .WithTools<WaveSnapshotTools>()
     .WithTools<WaveChatTools>()
     .WithTools<WaveRoleTools>()
+    .WithTools<SessionIdentityTools>()
     .WithTools<LaneTools>()
     .WithTools<DirectiveTools>()
     .WithTools<EntryAckTools>()

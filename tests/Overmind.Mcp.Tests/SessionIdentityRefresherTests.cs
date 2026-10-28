@@ -17,6 +17,7 @@ public sealed class SessionIdentityRefresherTests : IDisposable
     public void Dispose()
     {
         AdapterSession.Id = null;
+        AdapterIdentityState.Reset();
         Environment.SetEnvironmentVariable("OVERMIND_ALIAS", null);
         Environment.SetEnvironmentVariable("OVERMIND_VENDOR", null);
     }
@@ -100,6 +101,55 @@ public sealed class SessionIdentityRefresherTests : IDisposable
         var ended = Requests.Single(r => r.Uri.EndsWith("/end", StringComparison.Ordinal));
         ended.Method.ShouldBe("POST");
         ended.Uri.ShouldBe($"http://127.0.0.1:4761/api/agent/sessions/{afterFirst}/end");
+    }
+
+    [Fact]
+    public async Task Registration_PrefersSlotIdentity_OverEnv()
+    {
+        AdapterSession.Id = null;
+        AdapterIdentityState.Set("runtime", "qwen");
+        Environment.SetEnvironmentVariable("OVERMIND_ALIAS", "env-alias");
+        var refresher = Refresher(_ => SessionBody());
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        AdapterSession.Id.ShouldNotBeNull();
+        var payload = JsonNode.Parse(Requests.Single().Body)!;
+        payload["alias"]!.GetValue<string>().ShouldBe("runtime");
+        payload["vendor"]!.GetValue<string>().ShouldBe("qwen");
+    }
+
+    [Fact]
+    public async Task Reconnect_AfterRuntimeSet_RegistersUnderSlotIdentity()
+    {
+        AdapterSession.Id = null;
+        Environment.SetEnvironmentVariable("OVERMIND_ALIAS", "env-alias");
+        var refresher = Refresher(_ => SessionBody());
+
+        await refresher.RefreshAsync(CancellationToken.None);
+        var afterFirst = AdapterSession.Id!.Value;
+        AdapterIdentityState.Set("runtime", "claude");
+
+        await refresher.RefreshAsync(CancellationToken.None);
+        var afterSecond = AdapterSession.Id!.Value;
+
+        afterSecond.ShouldNotBe(afterFirst);
+        var registrations = Requests
+            .Where(r => r.Uri == "http://127.0.0.1:4761/api/agent/sessions")
+            .Select(r => JsonNode.Parse(r.Body)!)
+            .ToArray();
+        registrations.Length.ShouldBe(2);
+        registrations[0]["alias"]!.GetValue<string>().ShouldBe("env-alias");
+        registrations[1]["alias"]!.GetValue<string>().ShouldBe("runtime");
+        registrations[1]["vendor"]!.GetValue<string>().ShouldBe("claude");
+
+        var endDeadline = DateTime.UtcNow.AddSeconds(5);
+        while (!Requests.Any(r => r.Uri.EndsWith("/end", StringComparison.Ordinal)) && DateTime.UtcNow < endDeadline)
+        {
+            await Task.Delay(25);
+        }
+
+        Requests.ShouldContain(r => r.Uri.EndsWith($"/{afterFirst}/end", StringComparison.Ordinal));
     }
 
     [Fact]
