@@ -22,7 +22,8 @@ public sealed class SessionBootstrapPrompt
         "Work queue: what's next = planning_task_queue; the board order IS the queue (priority asc, then position); the human reorders by dragging, the agent moves with planning_move_feature, and crossing bands via planning_set_feature_priority needs the user's explicit approval.";
 
     private const string ValidationProofRouting =
-        "Spec/plan validation needs human proof: overmind_notify(kind=approval, featureSlug) → the human's bell reply → planning_validate; every edit voids the reply (the UI door needs no proof).";
+        "Spec/plan validation needs human proof: overmind_notify(kind=approval, featureSlug) → the human's bell reply → planning_validate; every edit voids the reply. " +
+        "One fresh reply may validate the spec and the plan of the same feature in one pass — any edit voids it for both (the UI door needs no proof).";
 
     private const string NotificationUrlRouting =
         "Notification reach: the overmind_notify response may carry url — quote the url in chat when asking for an approval or reporting a question so the human can click through.";
