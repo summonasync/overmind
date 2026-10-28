@@ -46,6 +46,85 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ToolsList_OnboardDescription_DocumentsBriefMode()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain(
+            "brief=true returns only the project id, board counts per status, humanGate and the adapter version");
+        description.ShouldContain("already onboarded and working a lane");
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_ReturnsOnlyTheFourBlocks()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("alpha");
+        text.ShouldContain(Canned.ProjectId.ToString());
+        text.ShouldContain("Board: inProgress: 1, draft: 1");
+        text.ShouldContain("Validation: humanGate=off");
+
+        text.ShouldNotContain("Created project");
+        text.ShouldNotContain("Current feature:");
+        text.ShouldNotContain("Materialization:");
+        text.ShouldNotContain("Semantic search:");
+        text.ShouldNotContain("Agent identity:");
+        text.ShouldNotContain("Adapter:");
+        text.ShouldNotContain(Canned.OnboardGateGuidanceOff);
+        text.ShouldNotContain(Canned.OnboardQuickstartText);
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_WithoutFeatures_ShowsEmptyBoardLine()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardNoCountsJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        Canned.ToolResultText(response).ShouldContain("Board: no features yet.");
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_ShowsAdapterVersionAndWarningWhenPresent()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAdapterMismatchJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Adapter: 1.0.0+stalebuild — tools may be missing from your toolset; restart your MCP session");
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_PredatesAdapterBlock_ShowsUnknownVersionWithWarning()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAdapterPredatesJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        Canned.ToolResultText(response).ShouldContain(
+            "Adapter: unknown — adapter predates version reporting; restart recommended");
+    }
+
+    [Fact]
+    public async Task Onboard_BriefFalse_MatchesDefaultPayloadByteForByte()
+    {
+        var explicitDefault = Canned.ToolResultText(
+            await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = false }));
+        var omitted = Canned.ToolResultText(await Driver.CallToolAsync("overmind_onboard", new JsonObject()));
+
+        omitted.ShouldBe(explicitDefault);
+        omitted.ShouldContain(Canned.OnboardQuickstartText);
+    }
+
+    [Fact]
     public async Task Onboard_PostsCwdAndReturnsFormattedSummary()
     {
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
