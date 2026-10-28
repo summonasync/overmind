@@ -2053,6 +2053,98 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_ReplaceHeadingSection_RewritesTheBlockAndKeepsTheHeadingLine()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n## Scope\n\nEverything.\n\n## Out\n\nNothing.\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "replace_section", Section = "## Scope", Content = "The trimmed scope." });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var patch = await response.Content.ReadFromJsonAsync<PatchResultJson>(JsonOptions);
+        patch!.Section.ShouldBe("## Scope");
+        patch.Status.ShouldBe("draft");
+
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Body.ShouldContain("## Scope\nThe trimmed scope.\n## Out");
+        artifact.Body.ShouldNotContain("Everything.");
+    }
+
+    [Fact]
+    public async Task Patch_RemoveHeadingSection_TombstonesTheBlockWithTheReason()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n## Scope\n\nEverything.\n\n## Out\n\nNothing.\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "remove_section", Section = "## Scope", Reason = "scope cut in review" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(
+            $"/api/planning/artifacts/{spec.Id}", JsonOptions);
+        artifact!.Body.ShouldMatch("<removed \\d{4}-\\d{2}-\\d{2} — scope cut in review>");
+        artifact.Body.ShouldNotContain("Everything.");
+        artifact.Body.ShouldNotContain("## Scope");
+        artifact.Body.ShouldContain("## Out");
+    }
+
+    [Fact]
+    public async Task Patch_RemoveWithoutReason_Returns400PatchRemoveReasonRequired()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n## Scope\n\nEverything.\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "remove_section", Section = "## Scope" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("PatchRemoveReasonRequired");
+        problem.Detail!.ShouldContain("reason");
+    }
+
+    [Fact]
+    public async Task Patch_RemoveXmlSection_Returns400RemoveNotAllowedForXmlSection()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new
+        {
+            Kind = "spec",
+            Body = "# Spec\n\n<scope>\nEverything.\n</scope>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(spec.Id),
+            new { Op = "remove_section", Section = "scope", Reason = "scope cut in review" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("RemoveNotAllowedForXmlSection");
+        problem.Detail!.ShouldContain("tombstone a heading section instead");
+    }
+
+    [Fact]
     public async Task Patch_TickAcByIndex_MarksTheItemAndProjectsTheAcSection()
     {
         var project = await CreateProjectAsync();

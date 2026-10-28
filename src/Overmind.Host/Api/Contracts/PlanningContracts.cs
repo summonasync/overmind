@@ -307,7 +307,8 @@ public sealed record PatchPlanningArtifactRequest(
     string? AcText,
     string? Brief,
     string? LogNote = null,
-    string? Source = null);
+    string? Source = null,
+    string? Reason = null);
 
 public sealed record PlanningArtifactPatchResponse(
     Guid ArtifactId,
