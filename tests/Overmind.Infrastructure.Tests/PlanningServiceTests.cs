@@ -9,6 +9,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
@@ -3054,6 +3055,220 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             artifact.Id, new PlanningArtifactPatch(Section: "refs", Content: "- the spec"), default);
 
         PlanningSections.Find("refs", patched.Artifact.Body)!.Content.ShouldBe("- the spec");
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingSection_OnSpec_ReplacesTheH2Block_AndPersists()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n## Scope\nold scope\n\n## Next\nlater",
+            null, null, null, default);
+
+        _materializer.ClearReceivedCalls();
+
+        var patched = await artifactService.PatchAsync(
+            artifact.Id, new PlanningArtifactPatch(Section: "## Scope", Content: "new scope"), default);
+
+        patched.Artifact.Version.ShouldBe(2);
+        patched.Artifact.Body.ShouldBe("# Spec\n\n## Scope\nnew scope\n## Next\nlater");
+
+        await _context.Entry(artifact).ReloadAsync();
+        artifact.Body.ShouldBe("# Spec\n\n## Scope\nnew scope\n## Next\nlater");
+
+        var snapshot = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
+        snapshot.Body.ShouldContain("old scope");
+
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingSection_BareAndPrefixedAddresses_AreEquivalent()
+    {
+        var featureService = CreateFeatureService();
+        var featureA = await featureService.CreateAsync(_projectId, "feat-a", "Title", "body");
+        var featureB = await featureService.CreateAsync(_projectId, "feat-b", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var prefixed = await artifactService.UpsertAsync(
+            featureA.Id, PlanningArtifactKind.Spec, "# Spec\n\n## Scope\nold\n\n## Next\nlater", null, null, null, default);
+        var bare = await artifactService.UpsertAsync(
+            featureB.Id, PlanningArtifactKind.Spec, "# Spec\n\n## Scope\nold\n\n## Next\nlater", null, null, null, default);
+
+        var patchedPrefixed = await artifactService.PatchAsync(
+            prefixed.Id, new PlanningArtifactPatch(Section: "## Scope", Content: "replaced"), default);
+        var patchedBare = await artifactService.PatchAsync(
+            bare.Id, new PlanningArtifactPatch(Section: "Scope", Content: "replaced"), default);
+
+        patchedBare.Artifact.Body.ShouldBe(patchedPrefixed.Artifact.Body);
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingSection_OnTask_ThrowsWithVocabulary()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "# Task\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                artifact.Id, new PlanningArtifactPatch(Section: "## Goal", Content: "x"), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("Heading patches apply");
+        ex.Message.ShouldContain("Accepted sections for tasks");
+        ex.Message.ShouldContain("obstacles");
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingTombstone_OnValidatedSpec_DemotesBumpsAnchorAndVoidsTheProof()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n## Scope\noriginal scope\n\n## Next\nlater",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var rewound = DateTime.UtcNow.AddMinutes(-5);
+        _context.Entry(spec).Property(a => a.ContentUpdatedAt).CurrentValue = rewound;
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(Section: "Scope", Remove: true, Reason: "scope cut in review", LogNote: "reopened"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+        patched.Artifact.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
+        patched.Artifact.ContentUpdatedAt.ShouldBeGreaterThan(rewound);
+        patched.Artifact.Body.ShouldStartWith("# Spec\n\n<removed ");
+        Regex.IsMatch(
+                patched.Artifact.Body,
+                @"^<removed \d{4}-\d{2}-\d{2} — scope cut in review>$",
+                RegexOptions.Multiline)
+            .ShouldBeTrue();
+        patched.Artifact.Body.ShouldNotContain("original scope");
+        patched.Artifact.Body.ShouldContain("## Next\nlater");
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingNoOp_DoesNotBumpTheContentAnchor()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "## Scope\nline one\nline two\n## Next\nlater",
+            null, null, null, default);
+
+        var rewound = DateTime.UtcNow.AddMinutes(-5);
+        _context.Entry(spec).Property(a => a.ContentUpdatedAt).CurrentValue = rewound;
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id, new PlanningArtifactPatch(Section: "Scope", Content: "line one\nline two"), default);
+
+        patched.Artifact.Version.ShouldBe(2);
+        patched.Artifact.ContentUpdatedAt.ShouldBe(rewound);
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingRemoveWithoutReason_Throws_AndPersistsNothing()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n## Scope\nold\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                spec.Id, new PlanningArtifactPatch(Section: "Scope", Remove: true), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchRemoveReasonRequired);
+
+        await _context.Entry(spec).ReloadAsync();
+        spec.Version.ShouldBe(1);
+        spec.Body.ShouldContain("## Scope\nold\n");
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingRemove_OnXmlSection_Throws()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nold\n</goal>\n", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                spec.Id, new PlanningArtifactPatch(Section: "goal", Remove: true, Reason: "gone"), default));
+
+        ex.Code.ShouldBe(PlanningFailureCode.RemoveNotAllowedForXmlSection);
+    }
+
+    [Fact]
+    public async Task PatchAsync_HeadingRemoveWithoutSection_ThrowsInvalidPatchRequest()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n## Scope\nold\n", null, null, null, default);
+
+        var withoutSection = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                spec.Id, new PlanningArtifactPatch(Remove: true, Reason: "gone"), default));
+        var withContent = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.PatchAsync(
+                spec.Id, new PlanningArtifactPatch(Section: "Scope", Remove: true, Reason: "gone", Content: "x"), default));
+
+        withoutSection.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
+        withContent.Code.ShouldBe(PlanningFailureCode.InvalidPatchRequest);
+    }
+
+    [Fact]
+    public async Task PatchAsync_XmlSectionPatch_OnBodyWithHeadings_LeavesHeadingsUntouched()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id,
+            PlanningArtifactKind.Spec,
+            "# Spec\n\n## Notes\nsome notes\n\n<goal>\noriginal\n</goal>\n",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id, new PlanningArtifactPatch(Section: "goal", Content: "patched goal"), default);
+
+        PlanningSections.Find("goal", patched.Artifact.Body)!.Content.ShouldBe("patched goal");
+        patched.Artifact.Body.ShouldContain("## Notes\nsome notes");
     }
 
     [Fact]

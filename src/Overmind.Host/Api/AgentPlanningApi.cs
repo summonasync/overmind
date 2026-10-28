@@ -548,7 +548,9 @@ public static class AgentPlanningApi
                     request.Section, request.Content, request.AcIndex, request.AcText,
                     request.Brief, request.LogNote,
                     Untick: op == "untick_ac",
-                    Amend: op == "amend_result"),
+                    Amend: op == "amend_result",
+                    Remove: op == "remove_section",
+                    Reason: request.Reason),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
             var artifact = result.Artifact;
@@ -594,6 +596,15 @@ public static class AgentPlanningApi
                    request.AcText is null &&
                    request.Brief is null &&
                    !string.IsNullOrWhiteSpace(request.Content);
+        }
+
+        if (op == "remove_section")
+        {
+            return request.Brief is null &&
+                   !string.IsNullOrWhiteSpace(request.Section) &&
+                   request.Content is null &&
+                   request.AcIndex is null &&
+                   request.AcText is null;
         }
 
         if (op == "replace_section")
