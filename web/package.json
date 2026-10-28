@@ -7,7 +7,8 @@
     "build": "next build",
     "lint": "eslint .",
     "start": "next start",
-    "test": "node --test \"tests/**/*.test.mts\""
+    "test": "node --test \"tests/**/*.test.mts\"",
+    "check:overrides": "node --test tests/dead-overrides.test.mts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

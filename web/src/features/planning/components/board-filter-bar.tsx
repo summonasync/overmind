@@ -107,7 +107,7 @@ export function BoardFilterBar({ search }: BoardFilterBarProps) {
         </label>
 
         {isActive ? (
-          <Button variant="ghost" className="ml-auto px-2 py-1 text-xs" onClick={clearFilters}>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={clearFilters}>
             <X size={12} aria-hidden />
             Clear filters
           </Button>

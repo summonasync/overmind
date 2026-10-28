@@ -78,7 +78,8 @@ export function NotificationBell() {
         {unreadCount > 0 ? (
           <Badge
             tone="danger"
-            className="absolute -right-1.5 -top-1.5 min-w-4 justify-center px-1 text-[10px] leading-4"
+            size="xs"
+            className="absolute -right-1.5 -top-1.5 min-w-4 justify-center"
           >
             {unreadCount > DISPLAY_CAP ? `${DISPLAY_CAP}+` : unreadCount}
           </Badge>

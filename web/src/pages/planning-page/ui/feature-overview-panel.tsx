@@ -62,7 +62,7 @@ export function FeatureOverviewPanel({ projectId, slug }: FeatureOverviewPanelPr
             <div className="flex items-center gap-1.5">
               <Button
                 variant="ghost"
-                className="px-2 py-1 text-xs"
+                size="sm"
                 disabled={claimFeature.isPending || unclaimFeature.isPending}
                 onClick={() =>
                   boardItem.claimedByAlias === null

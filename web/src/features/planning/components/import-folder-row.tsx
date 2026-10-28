@@ -45,7 +45,8 @@ export function ImportFolderRow({ entry, importing, onImport }: ImportFolderRowP
         ) : null}
         <Button
           variant="secondary"
-          className="ml-auto px-2.5 py-1 text-xs"
+          size="sm"
+          className="ml-auto"
           disabled={state === "error" || importing}
           onClick={() => onImport(entry)}
         >

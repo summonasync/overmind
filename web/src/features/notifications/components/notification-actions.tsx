@@ -37,7 +37,8 @@ export function NotificationActions({ item }: NotificationActionsProps) {
       <div className="mt-2 flex items-center gap-2">
         <Button
           variant="secondary"
-          className="shrink-0 px-2 py-1 text-xs"
+          size="sm"
+          className="shrink-0"
           disabled={replied || replyingThis}
           onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.approve })}
           aria-label={`Approve request from ${item.agent}`}
@@ -47,7 +48,8 @@ export function NotificationActions({ item }: NotificationActionsProps) {
         </Button>
         <Button
           variant="danger"
-          className="shrink-0 px-2 py-1 text-xs"
+          size="sm"
+          className="shrink-0"
           disabled={replied || replyingThis}
           onClick={() => reply.mutate({ id: item.id, text: APPROVAL_REPLY.reject })}
           aria-label={`Reject request from ${item.agent}`}
@@ -93,7 +95,8 @@ export function NotificationActions({ item }: NotificationActionsProps) {
         <Button
           type="submit"
           variant="accent"
-          className="shrink-0 px-2 py-1 text-xs"
+          size="sm"
+          className="shrink-0"
           disabled={replied || replyingThis || draft.trim().length === 0}
         >
           <Send size={12} aria-hidden />

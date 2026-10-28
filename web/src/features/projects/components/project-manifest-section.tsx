@@ -56,7 +56,7 @@ export function ProjectManifestSection({ project }: ProjectManifestSectionProps)
         </p>
         <Button
           variant="secondary"
-          className="px-2.5 py-1 text-xs"
+          size="sm"
           disabled={manifestImport.pending}
           onClick={handleImport}
         >

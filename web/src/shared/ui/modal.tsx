@@ -57,7 +57,7 @@ export function Modal({ title, open, onClose, children, size = "md" }: ModalProp
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <Button variant="ghost" onClick={onClose} aria-label="Close" className="px-2">
+          <Button variant="ghost" onClick={onClose} aria-label="Close">
             <X size={16} aria-hidden />
           </Button>
         </div>

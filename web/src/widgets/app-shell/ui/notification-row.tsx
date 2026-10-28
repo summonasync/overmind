@@ -58,7 +58,8 @@ export function NotificationRow({ item }: NotificationRowProps) {
         {replyingThis ? null : (
           <Button
             variant="ghost"
-            className="shrink-0 px-2 py-1 text-xs opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+            size="sm"
+            className="shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
             aria-label="Delete notification"
             disabled={removingThis}
             onClick={() => remove.mutate(item.id)}
@@ -87,7 +88,8 @@ export function NotificationRow({ item }: NotificationRowProps) {
         {unread ? (
           <Button
             variant="ghost"
-            className="ml-auto shrink-0 px-2 py-1 text-xs"
+            size="sm"
+            className="ml-auto shrink-0"
             disabled={markingThis}
             onClick={() => markRead.mutate(item.id)}
           >

@@ -11,7 +11,7 @@ export function AttentionBadge() {
     return null;
   }
   return (
-    <Badge tone="danger" className="ml-auto min-w-5 justify-center px-1 text-[10px] leading-4">
+    <Badge tone="danger" size="xs" className="ml-auto min-w-5 justify-center">
       {unreadCount > DISPLAY_CAP ? `${DISPLAY_CAP}+` : unreadCount}
     </Badge>
   );

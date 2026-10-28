@@ -69,26 +69,17 @@ export function NotificationCenter({ initialKind = "all" }: NotificationCenterPr
           ))}
         </div>
         <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            className="px-2 py-1 text-xs"
-            disabled={unreadCount === 0 || markAllRead.isPending}
+          <Button variant="ghost" size="sm" disabled={unreadCount === 0 || markAllRead.isPending}
             onClick={() => markAllRead.mutate()}
           >
             Mark all read
           </Button>
-          <Button
-            variant="ghost"
-            className="px-2 py-1 text-xs"
-            disabled={readCount === 0 || clearRead.isPending}
+          <Button variant="ghost" size="sm" disabled={readCount === 0 || clearRead.isPending}
             onClick={() => clearRead.mutate()}
           >
             Clear read
           </Button>
-          <Button
-            variant="ghost"
-            className="px-2 py-1 text-xs"
-            disabled={repliedCount === 0 || hideConversations.isPending}
+          <Button variant="ghost" size="sm" disabled={repliedCount === 0 || hideConversations.isPending}
             onClick={() => hideConversations.mutate()}
           >
             Clear conversations

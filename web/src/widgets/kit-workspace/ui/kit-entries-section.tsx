@@ -56,7 +56,7 @@ export function KitEntriesSection({ kit, projects, entryMap, mutations }: KitEnt
                 </span>
                 <Button
                   variant="ghost"
-                  className="px-2 py-0.5 text-xs"
+                  size="xs"
                   onClick={() => mutations.removeEntry.mutate({ kitId: kit.id, entryId: id })}
                 >
                   Remove

@@ -34,13 +34,13 @@ export function DriftPanel({ projectId }: DriftPanelProps) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={loading} onClick={() => refetch()}>
+          <Button variant="secondary" size="sm" disabled={loading} onClick={() => refetch()}>
             <RefreshCw size={12} aria-hidden />
             {loading ? "Checking…" : "Refresh"}
           </Button>
           <Button
             variant="secondary"
-            className="px-2.5 py-1 text-xs"
+            size="sm"
             disabled={materialize.isPending}
             onClick={() => setConfirmOpen(true)}
           >

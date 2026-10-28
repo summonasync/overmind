@@ -81,7 +81,7 @@ export function SkillFilesEditor({ files, onChange }: SkillFilesEditorProps) {
             <li key={file.relativePath} className="rounded-md border border-border bg-surface p-2">
               <div className="mb-1 flex items-center justify-between">
                 <span className="font-mono text-xs text-foreground">{file.relativePath}</span>
-                <Button variant="ghost" className="px-2 py-0.5 text-xs" onClick={() => removeFile(file.relativePath)}>
+                <Button variant="ghost" size="xs" onClick={() => removeFile(file.relativePath)}>
                   Remove
                 </Button>
               </div>

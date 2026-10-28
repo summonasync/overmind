@@ -136,13 +136,13 @@ function NewLaneForm({ lanes, pending, onSubmit, onCancel }: NewLaneFormProps) {
       <Button
         type="submit"
         variant="accent"
+        size="xs"
         disabled={validationError !== null || pending}
-        className="px-2 py-0.5 text-xs"
       >
         <Plus size={12} aria-hidden />
         Add
       </Button>
-      <Button variant="ghost" onClick={onCancel} className="px-2 py-0.5 text-xs">
+      <Button variant="ghost" size="xs" onClick={onCancel}>
         Cancel
       </Button>
       {validationError !== null ? (

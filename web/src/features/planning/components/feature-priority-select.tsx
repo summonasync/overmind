@@ -3,9 +3,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/shared/lib/cn";
 import { ErrorText } from "@/shared/ui/error-text";
+import { Select } from "@/shared/ui/select";
 import { updatePlanningFeature } from "@/features/planning/api";
-import { priorityTone } from "@/features/planning/lib/priority-tone";
-import { selectToneClasses } from "@/features/planning/lib/select-tone-classes";
 import { planningKeys } from "@/features/planning/queries";
 import { FEATURE_PRIORITIES } from "@/features/planning/types";
 import type {
@@ -16,9 +15,11 @@ import type {
 
 type PrioritySelectSize = "sm" | "md";
 
-const SIZE_CLASSES: Record<PrioritySelectSize, string> = {
-  sm: "px-1.5 py-0.5 text-xs font-medium",
-  md: "px-2.5 py-1.5 text-sm",
+const PRIORITY_TONE_CLASSES: Record<PlanningFeaturePriority, string> = {
+  p0: "border-danger/40 text-danger!",
+  p1: "border-warning/40 text-warning!",
+  p2: "border-success/40 text-success!",
+  p3: "border-border/50 text-muted/70!",
 };
 
 interface FeaturePrioritySelectProps {
@@ -76,14 +77,10 @@ export function FeaturePrioritySelect({
 
   return (
     <span className="flex flex-col items-start gap-1">
-      <select
+      <Select
+        size={size}
         aria-label={`Feature priority for ${title}`}
-        className={cn(
-          "rounded-md border bg-surface",
-          "hover:border-border-strong focus-visible:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-          SIZE_CLASSES[size],
-          selectToneClasses[priorityTone(priority)],
-        )}
+        className={cn(PRIORITY_TONE_CLASSES[priority], size === "sm" && "font-medium")}
         value={priority}
         disabled={setPriority.isPending}
         onChange={(event) => setPriority.mutate(event.target.value as PlanningFeaturePriority)}
@@ -93,7 +90,7 @@ export function FeaturePrioritySelect({
             {candidate.toUpperCase()}
           </option>
         ))}
-      </select>
+      </Select>
       <ErrorText error={setPriority.error} />
     </span>
   );
