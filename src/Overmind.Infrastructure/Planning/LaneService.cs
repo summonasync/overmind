@@ -42,7 +42,8 @@ public sealed class LaneService
                 throw PlanningException.LaneBirthRestricted(upsert.Name.Trim());
             }
 
-            current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority, upsert.BoundAlias);
+            current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority,
+                LiveSurfacesJson.Serialize(upsert.LiveSurfaces), upsert.BoundAlias);
         }
 
         try
@@ -82,7 +83,8 @@ public sealed class LaneService
             }
 
             _db.PlanningLanes.Add(PlanningLane.Create(
-                projectId, lane.Name, lane.Contour, lane.SerialOrder, lane.Priority, lane.BoundAlias));
+                projectId, lane.Name, lane.Contour, lane.SerialOrder, lane.Priority,
+                LiveSurfacesJson.Serialize(lane.LiveSurfaces), lane.BoundAlias));
         }
         else
         {
@@ -90,7 +92,8 @@ public sealed class LaneService
 
             // The route carries the name as the locator only: identity stays on the stored spelling,
             // so a case-different PUT edits the lane instead of renaming it.
-            target.Update(target.Name, lane.Contour, lane.SerialOrder, lane.Priority, lane.BoundAlias);
+            target.Update(target.Name, lane.Contour, lane.SerialOrder, lane.Priority,
+                LiveSurfacesJson.Serialize(lane.LiveSurfaces), lane.BoundAlias);
         }
 
         try
@@ -232,6 +235,7 @@ public sealed class LaneService
             lane.SerialOrder,
             lane.Priority,
             lane.BoundAlias,
+            LiveSurfacesJson.Deserialize(lane.LiveSurfaces),
             summaries.Count(s => s.Status != PlanningFeatureStatus.Done),
             holder,
             summaries);
@@ -294,6 +298,11 @@ public sealed class LaneService
             {
                 throw new ArgumentException(
                     $"Lane priority must be between 0 and {PlanningLane.MaxPriority}.");
+            }
+
+            if (lane.LiveSurfaces is not null)
+            {
+                LiveSurfacesJson.Serialize(lane.LiveSurfaces);
             }
 
             if (!seen.Add(name))

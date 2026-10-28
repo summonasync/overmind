@@ -99,6 +99,45 @@ public class BriefingToolContractTests : McpSessionTestBase
             "# Storage choice We picked SQLite over Postgres for the single-file story.");
     }
 
+    [Fact]
+    public async Task Briefing_CarriesLiveSurfaces_WhenTheRosterWatchesPaths()
+    {
+        Stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/lanes",
+            """
+            {"lanes":[
+              {"name":"web-boundary","contour":"web src","serialOrder":1,"priority":0,"liveSurfaces":[{"glob":"web/src/**","owner":"van-darkholme"},{"glob":"luca/umbracolistener/src/**","owner":"billy-herrington"}],"openFeatureCount":1,"holder":null},
+              {"name":"backend","contour":null,"serialOrder":null,"priority":null,"openFeatureCount":0,"holder":null}
+            ]}
+            """);
+
+        var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var briefing = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        var live = briefing["liveSurfaces"]!.AsArray();
+        live.Count.ShouldBe(2);
+        live[0]!.AsObject().Select(field => field.Key).ShouldBe(["lane", "glob", "owner"]);
+        live[0]!.AsObject()["lane"]!.GetValue<string>().ShouldBe("web-boundary");
+        live[0]!.AsObject()["glob"]!.GetValue<string>().ShouldBe("web/src/**");
+        live[0]!.AsObject()["owner"]!.GetValue<string>().ShouldBe("van-darkholme");
+        live[1]!.AsObject()["owner"]!.GetValue<string>().ShouldBe("billy-herrington");
+    }
+
+    [Fact]
+    public async Task Briefing_OmitsLiveSurfaces_WhenNoLaneWatchesAnything()
+    {
+        var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var briefing = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        briefing.ShouldNotContainKey("liveSurfaces");
+    }
+
     [Theory]
     [InlineData(2, 2)]
     [InlineData(0, 0)]
@@ -235,6 +274,7 @@ public class BriefingToolContractTests : McpSessionTestBase
             "and the tombstone list of buried entries. " +
             "One consolidated tool by design: four specialized getguards/getgates/getnotes/gettombstones lookups would multiply " +
             "the discovery surface for a single moment-in-time need; list_entries stays the exploration tool, this one is the start ritual. " +
+            "When the project's lane roster carries liveSurfaces (globs + owners of running stands watched by a lane), a liveSurfaces section lists them so the start-of-work picture warns before any watched path is touched; the section is absent when no lane watches anything. " +
             "notesLimit defaults to 10; includeTombstones=false trims the graves section; categories without entries come back as " +
             "empty arrays, never omitted keys; entries arrive most-recently-updated first. " +
             "Read-only: projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.");

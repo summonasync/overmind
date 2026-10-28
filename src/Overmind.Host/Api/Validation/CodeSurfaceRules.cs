@@ -4,8 +4,6 @@ namespace Overmind.Host.Api.Validation;
 
 public static class CodeSurfaceRules
 {
-    private static readonly char[] UnsupportedMetacharacters = ['?', '[', ']', '{', '}', '\\'];
-
     public static readonly string SetSizeMessage =
         $"At most {PlanningFeature.MaxCodeSurfaces} code surface patterns are allowed.";
 
@@ -15,21 +13,12 @@ public static class CodeSurfaceRules
         "intersections; no leading '/', no '.' or '..' or empty segments, at most " +
         $"{PlanningFeature.MaxCodeSurfaceLength} characters).";
 
-    public static bool IsValidEntry(string? pattern)
-    {
-        if (string.IsNullOrWhiteSpace(pattern))
-        {
-            return false;
-        }
+    public static readonly string LiveSurfaceOwnerMessage =
+        $"Each live surface requires a non-empty owner alias of at most " +
+        $"{PlanningLane.MaxLiveSurfaceOwnerLength} characters.";
 
-        var trimmed = pattern.Trim();
-        if (trimmed.Length > PlanningFeature.MaxCodeSurfaceLength ||
-            trimmed.StartsWith('/') ||
-            trimmed.IndexOfAny(UnsupportedMetacharacters) >= 0)
-        {
-            return false;
-        }
+    public static readonly string LiveSurfaceSetSizeMessage =
+        $"At most {PlanningLane.MaxLiveSurfaces} live surfaces are allowed per lane.";
 
-        return trimmed.Split('/').All(segment => segment.Length > 0 && segment is not (".." or "."));
-    }
+    public static bool IsValidEntry(string? pattern) => RepoGlobRule.IsValid(pattern);
 }

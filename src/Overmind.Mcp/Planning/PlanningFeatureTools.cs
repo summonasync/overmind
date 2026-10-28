@@ -255,7 +255,7 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_claim_feature", Destructive = false, Idempotent = false)]
-    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. alias and vendor are optional — omitted values fall back to the identity the session registered with (OVERMIND_ALIAS/OVERMIND_VENDOR), and a claim-locked write that finds a stale/ended claim held by the caller's own alias+vendor adopts it and proceeds instead of 409ing. Lane discipline rides on the claim: a feature whose lane already holds an ALIVE claim by a different alias+vendor pair refuses with 409 naming the holder — unclaimed open features in the lane and the caller's own claims never block, and the stale/ended take-over flow is unchanged. overrideLaneCheck=true is the explicit escape hatch and is echoed back. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
+    [Description("Claims the feature for your adapter session — the claim is a hard mutation lock backed by session liveness: feature done → 409; a live foreign session holding the claim → 409 naming the holder (regardless of alias+vendor match — name collisions cannot hijack a live holder); a stale or ended claim by a different session → take-over succeeds and is logged; your own alias+vendor on an ended session (adapter restart) → auto-adopt with a fresh session binding. alias and vendor are optional — omitted values fall back to the identity the session registered with (OVERMIND_ALIAS/OVERMIND_VENDOR), and a claim-locked write that finds a stale/ended claim held by the caller's own alias+vendor adopts it and proceeds instead of 409ing. Lane discipline rides on the claim: a feature whose lane already holds an ALIVE claim by a different alias+vendor pair refuses with 409 naming the holder — unclaimed open features in the lane and the caller's own claims never block, and the stale/ended take-over flow is unchanged. overrideLaneCheck=true is the explicit escape hatch and is echoed back. The response also carries liveSurfaces (globs + owner aliases of running stands watched by the feature's lane that overlap the feature's codeSurfaces) when any match — purely informational, editing is never blocked. Reads stay open; the human door in the Overmind UI is never locked. On 409 the error names the holder — pick a different feature or coordinate; claims clear themselves when the holder session ends or goes stale past the project threshold.")]
     public async Task<CallToolResult> ClaimFeature(
         [Description("Slug of the feature to claim, as shown on the board.")] string slug,
         [Description("Your display alias, max 32 chars (e.g. Dan); omit to use the alias the adapter session registered with.")] string? alias = null,
@@ -312,6 +312,13 @@ public sealed class PlanningFeatureTools
         if (echo.TryGetProperty("overrideLaneCheck", out var overridden) && overridden.ValueKind == JsonValueKind.True)
         {
             claim["overrideLaneCheck"] = true;
+        }
+
+        if (echo.TryGetProperty("liveSurfaces", out var liveSurfaces) &&
+            liveSurfaces.ValueKind == JsonValueKind.Array &&
+            liveSurfaces.GetArrayLength() > 0)
+        {
+            claim["liveSurfaces"] = JsonNode.Parse(liveSurfaces.GetRawText())!.DeepClone();
         }
 
         return EchoResult(claim.Deserialize<JsonElement>());

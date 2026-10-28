@@ -22,6 +22,7 @@ public sealed class OvermindBriefingTools
         "and the tombstone list of buried entries. " +
         "One consolidated tool by design: four specialized getguards/getgates/getnotes/gettombstones lookups would multiply " +
         "the discovery surface for a single moment-in-time need; list_entries stays the exploration tool, this one is the start ritual. " +
+        "When the project's lane roster carries liveSurfaces (globs + owners of running stands watched by a lane), a liveSurfaces section lists them so the start-of-work picture warns before any watched path is touched; the section is absent when no lane watches anything. " +
         "notesLimit defaults to 10; includeTombstones=false trims the graves section; categories without entries come back as " +
         "empty arrays, never omitted keys; entries arrive most-recently-updated first. " +
         "Read-only: projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.";
@@ -58,6 +59,8 @@ public sealed class OvermindBriefingTools
         var gates = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "gate", ct));
         var decisions = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "decision", ct));
         var notes = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "note", ct));
+        var lanes = await Guarded(() => FetchLanesAsync(resolvedProjectId, ct));
+
 
         var briefing = new JsonObject
         {
@@ -82,11 +85,52 @@ public sealed class OvermindBriefingTools
             briefing["tombstones"] = GraveRows(tombstones);
         }
 
+        var liveSurfaces = LiveSurfaceRows(lanes);
+        if (liveSurfaces is { Count: > 0 })
+        {
+            briefing["liveSurfaces"] = liveSurfaces;
+        }
+
         return briefing.Deserialize<JsonElement>();
     }
 
     private async Task<JsonElement> FetchEntriesAsync(Guid projectId, string type, CancellationToken ct) =>
         await _api.GetAsync($"/api/projects/{projectId}/entries?type={type}", ct);
+
+    private async Task<JsonElement> FetchLanesAsync(Guid projectId, CancellationToken ct) =>
+        await _api.GetAsync($"/api/agent/projects/{projectId}/planning/lanes", ct);
+
+    private static JsonArray? LiveSurfaceRows(JsonElement roster)
+    {
+        if (roster.ValueKind != JsonValueKind.Object || !roster.TryGetProperty("lanes", out var lanes))
+        {
+            return null;
+        }
+
+        var rows = new JsonArray();
+        foreach (var lane in lanes.EnumerateArray())
+        {
+            if (lane.ValueKind != JsonValueKind.Object ||
+                !lane.TryGetProperty("liveSurfaces", out var surfaces) ||
+                surfaces.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var laneName = lane.TryGetProperty("name", out var name) ? name.GetString() : null;
+            foreach (var surface in surfaces.EnumerateArray())
+            {
+                rows.Add(new JsonObject
+                {
+                    ["lane"] = laneName,
+                    ["glob"] = surface.TryGetProperty("glob", out var glob) ? glob.GetString() : null,
+                    ["owner"] = surface.TryGetProperty("owner", out var owner) ? owner.GetString() : null
+                });
+            }
+        }
+
+        return rows;
+    }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
     {

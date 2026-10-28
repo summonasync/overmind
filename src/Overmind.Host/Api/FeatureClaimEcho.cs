@@ -19,5 +19,7 @@ public static class FeatureClaimEcho
                     .GetValueOrDefault(feature.Id),
             feature.ClaimedByHuman,
             feature.Lane,
-            overrideLaneCheck);
+            overrideLaneCheck,
+            [.. (await claims.LiveSurfacesForClaimAsync(feature, ct))
+                .Select(s => new LiveSurfaceResponse(s.Glob, s.Owner))]);
 }

@@ -149,7 +149,7 @@ public sealed class WaveSnapshotServiceTests : IDisposable
     [Fact]
     public async Task Snapshot_LaneBoundAliases_CarryOnlyBoundLanes()
     {
-        _context.PlanningLanes.Add(PlanningLane.Create(_projectId, "frontend", null, null, null, "johan"));
+        _context.PlanningLanes.Add(PlanningLane.Create(_projectId, "frontend", null, null, null, boundAlias: "johan"));
         _context.PlanningLanes.Add(PlanningLane.Create(_projectId, "backend", null, null));
         await CreateFeatureAsync("lane-a");
         var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "lane-a");

@@ -6,6 +6,10 @@ public sealed class PlanningLane
     public const int MaxContourLength = 2000;
     public const int MaxBoundAliasLength = 32;
     public const int MaxPriority = 3;
+    public const int MaxLiveSurfaces = 16;
+    public const int MaxLiveSurfaceGlobLength = 200;
+    public const int MaxLiveSurfaceOwnerLength = 32;
+    public const int MaxLiveSurfacesJsonLength = 4000;
 
     private PlanningLane()
     {
@@ -18,12 +22,13 @@ public sealed class PlanningLane
     public int? SerialOrder { get; private set; }
     public int? Priority { get; private set; }
     public string? BoundAlias { get; private set; }
+    public string? LiveSurfaces { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
     public static PlanningLane Create(
         Guid projectId, string name, string? contour, int? serialOrder, int? priority = null,
-        string? boundAlias = null)
+        string? liveSurfaces = null, string? boundAlias = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -37,12 +42,13 @@ public sealed class PlanningLane
             SerialOrder = serialOrder,
             Priority = priority,
             BoundAlias = NormalizeBoundAlias(boundAlias),
+            LiveSurfaces = NormalizeLiveSurfaces(liveSurfaces),
             CreatedAt = now,
             UpdatedAt = now
         };
     }
 
-    public void Update(string name, string? contour, int? serialOrder, int? priority, string? boundAlias)
+    public void Update(string name, string? contour, int? serialOrder, int? priority, string? liveSurfaces = null, string? boundAlias = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -51,6 +57,7 @@ public sealed class PlanningLane
         SerialOrder = serialOrder;
         Priority = priority;
         BoundAlias = NormalizeBoundAlias(boundAlias);
+        LiveSurfaces = NormalizeLiveSurfaces(liveSurfaces);
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -79,4 +86,7 @@ public sealed class PlanningLane
 
     private static string? NormalizeBoundAlias(string? boundAlias) =>
         string.IsNullOrWhiteSpace(boundAlias) ? null : boundAlias.Trim();
+
+    private static string? NormalizeLiveSurfaces(string? liveSurfaces) =>
+        string.IsNullOrWhiteSpace(liveSurfaces) ? null : liveSurfaces.Trim();
 }

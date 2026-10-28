@@ -52,8 +52,67 @@ public sealed class FeatureClaimServiceTests : IDisposable
             TestPlanningDispatcher.Create(_context, _materializer),
             NullLogger<PlanningFeatureService>.Instance);
 
+    [Fact]
+    public async Task LiveSurfacesForClaim_LaneWatchesOverlappingGlobs_ListsThem()
+    {
+        var service = CreateClaimService();
+        await SeedWatchedLaneAsync(
+            "web-boundary",
+            new LiveSurfaceEntry("web/src/**", "van-darkholme"),
+            new LiveSurfaceEntry("docs/**", "billy-herrington"));
+        var feature = await CreateFeatureInLaneAsync("web-boundary", ["src/Overmind.Host/**", "web/src/**"]);
+
+        var live = await service.LiveSurfacesForClaimAsync(feature);
+
+        live.ShouldBe([new LiveSurfaceEntry("web/src/**", "van-darkholme")]);
+    }
+
+    [Fact]
+    public async Task LiveSurfacesForClaim_NoOverlap_ReturnsEmpty()
+    {
+        var service = CreateClaimService();
+        await SeedWatchedLaneAsync("web-boundary", new LiveSurfaceEntry("web/src/**", "van-darkholme"));
+        var feature = await CreateFeatureInLaneAsync("web-boundary", ["src/api/**/*.cs"]);
+
+        var live = await service.LiveSurfacesForClaimAsync(feature);
+
+        live.ShouldBe([]);
+    }
+
+    [Fact]
+    public async Task LiveSurfacesForClaim_FeatureWithoutCodeSurfaces_ReturnsEmptyWithoutError()
+    {
+        var service = CreateClaimService();
+        await SeedWatchedLaneAsync("web-boundary", new LiveSurfaceEntry("web/src/**", "van-darkholme"));
+        var feature = await CreateFeatureInLaneAsync("web-boundary");
+
+        var live = await service.LiveSurfacesForClaimAsync(feature);
+
+        live.ShouldBe([]);
+    }
+
     private async Task<PlanningFeature> CreateFeatureAsync(string slug = "feat-a") =>
         await CreateFeatureService().CreateAsync(_projectId, slug, "Title", "body");
+
+    private async Task<PlanningFeature> CreateFeatureInLaneAsync(string lane, string[]? codeSurfaces = null)
+    {
+        var feature = await CreateFeatureAsync();
+        feature.SetLane(lane);
+        if (codeSurfaces is not null)
+        {
+            feature.SetCodeSurfaces(CodeSurfacesJson.Serialize(codeSurfaces));
+        }
+
+        await _context.SaveChangesAsync();
+        return feature;
+    }
+
+    private async Task SeedWatchedLaneAsync(string name, params LiveSurfaceEntry[] surfaces)
+    {
+        _context.PlanningLanes.Add(PlanningLane.Create(
+            _projectId, name, null, null, null, LiveSurfacesJson.Serialize(surfaces)));
+        await _context.SaveChangesAsync();
+    }
 
     private async Task AgeHolderSessionAsync(DateTime lastSeenAt, DateTime? endedAt = null)
     {

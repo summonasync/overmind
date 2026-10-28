@@ -104,7 +104,15 @@ public static class LanesApi
 
         return await WriteAsync(
             projectId,
-            new LaneUpsert(name, request.Contour, request.SerialOrder, request.Priority, request.BoundAlias),
+            new LaneUpsert(
+                name,
+                request.Contour,
+                request.SerialOrder,
+                request.Priority,
+                request.LiveSurfaces is null
+                    ? null
+                    : [.. request.LiveSurfaces.Select(s => new LiveSurfaceEntry(s.Glob, s.Owner))],
+                request.BoundAlias),
             LaneWriteMode.Update,
             lanes,
             ct);
@@ -156,6 +164,7 @@ public static class LanesApi
             lane.SerialOrder,
             lane.Priority,
             lane.BoundAlias,
+            [.. lane.LiveSurfaces.Select(s => new LiveSurfaceResponse(s.Glob, s.Owner))],
             lane.OpenFeatureCount,
             lane.Holder is { } holder
                 ? new LaneHolderResponse(holder.Alias, holder.Vendor, holder.ClaimState)
@@ -166,6 +175,13 @@ public static class LanesApi
     private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes) =>
     [
         .. lanes.Select(lane => new LaneUpsert(
-            lane.Name, lane.Contour, lane.SerialOrder, lane.Priority, lane.BoundAlias))
+            lane.Name,
+            lane.Contour,
+            lane.SerialOrder,
+            lane.Priority,
+            lane.LiveSurfaces is null
+                ? null
+                : [.. lane.LiveSurfaces.Select(s => new LiveSurfaceEntry(s.Glob, s.Owner))],
+            lane.BoundAlias))
     ];
 }

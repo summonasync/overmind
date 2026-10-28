@@ -338,6 +338,7 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(l => l.Name).HasMaxLength(PlanningLane.MaxNameLength).UseCollation("NOCASE");
             builder.Property(l => l.Contour).HasMaxLength(PlanningLane.MaxContourLength);
             builder.Property(l => l.BoundAlias).HasMaxLength(PlanningLane.MaxBoundAliasLength);
+            builder.Property(l => l.LiveSurfaces).HasMaxLength(PlanningLane.MaxLiveSurfacesJsonLength);
 
             builder.HasIndex(l => new { l.ProjectId, l.Name }).IsUnique();
         });

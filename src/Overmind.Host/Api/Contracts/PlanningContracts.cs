@@ -103,16 +103,27 @@ public sealed record PlanningFeatureClaimResponse(
     AgentSessionLiveness? ClaimState,
     bool ClaimedByHuman,
     string? Lane = null,
-    bool OverrideLaneCheck = false);
+    bool OverrideLaneCheck = false,
+    LiveSurfaceResponse[]? LiveSurfaces = null);
+
+public sealed record LiveSurfaceRequest(string Glob, string Owner);
 
 public sealed record LaneUpsertRequest(
-    string Name, string? Contour = null, int? SerialOrder = null, int? Priority = null,
+    string Name,
+    string? Contour = null,
+    int? SerialOrder = null,
+    int? Priority = null,
+    LiveSurfaceRequest[]? LiveSurfaces = null,
     string? BoundAlias = null);
 
 public sealed record SetLanesRequest(LaneUpsertRequest[] Lanes);
 
 public sealed record UpdateLaneRequest(
-    string? Contour = null, int? SerialOrder = null, int? Priority = null, string? BoundAlias = null);
+    string? Contour = null,
+    int? SerialOrder = null,
+    int? Priority = null,
+    LiveSurfaceRequest[]? LiveSurfaces = null,
+    string? BoundAlias = null);
 
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
@@ -125,12 +136,15 @@ public sealed record LaneFeatureResponse(
     string? ClaimedByVendor,
     AgentSessionLiveness? ClaimState);
 
+public sealed record LiveSurfaceResponse(string Glob, string Owner);
+
 public sealed record LaneRowResponse(
     string Name,
     string? Contour,
     int? SerialOrder,
     int? Priority,
     string? BoundAlias,
+    LiveSurfaceResponse[]? LiveSurfaces,
     int OpenFeatureCount,
     LaneHolderResponse? Holder,
     LaneFeatureResponse[] Features);
