@@ -76,5 +76,5 @@ public sealed class WaveParticipantMapperTests
     }
 
     private static LaneRow Lane(string name, LaneHolder? holder) =>
-        new(name, null, null, null, [], 1, holder, []);
+        new(name, null, null, null, null, [], 1, holder, []);
 }

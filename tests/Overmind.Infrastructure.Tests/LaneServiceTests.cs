@@ -349,6 +349,61 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SetLanes_BoundAlias_PersistsAndRoundTrips()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend");
+
+        var roster = await service.SetLanesAsync(
+            _projectId, [new LaneUpsert("frontend", "web/src", null, null, BoundAlias: "johan")]);
+
+        roster.Single().BoundAlias.ShouldBe("johan");
+        (await _context.PlanningLanes.SingleAsync(l => l.Name == "frontend")).BoundAlias.ShouldBe("johan");
+    }
+
+    [Fact]
+    public async Task SetLanes_OmittedBoundAlias_ClearsTheStoredOne()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend");
+        await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null, null, BoundAlias: "johan")]);
+
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("frontend", null, null)]);
+
+        roster.Single().BoundAlias.ShouldBeNull();
+        (await _context.PlanningLanes.SingleAsync(l => l.Name == "frontend")).BoundAlias.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SetLanes_BoundAliasOverTheCap_Throws()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("backend");
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => service.SetLanesAsync(
+            _projectId, [new LaneUpsert("frontend", null, null, null, BoundAlias: new string('x', PlanningLane.MaxBoundAliasLength + 1))]));
+
+        ex.Message.ShouldContain($"exceeds the {PlanningLane.MaxBoundAliasLength} character cap");
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task UpsertLane_Update_BoundAlias_IsItemLevelReplace()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend");
+
+        var bound = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("frontend", null, null, null, BoundAlias: "johan"), LaneWriteMode.Update);
+        bound.Single().BoundAlias.ShouldBe("johan");
+
+        var cleared = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("frontend", null, null, null, null), LaneWriteMode.Update);
+
+        cleared.Single().BoundAlias.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task ListLanes_PriorityFirst_NullsLast_SerialThenNameWithinEqualPriority()
     {
         var service = CreateService();

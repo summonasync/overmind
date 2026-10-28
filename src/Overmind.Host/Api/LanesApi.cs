@@ -111,7 +111,8 @@ public static class LanesApi
                 request.Priority,
                 request.LiveSurfaces is null
                     ? null
-                    : [.. request.LiveSurfaces.Select(s => new LiveSurfaceEntry(s.Glob, s.Owner))]),
+                    : [.. request.LiveSurfaces.Select(s => new LiveSurfaceEntry(s.Glob, s.Owner))],
+                request.BoundAlias),
             LaneWriteMode.Update,
             lanes,
             ct);
@@ -162,6 +163,7 @@ public static class LanesApi
             lane.Contour,
             lane.SerialOrder,
             lane.Priority,
+            lane.BoundAlias,
             [.. lane.LiveSurfaces.Select(s => new LiveSurfaceResponse(s.Glob, s.Owner))],
             lane.OpenFeatureCount,
             lane.Holder is { } holder
@@ -179,6 +181,7 @@ public static class LanesApi
             lane.Priority,
             lane.LiveSurfaces is null
                 ? null
-                : [.. lane.LiveSurfaces.Select(s => new LiveSurfaceEntry(s.Glob, s.Owner))]))
+                : [.. lane.LiveSurfaces.Select(s => new LiveSurfaceEntry(s.Glob, s.Owner))],
+            lane.BoundAlias))
     ];
 }

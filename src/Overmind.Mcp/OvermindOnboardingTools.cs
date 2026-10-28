@@ -19,11 +19,14 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate plus the state-truthful gate sentence — off: agent validate requires a live approval proof, overmind_notify(kind=approval) with a human reply newer than the artifact's last update, 409 ValidationProofRequired without it; on: agents STOP until a human validates the artifact in the UI), an agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path.")]
-    public async Task<string> Onboard(CancellationToken ct)
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate plus the state-truthful gate sentence — off: agent validate requires a live approval proof, overmind_notify(kind=approval) with a human reply newer than the artifact's last update, 409 ValidationProofRequired without it; on: agents STOP until a human validates the artifact in the UI), an agentIdentity block (effective alias/vendor resolved env > placeholder with its source, the project's naming rules for choosing your own stable alias, and the session_identity_set next step when the alias is still the shared placeholder), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path. brief=true returns only the project id, board counts per status, humanGate and the adapter version — the cheap repeat call for agents already onboarded and working a lane; the default stays the full payload.")]
+    public async Task<string> Onboard(
+        [Description("True to return only the project id, board counts per status, humanGate and adapter version — for repeat callers already onboarded and working a lane.")]
+        bool brief = false,
+        CancellationToken ct = default)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));
-        return Format(payload);
+        return brief ? FormatBrief(payload) : Format(payload);
     }
 
     private static object BuildRequest()
@@ -44,6 +47,72 @@ public sealed class OvermindOnboardingTools
         {
             throw new McpException(ex.Message);
         }
+    }
+
+    private static string FormatBrief(JsonElement payload)
+    {
+        var projectName = payload.GetProperty("projectName").GetString() ?? "unknown";
+        var projectId = payload.GetProperty("projectId").GetString() ?? string.Empty;
+
+        var output = new StringBuilder();
+        output.AppendLine($"Project: {projectName} ({projectId})");
+
+        var board = payload.GetProperty("board");
+        if (board.TryGetProperty("countsByStatus", out var counts) &&
+            counts.ValueKind == JsonValueKind.Object &&
+            counts.EnumerateObject().Any())
+        {
+            output.AppendLine($"Board: {string.Join(", ", counts.EnumerateObject().Select(p => $"{p.Name}: {p.Value}"))}");
+        }
+        else
+        {
+            output.AppendLine("Board: no features yet.");
+        }
+
+        if (HumanGateState(payload) is { } gate)
+        {
+            output.AppendLine($"Validation: humanGate={gate}");
+        }
+
+        AppendBriefAdapter(payload, output);
+        return output.ToString();
+    }
+
+    private static void AppendBriefAdapter(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("adapter", out var block) || block.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var version = block.TryGetProperty("adapterVersion", out var value) &&
+                      value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+        var suffix = block.TryGetProperty("warning", out var warning) &&
+                     warning.ValueKind == JsonValueKind.String &&
+                     warning.GetString() is { Length: > 0 } warningText
+            ? $" — {warningText}"
+            : string.Empty;
+
+        output.AppendLine($"Adapter: {version ?? "unknown"}{suffix}");
+    }
+
+    private static string? HumanGateState(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("validation", out var block) ||
+            !block.TryGetProperty("humanGate", out var gate))
+        {
+            return null;
+        }
+
+        return gate.ValueKind switch
+        {
+            JsonValueKind.True => "on",
+            JsonValueKind.False => "off",
+            _ => null
+        };
     }
 
     private static string Format(JsonElement payload)
@@ -191,26 +260,12 @@ public sealed class OvermindOnboardingTools
 
     private static void AppendValidation(JsonElement payload, StringBuilder output)
     {
-        if (!payload.TryGetProperty("validation", out var block) ||
-            block.ValueKind != JsonValueKind.Object ||
-            !block.TryGetProperty("humanGate", out var gate))
+        if (HumanGateState(payload) is not { } state)
         {
             return;
         }
 
-        var state = gate.ValueKind switch
-        {
-            JsonValueKind.True => "on",
-            JsonValueKind.False => "off",
-            _ => null
-        };
-
-        if (state is null)
-        {
-            return;
-        }
-
-        var guidance = block.TryGetProperty("guidance", out var text) &&
+        var guidance = payload.GetProperty("validation").TryGetProperty("guidance", out var text) &&
                        text.ValueKind == JsonValueKind.String &&
                        text.GetString() is { Length: > 0 } guidanceText
             ? $" — {guidanceText}"
@@ -230,20 +285,25 @@ public sealed class OvermindOnboardingTools
             return;
         }
 
-        var alias = block.TryGetProperty("alias", out var aliasValue) &&
-                    aliasValue.ValueKind == JsonValueKind.String
-            ? aliasValue.GetString()
-            : null;
-
-        var vendor = block.TryGetProperty("vendor", out var vendorValue) &&
-                     vendorValue.ValueKind == JsonValueKind.String
-            ? vendorValue.GetString()
-            : null;
+        var alias = AgentIdentity.ResolveAlias();
+        var vendor = AgentIdentity.ResolveVendor();
+        var source = alias == AgentIdentity.PlaceholderAlias ? "placeholder" : "env";
 
         output.AppendLine(
-            $"Agent identity: default alias '{alias ?? "unknown"}', vendor '{vendor ?? "unknown"}' — " +
+            $"Agent identity: alias '{alias}', vendor '{vendor}' (source: {source}) — " +
             "pass this pair to planning_claim_feature when claiming a feature; the project's naming rules:");
         output.AppendLine(rulesText);
+
+        if (source != "placeholder")
+        {
+            return;
+        }
+
+        output.AppendLine(
+            $"Next step: '{alias}' is the shared placeholder — invent your own alias per the naming rules above " +
+            "(or restore your stable one) and set it via session_identity_set BEFORE claiming; heading to a lane, " +
+            "planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set before the claim " +
+            "(flow: onboard → identity → lane → claim → work).");
     }
 
     private static void AppendSemantic(JsonElement payload, StringBuilder output)

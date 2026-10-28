@@ -136,6 +136,37 @@ public sealed class WaveSnapshotApiTests : IDisposable
         humanDoor.Content.Headers.ContentType!.MediaType.ShouldBe("text/html");
     }
 
+    [Fact]
+    public async Task Snapshot_QueueRowsCarryTheLaneBoundAlias()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "lane-a", "Lane A");
+        await SetFeatureLaneAsync(project.Id, "lane-a", "frontend");
+        await PutLaneBoundAliasAsync(project.Id, "frontend", "johan");
+
+        var snapshot = await GetSnapshotAsync(project.Id);
+
+        var row = snapshot!.Queue.Single(i => i.Slug == "lane-a");
+        row.Lane.ShouldBe("frontend");
+        row.LaneBoundAlias.ShouldBe("johan");
+    }
+
+    private async Task PutLaneBoundAliasAsync(Guid projectId, string name, string boundAlias)
+    {
+        var response = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{projectId}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = name, BoundAlias = boundAlias } } });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task SetFeatureLaneAsync(Guid projectId, string slug, string lane)
+    {
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}",
+            new { Lane = lane });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     private async Task<WaveSnapshotJson?> GetSnapshotAsync(Guid projectId)
     {
         var response = await _client.GetAsync($"/api/agent/projects/{projectId}/planning/wave-snapshot");
@@ -217,7 +248,8 @@ public sealed class WaveSnapshotApiTests : IDisposable
     public sealed record QueueItemJson(
         string Slug, string? Number, string Title, string Priority, string Status, int QueuePosition,
         string? SpecStatus, string? PlanStatus, int TaskDone, int TaskTotal,
-        TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked);
+        TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked,
+        string? Lane = null, string? LaneBoundAlias = null);
 
     public sealed record ClaimJson(
         string Slug,

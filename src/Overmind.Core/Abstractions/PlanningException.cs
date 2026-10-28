@@ -148,6 +148,28 @@ public sealed class PlanningException : Exception
             $"Section name '{section}' does not match the tag grammar the parser reads: lowercase letters, digits and hyphens, starting with a letter (e.g. 'goal', 'anti-scope', 'my-tag'). " +
             "A section inserted under any other name could never be found again — rename it to a lowercase tag.");
 
+    public static PlanningException PatchHeadingNotFound(string heading, IReadOnlyList<string> presentHeadings) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchHeadingNotFound,
+            $"Heading '{heading}' was not found in the artifact body. H2 headings present: " +
+            $"{(presentHeadings.Count == 0 ? "(none)" : string.Join(", ", presentHeadings.Select(h => $"'{h}'")))}. " +
+            "Heading sections resolve case-sensitively by their exact text.");
+
+    public static PlanningException PatchHeadingAmbiguous(string heading, IReadOnlyList<string> headings) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchHeadingAmbiguous,
+            $"Heading '{heading}' matches {headings.Count} H2 headings in the body ({string.Join(", ", headings.Select(h => $"'{h}'"))}); " +
+            "a patch would rewrite an arbitrary one — nothing was modified. Merge or rename the duplicates first.");
+
+    public static PlanningException PatchRemoveReasonRequired(string section) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchRemoveReasonRequired,
+            $"Tombstoning '{section}' requires a reason: the '<removed date — reason>' marker records why the block died, " +
+            "and that reason is what keeps it from being silently resurrected. Resend with reason.");
+
+    public static PlanningException PatchRemoveNotAllowedForXmlSection(string section) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.RemoveNotAllowedForXmlSection,
+            $"remove=true resolves markdown heading sections on spec, plan and result bodies; '{section}' goes through " +
+            "the XML-section path, whose tombstone semantics are not defined — tombstone a heading section instead, " +
+            "or resend the full body without the section.");
+
     public static string InlineSectionHint(string section) =>
         $"A one-line '<{section}>…</{section}>' section exists in the body — one-line sections need " +
         "the canonical multi-line form; re-send the body once (any upsert canonicalizes it).";

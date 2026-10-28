@@ -46,6 +46,85 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ToolsList_OnboardDescription_DocumentsBriefMode()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain(
+            "brief=true returns only the project id, board counts per status, humanGate and the adapter version");
+        description.ShouldContain("already onboarded and working a lane");
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_ReturnsOnlyTheFourBlocks()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain("alpha");
+        text.ShouldContain(Canned.ProjectId.ToString());
+        text.ShouldContain("Board: inProgress: 1, draft: 1");
+        text.ShouldContain("Validation: humanGate=off");
+
+        text.ShouldNotContain("Created project");
+        text.ShouldNotContain("Current feature:");
+        text.ShouldNotContain("Materialization:");
+        text.ShouldNotContain("Semantic search:");
+        text.ShouldNotContain("Agent identity:");
+        text.ShouldNotContain("Adapter:");
+        text.ShouldNotContain(Canned.OnboardGateGuidanceOff);
+        text.ShouldNotContain(Canned.OnboardQuickstartText);
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_WithoutFeatures_ShowsEmptyBoardLine()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardNoCountsJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        Canned.ToolResultText(response).ShouldContain("Board: no features yet.");
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_ShowsAdapterVersionAndWarningWhenPresent()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAdapterMismatchJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Adapter: 1.0.0+stalebuild — tools may be missing from your toolset; restart your MCP session");
+    }
+
+    [Fact]
+    public async Task Onboard_Brief_PredatesAdapterBlock_ShowsUnknownVersionWithWarning()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAdapterPredatesJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        Canned.ToolResultText(response).ShouldContain(
+            "Adapter: unknown — adapter predates version reporting; restart recommended");
+    }
+
+    [Fact]
+    public async Task Onboard_BriefFalse_MatchesDefaultPayloadByteForByte()
+    {
+        var explicitDefault = Canned.ToolResultText(
+            await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = false }));
+        var omitted = Canned.ToolResultText(await Driver.CallToolAsync("overmind_onboard", new JsonObject()));
+
+        omitted.ShouldBe(explicitDefault);
+        omitted.ShouldContain(Canned.OnboardQuickstartText);
+    }
+
+    [Fact]
     public async Task Onboard_PostsCwdAndReturnsFormattedSummary()
     {
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
@@ -146,7 +225,7 @@ public class OnboardingToolContractTests : McpSessionTestBase
         var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
         description.ShouldContain(
-            "agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias)");
+            "agentIdentity block (effective alias/vendor resolved env > placeholder with its source, the project's naming rules for choosing your own stable alias, and the session_identity_set next step when the alias is still the shared placeholder)");
     }
 
     [Fact]
@@ -268,14 +347,47 @@ public class OnboardingToolContractTests : McpSessionTestBase
     {
         Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAgentIdentityJson);
 
-        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_ALIAS"] = string.Empty,
+            ["OVERMIND_VENDOR"] = string.Empty
+        });
+        await driver.InitializeAsync();
+
+        var response = await driver.CallToolAsync("overmind_onboard", new JsonObject());
 
         var text = Canned.ToolResultText(response);
         text.ShouldContain(
-            "Agent identity: default alias 'agent', vendor 'unknown' — pass this pair to planning_claim_feature " +
-            "when claiming a feature; the project's naming rules:");
+            "Agent identity: alias 'agent', vendor 'unknown' (source: placeholder) — pass this pair to " +
+            "planning_claim_feature when claiming a feature; the project's naming rules:");
         text.ShouldContain("Aliases on this project take the crew animal list and stay lowercase.");
         text.ShouldContain("Keep the alias stable across sessions — it binds the feature claim.");
+        text.ShouldContain(
+            "Next step: 'agent' is the shared placeholder — invent your own alias per the naming rules above " +
+            "(or restore your stable one) and set it via session_identity_set BEFORE claiming");
+        text.ShouldContain(
+            "planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set before the claim");
+    }
+
+    [Fact]
+    public async Task Onboard_EnvIdentity_RendersSourceAndSkipsNextStep()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAgentIdentityJson);
+
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_ALIAS"] = "crew-otter",
+            ["OVERMIND_VENDOR"] = "qwen"
+        });
+        await driver.InitializeAsync();
+
+        var response = await driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Agent identity: alias 'crew-otter', vendor 'qwen' (source: env) — pass this pair to " +
+            "planning_claim_feature when claiming a feature; the project's naming rules:");
+        text.ShouldNotContain("Next step:");
     }
 
     [Fact]

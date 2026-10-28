@@ -37,6 +37,7 @@ public static class PlanningQueueApi
         var lag = await mirrorLag.ReadAsync(projectId, ct);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var laneBoundAliases = await LaneBoundAliasesAsync(db, projectId, ct);
         var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
         var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(new PlanningQueueResponse(queue
@@ -46,7 +47,8 @@ public static class PlanningQueueApi
                 laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
                 overlapIndex.GetValueOrDefault(f.Id),
                 directiveCounts.GetValueOrDefault(f.Id),
-                lag))
+                lag,
+                laneBoundAliases.GetValueOrDefault(f.Lane ?? string.Empty)))
             .ToArray()));
     }
 
@@ -95,6 +97,7 @@ public static class PlanningQueueApi
         var lag = await mirrorLag.ReadAsync(projectId, ct);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var laneBoundAliases = await LaneBoundAliasesAsync(db, projectId, ct);
         var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
         var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(PlanningMapper.ToQueueItem(
@@ -102,7 +105,8 @@ public static class PlanningQueueApi
             laneHolders.GetValueOrDefault(moved.Lane ?? string.Empty),
             overlapIndex.GetValueOrDefault(moved.Id),
             directiveCounts.GetValueOrDefault(moved.Id),
-            lag));
+            lag,
+            laneBoundAliases.GetValueOrDefault(moved.Lane ?? string.Empty)));
     }
 
     internal static async Task<IResult> Reorder(
@@ -143,6 +147,7 @@ public static class PlanningQueueApi
         var lag = await mirrorLag.ReadAsync(projectId, ct);
         var claimLiveness = await claims.ClaimLivenessAsync(projectId, features, ct);
         var laneHolders = PlanningMapper.LaneHoldersByLane(features, claimLiveness);
+        var laneBoundAliases = await LaneBoundAliasesAsync(db, projectId, ct);
         var overlapIndex = await PlanningFeaturesApi.OverlapIndexAsync(db, projectId, ct);
         var directiveCounts = await directives.OpenCountsAsync(projectId, ct);
         return Results.Ok(new PlanningQueueResponse(features
@@ -153,9 +158,17 @@ public static class PlanningQueueApi
                 laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
                 overlapIndex.GetValueOrDefault(f.Id),
                 directiveCounts.GetValueOrDefault(f.Id),
-                lag))
+                lag,
+                laneBoundAliases.GetValueOrDefault(f.Lane ?? string.Empty)))
             .ToArray()));
     }
+
+    private static async Task<IReadOnlyDictionary<string, string?>> LaneBoundAliasesAsync(
+        OvermindDbContext db, Guid projectId, CancellationToken ct) =>
+        await db.PlanningLanes
+            .AsNoTracking()
+            .Where(l => l.ProjectId == projectId && l.BoundAlias != null)
+            .ToDictionaryAsync(l => l.Name, l => l.BoundAlias, StringComparer.OrdinalIgnoreCase, ct);
 
     private static async Task<List<PlanningFeature>> LoadProjectFeatures(
         OvermindDbContext db, Guid projectId, CancellationToken ct) =>

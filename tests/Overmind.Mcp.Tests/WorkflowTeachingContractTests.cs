@@ -58,9 +58,26 @@ public class WorkflowTeachingContractTests : McpSessionTestBase
 
         text.ShouldContain(
             "1. overmind_onboard — resolves your project from the reported cwd and returns the project id, board summary, and this quickstart.");
-        text.ShouldContain("2. planning_list_features — the full board view; pick the feature to work on from planning_task_queue");
+        text.ShouldContain("2. identity — the agentIdentity block of this response carries your effective alias/vendor");
+        text.ShouldContain("3. planning_list_features — the full board view; pick the feature to work on from planning_task_queue");
         text.ShouldContain(
-            "3. planning_current_task — returns the single next task, or a stop/empty reason. Obey STOP lines; ask the user instead of working around them.");
+            "4. planning_current_task — returns the single next task, or a stop/empty reason. Obey STOP lines; ask the user instead of working around them.");
+
+        text.IndexOf("2. identity", StringComparison.Ordinal)
+            .ShouldBeLessThan(text.IndexOf("3. planning_list_features", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Quickstart_TeachesIdentityBeforeClaim()
+    {
+        var text = OnboardQuickstart.Text;
+
+        text.ShouldContain("source (env | placeholder)");
+        text.ShouldContain("invent your own per the naming rules (or restore your stable one) via session_identity_set");
+        text.ShouldContain("planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set BEFORE the claim");
+        text.ShouldContain("Flow: onboard → identity → lane → claim → work.");
+        text.IndexOf("session_identity_set", StringComparison.Ordinal)
+            .ShouldBeLessThan(text.IndexOf("planning_claim_feature", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -135,6 +135,25 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "a tag-parseable name (the XML vocabulary — goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log) " +
+            "always routes to the XML section path byte-identically");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "a bare word like 'scope' on a spec creates/reaches the XML section, NOT the heading block: " +
+            "heading addresses need the '## ' prefix");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "remove=true together with reason replaces the resolved heading block — heading line included — " +
+            "with a single '<removed YYYY-MM-DD — reason>' line");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "a duplicate heading name is a 400 listing the matching headings");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "heading mode on a task is a 400 naming the XML vocabulary");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "removing an XML section is refused in v1 (RemoveNotAllowedForXmlSection");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "a heading patch on a validated artifact demotes it + needs logNote");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
+            "a heading block carrying the <log> pair is refused the same way");
+        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
             "acIndex is 1-based; numbering matches the materialized mirror; acText is the recommended selector");
         tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
             "acText '&lt;key&gt;' matches a stored '<key>' and the reverse");
@@ -3211,6 +3230,94 @@ public class PlanningToolContractTests : McpSessionTestBase
         ToolErrorText(blankContent).ShouldContain("non-blank content");
         Stub.Requests.ShouldNotContain(r =>
             r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_HeadingPatch_PostsTheHeadingAddressVerbatim()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString(),
+            ["section"] = "## Scope",
+            ["content"] = "The trimmed scope.",
+            ["logNote"] = "scope rewrite"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("replace_section");
+        body["section"]!.GetValue<string>().ShouldBe("## Scope");
+        body["content"]!.GetValue<string>().ShouldBe("The trimmed scope.");
+        body["source"]!.GetValue<string>().ShouldBe("agent");
+
+        response["result"]!["isError"].ShouldBeNull();
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["section"]!.GetValue<string>().ShouldBe("## Scope");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_Tombstone_PostsRemoveSectionWithReason()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString(),
+            ["section"] = "## Scope",
+            ["remove"] = true,
+            ["reason"] = "scope cut in review",
+            ["logNote"] = "tombstoning the scope"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!;
+        body["op"]!.GetValue<string>().ShouldBe("remove_section");
+        body["section"]!.GetValue<string>().ShouldBe("## Scope");
+        body["reason"]!.GetValue<string>().ShouldBe("scope cut in review");
+        body["content"].ShouldBeNull();
+        request.Body.ShouldNotContain("\"remove\"");
+        body["logNote"]!.GetValue<string>().ShouldBe("tombstoning the scope");
+
+        response["result"]!["isError"].ShouldBeNull();
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["section"]!.GetValue<string>().ShouldBe("## Scope");
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_RemoveWithoutReason_RejectedBeforeTheCall()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString(),
+            ["section"] = "## Scope",
+            ["remove"] = true
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("remove=true needs reason");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_DuplicateHeading_SurfacesTheAmbiguity400()
+    {
+        Stub.Route(
+            "POST",
+            "/api/agent/planning/artifacts/[^/]+/patch",
+            400,
+            """{"title":"PatchHeadingAmbiguous","detail":"Heading '## Scope' matches 2 H2 headings in the body ('## Scope', '## Scope'); a patch would rewrite an arbitrary one — nothing was modified. Merge or rename the duplicates first.","status":400}""");
+
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningSpecArtifactId.ToString(),
+            ["section"] = "## Scope",
+            ["content"] = "The trimmed scope."
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("matches 2 H2 headings");
+        text.ShouldContain("nothing was modified");
     }
 
     [Fact]

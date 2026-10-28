@@ -57,6 +57,7 @@ public sealed record PlanningQueueItem(
     DateTime UpdatedAt,
     string? Lane = null,
     LaneHolderResponse? LaneHolder = null,
+    string? LaneBoundAlias = null,
     PotentialOverlap[]? PotentialOverlaps = null,
     int PendingMutations = 0,
     DateTime? LastAttemptAt = null,
@@ -112,7 +113,8 @@ public sealed record LaneUpsertRequest(
     string? Contour = null,
     int? SerialOrder = null,
     int? Priority = null,
-    LiveSurfaceRequest[]? LiveSurfaces = null);
+    LiveSurfaceRequest[]? LiveSurfaces = null,
+    string? BoundAlias = null);
 
 public sealed record SetLanesRequest(LaneUpsertRequest[] Lanes);
 
@@ -120,7 +122,8 @@ public sealed record UpdateLaneRequest(
     string? Contour = null,
     int? SerialOrder = null,
     int? Priority = null,
-    LiveSurfaceRequest[]? LiveSurfaces = null);
+    LiveSurfaceRequest[]? LiveSurfaces = null,
+    string? BoundAlias = null);
 
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
@@ -140,6 +143,7 @@ public sealed record LaneRowResponse(
     string? Contour,
     int? SerialOrder,
     int? Priority,
+    string? BoundAlias,
     LiveSurfaceResponse[]? LiveSurfaces,
     int OpenFeatureCount,
     LaneHolderResponse? Holder,
@@ -320,7 +324,8 @@ public sealed record PatchPlanningArtifactRequest(
     string? AcText,
     string? Brief,
     string? LogNote = null,
-    string? Source = null);
+    string? Source = null,
+    string? Reason = null);
 
 public sealed record PlanningArtifactPatchResponse(
     Guid ArtifactId,

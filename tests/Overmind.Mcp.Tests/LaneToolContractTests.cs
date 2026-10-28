@@ -127,6 +127,18 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SetLanes_ForwardsBoundAliasToTheHost()
+    {
+        _stub.Route("PUT", RosterRoute, 200, RosterJson);
+
+        await Tool().SetLanes(
+            Element("""[{"name":"frontend","boundAlias":"johan"}]"""), Canned.ProjectId);
+
+        var request = _stub.Requests.Single(r => r.Method == "PUT");
+        request.Body.ShouldContain("\"boundAlias\":\"johan\"");
+    }
+
+    [Fact]
     public async Task SetLanes_EmptyArray_IsANoOpThatEchoesTheUnchangedRoster()
     {
         _stub.Route("PUT", RosterRoute, 200, """{"lanes":[]}""");

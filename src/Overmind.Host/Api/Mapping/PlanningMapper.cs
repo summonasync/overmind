@@ -54,7 +54,8 @@ public static class PlanningMapper
         AgentSessionLiveness? claimState = null, LaneHolderResponse? laneHolder = null,
         IReadOnlyList<FeatureOverlapRow>? overlaps = null,
         int openDirectiveCount = 0,
-        PlanningMaterializationLag? lag = null)
+        PlanningMaterializationLag? lag = null,
+        string? laneBoundAlias = null)
     {
         var blockers = OpenBlockerSlugs(feature, projectFeatures);
         var artifacts = feature.Artifacts;
@@ -90,6 +91,7 @@ public static class PlanningMapper
             feature.UpdatedAt,
             feature.Lane,
             laneHolder ?? LaneHolderOf(feature, claimState),
+            laneBoundAlias,
             Overlaps(overlaps),
             lag?.PendingMutations ?? 0,
             lag?.LastAttemptAt,
@@ -197,7 +199,8 @@ public static class PlanningMapper
                     f, graph, snapshot.ClaimLiveness.GetValueOrDefault(f.Id),
                     laneHolders.GetValueOrDefault(f.Lane ?? string.Empty),
                     overlaps.GetValueOrDefault(f.Id),
-                    snapshot.OpenDirectiveCounts.GetValueOrDefault(f.Id)))],
+                    snapshot.OpenDirectiveCounts.GetValueOrDefault(f.Id),
+                    laneBoundAlias: snapshot.LaneBoundAliases.GetValueOrDefault(f.Lane ?? string.Empty)))],
             [.. snapshot.QueueFeatures
                 .Where(f => f.ClaimSessionId is not null)
                 .Select(f => ToSnapshotClaim(f, snapshot.ClaimLiveness.GetValueOrDefault(f.Id)))],

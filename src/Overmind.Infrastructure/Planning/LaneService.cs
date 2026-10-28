@@ -43,7 +43,7 @@ public sealed class LaneService
             }
 
             current.Update(upsert.Name, upsert.Contour, upsert.SerialOrder, upsert.Priority,
-                LiveSurfacesJson.Serialize(upsert.LiveSurfaces));
+                LiveSurfacesJson.Serialize(upsert.LiveSurfaces), upsert.BoundAlias);
         }
 
         try
@@ -84,7 +84,7 @@ public sealed class LaneService
 
             _db.PlanningLanes.Add(PlanningLane.Create(
                 projectId, lane.Name, lane.Contour, lane.SerialOrder, lane.Priority,
-                LiveSurfacesJson.Serialize(lane.LiveSurfaces)));
+                LiveSurfacesJson.Serialize(lane.LiveSurfaces), lane.BoundAlias));
         }
         else
         {
@@ -93,7 +93,7 @@ public sealed class LaneService
             // The route carries the name as the locator only: identity stays on the stored spelling,
             // so a case-different PUT edits the lane instead of renaming it.
             target.Update(target.Name, lane.Contour, lane.SerialOrder, lane.Priority,
-                LiveSurfacesJson.Serialize(lane.LiveSurfaces));
+                LiveSurfacesJson.Serialize(lane.LiveSurfaces), lane.BoundAlias);
         }
 
         try
@@ -234,6 +234,7 @@ public sealed class LaneService
             lane.Contour,
             lane.SerialOrder,
             lane.Priority,
+            lane.BoundAlias,
             LiveSurfacesJson.Deserialize(lane.LiveSurfaces),
             summaries.Count(s => s.Status != PlanningFeatureStatus.Done),
             holder,
@@ -285,6 +286,12 @@ public sealed class LaneService
             {
                 throw new ArgumentException(
                     $"Lane contour exceeds the {PlanningLane.MaxContourLength} character cap.");
+            }
+
+            if (lane.BoundAlias is { } boundAlias && boundAlias.Trim().Length > PlanningLane.MaxBoundAliasLength)
+            {
+                throw new ArgumentException(
+                    $"Lane boundAlias exceeds the {PlanningLane.MaxBoundAliasLength} character cap.");
             }
 
             if (lane.Priority is < 0 or > PlanningLane.MaxPriority)

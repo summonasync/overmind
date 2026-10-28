@@ -15,8 +15,10 @@ public sealed class ProjectResolver
         _api = api;
     }
 
-    public async Task<Guid> ResolveAsync(Guid? projectId, bool create, string errorNoun, CancellationToken ct)
+    public async Task<Guid> ResolveAsync(Guid? projectId, bool create, string errorNoun, CancellationToken ct, string? workingDirectory = null)
     {
+        var cwd = workingDirectory ?? Environment.CurrentDirectory;
+
         if (projectId is not null)
         {
             return projectId.Value;
@@ -28,7 +30,20 @@ public sealed class ProjectResolver
             return fromEnvironment;
         }
 
-        var body = new JsonObject { ["cwd"] = Environment.CurrentDirectory };
+        var pin = ProjectPinFile.Read(cwd);
+        if (pin.ProjectId is { } pinnedId)
+        {
+            if (await IsRegisteredAsync(pinnedId, cwd, ct))
+            {
+                return pinnedId;
+            }
+        }
+        else if (pin.IsUnparsable)
+        {
+            Console.Error.WriteLine($"[overmind-mcp] WARN: ignoring unparsable pin file {pin.FilePath}");
+        }
+
+        var body = new JsonObject { ["cwd"] = cwd };
         if (!create)
         {
             body["create"] = false;
@@ -55,5 +70,24 @@ public sealed class ProjectResolver
 
         throw new McpException(
             "The host returned no usable projectId for the working directory. Call overmind_onboard, then pass its projectId explicitly.");
+    }
+
+    private async Task<bool> IsRegisteredAsync(Guid pinnedId, string cwd, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["cwd"] = cwd,
+            ["projectId"] = pinnedId,
+        };
+        try
+        {
+            await _api.PostAsync("/api/onboard", body, ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is ApiNotFoundException or ApiStatusException or ApiUnreachableException)
+        {
+            Console.Error.WriteLine($"[overmind-mcp] WARN: ignoring .overmind/project pin {pinnedId}: {ex.Message}");
+            return false;
+        }
     }
 }

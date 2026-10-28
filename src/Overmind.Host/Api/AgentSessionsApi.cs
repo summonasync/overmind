@@ -13,6 +13,7 @@ public static class AgentSessionsApi
 
         group.MapPost("/sessions", Register);
         group.MapPost("/sessions/{id:guid}/role", SetRole);
+        group.MapPost("/sessions/{id:guid}/identity", SetIdentity);
         group.MapPost("/sessions/{id:guid}/end", End);
         group.MapPost("/sessions/{id:guid}/touch", Touch);
 
@@ -63,6 +64,99 @@ public static class AgentSessionsApi
         session.SetRole(role);
         await db.SaveChangesAsync(ct);
         return Results.Ok(ToResponse(session));
+    }
+
+    private static async Task<IResult> SetIdentity(
+        Guid id, SetAgentSessionIdentityRequest request, OvermindDbContext db, CancellationToken ct)
+    {
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (session is null)
+        {
+            return HttpErrors.NotFound($"Session '{id}' was not found.");
+        }
+
+        var alias = request.Alias?.Trim();
+        var vendor = request.Vendor?.Trim();
+
+        var holder = await FindAliveAliasHolderAsync(db, id, alias, ct);
+        if (holder is not null)
+        {
+            return HttpErrors.Conflict(
+                $"Alias '{alias}' is held by the alive session '{holder.Alias}' by '{holder.Vendor}'; " +
+                "a stale or ended holder frees the alias.");
+        }
+
+        var identityChanged = !string.Equals(alias, session.Alias, StringComparison.Ordinal) ||
+                              !string.Equals(vendor, session.Vendor, StringComparison.Ordinal);
+
+        try
+        {
+            session.SetIdentity(alias!, vendor!);
+        }
+        catch (ArgumentException ex)
+        {
+            return HttpErrors.BadRequest(ex.Message);
+        }
+
+        var warnings = await BuildWarningsAsync(db, id, identityChanged, alias!, vendor!, ct);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new AgentSessionIdentityResponse(ToResponse(session), warnings));
+    }
+
+    private static async Task<AgentSession?> FindAliveAliasHolderAsync(
+        OvermindDbContext db, Guid sessionId, string? alias, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(alias))
+        {
+            return null;
+        }
+
+        // The union of project alive windows: a holder counts as alive while any project would still count it.
+        var threshold = await db.Projects
+            .Select(p => (int?)p.ClaimStaleThresholdMinutes)
+            .MaxAsync(ct) ?? Project.DefaultClaimStaleThresholdMinutes;
+
+        var candidates = await db.AgentSessions
+            .Where(s => s.Id != sessionId && s.Alias == alias)
+            .ToListAsync(ct);
+
+        return candidates.FirstOrDefault(s =>
+            string.Equals(s.Alias, alias, StringComparison.Ordinal) &&
+            s.Liveness(DateTime.UtcNow, threshold) == AgentSessionLiveness.Alive);
+    }
+
+    private static async Task<IReadOnlyList<string>> BuildWarningsAsync(
+        OvermindDbContext db, Guid sessionId, bool identityChanged, string alias, string vendor, CancellationToken ct)
+    {
+        List<string> warnings = [];
+
+        if (alias.Equals(AgentIdentityDefaults.Alias, StringComparison.Ordinal) &&
+            vendor.Equals(AgentIdentityDefaults.Vendor, StringComparison.Ordinal))
+        {
+            warnings.Add(
+                $"The placeholder identity '{AgentIdentityDefaults.Alias}' by '{AgentIdentityDefaults.Vendor}' was set; " +
+                "invent a project alias and set it again before claiming a feature or posting to wave chat.");
+        }
+
+        if (!identityChanged)
+        {
+            return warnings;
+        }
+
+        var heldSlugs = await db.PlanningFeatures
+            .Where(f => f.ClaimSessionId == sessionId)
+            .OrderBy(f => f.Slug)
+            .Select(f => f.Slug)
+            .ToListAsync(ct);
+
+        if (heldSlugs.Count > 0)
+        {
+            warnings.Add(
+                $"Identity changed while holding claims: {string.Join(", ", heldSlugs)}; " +
+                "the claims keep their claim-time attribution.");
+        }
+
+        return warnings;
     }
 
     private static async Task<IResult> End(Guid id, OvermindDbContext db, CancellationToken ct)

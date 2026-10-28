@@ -146,6 +146,22 @@ public sealed class WaveSnapshotServiceTests : IDisposable
         ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
     }
 
+    [Fact]
+    public async Task Snapshot_LaneBoundAliases_CarryOnlyBoundLanes()
+    {
+        _context.PlanningLanes.Add(PlanningLane.Create(_projectId, "frontend", null, null, null, boundAlias: "johan"));
+        _context.PlanningLanes.Add(PlanningLane.Create(_projectId, "backend", null, null));
+        await CreateFeatureAsync("lane-a");
+        var feature = await _context.PlanningFeatures.SingleAsync(f => f.Slug == "lane-a");
+        feature.SetLane("frontend");
+        await _context.SaveChangesAsync();
+
+        var snapshot = await Service().SnapshotAsync(_projectId);
+
+        snapshot.LaneBoundAliases.Keys.ShouldBe(["frontend"]);
+        snapshot.LaneBoundAliases["frontend"].ShouldBe("johan");
+    }
+
     private WaveSnapshotService Service() =>
         new(_context, new FeatureClaimService(_context, Dispatcher()), new DirectiveService(_context));
 

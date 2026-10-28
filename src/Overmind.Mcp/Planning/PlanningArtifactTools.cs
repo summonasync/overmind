@@ -97,7 +97,7 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_upsert_artifact", Destructive = false, Idempotent = false)]
-    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body, so prefer planning_patch_artifact for one XML section or one acceptance item and planning_append_log for a log line. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). dryRun=true runs the full validation path (canonicalization, pointer lint, kind guards, order resolution) and persists NOTHING — no row, no version snapshot, no feature transition, no materialization dispatch; the response echoes the would-be artifact id and version marked dryRun, so a huge body can be shape-checked before the real send. Features cannot be deleted or archived via MCP — the UI owns feature deletion. Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
+    [Description("Creates an artifact for a feature, or updates the existing artifact of the same kind and order as a new version — the most expensive write: resends the full body. Artifacts are created draft; validation goes through planning_validate. Editing a validated artifact requires a logNote — not needed on create. Expected XML sections — task: goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log; spec/plan/result: free-form markdown with <log> as the only machine-parsed section. Order is a sort key within the feature — lowest order first; it drives planning_current_task picking; omitted order appends after the current max (first append lands on 0; materialized backlog files are numbered 1-based). Gaps in order numbering are legal and meaningful — imported backlogs skip tasks that were planned but never written; order doubles as the stable handle (blockedBy edges and {featureSlug}/T{order} aliases address tasks by order), so never renumber existing tasks to close a hole. Task artifacts also take a brief: a one-line summary (max 500 chars) shown next to the task; other kinds reject it. They also take blockedBy: sibling task orders this task waits on — re-upsert replaces the edge set declaratively (empty array clears), omit it to preserve the current edges on update (none on create). dryRun=true runs the full validation path (canonicalization, pointer lint, kind guards, order resolution) and persists NOTHING — no row, no version snapshot, no feature transition, no materialization dispatch; the response echoes the would-be artifact id and version marked dryRun, so a huge body can be shape-checked before the real send. Features cannot be deleted or archived via MCP — the UI owns feature deletion. Without a validated plan the feature never auto-promotes to review — flip it manually via planning_set_feature_status.")]
     public async Task<JsonElement> UpsertArtifact(
         [Description("Slug of the feature to add or update the artifact in.")] string featureSlug,
         [Description("Artifact kind: spec, plan, task or result.")] string kind,
@@ -360,7 +360,7 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_append_log", Destructive = false, Idempotent = false)]
-    [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body — the cheapest write: one dated line, body is not resent. Use it to report progress between status moves.")]
+    [Description("Planning ceremony, step 3 companion: appends a dated line to an artifact's log without touching its body — the cheapest write: one dated line, body is not resent.")]
     public async Task<JsonElement> AppendLog(
         [Description("Note text recorded as a dated log line.")] string note,
         [Description("Id of the artifact to append the note to; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
@@ -396,27 +396,29 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_patch_artifact", Destructive = false, Idempotent = false)]
-    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section, flips one acceptance item, sets the task brief, or appends a result amendment; rest of the body untouched. A section absent from the body is instead INSERTED — with the content, or declared-empty when content is omitted (tasks accept the declared vocabulary only, spec/plan/result any tag name). Alternatively acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. Text matching is entity-normalized: acText '&lt;key&gt;' matches a stored '<key>' and the reverse, so escaped and readable forms are interchangeable on either side. A miss never succeeds silently: an out-of-range acIndex or an unmatched acText is a 400 listing the visible items. A section-replace of an existing section without content, and an unknown section name on a task, are 400s — the latter lists sections present plus the accepted vocabulary. The log section is append-only: patching it is a 400 that points at planning_append_log / planning_edit_log, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced or inserted section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote. The amendment door: amend=true together with content, on a kind=result artifact only — content is appended to the body tail as a dated block '## <amendment> yyyy-MM-dd' followed by the content lines, one block per call, existing text untouched; a supersede note is just a line of the content ('Supersedes: <what and why>'). NO demotion — a validated result stays validated untouched, a done feature stays done — and no human proof is required: logNote is mandatory and records the pre-approval; when the append stales a live approval reply the response's validationProofVoided names it. Works on draft results too; on spec/plan/task the door is refused with a 400 naming the result-only scope.")]
+    [Description("Changes one artifact in place without resending its body — the middle tier: replaces one XML section or one markdown heading block, flips one acceptance item, sets the task brief, or appends a result amendment; rest of the body untouched. A section absent from the body is instead INSERTED — with the content, or declared-empty when content is omitted (tasks accept the declared vocabulary only, spec/plan/result any tag name). The section address is dual-mode and the routing rule is exact: a tag-parseable name (the XML vocabulary — goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log) always routes to the XML section path byte-identically, while a markdown heading address ('## Scope') routes to an H2 heading block of a spec/plan/result body — so a bare word like 'scope' on a spec creates/reaches the XML section, NOT the heading block: heading addresses need the '## ' prefix. A heading patch replaces from the heading line to the next same-or-higher heading and keeps the heading line byte-stable; an absent heading + content inserts at the body tail. The tombstone mode: remove=true together with reason replaces the resolved heading block — heading line included — with a single '<removed YYYY-MM-DD — reason>' line (remove without reason is refused). Guards: a duplicate heading name is a 400 listing the matching headings (nothing modified); heading mode on a task is a 400 naming the XML vocabulary; removing an XML section is refused in v1 (RemoveNotAllowedForXmlSection — tombstones are heading-mode only); a heading patch on a validated artifact demotes it + needs logNote like any content edit. Alternatively acIndex/acText to tick one acceptance-criteria item (add untick=true to clear the checkbox instead), or brief to set the one-line task summary (task-only, max 500 chars, no version bump, no log line, body untouched); never more than one. " + AcIndexBasisLine + " — fall back to the index when the text is ambiguous. Text matching is entity-normalized: acText '&lt;key&gt;' matches a stored '<key>' and the reverse, so escaped and readable forms are interchangeable on either side. A miss never succeeds silently: an out-of-range acIndex or an unmatched acText is a 400 listing the visible items. A section-replace of an existing section without content, and an unknown section name on a task, are 400s — the latter lists sections present plus the accepted vocabulary. The log section is append-only: patching it is a 400 that points at planning_append_log / planning_edit_log, a heading block carrying the <log> pair is refused the same way, and history is rewritten only through a full upsert. Flipping an item already in the requested state is a successful no-op rendering 'already ticked — no change' or 'already unticked — no change'; a replaced or inserted section is a real change every time. Tick and untick echo the resolved item as tickedIndex + tickedText. Editing a validated artifact requires a logNote. The amendment door: amend=true together with content, on a kind=result artifact only — content is appended to the body tail as a dated block '## <amendment> yyyy-MM-dd' followed by the content lines, one block per call, existing text untouched; a supersede note is just a line of the content ('Supersedes: <what and why>'). NO demotion — a validated result stays validated untouched, a done feature stays done — and no human proof is required: logNote is mandatory and records the pre-approval; when the append stales a live approval reply the response's validationProofVoided names it. Works on draft results too; on spec/plan/task the door is refused with a 400 naming the result-only scope.")]
     public async Task<CallToolResult> PatchArtifact(
         [Description("Id of the artifact to patch; omit it to address the artifact by alias + projectId.")] Guid? artifactId = null,
-        [Description("Name of the XML section to replace or insert, e.g. goal.")] string? section = null,
-        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty. With amend=true this carries the amendment text appended as the dated block instead.")] string? content = null,
+        [Description("Dual-mode address: an XML section name (e.g. goal) or, for spec/plan/result, a markdown heading with the '## ' prefix (e.g. '## Scope') — the routing rule is in the tool description.")] string? section = null,
+        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty. With amend=true this carries the amendment text appended as the dated block instead; with remove=true it must be omitted.")] string? content = null,
         [Description("1-based index of the acceptance-criteria item; numbering matches the materialized mirror and the 400 diagnostics.")] int? acIndex = null,
         [Description("Exact text of the acceptance-criteria item, without the checkbox marker — the recommended selector; entity-escaped and readable forms match alike.")] string? acText = null,
         [Description("Set true together with acIndex or acText to clear the checkbox ([x] to [ ]) instead of ticking it.")] bool untick = false,
         [Description("One-line brief to set on a task artifact, max 500 chars; task-only — spec/plan/result reject it; no version bump.")] string? brief = null,
         [Description("Set true together with content to use the amendment door: content becomes a dated '## <amendment> yyyy-MM-dd' block at the body tail of a kind=result artifact — no demotion, logNote records the pre-approval.")] bool amend = false,
+        [Description("Set true together with section + reason to tombstone the resolved heading block: the block — heading line included — is replaced by a single '<removed YYYY-MM-DD — reason>' line. Heading mode only in v1; XML-section remove is refused.")] bool remove = false,
+        [Description("Reason carried in the '<removed YYYY-MM-DD — reason>' tombstone line; required when remove=true.")] string? reason = null,
         [Description("Change note recorded in the artifact log; required when the artifact is validated.")] string? logNote = null,
         [Description("Id of the project the feature belongs to; required when alias is used.")] Guid? projectId = null,
         [Description(ArtifactAliasDescription)] string? alias = null,
         [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {
-        var op = PatchOpOf(section, content, acIndex, acText, brief, untick, amend);
+        var op = PatchOpOf(section, content, acIndex, acText, brief, untick, amend, remove, reason);
         var id = await _aliases.AddressArtifactAsync(artifactId, projectId, alias, ct);
         var patch = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/planning/artifacts/{id}/patch",
-            new { op, section, content, acIndex, acText, brief, logNote, source = DoorSource },
+            new { op, section, content, acIndex, acText, brief, logNote, reason, source = DoorSource },
             ct, operationId), PatchReadback(id, logNote), ct);
 
         if (patch.TryGetProperty("noChange", out var noChange) &&
@@ -506,7 +508,7 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_validate", Destructive = false, Idempotent = false)]
-    [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying. Validating a spec or plan here requires human-approval proof: send overmind_notify(kind=approval, featureSlug=<the feature's slug>), wait for the human's reply in the notification center, then validate (notify → reply → validate). The reply must be newer than the artifact's last update — every edit voids it, and re-validation needs a fresh reply; without proof the call fails with a ValidationProofRequired 409. The human door (UI) needs no proof, and neither does asMigrated — the migration escape hatch for artifacts pre-approved before import (e.g. already validated on disk): it skips the human gate, requires a logNote carrying the provenance, and leaves a 'validated as migrated — pre-approved on disk' marker line in the artifact log.")]
+    [Description("Validates a spec, plan or result artifact. When the project requires human validation this fails with a STOP error — ask the user to approve it in the Overmind UI instead of retrying. Validating a spec or plan here requires human-approval proof: send overmind_notify(kind=approval, featureSlug=<the feature's slug>), wait for the human's reply in the notification center, then validate (notify → reply → validate). The reply must be newer than the artifact's last update — every edit voids it, and re-validation needs a fresh reply; without proof the call fails with a ValidationProofRequired 409. One fresh reply may validate the spec and the plan of the same feature in one pass — and any body edit to either voids it for both. The human door (UI) needs no proof, and neither does asMigrated — the migration escape hatch for artifacts pre-approved before import (e.g. already validated on disk): it skips the human gate, requires a logNote carrying the provenance, and leaves a 'validated as migrated — pre-approved on disk' marker line in the artifact log.")]
     public async Task<CallToolResult> Validate(
         [Description("Id of the artifact to validate.")] Guid artifactId,
         [Description("True only for artifacts pre-approved before migration (e.g. already validated on disk); skips the human gate and leaves a loud migration marker in the log.")] bool? asMigrated = null,
@@ -537,14 +539,16 @@ public sealed class PlanningArtifactTools
     }
 
     private static string PatchOpOf(
-        string? section, string? content, int? acIndex, string? acText, string? brief, bool untick, bool amend)
+        string? section, string? content, int? acIndex, string? acText, string? brief, bool untick, bool amend,
+        bool remove, string? reason)
     {
         var wantsSection = section is not null || content is not null;
         var wantsAc = acIndex is not null || acText is not null;
 
         if (amend)
         {
-            if (brief is not null || section is not null || acIndex is not null || acText is not null || untick)
+            if (brief is not null || section is not null || acIndex is not null || acText is not null ||
+                untick || remove || reason is not null)
             {
                 throw new McpException(PatchShapeError);
             }
@@ -560,7 +564,7 @@ public sealed class PlanningArtifactTools
 
         if (brief is not null)
         {
-            if (wantsSection || wantsAc || untick)
+            if (wantsSection || wantsAc || untick || remove || reason is not null)
             {
                 throw new McpException(PatchShapeError);
             }
@@ -571,6 +575,34 @@ public sealed class PlanningArtifactTools
             }
 
             return "set_brief";
+        }
+
+        if (remove)
+        {
+            if (wantsAc || untick)
+            {
+                throw new McpException(PatchShapeError);
+            }
+
+            if (string.IsNullOrWhiteSpace(section) || content is not null)
+            {
+                throw new McpException(
+                    "The tombstone mode needs the section to remove; content must be omitted — the block is replaced by the <removed> line, not new content.");
+            }
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new McpException(
+                    "remove=true needs reason: it is carried in the '<removed YYYY-MM-DD — reason>' tombstone line and is what keeps the block from being silently resurrected.");
+            }
+
+            return "remove_section";
+        }
+
+        if (reason is not null)
+        {
+            throw new McpException(
+                "reason belongs to the tombstone mode: pair it with remove=true and the section to remove.");
         }
 
         if (wantsSection == wantsAc)

@@ -5,4 +5,5 @@ public sealed record LaneUpsert(
     string? Contour,
     int? SerialOrder,
     int? Priority = null,
-    IReadOnlyList<LiveSurfaceEntry>? LiveSurfaces = null);
+    IReadOnlyList<LiveSurfaceEntry>? LiveSurfaces = null,
+    string? BoundAlias = null);

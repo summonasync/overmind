@@ -24,9 +24,9 @@ public sealed class LaneTools
     }
 
     [McpServerTool(Name = "planning_set_lanes", Destructive = false, Idempotent = false)]
-    [Description("Reshapes the project's lane roster as an UPSERT of known lanes — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Only the lanes the payload names change (name-keyed case-insensitively); lanes absent from the payload are never touched, so a payload missing a lane deletes nothing. An empty array is an explicit no-op echoing the unchanged roster — it used to clear the whole roster and no longer does. An unknown name fails with 400 LaneBirthRestricted naming planning_update_feature as the only birth path: set_lanes never creates lanes. Each item: name (required, max 64, unique per project, and addressable as a single URL path segment — a lane is edited granularly at its name, so no slash, backslash or control character, and never a bare dot or dot-dot: those are refused with 400 InvalidLaneName before anything is written), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet), priority (optional int 0-3, mirroring feature priorities p0-p3 — lane columns sort priority asc, nulls last; null = no priority), liveSurfaces (optional array of {glob, owner} — repo-relative globs watched by a running stand, owner = the alias running it, glob flavor identical to codeSurfaces; entries whose globs match a feature's codeSurfaces are shown in that feature's claim response as an informational warning, never a block; omitted liveSurfaces clears the lane's entries). Removal is a separate explicit act: planning_remove_lane. Features join a lane via planning_update_feature's lane field, which auto-creates unknown names. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
+    [Description("Reshapes the project's lane roster as an UPSERT of known lanes — lanes are first-class planning data: named code contours owned by one agent each, serial within the lane. Only the lanes the payload names change (name-keyed case-insensitively); lanes absent from the payload are never touched, so a payload missing a lane deletes nothing. An empty array is an explicit no-op echoing the unchanged roster — it used to clear the whole roster and no longer does. An unknown name fails with 400 LaneBirthRestricted naming planning_update_feature as the only birth path: set_lanes never creates lanes. Each item: name (required, max 64, unique per project, and addressable as a single URL path segment — a lane is edited granularly at its name, so no slash, backslash or control character, and never a bare dot or dot-dot: those are refused with 400 InvalidLaneName before anything is written), contour (free text description of the code contour), serialOrder (optional int, reserved — no behavior yet), priority (optional int 0-3, mirroring feature priorities p0-p3 — lane columns sort priority asc, nulls last; null = no priority), boundAlias (optional, max 32 — binds the lane to one agent alias so the resident re-adopts it after a restart via session_identity_set; vendor is intentionally not bound — it is per-runtime; null or omitted clears the binding, item-level replace like every optional field), liveSurfaces (optional array of {glob, owner} — repo-relative globs watched by a running stand, owner = the alias running it, glob flavor identical to codeSurfaces; entries whose globs match a feature's codeSurfaces are shown in that feature's claim response as an informational warning, never a block; omitted liveSurfaces clears the lane's entries, item-level replace like every optional field). Removal is a separate explicit act: planning_remove_lane. Features join a lane via planning_update_feature's lane field, which auto-creates unknown names. Max 64 lanes per project. Returns the resulting roster with per-lane holder and open-feature counts.")]
     public async Task<CallToolResult> SetLanes(
-        [Description("Lanes to reshape: an array of lane objects — name (required), contour, serialOrder, priority (optional 0-3, omit for none). Only named lanes change; absent lanes survive; an empty array is a no-op. Each item may carry liveSurfaces: an optional array of {glob, owner} objects.")] JsonElement lanes,
+        [Description("Lanes to reshape: an array of lane objects — name (required), contour, serialOrder, priority (optional 0-3, omit for none), boundAlias (optional, max 32; null or omitted clears it). Only named lanes change; absent lanes survive; an empty array is a no-op. Each item may carry liveSurfaces: an optional array of {glob, owner} objects (omitted clears the lane's entries).")] JsonElement lanes,
         [Description("Id of the project the roster belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
@@ -95,7 +95,7 @@ public sealed class LaneTools
     }
 
     [McpServerTool(Name = "planning_list_lanes", ReadOnly = true, Idempotent = true)]
-    [Description("Reads the project's lane roster with the live projection per lane: name, contour, serialOrder (reserved, no behavior yet), priority (0-3, null = no priority — the board sorts lanes priority asc, nulls last), liveSurfaces (the {glob, owner} entries of running stands this lane watches, shown verbatim; entries whose glob matches a claimant feature's codeSurfaces surface as informational warnings in planning_claim_feature responses), openFeatureCount (non-done features currently in the lane), holder (alias + vendor + claimState of the alive claim on any feature in the lane), and the features themselves (slug, status, claim identity, claimState). The wave marshal reads this before deciding who moves — a lane is busy when some feature in it holds an alive claim by another agent.")]
+    [Description("Reads the project's lane roster with the live projection per lane: name, contour, serialOrder (reserved, no behavior yet), priority (0-3, null = no priority — the board sorts lanes priority asc, nulls last), boundAlias (the agent alias the lane is bound to, null when free — entering the lane means adopting it via session_identity_set, or binding your own before claiming), liveSurfaces (the {glob, owner} entries of running stands this lane watches, shown verbatim; entries whose glob matches a claimant feature's codeSurfaces surface as informational warnings in planning_claim_feature responses), openFeatureCount (non-done features currently in the lane), holder (alias + vendor + claimState of the alive claim on any feature in the lane), and the features themselves (slug, status, claim identity, claimState). The wave marshal reads this before deciding who moves — a lane is busy when some feature in it holds an alive claim by another agent.")]
     public async Task<JsonElement> ListLanes(
         [Description("Id of the project whose roster to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
@@ -144,7 +144,8 @@ public sealed class LaneTools
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
-                throw new McpException($"lanes[{index}] must be an object: name, contour, serialOrder, priority.");
+                throw new McpException(
+                    $"lanes[{index}] must be an object: name, contour, serialOrder, priority, boundAlias.");
             }
 
             var name = item.TryGetProperty("name", out var nameElement) &&
@@ -160,6 +161,12 @@ public sealed class LaneTools
             if (item.TryGetProperty("contour", out var contour) && contour.ValueKind == JsonValueKind.String)
             {
                 entry["contour"] = contour.GetString();
+            }
+
+            if (item.TryGetProperty("boundAlias", out var boundAlias) &&
+                boundAlias.ValueKind == JsonValueKind.String)
+            {
+                entry["boundAlias"] = boundAlias.GetString();
             }
 
             if (item.TryGetProperty("serialOrder", out var serialOrder) &&
