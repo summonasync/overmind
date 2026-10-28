@@ -102,7 +102,8 @@ public sealed record PlanningFeatureClaimResponse(
     AgentSessionLiveness? ClaimState,
     bool ClaimedByHuman,
     string? Lane = null,
-    bool OverrideLaneCheck = false);
+    bool OverrideLaneCheck = false,
+    LiveSurfaceResponse[]? LiveSurfaces = null);
 
 public sealed record LiveSurfaceRequest(string Glob, string Owner);
 

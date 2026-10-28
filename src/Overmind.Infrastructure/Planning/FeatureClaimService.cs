@@ -149,6 +149,35 @@ public sealed class FeatureClaimService
                 : AgentSessionLiveness.Ended);
     }
 
+    // Read-only warning projection: the lane's live surfaces whose globs overlap the feature's
+    // codeSurfaces. Informational only — a feature without codeSurfaces or a lane gets silence,
+    // never an error, and nothing here blocks editing.
+    public async Task<IReadOnlyList<LiveSurfaceEntry>> LiveSurfacesForClaimAsync(
+        PlanningFeature feature, CancellationToken ct = default)
+    {
+        if (feature.Lane is null || string.IsNullOrWhiteSpace(feature.CodeSurfaces))
+        {
+            return [];
+        }
+
+        var patterns = CodeSurfacesJson.Deserialize(feature.CodeSurfaces);
+        if (patterns.Count == 0)
+        {
+            return [];
+        }
+
+        var lane = await _db.PlanningLanes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(l => l.ProjectId == feature.ProjectId && l.Name == feature.Lane, ct);
+        if (string.IsNullOrEmpty(lane?.LiveSurfaces))
+        {
+            return [];
+        }
+
+        return [.. LiveSurfacesJson.Deserialize(lane.LiveSurfaces)
+            .Where(e => patterns.Any(p => CodeSurfaceOverlap.GlobsOverlap(e.Glob, p)))];
+    }
+
     public async Task EnsureHolderAsync(
         Guid projectId, string slug, Guid? sessionId, CancellationToken ct = default)
     {

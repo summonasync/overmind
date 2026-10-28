@@ -113,6 +113,20 @@ public sealed class LaneToolContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SetLanes_PutsLiveSurfacesThrough()
+    {
+        _stub.Route("PUT", RosterRoute, 200, RosterJson);
+
+        var result = await Tool().SetLanes(
+            Element("""[{"name":"frontend","liveSurfaces":[{"glob":"web/src/**","owner":"van-darkholme"}]}]"""),
+            Canned.ProjectId);
+
+        var request = _stub.Requests.Single(r => r.Method == "PUT");
+        request.Body.ShouldContain("\"liveSurfaces\":[{\"glob\":\"web/src/**\",\"owner\":\"van-darkholme\"}]");
+        Text(result).ShouldBe("Lane roster holds 1 lane(s): frontend.");
+    }
+
+    [Fact]
     public async Task SetLanes_EmptyArray_IsANoOpThatEchoesTheUnchangedRoster()
     {
         _stub.Route("PUT", RosterRoute, 200, """{"lanes":[]}""");

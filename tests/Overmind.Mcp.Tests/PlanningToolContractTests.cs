@@ -2741,6 +2741,33 @@ public class PlanningToolContractTests : McpSessionTestBase
         Driver.HasExited.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task PlanningClaimFeature_EchoesLiveSurfaces_WhenTheLaneWatchesMatchingPaths()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/[^/]+/claim",
+            200,
+            """
+            {"slug":"demo-feature","claimedByAlias":"Dan","claimedByVendor":"qwen","claimedAt":"2026-10-02T10:00:00Z","claimState":"alive","lane":"web-boundary","liveSurfaces":[{"glob":"web/src/**","owner":"van-darkholme"}]}
+            """);
+
+        var response = await Driver.CallToolAsync("planning_claim_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["alias"] = "Dan",
+            ["vendor"] = "qwen"
+        });
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo.Select(p => p.Key).ShouldBe(
+            ["slug", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "lane", "liveSurfaces"]);
+        var live = echo["liveSurfaces"]!.AsArray().Single()!.AsObject();
+        live["glob"]!.GetValue<string>().ShouldBe("web/src/**");
+        live["owner"]!.GetValue<string>().ShouldBe("van-darkholme");
+    }
+
     [Theory]
     [InlineData("alias", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
     [InlineData("vendor", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
