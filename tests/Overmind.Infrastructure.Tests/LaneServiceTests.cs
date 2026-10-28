@@ -130,6 +130,79 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SetLanes_WithLiveSurfaces_RoundTripsThroughTheRoster()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("web-boundary", "web src", 1, 0);
+
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert(
+            "web-boundary", "web src", 1, 0,
+            [new LiveSurfaceEntry("web/src/**", "van-darkholme")])]);
+
+        roster.Single().LiveSurfaces.ShouldBe([new LiveSurfaceEntry("web/src/**", "van-darkholme")]);
+
+        var reread = await service.ListLanesAsync(_projectId);
+        reread.Single().LiveSurfaces.ShouldBe([new LiveSurfaceEntry("web/src/**", "van-darkholme")]);
+    }
+
+    [Fact]
+    public async Task SetLanes_LiveSurfaces_GlobsAndOwnersAreNormalized()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("web-boundary");
+
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert(
+            "web-boundary", null, null, null,
+            [new LiveSurfaceEntry("  web/src/**  ", "  van-darkholme  ")])]);
+
+        roster.Single().LiveSurfaces.ShouldBe([new LiveSurfaceEntry("web/src/**", "van-darkholme")]);
+    }
+
+    [Fact]
+    public async Task SetLanes_LiveSurfaceWithInvalidGlob_Throws()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("web-boundary");
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() => service.SetLanesAsync(_projectId,
+            [new LaneUpsert("web-boundary", null, null, null,
+                [new LiveSurfaceEntry("src/{a,b}/**", "van-darkholme")])]));
+
+        ex.Message.ShouldContain("repo-relative glob");
+    }
+
+    [Fact]
+    public async Task SetLanes_LiveSurfacesOmitted_ClearsExistingEntries()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("web-boundary");
+        await service.SetLanesAsync(_projectId, [new LaneUpsert(
+            "web-boundary", null, null, null,
+            [new LiveSurfaceEntry("web/src/**", "van-darkholme")])]);
+
+        var roster = await service.SetLanesAsync(_projectId, [new LaneUpsert("web-boundary", "web src", 1, 0)]);
+
+        roster.Single().LiveSurfaces.ShouldBe([]);
+        roster.Single().Contour.ShouldBe("web src");
+    }
+
+    [Fact]
+    public async Task UpsertLane_UpdateMode_SetsLiveSurfaces()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("web-boundary");
+
+        var roster = await service.UpsertLaneAsync(
+            _projectId,
+            new LaneUpsert("web-boundary", null, null, null,
+                [new LiveSurfaceEntry("luca/umbracolistener/src/**", "billy-herrington")]),
+            LaneWriteMode.Update);
+
+        roster.Single().LiveSurfaces.ShouldBe(
+            [new LiveSurfaceEntry("luca/umbracolistener/src/**", "billy-herrington")]);
+    }
+
+    [Fact]
     public async Task SetLanes_DuplicateNamesInRequest_Throws()
     {
         var ex = await Should.ThrowAsync<PlanningException>(() => CreateService()

@@ -5,6 +5,7 @@ public sealed record LaneRow(
     string? Contour,
     int? SerialOrder,
     int? Priority,
+    IReadOnlyList<LiveSurfaceEntry> LiveSurfaces,
     int OpenFeatureCount,
     LaneHolder? Holder,
     IReadOnlyList<LaneFeatureSummary> Features);

@@ -98,7 +98,30 @@ public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest
             lane.RuleFor(l => l.SerialOrder).GreaterThanOrEqualTo(0).When(l => l.SerialOrder.HasValue);
             lane.RuleFor(l => l.Priority).InclusiveBetween(0, PlanningLane.MaxPriority)
                 .When(l => l.Priority.HasValue);
+            lane.RuleFor(l => l.LiveSurfaces).Must(LiveSurfacesValid)
+                .WithMessage("liveSurfaces entries are invalid: " +
+                             CodeSurfaceRules.EntryMessage + " " + CodeSurfaceRules.LiveSurfaceOwnerMessage)
+                .When(l => l.LiveSurfaces is not null);
         });
+    }
+
+    internal static bool LiveSurfacesValid(LiveSurfaceRequest[]? surfaces)
+    {
+        if (surfaces is null)
+        {
+            return true;
+        }
+
+        if (surfaces.Length > PlanningLane.MaxLiveSurfaces)
+        {
+            return false;
+        }
+
+        return surfaces.All(s =>
+            s is not null &&
+            RepoGlobRule.IsValid(s.Glob) &&
+            !string.IsNullOrWhiteSpace(s.Owner) &&
+            s.Owner.Trim().Length <= PlanningLane.MaxLiveSurfaceOwnerLength);
     }
 }
 
@@ -109,6 +132,10 @@ public sealed class UpdateLaneRequestValidator : AbstractValidator<UpdateLaneReq
         RuleFor(x => x.Contour).MaximumLength(PlanningLane.MaxContourLength);
         RuleFor(x => x.SerialOrder).GreaterThanOrEqualTo(0).When(x => x.SerialOrder.HasValue);
         RuleFor(x => x.Priority).InclusiveBetween(0, PlanningLane.MaxPriority).When(x => x.Priority.HasValue);
+        RuleFor(x => x.LiveSurfaces).Must(SetLanesRequestValidator.LiveSurfacesValid)
+            .WithMessage("liveSurfaces entries are invalid: " +
+                         CodeSurfaceRules.EntryMessage + " " + CodeSurfaceRules.LiveSurfaceOwnerMessage)
+            .When(x => x.LiveSurfaces is not null);
     }
 }
 

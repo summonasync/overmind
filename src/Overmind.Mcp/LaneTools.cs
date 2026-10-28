@@ -174,6 +174,33 @@ public sealed class LaneTools
                 entry["priority"] = priority.GetInt32();
             }
 
+            if (item.TryGetProperty("liveSurfaces", out var liveSurfaces) &&
+                liveSurfaces.ValueKind == JsonValueKind.Array)
+            {
+                var surfaces = new JsonArray();
+                foreach (var surface in liveSurfaces.EnumerateArray())
+                {
+                    if (surface.ValueKind != JsonValueKind.Object ||
+                        !surface.TryGetProperty("glob", out var glob) ||
+                        glob.ValueKind != JsonValueKind.String)
+                    {
+                        throw new McpException(
+                            $"lanes[{index}]: each liveSurfaces entry must be an object with a glob string and an owner string.");
+                    }
+
+                    var surfaceEntry = new JsonObject { ["glob"] = glob.GetString() };
+                    if (surface.TryGetProperty("owner", out var owner) &&
+                        owner.ValueKind == JsonValueKind.String)
+                    {
+                        surfaceEntry["owner"] = owner.GetString();
+                    }
+
+                    surfaces.Add(surfaceEntry);
+                }
+
+                entry["liveSurfaces"] = surfaces;
+            }
+
             items.Add(entry);
             index++;
         }
