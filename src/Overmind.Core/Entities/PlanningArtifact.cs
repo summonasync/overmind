@@ -220,6 +220,76 @@ public sealed class PlanningArtifact
         ApplyBodyMutation(PlanningSections.Insert(section, Body, content), logNote, source);
     }
 
+    public void PatchHeadingSection(
+        string section,
+        string? content,
+        bool remove,
+        string? reason,
+        string? logNote = null,
+        PlanningLogSource? source = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(section);
+
+        if (Kind == PlanningArtifactKind.Task)
+        {
+            throw PlanningException.PatchSectionNotFound(
+                section,
+                PlanningSections.List(Body),
+                "Heading patches apply to the free-form markdown of spec, plan and result artifacts; tasks keep the XML section vocabulary.",
+                string.Join(", ", PlanningTaskSections.Declared));
+        }
+
+        if (remove && string.IsNullOrWhiteSpace(reason))
+        {
+            throw PlanningException.PatchRemoveReasonRequired(section);
+        }
+
+        if (!PlanningHeadingSections.TryGetHeadingText(section, out var headingText))
+        {
+            throw HeadingNotFound(section);
+        }
+
+        var blocks = PlanningHeadingSections.Find(headingText, Body);
+        if (blocks.Count > 1)
+        {
+            throw PlanningException.PatchHeadingAmbiguous(
+                section, [.. blocks.Select(b => b.HeadingLine.Trim())]);
+        }
+
+        if (remove)
+        {
+            if (blocks.Count == 0)
+            {
+                throw HeadingNotFound(section);
+            }
+
+            EnsureLogNotInside(blocks[0]);
+            RequireChangeNoteWhenFrozen(logNote);
+            ApplyBodyMutation(
+                PlanningHeadingSections.Remove(
+                    blocks[0], Body, PlanningHeadingSections.TombstoneLine(reason!)),
+                logNote,
+                source);
+            return;
+        }
+
+        if (blocks.Count == 0)
+        {
+            RequireChangeNoteWhenFrozen(logNote);
+            ApplyBodyMutation(PlanningHeadingSections.Insert(headingText, Body, content), logNote, source);
+            return;
+        }
+
+        if (content is null)
+        {
+            throw PlanningException.SectionContentRequiredForReplace(section);
+        }
+
+        EnsureLogNotInside(blocks[0]);
+        RequireChangeNoteWhenFrozen(logNote);
+        ApplyBodyMutation(PlanningHeadingSections.Replace(blocks[0], Body, content), logNote, source);
+    }
+
     public PlanningAcTickResult TickAc(int? index, string? text, string? logNote = null, PlanningLogSource? source = null) =>
         FlipAc(index, text, checking: true, logNote, source);
 
@@ -465,6 +535,17 @@ public sealed class PlanningArtifact
                 ? PlanningException.InlineSectionHint(section)
                 : null,
             Kind == PlanningArtifactKind.Task ? string.Join(", ", PlanningTaskSections.Declared) : null);
+
+    private PlanningException HeadingNotFound(string section) =>
+        PlanningException.PatchHeadingNotFound(section, PlanningHeadingSections.List(Body));
+
+    private void EnsureLogNotInside(PlanningHeadingBlock block)
+    {
+        if (PlanningSections.TryFind("log", Body[block.Start..block.End], out _))
+        {
+            throw PlanningException.PatchLogSectionNotReplaceable();
+        }
+    }
 
     // The log is append-only across resends: stored lines are the truth, and the incoming body's
     // log section carries new lines only. Line k of the incoming parse either continues the stored

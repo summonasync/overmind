@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Overmind.Core;
 using Shouldly;
 using Xunit;
@@ -84,6 +85,29 @@ shipped behind the flag; totals below.
 <log>
 - 2026-09-01 — seeded
 </log>
+""";
+
+    private const string HeadingBody = """
+# Spec
+
+## Scope
+- ship the locator
+### Nested
+- deeper still
+
+## Next
+later
+""";
+
+    private const string HeadingOverLogBody = """
+## Log
+
+<log>
+- 2026-09-01 — seeded
+</log>
+
+## Tail
+end
 """;
 
     [Theory]
@@ -872,6 +896,226 @@ shipped behind the flag; totals below.
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Plan, PatchBody);
 
         Should.Throw<ArgumentException>(() => artifact.PatchSection(section, "content"));
+    }
+
+    [Fact]
+    public void PatchHeadingSection_PrefixedAndBareAddresses_ResolveIdentically()
+    {
+        var prefixed = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+        var bare = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        prefixed.PatchHeadingSection("## Scope", "replaced", remove: false, reason: null);
+        bare.PatchHeadingSection("Scope", "replaced", remove: false, reason: null);
+
+        prefixed.Body.ShouldBe("# Spec\n\n## Scope\nreplaced\n## Next\nlater");
+        bare.Body.ShouldBe(prefixed.Body);
+        prefixed.Version.ShouldBe(2);
+        prefixed.Versions.ShouldHaveSingleItem().Body.ShouldBe(HeadingBody);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_KeepsTheHeadingLineByteIdentical_OnReplace()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        artifact.PatchHeadingSection("Scope", "replaced", remove: false, reason: null);
+
+        artifact.Body.ShouldStartWith("# Spec\n\n## Scope\nreplaced\n");
+        artifact.Body.ShouldNotContain("### Deep");
+    }
+
+    [Fact]
+    public void PatchHeadingSection_AbsentHeading_WithContent_InsertsAtTheBodyEnd()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        artifact.PatchHeadingSection("## Added", "fresh content", remove: false, reason: null);
+
+        artifact.Body.ShouldEndWith("## Added\nfresh content\n");
+        artifact.Version.ShouldBe(2);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_AbsentHeading_WithoutContent_InsertsDeclaredEmpty()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        artifact.PatchHeadingSection("Added", null, remove: false, reason: null);
+
+        artifact.Body.ShouldEndWith("## Added\n" + PlanningSections.EmptyMarker + "\n");
+    }
+
+    [Fact]
+    public void PatchHeadingSection_ExistingHeading_WithoutContent_ThrowsContentRequired()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("Scope", null, remove: false, reason: null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.SectionContentRequiredForReplace);
+        artifact.Body.ShouldBe(HeadingBody);
+        artifact.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_DuplicateHeading_ThrowsListingMatches_AndWritesNothing()
+    {
+        const string body = "## Scope\na\nmiddle\n## Scope\nb\n## Tail\nend";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, body);
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("## Scope", "c", remove: false, reason: null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchHeadingAmbiguous);
+        ex.Message.ShouldContain("2 H2 headings");
+        ex.Message.ShouldContain("'## Scope', '## Scope'");
+        artifact.Body.ShouldBe(body);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void PatchHeadingSection_OnTask_ThrowsNamingTheXmlVocabulary()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, PatchBody);
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("## Goal", "content", remove: false, reason: null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("Heading patches apply");
+        ex.Message.ShouldContain(string.Join(", ", PlanningTaskSections.Declared));
+        artifact.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_MissingHeading_OnRemove_ThrowsListingPresentHeadings()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("Absent", null, remove: true, reason: "gone"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchHeadingNotFound);
+        ex.Message.ShouldContain("'## Scope'");
+        artifact.Body.ShouldBe(HeadingBody);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_Remove_WritesTheTombstoneMarkerOverTheWholeBlock()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        artifact.PatchHeadingSection("Scope", null, remove: true, reason: "scope cut in review");
+
+        Regex.IsMatch(
+                artifact.Body,
+                @"^# Spec\n\n<removed \d{4}-\d{2}-\d{2} — scope cut in review>\n## Next\nlater$")
+            .ShouldBeTrue();
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(HeadingBody);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_RemoveWithoutReason_Throws_AndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        var ex = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("Scope", null, remove: true, reason: null));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchRemoveReasonRequired);
+        artifact.Body.ShouldBe(HeadingBody);
+        artifact.Version.ShouldBe(1);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_BlockCarryingTheLogSection_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingOverLogBody);
+
+        var replace = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("Log", "rewritten", remove: false, reason: null));
+        var tombstone = Should.Throw<PlanningException>(
+            () => artifact.PatchHeadingSection("Log", null, remove: true, reason: "gone"));
+
+        replace.Code.ShouldBe(PlanningFailureCode.PatchLogSectionNotReplaceable);
+        tombstone.Code.ShouldBe(PlanningFailureCode.PatchLogSectionNotReplaceable);
+        artifact.Body.ShouldBe(HeadingOverLogBody);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_FrozenWithoutNote_Throws_AndLeavesArtifactUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+        artifact.Validate();
+        var frozenBody = artifact.Body;
+
+        Should.Throw<InvalidOperationException>(
+            () => artifact.PatchHeadingSection("Scope", "no note here", remove: false, reason: null));
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        artifact.Body.ShouldBe(frozenBody);
+        artifact.Version.ShouldBe(1);
+        artifact.Versions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void PatchHeadingSection_FrozenWithNote_DemotesToDraft_AndAppendsTheAutoLine()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+        artifact.Validate();
+
+        artifact.PatchHeadingSection("Scope", "rework after review", remove: false, reason: null, "spec reopened");
+
+        artifact.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        artifact.FrozenAt.ShouldBeNull();
+        artifact.StatusChanged.ShouldBe(PlanningArtifact.DemotedStatusEcho);
+        artifact.Version.ShouldBe(2);
+        artifact.Versions.ShouldHaveSingleItem().Body.ShouldBe(HeadingBody);
+        var lines = PlanningLog.Parse(artifact.Body);
+        lines.ShouldContain(line => line.Text == "spec reopened");
+        lines.Last().Text.ShouldBe(PlanningArtifact.DemotionLogNote);
+    }
+
+    [Fact]
+    public void PatchHeadingSection_IdenticalContent_DoesNotBumpTheContentAnchor()
+    {
+        const string body = "## Scope\nline one\nline two\n## Next\nlater";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, body);
+
+        artifact.PatchHeadingSection("Scope", "line one\nline two", remove: false, reason: null);
+        var anchorAfterFirst = artifact.ContentUpdatedAt;
+
+        artifact.PatchHeadingSection("Scope", "line one\nline two", remove: false, reason: null);
+
+        artifact.Version.ShouldBe(3);
+        artifact.ContentUpdatedAt.ShouldBe(anchorAfterFirst);
+        artifact.StatusChanged.ShouldBeNull();
+    }
+
+    [Fact]
+    public void PatchHeadingSection_LfContent_OnCrlfBody_IsANoOpWithoutBumpingTheContentAnchor()
+    {
+        const string body = "## Scope\r\nline one\r\nline two\r\n## Next\r\nlater";
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, body);
+
+        artifact.PatchHeadingSection("Scope", "line one\nline two", remove: false, reason: null);
+
+        artifact.Body.ShouldBe(body);
+        artifact.Version.ShouldBe(2);
+        artifact.ContentUpdatedAt.ShouldBe(artifact.CreatedAt);
+        artifact.StatusChanged.ShouldBeNull();
+    }
+
+    [Fact]
+    public void PatchHeadingSection_BlankSectionName_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, HeadingBody);
+
+        Should.Throw<ArgumentException>(
+            () => artifact.PatchHeadingSection("  ", "content", remove: false, reason: null));
     }
 
     [Fact]

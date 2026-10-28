@@ -393,11 +393,13 @@ public sealed class PlanningArtifactService
         var wantsSection = patch.Section is not null;
         var wantsTick = patch.TickIndex.HasValue || patch.TickText is not null;
         var wantsBrief = patch.Brief is not null;
+        var wantsRemove = patch.Remove;
         var actionCount = (wantsAmend ? 1 : 0) + (wantsSection ? 1 : 0) + (wantsTick ? 1 : 0) + (wantsBrief ? 1 : 0);
 
         if (actionCount != 1 ||
             (wantsBrief && string.IsNullOrWhiteSpace(patch.Brief)) ||
-            (wantsAmend && string.IsNullOrWhiteSpace(patch.Content)))
+            (wantsAmend && string.IsNullOrWhiteSpace(patch.Content)) ||
+            (wantsRemove && (!wantsSection || patch.Content is not null)))
         {
             throw PlanningException.InvalidPatchRequest();
         }
@@ -432,7 +434,20 @@ public sealed class PlanningArtifactService
                     PointerMarkerGrammar.EnsureValid(content);
                 }
 
-                artifact.PatchSection(patch.Section!, content, patch.LogNote, source);
+                if (PlanningSections.IsNameParseable(patch.Section!))
+                {
+                    if (wantsRemove)
+                    {
+                        throw PlanningException.PatchRemoveNotAllowedForXmlSection(patch.Section!);
+                    }
+
+                    artifact.PatchSection(patch.Section!, content, patch.LogNote, source);
+                }
+                else
+                {
+                    artifact.PatchHeadingSection(
+                        patch.Section!, content, wantsRemove, patch.Reason, patch.LogNote, source);
+                }
             }
             else if (wantsBrief)
             {

@@ -8,4 +8,6 @@ public sealed record PlanningArtifactPatch(
     string? Brief = null,
     string? LogNote = null,
     bool Untick = false,
-    bool Amend = false);
+    bool Amend = false,
+    bool Remove = false,
+    string? Reason = null);
