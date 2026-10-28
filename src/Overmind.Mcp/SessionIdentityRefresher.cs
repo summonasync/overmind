@@ -32,8 +32,12 @@ public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle)
         timeout.CancelAfter(Budget);
         try
         {
+            // The slot outranks env: a reconnect must not clobber the identity set at runtime.
+            var slot = AdapterIdentityState.TryGet();
             var session = await lifecycle.RegisterAsync(
-                AgentIdentity.ResolveAlias(), AgentIdentity.ResolveVendor(), timeout.Token);
+                slot?.Alias ?? AgentIdentity.ResolveAlias(),
+                slot?.Vendor ?? AgentIdentity.ResolveVendor(),
+                timeout.Token);
             Guid? superseded;
             lock (_swap)
             {

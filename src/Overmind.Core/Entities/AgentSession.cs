@@ -79,6 +79,15 @@ public sealed class AgentSession
         Alias = NormalizeIdentity(alias, nameof(alias));
     }
 
+    public void SetIdentity(string alias, string vendor)
+    {
+        var normalizedAlias = NormalizeIdentity(alias, nameof(alias));
+        var normalizedVendor = NormalizeIdentity(vendor, nameof(vendor));
+
+        Alias = normalizedAlias;
+        Vendor = normalizedVendor;
+    }
+
     public AgentSessionLiveness Liveness(DateTime now, int staleThresholdMinutes)
     {
         if (EndedAt is not null)

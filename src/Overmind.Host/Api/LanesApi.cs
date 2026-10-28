@@ -104,7 +104,7 @@ public static class LanesApi
 
         return await WriteAsync(
             projectId,
-            new LaneUpsert(name, request.Contour, request.SerialOrder, request.Priority),
+            new LaneUpsert(name, request.Contour, request.SerialOrder, request.Priority, request.BoundAlias),
             LaneWriteMode.Update,
             lanes,
             ct);
@@ -155,6 +155,7 @@ public static class LanesApi
             lane.Contour,
             lane.SerialOrder,
             lane.Priority,
+            lane.BoundAlias,
             lane.OpenFeatureCount,
             lane.Holder is { } holder
                 ? new LaneHolderResponse(holder.Alias, holder.Vendor, holder.ClaimState)
@@ -164,6 +165,7 @@ public static class LanesApi
 
     private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes) =>
     [
-        .. lanes.Select(lane => new LaneUpsert(lane.Name, lane.Contour, lane.SerialOrder, lane.Priority))
+        .. lanes.Select(lane => new LaneUpsert(
+            lane.Name, lane.Contour, lane.SerialOrder, lane.Priority, lane.BoundAlias))
     ];
 }

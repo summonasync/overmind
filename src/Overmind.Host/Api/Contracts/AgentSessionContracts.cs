@@ -4,6 +4,8 @@ public sealed record RegisterAgentSessionRequest(string Alias, string Vendor, st
 
 public sealed record SetAgentSessionRoleRequest(string Role);
 
+public sealed record SetAgentSessionIdentityRequest(string Alias, string Vendor);
+
 public sealed record AgentSessionResponse(
     Guid Id,
     string Alias,
@@ -11,3 +13,5 @@ public sealed record AgentSessionResponse(
     DateTime StartedAt,
     DateTime LastSeenAt,
     DateTime? EndedAt);
+
+public sealed record AgentSessionIdentityResponse(AgentSessionResponse Session, IReadOnlyList<string> Warnings);

@@ -225,7 +225,7 @@ public class OnboardingToolContractTests : McpSessionTestBase
         var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
         description.ShouldContain(
-            "agentIdentity block (default alias/vendor + the project's naming rules for choosing your own stable alias)");
+            "agentIdentity block (effective alias/vendor resolved env > placeholder with its source, the project's naming rules for choosing your own stable alias, and the session_identity_set next step when the alias is still the shared placeholder)");
     }
 
     [Fact]
@@ -347,14 +347,47 @@ public class OnboardingToolContractTests : McpSessionTestBase
     {
         Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAgentIdentityJson);
 
-        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_ALIAS"] = string.Empty,
+            ["OVERMIND_VENDOR"] = string.Empty
+        });
+        await driver.InitializeAsync();
+
+        var response = await driver.CallToolAsync("overmind_onboard", new JsonObject());
 
         var text = Canned.ToolResultText(response);
         text.ShouldContain(
-            "Agent identity: default alias 'agent', vendor 'unknown' — pass this pair to planning_claim_feature " +
-            "when claiming a feature; the project's naming rules:");
+            "Agent identity: alias 'agent', vendor 'unknown' (source: placeholder) — pass this pair to " +
+            "planning_claim_feature when claiming a feature; the project's naming rules:");
         text.ShouldContain("Aliases on this project take the crew animal list and stay lowercase.");
         text.ShouldContain("Keep the alias stable across sessions — it binds the feature claim.");
+        text.ShouldContain(
+            "Next step: 'agent' is the shared placeholder — invent your own alias per the naming rules above " +
+            "(or restore your stable one) and set it via session_identity_set BEFORE claiming");
+        text.ShouldContain(
+            "planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set before the claim");
+    }
+
+    [Fact]
+    public async Task Onboard_EnvIdentity_RendersSourceAndSkipsNextStep()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardAgentIdentityJson);
+
+        using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
+        {
+            ["OVERMIND_ALIAS"] = "crew-otter",
+            ["OVERMIND_VENDOR"] = "qwen"
+        });
+        await driver.InitializeAsync();
+
+        var response = await driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Agent identity: alias 'crew-otter', vendor 'qwen' (source: env) — pass this pair to " +
+            "planning_claim_feature when claiming a feature; the project's naming rules:");
+        text.ShouldNotContain("Next step:");
     }
 
     [Fact]

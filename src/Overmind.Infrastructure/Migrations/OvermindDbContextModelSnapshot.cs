@@ -567,6 +567,10 @@ namespace Overmind.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BoundAlias")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Contour")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
