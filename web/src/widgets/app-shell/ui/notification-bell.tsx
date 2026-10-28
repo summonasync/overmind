@@ -1,60 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bell } from "lucide-react";
 import {
   isAwaitingApproval,
-  NOTIFICATION_KIND_META,
-  notificationHref,
-  notificationProjectId,
   unreadNotifications,
+  useBellAutoRead,
+  useNotificationMutations,
   useNotifications,
 } from "@/features/notifications";
-import type { NotificationItem } from "@/features/notifications";
-import { ProjectNameBadge } from "@/features/projects";
 import { Badge } from "@/shared/ui/badge";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { ErrorText } from "@/shared/ui/error-text";
 import { Modal } from "@/shared/ui/modal";
 import { cn } from "@/shared/lib/cn";
-import { formatNotificationTime } from "@/shared/lib/relative-time";
+import { BellNotificationCard } from "@/widgets/app-shell/ui/bell-notification-card";
 
 const DISPLAY_CAP = 50;
-
-function BellPreviewRow({ item }: { item: NotificationItem }) {
-  const meta = NOTIFICATION_KIND_META[item.kind];
-  const KindIcon = meta.icon;
-  const href = item.featureSlug ? notificationHref(item) : null;
-
-  const content = (
-    <>
-      <ProjectNameBadge projectId={notificationProjectId(item)} />
-      <KindIcon size={14} aria-hidden className={cn("shrink-0", meta.iconClass)} />
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.text}</span>
-      <span className="shrink-0 text-xs text-muted">{formatNotificationTime(item.createdAt)}</span>
-    </>
-  );
-
-  return (
-    <li>
-      {href ? (
-        <a
-          href={href}
-          className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          {content}
-        </a>
-      ) : (
-        <div className="flex items-center gap-2 px-2 py-2">{content}</div>
-      )}
-    </li>
-  );
-}
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const { items, unreadCount } = useNotifications();
+  const { markRead } = useNotificationMutations();
   const awaitingApproval = items.some(isAwaitingApproval);
   const unread = unreadNotifications(items);
+  const unreadIds = useMemo(() => unread.map((item) => item.id), [unread]);
+
+  useBellAutoRead(open, unreadIds, markRead.mutate);
 
   return (
     <>
@@ -93,12 +65,18 @@ export function NotificationBell() {
               hint="Everything is read — the Attention page holds the awaiting queue and the full history."
             />
           ) : (
-            <ul className="flex flex-col">
+            <ul className="flex flex-col gap-2">
               {unread.map((item) => (
-                <BellPreviewRow key={item.id} item={item} />
+                <BellNotificationCard
+                  key={item.id}
+                  item={item}
+                  marking={markRead.isPending && markRead.variables === item.id}
+                  onMarkRead={markRead.mutate}
+                />
               ))}
             </ul>
           )}
+          <ErrorText error={markRead.error} />
           <a
             href="/attention"
             onClick={() => setOpen(false)}

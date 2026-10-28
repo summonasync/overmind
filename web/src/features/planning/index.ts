@@ -31,6 +31,7 @@ export {
   usePlanningWorkflow,
   useWorkflowMutations,
 } from "./lib/use-planning";
+export { useFeatureTitle } from "./lib/use-feature-title";
 export {
   artifactVersionsQueryOptions,
   boardQueryOptions,
