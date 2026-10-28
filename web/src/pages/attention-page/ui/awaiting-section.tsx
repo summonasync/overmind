@@ -6,7 +6,11 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { AwaitingRow } from "@/pages/attention-page/ui/awaiting-row";
 
-export function AwaitingSection() {
+interface AwaitingSectionProps {
+  highlightId?: string | null;
+}
+
+export function AwaitingSection({ highlightId }: AwaitingSectionProps) {
   const { items, isPending, error } = useAwaitingNotifications();
 
   return (
@@ -33,7 +37,7 @@ export function AwaitingSection() {
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((item) => (
-            <AwaitingRow key={item.id} item={item} />
+            <AwaitingRow key={item.id} item={item} highlighted={item.id === highlightId} />
           ))}
         </ul>
       )}

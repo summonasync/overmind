@@ -22,9 +22,10 @@ const chipActive = "border-primary bg-primary/10 text-primary";
 
 interface NotificationCenterProps {
   initialKind?: NotificationKindFilter;
+  highlightId?: string | null;
 }
 
-export function NotificationCenter({ initialKind = "all" }: NotificationCenterProps) {
+export function NotificationCenter({ initialKind = "all", highlightId }: NotificationCenterProps) {
   const [kind, setKind] = useState<NotificationKindFilter>(initialKind);
   const [showHidden, setShowHidden] = useState(false);
   const { items, unreadCount, isPending, error } = useNotifications(showHidden);
@@ -100,7 +101,7 @@ export function NotificationCenter({ initialKind = "all" }: NotificationCenterPr
       ) : (
         <ul className="flex flex-col gap-2">
           {visible.map((item) => (
-            <NotificationRow key={item.id} item={item} />
+            <NotificationRow key={item.id} item={item} highlighted={item.id === highlightId} />
           ))}
         </ul>
       )}

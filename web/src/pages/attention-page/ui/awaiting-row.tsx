@@ -14,18 +14,21 @@ import { formatNotificationTime } from "@/shared/lib/relative-time";
 
 interface AwaitingRowProps {
   item: NotificationItem;
+  highlighted?: boolean;
 }
 
-export function AwaitingRow({ item }: AwaitingRowProps) {
+export function AwaitingRow({ item, highlighted }: AwaitingRowProps) {
   const meta = NOTIFICATION_KIND_META[item.kind];
   const KindIcon = meta.icon;
   const numbering = useProjectNumbering(notificationProjectId(item));
 
   return (
     <li
+      data-notification-id={item.id}
       className={cn(
-        "rounded-lg border bg-surface p-3",
+        "rounded-lg border bg-surface p-3 transition-shadow",
         item.kind === "approval" ? "border-warning/30" : "border-primary/30",
+        highlighted && "ring-2 ring-primary/50",
       )}
     >
       <div className="flex items-center gap-2">
