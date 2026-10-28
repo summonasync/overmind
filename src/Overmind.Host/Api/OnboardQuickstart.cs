@@ -12,16 +12,17 @@ public static class OnboardQuickstart
         Git hygiene: the mirror is untracked by default — every materialize pass keeps the BACKLOG/ + ENTRIES/ patterns in .git/info/exclude (the Host never executes git; exclude never untracks, so an already-committed mirror stays committed until a human runs git rm -r --cached). planning_export_backlog is the explicit commit-alongside path: it renders the full mirror (planning tree + entries projection) into an explicit empty absolute target directory with the same renderers as the pass and zero tracking rows, and refuses a target inside BACKLOG//ENTRIES/. Export assumes the loopback-only binding; if Overmind:BindUrl is ever widened this is the first candidate for RequireAuthorization.
 
         1. overmind_onboard — resolves your project from the reported cwd and returns the project id, board summary, and this quickstart.
-        2. planning_list_features — the full board view; pick the feature to work on from planning_task_queue: the board order IS the queue, first on the board = next in the queue. Claim the pick with planning_claim_feature (your alias+vendor bind the claim to your adapter session — the agentIdentity block of this response carries the project's naming rules; follow them).
-        3. planning_current_task — returns the single next task, or a stop/empty reason. Obey STOP lines; ask the user instead of working around them.
-        4. A new feature runs the gated ceremony, in order:
+        2. identity — the agentIdentity block of this response carries your effective alias/vendor, its source (env | placeholder) and the project's naming rules; a placeholder alias must not reach a claim: invent your own per the naming rules (or restore your stable one) via session_identity_set; heading to a lane — planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set BEFORE the claim. Flow: onboard → identity → lane → claim → work.
+        3. planning_list_features — the full board view; pick the feature to work on from planning_task_queue: the board order IS the queue, first on the board = next in the queue. Claim the pick with planning_claim_feature (your alias+vendor bind the claim to your adapter session — identity first, step 2).
+        4. planning_current_task — returns the single next task, or a stop/empty reason. Obey STOP lines; ask the user instead of working around them.
+        5. A new feature runs the gated ceremony, in order:
            planning_create_feature — the durable what/why.
            planning_upsert_artifact kind=spec — the requirements contract.
            the human validation gate — overmind_notify(kind=approval, featureSlug), wait for the human's reply, then planning_validate; every edit voids the reply.
            planning_upsert_artifact kind=plan — the task slice map; the same gate again.
            planning_upsert_tasks — each task an execution contract (goal, scope, acceptance criteria); a sub-agent receives ONLY its own task artifact via planning_read_artifact.
            the work loop — planning_current_task hands over the next task, implement it, verify it, planning_set_status with a logNote; review before a task closes.
-        5. Close-out: planning_upsert_artifact kind=result with what shipped and how it was verified, then the done tap belongs to the human in the Overmind UI.
+        6. Close-out: planning_upsert_artifact kind=result with what shipped and how it was verified, then the done tap belongs to the human in the Overmind UI.
 
         Escape hatch: set the OVERMIND_PROJECT_ID environment variable to skip cwd matching and address a specific project id directly.
 
