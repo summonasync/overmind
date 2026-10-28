@@ -79,6 +79,12 @@ public static class OnboardApi
             }
             else
             {
+                var refusal = await WorktreeRefusalAsync(normalizedCwd, db, ct);
+                if (refusal is not null)
+                {
+                    return refusal;
+                }
+
                 var name = await ResolveUniqueNameAsync(new DirectoryInfo(normalizedCwd).Name, db, ct);
                 project = Project.Create(name, normalizedCwd);
                 db.Projects.Add(project);
@@ -120,6 +126,36 @@ public static class OnboardApi
                 await policy.ResolveAgentNamingRulesAsync(project, ct) ?? AgentIdentityDefaults.GenericNamingHint),
             BuildAdapterBlock(http),
             OnboardQuickstart.Text));
+    }
+
+    private static async Task<IResult?> WorktreeRefusalAsync(string normalizedCwd, OvermindDbContext db, CancellationToken ct)
+    {
+        if (WorktreeProbe.Probe(normalizedCwd) is not { } worktree)
+        {
+            return null;
+        }
+
+        string mainRoot;
+        try
+        {
+            mainRoot = NormalizeCwd(worktree.MainRoot);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+
+        var owner = await db.Projects.FirstOrDefaultAsync(p => p.DiskPath == mainRoot, ct);
+        if (owner is null)
+        {
+            return null;
+        }
+
+        var pinPath = Path.Combine(worktree.Root, ".overmind", "project");
+        return HttpErrors.Conflict(
+            $"'{normalizedCwd}' is a git worktree of the registered project '{owner.Name}' ({mainRoot}). " +
+            "Refusing to auto-create a duplicate project. Pin the worktree instead: write the project id to " +
+            $"'{pinPath}' (a raw GUID line or {{ \"projectId\": \"...\" }}) or set OVERMIND_PROJECT_ID, then retry.");
     }
 
     private static OnboardAdapterBlock BuildAdapterBlock(HttpRequest http)
