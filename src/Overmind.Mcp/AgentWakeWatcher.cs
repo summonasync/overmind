@@ -63,7 +63,11 @@ public sealed class AgentWakeWatcher(
         {
             throw;
         }
-        catch (Exception ex) when (ex is ApiStatusException or ApiNotFoundException)
+        catch (ApiStatusException ex) when (ex.StatusCode < 500)
+        {
+            _inGate = false;
+        }
+        catch (ApiNotFoundException)
         {
             _inGate = false;
         }
