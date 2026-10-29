@@ -63,7 +63,6 @@ public sealed class ReplyAutoActWorker(
         catch (Exception ex)
         {
             var attempts = _attempts.GetValueOrDefault(notificationId) + 1;
-            _attempts[notificationId] = attempts;
             if (attempts >= MaxAttempts)
             {
                 _attempts.Remove(notificationId);
@@ -73,10 +72,20 @@ public sealed class ReplyAutoActWorker(
                 return true;
             }
 
+            if (!queue.TryEnqueue(notificationId))
+            {
+                _attempts.Remove(notificationId);
+                logger.LogError(
+                    ex,
+                    "auto-act queue is full; reply {NotificationId} dropped after {Attempts} failed attempts — nothing is persisted: replying to the notification again re-stamps RepliedAt and re-queues it, and the in-memory queue does not survive a restart",
+                    notificationId, attempts);
+                return true;
+            }
+
+            _attempts[notificationId] = attempts;
             logger.LogWarning(
                 ex, "auto-act attempt {Attempts} for reply {NotificationId} failed — requeued",
                 attempts, notificationId);
-            queue.TryEnqueue(notificationId);
             return true;
         }
     }

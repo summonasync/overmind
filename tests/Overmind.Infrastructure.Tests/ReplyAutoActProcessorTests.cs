@@ -221,6 +221,64 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task Process_SpecReplyOnDoneEligibleFeature_ValidatesSpecWithoutClose()
+    {
+        await EnableAutoActAsync();
+        var feature = await CreateFeatureAsync("two-doors");
+        await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
+        await CreateValidatedResultAsync(feature.Id);
+        var notification = await CreateApprovalAsync("two-doors", "spec", DateTime.UtcNow);
+
+        var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
+
+        result.Acted.ShouldBeTrue();
+        (await _context.PlanningArtifacts
+                .SingleAsync(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Spec))
+            .Status.ShouldBe(PlanningArtifactStatus.Validated);
+        (await _context.PlanningFeatures.SingleAsync(f => f.Id == feature.Id))
+            .Status.ShouldNotBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
+    public async Task Process_ValidatedSpecReplyOnDoneEligibleFeature_SkipsWithoutClose()
+    {
+        await EnableAutoActAsync();
+        var feature = await CreateFeatureAsync("second-tap");
+        var spec = await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
+        spec.Validate();
+        await _context.SaveChangesAsync();
+        await CreateValidatedResultAsync(feature.Id);
+        var notification = await CreateApprovalAsync("second-tap", "spec", DateTime.UtcNow);
+
+        var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
+
+        result.Acted.ShouldBeFalse();
+        result.Reason.ShouldContain("no draft");
+        (await _context.PlanningFeatures.SingleAsync(f => f.Id == feature.Id))
+            .Status.ShouldNotBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
+    public async Task Process_TasksTabReplyOnDoneEligibleFeature_SkipsWithoutValidationOrClose()
+    {
+        await EnableAutoActAsync();
+        var feature = await CreateFeatureAsync("task-page");
+        await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
+        await CreateValidatedResultAsync(feature.Id);
+        var notification = await CreateApprovalAsync("task-page", "tasks", DateTime.UtcNow);
+
+        var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
+
+        result.Acted.ShouldBeFalse();
+        result.Reason.ShouldContain("no draft");
+        (await _context.PlanningArtifacts
+                .SingleAsync(a => a.FeatureId == feature.Id && a.Kind == PlanningArtifactKind.Spec))
+            .Status.ShouldBe(PlanningArtifactStatus.Draft);
+        (await _context.PlanningFeatures.SingleAsync(f => f.Id == feature.Id))
+            .Status.ShouldNotBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
     public async Task Process_MissingNotification_Skips()
     {
         var result = await CreateProcessor()

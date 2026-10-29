@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Overmind.Core;
 using Overmind.Infrastructure.Notifications;
@@ -87,6 +88,56 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
         _queue.PendingCount.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Dispatch_QueueFull_DoesNotThrowAndLogsDrop()
+    {
+        await SetAutoActAsync(true);
+        var full = new ReplyAutoActQueue(capacity: 1);
+        full.TryEnqueue(Guid.NewGuid()).ShouldBeTrue();
+        var logs = new List<string>();
+        var notification = CreateNotification(NotificationKind.Approval, "overflow");
+
+        await CreateFanout(full, logs).TryDispatchAsync(notification, CancellationToken.None);
+
+        full.PendingCount.ShouldBe(1);
+        var error = logs.Single(l => l.Contains("Error"));
+        error.ShouldContain(notification.Id.ToString());
+        error.ShouldContain("nothing is persisted");
+    }
+
+    [Fact]
+    public async Task Dispatch_DatabaseFailure_IsSwallowed()
+    {
+        var broken = _db.CreateContext();
+        broken.Dispose();
+        var notification = CreateNotification(NotificationKind.Approval, "wrecked");
+
+        await new ReplyAutoActFanout(broken, _queue, NullLogger<ReplyAutoActFanout>.Instance)
+            .TryDispatchAsync(notification, CancellationToken.None);
+
+        _queue.PendingCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task ReplyAsync_FanoutFailure_StillPersistsReply()
+    {
+        var broken = _db.CreateContext();
+        broken.Dispose();
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "approve resilient", _projectId, "resilient", "spec");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+        var service = new NotificationsService(
+            _context,
+            new ReplyAutoActFanout(broken, _queue, NullLogger<ReplyAutoActFanout>.Instance));
+
+        var replied = await service.ReplyAsync(notification.Id, "approved", CancellationToken.None);
+
+        replied.ShouldNotBeNull();
+        replied.ReplyText.ShouldBe("approved");
+        replied.RepliedAt.ShouldNotBeNull();
+    }
+
     private AgentNotification CreateNotification(NotificationKind kind, string? slug) =>
         AgentNotification.Restore(
             Guid.NewGuid(), _projectId, kind, slug, "spec",
@@ -100,9 +151,29 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
         await _context.SaveChangesAsync();
     }
 
-    private ReplyAutoActFanout CreateFanout() =>
+    private ReplyAutoActFanout CreateFanout(ReplyAutoActQueue? queue = null, List<string>? logs = null) =>
         new(
             _context,
-            _queue,
-            NullLogger<ReplyAutoActFanout>.Instance);
+            queue ?? _queue,
+            logs is null
+                ? NullLogger<ReplyAutoActFanout>.Instance
+                : new CollectingLogger<ReplyAutoActFanout>("fanout", logs));
+
+    private sealed class CollectingLogger<T>(string name, List<string> sink) : ILogger<T>
+        where T : notnull
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (sink)
+            {
+                sink.Add($"{name} {logLevel}: {formatter(state, exception)}");
+            }
+        }
+    }
 }

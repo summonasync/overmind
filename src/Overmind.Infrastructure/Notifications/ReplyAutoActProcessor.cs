@@ -57,13 +57,19 @@ public sealed class ReplyAutoActProcessor(
             return ReplyAutoActResult.Skipped($"feature '{notification.FeatureSlug}' not found");
         }
 
+        if (notification.Tab is null)
+        {
+            return await CloseFeatureAsync(notification, feature, ct);
+        }
+
         var document = await ResolveDocumentAsync(feature.Id, notification.Tab, ct);
         if (document is { Status: PlanningArtifactStatus.Draft })
         {
             return await ValidateDocumentAsync(notification, document, ct);
         }
 
-        return await CloseFeatureAsync(notification, feature, ct);
+        return ReplyAutoActResult.Skipped(
+            $"feature '{notification.FeatureSlug}' has no draft '{notification.Tab}' artifact to validate");
     }
 
     private async Task<ReplyAutoActResult> ValidateDocumentAsync(

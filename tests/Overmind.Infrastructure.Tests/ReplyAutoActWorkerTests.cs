@@ -100,6 +100,74 @@ public sealed class ReplyAutoActWorkerTests : IDisposable
     }
 
     [Fact]
+    public async Task Execute_RequeueWhileQueueFull_DropsItemAndRestoresAttemptBudget()
+    {
+        var dropped = Guid.NewGuid();
+        var spare = Guid.NewGuid();
+        var firstAttempt = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        var spareDone = new TaskCompletionSource();
+        var droppedFailures = 0;
+
+        var processor = Substitute.For<IReplyAutoActProcessor>();
+        processor
+            .ProcessAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                var id = call.Arg<Guid>();
+                if (id == spare)
+                {
+                    spareDone.TrySetResult();
+                    return ReplyAutoActResult.Performed("spare closed");
+                }
+
+                if (id == dropped)
+                {
+                    droppedFailures++;
+                    if (droppedFailures == 1)
+                    {
+                        firstAttempt.TrySetResult();
+                        await release.Task;
+                    }
+
+                    throw new InvalidOperationException("flaky storage");
+                }
+
+                return ReplyAutoActResult.Performed("ok");
+            });
+
+        var queue = new ReplyAutoActQueue(capacity: 1);
+        var (worker, _, logs) = BuildWorker(processor, queue);
+        queue.TryEnqueue(dropped).ShouldBeTrue();
+
+        using var cts = new CancellationTokenSource();
+        var run = Task.Run(() => worker.ExecuteAsync(cts.Token));
+
+        await firstAttempt.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        queue.TryEnqueue(spare).ShouldBeTrue();
+        release.TrySetResult();
+        await spareDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        queue.TryEnqueue(dropped).ShouldBeTrue();
+        var droppedId = dropped.ToString();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline
+               && !logs.Any(l => l.Contains("gave up") && l.Contains(droppedId)))
+        {
+            await Task.Delay(50, CancellationToken.None);
+        }
+
+        cts.Cancel();
+        await run;
+
+        droppedFailures.ShouldBe(4);
+        logs.Count(l => l.Contains("requeued") && l.Contains(droppedId)).ShouldBe(2);
+        logs.Count(l => l.Contains("Error") && l.Contains("dropped") && l.Contains(droppedId))
+            .ShouldBe(1);
+        queue.TryDequeue(out _).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Execute_EmptyQueue_Cancelled_ReturnsPromptly()
     {
         var (worker, _, _) = BuildWorker();
@@ -110,9 +178,9 @@ public sealed class ReplyAutoActWorkerTests : IDisposable
     }
 
     private (ReplyAutoActWorker Worker, ReplyAutoActQueue Queue, List<string> Logs) BuildWorker(
-        IReplyAutoActProcessor? processor = null)
+        IReplyAutoActProcessor? processor = null, ReplyAutoActQueue? queue = null)
     {
-        var queue = new ReplyAutoActQueue();
+        queue ??= new ReplyAutoActQueue();
         var logs = new List<string>();
         var workerContext = _db.CreateContext();
         var dispatcher = TestPlanningDispatcher.Create(workerContext, _materializer);

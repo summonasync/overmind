@@ -49,7 +49,7 @@ public sealed class ReplyAutoActFanout(
         }
 
         logger.LogError(
-            "auto-act queue is full; reply {NotificationId} stays unprocessed — the reply row and the wake channel remain the recovery path",
+            "auto-act queue is full; reply {NotificationId} stays unprocessed — nothing is persisted: replying to the notification again re-stamps RepliedAt and re-queues it, and the in-memory queue does not survive a restart",
             notification.Id);
     }
 }
