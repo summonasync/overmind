@@ -32,8 +32,9 @@ public sealed class SessionIdentityFileWriter(IParentProcessIdSource parentProce
             {
                 File.Delete(temp);
             }
-            catch (Exception)
+            catch (Exception cleanup) when (cleanup is not OutOfMemoryException)
             {
+                Console.Error.WriteLine($"[overmind-mcp] WARN: session identity temp file cleanup failed: {cleanup.Message}");
             }
         }
     }
