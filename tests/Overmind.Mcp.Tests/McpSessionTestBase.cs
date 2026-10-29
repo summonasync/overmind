@@ -15,13 +15,15 @@ public abstract class McpSessionTestBase : IAsyncLifetime
 
     protected virtual bool AutoHandshake => true;
 
+    protected virtual IReadOnlyDictionary<string, string>? EnvironmentOverrides => null;
+
     public virtual async Task InitializeAsync()
     {
         Stub = StubOvermindApi.Start();
         RegisterRoutes(Stub);
 
         var watch = Stopwatch.StartNew();
-        Driver = McpProcessDriver.Start(Stub.BaseUrl);
+        Driver = McpProcessDriver.Start(Stub.BaseUrl, EnvironmentOverrides);
 
         if (AutoHandshake)
         {
