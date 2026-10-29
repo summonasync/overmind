@@ -60,7 +60,12 @@ public sealed class IssueServiceTests : IDisposable
                 context,
                 TestPlanningDispatcher.Create(context, _materializer),
                 new TaskDependencyService(context, TestPlanningDispatcher.Create(context, _materializer))),
-            new NotificationsService(context),
+            new NotificationsService(
+                context,
+                new ReplyAutoActFanout(
+                    context,
+                    new ReplyAutoActQueue(),
+                    NullLogger<ReplyAutoActFanout>.Instance)),
             new FeatureClaimService(context, TestPlanningDispatcher.Create(context, _materializer)),
             TestPlanningDispatcher.Create(context, _materializer));
 

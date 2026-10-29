@@ -699,6 +699,11 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<string>("AgentNamingRules")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("AutoActOnReplies")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("ClaimStaleThresholdMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
