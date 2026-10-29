@@ -50,13 +50,16 @@ if (!await new HostReadinessGate(http, Console.Error)
     return 2;
 }
 
+var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource());
 var lifecycle = new AgentSessionLifecycle(http);
 Guid adapterSessionId = Guid.Empty;
 try
 {
-    adapterSessionId = await lifecycle.RegisterAsync(
-        AgentIdentity.ResolveAlias(), AgentIdentity.ResolveVendor(), CancellationToken.None);
+    var alias = AgentIdentity.ResolveAlias();
+    var vendor = AgentIdentity.ResolveVendor();
+    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
+    identityFile.Write(alias, vendor, adapterSessionId);
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
 catch (Exception ex)
@@ -76,7 +79,7 @@ if (adapterSessionId != Guid.Empty)
 // A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
 // session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
 // and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
-var identityRefresher = new SessionIdentityRefresher(lifecycle);
+var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile);
 
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
 // source-generated JsonContext with its own options snapshot; the default HTML-safe encoder
@@ -113,6 +116,7 @@ var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 builder.Logging.ClearProviders();
 
 builder.Services.AddSingleton(new OvermindApiClient(http));
+builder.Services.AddSingleton(identityFile);
 builder.Services.AddSingleton<MutationGuard>();
 builder.Services.AddSingleton<IGitCli, GitCli>();
 builder.Services.AddSingleton<ProjectResolver>();
