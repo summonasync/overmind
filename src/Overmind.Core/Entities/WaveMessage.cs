@@ -110,6 +110,6 @@ public sealed partial class WaveMessage
             : AgentSession.NormalizeRole(trimmed);
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_-])@([A-Za-z0-9_-]{1,32})")]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_-])@([A-Za-z0-9_-]{1,32})(?![A-Za-z0-9_-])")]
     private static partial Regex MentionToken();
 }
