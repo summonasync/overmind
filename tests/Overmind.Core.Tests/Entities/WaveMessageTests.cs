@@ -60,6 +60,31 @@ public sealed class WaveMessageTests
     }
 
     [Fact]
+    public void ParseMentions_RequiresWordBoundaryBeforeTheAt()
+    {
+        var mentions = WaveMessage.ParseMentions(
+            "agent-name@summonasync.dev alias@summonasync.dev mail x@alias");
+
+        mentions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ParseMentions_MatchesAtPunctuationAndEndBoundaries()
+    {
+        var mentions = WaveMessage.ParseMentions("(@alias), ping @marshal");
+
+        mentions.ShouldBe(["alias", "marshal"]);
+    }
+
+    [Fact]
+    public void ParseMentions_RejectsTokenTruncatedMidWord()
+    {
+        var mentions = WaveMessage.ParseMentions($"@{new string('a', WaveMessage.MaxIdentityLength + 1)}");
+
+        mentions.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void ParseMentions_CapsTheDistinctSet()
     {
         var text = string.Join(' ', Enumerable
