@@ -231,6 +231,48 @@ public class PlanningToolContractTests : McpSessionTestBase
         Canned.ToolResultText(response).ShouldContain("\"taskCounts\":{\"todo\":0,\"inProgress\":1,\"review\":0,\"done\":1,\"blocked\":0}");
     }
 
+    [Fact]
+    public async Task PlanningListFeatures_ForwardsFiltersThroughTheQuery()
+    {
+        var response = await Driver.CallToolAsync("planning_list_features", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["status"] = "inProgress",
+            ["claimedByAlias"] = "Dan",
+            ["lane"] = "frontend",
+            ["priority"] = "p1",
+            ["unclaimedOnly"] = true
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features");
+        var query = ParseQuery(request.Query);
+        query.ShouldBe(new Dictionary<string, string>
+        {
+            ["status"] = "inProgress",
+            ["claimedByAlias"] = "Dan",
+            ["lane"] = "frontend",
+            ["priority"] = "p1",
+            ["unclaimedOnly"] = "true"
+        });
+    }
+
+    [Theory]
+    [InlineData("status", "")]
+    [InlineData("priority", "   ")]
+    public async Task PlanningListFeatures_BlankFilterValues_AreDroppedFromTheQuery(string field, string value)
+    {
+        await Driver.CallToolAsync("planning_list_features", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            [field] = value
+        });
+
+        var request = FindRequest("GET", $"/api/agent/projects/{Canned.ProjectId}/planning/features");
+        ParseQuery(request.Query).ShouldNotContainKey(field);
+    }
+
     [Theory]
     [InlineData("planning_list_features", "{}", "GET",
         "/api/agent/projects/{projectId}/planning/features")]

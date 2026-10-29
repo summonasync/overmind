@@ -111,6 +111,119 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Board_WithoutFilters_ReturnsEveryFeature()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await BringToStatusAsync(project.Id, "beta", "inProgress");
+        await CreateFeature(project.Id, "gamma", "Gamma");
+        await BringToStatusAsync(project.Id, "gamma", "done");
+
+        var board = await GetBoardAsync(project.Id, string.Empty);
+
+        board!.Select(i => i.Slug).ShouldBe(["alpha", "beta", "gamma"]);
+    }
+
+    [Fact]
+    public async Task Board_StatusFilter_ReturnsOnlyThatStatus()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await BringToStatusAsync(project.Id, "beta", "inProgress");
+
+        var board = await GetBoardAsync(project.Id, "?status=inProgress");
+
+        board!.Select(i => i.Slug).ShouldBe(["beta"]);
+    }
+
+    [Fact]
+    public async Task Board_PriorityFilter_ReturnsOnlyThatBand()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await SetFeaturePriorityAsync(project.Id, "beta", "p0");
+
+        var board = await GetBoardAsync(project.Id, "?priority=p0");
+
+        board!.Select(i => i.Slug).ShouldBe(["beta"]);
+    }
+
+    [Fact]
+    public async Task Board_LaneFilter_MatchesCaseInsensitive()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await SetFeatureLaneAsync(project.Id, "beta", "Frontend");
+
+        var board = await GetBoardAsync(project.Id, "?lane=frontend");
+
+        board!.Select(i => i.Slug).ShouldBe(["beta"]);
+        board.Single().Lane.ShouldBe("Frontend");
+    }
+
+    [Fact]
+    public async Task Board_ClaimedByAliasFilter_ReturnsStoredClaimOwner()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await ClaimFeatureAsync(project.Id, "beta", "marshal");
+
+        var board = await GetBoardAsync(project.Id, "?claimedByAlias=marshal");
+
+        board!.Select(i => i.Slug).ShouldBe(["beta"]);
+        board.Single().ClaimedByAlias.ShouldBe("marshal");
+    }
+
+    [Fact]
+    public async Task Board_UnclaimedOnly_DropsClaimedFeatures()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await ClaimFeatureAsync(project.Id, "beta", "marshal");
+
+        var board = await GetBoardAsync(project.Id, "?unclaimedOnly=true");
+
+        board!.Select(i => i.Slug).ShouldBe(["alpha"]);
+    }
+
+    [Fact]
+    public async Task Board_ComposableFilters_AndTogether()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "alpha", "Alpha");
+        await CreateFeature(project.Id, "beta", "Beta");
+        await CreateFeature(project.Id, "gamma", "Gamma");
+        await SetFeatureLaneAsync(project.Id, "alpha", "frontend");
+        await SetFeatureLaneAsync(project.Id, "beta", "frontend");
+        await BringToStatusAsync(project.Id, "beta", "inProgress");
+
+        var board = await GetBoardAsync(project.Id, "?status=inProgress&lane=frontend");
+
+        board!.Select(i => i.Slug).ShouldBe(["beta"]);
+    }
+
+    [Theory]
+    [InlineData("status", "shipped")]
+    [InlineData("priority", "urgent")]
+    public async Task Board_UnknownEnumFilter_Returns400(string field, string value)
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/projects/{project.Id}/planning/features?{field}={value}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey(field);
+    }
+
+    [Fact]
     public async Task CreateFeature_Returns201()
     {
         var project = await CreateProjectAsync();
@@ -1885,6 +1998,45 @@ public sealed class PlanningApiTests : IDisposable
         }
     }
 
+    private async Task<BoardItemJson[]?> GetBoardAsync(Guid projectId, string query)
+    {
+        var response = await _client.GetAsync($"/api/projects/{projectId}/planning/features{query}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<BoardItemJson[]>(JsonOptions);
+    }
+
+    private async Task SetFeaturePriorityAsync(Guid projectId, string slug, string priority)
+    {
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}",
+            new { Priority = priority });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task SetFeatureLaneAsync(Guid projectId, string slug, string lane)
+    {
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}",
+            new { Lane = lane });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task ClaimFeatureAsync(Guid projectId, string slug, string alias)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/planning/features/{slug}/claim")
+        {
+            Content = JsonContent.Create(new { Alias = alias, Vendor = "claude" })
+        };
+        request.Headers.Add(SessionHeaderName, Guid.NewGuid().ToString());
+
+        var response = await _client.SendAsync(request);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static string SessionHeaderName => "X-Overmind-Session";
+
     private async Task<ArtifactJson> CreateTaskWithBrief(Guid projectId, string brief)
     {
         var response = await _client.PostAsJsonAsync(
@@ -1923,7 +2075,8 @@ public sealed class PlanningApiTests : IDisposable
     public sealed record BoardItemJson(
         string Slug, string Title, string Status, string Priority, int Version,
         string? SpecStatus, string? PlanStatus, int TaskTotal, int TaskDone,
-        TaskCountsJson TaskCounts, DateTime UpdatedAt);
+        TaskCountsJson TaskCounts, DateTime UpdatedAt,
+        string? ClaimedByAlias = null, string? Lane = null);
 
     public sealed record TaskCountsJson(int Todo, int InProgress, int Review, int Done, int Blocked);
 

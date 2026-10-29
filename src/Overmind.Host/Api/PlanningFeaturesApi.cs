@@ -29,19 +29,75 @@ public static class PlanningFeaturesApi
     }
 
     internal static async Task<IResult> Board(
-        Guid projectId, OvermindDbContext db, FeatureClaimService claims, DirectiveService directives,
+        Guid projectId,
+        string? status,
+        string? priority,
+        string? lane,
+        string? claimedByAlias,
+        bool? unclaimedOnly,
+        OvermindDbContext db, FeatureClaimService claims, DirectiveService directives,
         CancellationToken ct)
     {
+        PlanningFeatureStatus? statusFilter = null;
+        if (status is not null)
+        {
+            if (!TryParseEnum(status, out PlanningFeatureStatus parsedStatus))
+            {
+                return InvalidValue(nameof(status), Enum.GetNames<PlanningFeatureStatus>());
+            }
+
+            statusFilter = parsedStatus;
+        }
+
+        FeaturePriority? priorityFilter = null;
+        if (priority is not null)
+        {
+            if (!TryParseEnum(priority, out FeaturePriority parsedPriority))
+            {
+                return InvalidValue(nameof(priority), Enum.GetNames<FeaturePriority>());
+            }
+
+            priorityFilter = parsedPriority;
+        }
+
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
         if (!projectExists)
         {
             return HttpErrors.NotFound($"Project '{projectId}' was not found.");
         }
 
-        var features = await db.PlanningFeatures
+        var query = db.PlanningFeatures
             .Include(f => f.Artifacts)
             .Include(f => f.BlockedBy)
-            .Where(f => f.ProjectId == projectId)
+            .Where(f => f.ProjectId == projectId);
+        if (statusFilter is not null)
+        {
+            query = query.Where(f => f.Status == statusFilter);
+        }
+
+        if (priorityFilter is not null)
+        {
+            query = query.Where(f => f.Priority == priorityFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(lane))
+        {
+            var laneName = lane.Trim();
+            query = query.Where(f => f.Lane != null && f.Lane.ToLower() == laneName.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(claimedByAlias))
+        {
+            var alias = claimedByAlias.Trim();
+            query = query.Where(f => f.ClaimedByAlias == alias);
+        }
+
+        if (unclaimedOnly == true)
+        {
+            query = query.Where(f => f.ClaimSessionId == null);
+        }
+
+        var features = await query
             .OrderBy(f => f.Slug)
             .ToListAsync(ct);
 
