@@ -9,7 +9,7 @@ using ModelContextProtocol.Server;
 namespace Overmind.Mcp;
 
 [McpServerToolType]
-public sealed class SessionIdentityTools(OvermindApiClient api)
+public sealed class SessionIdentityTools(OvermindApiClient api, SessionIdentityFileWriter identityFile)
 {
     public const int MaxIdentityLength = 32;
 
@@ -58,9 +58,10 @@ public sealed class SessionIdentityTools(OvermindApiClient api)
         }
 
         var session = response.GetProperty("session");
-        AdapterIdentityState.Set(
-            session.GetProperty("alias").GetString() ?? normalizedAlias,
-            session.GetProperty("vendor").GetString() ?? normalizedVendor);
+        var registeredAlias = session.GetProperty("alias").GetString() ?? normalizedAlias;
+        var registeredVendor = session.GetProperty("vendor").GetString() ?? normalizedVendor;
+        AdapterIdentityState.Set(registeredAlias, registeredVendor);
+        identityFile.Write(registeredAlias, registeredVendor, session.GetProperty("id").GetGuid());
 
         return new CallToolResult
         {
