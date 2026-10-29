@@ -8,4 +8,4 @@ public sealed record AgentWakeSignalResponse(
     DateTime CreatedAt,
     string Excerpt);
 
-public sealed record AgentWakeResponse(AgentWakeSignalResponse[] Signals, DateTime Cursor);
+public sealed record AgentWakeResponse(AgentWakeSignalResponse[] Signals, string Cursor);

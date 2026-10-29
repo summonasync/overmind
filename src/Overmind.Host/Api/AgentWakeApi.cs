@@ -12,8 +12,9 @@ public static class AgentWakeApi
         "Pending signals for the calling session, side-effect free. Reply signals are human replies " +
         "on this session's notifications with RepliedAt after since, defaulting to the last 7 days; " +
         "mention signals are wave chat messages mentioning this session's alias with CreatedAt after " +
-        "since, defaulting to after the session's LastSeenAt. Signals are ordered by createdAt asc, " +
-        "capped at 100; the cursor echoes the newest timestamp seen, or the request since on an empty page.";
+        "since, defaulting to after the session's LastSeenAt before this request touched it. Signals are " +
+        "ordered by createdAt asc, capped at 100; the cursor is the newest createdAt seen followed by '|' " +
+        "and the newest signal's ref id, or the request since on an empty page — echo it verbatim as since to page on.";
 
     public static RouteGroupBuilder MapAgentWakeApi(this IEndpointRouteBuilder routes)
     {
@@ -24,15 +25,22 @@ public static class AgentWakeApi
     }
 
     private static async Task<IResult> Wake(
-        [FromQuery] DateTime? since,
+        [FromQuery] string? since,
         AgentWakeService wake,
         OvermindDbContext db,
-        HttpRequest http,
+        HttpContext context,
         CancellationToken ct)
     {
-        if (!SessionHeader.TryRead(http, out var sessionId))
+        if (!SessionHeader.TryRead(context.Request, out var sessionId))
         {
             return AgentIdentityRequired();
+        }
+
+        if (!WakeCursor.TryDecode(since, out var sinceAt, out var sinceRefId))
+        {
+            return HttpErrors.BadRequest(
+                "The since parameter must be an ISO 8601 timestamp, optionally followed by '|' " +
+                "and the cursor ref id echoed from the previous page.");
         }
 
         var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
@@ -41,11 +49,16 @@ public static class AgentWakeApi
             return AgentIdentityRequired();
         }
 
-        var page = await wake.PendingAsync(session.Alias, session.LastSeenAt, since, ct);
+        var mentionSince = context.Items.TryGetValue(SessionTouchMiddleware.PreTouchLastSeenKey, out var touched)
+            && touched is DateTime beforeTouch
+                ? beforeTouch
+                : session.LastSeenAt;
+
+        var page = await wake.PendingAsync(session.Alias, mentionSince, sinceAt, sinceRefId, ct);
         return Results.Ok(new AgentWakeResponse(
         [
             .. page.Signals.Select(ToResponse)
-        ], page.Cursor));
+        ], WakeCursor.Encode(page.Cursor, page.CursorRefId)));
     }
 
     private static AgentWakeSignalResponse ToResponse(AgentWakeSignal signal) =>

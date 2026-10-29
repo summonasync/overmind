@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -127,7 +128,20 @@ public sealed class AgentWakeApiTests : IDisposable
         var wake = await WakeAsync();
 
         wake.Signals.Select(s => s.RefId).ShouldBe([live]);
-        wake.Cursor.ShouldBe(wake.Signals.Single().CreatedAt, TimeSpan.FromSeconds(1));
+        CursorAt(wake.Cursor).ShouldBe(wake.Signals.Single().CreatedAt, TimeSpan.FromSeconds(1));
+        CursorRefId(wake.Cursor).ShouldBe(wake.Signals.Single().RefId);
+    }
+
+    [Fact]
+    public async Task Wake_WithoutSince_DefaultsMentionsToThePreTouchLastSeenForALiveSession()
+    {
+        var projectId = await CreateProjectAsync();
+        await SetSessionLastSeenAsync(UtcNow.AddHours(-1));
+        var live = await SeedMentionAsync(projectId, "all", "Dan", "worker", "fresh ping @Dan", UtcNow);
+
+        var wake = await WakeAsync();
+
+        wake.Signals.Select(s => s.RefId).ShouldBe([live]);
     }
 
     [Fact]
@@ -146,11 +160,13 @@ public sealed class AgentWakeApiTests : IDisposable
             ("notification-reply", reply),
             ("wave-mention", mention),
         ]);
-        windowed.Cursor.ShouldBe(UtcNow.AddMinutes(-30), TimeSpan.FromSeconds(1));
+        CursorAt(windowed.Cursor).ShouldBe(UtcNow.AddMinutes(-30), TimeSpan.FromSeconds(1));
+        CursorRefId(windowed.Cursor).ShouldBe(mention);
 
         var drained = await WakeAsync(Uri.EscapeDataString(UtcNow.AddMinutes(5).ToString("O")));
         drained.Signals.ShouldBeEmpty();
-        drained.Cursor.ShouldBe(UtcNow.AddMinutes(5), TimeSpan.FromSeconds(1));
+        CursorAt(drained.Cursor).ShouldBe(UtcNow.AddMinutes(5), TimeSpan.FromSeconds(1));
+        CursorRefId(drained.Cursor).ShouldBeNull();
     }
 
     [Fact]
@@ -170,14 +186,55 @@ public sealed class AgentWakeApiTests : IDisposable
 
         firstPage.Signals.Length.ShouldBe(100);
         firstPage.Signals.Select(s => s.CreatedAt).ShouldBeInOrder(SortDirection.Ascending);
-        firstPage.Cursor.ShouldBe(firstPage.Signals[99].CreatedAt, TimeSpan.FromMilliseconds(1));
+        CursorAt(firstPage.Cursor).ShouldBe(firstPage.Signals[99].CreatedAt, TimeSpan.FromMilliseconds(1));
+        CursorRefId(firstPage.Cursor).ShouldBe(firstPage.Signals[99].RefId);
 
-        var secondPage = await WakeAsync(Uri.EscapeDataString(firstPage.Cursor.ToString("O")));
+        var secondPage = await WakeAsync(Uri.EscapeDataString(firstPage.Cursor));
 
         secondPage.Signals.Length.ShouldBe(20);
         secondPage.Signals.Select(s => s.RefId)
             .Intersect(firstPage.Signals.Select(s => s.RefId))
             .ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Wake_TieGroupAcrossThePageBoundary_PagesWithoutLossOrDuplicates()
+    {
+        var projectId = await CreateProjectAsync();
+        var now = UtcNow;
+        var baseAt = new DateTime(
+            now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, DateTimeKind.Utc).AddHours(-2);
+        var seeded = new List<Guid>();
+        for (var i = 0; i < 105; i++)
+        {
+            seeded.Add(await SeedMentionAsync(projectId, "all", "Dan", "worker", $"tie ping {i} @Dan", baseAt));
+        }
+
+        var firstPage = await WakeAsync(Uri.EscapeDataString(UtcNow.AddDays(-1).ToString("O")));
+
+        firstPage.Signals.Length.ShouldBe(100);
+        firstPage.Signals.Select(s => s.CreatedAt).ShouldAllBe(at => at == baseAt);
+        CursorAt(firstPage.Cursor).ShouldBe(baseAt, TimeSpan.FromMilliseconds(1));
+        CursorRefId(firstPage.Cursor).ShouldBe(firstPage.Signals[99].RefId);
+
+        var secondPage = await WakeAsync(Uri.EscapeDataString(firstPage.Cursor));
+
+        secondPage.Signals.Length.ShouldBe(5);
+        secondPage.Signals.Select(s => s.CreatedAt).ShouldAllBe(at => at == baseAt);
+        var all = firstPage.Signals.Concat(secondPage.Signals).Select(s => s.RefId).ToList();
+        all.Distinct().Count().ShouldBe(105);
+        all.OrderBy(id => id).ShouldBe(seeded.OrderBy(id => id));
+    }
+
+    [Fact]
+    public async Task Wake_TruncatesExcerptWithoutSplittingSurrogatePairs()
+    {
+        var text = new string('y', 199) + "😀" + new string('z', 60);
+        await SeedNotificationAsync("Dan", "emoji reply", text, MinutesAgo(10));
+
+        var wake = await WakeAsync(Uri.EscapeDataString(MinutesAgo(60).ToString("O")));
+
+        wake.Signals.Single().Excerpt.ShouldBe(new string('y', 199) + "😀");
     }
 
     [Fact]
@@ -192,6 +249,7 @@ public sealed class AgentWakeApiTests : IDisposable
         description.ShouldContain("7 days");
         description.ShouldContain("LastSeenAt");
         description.ShouldContain("side-effect free");
+        description.ShouldContain("echo it verbatim as since");
     }
 
     private DateTime UtcNow => DateTime.UtcNow;
@@ -318,7 +376,13 @@ public sealed class AgentWakeApiTests : IDisposable
     private sealed record WakeSignalJson(
         string Kind, Guid RefId, string? RoomId, string From, DateTime CreatedAt, string Excerpt);
 
-    private sealed record WakeJson(WakeSignalJson[] Signals, DateTime Cursor);
+    private sealed record WakeJson(WakeSignalJson[] Signals, string Cursor);
+
+    private static DateTime CursorAt(string cursor) =>
+        DateTime.Parse(cursor.Split('|')[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    private static Guid? CursorRefId(string cursor) =>
+        cursor.Split('|') is { Length: 2 } parts ? Guid.Parse(parts[1]) : null;
 
     private sealed record MessageJson(
         Guid Id, string Room, string AuthorAlias, string Text, string[] Mentions, DateTime CreatedAt,
