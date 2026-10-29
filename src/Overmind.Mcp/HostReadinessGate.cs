@@ -18,8 +18,8 @@ public sealed class HostReadinessGate(HttpClient http, TextWriter log)
                 return true;
             }
             catch (Exception ex)
-                when (ex is HttpRequestException
-                    or OperationCanceledException && !ct.IsCancellationRequested)
+                when ((ex is HttpRequestException or OperationCanceledException)
+                    && !ct.IsCancellationRequested)
             {
                 if (started.Elapsed >= budget)
                 {
