@@ -29,12 +29,17 @@ public sealed class WaveSnapshotTools
         "repo code discovery (the planning_feature_code projection: worktrees/branches carrying the slug or NNN prefix, " +
         "pins matched first and flagged, stale pins reported): the git listing is cached briefly, so repeated snapshots " +
         "in one marshal pass do not spawn git processes per request; a discovery failure degrades to discoveryError and " +
-        "the rest of the payload is unaffected. projectId is required; project resolution never creates a project row.")]
+        "the rest of the payload is unaffected. compact=true projects every section to coordination-critical fields " +
+        "only (queue rows drop briefExcerpt, taskCounts, spec/plan statuses and materializer stamps; claims drop " +
+        "lastActivityAt; entries drop snippets — discovery, code pins and blockers pass through unchanged); " +
+        "default false keeps the full payload. projectId is required; project resolution never creates a project row.")]
     public async Task<JsonElement> WaveSnapshot(
         [Description("Id of the project to snapshot.")] Guid? projectId = null,
         [Description("Optional comma-separated tag list for the coordination entries section; " +
             "defaults to wave-sync,lane-marshalling.")] string? tags = null,
         [Description("Optional cap (1-100) on the coordination entries section; default 20.")] int? entryLimit = null,
+        [Description("Project each section to coordination-critical fields only to save tokens; " +
+            "default false keeps the full payload.")] bool compact = false,
         CancellationToken ct = default)
     {
         if (projectId is null)
@@ -60,7 +65,7 @@ public sealed class WaveSnapshotTools
         }
 
         var snapshot = await ReadAsync(url, ct);
-        return await WithDiscoveryAsync(snapshot, ct);
+        return await WithDiscoveryAsync(compact ? WaveSnapshotCompactor.Compact(snapshot) : snapshot, ct);
     }
 
     private async Task<JsonElement> ReadAsync(string url, CancellationToken ct)
