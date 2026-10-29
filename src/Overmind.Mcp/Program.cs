@@ -37,13 +37,15 @@ Console.Error.WriteLine($"[overmind-mcp] overmind API base URL: {baseUrl}");
 
 var http = OvermindApiClient.CreateHttpClient(baseUrl);
 
-try
+if (!await new HostReadinessGate(http, Console.Error)
+        .WaitUntilReadyAsync(
+            HostReadinessGate.DefaultBudget,
+            HostReadinessGate.DefaultInterval,
+            CancellationToken.None))
 {
-    await OvermindApiClient.CheckHealthAsync(http, CancellationToken.None);
-}
-catch (Exception ex)
-{
-    Console.Error.WriteLine($"[overmind-mcp] FATAL: overmind API at {baseUrl} is unreachable: {ex.Message}");
+    Console.Error.WriteLine(
+        $"[overmind-mcp] FATAL: overmind API at {baseUrl} is unreachable "
+        + $"after {HostReadinessGate.DefaultBudget.TotalSeconds:0}s of retries.");
     Console.Error.WriteLine("[overmind-mcp] start the overmind host first or point OVERMIND_API_URL at a running instance.");
     return 2;
 }
