@@ -132,6 +132,7 @@ builder.Services.AddSingleton<EntryAckTools>();
 builder.Services.AddSingleton<IssuesTools>();
 builder.Services.AddSingleton<OvermindOnboardingTools>();
 builder.Services.AddSingleton<OvermindNotificationTools>();
+builder.Services.AddSingleton<AgentWakeTools>();
 builder.Services.AddSingleton<OvermindResources>();
 builder.Services.AddSingleton<OvermindPlanningResources>();
 builder.Services.AddSingleton<SessionBootstrapPrompt>();
@@ -170,6 +171,7 @@ builder.Services
     .WithTools<IssuesTools>()
     .WithTools<OvermindOnboardingTools>()
     .WithTools<OvermindNotificationTools>()
+    .WithTools<AgentWakeTools>()
     .WithResources<OvermindResources>()
     .WithResources<OvermindPlanningResources>()
     .WithPrompts<SessionBootstrapPrompt>();
