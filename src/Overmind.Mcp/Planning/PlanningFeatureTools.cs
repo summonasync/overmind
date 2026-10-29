@@ -27,14 +27,44 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_list_features", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress (taskTotal, taskDone, taskCounts: todo/inProgress/review/done/blocked, sums to taskTotal), plus claim state (claimedByAlias, claimedByVendor, claimedAt, claimState alive|stale|ended) on claimed entries — a stale or ended claim can be taken over via planning_claim_feature. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection.")]
+    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress (taskTotal, taskDone, taskCounts: todo/inProgress/review/done/blocked, sums to taskTotal), plus claim state (claimedByAlias, claimedByVendor, claimedAt, claimState alive|stale|ended) on claimed entries — a stale or ended claim can be taken over via planning_claim_feature. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection. Optional composable filters (AND, all additive — omit everything for the unchanged full board): status (draft|ready|inProgress|done|review), priority (p0-p3), lane (case-insensitive roster name), claimedByAlias (exact stored claim owner, any liveness), unclaimedOnly (features with no claim record).")]
     public async Task<JsonElement> ListFeatures(
         [Description("Id of the project whose feature board to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Optional status filter: draft, ready, inProgress, done or review.")] string? status = null,
+        [Description("Optional claimedByAlias filter: exact match on the stored claim owner, regardless of claim liveness.")] string? claimedByAlias = null,
+        [Description("Optional lane filter: case-insensitive match on the lane roster name.")] string? lane = null,
+        [Description("Optional priority filter: p0 (critical), p1 (high), p2 (normal), p3 (low).")] string? priority = null,
+        [Description("True to return only features with no claim record.")] bool? unclaimedOnly = null,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
+        var url = $"/api/agent/projects/{resolved}/planning/features{BoardQuery(status, claimedByAlias, lane, priority, unclaimedOnly)}";
 
-        return await Guarded(() => _api.GetAsync($"/api/agent/projects/{resolved}/planning/features", ct));
+        return await Guarded(() => _api.GetAsync(url, ct));
+    }
+
+    private static string BoardQuery(
+        string? status, string? claimedByAlias, string? lane, string? priority, bool? unclaimedOnly)
+    {
+        var query = new List<string>();
+        void Add(string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                query.Add($"{name}={Uri.EscapeDataString(value.Trim())}");
+            }
+        }
+
+        Add("status", status);
+        Add("claimedByAlias", claimedByAlias);
+        Add("lane", lane);
+        Add("priority", priority);
+        if (unclaimedOnly == true)
+        {
+            query.Add("unclaimedOnly=true");
+        }
+
+        return query.Count == 0 ? string.Empty : $"?{string.Join('&', query)}";
     }
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]

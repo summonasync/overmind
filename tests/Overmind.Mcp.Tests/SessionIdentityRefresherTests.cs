@@ -13,23 +13,36 @@ public sealed class SessionIdentityRefresherTests : IDisposable
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly List<(string Method, string Uri, string Body)> Requests = [];
+    private readonly string IdentityRoot = Path.Combine(
+        Path.GetTempPath(), "overmind-identity-refresher", Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
+        if (Directory.Exists(IdentityRoot))
+        {
+            Directory.Delete(IdentityRoot, recursive: true);
+        }
+
         AdapterSession.Id = null;
         AdapterIdentityState.Reset();
         Environment.SetEnvironmentVariable("OVERMIND_ALIAS", null);
         Environment.SetEnvironmentVariable("OVERMIND_VENDOR", null);
     }
 
-    private SessionIdentityRefresher Refresher(Func<HttpRequestMessage, HttpResponseMessage> respond)
+    private SessionIdentityRefresher Refresher(
+        Func<HttpRequestMessage, HttpResponseMessage> respond,
+        SessionIdentityFileWriter? identityFile = null)
     {
         var http = new HttpClient(new RecordingHandler(Requests, respond))
         {
             BaseAddress = new Uri("http://127.0.0.1:4761"),
         };
-        return new SessionIdentityRefresher(new AgentSessionLifecycle(http));
+        return new SessionIdentityRefresher(
+            new AgentSessionLifecycle(http), identityFile ?? IdentityFileWriter(null));
     }
+
+    private SessionIdentityFileWriter IdentityFileWriter(int? parentPid) =>
+        new(new FixedParentPid(parentPid), IdentityRoot);
 
     private static HttpResponseMessage JsonBody(object payload) =>
         new(HttpStatusCode.OK)
@@ -184,7 +197,7 @@ public sealed class SessionIdentityRefresherTests : IDisposable
         {
             BaseAddress = new Uri("http://127.0.0.1:4761"),
         };
-        var refresher = new SessionIdentityRefresher(new AgentSessionLifecycle(http));
+        var refresher = new SessionIdentityRefresher(new AgentSessionLifecycle(http), IdentityFileWriter(null));
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         await refresher.RefreshAsync(CancellationToken.None);
@@ -192,6 +205,30 @@ public sealed class SessionIdentityRefresherTests : IDisposable
 
         watch.Elapsed.ShouldBeLessThan(SessionIdentityRefresher.Budget + TimeSpan.FromSeconds(3));
         AdapterSession.Id.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task HandshakeRegistration_WritesIdentityFileWithRegisteredIdentity()
+    {
+        AdapterSession.Id = null;
+        AdapterIdentityState.Set("runtime", "qwen");
+        var refresher = Refresher(_ => SessionBody(), IdentityFileWriter(4242));
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        var path = Path.Combine(IdentityRoot, "identity", "parent-4242.json");
+        File.Exists(path).ShouldBeTrue();
+        var payload = JsonNode.Parse(File.ReadAllText(path))!;
+        payload["alias"]!.GetValue<string>().ShouldBe("runtime");
+        payload["vendor"]!.GetValue<string>().ShouldBe("qwen");
+        payload["sessionId"]!.GetValue<string>().ShouldBe(AdapterSession.Id!.Value.ToString());
+        DateTimeOffset.Parse(payload["registeredAt"]!.GetValue<string>())
+            .ShouldBe(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
+    }
+
+    private sealed class FixedParentPid(int? pid) : IParentProcessIdSource
+    {
+        public int? Resolve() => pid;
     }
 
     private sealed class RecordingHandler(

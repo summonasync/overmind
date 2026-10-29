@@ -3,7 +3,7 @@ using ModelContextProtocol.Server;
 
 namespace Overmind.Mcp;
 
-public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle)
+public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle, SessionIdentityFileWriter identityFile)
 {
     public static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);
 
@@ -34,16 +34,17 @@ public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle)
         {
             // The slot outranks env: a reconnect must not clobber the identity set at runtime.
             var slot = AdapterIdentityState.TryGet();
-            var session = await lifecycle.RegisterAsync(
-                slot?.Alias ?? AgentIdentity.ResolveAlias(),
-                slot?.Vendor ?? AgentIdentity.ResolveVendor(),
-                timeout.Token);
+            var alias = slot?.Alias ?? AgentIdentity.ResolveAlias();
+            var vendor = slot?.Vendor ?? AgentIdentity.ResolveVendor();
+            var session = await lifecycle.RegisterAsync(alias, vendor, timeout.Token);
             Guid? superseded;
             lock (_swap)
             {
                 superseded = AdapterSession.Id;
                 AdapterSession.Id = session;
             }
+
+            identityFile.Write(alias, vendor, session);
 
             if (superseded is { } old && old != Guid.Empty && old != session)
             {

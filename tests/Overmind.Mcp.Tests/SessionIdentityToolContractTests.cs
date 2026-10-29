@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using Shouldly;
@@ -12,6 +13,8 @@ public sealed class SessionIdentityToolContractTests : IAsyncLifetime
 
     private StubOvermindApi _stub = null!;
     private OvermindApiClient _api = null!;
+    private readonly string _identityRoot = Path.Combine(
+        Path.GetTempPath(), "overmind-identity-tool", Guid.NewGuid().ToString("N"));
 
     public Task InitializeAsync()
     {
@@ -26,6 +29,11 @@ public sealed class SessionIdentityToolContractTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        if (Directory.Exists(_identityRoot))
+        {
+            Directory.Delete(_identityRoot, recursive: true);
+        }
+
         AdapterSession.Id = null;
         AdapterIdentityState.Reset();
         await _stub.DisposeAsync();
@@ -133,5 +141,52 @@ public sealed class SessionIdentityToolContractTests : IAsyncLifetime
     private static string Text(CallToolResult result) =>
         ((TextContentBlock)result.Content[0]).Text;
 
-    private SessionIdentityTools Tool() => new(_api);
+    private sealed class FixedParentPid(int? pid) : IParentProcessIdSource
+    {
+        public int? Resolve() => pid;
+    }
+
+    private SessionIdentityTools Tool(SessionIdentityFileWriter? identityFile = null) =>
+        new(_api, identityFile ?? IdentityFile(4242));
+
+    private SessionIdentityFileWriter IdentityFile(int? parentPid) =>
+        new(new FixedParentPid(parentPid), _identityRoot);
+
+    private string IdentityFilePath() =>
+        Path.Combine(_identityRoot, "identity", "parent-4242.json");
+
+    [Fact]
+    public async Task SetIdentity_OverwritesIdentityFile_WithTheEchoedPair()
+    {
+        _stub.Route("POST", $"/api/agent/sessions/{SessionId}/identity", 200, IdentityJson("dan", "claude"));
+        await Tool().SetIdentity("dan", "claude");
+
+        _stub.Route("POST", $"/api/agent/sessions/{SessionId}/identity", 200, IdentityJson("mister-po", "qwen"));
+        await Tool().SetIdentity("mister-po", "qwen");
+
+        var payload = JsonNode.Parse(File.ReadAllText(IdentityFilePath()))!;
+        payload["alias"]!.GetValue<string>().ShouldBe("mister-po");
+        payload["vendor"]!.GetValue<string>().ShouldBe("qwen");
+        payload["sessionId"]!.GetValue<string>().ShouldBe(SessionId.ToString());
+    }
+
+    [Fact]
+    public async Task SetIdentity_IdentityFileFailure_DoesNotFailTheTool()
+    {
+        var brokenRoot = Path.Combine(Path.GetTempPath(), $"overmind-identity-broken-{Guid.NewGuid():N}");
+        File.WriteAllText(brokenRoot, "not a directory");
+
+        try
+        {
+            var result = await Tool(new SessionIdentityFileWriter(new FixedParentPid(4242), brokenRoot))
+                .SetIdentity("dan", "claude");
+
+            Text(result).ShouldBe($"Identity set to 'dan' by 'claude' (session {SessionId}).");
+            AdapterIdentityState.TryGet().ShouldBe(new AdapterIdentityState.Identity("dan", "claude"));
+        }
+        finally
+        {
+            File.Delete(brokenRoot);
+        }
+    }
 }
