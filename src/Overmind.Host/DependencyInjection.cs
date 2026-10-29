@@ -15,6 +15,7 @@ using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
 using Overmind.Infrastructure.VectorSearch;
+using Overmind.Infrastructure.Wake;
 using Overmind.Infrastructure.Wave;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -154,6 +155,7 @@ public static class DependencyInjection
         services.AddScoped<WaveSnapshotService>();
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<WaveChatService>();
+        services.AddScoped<AgentWakeService>();
         services.AddScoped<WaveChatRetentionSweeper>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();

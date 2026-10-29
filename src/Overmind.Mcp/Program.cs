@@ -80,6 +80,7 @@ if (adapterSessionId != Guid.Empty)
 // session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
 // and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
 var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile);
+var wakeSlot = new WakeSignalSlot();
 
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
 // source-generated JsonContext with its own options snapshot; the default HTML-safe encoder
@@ -138,9 +139,13 @@ builder.Services.AddSingleton<EntryAckTools>();
 builder.Services.AddSingleton<IssuesTools>();
 builder.Services.AddSingleton<OvermindOnboardingTools>();
 builder.Services.AddSingleton<OvermindNotificationTools>();
+builder.Services.AddSingleton<AgentWakeTools>();
 builder.Services.AddSingleton<OvermindResources>();
 builder.Services.AddSingleton<OvermindPlanningResources>();
 builder.Services.AddSingleton<SessionBootstrapPrompt>();
+builder.Services.AddSingleton(wakeSlot);
+builder.Services.AddSingleton<IWakeTicker, PeriodicWakeTicker>();
+builder.Services.AddSingleton<IWakeNotifier, McpWakeNotifier>();
 
 builder.Services
     .AddMcpServer(options =>
@@ -158,6 +163,7 @@ builder.Services
         options.Filters ??= new McpServerFilters();
         options.Filters.Message.IncomingFilters.Add(identityRefresher.CreateIncomingFilter());
         options.Filters.Request.CallToolFilters.Add(ToolBindingErrorFilter.Create());
+        options.Filters.Request.CallToolFilters.Add(new WakeSlotFilter(wakeSlot).Create());
     })
     .WithStdioServerTransport()
     .WithTools<OvermindTools>()
@@ -176,9 +182,12 @@ builder.Services
     .WithTools<IssuesTools>()
     .WithTools<OvermindOnboardingTools>()
     .WithTools<OvermindNotificationTools>()
+    .WithTools<AgentWakeTools>()
     .WithResources<OvermindResources>()
     .WithResources<OvermindPlanningResources>()
     .WithPrompts<SessionBootstrapPrompt>();
+
+builder.Services.AddHostedService<AgentWakeWatcher>();
 
 var app = builder.Build();
 app.Services.GetRequiredService<IHostApplicationLifetime>()

@@ -66,7 +66,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheSixtyTools()
+    public async Task ToolsList_ExposesExactlyTheSixtyOneTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -81,7 +81,7 @@ public class HandshakeContractTests : McpSessionTestBase
             "issues_append",
             "issues_create", "issues_get", "issues_list", "issues_promote", "issues_set_status",
             "list_entries", "list_projects", "overmind_briefing", "overmind_notify", "overmind_onboard",
-            "overmind_replies", "overmind_wave_snapshot",
+            "overmind_replies", "overmind_wake_peek", "overmind_wave_snapshot",
             "planning_ack_directive", "planning_add_feature_dependency", "planning_append_directive",
             "planning_append_log",
             "planning_claim_feature",

@@ -124,16 +124,16 @@ public sealed class WaveChatService
     private IQueryable<WaveMessage> UnreadFeed(
         Guid projectId, string room, string alias, DateTime since, bool replayMentions)
     {
-        var mentionPattern = $"% {alias.Replace("_", "\\_")} %";
+        var mentionPattern = WaveMentions.LikePattern(alias);
         var projectFeed = _db.WaveMessages
             .AsNoTracking()
             .Where(m => m.ProjectId == projectId);
 
         return replayMentions
             ? projectFeed.Where(m => (m.Room == room && m.CreatedAt > since)
-                        || EF.Functions.Like(m.Mentions, mentionPattern, "\\"))
+                        || EF.Functions.Like(m.Mentions, mentionPattern, WaveMentions.Escape))
             : projectFeed.Where(m => m.CreatedAt > since
-                        && (m.Room == room || EF.Functions.Like(m.Mentions, mentionPattern, "\\")));
+                        && (m.Room == room || EF.Functions.Like(m.Mentions, mentionPattern, WaveMentions.Escape)));
     }
 
     public async Task<IReadOnlyList<WaveMessage>> ListHistoryAsync(
