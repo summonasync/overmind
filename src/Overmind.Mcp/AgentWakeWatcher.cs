@@ -55,7 +55,7 @@ public sealed class AgentWakeWatcher(
             _inGate = count > 0;
             if (count > 0)
             {
-                slot.Add(count);
+                slot.Set(count);
                 await notifier.NotifyAsync(count, timeout.Token);
             }
         }

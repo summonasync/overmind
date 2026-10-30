@@ -130,7 +130,7 @@ public sealed class AgentWakeWatcherTests : IDisposable
     }
 
     [Fact]
-    public async Task Poll_SignalsOnConsecutivePasses_AccumulateInTheSlot()
+    public async Task Poll_RepeatedGatePasses_KeepTheSurfacedCountAtThePollValue()
     {
         AdapterSession.Id = Guid.NewGuid();
         var handler = new WakePageHandler(OneSignalJson, OneSignalJson, EmptyJson);
@@ -148,7 +148,7 @@ public sealed class AgentWakeWatcherTests : IDisposable
         ticker.Release();
         await ticker.WaitUntilPeriodCountAsync(4);
 
-        slot.Consume().ShouldBe(2);
+        slot.Consume().ShouldBe(1);
         notifier.Counts.ShouldBe([1, 1]);
         ticker.Periods.ShouldBe([Idle, Gate, Gate, Idle]);
 
