@@ -123,18 +123,20 @@ public sealed class OvermindTools
         Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
 
     [McpServerTool(Name = "write_entry", Destructive = false, Idempotent = false)]
-    [Description("Creates a new entry (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act.")]
+    [Description("Creates a new entry (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead and never auto-creates a project row.")]
     public async Task<JsonElement> WriteEntry(
-        [Description("Id of the project to write into.")] Guid projectId,
         [Description("Entry type: note, decision, gate, guard, idea, audit or tombstone.")] string type,
         [Description("Entry title.")] string title,
         [Description("Markdown body of the entry.")] string content,
         [Description("Optional tags attached to the entry.")] string[]? tags = null,
+        [Description("Id of the project to write into; resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        var resolvedProjectId = await _projects.ResolveAsync(projectId, create: false, "for the entry", ct);
+
         var body = new
         {
-            projectId,
+            projectId = resolvedProjectId,
             type = NormalizeWritableType(type),
             title,
             content,

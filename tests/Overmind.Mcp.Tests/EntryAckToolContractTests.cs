@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessCurrentDirectory))]
 public sealed class EntryAckToolContractTests : IAsyncLifetime
 {
     private static readonly string AckRoute =
@@ -27,13 +28,31 @@ public sealed class EntryAckToolContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MissingProjectId_ThrowsTheGuard()
+    public async Task MissingProjectId_ResolvesThroughTheOnboardCwd()
     {
+        _stub.Route("POST", "/api/onboard", 200, $$"""{"projectId":"{{Canned.ProjectId}}"}""");
+        _stub.Route("POST", AckRoute, 200,
+            $$"""{"entryId":"{{Canned.EntryId}}","ack":true,"alias":"Dan","vendor":"qwen","at":"2026-10-17T12:05:00Z"}""");
+
+        var result = await Tool().AckEntry(Canned.EntryId);
+
+        var onboard = _stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        var body = JsonNode.Parse(onboard.Body)!;
+        body["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        body["create"]!.GetValue<bool>().ShouldBeFalse();
+        Text(result).ShouldBe($"Entry {Canned.EntryId} acknowledged.");
+    }
+
+    [Fact]
+    public async Task UnregisteredCwd_GetsGuidanceWithoutAnyAck()
+    {
+        _stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+
         var ex = await Should.ThrowAsync<McpException>(() => Tool().AckEntry(Canned.EntryId));
 
-        ex.Message.ShouldBe(
-            "projectId is required for this tool — unlike most tools it does not fall back to OVERMIND_PROJECT_ID or the working directory.");
-        _stub.Requests.ShouldBeEmpty();
+        ex.Message.ShouldContain("Could not resolve the project for the entry");
+        ex.Message.ShouldContain("Pass projectId explicitly");
+        _stub.Requests.ShouldNotContain(r => r.Path.Contains("/ack"));
     }
 
     [Fact]
@@ -75,5 +94,5 @@ public sealed class EntryAckToolContractTests : IAsyncLifetime
     private static string Text(CallToolResult result) =>
         ((TextContentBlock)result.Content[0]).Text;
 
-    private EntryAckTools Tool() => new(_api, new MutationGuard(_api));
+    private EntryAckTools Tool() => new(_api, new MutationGuard(_api), new ProjectResolver(_api));
 }
