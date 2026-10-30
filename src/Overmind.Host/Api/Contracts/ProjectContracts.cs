@@ -22,9 +22,12 @@ public sealed record ProjectResponse(
     ProjectNumberStyle NumberStyle,
     string? NumberPrefix,
     bool IsFavorite,
+    bool AutoActOnReplies,
     int OpenFeatureCount,
     DateTime CreatedAt);
 
 public sealed record FavoriteRequest(bool IsFavorite);
+
+public sealed record AutoActRequest(bool Enabled);
 
 public sealed record ProjectManifestImportResponse(string SourceFile, string Manifest);
