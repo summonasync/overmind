@@ -15,7 +15,7 @@ public sealed class WakeSlotFilterTests
     public async Task Pending_SlotCount_IsAppendedToTheResult_AndConsumed(int pending, string expected)
     {
         var slot = new WakeSignalSlot();
-        slot.Add(pending);
+        slot.Set(pending);
         var filter = new WakeSlotFilter(slot).Create();
 
         var result = await InvokeAsync(filter, Result);
