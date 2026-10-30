@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessCurrentDirectory))]
 public sealed class FeatureCodeToolContractTests : IAsyncLifetime
 {
     private StubOvermindApi _stub = null!;

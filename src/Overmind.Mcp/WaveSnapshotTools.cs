@@ -28,11 +28,16 @@ public sealed class WaveSnapshotTools
         "by tag (defaults: wave-sync, lane-marshalling — overridable). The adapter half enriches in-flight features with " +
         "repo code discovery (the planning_feature_code projection: worktrees/branches carrying the slug or NNN prefix, " +
         "pins matched first and flagged, stale pins reported): the git listing is cached briefly, so repeated snapshots " +
-        "in one marshal pass do not spawn git processes per request; a discovery failure degrades to discoveryError and " +
-        "the rest of the payload is unaffected. compact=true projects every section to coordination-critical fields " +
-        "only (queue rows drop briefExcerpt, taskCounts, spec/plan statuses and materializer stamps; claims drop " +
-        "lastActivityAt; entries drop snippets — discovery, code pins and blockers pass through unchanged); " +
-        "default false keeps the full payload. projectId is required; project resolution never creates a project row.")]
+        "in one marshal pass do not spawn git processes per request; a cwd outside any git repository is an expected " +
+        "condition reported as the short discoverySkipped marker, while a genuine discovery failure degrades to " +
+        "discoveryError — the rest of the payload is unaffected either way. compact=true projects every section to " +
+        "coordination-critical fields only and stays sparse: null values, empty arrays and default scalars " +
+        "(readiness 0, stale false, isBlocked false, openDirectiveCount 0) disappear; queue rows drop briefExcerpt, " +
+        "taskCounts, spec/plan statuses and materializer stamps, keep task progress only when taskTotal > 0, claim " +
+        "fields only when claimedByAlias is set and lane fields only when lane is set; claims drop lastActivityAt " +
+        "and claimedByHuman=false; entries drop snippets and empty tags; discovery rows drop the per-row workspace " +
+        "(the top-level workspace stays); code pins and blockers pass through unchanged. default false keeps the " +
+        "full payload. projectId is required; project resolution never creates a project row.")]
     public async Task<JsonElement> WaveSnapshot(
         [Description("Id of the project to snapshot.")] Guid? projectId = null,
         [Description("Optional comma-separated tag list for the coordination entries section; " +
@@ -65,7 +70,8 @@ public sealed class WaveSnapshotTools
         }
 
         var snapshot = await ReadAsync(url, ct);
-        return await WithDiscoveryAsync(compact ? WaveSnapshotCompactor.Compact(snapshot) : snapshot, ct);
+        snapshot = await WithDiscoveryAsync(snapshot, ct);
+        return compact ? WaveSnapshotCompactor.Compact(snapshot) : snapshot;
     }
 
     private async Task<JsonElement> ReadAsync(string url, CancellationToken ct)
@@ -99,8 +105,7 @@ public sealed class WaveSnapshotTools
         if (!GitRepositoryProbe.IsRepository(workspace))
         {
             payload["workspace"] = workspace;
-            payload["discoveryError"] =
-                $"code discovery skipped: {workspace} is not inside a git repository; the rest of the snapshot is unaffected";
+            payload["discoverySkipped"] = "cwd is not a git repository";
             return payload.Deserialize<JsonElement>();
         }
 

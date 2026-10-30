@@ -7,6 +7,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessCurrentDirectory))]
 public sealed class DiscoveryFastFailTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -35,25 +36,41 @@ public sealed class DiscoveryFastFailTests : IDisposable
     }
 
     [Fact]
-    public async Task WaveSnapshot_NonRepository_ReportsDiscoveryError_KeepsBoardHalves()
+    public async Task WaveSnapshot_NonRepository_ReportsDiscoverySkipped_KeepsBoardHalves()
     {
-        var snapshot = new JsonObject
-        {
-            ["queue"] = new JsonArray(),
-            ["claims"] = new JsonArray(),
-            ["openBlockers"] = new JsonArray(),
-            ["codeLocations"] = new JsonArray { new JsonObject { ["slug"] = "demo-feature" } }
-        };
-        var tools = new WaveSnapshotTools(Api(_ => Json(200, snapshot)), Git, new WaveListingCache());
+        var tools = new WaveSnapshotTools(Api(_ => Json(200, SnapshotWithCodeLocations())), Git, new WaveListingCache());
 
         var result = await tools.WaveSnapshot(Canned.ProjectId);
 
         var payload = JsonNode.Parse(result.GetRawText())!;
-        payload["discoveryError"]!.GetValue<string>().ShouldContain("not inside a git repository");
+        payload["discoverySkipped"]!.GetValue<string>().ShouldBe("cwd is not a git repository");
+        payload["discoveryError"].ShouldBeNull();
         payload["queue"].ShouldNotBeNull();
         payload["claims"].ShouldNotBeNull();
         payload["discovery"].ShouldBeNull();
     }
+
+    [Fact]
+    public async Task WaveSnapshot_NonRepository_KeepsTheSkipMarker_InCompactMode()
+    {
+        var tools = new WaveSnapshotTools(Api(_ => Json(200, SnapshotWithCodeLocations())), Git, new WaveListingCache());
+
+        var result = await tools.WaveSnapshot(Canned.ProjectId, compact: true);
+
+        var payload = JsonNode.Parse(result.GetRawText())!;
+        payload["discoverySkipped"]!.GetValue<string>().ShouldBe("cwd is not a git repository");
+        payload["discoveryError"].ShouldBeNull();
+        payload["workspace"]!.GetValue<string>().ShouldBe(Workspace);
+        payload["queue"].ShouldNotBeNull();
+    }
+
+    private static JsonObject SnapshotWithCodeLocations() => new()
+    {
+        ["queue"] = new JsonArray(),
+        ["claims"] = new JsonArray(),
+        ["openBlockers"] = new JsonArray(),
+        ["codeLocations"] = new JsonArray { new JsonObject { ["slug"] = "demo-feature" } }
+    };
 
     [Fact]
     public async Task FeatureCode_NonRepository_DegradesDiscovery_AnswersFeatureContext()

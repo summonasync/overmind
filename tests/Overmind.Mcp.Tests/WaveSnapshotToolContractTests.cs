@@ -118,6 +118,19 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         })
     }.ToJsonString();
 
+    private static readonly string UnclaimedDraftSnapshotJson = new JsonObject
+    {
+        ["projectId"] = Canned.ProjectId.ToString(),
+        ["generatedAt"] = "2026-10-17T12:00:00Z",
+        ["queue"] = new JsonArray(BuildQueueRow(1, claimed: false)),
+        ["claims"] = new JsonArray(),
+        ["codeLocations"] = new JsonArray(),
+        ["openBlockers"] = new JsonArray(),
+        ["entries"] = new JsonArray()
+    }.ToJsonString();
+
+    private static readonly string LargeSnapshotJson = BuildSnapshot(BuildQueueRows(50));
+
     private StubOvermindApi _stub = null!;
     private OvermindApiClient _api = null!;
 
@@ -191,7 +204,9 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         row.GetProperty("lane").GetString().ShouldBe("frontend");
         row.GetProperty("laneBoundAlias").GetString().ShouldBe("johan");
         row.GetProperty("openDirectiveCount").GetInt32().ShouldBe(1);
-        row.GetProperty("stale").GetBoolean().ShouldBeFalse();
+        row.TryGetProperty("stale", out _).ShouldBeFalse();
+        row.TryGetProperty("claimedByHuman", out _).ShouldBeFalse();
+        row.TryGetProperty("laneHolder", out _).ShouldBeFalse();
         row.GetProperty("potentialOverlaps")[0].GetProperty("withFeatureSlug").GetString().ShouldBe("other-feature");
 
         row.TryGetProperty("briefExcerpt", out _).ShouldBeFalse();
@@ -227,6 +242,48 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         entry.GetProperty("title").GetString().ShouldBe("wave standup");
         entry.GetProperty("tags").EnumerateArray().Single().GetString().ShouldBe("wave-sync");
         entry.TryGetProperty("snippet", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_CompactKeepsAnUnclaimedDraftRowSparse_WithNoNullsOrEmptyArrays()
+    {
+        _stub.RouteGet(SnapshotRoute, UnclaimedDraftSnapshotJson);
+
+        var result = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, compact: true);
+
+        var row = result.GetProperty("queue").EnumerateArray().Single();
+        foreach (var property in row.EnumerateObject())
+        {
+            property.Value.ValueKind.ShouldNotBe(JsonValueKind.Null);
+            if (property.Value.ValueKind == JsonValueKind.Array)
+            {
+                property.Value.GetArrayLength().ShouldBeGreaterThan(0);
+            }
+        }
+
+        row.GetProperty("slug").GetString().ShouldBe("feature-001");
+        row.GetProperty("readiness").GetInt32().ShouldBe(2);
+        row.GetProperty("lane").GetString().ShouldBe("platform");
+        row.TryGetProperty("claimedByAlias", out _).ShouldBeFalse();
+        row.TryGetProperty("claimedByHuman", out _).ShouldBeFalse();
+        row.TryGetProperty("taskTotal", out _).ShouldBeFalse();
+        row.TryGetProperty("isBlocked", out _).ShouldBeFalse();
+        row.TryGetProperty("openDirectiveCount", out _).ShouldBeFalse();
+        row.TryGetProperty("stale", out _).ShouldBeFalse();
+        row.TryGetProperty("blockedBy", out _).ShouldBeFalse();
+        row.TryGetProperty("potentialOverlaps", out _).ShouldBeFalse();
+        row.TryGetProperty("briefExcerpt", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_CompactHalvesTheRawLengthOfALargeCannedSnapshot()
+    {
+        _stub.RouteGet(SnapshotRoute, LargeSnapshotJson);
+
+        var full = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId);
+        var compact = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, compact: true);
+
+        compact.GetRawText().Length.ShouldBeLessThanOrEqualTo(full.GetRawText().Length / 2);
     }
 
     [Fact]
@@ -327,6 +384,64 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
 
     private WaveSnapshotTools Tool(StubGitCli git, WaveListingCache? cache = null) =>
         new(_api, git, cache ?? new WaveListingCache());
+
+    private static string BuildSnapshot(JsonArray queue) => new JsonObject
+    {
+        ["projectId"] = Canned.ProjectId.ToString(),
+        ["generatedAt"] = "2026-10-17T12:00:00Z",
+        ["queue"] = queue,
+        ["claims"] = new JsonArray(),
+        ["codeLocations"] = new JsonArray(),
+        ["openBlockers"] = new JsonArray(),
+        ["entries"] = new JsonArray()
+    }.ToJsonString();
+
+    private static JsonArray BuildQueueRows(int count)
+    {
+        var rows = new JsonArray();
+        for (var position = 1; position <= count; position++)
+        {
+            rows.Add(BuildQueueRow(position, claimed: position % 2 == 0));
+        }
+
+        return rows;
+    }
+
+    private static JsonObject BuildQueueRow(int position, bool claimed) => new()
+    {
+        ["slug"] = $"feature-{position:000}",
+        ["number"] = position.ToString(),
+        ["title"] = $"Feature {position}",
+        ["priority"] = "p2",
+        ["status"] = "ready",
+        ["queuePosition"] = position,
+        ["specStatus"] = "validated",
+        ["planStatus"] = "validated",
+        ["taskDone"] = 0,
+        ["taskTotal"] = 0,
+        ["taskCounts"] = new JsonObject { ["todo"] = 0, ["inProgress"] = 0, ["review"] = 0, ["done"] = 0, ["blocked"] = 0 },
+        ["readiness"] = 2,
+        ["blockedBy"] = new JsonArray(),
+        ["isBlocked"] = false,
+        ["claimedByAlias"] = claimed ? "marshal" : null,
+        ["claimedByVendor"] = claimed ? "claude" : null,
+        ["claimedByHuman"] = false,
+        ["claimedAt"] = claimed ? "2026-10-17T09:00:00Z" : null,
+        ["claimState"] = claimed ? "alive" : null,
+        ["phase"] = "plan validated",
+        ["briefExcerpt"] = "Crash on save when the workspace file is read-only.",
+        ["openDirectiveCount"] = 0,
+        ["createdAt"] = "2026-09-08T09:00:00Z",
+        ["updatedAt"] = "2026-10-17T08:00:00Z",
+        ["lane"] = "platform",
+        ["laneBoundAlias"] = null,
+        ["laneHolder"] = null,
+        ["potentialOverlaps"] = new JsonArray(),
+        ["pendingMutations"] = 0,
+        ["lastAttemptAt"] = null,
+        ["lastSuccessAt"] = "2026-10-17T10:00:00Z",
+        ["stale"] = false
+    };
 
     private sealed class StubGitCli : IGitCli
     {

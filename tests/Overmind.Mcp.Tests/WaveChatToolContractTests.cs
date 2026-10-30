@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessCurrentDirectory))]
 public sealed class WaveChatToolContractTests : IAsyncLifetime
 {
     private const string SelfAlias = "dan";

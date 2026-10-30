@@ -7,6 +7,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessCurrentDirectory))]
 public sealed class LaneToolContractTests : IAsyncLifetime
 {
     private static readonly string RosterRoute =

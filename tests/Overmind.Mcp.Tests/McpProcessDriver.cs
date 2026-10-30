@@ -11,9 +11,10 @@ public sealed class McpProcessDriver : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
-    // Captured at type load: tests that move Environment.CurrentDirectory must not leak the
+    // Deterministic on purpose: tests that move Environment.CurrentDirectory must not leak the
     // move into the adapter processes spawned by parallel test collections.
-    private static readonly string FallbackWorkingDirectory = Environment.CurrentDirectory;
+    private static readonly string FallbackWorkingDirectory =
+        Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
 
     private readonly Process _process;
     private readonly StreamWriter _stdin;
