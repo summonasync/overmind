@@ -134,6 +134,12 @@ public static class DependencyInjection
         services.AddSingleton<PlanningMaterializationQueue>();
         services.AddSingleton<PlanningMaterializationWorker>();
         services.AddHostedService<PlanningMaterializationHostedService>();
+        services.AddSingleton<ReplyAutoActQueue>();
+        services.AddSingleton<ReplyAutoActWorker>();
+        services.AddHostedService<ReplyAutoActHostedService>();
+        services.AddScoped<ReplyAutoActFanout>();
+        services.AddScoped<ReplyAutoActProcessor>();
+        services.AddScoped<IReplyAutoActProcessor>(provider => provider.GetRequiredService<ReplyAutoActProcessor>());
         services.AddScoped<PlanningMaterializationDispatcher>();
         services.AddScoped<PlanningMaterializationStatusReader>(provider => new PlanningMaterializationStatusReader(
             provider.GetRequiredService<OvermindDbContext>(),

@@ -20,16 +20,22 @@ public sealed class ArtifactContentUpdatedAtMigrationTests : IDisposable
         {
             db.Database.Migrate(AddIssuesKindMigration);
 
-            var project = Project.Create("freshness", "/tmp/freshness");
-            db.Projects.Add(project);
-            var feature = PlanningFeature.Create(project.Id, "001-backfill", "Backfill", "backfill body");
-            db.PlanningFeatures.Add(feature);
-            db.SaveChanges();
-
+            var projectId = Guid.NewGuid();
+            var featureId = Guid.NewGuid();
+            db.Database.ExecuteSql(
+                $"""
+                INSERT INTO "Projects" ("Id", "Name", "DiskPath", "Description", "CreatedAt")
+                VALUES ({projectId}, 'freshness', '/tmp/freshness', '', {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss})
+                """);
+            db.Database.ExecuteSql(
+                $"""
+                INSERT INTO "PlanningFeatures" ("Id", "ProjectId", "Slug", "Title", "Body", "Status", "Version", "CreatedAt", "UpdatedAt")
+                VALUES ({featureId}, {projectId}, '001-backfill', 'Backfill', 'backfill body', 0, 1, '2020-03-03 04:05:06', '2020-03-03 04:05:06')
+                """);
             db.Database.ExecuteSql(
                 $"""
                 INSERT INTO "PlanningArtifacts" ("Id", "FeatureId", "Kind", "Status", "Review", "Body", "Order", "Version", "CreatedAt", "UpdatedAt")
-                VALUES ({Guid.NewGuid()}, {feature.Id}, 1, 0, 0, '<goal>backfilled</goal>', 0, 1, '2020-03-03 04:05:06', '2020-03-04 05:06:07')
+                VALUES ({Guid.NewGuid()}, {featureId}, 1, 0, 0, '<goal>backfilled</goal>', 0, 1, '2020-03-03 04:05:06', '2020-03-04 05:06:07')
                 """);
         }
 

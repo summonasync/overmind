@@ -4,7 +4,7 @@ using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.Notifications;
 
-public sealed class NotificationsService(OvermindDbContext db)
+public sealed class NotificationsService(OvermindDbContext db, ReplyAutoActFanout autoAct)
 {
     public const int ListCapacity = 50;
 
@@ -158,6 +158,7 @@ public sealed class NotificationsService(OvermindDbContext db)
 
         notification.Reply(text);
         await db.SaveChangesAsync(ct);
+        await autoAct.TryDispatchAsync(notification, ct);
 
         return notification;
     }
