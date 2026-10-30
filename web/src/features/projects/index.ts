@@ -5,10 +5,12 @@ export { ProjectForm } from "./components/project-form";
 export { ProjectList } from "./components/project-list";
 export { ProjectManifestSection } from "./components/project-manifest-section";
 export { ProjectNameBadge } from "./components/project-name-badge";
+export { ProjectAutoActToggle } from "./components/project-auto-act-toggle";
 export { ProjectFavoriteToggle } from "./components/project-favorite-toggle";
 export { ProjectTree } from "./components/project-tree";
 export { FolderPickerModal } from "./components/folder-picker-modal";
 export {
+  useProjectAutoActToggle,
   useProjectFavoriteToggle,
   useProjectList,
   useProjectManifestImport,
@@ -26,6 +28,7 @@ export {
 } from "./queries";
 export type {
   ClaimSettingsResponse,
+  ProjectAutoActResponse,
   ProjectFormValues,
   ProjectManifestImportResponse,
   ProjectResponse,

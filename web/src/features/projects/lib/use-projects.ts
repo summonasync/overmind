@@ -5,6 +5,7 @@ import {
   createProject,
   deleteProject,
   importProjectManifest,
+  setProjectAutoAct,
   toggleProjectFavorite,
   updateProject,
 } from "@/features/projects/api";
@@ -56,6 +57,20 @@ export function useProjectFavoriteToggle() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
       queryClient.invalidateQueries({ queryKey: [...projectKeys.all, "tree"] });
+    },
+  });
+
+  return toggle;
+}
+
+export function useProjectAutoActToggle() {
+  const queryClient = useQueryClient();
+
+  const toggle = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      setProjectAutoAct(id, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
   });
 

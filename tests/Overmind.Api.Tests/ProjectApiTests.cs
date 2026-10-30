@@ -287,6 +287,55 @@ public sealed class ProjectApiTests : IDisposable
     }
 
     [Fact]
+    public async Task SetAutoAct_ToggleRoundTrip_PersistsState()
+    {
+        var created = await CreateProjectAsync("auto-act", TestPaths.DiskPath("auto-act"));
+
+        var enableResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{created.Id}/auto-act", new { Enabled = true });
+        enableResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var enabled = await enableResponse.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        enabled!.AutoActOnReplies.ShouldBeTrue();
+
+        var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{created.Id}", JsonOptions);
+        fetched!.AutoActOnReplies.ShouldBeTrue();
+
+        var disableResponse = await _client.PostAsJsonAsync(
+            $"/api/projects/{created.Id}/auto-act", new { Enabled = false });
+        var disabled = await disableResponse.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        disabled!.AutoActOnReplies.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task SetAutoAct_MissingProject_Returns404()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{Guid.NewGuid()}/auto-act", new { Enabled = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task SetAutoAct_NonBooleanBody_Returns400()
+    {
+        var created = await CreateProjectAsync("auto-act-junk", TestPaths.DiskPath("auto-act-junk"));
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/projects/{created.Id}/auto-act", new { Enabled = "yes" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task SetAutoAct_UntouchedProject_DefaultsToFalse()
+    {
+        var created = await CreateProjectAsync("auto-act-default", TestPaths.DiskPath("auto-act-default"));
+
+        var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{created.Id}", JsonOptions);
+        fetched!.AutoActOnReplies.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task ListAll_OpenFeatureCount_ExcludesDoneFeatures()
     {
         var created = await CreateProjectAsync("counted", TestPaths.DiskPath("counted"));
@@ -342,6 +391,7 @@ public sealed class ProjectApiTests : IDisposable
         string NumberStyle,
         string? NumberPrefix,
         bool IsFavorite,
+        bool AutoActOnReplies,
         int OpenFeatureCount,
         DateTime CreatedAt);
 

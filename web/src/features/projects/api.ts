@@ -1,6 +1,7 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type {
   ClaimSettingsResponse,
+  ProjectAutoActResponse,
   ProjectFormValues,
   ProjectManifestImportResponse,
   ProjectResponse,
@@ -42,6 +43,13 @@ export function updateProject(id: string, values: ProjectUpdateValues): Promise<
 
 export function toggleProjectFavorite(id: string, isFavorite: boolean): Promise<ProjectResponse> {
   return apiPost<ProjectResponse>(`/projects/${id}/favorite`, { isFavorite });
+}
+
+export function setProjectAutoAct(
+  id: string,
+  enabled: boolean,
+): Promise<ProjectAutoActResponse> {
+  return apiPost<ProjectAutoActResponse>(`/projects/${id}/auto-act`, { enabled });
 }
 
 export function importProjectManifest(id: string): Promise<ProjectManifestImportResponse> {
