@@ -60,3 +60,9 @@ Your final message is the complete, self-contained handoff for the caller: state
   - mcp__overmind__search
   - mcp__overmind__update_entry
   - mcp__overmind__write_entry
+  - mcp__squeezr__code_search
+  - mcp__squeezr__expand_span
+  - mcp__squeezr__find_references
+  - mcp__squeezr__index_status
+  - mcp__squeezr__repo_map
+  - mcp__squeezr__symbol_lookup

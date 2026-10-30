@@ -153,6 +153,10 @@ is enforced by prompt, not code:
   Progress chatter, status noise and discussion stay out — chat is signal, not a diary.
 - **An `@alias` mention means "you must read this".** Mention an alias only when that agent
   has to act; a mention lands in its unread feed across rooms.
+- **A mention is also a wake signal.** `overmind_wake_peek` reports fresh mentions, so a
+  live-but-idle holder running the wake ritual (see `overmind-ceremony`) picks your mention
+  up on its next self-scheduled tick — mention + directive is how you ping a sleeping lane
+  without waiting for a manual nudge.
 - **Cap mirrors directives: 500 chars.** One fact per message, slugs and links over prose.
 - **Posts carry your identity.** A message lands under your real alias and renders in your
   role color — owner violet, workers yellow, marshal lime; the owner watches the room live.
