@@ -725,6 +725,51 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task WriteEntry_NoExplicitProject_ResolvesThroughTheOnboardCwd()
+    {
+        var response = await Driver.CallToolAsync("write_entry", new JsonObject
+        {
+            ["type"] = "note",
+            ["title"] = "Resolved note",
+            ["content"] = "body"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        var onboardBody = JsonNode.Parse(onboard.Body)!;
+        onboardBody["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
+        onboardBody["create"]!.GetValue<bool>().ShouldBeFalse();
+
+        var entry = FindRequest("POST", "/api/entries");
+        JsonNode.Parse(entry.Body)!["projectId"]!.GetValue<Guid>().ShouldBe(Canned.ProjectId);
+    }
+
+    [Fact]
+    public async Task WriteEntry_UnregisteredCwd_ReturnsGuidanceWithoutPostingOrCreating()
+    {
+        Stub.Route("POST", "/api/onboard", 404, Canned.OnboardUnregisteredCwdJson);
+
+        var response = await Driver.CallToolAsync("write_entry", new JsonObject
+        {
+            ["type"] = "note",
+            ["title"] = "Orphan note",
+            ["content"] = "body"
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("Could not resolve the project for the entry");
+        text.ShouldContain("Pass projectId explicitly");
+
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/entries");
+        var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
+        JsonNode.Parse(onboard.Body)!["create"]!.GetValue<bool>().ShouldBeFalse();
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task DeleteEntry_ProjectIdEnvOverride_SkipsOnboard()
     {
         using var driver = McpProcessDriver.Start(Stub.BaseUrl, new Dictionary<string, string>
@@ -783,7 +828,8 @@ public class ToolContractTests : McpSessionTestBase
         description.ShouldContain("reads stay pure");
         description.ShouldContain("owner-only body writes are unchanged");
         description.ShouldContain("idempotent no-op");
-        description.ShouldContain("projectId is required");
+        description.ShouldContain("OVERMIND_PROJECT_ID");
+        description.ShouldContain("never auto-creates a project row");
 
         var properties = tools["ack_entry"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("entryId");

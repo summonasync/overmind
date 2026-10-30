@@ -7,6 +7,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessCurrentDirectory))]
 public sealed class DirectiveToolContractTests : IAsyncLifetime
 {
     private static readonly Guid DirectiveId = Guid.Parse("16161616-1616-1616-1616-161616161616");

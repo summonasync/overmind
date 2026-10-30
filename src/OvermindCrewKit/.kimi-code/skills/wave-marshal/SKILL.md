@@ -76,7 +76,7 @@ Primary read, one call: `overmind_wave_snapshot(projectId)` —
   branches carrying the slug or its NNN prefix, pins matched first and flagged `pinned`,
   stale pins reported — the `planning_feature_code` projection, git listing cached for the
   pass; a discovery failure degrades to `discoveryError` and the rest of the snapshot is
-  unaffected;
+  unaffected; a non-repository cwd yields a short `discoverySkipped` marker instead;
 - open feature blockers rolled up per feature;
 - the latest coordination entries by tag (defaults `wave-sync,lane-marshalling`; override
   with `tags=`, cap with `entryLimit` 1–100, default 20).
