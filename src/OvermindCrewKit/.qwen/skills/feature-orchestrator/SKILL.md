@@ -95,6 +95,7 @@ For ANY complex task (more than 3 files changed, or cross-layer changes, or new 
   - `Documentation` (README, ADR, runbooks, doc restructure) → `documentation-writer`
   - `Learning materials` (study plans, concept explanations, assessments) → `tutor-master`
 - Coder MUST follow all rules from their skill file.
+- **Before the first edit of an indexed symbol: run `find_references` on it** — the caller list (or its absence-reason from the blast-radius set) is part of the task artifact, checked at review (`overmind-ceremony`).
 - Coder MUST output list of changed files.
 - Coder receives ONLY its task artifact reference (projectId + featureSlug + artifactId) as primary input — reads it via `planning_read_artifact`, NEVER from disk when MCP is available (spec/plan stay with orchestrator and reviewer; the feature body is readable by all). Coder MUST patch discovered workarounds, quirks, and environment issues into the task artifact's `<obstacles>` section (`planning_patch_artifact`), append a one-line entry to `<log>` (`planning_append_log`), and move statuses (`planning_set_status` with logNote). Full contract: `overmind-ceremony`.
 - **Parallel execution** → independent task artifacts with disjoint file sets may be dispatched concurrently per `overmind-ceremony` (Parallel dispatch): one spawn batch, one briefing per coder, all results collected before the next ceremony move.

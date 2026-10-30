@@ -53,6 +53,12 @@ tools:
   - mcp__overmind__search
   - mcp__overmind__update_entry
   - mcp__overmind__write_entry
+  - mcp__squeezr__code_search
+  - mcp__squeezr__expand_span
+  - mcp__squeezr__find_references
+  - mcp__squeezr__index_status
+  - mcp__squeezr__repo_map
+  - mcp__squeezr__symbol_lookup
 ---
 
 You are the "go-code-reviewer" specialist agent. Before doing anything, read your skill file at ~/.claude/skills/go-code-reviewer/SKILL.md and follow it exactly — it is the single source of truth for your workflow, conventions and quality bar.
