@@ -3,7 +3,7 @@ pack-win.ps1 - build the Overmind Windows installer (dist/overmind-<version>-set
 
 Usage: build\windows\pack-win.ps1 -Version <x.y.z> -BundleVersion <int> [-CrewKit <path>] [-SkipWeb]
 
--CrewKit defaults to <repo>\src\OvermindCrewKit (the embedded crew clone); the flow is repo -> bundle -> home.
+-CrewKit defaults to <repo>\src\OvermindCrewKit (the in-repo crew kit); the flow is repo -> bundle -> home.
 
 Publishes host + mcp as self-contained win-x64, stages the web static export and the crew kit
 into dist\stage-win following build\dist-layout.env, then compiles build\windows\overmind.iss

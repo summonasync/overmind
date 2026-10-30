@@ -402,7 +402,9 @@ FodyWeavers.xsd
 # Portable distribution output (build/pack.sh)
 dist/
 
-# Embedded crew kit checkout (separate repo, staged into bundles by build/pack.sh)
-src/OvermindCrewKit/
+# Crew kit lives in-repo (absorbed 2026-10-30 with full history, no separate origin).
+# Only its local-only Claude settings stay untracked — the old nested repo hid them
+# via .git/info/exclude, which did not survive the absorb.
+src/OvermindCrewKit/.claude/settings.local.json
 
 .idea/
