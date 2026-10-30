@@ -11,6 +11,7 @@ import { ProjectsInfoPanel, useInfoPanel } from "@/widgets/app-shell";
 import {
   ClaimSettingsSection,
   FeatureNumberSettings,
+  ProjectAutoActToggle,
   ProjectDetail,
   ProjectForm,
   ProjectList,
@@ -119,6 +120,10 @@ function ProjectsSettingsPageContent() {
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Backlog import</h3>
               <BacklogImportSection projectId={detail.id} />
+            </div>
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Auto-act</h3>
+              <ProjectAutoActToggle key={detail.id} project={detail} />
             </div>
           </>
         ) : null}

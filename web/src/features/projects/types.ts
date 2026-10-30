@@ -9,6 +9,7 @@ export interface ProjectResponse {
   numberStyle: FeatureNumberStyle;
   numberPrefix: string | null;
   isFavorite: boolean;
+  autoActOnReplies: boolean;
   openFeatureCount: number;
   createdAt: string;
 }
@@ -29,6 +30,10 @@ export type ProjectUpdateValues = ProjectFormValues & {
 export interface ProjectManifestImportResponse {
   sourceFile: string;
   manifest: string;
+}
+
+export interface ProjectAutoActResponse {
+  enabled: boolean;
 }
 
 export interface ClaimSettingsResponse {
