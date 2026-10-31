@@ -33,7 +33,10 @@ export function WaveRoster({ participants, loading, error }: WaveRosterProps) {
             <p className="px-1.5 pb-1 text-xs text-muted">No agents on lanes right now</p>
           ) : (
             agents.map((agent) => (
-              <AgentRow key={`${agent.lane ?? ""}:${agent.alias}`} agent={agent} />
+              <AgentRow
+                key={`${agent.lane ?? ""}:${agent.alias}:${agent.vendor ?? ""}`}
+                agent={agent}
+              />
             ))
           )}
         </>
