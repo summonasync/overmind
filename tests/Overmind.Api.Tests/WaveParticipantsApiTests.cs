@@ -68,17 +68,82 @@ public sealed class WaveParticipantsApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Get_ClaimReleased_AgentDropsOwnerStays()
+    public async Task Get_ClaimReleased_AliveSessionStaysAsClaimlessRowUntilEnded()
     {
         var projectId = await CreateProjectAsync(_client);
         await ClaimLaneFeatureAsync(_client, projectId, 1, "backend", "guldan", "claude");
         await _client.PostAsync(
             $"/api/projects/{projectId}/planning/features/001-backend-work/unclaim", null);
 
-        var response = await _client.GetAsync($"/api/projects/{projectId}/wave/participants");
+        var released = await ReadAsync(
+            await _client.GetAsync($"/api/projects/{projectId}/wave/participants"));
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var roster = await ReadAsync(response);
+        await ExecuteAsync("UPDATE AgentSessions SET EndedAt = datetime('now') WHERE Alias = 'guldan'");
+
+        var ended = await ReadAsync(
+            await _client.GetAsync($"/api/projects/{projectId}/wave/participants"));
+
+        released.Items.ShouldBe(new[]
+        {
+            new ParticipantJson("owner", null, "owner", null, null, "owner"),
+            new ParticipantJson("agent", null, "guldan", "claude", null, "worker"),
+        });
+        ended.Items.ShouldBe([new ParticipantJson("owner", null, "owner", null, null, "owner")]);
+    }
+
+    [Fact]
+    public async Task Get_ClaimlessMarshalSession_AppearsAsAgentRowWithoutLane()
+    {
+        var projectId = await CreateProjectAsync(_client);
+        var register = await _client.PostAsJsonAsync(
+            "/api/agent/sessions",
+            new { Alias = "van", Vendor = "claude", Role = "marshal" }, JsonOptions);
+        register.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var roster = await ReadAsync(
+            await _client.GetAsync($"/api/projects/{projectId}/wave/participants"));
+
+        roster.Items.Length.ShouldBe(2);
+        roster.Items[0].ShouldBe(new ParticipantJson("owner", null, "owner", null, null, "owner"));
+        roster.Items[1].ShouldBe(new ParticipantJson("agent", null, "van", "claude", null, "marshal"));
+    }
+
+    [Fact]
+    public async Task Get_StaleClaimReplacedByFreshSessionOfSameAlias_ShowsSingleRow()
+    {
+        var projectId = await CreateProjectAsync(_client);
+        await ClaimLaneFeatureAsync(_client, projectId, 1, "backend", "guldan", "claude");
+        await ExecuteAsync(
+            "UPDATE AgentSessions SET LastSeenAt = datetime('now', '-2 hours') WHERE Alias = 'guldan'");
+        var register = await _client.PostAsJsonAsync(
+            "/api/agent/sessions", new { Alias = "guldan", Vendor = "claude" }, JsonOptions);
+        register.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var roster = await ReadAsync(
+            await _client.GetAsync($"/api/projects/{projectId}/wave/participants"));
+
+        roster.Items.ShouldBe(new[]
+        {
+            new ParticipantJson("owner", null, "owner", null, null, "owner"),
+            new ParticipantJson("agent", null, "guldan", "claude", null, "worker"),
+        });
+    }
+
+    [Fact]
+    public async Task Get_EndedAndStaleClaimlessSessions_AbsentFromRoster()
+    {
+        var projectId = await CreateProjectAsync(_client);
+        await _client.PostAsJsonAsync(
+            "/api/agent/sessions", new { Alias = "gone", Vendor = "qwen" }, JsonOptions);
+        await _client.PostAsJsonAsync(
+            "/api/agent/sessions", new { Alias = "idle", Vendor = "kimi" }, JsonOptions);
+        await ExecuteAsync("UPDATE AgentSessions SET EndedAt = datetime('now') WHERE Alias = 'gone'");
+        await ExecuteAsync(
+            "UPDATE AgentSessions SET LastSeenAt = datetime('now', '-2 hours') WHERE Alias = 'idle'");
+
+        var roster = await ReadAsync(
+            await _client.GetAsync($"/api/projects/{projectId}/wave/participants"));
+
         roster.Items.ShouldBe([new ParticipantJson("owner", null, "owner", null, null, "owner")]);
     }
 

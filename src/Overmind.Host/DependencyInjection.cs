@@ -161,6 +161,7 @@ public static class DependencyInjection
         services.AddScoped<WaveSnapshotService>();
         services.AddScoped<FrontmatterKeyRegistry>();
         services.AddScoped<WaveChatService>();
+        services.AddScoped<WaveParticipantService>();
         services.AddScoped<AgentWakeService>();
         services.AddScoped<WaveChatRetentionSweeper>();
         services.AddScoped<BacklogImportSeeder>();
