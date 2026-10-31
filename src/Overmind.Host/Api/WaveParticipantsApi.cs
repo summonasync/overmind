@@ -3,6 +3,7 @@ using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Planning;
+using Overmind.Infrastructure.Wave;
 
 namespace Overmind.Host.Api;
 
@@ -22,14 +23,16 @@ public static class WaveParticipantsApi
     private static async Task<IResult> Participants(
         Guid projectId,
         LaneService lanes,
+        WaveParticipantService sessions,
         IConfiguration configuration,
         CancellationToken ct)
     {
         try
         {
             var roster = await lanes.ListLanesAsync(projectId, ct);
+            var claimless = await sessions.ListClaimlessSessionsAsync(projectId, roster, ct);
             return Results.Ok(WaveParticipantMapper.ToResponse(
-                roster, WaveOwnerDefaults.ResolveAlias(configuration)));
+                roster, claimless, WaveOwnerDefaults.ResolveAlias(configuration)));
         }
         catch (PlanningException ex)
         {

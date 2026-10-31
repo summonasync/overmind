@@ -1,5 +1,6 @@
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Planning;
+using Overmind.Infrastructure.Wave;
 
 namespace Overmind.Host.Api.Mapping;
 
@@ -10,7 +11,10 @@ public static class WaveParticipantMapper
             ? new DateTimeOffset(DateTime.SpecifyKind(seen, DateTimeKind.Utc))
             : null;
 
-    public static WaveParticipantsResponse ToResponse(IReadOnlyList<LaneRow> lanes, string ownerAlias) =>
+    public static WaveParticipantsResponse ToResponse(
+        IReadOnlyList<LaneRow> lanes,
+        IReadOnlyList<WaveSessionPresence> sessions,
+        string ownerAlias) =>
         new(
         [
             new WaveParticipantResponse(
@@ -30,6 +34,16 @@ public static class WaveParticipantMapper
                     l.Holder.Vendor,
                     l.Holder.ClaimState,
                     l.Holder.Role,
-                    LastSeenOf(l.Holder.LastSeenAt)))
+                    LastSeenOf(l.Holder.LastSeenAt))),
+            .. sessions
+                .OrderBy(s => s.Alias, StringComparer.OrdinalIgnoreCase)
+                .Select(s => new WaveParticipantResponse(
+                    WaveParticipantResponse.AgentKind,
+                    null,
+                    s.Alias,
+                    s.Vendor,
+                    null,
+                    s.Role,
+                    LastSeenOf(s.LastSeenAt)))
         ]);
 }

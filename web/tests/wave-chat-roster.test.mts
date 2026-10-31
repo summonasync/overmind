@@ -30,6 +30,20 @@ const agent = (
   lastSeenAt: "2026-10-25T09:30:00Z",
 });
 
+const claimlessAgent = (
+  alias: string,
+  role: WaveParticipant["role"],
+  vendor = "claude",
+): WaveParticipant => ({
+  kind: "agent",
+  lane: null,
+  alias,
+  vendor,
+  claimState: null,
+  role,
+  lastSeenAt: "2026-10-31T09:30:00Z",
+});
+
 test("the owner stays pinned first no matter how the payload orders rows", () => {
   const participants = [agent("guldan", "frontend"), owner("johan"), agent("thrall", "backend")];
   assert.deepEqual(ownerOf(participants), owner("johan"));
@@ -76,6 +90,25 @@ test("presence seats list agents first and the owner last, roles attached", () =
 
 test("presence ignores duplicate agent rows on different lanes as separate seats", () => {
   const participants = [owner(), agent("guldan", "backend"), agent("guldan", "frontend")];
+  assert.equal(presenceSeats(participants).length, 3);
+});
+
+test("a claim-less null-lane session lands in the agent rows with its role badge", () => {
+  const marshal = claimlessAgent("van-darkholme", "marshal");
+  const [row] = agentsOf([owner(), marshal]);
+  assert.deepEqual(row, marshal);
+  assert.equal(roleBadgeToneOf(row.role), "marshal");
+  assert.deepEqual(presenceSeats([owner(), marshal]), [
+    { alias: "van-darkholme", role: "marshal" },
+    { alias: "johan", role: "owner" },
+  ]);
+});
+
+test("holder rows keep their lane and claim state beside claim-less ones", () => {
+  const holder = agent("guldan", "frontend", "claude", "marshal");
+  const claimless = claimlessAgent("guldan", "worker", "kimi");
+  const participants = [owner(), holder, claimless];
+  assert.deepEqual(agentsOf(participants), [holder, claimless]);
   assert.equal(presenceSeats(participants).length, 3);
 });
 
