@@ -517,6 +517,11 @@ public sealed class PlanningArtifactService
             throw PlanningException.CannotValidateTask();
         }
 
+        if (artifact.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan)
+        {
+            await TryPromoteToReviewAsync(feature, ct);
+        }
+
         feature.Touch();
 
         await _db.SaveChangesAsync(ct);
