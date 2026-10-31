@@ -1400,6 +1400,161 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task ValidateAsync_LatePlanValidation_PromotesStuckFeatureToReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+
+        var midFlight = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        midFlight.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+
+        await artifactService.ValidateAsync(plan.Id, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        var line = PlanningLog.Parse(persisted.Body)
+            .Single(l => l.Text == "all tasks done + spec + plan validated → review");
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_LateSpecValidation_PromotesStuckFeatureToReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+
+        await artifactService.ValidateAsync(plan.Id, default);
+        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+
+        var midFlight = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        midFlight.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        var line = PlanningLog.Parse(persisted.Body)
+            .Single(l => l.Text == "all tasks done + spec + plan validated → review");
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_TaskAndResultValidation_DoesNotEvaluateReviewInvariant()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var result = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+        await artifactService.SetStatusAsync(plan.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "confirming the plan", default);
+
+        var stuck = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        stuck.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+
+        await Should.ThrowAsync<PlanningException>(() => artifactService.ValidateAsync(task.Id, default));
+        await artifactService.ValidateAsync(result.Id, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        PlanningLog.Parse(persisted.Body)
+            .ShouldNotContain(l => l.Source == PlanningLogSource.Auto && l.Text.Contains("review"));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AllValidationsWithOpenTask_NoReviewPromotion()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task1 = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task2 = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
+
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.ValidateAsync(plan.Id, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+        PlanningLog.Parse(persisted.Body)
+            .ShouldNotContain(l => l.Source == PlanningLogSource.Auto && l.Text.Contains("review"));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RevalidatedSpecOnDoneFeature_FeatureStaysDone()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.ValidateAsync(plan.Id, default);
+        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+        await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+        await featureService.SetStatusAsync(_projectId, "feat", PlanningFeatureStatus.Done, "closing the feature", ct: default);
+
+        await artifactService.SetStatusAsync(spec.Id, PlanningArtifactStatus.Draft, PlanningLogSource.Agent, "late reopen", default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Done);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_LatePlanValidation_OnReadyFeatureWithAllTasksDone_PromotesToReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task1 = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task2 = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
+        await artifactService.SetStatusAsync(task2.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 2 done", default);
+
+        var ready = await featureService.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Ready, default);
+        ready.Status.ShouldBe(PlanningFeatureStatus.Ready);
+
+        await artifactService.ValidateAsync(plan.Id, default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        var line = PlanningLog.Parse(persisted.Body)
+            .Single(l => l.Text == "all tasks done + spec + plan validated → review");
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
     public async Task SetStatusAsync_ManualValidatedToDraft_OnSpecOfReviewFeature_DemotesFeatureToInProgress()
     {
         var featureService = CreateFeatureService();
