@@ -93,6 +93,22 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task Process_DraftPlanReplyOnPlanTab_ValidatesPlan()
+    {
+        await SetAutoActAsync(true);
+        var feature = await CreateFeatureAsync("blueprint");
+        var artifact = await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Plan);
+        var notification = await CreateApprovalAsync("blueprint", "plan", DateTime.UtcNow);
+
+        var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
+
+        result.Acted.ShouldBeTrue();
+        result.Reason.ShouldBe("plan validated");
+        (await _context.PlanningArtifacts.SingleAsync(a => a.Id == artifact.Id))
+            .Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
     public async Task Process_UnknownSlug_SkipsWithLog()
     {
         await SetAutoActAsync(true);
