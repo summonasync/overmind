@@ -64,4 +64,20 @@ public sealed class AgentWakeSnapshotTests : IDisposable
     {
         (await _wake.SnapshotAsync("ghost", CancellationToken.None)).ShouldBeNull();
     }
+
+    [Fact]
+    public async Task Snapshot_LowercasedFanoutAlias_ResolvesTheVerbatimSession()
+    {
+        var lastSeen = DateTime.UtcNow.AddHours(-2);
+        _context.AgentSessions.Add(AgentSession.Restore(
+            Guid.NewGuid(), "Dan", "claude", lastSeen.AddHours(-1), lastSeen));
+        _context.WaveMessages.Add(WaveMessage.Create(
+            _projectId, "all", "erin", "worker", "ping @Dan"));
+        await _context.SaveChangesAsync();
+
+        var snapshot = await _wake.SnapshotAsync("dan", CancellationToken.None);
+
+        snapshot.ShouldNotBeNull();
+        snapshot.Signals.Select(s => s.Kind).ShouldBe([AgentWakeService.MentionKind]);
+    }
 }

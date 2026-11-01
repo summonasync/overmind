@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Overmind.Core;
 
 namespace Overmind.Infrastructure.Wake;
 
@@ -27,7 +28,9 @@ public sealed class WakeDropFanout(IServiceScopeFactory scopes, ILogger<WakeDrop
                 return;
             }
 
-            await writer.WriteAsync(WakeDrop.For(alias, DateTime.UtcNow, snapshot), CancellationToken.None);
+            await writer.WriteAsync(
+                WakeDrop.For(WaveWatermark.NormalizeAlias(alias), DateTime.UtcNow, snapshot),
+                CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

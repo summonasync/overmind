@@ -87,7 +87,7 @@ public sealed class WakeDropWriter(string? rootDirectory = null)
     private static string FileName(string alias)
     {
         var name = new StringBuilder(alias.Length);
-        foreach (var c in alias)
+        foreach (var c in alias.ToLowerInvariant())
         {
             name.Append(char.IsAsciiLetterOrDigit(c) || c is '_' or '-' ? c : '_');
         }

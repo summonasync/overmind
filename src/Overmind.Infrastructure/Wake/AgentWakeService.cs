@@ -29,12 +29,17 @@ public sealed class AgentWakeService(OvermindDbContext db)
 
     public async Task<AgentWakePage?> SnapshotAsync(string alias, CancellationToken ct = default)
     {
-        var lastSeenAt = await db.AgentSessions
+        var normalized = WaveWatermark.NormalizeAlias(alias);
+        var session = await db.AgentSessions
             .AsNoTracking()
-            .Where(s => s.Alias == alias)
-            .MaxAsync(s => (DateTime?)s.LastSeenAt, ct);
+            .Where(s => s.Alias.ToLower() == normalized)
+            .OrderByDescending(s => s.LastSeenAt)
+            .Select(s => new { s.Alias, s.LastSeenAt })
+            .FirstOrDefaultAsync(ct);
 
-        return lastSeenAt is null ? null : await PendingAsync(alias, lastSeenAt.Value, null, null, ct);
+        return session is null
+            ? null
+            : await PendingAsync(session.Alias, session.LastSeenAt, null, null, ct);
     }
 
     public async Task<AgentWakePage> PendingAsync(
