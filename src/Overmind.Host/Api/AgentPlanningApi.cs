@@ -388,7 +388,7 @@ public static class AgentPlanningApi
         try
         {
             var result = await service.SetStatusAsync(
-                id, request.Status, PlanningLogSource.Agent, request.LogNote, ct);
+                id, request.Status, PlanningLogSource.Agent, request.LogNote, ct, requireHumanProof: true);
             return Results.Ok(new SetPlanningArtifactStatusResponse(
                 result.ArtifactId,
                 result.Status,

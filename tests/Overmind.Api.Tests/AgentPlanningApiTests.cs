@@ -576,6 +576,62 @@ public sealed class AgentPlanningApiTests : IDisposable
         problem.Detail.ShouldContain("awaits human validation");
     }
 
+    [Fact]
+    public async Task SetStatus_SpecToValidated_WithoutProof_Returns409NamingTheMissingApproval()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(spec.Id),
+            new { Status = "validated", LogNote = "self-validating" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ValidationProofRequired");
+        problem.Detail!.ShouldBe(
+            "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
+            "and wait for the human's reply in the notification center, or validate via the UI.");
+    }
+
+    [Fact]
+    public async Task SetStatus_SpecToValidated_WithRepliedApproval_SucceedsAndPromotesTheDoneFeature()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        var plan = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "plan", Body = "plan" });
+        var task = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "task", Body = "task one" });
+        await FreezeViaHumanDoorAsync(spec.Id);
+        await SetTaskStatusAsync(task.Id, "done");
+        await NotifyAndReplyAsync(project.Id, "feat");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(plan.Id),
+            new { Status = "validated", LogNote = "confirming the plan" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/agent/projects/{project.Id}/planning/features/feat", JsonOptions);
+        feature!.Status.ShouldBe("review");
+    }
+
+    [Fact]
+    public async Task SetStatus_ResultToValidated_WithoutProof_Succeeds()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var result = await CreateAgentArtifactAsync(
+            project.Id, "feat", new { Kind = "result", Body = "# Result\n\nclose-out\n" });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentStatusUrl(result.Id),
+            new { Status = "validated", LogNote = "close-out recorded" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     private async Task<string> NotifyAndReplyAsync(Guid projectId, string featureSlug, string kind = "approval")
     {
         var create = await _client.PostAsJsonAsync("/api/agent/notifications", new

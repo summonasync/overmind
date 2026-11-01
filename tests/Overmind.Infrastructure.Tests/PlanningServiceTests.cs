@@ -1460,18 +1460,20 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var artifactService = CreateArtifactService();
         var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
         var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
-        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task1 = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var task2 = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 2", null, null, null, default);
         var result = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
 
         await artifactService.ValidateAsync(spec.Id, default);
-        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+        await artifactService.SetStatusAsync(task1.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task 1 done", default);
         await artifactService.SetStatusAsync(plan.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "confirming the plan", default);
 
         var stuck = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         stuck.Status.ShouldBe(PlanningFeatureStatus.InProgress);
 
-        await Should.ThrowAsync<PlanningException>(() => artifactService.ValidateAsync(task.Id, default));
+        await Should.ThrowAsync<PlanningException>(() => artifactService.ValidateAsync(task1.Id, default));
         await artifactService.ValidateAsync(result.Id, default);
+        await artifactService.SetStatusAsync(task2.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "task 2 started", default);
 
         var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
         persisted.Status.ShouldBe(PlanningFeatureStatus.InProgress);
@@ -1552,6 +1554,159 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var line = PlanningLog.Parse(persisted.Body)
             .Single(l => l.Text == "all tasks done + spec + plan validated → review");
         line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_LatePlanValidation_PromotesStuckFeatureToReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+
+        await artifactService.ValidateAsync(spec.Id, default);
+        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+
+        var midFlight = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        midFlight.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+
+        await artifactService.SetStatusAsync(plan.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "confirming the plan", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        var line = PlanningLog.Parse(persisted.Body)
+            .Single(l => l.Text == "all tasks done + spec + plan validated → review");
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_LateSpecValidation_PromotesStuckFeatureToReview()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+        var plan = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Plan, "plan", null, null, null, default);
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+
+        await artifactService.ValidateAsync(plan.Id, default);
+        await artifactService.SetStatusAsync(task.Id, PlanningArtifactStatus.Done, PlanningLogSource.Agent, "task done", default);
+
+        var midFlight = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        midFlight.Status.ShouldBe(PlanningFeatureStatus.InProgress);
+
+        await artifactService.SetStatusAsync(spec.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "confirming the spec", default);
+
+        var persisted = await _context.PlanningFeatures.FirstAsync(f => f.Id == feature.Id);
+        persisted.Status.ShouldBe(PlanningFeatureStatus.Review);
+        var line = PlanningLog.Parse(persisted.Body)
+            .Single(l => l.Text == "all tasks done + spec + plan validated → review");
+        line.Source.ShouldBe(PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_AgentDocumentValidationWithoutProof_IsRefusedAndLeavesArtifactUntouched()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.SetStatusAsync(
+                spec.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "self-validating",
+                default, requireHumanProof: true));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+        ex.Message.ShouldBe(
+            "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
+            "and wait for the human's reply in the notification center, or validate via the UI.");
+
+        var persisted = await _context.PlanningArtifacts.FirstAsync(a => a.Id == spec.Id);
+        persisted.Status.ShouldBe(PlanningArtifactStatus.Draft);
+        persisted.Version.ShouldBe(1);
+        PlanningLog.Parse(persisted.Body).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_AgentDocumentValidationWithFreshProof_SucceedsAndKeepsTheCallerNote()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var result = await artifactService.SetStatusAsync(
+            spec.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "spec confirmed",
+            default, requireHumanProof: true);
+
+        result.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        await _context.Entry(spec).ReloadAsync();
+        var line = PlanningLog.Parse(spec.Body).ShouldHaveSingleItem();
+        line.Source.ShouldBe(PlanningLogSource.Agent);
+        line.Text.ShouldBe("spec confirmed");
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_AgentDocumentValidation_EditedAfterReply_IsRefused()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Spec, "spec v1", null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "spec v2", null, null, "edited after the reply", default);
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.SetStatusAsync(
+                spec.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "self-validating",
+                default, requireHumanProof: true));
+
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_AgentProofRule_SkipsTaskAndResultMoves()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Task, "task 1", null, null, null, default);
+        var result = await artifactService.UpsertAsync(feature.Id, PlanningArtifactKind.Result, "close-out", null, null, null, default);
+
+        await artifactService.SetStatusAsync(
+            task.Id, PlanningArtifactStatus.InProgress, PlanningLogSource.Agent, "taking the task",
+            default, requireHumanProof: true);
+        await artifactService.SetStatusAsync(
+            result.Id, PlanningArtifactStatus.Validated, PlanningLogSource.Agent, "close-out recorded",
+            default, requireHumanProof: true);
+
+        var persistedTask = await _context.PlanningArtifacts.FirstAsync(a => a.Id == task.Id);
+        persistedTask.Status.ShouldBe(PlanningArtifactStatus.InProgress);
+        var persistedResult = await _context.PlanningArtifacts.FirstAsync(a => a.Id == result.Id);
+        persistedResult.Status.ShouldBe(PlanningArtifactStatus.Validated);
     }
 
     [Fact]
