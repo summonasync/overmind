@@ -12,6 +12,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { Modal } from "@/shared/ui/modal";
+import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import { Select } from "@/shared/ui/select";
 import { ArtifactDeclineDialog } from "@/features/planning/components/artifact-decline-dialog";
@@ -100,18 +101,8 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
   if (feature === null) {
     return (
       <div className="space-y-4">
-        <PageHeader
-          title={slug}
-          description="Feature workspace"
-          actions={
-            <a
-              href={`/dashboard?project=${projectId}`}
-              className={cn("text-xs text-muted underline-offset-2 hover:text-foreground hover:underline", focusRing)}
-            >
-              ← Dashboard
-            </a>
-          }
-        />
+        <PageBackLink href={`/dashboard?project=${projectId}`} label="Dashboard" />
+        <PageHeader title={slug} description="Feature workspace" />
         <ErrorText error={error ?? new Error(`Feature '${slug}' was not found.`)} />
       </div>
     );
@@ -146,12 +137,7 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
   return (
     <div className="space-y-4">
       <header className="space-y-3">
-        <a
-          href={boardHref}
-          className={cn("text-xs text-muted underline-offset-2 hover:text-foreground hover:underline", focusRing)}
-        >
-          ← Dashboard
-        </a>
+        <PageBackLink href={boardHref} label="Dashboard" />
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{feature.title}</h1>
           <p className="mt-1 text-sm text-muted">

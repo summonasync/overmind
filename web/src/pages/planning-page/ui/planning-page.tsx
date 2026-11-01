@@ -6,6 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
+import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import { TabHeader } from "@/shared/ui/tab-header";
 import { useInfoPanel } from "@/widgets/app-shell";
@@ -153,19 +154,10 @@ function PlanningPageContent() {
 
   return (
     <div className="space-y-4">
+      <PageBackLink href="/" label="All projects" />
       <TabHeader
         description={DASHBOARD_TAB_DESCRIPTION}
-        actions={
-          <>
-            <a
-              href="/"
-              className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
-            >
-              ← All projects
-            </a>
-            <Button onClick={openCreate}>New feature</Button>
-          </>
-        }
+        actions={<Button onClick={openCreate}>New feature</Button>}
       />
 
       <ErrorText error={activeError} />

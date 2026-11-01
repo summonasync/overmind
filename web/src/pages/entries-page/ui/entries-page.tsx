@@ -7,6 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
+import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import { TabHeader } from "@/shared/ui/tab-header";
 import { EntryEditor, EntryFilters, EntryList, EntryReadModal, TagManager, useEntryList, useEntryMutations } from "@/features/entries";
@@ -60,19 +61,10 @@ function EntriesPageContent() {
 
   return (
     <div className="space-y-4">
+      <PageBackLink href="/" label="All projects" />
       <TabHeader
         description="Capture knowledge, decisions and skills — turn experience into a lasting advantage."
-        actions={
-          <>
-            <a
-              href="/"
-              className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
-            >
-              ← All projects
-            </a>
-            <Button onClick={() => { setEditing(null); setFormOpen(true); }}>New entry</Button>
-          </>
-        }
+        actions={<Button onClick={() => { setEditing(null); setFormOpen(true); }}>New entry</Button>}
       />
 
       <div className="flex flex-wrap items-center gap-2">
