@@ -161,6 +161,26 @@ public class StatusModelContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningSetStatusDescription_DocumentsTheValidationProofGate()
+    {
+        var description = await ToolDescription("planning_set_status");
+
+        description.ShouldContain("same human-proof rule as planning_validate");
+        description.ShouldContain("newer than the artifact's last content update");
+        description.ShouldContain("ValidationProofRequired 409");
+        description.ShouldContain("Task and result moves never require proof");
+    }
+
+    [Fact]
+    public async Task PlanningSetStatusDescription_StatesTheReviewReEvaluationOnValidated()
+    {
+        var description = await ToolDescription("planning_set_status");
+
+        description.ShouldContain("re-evaluates the review invariant");
+        description.ShouldContain("exactly one [auto] promotion line");
+    }
+
+    [Fact]
     public async Task PlanningSetStatusDescription_DocumentsTheAppendedLogLineShape()
     {
         var description = await ToolDescription("planning_set_status");

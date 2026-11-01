@@ -318,7 +318,7 @@ public sealed class PlanningArtifactService
 
     public async Task<PlanningArtifactStatusResult> SetStatusAsync(
         Guid artifactId, PlanningArtifactStatus status, PlanningLogSource source, string logNote,
-        CancellationToken ct = default)
+        CancellationToken ct = default, bool requireHumanProof = false)
     {
         if (string.IsNullOrWhiteSpace(logNote))
         {
@@ -327,6 +327,12 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+
+        if (requireHumanProof && IsDocumentValidation(artifact.Kind, status))
+        {
+            await RequireLiveApprovalProofAsync(feature.ProjectId, feature.Slug, artifact, ct);
+        }
+
         var wasValidated = artifact.IsFrozen;
 
         try
@@ -348,6 +354,11 @@ public sealed class PlanningArtifactService
         }
 
         if (artifact.Kind == PlanningArtifactKind.Task && artifact.Status == PlanningArtifactStatus.Done)
+        {
+            await TryPromoteToReviewAsync(feature, ct);
+        }
+
+        if (IsDocumentValidation(artifact.Kind, artifact.Status))
         {
             await TryPromoteToReviewAsync(feature, ct);
         }
@@ -517,7 +528,7 @@ public sealed class PlanningArtifactService
             throw PlanningException.CannotValidateTask();
         }
 
-        if (artifact.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan)
+        if (IsDocumentValidation(artifact.Kind, artifact.Status))
         {
             await TryPromoteToReviewAsync(feature, ct);
         }
@@ -529,6 +540,10 @@ public sealed class PlanningArtifactService
 
         return artifact;
     }
+
+    private static bool IsDocumentValidation(PlanningArtifactKind kind, PlanningArtifactStatus status) =>
+        kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan &&
+        status == PlanningArtifactStatus.Validated;
 
     private async Task<(Guid NotificationId, DateTime? RepliedAt)?> FindLiveApprovalProofAsync(
         Guid projectId, string featureSlug, DateTime asOf, CancellationToken ct)
@@ -547,6 +562,19 @@ public sealed class PlanningArtifactService
         return proof is null ? null : (proof.Id, proof.RepliedAt);
     }
 
+    private async Task<(Guid NotificationId, DateTime? RepliedAt)> RequireLiveApprovalProofAsync(
+        Guid projectId, string featureSlug, PlanningArtifact artifact, CancellationToken ct)
+    {
+        var proof = await FindLiveApprovalProofAsync(projectId, featureSlug, artifact.ContentUpdatedAt, ct);
+
+        if (proof is null)
+        {
+            throw PlanningException.ValidationProofRequired(featureSlug);
+        }
+
+        return proof.Value;
+    }
+
     private async Task<string> BuildHumanProofLineAsync(PlanningArtifact artifact, CancellationToken ct)
     {
         var feature = await _db.PlanningFeatures
@@ -555,14 +583,9 @@ public sealed class PlanningArtifactService
             .Select(f => new { f.Slug, f.ProjectId })
             .FirstAsync(ct);
 
-        var proof = await FindLiveApprovalProofAsync(feature.ProjectId, feature.Slug, artifact.ContentUpdatedAt, ct);
+        var proof = await RequireLiveApprovalProofAsync(feature.ProjectId, feature.Slug, artifact, ct);
 
-        if (proof is null)
-        {
-            throw PlanningException.ValidationProofRequired(feature.Slug);
-        }
-
-        return $"validated with human proof: notification {proof.Value.NotificationId} replied {proof.Value.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
+        return $"validated with human proof: notification {proof.NotificationId} replied {proof.RepliedAt:yyyy-MM-dd HH:mm:ss} UTC";
     }
 
     public async Task<PlanningArtifact> DeclineAsync(Guid artifactId, string? reason, CancellationToken ct = default)
