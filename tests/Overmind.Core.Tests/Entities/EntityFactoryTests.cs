@@ -47,6 +47,14 @@ public class ProjectTests
     }
 
     [Fact]
+    public void Create_AutoActOnReplies_DefaultsToTrue()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.AutoActOnReplies.ShouldBeTrue();
+    }
+
+    [Fact]
     public void SetClaimSettings_StoresThresholdAndTrimsNamingRules()
     {
         var project = Project.Create("Overmind", "/disk/path");

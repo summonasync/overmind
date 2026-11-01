@@ -10,12 +10,13 @@ namespace Overmind.Infrastructure.Tests;
 public sealed class ProjectAutoActOnRepliesMigrationTests : IDisposable
 {
     private const string PreFlagMigration = "20261028072159_AddLaneLiveSurfaces";
+    private const string PreviousSchemaMigration = "20261029100535_AddProjectAutoActOnReplies";
 
     private readonly string _path =
         Path.Combine(Path.GetTempPath(), $"overmind-auto-act-{Guid.NewGuid():N}.db");
 
     [Fact]
-    public void Migrate_FreshProject_DefaultsAutoActOff()
+    public void Migrate_FreshProject_DefaultsAutoActOn()
     {
         using var db = CreateContext();
         db.Database.Migrate();
@@ -24,7 +25,7 @@ public sealed class ProjectAutoActOnRepliesMigrationTests : IDisposable
         db.Projects.Add(project);
         db.SaveChanges();
 
-        db.Projects.Single(p => p.Id == project.Id).AutoActOnReplies.ShouldBeFalse();
+        db.Projects.Single(p => p.Id == project.Id).AutoActOnReplies.ShouldBeTrue();
     }
 
     [Fact]
@@ -46,7 +47,7 @@ public sealed class ProjectAutoActOnRepliesMigrationTests : IDisposable
     }
 
     [Fact]
-    public void Migrate_ProjectRowCreatedBeforeFlag_GetsDefaultOff()
+    public void Migrate_ProjectRowCreatedBeforeFlag_GetsBackfilledOn()
     {
         using (var db = CreateContext())
         {
@@ -63,7 +64,29 @@ public sealed class ProjectAutoActOnRepliesMigrationTests : IDisposable
         using (var db = CreateContext())
         {
             db.Database.Migrate();
-            db.Projects.Single(p => p.Name == "legacy").AutoActOnReplies.ShouldBeFalse();
+            db.Projects.Single(p => p.Name == "legacy").AutoActOnReplies.ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void Migrate_OffRowOnPreviousSchema_GetsBackfilledOn()
+    {
+        using (var db = CreateContext())
+        {
+            db.Database.Migrate(PreviousSchemaMigration);
+
+            using var command = (SqliteCommand)db.Database.GetDbConnection().CreateCommand();
+            command.CommandText =
+                "INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt, AutoActOnReplies) "
+                + $"VALUES ('{Guid.NewGuid()}', 'stale-off', '/tmp/stale-off', '', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', 0)";
+            db.Database.OpenConnection();
+            command.ExecuteNonQuery();
+        }
+
+        using (var db = CreateContext())
+        {
+            db.Database.Migrate();
+            db.Projects.Single(p => p.Name == "stale-off").AutoActOnReplies.ShouldBeTrue();
         }
     }
 

@@ -43,7 +43,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_FreshReplyOnDraftSpec_ValidatesArtifactAuditsAndNotifies()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("specs");
         var artifact = await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
         var notification = await CreateApprovalAsync("specs", "spec", DateTime.UtcNow);
@@ -64,7 +64,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_StaleReply_SkipsValidation()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("late-spec");
         var notification = await CreateApprovalAsync("late-spec", "spec", DateTime.UtcNow.AddMinutes(-5));
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
@@ -80,7 +80,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_DraftResultWithResultTab_ValidatesResult()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("close-out");
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Result);
         var notification = await CreateApprovalAsync("close-out", "result", DateTime.UtcNow);
@@ -93,9 +93,25 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task Process_DraftPlanReplyOnPlanTab_ValidatesPlan()
+    {
+        await SetAutoActAsync(true);
+        var feature = await CreateFeatureAsync("blueprint");
+        var artifact = await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Plan);
+        var notification = await CreateApprovalAsync("blueprint", "plan", DateTime.UtcNow);
+
+        var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
+
+        result.Acted.ShouldBeTrue();
+        result.Reason.ShouldBe("plan validated");
+        (await _context.PlanningArtifacts.SingleAsync(a => a.Id == artifact.Id))
+            .Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
     public async Task Process_UnknownSlug_SkipsWithLog()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var notification = await CreateApprovalAsync("ghost-feature", "spec", DateTime.UtcNow);
 
         var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
@@ -107,6 +123,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_AutoActDisabled_Skips()
     {
+        await SetAutoActAsync(false);
         var feature = await CreateFeatureAsync("muted");
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
         var notification = await CreateApprovalAsync("muted", "spec", DateTime.UtcNow);
@@ -122,7 +139,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_QuestionReply_Skips()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("asked");
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
         var notification = AgentNotification.Restore(
@@ -142,7 +159,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_DoneEligibleFeature_FlipsDoneWithProof()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("closing");
         await CreateValidatedResultAsync(feature.Id);
         var notification = await CreateApprovalAsync("closing", tab: null, DateTime.UtcNow);
@@ -160,7 +177,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_DoneFlipWithOpenBlocker_Skips()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var blocker = await CreateFeatureAsync("blocker");
         var feature = await CreateFeatureAsync("chained");
         await CreateValidatedResultAsync(feature.Id);
@@ -179,7 +196,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_DoneFlipWithoutValidatedResult_Skips()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         await CreateFeatureAsync("no-result");
         var notification = await CreateApprovalAsync("no-result", tab: null, DateTime.UtcNow);
 
@@ -192,7 +209,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_DoneFlipStaleAgainstResult_Skips()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("stale-close");
         var notification = await CreateApprovalAsync("stale-close", tab: null, DateTime.UtcNow.AddMinutes(-5));
         await CreateValidatedResultAsync(feature.Id);
@@ -207,7 +224,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_AlreadyDoneFeature_Skips()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("closed");
         await CreateValidatedResultAsync(feature.Id);
         feature.SetStatus(PlanningFeatureStatus.Done, "manual close", PlanningLogSource.Ui);
@@ -223,7 +240,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_SpecReplyOnDoneEligibleFeature_ValidatesSpecWithoutClose()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("two-doors");
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
         await CreateValidatedResultAsync(feature.Id);
@@ -242,7 +259,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_ValidatedSpecReplyOnDoneEligibleFeature_SkipsWithoutClose()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("second-tap");
         var spec = await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
         spec.Validate();
@@ -261,7 +278,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
     [Fact]
     public async Task Process_TasksTabReplyOnDoneEligibleFeature_SkipsWithoutValidationOrClose()
     {
-        await EnableAutoActAsync();
+        await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("task-page");
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
         await CreateValidatedResultAsync(feature.Id);
@@ -288,10 +305,10 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
         result.Reason.ShouldContain("no longer exists");
     }
 
-    private async Task EnableAutoActAsync()
+    private async Task SetAutoActAsync(bool enabled)
     {
         var project = await _context.Projects.SingleAsync(p => p.Id == _projectId);
-        project.SetAutoActOnReplies(true);
+        project.SetAutoActOnReplies(enabled);
         await _context.SaveChangesAsync();
     }
 

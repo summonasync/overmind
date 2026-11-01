@@ -56,7 +56,7 @@ public sealed partial class Project
             RequireHumanValidation = HumanValidationOverride.Unset,
             NumberStyle = ProjectNumberStyle.Hash,
             IsFavorite = false,
-            AutoActOnReplies = false,
+            AutoActOnReplies = true,
             CreatedAt = DateTime.UtcNow
         };
     }

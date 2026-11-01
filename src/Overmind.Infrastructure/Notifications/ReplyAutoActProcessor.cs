@@ -96,7 +96,7 @@ public sealed class ReplyAutoActProcessor(
             $"auto-act: {document.Kind.ToString().ToLowerInvariant()} of '{notification.FeatureSlug}' validated by your reply",
             ct);
 
-        return ReplyAutoActResult.Performed($"{document.Kind} validated");
+        return ReplyAutoActResult.Performed($"{document.Kind.ToString().ToLowerInvariant()} validated");
     }
 
     private async Task<ReplyAutoActResult> CloseFeatureAsync(

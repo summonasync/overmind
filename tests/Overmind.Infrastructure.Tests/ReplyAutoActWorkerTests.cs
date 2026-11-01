@@ -70,6 +70,29 @@ public sealed class ReplyAutoActWorkerTests : IDisposable
     }
 
     [Fact]
+    public async Task Execute_SkippedReply_LogsSkipReasonWithoutSideEffects()
+    {
+        var notification = AgentNotification.Restore(
+            Guid.NewGuid(), _projectId, NotificationKind.Approval, "ghost", "spec",
+            "approve ghost", "agent", DateTime.UtcNow.AddMinutes(-1),
+            replyText: "approved", repliedAt: DateTime.UtcNow);
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var (worker, queue, logs) = BuildWorker();
+        queue.TryEnqueue(notification.Id).ShouldBeTrue();
+        await RunUntilAsync(worker, logs, () => Task.FromResult(
+            logs.Any(l => l.Contains("skipped") && l.Contains(notification.Id.ToString()))));
+
+        var skip = logs.Single(l => l.Contains("skipped"));
+        skip.ShouldContain("not found");
+        queue.TryDequeue(out _).ShouldBeFalse();
+        (await _context.AgentNotifications
+                .AnyAsync(n => n.Kind == NotificationKind.Info))
+            .ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Execute_ProcessorFails_RetriesBoundedThenDrops()
     {
         var attempts = 0;

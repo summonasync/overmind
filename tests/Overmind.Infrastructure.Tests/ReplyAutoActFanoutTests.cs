@@ -46,6 +46,7 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
     [Fact]
     public async Task Dispatch_FlagOff_DoesNotEnqueue()
     {
+        await SetAutoActAsync(false);
         var notification = CreateNotification(NotificationKind.Approval, "sleepy");
 
         await CreateFanout().TryDispatchAsync(notification, CancellationToken.None);
