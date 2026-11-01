@@ -327,12 +327,12 @@ public sealed class ProjectApiTests : IDisposable
     }
 
     [Fact]
-    public async Task SetAutoAct_UntouchedProject_DefaultsToFalse()
+    public async Task SetAutoAct_UntouchedProject_DefaultsToTrue()
     {
         var created = await CreateProjectAsync("auto-act-default", TestPaths.DiskPath("auto-act-default"));
 
         var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{created.Id}", JsonOptions);
-        fetched!.AutoActOnReplies.ShouldBeFalse();
+        fetched!.AutoActOnReplies.ShouldBeTrue();
     }
 
     [Fact]
