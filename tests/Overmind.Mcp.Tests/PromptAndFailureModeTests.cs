@@ -182,7 +182,11 @@ public class FailureModeTests : McpSessionTestBase
     [Fact]
     public async Task ApiUnreachableAtStartup_ExitsWithCodeTwoAndStderrMessage()
     {
-        using var driver = McpProcessDriver.Start($"http://127.0.0.1:{DeadPort()}");
+        using var reserved = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        reserved.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var port = ((IPEndPoint)reserved.LocalEndPoint!).Port;
+
+        using var driver = McpProcessDriver.Start($"http://127.0.0.1:{port}");
 
         var exitCode = await driver.WaitForExitAsync(TimeSpan.FromSeconds(30));
 
@@ -214,14 +218,5 @@ public class FailureModeTests : McpSessionTestBase
         });
         second["result"]!["isError"]!.GetValue<bool>().ShouldBeTrue();
         Driver.HasExited.ShouldBeFalse();
-    }
-
-    private static int DeadPort()
-    {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
     }
 }
