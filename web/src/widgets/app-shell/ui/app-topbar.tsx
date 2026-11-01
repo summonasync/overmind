@@ -2,9 +2,8 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { BellRing, Folder, Search, Settings, type LucideIcon } from "lucide-react";
+import { BellRing, BookOpen, Folder, Search, Settings, type LucideIcon } from "lucide-react";
 import logoMark from "@/shared/assets/brand/logo-mark.png";
-import kerriganAvatar from "@/shared/assets/brand/kerrigan-avatar.png";
 import { cn } from "@/shared/lib/cn";
 import { NotificationBell } from "@/widgets/app-shell/ui/notification-bell";
 import { StatusChip } from "@/widgets/app-shell/ui/status-chip";
@@ -19,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
   { href: "/attention", label: "Attention", icon: BellRing },
   { href: "/search", label: "Search", icon: Search },
+  { href: "/wiki", label: "Wiki", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -71,15 +71,8 @@ export function AppTopbar() {
         </nav>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-3">
-        <StatusChip />
         <NotificationBell />
-        <div className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-3">
-          <img src={kerriganAvatar.src} alt="Kerrigan avatar" className="h-7 w-7 rounded-full border border-primary/40 object-cover" />
-          <div className="leading-tight">
-            <p className="text-xs font-medium text-foreground">Humanity Evolves</p>
-            <p className="text-[10px] text-muted">Overmind</p>
-          </div>
-        </div>
+        <StatusChip />
       </div>
     </header>
   );

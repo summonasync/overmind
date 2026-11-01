@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, Folder } from "lucide-react";
+import { InfoPanelCollapsibleSection } from "@/widgets/app-shell/ui/info-panel-collapsible-section";
 import { InfoPanelSection } from "@/widgets/app-shell/ui/info-panel-section";
 import { InfoPanelStat } from "@/widgets/app-shell/ui/info-panel-stat";
 import { useProjectList } from "@/features/projects";
@@ -19,7 +20,12 @@ export function ProjectsInfoPanel() {
 
   return (
     <div className="space-y-6">
-      <InfoPanelSection title="Project Overview" icon={Folder}>
+      <InfoPanelCollapsibleSection
+        page="projects"
+        section="stats"
+        title="Project Overview"
+        icon={Folder}
+      >
         <div className="grid grid-cols-2 gap-2">
           <InfoPanelStat value={projects.length} label="Total Projects" />
           <InfoPanelStat
@@ -27,7 +33,7 @@ export function ProjectsInfoPanel() {
             label="With Description"
           />
         </div>
-      </InfoPanelSection>
+      </InfoPanelCollapsibleSection>
 
       <InfoPanelSection title="Recent Projects" icon={Clock}>
         {recent.length === 0 ? (
