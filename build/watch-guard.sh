@@ -9,6 +9,9 @@
 # API stub — an unreachable API kills the adapter at its pre-boot health check, before any
 # file watches exist, and would pass vacuously with zero — so the adapter starts from the
 # same tree with a live stub and must hold < 25 watches. Non-Linux prints SKIP, exits 0.
+#
+# When ~/.overmind/models holds the embedding model, the host cell gets a temp copy of it via
+# OVERMIND_MODELS_DIR, so the guard never stalls on a 90MB download; no cache, no shortcut.
 
 set -euo pipefail
 
@@ -86,11 +89,25 @@ free_port() {
 
 port=$(free_port)
 
-echo "watch-guard: host cell (port=$port, cwd=300-dir tree)"
+model_cache=${HOME:-}/.overmind/models/all-MiniLM-L6-v2
+models_dir=$work/models/all-MiniLM-L6-v2
+models_env=()
+cache_note=no-local-cache
+# file list mirrors OnnxModelSpec.AllMiniLmL6V2
+for f in model.onnx vocab.txt; do
+    [[ -f $model_cache/$f ]] || continue
+    mkdir -p "$models_dir"
+    cp "$model_cache/$f" "$models_dir/$f"
+    models_env=(OVERMIND_MODELS_DIR="$(dirname "$models_dir")")
+    cache_note=seeded
+done
+
+echo "watch-guard: host cell (port=$port, cwd=300-dir tree, models=$cache_note)"
 (
     cd "$tree"
-    HOME="$work/home" Overmind__BindUrl="http://127.0.0.1:$port" OVERMIND_WEB_ROOT="$web" \
-        exec "$host_bin" --no-tray
+    exec env HOME="$work/home" "${models_env[@]}" \
+        Overmind__BindUrl="http://127.0.0.1:$port" OVERMIND_WEB_ROOT="$web" \
+        "$host_bin" --no-tray
 ) >"$work/host.log" 2>&1 &
 host_pid=$!
 
