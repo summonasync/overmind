@@ -96,3 +96,24 @@ test("the whole src tree is clean of the retired renderer", () => {
     "the toggle lives only inside the shared editor",
   );
 });
+
+test("no parallel markdown parser remains in src", () => {
+  const files = readdirSync(new URL("../src/", import.meta.url), { recursive: true }).filter(
+    (file) => /\.(ts|tsx)$/.test(file),
+  );
+  assert.ok(!files.includes("shared/lib/markdown.tsx"), "the retired renderer file itself is gone");
+  for (const engine of ['from "react-markdown"', 'from "remark-gfm"']) {
+    const importers = files.filter((file) => sourceOf(`../src/${file}`).includes(engine));
+    assert.deepEqual(
+      importers,
+      ["shared/ui/markdown-viewer.tsx"],
+      `a parallel markdown parser snuck in via ${engine}`,
+    );
+  }
+});
+
+test("no test suite keeps a private react-markdown pipeline", () => {
+  const roundtrip = sourceOf("./markdown-roundtrip.test.mts");
+  assert.ok(!roundtrip.includes('from "react-markdown"'), "the roundtrip render owns no engine");
+  assert.ok(roundtrip.includes("MarkdownViewer"), "the roundtrip render goes through the shared viewer");
+});

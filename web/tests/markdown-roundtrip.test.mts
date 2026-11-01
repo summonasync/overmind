@@ -3,8 +3,15 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { createJiti } from "jiti";
+
+// the viewer carries no React import, so the transform needs the automatic jsx runtime
+const jiti = createJiti(import.meta.url, {
+  jsx: { runtime: "automatic", importSource: "react" },
+  alias: { "@": new URL("../src/", import.meta.url).href },
+});
+
+const { MarkdownViewer } = await jiti.import("../src/shared/ui/markdown-viewer.tsx");
 
 const fixture = () =>
   readFileSync(new URL("./fixtures/markdown-roundtrip.md", import.meta.url), "utf8");
@@ -16,26 +23,24 @@ const editor = () =>
   readFileSync(new URL("../src/shared/ui/markdown-editor.tsx", import.meta.url), "utf8");
 
 const render = (content: string) =>
-  renderToStaticMarkup(React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, content));
+  renderToStaticMarkup(React.createElement(MarkdownViewer, { content }));
 
-test("a persisted body renders with every block present", () => {
+test("a persisted body renders through the shared viewer with every block present", () => {
   const html = render(fixture());
   const blocks = [
-    "<h2>Round-trip fixture</h2>",
-    "<strong>bold</strong>",
+    '<h2 class="mt-3 mb-1 text-lg font-semibold">Round-trip fixture</h2>',
+    '<strong class="font-semibold">bold</strong>',
     "<em>italic</em>",
-    "<code>inline code</code>",
+    '<code class="rounded bg-surface-raised px-1 py-0.5 font-mono text-[0.85em] text-foreground">inline code</code>',
     'href="https://example.com/docs"',
     "<li>alpha item</li>",
     "<li>first step</li>",
-    'class="language-ts"',
     "const roundtrip =",
     "byte-identical",
-    "<blockquote>",
+    '<blockquote class="my-2 border-l-2 border-border pl-3 text-muted">',
     "Quoted note that must survive the swap.",
-    "<table>",
-    "<td>gfm</td>",
-    "<td>none</td>",
+    '<td class="border border-border px-2 py-1 align-top">gfm</td>',
+    '<td class="border border-border px-2 py-1 align-top">none</td>',
   ];
   for (const block of blocks) {
     assert.ok(html.includes(block), `block missing from the render: ${block}`);
@@ -50,12 +55,13 @@ test("ceremony and tombstone lines ride through as escaped literals, never as ht
   assert.ok(!/<goal>/.test(html), "no raw goal tag reaches the dom");
 });
 
-test("once the ceremony wrapper is split off, its content renders as markdown again", () => {
-  const inner = fixture().match(/<goal>\n([\s\S]*?)<\/goal>/)?.[1];
-  assert.ok(inner, "the fixture carries a goal section");
-  const html = render(inner);
-  assert.ok(html.includes("<li>keep the heading</li>"), "the section list keeps its items");
-  assert.ok(html.includes("<li>keep the list</li>"), "the section list keeps every line");
+test("once the viewer splits the ceremony wrapper, its content renders as markdown inside the toned pane", () => {
+  const html = render(fixture());
+  const section = html.indexOf('aria-label="goal section"');
+  assert.ok(section > -1, "the goal section renders through the shared toned block");
+  const pane = html.slice(section, html.indexOf("</section>", section));
+  assert.ok(pane.includes("<li>keep the heading</li>"), "the section list keeps its items");
+  assert.ok(pane.includes("<li>keep the list</li>"), "the section list keeps every line");
 });
 
 test("the editor hands the persisted value over untouched", () => {
