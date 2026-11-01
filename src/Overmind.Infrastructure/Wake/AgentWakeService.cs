@@ -27,6 +27,16 @@ public sealed class AgentWakeService(OvermindDbContext db)
 
     private static readonly TimeSpan ReplyLookback = TimeSpan.FromDays(7);
 
+    public async Task<AgentWakePage?> SnapshotAsync(string alias, CancellationToken ct = default)
+    {
+        var lastSeenAt = await db.AgentSessions
+            .AsNoTracking()
+            .Where(s => s.Alias == alias)
+            .MaxAsync(s => (DateTime?)s.LastSeenAt, ct);
+
+        return lastSeenAt is null ? null : await PendingAsync(alias, lastSeenAt.Value, null, null, ct);
+    }
+
     public async Task<AgentWakePage> PendingAsync(
         string alias,
         DateTime lastSeenAt,

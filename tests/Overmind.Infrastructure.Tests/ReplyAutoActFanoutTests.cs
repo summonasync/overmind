@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Overmind.Core;
 using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Wake;
 using Shouldly;
 using Xunit;
 
@@ -14,6 +16,8 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
     private readonly TempDatabase _db = new();
     private readonly OvermindDbContext _context;
     private readonly ReplyAutoActQueue _queue;
+    private readonly WakeDropFanout _wakeFanout;
+    private readonly ServiceProvider _wakeServices;
     private readonly Guid _projectId;
 
     public ReplyAutoActFanoutTests()
@@ -24,10 +28,12 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
         _context.Projects.Add(project);
         _context.SaveChanges();
         _projectId = project.Id;
+        (_wakeFanout, _wakeServices) = TestWakeFanout.Create(_db);
     }
 
     public void Dispose()
     {
+        _wakeServices.Dispose();
         _context.Dispose();
         _db.Dispose();
     }
@@ -129,7 +135,8 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
         await _context.SaveChangesAsync();
         var service = new NotificationsService(
             _context,
-            new ReplyAutoActFanout(broken, _queue, NullLogger<ReplyAutoActFanout>.Instance));
+            new ReplyAutoActFanout(broken, _queue, NullLogger<ReplyAutoActFanout>.Instance),
+            _wakeFanout);
 
         var replied = await service.ReplyAsync(notification.Id, "approved", CancellationToken.None);
 

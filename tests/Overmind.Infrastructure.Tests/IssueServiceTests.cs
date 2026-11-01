@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
@@ -8,6 +9,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
+using Overmind.Infrastructure.Wake;
 using Shouldly;
 using Xunit;
 
@@ -18,6 +20,8 @@ public sealed class IssueServiceTests : IDisposable
     private readonly TempDatabase _db = new();
     private readonly OvermindDbContext _context;
     private readonly IPlanningMaterializer _materializer;
+    private readonly WakeDropFanout _wakeFanout;
+    private readonly ServiceProvider _wakeServices;
     private static readonly Guid HolderSessionId = Guid.NewGuid();
     private static readonly Guid ForeignSessionId = Guid.NewGuid();
 
@@ -32,6 +36,7 @@ public sealed class IssueServiceTests : IDisposable
         _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
+        (_wakeFanout, _wakeServices) = TestWakeFanout.Create(_db);
 
         var board = Project.Create($"issues-board-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
         var author = Project.Create($"issues-author-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
@@ -47,6 +52,7 @@ public sealed class IssueServiceTests : IDisposable
 
     public void Dispose()
     {
+        _wakeServices.Dispose();
         _context.Dispose();
         _db.Dispose();
     }
@@ -65,7 +71,8 @@ public sealed class IssueServiceTests : IDisposable
                 new ReplyAutoActFanout(
                     context,
                     new ReplyAutoActQueue(),
-                    NullLogger<ReplyAutoActFanout>.Instance)),
+                    NullLogger<ReplyAutoActFanout>.Instance),
+                _wakeFanout),
             new FeatureClaimService(context, TestPlanningDispatcher.Create(context, _materializer)),
             TestPlanningDispatcher.Create(context, _materializer));
 
