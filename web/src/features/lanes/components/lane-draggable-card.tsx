@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
+import { cn } from "@/shared/lib/cn";
 import {
   laneDragTransform,
   laneFeatureDragData,
@@ -44,7 +45,7 @@ export function LaneDraggableCard({
       {...listeners}
       {...attributes}
       style={style}
-      className={className}
+      className={cn(disabled ? undefined : "cursor-grab active:cursor-grabbing", className)}
     >
       {children({ isDragging })}
     </div>

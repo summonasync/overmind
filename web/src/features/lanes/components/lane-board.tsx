@@ -25,6 +25,7 @@ import { FeatureLaneActions } from "@/features/lanes/components/feature-lane-act
 import { LaneDropNote } from "@/features/lanes/components/lane-drop-note";
 import { LaneDndProvider } from "@/features/lanes/components/lane-dnd-context";
 import { LaneDraggableCard } from "@/features/lanes/components/lane-draggable-card";
+import type { LaneDragGhostCard } from "@/features/lanes/components/lane-drag-ghost";
 import { LanePoolDroppable } from "@/features/lanes/components/lane-pool-droppable";
 import { LaneStatusChips } from "@/features/lanes/components/lane-status-chips";
 import { isStatusVisible, toggleStatus } from "@/features/lanes/lib/lane-filters";
@@ -222,10 +223,24 @@ export function LaneBoard() {
     }
   };
 
+  const resolveGhostCard = (slug: string): LaneDragGhostCard | null => {
+    const item = boardItems.get(slug);
+    return item === undefined
+      ? null
+      : {
+          slug: item.slug,
+          number: formatFeatureNumber(item.slug, numbering.style, numbering.prefix),
+          title: item.title,
+          status: item.status,
+          priority: item.priority,
+          blocked: item.isBlocked,
+        };
+  };
+
   const poolDisabled = dragged !== null && dragged.fromLane === null;
 
   return (
-    <LaneDndProvider onDrop={handleDrop} onDragChange={handleDragChange}>
+    <LaneDndProvider onDrop={handleDrop} onDragChange={handleDragChange} resolveGhostCard={resolveGhostCard}>
       <div className="space-y-4">
         <PageHeader title="Lanes" description={LANES_DESCRIPTION} />
 

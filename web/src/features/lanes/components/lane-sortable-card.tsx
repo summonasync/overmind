@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
+import { cn } from "@/shared/lib/cn";
 import {
   laneDragTransform,
   laneFeatureDragData,
@@ -46,7 +47,7 @@ export function LaneSortableCard({
       {...listeners}
       {...attributes}
       style={style}
-      className={className}
+      className={cn(disabled ? undefined : "cursor-grab active:cursor-grabbing", className)}
     >
       {children({ isDragging, isOver })}
     </div>
