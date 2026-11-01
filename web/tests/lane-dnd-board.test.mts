@@ -31,7 +31,11 @@ const dndData = () =>
 
 test("the whole lanes board lives inside one drag context that reports drops and drag state", () => {
   const board = laneBoard();
-  assert.ok(board.includes("<LaneDndProvider onDrop={handleDrop} onDragChange={handleDragChange}>"));
+  assert.ok(
+    board.includes(
+      "<LaneDndProvider onDrop={handleDrop} onDragChange={handleDragChange} resolveGhostCard={resolveGhostCard}>",
+    ),
+  );
   assert.ok(board.includes("resolveLaneDrop("), "the shared resolver decides reorder vs transfer vs pool");
   assert.ok(board.includes("planLaneDrop("), "the plan layer decides which mutation a drop becomes");
   assert.ok(board.includes("useState<LaneFeatureDragData | null>(null)"), "the board tracks the active drag");

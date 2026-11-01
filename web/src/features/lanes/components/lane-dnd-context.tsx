@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -11,6 +12,8 @@ import {
   type Announcements,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { LaneDragGhost } from "@/features/lanes/components/lane-drag-ghost";
+import type { LaneDragGhostCard } from "@/features/lanes/components/lane-drag-ghost";
 import {
   describeLaneDropTarget,
   laneDropTargetFromOver,
@@ -30,6 +33,7 @@ interface LaneDndProviderProps {
     overId: unknown,
   ) => void;
   onDragChange?: (drag: LaneFeatureDragData | null) => void;
+  resolveGhostCard?: (slug: string) => LaneDragGhostCard | null;
 }
 
 const LANE_DND_INSTRUCTIONS =
@@ -72,12 +76,18 @@ const announcements: Announcements = {
   },
 };
 
-export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProviderProps) {
+export function LaneDndProvider({
+  children,
+  onDrop,
+  onDragChange,
+  resolveGhostCard,
+}: LaneDndProviderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const [dragActive, setDragActive] = useState(false);
+  const [ghost, setGhost] = useState<LaneDragGhostCard | null>(null);
 
   return (
     <DndContext
@@ -88,12 +98,14 @@ export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProvi
         const drag = parseLaneFeatureDrag(event.active.data.current);
         if (drag !== null) {
           setDragActive(true);
+          setGhost(resolveGhostCard?.(drag.slug) ?? null);
           onDragChange?.(drag);
         }
       }}
       onDragEnd={(event) => {
         const drag = parseLaneFeatureDrag(event.active.data.current);
         setDragActive(false);
+        setGhost(null);
         onDragChange?.(null);
         if (drag === null) {
           return;
@@ -104,10 +116,14 @@ export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProvi
       }}
       onDragCancel={() => {
         setDragActive(false);
+        setGhost(null);
         onDragChange?.(null);
       }}
     >
       <div className={dragActive ? "cursor-grabbing" : undefined}>{children}</div>
+      <DragOverlay dropAnimation={null}>
+        {ghost === null ? null : <LaneDragGhost card={ghost} />}
+      </DragOverlay>
     </DndContext>
   );
 }
