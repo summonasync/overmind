@@ -30,6 +30,7 @@ The crew: orchestrators, coders, reviewers, architects, a product strategist (`p
 │   ├── skills/            # 43 skill directories
 │   ├── SKILLFLOW.md       # workflow graph shared by all skills
 │   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to all four homes)
+│   ├── WAKE-CHANNEL.md    # file-based wake drop recipe for the 190 tick (Kimi home in repo; deployed to all four homes)
 │   └── config.toml        # Kimi runtime config (secondary-model pool) — Kimi only
 ├── .claude/
 │   ├── CLAUDE.md          # Claude-side mirror of AGENTS.md

@@ -36,6 +36,12 @@
       "mode": "mirror"
     },
     {
+      "source": ".kimi-code/WAKE-CHANNEL.md",
+      "home": "kimi",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
       "source": ".kimi-code/config.toml",
       "home": "kimi",
       "type": "file",
@@ -67,6 +73,12 @@
     },
     {
       "source": ".kimi-code/SOCIAL_DICTIONARY.md",
+      "home": "claude",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/WAKE-CHANNEL.md",
       "home": "claude",
       "type": "file",
       "mode": "mirror"
@@ -114,6 +126,12 @@
       "mode": "mirror"
     },
     {
+      "source": ".kimi-code/WAKE-CHANNEL.md",
+      "home": "qwen",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
       "source": ".codex/agents",
       "home": "codex",
       "type": "dir",
@@ -139,6 +157,12 @@
     },
     {
       "source": ".kimi-code/SOCIAL_DICTIONARY.md",
+      "home": "codex",
+      "type": "file",
+      "mode": "mirror"
+    },
+    {
+      "source": ".kimi-code/WAKE-CHANNEL.md",
       "home": "codex",
       "type": "file",
       "mode": "mirror"
