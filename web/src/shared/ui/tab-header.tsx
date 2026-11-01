@@ -7,7 +7,7 @@ interface TabHeaderProps {
 
 export function TabHeader({ description, actions }: TabHeaderProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
       <p className="text-sm text-muted">{description}</p>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>
