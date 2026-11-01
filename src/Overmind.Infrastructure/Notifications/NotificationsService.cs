@@ -1,10 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Wake;
 
 namespace Overmind.Infrastructure.Notifications;
 
-public sealed class NotificationsService(OvermindDbContext db, ReplyAutoActFanout autoAct)
+public sealed class NotificationsService(
+    OvermindDbContext db,
+    ReplyAutoActFanout autoAct,
+    WakeDropFanout wakeDrop)
 {
     public const int ListCapacity = 50;
 
@@ -159,6 +163,7 @@ public sealed class NotificationsService(OvermindDbContext db, ReplyAutoActFanou
         notification.Reply(text);
         await db.SaveChangesAsync(ct);
         await autoAct.TryDispatchAsync(notification, ct);
+        _ = wakeDrop.WakeAsync(notification.Agent);
 
         return notification;
     }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Wake;
 
 namespace Overmind.Infrastructure.Wave;
 
@@ -16,10 +17,12 @@ public sealed class WaveChatService
     public const int MaxHistoryLimit = 500;
 
     private readonly OvermindDbContext _db;
+    private readonly WakeDropFanout _wakeDrop;
 
-    public WaveChatService(OvermindDbContext db)
+    public WaveChatService(OvermindDbContext db, WakeDropFanout wakeDrop)
     {
         _db = db;
+        _wakeDrop = wakeDrop;
     }
 
     public async Task<WaveMessage> PostAsync(
@@ -39,6 +42,11 @@ public sealed class WaveChatService
         var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, authorRole, text);
         _db.WaveMessages.Add(message);
         await _db.SaveChangesAsync(ct);
+        foreach (var alias in message.MentionList)
+        {
+            _ = _wakeDrop.WakeAsync(alias);
+        }
+
         return message;
     }
 

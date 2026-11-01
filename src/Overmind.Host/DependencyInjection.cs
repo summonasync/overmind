@@ -163,6 +163,8 @@ public static class DependencyInjection
         services.AddScoped<WaveChatService>();
         services.AddScoped<WaveParticipantService>();
         services.AddScoped<AgentWakeService>();
+        services.AddSingleton<WakeDropWriter>();
+        services.AddSingleton<WakeDropFanout>();
         services.AddScoped<WaveChatRetentionSweeper>();
         services.AddScoped<BacklogImportSeeder>();
         services.AddScoped<BacklogImporter>();
