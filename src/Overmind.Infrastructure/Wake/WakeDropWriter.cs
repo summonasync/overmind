@@ -14,6 +14,8 @@ public sealed class WakeDropWriter(string? rootDirectory = null)
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    public static readonly TimeSpan StaleAfter = TimeSpan.FromDays(7);
+
     public static string RootDirectory =>
         Environment.GetEnvironmentVariable(DirectoryVariable)
         ?? Path.Combine(
@@ -45,6 +47,29 @@ public sealed class WakeDropWriter(string? rootDirectory = null)
             File.Delete(temp);
             throw;
         }
+    }
+
+    public int SweepStale()
+    {
+        if (!Directory.Exists(_root))
+        {
+            return 0;
+        }
+
+        var cutoff = DateTime.UtcNow - StaleAfter;
+        var removed = 0;
+        foreach (var file in Directory.EnumerateFiles(_root, "*.json"))
+        {
+            if (File.GetLastWriteTimeUtc(file) >= cutoff)
+            {
+                continue;
+            }
+
+            File.Delete(file);
+            removed++;
+        }
+
+        return removed;
     }
 
     private async Task WritePayloadAsync(string path, byte[] payload, CancellationToken ct)

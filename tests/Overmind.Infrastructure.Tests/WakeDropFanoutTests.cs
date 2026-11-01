@@ -105,6 +105,27 @@ public sealed class WakeDropFanoutTests : IDisposable
         drop.Signals.Single().From.ShouldBe("human");
     }
 
+    [Fact]
+    public async Task Wake_RemovesStaleDropFilesAndKeepsFreshOnes()
+    {
+        var alias = "billy";
+        _context.AgentSessions.Add(AgentSession.Create(alias, "claude"));
+        await _context.SaveChangesAsync();
+        Directory.CreateDirectory(_root);
+        var stale = Path.Combine(_root, "ghost.json");
+        var fresh = Path.Combine(_root, "dan.json");
+        File.WriteAllText(stale, "{}");
+        File.WriteAllText(fresh, "{}");
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - WakeDropWriter.StaleAfter - TimeSpan.FromMinutes(1));
+        File.SetLastWriteTimeUtc(fresh, DateTime.UtcNow);
+
+        await _fanout.WakeAsync(alias);
+
+        File.Exists(Path.Combine(_root, $"{alias}.json")).ShouldBeTrue();
+        File.Exists(stale).ShouldBeFalse();
+        File.Exists(fresh).ShouldBeTrue();
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);

@@ -10,7 +10,16 @@ public sealed class WakeDropFanout(IServiceScopeFactory scopes, ILogger<WakeDrop
         try
         {
             using var scope = scopes.CreateScope();
-            var snapshot = await scope.ServiceProvider
+            var provider = scope.ServiceProvider;
+            var writer = provider.GetRequiredService<WakeDropWriter>();
+            var removed = writer.SweepStale();
+            if (removed > 0)
+            {
+                logger.LogInformation(
+                    "Wake drop sweep removed {RemovedCount} stale files", removed);
+            }
+
+            var snapshot = await provider
                 .GetRequiredService<AgentWakeService>()
                 .SnapshotAsync(alias, CancellationToken.None);
             if (snapshot is null)
@@ -18,8 +27,7 @@ public sealed class WakeDropFanout(IServiceScopeFactory scopes, ILogger<WakeDrop
                 return;
             }
 
-            await scope.ServiceProvider.GetRequiredService<WakeDropWriter>()
-                .WriteAsync(WakeDrop.For(alias, DateTime.UtcNow, snapshot), CancellationToken.None);
+            await writer.WriteAsync(WakeDrop.For(alias, DateTime.UtcNow, snapshot), CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

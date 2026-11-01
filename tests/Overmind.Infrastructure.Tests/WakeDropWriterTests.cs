@@ -114,6 +114,50 @@ public sealed class WakeDropWriterTests : IDisposable
             .ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
+    [Fact]
+    public void Sweep_RemovesStaleFilesAndKeepsFreshOnes()
+    {
+        Directory.CreateDirectory(_root);
+        var stale = Path.Combine(_root, "stale.json");
+        var fresh = Path.Combine(_root, "fresh.json");
+        File.WriteAllText(stale, "{}");
+        File.WriteAllText(fresh, "{}");
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - WakeDropWriter.StaleAfter - TimeSpan.FromMinutes(1));
+        File.SetLastWriteTimeUtc(fresh, DateTime.UtcNow - TimeSpan.FromMinutes(1));
+
+        var removed = _writer.SweepStale();
+
+        removed.ShouldBe(1);
+        File.Exists(stale).ShouldBeFalse();
+        File.Exists(fresh).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Write_AfterRestart_UpdatesTheExistingFileInPlace()
+    {
+        await _writer.WriteAsync(Drop(0));
+        var path = Path.Combine(_root, "billy.json");
+        var before = JsonSerializer.Deserialize<WakeDrop>(
+            await File.ReadAllTextAsync(path), JsonOptions);
+        before.ShouldNotBeNull();
+
+        var restarted = new WakeDropWriter(_root);
+        File.Exists(path).ShouldBeTrue();
+        var readable = JsonSerializer.Deserialize<WakeDrop>(
+            await File.ReadAllTextAsync(path), JsonOptions);
+        readable.ShouldNotBeNull();
+        readable.UpdatedAt.ShouldBe(before.UpdatedAt);
+
+        await restarted.WriteAsync(Drop(1));
+
+        Directory.EnumerateFiles(_root, "billy.json").ShouldHaveSingleItem();
+        var updated = JsonSerializer.Deserialize<WakeDrop>(
+            await File.ReadAllTextAsync(path), JsonOptions);
+        updated.ShouldNotBeNull();
+        updated.Signals.Single().Excerpt.ShouldBe("ping 1");
+        updated.Cursor.ShouldNotBe(before.Cursor);
+    }
+
     private static WakeDrop Drop(int i)
     {
         var at = new DateTime(2026, 11, 1, 10, 0, 0, DateTimeKind.Utc).AddMinutes(i);
