@@ -1,7 +1,11 @@
 "use client";
 
 import { ListChecks } from "lucide-react";
-import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
+import {
+  InfoPanelCollapsibleSection,
+  InfoPanelSection,
+  InfoPanelStat,
+} from "@/widgets/app-shell";
 import { PLANNING_FEATURE_STATUSES, usePlanningBoard } from "@/features/planning";
 import { FeatureOverviewPanel } from "@/pages/planning-page/ui/feature-overview-panel";
 
@@ -28,14 +32,19 @@ export function PlanningInfoPanel({ projectId, featureSlug }: PlanningInfoPanelP
 
   return (
     <div className="space-y-6">
-      <InfoPanelSection title="Dashboard Overview" icon={ListChecks}>
+      <InfoPanelCollapsibleSection
+        page="planning"
+        section="stats"
+        title="Dashboard Overview"
+        icon={ListChecks}
+      >
         <div className="grid grid-cols-2 gap-2">
           <InfoPanelStat value={features.length} label="Features" />
           <InfoPanelStat value={`${tasksDone}/${tasksTotal}`} label="Tasks done" />
           <InfoPanelStat value={validatedSpecs} label="Specs validated" />
           <InfoPanelStat value={validatedPlans} label="Plans validated" />
         </div>
-      </InfoPanelSection>
+      </InfoPanelCollapsibleSection>
 
       <InfoPanelSection title="Status breakdown">
         <ul className="space-y-1.5">
@@ -50,12 +59,12 @@ export function PlanningInfoPanel({ projectId, featureSlug }: PlanningInfoPanelP
         </ul>
       </InfoPanelSection>
 
-      <InfoPanelSection title="Ceremony">
+      <InfoPanelCollapsibleSection page="planning" section="tips" title="Ceremony">
         <p className="text-xs leading-relaxed text-muted">
           Each feature carries spec, plan, task and result artifacts. Specs and plans must be
           validated before work continues; tasks move from todo to done through review.
         </p>
-      </InfoPanelSection>
+      </InfoPanelCollapsibleSection>
     </div>
   );
 }

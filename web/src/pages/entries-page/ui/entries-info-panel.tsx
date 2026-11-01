@@ -1,7 +1,11 @@
 "use client";
 
 import { ArrowRight, Clock, Lightbulb, NotebookText } from "lucide-react";
-import { InfoPanelSection, InfoPanelStat } from "@/widgets/app-shell";
+import {
+  InfoPanelCollapsibleSection,
+  InfoPanelSection,
+  InfoPanelStat,
+} from "@/widgets/app-shell";
 import { formatCalendarDate } from "@/shared/lib/relative-time";
 import { ENTRY_TYPES } from "@/shared/api/types";
 import type { EntryResponse } from "@/features/entries";
@@ -29,12 +33,17 @@ export function EntriesInfoPanel({ entries, loading }: EntriesInfoPanelProps) {
 
   return (
     <div className="space-y-6">
-      <InfoPanelSection title="Entries Overview" icon={NotebookText}>
+      <InfoPanelCollapsibleSection
+        page="entries"
+        section="stats"
+        title="Entries Overview"
+        icon={NotebookText}
+      >
         <div className="grid grid-cols-2 gap-2">
           <InfoPanelStat value={entries.length} label="Total Entries" />
           <InfoPanelStat value={tagged} label="With Tags" />
         </div>
-      </InfoPanelSection>
+      </InfoPanelCollapsibleSection>
 
       <InfoPanelSection title="By Type">
         <ul className="space-y-1.5">
@@ -69,7 +78,7 @@ export function EntriesInfoPanel({ entries, loading }: EntriesInfoPanelProps) {
         )}
       </InfoPanelSection>
 
-      <InfoPanelSection title="Tips" icon={Lightbulb}>
+      <InfoPanelCollapsibleSection page="entries" section="tips" title="Tips" icon={Lightbulb}>
         <ul className="space-y-1.5">
           {TIPS.map((tip) => (
             <li key={tip} className="flex items-start gap-1.5 text-xs leading-relaxed text-muted">
@@ -78,7 +87,7 @@ export function EntriesInfoPanel({ entries, loading }: EntriesInfoPanelProps) {
             </li>
           ))}
         </ul>
-      </InfoPanelSection>
+      </InfoPanelCollapsibleSection>
     </div>
   );
 }
