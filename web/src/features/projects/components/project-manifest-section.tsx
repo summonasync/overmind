@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FolderInput } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
-import { Textarea } from "@/shared/ui/textarea";
+import { MarkdownEditor } from "@/shared/ui/markdown-editor";
 import { manifestImportedLine, manifestIsAbsent } from "@/features/projects/lib/manifest-text";
 import {
   useProjectManifestImport,
@@ -80,13 +80,14 @@ export function ProjectManifestSection({ project }: ProjectManifestSectionProps)
 
       <ErrorText error={manifestImport.error} />
 
-      <Textarea
-        rows={10}
-        aria-label="Project manifest"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder={"# My project\n\nStack, commands and conventions agents should know."}
-      />
+      <div className="flex h-96 flex-col">
+        <MarkdownEditor
+          className="min-h-0 flex-1"
+          value={draft}
+          onValueChange={setDraft}
+          placeholder={"# My project\n\nStack, commands and conventions agents should know."}
+        />
+      </div>
 
       <div className="flex items-center gap-3">
         <Button disabled={update.isPending} onClick={handleSave}>

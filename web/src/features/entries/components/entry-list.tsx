@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { Markdown } from "@/shared/lib/markdown";
+import { MarkdownViewer } from "@/shared/ui/markdown-viewer";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import { entryTagsQueryOptions } from "@/features/entries/queries";
 import {
@@ -114,7 +114,7 @@ export function EntryList({ entries, onEdit, onDelete, onRead }: EntryListProps)
             ) : null}
             {isExpanded ? (
               <div id={`entry-body-${entry.id}`} className="mt-2 rounded-md border border-border bg-surface px-3 py-2">
-                {body !== null ? <Markdown content={body} /> : <p className="text-sm text-muted">No content yet.</p>}
+                {body !== null ? <MarkdownViewer content={body} /> : <p className="text-sm text-muted">No content yet.</p>}
               </div>
             ) : (
               <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted">
