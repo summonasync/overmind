@@ -1,15 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Markdown } from "@/shared/lib/markdown";
 import { formatCalendarDate } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
-import { Textarea } from "@/shared/ui/textarea";
-import { WritePreviewToggle } from "@/shared/ui/write-preview-toggle";
+import { MarkdownEditor } from "@/shared/ui/markdown-editor";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
 import type { PlanningArtifactResponse, PlanningDocumentKind } from "@/features/planning/types";
 
@@ -41,7 +39,6 @@ export function ArtifactEditor({
 }: ArtifactEditorProps) {
   const [body, setBody] = useState(initial?.body ?? "");
   const [changeNote, setChangeNote] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
   const [formError, setFormError] = useState<Error | null>(null);
 
   const frozen = initial?.status === "validated";
@@ -78,22 +75,12 @@ export function ArtifactEditor({
         </p>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <WritePreviewToggle showPreview={showPreview} onShowPreviewChange={setShowPreview} />
-        {showPreview ? (
-          <div className="min-h-32 flex-1 overflow-y-auto rounded-md border border-border bg-surface px-3 py-2">
-            {body.trim() ? <Markdown content={body} /> : <p className="text-sm text-muted">Nothing to preview.</p>}
-          </div>
-        ) : (
-          <Textarea
-            rows={12}
-            className="min-h-0 flex-1 resize-none"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder="Markdown — what and why for this artifact."
-          />
-        )}
-      </div>
+      <MarkdownEditor
+        className="min-h-0 flex-1"
+        value={body}
+        onValueChange={setBody}
+        placeholder="Markdown — what and why for this artifact."
+      />
 
       {frozen ? (
         <div>

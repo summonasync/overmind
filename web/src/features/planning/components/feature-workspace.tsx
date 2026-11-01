@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
-import { Markdown } from "@/shared/lib/markdown";
+import { MarkdownViewer } from "@/shared/ui/markdown-viewer";
 import { cn } from "@/shared/lib/cn";
 import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
@@ -209,7 +209,7 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
 
       {feature.body.trim().length > 0 ? (
         <div className="rounded-lg border border-border bg-surface p-4">
-          <Markdown content={feature.body} />
+          <MarkdownViewer content={feature.body} />
         </div>
       ) : null}
 
@@ -522,7 +522,7 @@ function DocumentPanel({
       </div>
       <ErrorText error={approveError} />
       <div className="max-h-[55vh] overflow-y-auto">
-        <Markdown content={artifact.body} />
+        <MarkdownViewer content={artifact.body} />
       </div>
       {artifact.log.length > 0 ? (
         <div className="border-t border-border pt-3">

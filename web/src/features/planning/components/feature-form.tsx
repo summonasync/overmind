@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Markdown } from "@/shared/lib/markdown";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
+import { MarkdownEditor } from "@/shared/ui/markdown-editor";
 import { Select } from "@/shared/ui/select";
-import { Textarea } from "@/shared/ui/textarea";
-import { WritePreviewToggle } from "@/shared/ui/write-preview-toggle";
 import { slugPreview } from "@/features/planning/lib/slug-preview";
 import { FEATURE_PRIORITIES } from "@/features/planning/types";
 import type {
@@ -40,7 +38,6 @@ export function FeatureForm({ initial, pending, error, takenSlugs = [], onSubmit
   const [title, setTitle] = useState(initial?.title ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
   const [priority, setPriority] = useState<PlanningFeaturePriority>(initial?.priority ?? "p2");
-  const [showPreview, setShowPreview] = useState(false);
   const [validationError, setValidationError] = useState<Error | null>(null);
 
   const preview = slugPreview({ title, slug, takenSlugs });
@@ -109,26 +106,13 @@ export function FeatureForm({ initial, pending, error, takenSlugs = [], onSubmit
         feature folder name under BACKLOG/.
       </p>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between">
-          <label htmlFor="feature-body" className="mb-1 text-sm font-medium text-foreground">
-            Body
-          </label>
-          <WritePreviewToggle showPreview={showPreview} onShowPreviewChange={setShowPreview} />
-        </div>
-        {showPreview ? (
-          <div className="min-h-32 flex-1 overflow-y-auto rounded-md border border-border bg-surface px-3 py-2">
-            {body.trim() ? <Markdown content={body} /> : <p className="text-sm text-muted">Nothing to preview.</p>}
-          </div>
-        ) : (
-          <Textarea
-            id="feature-body"
-            rows={20}
-            className="min-h-0 flex-1 resize-none"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder="Optional markdown — goal, context, notes for the feature."
-          />
-        )}
+        <span className="mb-1 text-sm font-medium text-foreground">Body</span>
+        <MarkdownEditor
+          className="min-h-0 flex-1"
+          value={body}
+          onValueChange={setBody}
+          placeholder="Optional markdown — goal, context, notes for the feature."
+        />
       </div>
       <ErrorText error={validationError ?? error} />
       <div className="flex justify-end gap-2">

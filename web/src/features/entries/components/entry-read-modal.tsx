@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
-import { Markdown } from "@/shared/lib/markdown";
+import { MarkdownViewer } from "@/shared/ui/markdown-viewer";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
@@ -53,7 +53,7 @@ export function EntryReadModal({ entry, onEdit, onClose }: EntryReadModalProps) 
             </Button>
           </div>
           <div className="min-h-32 flex-1 overflow-y-auto rounded-md border border-border bg-surface px-3 py-2">
-            {body !== null ? <Markdown content={body} /> : <p className="text-sm text-muted">No content yet.</p>}
+            {body !== null ? <MarkdownViewer content={body} /> : <p className="text-sm text-muted">No content yet.</p>}
           </div>
         </div>
       ) : null}

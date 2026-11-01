@@ -3,14 +3,12 @@
 import { useState, type FormEvent } from "react";
 import { ENTRY_TYPES, type EntryType } from "@/shared/api/types";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
-import { Markdown } from "@/shared/lib/markdown";
 import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Field } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
+import { MarkdownEditor } from "@/shared/ui/markdown-editor";
 import { Select } from "@/shared/ui/select";
-import { Textarea } from "@/shared/ui/textarea";
-import { WritePreviewToggle } from "@/shared/ui/write-preview-toggle";
 import { SkillFilesEditor } from "@/features/entries/components/skill-files-editor";
 import type { EntryFormValues, EntryResponse, SkillFileDto } from "@/features/entries/types";
 
@@ -28,7 +26,6 @@ export function EntryEditor({ initial, pending, error, onSubmit, onCancel }: Ent
   const [tagsInput, setTagsInput] = useState((initial?.tags ?? []).join(", "));
   const [content, setContent] = useState(initial?.content ?? "");
   const [skillFiles, setSkillFiles] = useState<SkillFileDto[]>(initial?.skillFiles ?? []);
-  const [showPreview, setShowPreview] = useState(false);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -84,22 +81,12 @@ export function EntryEditor({ initial, pending, error, onSubmit, onCancel }: Ent
         />
       </Field>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <WritePreviewToggle showPreview={showPreview} onShowPreviewChange={setShowPreview} />
-        {showPreview ? (
-          <div className="min-h-32 flex-1 overflow-y-auto rounded-md border border-border bg-surface px-3 py-2">
-            {content.trim() ? <Markdown content={content} /> : <p className="text-sm text-muted">Nothing to preview.</p>}
-          </div>
-        ) : (
-          <Textarea
-            rows={10}
-            className="min-h-0 flex-1 resize-none"
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder="Markdown supported: # headings, **bold**, *italic*, `code`, - lists, [links](https://…)"
-          />
-        )}
-      </div>
+      <MarkdownEditor
+        className="min-h-0 flex-1"
+        value={content}
+        onValueChange={setContent}
+        placeholder="Markdown supported: # headings, **bold**, *italic*, `code`, - lists, [links](https://…)"
+      />
 
       {isSkill ? (
         <Field label="Skill files (per platform)">

@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleHelp, ClipboardList } from "lucide-react";
-import { Markdown } from "@/shared/lib/markdown";
+import { MarkdownViewer } from "@/shared/ui/markdown-viewer";
 import { formatCalendarDate } from "@/shared/lib/relative-time";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -140,7 +140,7 @@ export function FeatureOverviewPanel({ projectId, slug }: FeatureOverviewPanelPr
         ) : openQuestions === null ? (
           <p className="text-xs text-muted">None</p>
         ) : (
-          <Markdown content={openQuestions} />
+          <MarkdownViewer content={openQuestions} />
         )}
       </InfoPanelSection>
     </div>

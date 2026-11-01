@@ -5,7 +5,7 @@ import { AGENT_PLATFORMS, type AgentPlatform } from "@/shared/api/types";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
-import { Textarea } from "@/shared/ui/textarea";
+import { MarkdownEditor } from "@/shared/ui/markdown-editor";
 import { cn } from "@/shared/lib/cn";
 import type { SkillFileDto } from "@/features/entries/types";
 
@@ -85,10 +85,10 @@ export function SkillFilesEditor({ files, onChange }: SkillFilesEditorProps) {
                   Remove
                 </Button>
               </div>
-              <Textarea
-                rows={6}
+              <MarkdownEditor
+                className="h-64"
                 value={file.content}
-                onChange={(event) => updateFile(file.relativePath, event.target.value)}
+                onValueChange={(content) => updateFile(file.relativePath, content)}
                 placeholder="File content"
               />
             </li>
