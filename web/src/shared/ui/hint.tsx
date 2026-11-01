@@ -2,11 +2,17 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/cn";
 
 export type HintAlign = "center" | "left" | "right";
+export type HintWidth = "default" | "wide";
 
 const ALIGN_CLASSES: Record<HintAlign, { bubble: string; arrow: string }> = {
   center: { bubble: "left-1/2 -translate-x-1/2", arrow: "left-1/2 -translate-x-1/2" },
   left: { bubble: "left-0", arrow: "left-3" },
   right: { bubble: "right-0", arrow: "right-3" },
+};
+
+const WIDTH_CLASSES: Record<HintWidth, string> = {
+  default: "w-64",
+  wide: "w-72",
 };
 
 export function hintAnchorId(label: string): string {
@@ -20,12 +26,14 @@ export function hintAnchorId(label: string): string {
 interface HintProps {
   label: string;
   children: ReactNode;
+  trigger?: ReactNode;
   align?: HintAlign;
+  width?: HintWidth;
   id?: string;
   className?: string;
 }
 
-export function Hint({ label, children, align = "center", id, className }: HintProps) {
+export function Hint({ label, children, trigger, align = "center", width = "default", id, className }: HintProps) {
   const anchorId = id ?? hintAnchorId(label);
   const alignClasses = ALIGN_CLASSES[align];
 
@@ -34,16 +42,23 @@ export function Hint({ label, children, align = "center", id, className }: HintP
       <button
         type="button"
         aria-describedby={anchorId}
-        className="cursor-help rounded text-muted transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+        aria-label={trigger === undefined ? undefined : label}
+        className={cn(
+          "cursor-help transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+          trigger === undefined
+            ? "rounded text-muted hover:text-foreground focus-visible:text-foreground"
+            : "rounded-full",
+        )}
       >
-        {label}
+        {trigger ?? label}
       </button>
       <span
         role="tooltip"
         id={anchorId}
         className={cn(
-          "pointer-events-none absolute top-full z-30 mt-2 w-64 rounded-md border border-border-strong bg-surface-raised px-3 py-2 text-xs leading-5 text-foreground opacity-0 shadow-xl transition-opacity duration-150",
+          "pointer-events-none absolute top-full z-30 mt-2 rounded-md border border-border-strong bg-surface-raised px-3 py-2 text-xs leading-5 text-foreground opacity-0 shadow-xl transition-opacity duration-150",
           "group-hover:opacity-100 group-focus-within:opacity-100",
+          WIDTH_CLASSES[width],
           alignClasses.bubble,
         )}
       >
