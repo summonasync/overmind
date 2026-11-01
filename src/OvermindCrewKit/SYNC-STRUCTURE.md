@@ -273,7 +273,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 42 agent files + 51 skill dirs on the kimi/claude/codex sides; 41 + 50 on the qwen side (pre-existing qwen gap: the `git-commit-ai-detector` agent and its skill are absent there; a qwen-side change must keep 41/50, not drift further).
+4. Count parity intact: 42 agent files + 51 skill dirs on all four runtime sides (the pre-existing qwen gap — `git-commit-ai-detector` — was closed 2026-11-01).
    ```bash
    for d in .kimi-code .claude .qwen .codex; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```
