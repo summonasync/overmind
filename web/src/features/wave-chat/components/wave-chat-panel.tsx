@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/shared/ui/button";
@@ -49,7 +49,11 @@ interface UnreadAnchor {
   at: string | null;
 }
 
-export function WaveChatPanel() {
+interface WaveChatPanelProps {
+  hint?: ReactNode;
+}
+
+export function WaveChatPanel({ hint }: WaveChatPanelProps) {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project") ?? "";
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
@@ -234,6 +238,7 @@ export function WaveChatPanel() {
               onShowAll={showAll}
               scrollKey={activeRoom}
             />
+            {hint}
             <WaveComposer
               room={activeRoom}
               ownerAlias={ownerAlias}
