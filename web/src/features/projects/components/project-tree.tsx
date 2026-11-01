@@ -77,6 +77,22 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
     );
   }, [data, routeProjectPath]);
 
+  const projectFolders = useMemo(() => {
+    const folders = new Set<string>();
+    for (const root of data?.roots ?? []) {
+      if (root.containsProjects) {
+        folders.add(root.path);
+      }
+    }
+    const rootPaths = (data?.roots ?? []).map((root) => root.path);
+    for (const project of projects) {
+      for (const path of projectAncestorPaths(rootPaths, project.diskPath)) {
+        folders.add(path);
+      }
+    }
+    return folders;
+  }, [data, projects]);
+
   const isExpanded = (path: string) => {
     if (routeCollapsed.includes(path)) {
       return false;
@@ -173,6 +189,7 @@ export function ProjectTree({ onRegister }: ProjectTreeProps) {
             isExpanded={isExpanded}
             activeProjectId={activeProjectId}
             actions={<RootRemoveButton root={root} />}
+            projectFolders={projectFolders}
           />
         ))}
       </div>
@@ -264,10 +281,12 @@ interface TreeNodeProps {
   isExpanded: (path: string) => boolean;
   activeProjectId: string | null;
   actions?: ReactNode;
+  projectFolders: ReadonlySet<string>;
 }
 
-function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, activeProjectId, actions }: TreeNodeProps) {
+function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, activeProjectId, actions, projectFolders }: TreeNodeProps) {
   const expanded = isExpanded(entry.path);
+  const containsProjects = projectFolders.has(entry.path);
 
   if (entry.projectId !== null) {
     const active = activeProjectId !== null && entry.projectId === activeProjectId;
@@ -298,7 +317,11 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
     <div>
       <div
         style={{ paddingLeft: depth * 12 }}
-        className="group flex min-w-0 items-center gap-0.5 rounded text-muted transition-colors hover:text-foreground"
+        aria-disabled={!containsProjects || undefined}
+        className={cn(
+          "group flex min-w-0 items-center gap-0.5 rounded text-muted transition-colors hover:text-foreground",
+          !containsProjects && "opacity-70",
+        )}
       >
         <button
           type="button"
@@ -341,6 +364,7 @@ function TreeNode({ entry, depth, onRegister, onToggleExpanded, isExpanded, acti
           onToggleExpanded={onToggleExpanded}
           isExpanded={isExpanded}
           activeProjectId={activeProjectId}
+          projectFolders={projectFolders}
         />
       ) : null}
     </div>
@@ -354,9 +378,10 @@ interface TreeChildrenProps {
   onToggleExpanded: (path: string) => void;
   isExpanded: (path: string) => boolean;
   activeProjectId: string | null;
+  projectFolders: ReadonlySet<string>;
 }
 
-function TreeChildren({ path, depth, onRegister, onToggleExpanded, isExpanded, activeProjectId }: TreeChildrenProps) {
+function TreeChildren({ path, depth, onRegister, onToggleExpanded, isExpanded, activeProjectId, projectFolders }: TreeChildrenProps) {
   const { data, isPending, error, refetch } = useDirectory(path);
 
   if (isPending) {
@@ -402,6 +427,7 @@ function TreeChildren({ path, depth, onRegister, onToggleExpanded, isExpanded, a
           onToggleExpanded={onToggleExpanded}
           isExpanded={isExpanded}
           activeProjectId={activeProjectId}
+          projectFolders={projectFolders}
         />
       ))}
       {data.truncated ? (

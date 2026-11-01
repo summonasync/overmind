@@ -6,6 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
+import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import { TabHeader } from "@/shared/ui/tab-header";
 import { useProjectList } from "@/features/projects";
@@ -60,26 +61,11 @@ function IssuesPageContent() {
 
   return (
     <div className="space-y-4">
-      <TabHeader
-        description={PROJECT_ISSUES_DESCRIPTION}
-        actions={
-          issueId ? (
-            <a
-              href={`/issues?project=${encodeURIComponent(projectId)}`}
-              className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
-            >
-              ← All issues
-            </a>
-          ) : (
-            <a
-              href="/"
-              className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
-            >
-              ← All projects
-            </a>
-          )
-        }
+      <PageBackLink
+        href={issueId ? `/issues?project=${encodeURIComponent(projectId)}` : "/"}
+        label={issueId ? "All issues" : "All projects"}
       />
+      <TabHeader description={PROJECT_ISSUES_DESCRIPTION} />
 
       {issueId ? (
         <IssueDetail
