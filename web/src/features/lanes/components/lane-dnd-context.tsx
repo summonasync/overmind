@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -77,6 +77,7 @@ export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProvi
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  const [dragActive, setDragActive] = useState(false);
 
   return (
     <DndContext
@@ -86,11 +87,13 @@ export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProvi
       onDragStart={(event) => {
         const drag = parseLaneFeatureDrag(event.active.data.current);
         if (drag !== null) {
+          setDragActive(true);
           onDragChange?.(drag);
         }
       }}
       onDragEnd={(event) => {
         const drag = parseLaneFeatureDrag(event.active.data.current);
+        setDragActive(false);
         onDragChange?.(null);
         if (drag === null) {
           return;
@@ -99,9 +102,12 @@ export function LaneDndProvider({ children, onDrop, onDragChange }: LaneDndProvi
         const target = over === null ? null : laneDropTargetFromOver(over.data.current);
         onDrop?.(drag, target, over?.id ?? null);
       }}
-      onDragCancel={() => onDragChange?.(null)}
+      onDragCancel={() => {
+        setDragActive(false);
+        onDragChange?.(null);
+      }}
     >
-      {children}
+      <div className={dragActive ? "cursor-grabbing" : undefined}>{children}</div>
     </DndContext>
   );
 }
