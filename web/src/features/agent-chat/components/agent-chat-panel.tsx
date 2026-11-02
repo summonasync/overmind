@@ -11,6 +11,7 @@ import { AgentMessageList } from "@/features/agent-chat/components/agent-message
 import { AgentProjectSelect } from "@/features/agent-chat/components/agent-project-select";
 import { useAgentChat } from "@/features/agent-chat/lib/use-agent-chat";
 import { useAgentConversationList } from "@/features/agent-chat/lib/use-agent-conversation-list";
+import { useConversationRestore } from "@/features/agent-chat/lib/use-conversation-restore";
 
 const PANEL_DESCRIPTION =
   "Talk to the embedded Overmind agent. It answers from the configured LLM provider and can drive planning, entries and wave coordination on your instruction.";
@@ -33,6 +34,12 @@ export function AgentChatPanel({ hint }: AgentChatPanelProps) {
         setSelectedId(null);
       }
     },
+  });
+  useConversationRestore({
+    conversations: list.conversations,
+    isPending: list.isPending,
+    selectedId,
+    select: setSelectedId,
   });
   const chat = useAgentChat({
     conversationId: selectedId,

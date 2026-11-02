@@ -25,6 +25,16 @@ export function isReportableMessageId(messageId: string): boolean {
   return messageId.length > 0 && !messageId.startsWith(PENDING_ID_PREFIX);
 }
 
+export function latestReportableId(orderedIds: readonly string[]): string | null {
+  for (let index = orderedIds.length - 1; index >= 0; index -= 1) {
+    const messageId = orderedIds[index];
+    if (isReportableMessageId(messageId)) {
+      return messageId;
+    }
+  }
+  return null;
+}
+
 export function seenCandidate(
   orderedIds: readonly string[],
   seenIds: ReadonlySet<string>,

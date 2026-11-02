@@ -4,6 +4,7 @@ export { AgentConversationList } from "./components/agent-conversation-list";
 export { AgentMessageList } from "./components/agent-message-list";
 export { useAgentChat } from "./lib/use-agent-chat";
 export { useAgentConversationList } from "./lib/use-agent-conversation-list";
+export { useConversationRestore } from "./lib/use-conversation-restore";
 export { useAgentUnreadCount } from "./lib/use-agent-unread-count";
 export {
   useChatActivity,

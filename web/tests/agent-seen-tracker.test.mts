@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   createSeenTracker,
   isReportableMessageId,
+  latestReportableId,
   seenCandidate,
   type SeenFlushEntry,
 } from "../src/features/agent-chat/lib/seen-tracker.ts";
@@ -45,6 +46,13 @@ test("candidate is the highest seen reportable message", () => {
   assert.equal(seenCandidate(ids, new Set(["a"]), null), "a");
   assert.equal(seenCandidate(ids, new Set(), null), null);
   assert.equal(seenCandidate(ids, new Set(["pending-assistant-1"]), null), null);
+});
+
+test("latest reportable id is the last non-pending entry", () => {
+  assert.equal(latestReportableId(["a", "pending-assistant-1", "b"]), "b");
+  assert.equal(latestReportableId(["a"]), "a");
+  assert.equal(latestReportableId(["pending-user-1", "pending-assistant-2"]), null);
+  assert.equal(latestReportableId([]), null);
 });
 
 test("candidate never regresses behind the sent watermark", () => {
