@@ -1,5 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getClaimSettings, getProject, listProjects } from "@/features/projects/api";
+import {
+  getApprovalSettings,
+  getClaimSettings,
+  getProject,
+  listProjects,
+} from "@/features/projects/api";
 import { browseRoots, getTreeRoots, listDirectory } from "@/shared/api/system";
 
 export const projectKeys = {
@@ -9,6 +14,7 @@ export const projectKeys = {
   tree: (path: string) => [...projectKeys.all, "tree", path] as const,
   browseRoots: () => [...projectKeys.all, "browse-roots"] as const,
   claimSettings: (projectId: string) => [...projectKeys.all, "claim-settings", projectId] as const,
+  approvalSettings: (projectId: string) => [...projectKeys.all, "approval-settings", projectId] as const,
 };
 
 export const projectListQueryOptions = () =>
@@ -28,6 +34,13 @@ export const claimSettingsQueryOptions = (projectId: string) =>
   queryOptions({
     queryKey: projectKeys.claimSettings(projectId),
     queryFn: () => getClaimSettings(projectId),
+    enabled: projectId.length > 0,
+  });
+
+export const approvalSettingsQueryOptions = (projectId: string) =>
+  queryOptions({
+    queryKey: projectKeys.approvalSettings(projectId),
+    queryFn: () => getApprovalSettings(projectId),
     enabled: projectId.length > 0,
   });
 

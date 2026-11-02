@@ -40,3 +40,7 @@ export interface ClaimSettingsResponse {
   claimStaleThresholdMinutes: number;
   agentNamingRules: string | null;
 }
+
+export interface ApprovalSettingsResponse {
+  delegateApprovals: boolean;
+}

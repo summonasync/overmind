@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type {
+  ApprovalSettingsResponse,
   ClaimSettingsResponse,
   ProjectAutoActResponse,
   ProjectFormValues,
@@ -71,5 +72,18 @@ export function updateClaimSettings(
   return apiPut<ClaimSettingsResponse>(`/projects/${id}/claim-settings`, {
     claimStaleThresholdMinutes: values.claimStaleThresholdMinutes,
     agentNamingRules: values.agentNamingRules,
+  });
+}
+
+export function getApprovalSettings(id: string): Promise<ApprovalSettingsResponse> {
+  return apiGet<ApprovalSettingsResponse>(`/projects/${id}/approval-settings`);
+}
+
+export function updateApprovalSettings(
+  id: string,
+  delegateApprovals: boolean,
+): Promise<ApprovalSettingsResponse> {
+  return apiPut<ApprovalSettingsResponse>(`/projects/${id}/approval-settings`, {
+    delegateApprovals,
   });
 }
