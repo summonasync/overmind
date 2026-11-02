@@ -120,6 +120,26 @@ public sealed class DelegatedApprovalApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_FlagOnWhenHumanValidationEffective_HumanGateStillWins()
+    {
+        var project = await CreateProjectAsync();
+        await EnableDelegationAsync(project.Id);
+        await SetHumanValidationDefaultAsync("on");
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        var instructionId = await SendInstructionAsync(project.Id, "approve spec of feat");
+
+        var response = await SendAsync(AgentValidateUrl(spec.Id), HttpMethod.Post, _sessionId, instructionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("HumanValidationRequired");
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Status.ShouldBe("draft");
+        artifact.Body.ShouldNotContain(DelegatedApprovalGate.ProvenanceMarker);
+    }
+
+    [Fact]
     public async Task SetFeatureStatus_FlagOnWithOwnerInstruction_DelegatesTheDoneFlip()
     {
         var project = await CreateProjectAsync();
@@ -195,6 +215,13 @@ public sealed class DelegatedApprovalApiTests : IDisposable
         var history = await _client.GetFromJsonAsync<HistoryJson>(
             $"/api/agent/conversations/{conversationId}/messages", JsonOptions);
         return history!.Items.Where(m => m.Role == "user").Select(m => m.Id).Last();
+    }
+
+    private async Task SetHumanValidationDefaultAsync(string value)
+    {
+        var updated = await _client.PutAsJsonAsync(
+            "/api/settings", new { PlanningRequireHumanValidationDefault = value }, JsonOptions);
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task EnableDelegationAsync(Guid projectId)
