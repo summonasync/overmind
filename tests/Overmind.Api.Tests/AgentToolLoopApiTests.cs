@@ -155,6 +155,60 @@ public sealed class AgentToolLoopApiTests : IDisposable
         rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task WaveTools_PostPeekUnreadHistory_CrossProjectRooms()
+    {
+        var projectA = await CreateProjectAsync();
+        var projectB = await CreateProjectAsync();
+        await EnsureSessionAsync();
+
+        using var scope = _factory.Services.CreateAsyncScope();
+        var registry = scope.ServiceProvider.GetRequiredService<AgentToolRegistry>();
+
+        var postA = await registry.InvokeAsync("wave_chat_post", Args(new
+        {
+            projectId = projectA.Id.ToString(),
+            room = "all",
+            text = "lane signal for project A",
+        }), default, CancellationToken.None);
+        postA.GetProperty("authorAlias").GetString().ShouldBe("overmind-agent");
+        postA.GetProperty("authorRole").GetString().ShouldBe(AgentSession.EmbeddedRole);
+
+        await registry.InvokeAsync("wave_chat_post", Args(new
+        {
+            projectId = projectB.Id.ToString(),
+            room = "all",
+            text = "lane signal for project B",
+        }), default, CancellationToken.None);
+
+        var peekB = await registry.InvokeAsync("wave_chat_peek", Args(new
+        {
+            projectId = projectB.Id.ToString(),
+            room = "all",
+        }), default, CancellationToken.None);
+        peekB.GetProperty("room").GetString().ShouldBe("all");
+        peekB.GetProperty("count").GetInt32().ShouldBe(1);
+
+        var unreadB = await registry.InvokeAsync("wave_chat_unread", Args(new
+        {
+            projectId = projectB.Id.ToString(),
+            room = "all",
+        }), default, CancellationToken.None);
+        var bMessage = unreadB.GetProperty("items").EnumerateArray().Single();
+        bMessage.GetProperty("text").GetString().ShouldBe("lane signal for project B");
+
+        var historyA = await registry.InvokeAsync("wave_chat_history", Args(new
+        {
+            projectId = projectA.Id.ToString(),
+            room = "all",
+        }), default, CancellationToken.None);
+        historyA.GetProperty("items").EnumerateArray().Single()
+            .GetProperty("text").GetString().ShouldBe("lane signal for project A");
+    }
+
+    private static JsonElement Args(object arguments) =>
+        JsonSerializer.SerializeToElement(arguments, JsonOptions);
+
     private async Task<ProjectJson> CreateProjectAsync()
     {
         var name = $"agent-tools-{Guid.NewGuid():N}";

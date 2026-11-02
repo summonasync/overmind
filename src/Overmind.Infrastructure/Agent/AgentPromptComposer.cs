@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using Overmind.Core;
 using Overmind.Infrastructure.Grimoire;
@@ -14,6 +15,7 @@ public sealed class AgentPromptComposer(
     public const int MaxHistoryMessages = 24;
     public const int MaxSnapshotProjects = 8;
     public const int MaxQueueRowsPerProject = 10;
+    public const int MaxQueueRows = 24;
     public const int MaxRecentReplies = 5;
     public const int MaxMemoryFacts = 5;
 
@@ -72,43 +74,66 @@ public sealed class AgentPromptComposer(
 
     private async Task<string> ComposeSnapshotAsync(Guid? projectId, CancellationToken ct)
     {
-        var snapshot = new Dictionary<string, object?>();
+        var snapshot = new JsonObject();
 
         try
         {
             var projects = await api.GetAsync("/api/projects", ct);
-            List<Dictionary<string, object?>> projectRows = [.. EnumerateJson(projects)
-                .Take(MaxSnapshotProjects)
-                .Select(project => new Dictionary<string, object?>
+            var projectIds = new List<Guid>(MaxSnapshotProjects);
+            var projectRows = new JsonArray();
+            foreach (var project in EnumerateJson(projects).Take(MaxSnapshotProjects))
+            {
+                projectRows.Add(new JsonObject
                 {
                     ["id"] = TextOf(project, "id"),
                     ["name"] = TextOf(project, "name"),
                     ["openFeatures"] = TextOf(project, "openFeatureCount")
-                })];
+                });
+                if (Guid.TryParse(TextOf(project, "id"), out var id))
+                {
+                    projectIds.Add(id);
+                }
+            }
+
             snapshot["projects"] = projectRows;
 
-            var queue = new List<object>();
-            foreach (var project in EnumerateJson(projects).Take(MaxSnapshotProjects))
+            var queue = new JsonArray();
+            foreach (var id in projectIds)
             {
-                if (!Guid.TryParse(TextOf(project, "id"), out var id) || (projectId is { } scoped && id != scoped))
+                if (projectId is { } scoped && id != scoped)
                 {
                     continue;
+                }
+
+                if (queue.Count >= MaxQueueRows)
+                {
+                    break;
                 }
 
                 try
                 {
                     var rows = await api.GetAsync($"/api/agent/projects/{id}/planning/task-queue", ct);
-                    if (rows.TryGetProperty("items", out var items))
+                    if (!rows.TryGetProperty("items", out var items))
                     {
-                        queue.AddRange(items.EnumerateArray().Take(MaxQueueRowsPerProject).Select(row => (object)new Dictionary<string, object?>
+                        continue;
+                    }
+
+                    foreach (var row in items.EnumerateArray().Take(MaxQueueRowsPerProject))
+                    {
+                        if (queue.Count >= MaxQueueRows)
                         {
-                            ["projectId"] = id,
+                            break;
+                        }
+
+                        queue.Add(new JsonObject
+                        {
+                            ["projectId"] = id.ToString(),
                             ["slug"] = TextOf(row, "slug"),
                             ["title"] = TextOf(row, "title"),
                             ["priority"] = TextOf(row, "priority"),
                             ["status"] = TextOf(row, "status"),
                             ["tasks"] = $"{TextOf(row, "taskDone")}/{TextOf(row, "taskTotal")}"
-                        }));
+                        });
                     }
                 }
                 catch (LoopbackApiException)
@@ -121,13 +146,19 @@ public sealed class AgentPromptComposer(
             var replies = await api.GetAsync("/api/agent/notifications/replies", ct);
             if (replies.TryGetProperty("items", out var replyItems))
             {
-                snapshot["recentReplies"] = replyItems.EnumerateArray().Take(MaxRecentReplies).Select(reply => new Dictionary<string, object?>
+                var replyRows = new JsonArray();
+                foreach (var reply in replyItems.EnumerateArray().Take(MaxRecentReplies))
                 {
-                    ["id"] = TextOf(reply, "id"),
-                    ["kind"] = TextOf(reply, "kind"),
-                    ["text"] = Truncate(TextOf(reply, "text"), 160),
-                    ["replyText"] = Truncate(TextOf(reply, "replyText"), 200)
-                }).ToList();
+                    replyRows.Add(new JsonObject
+                    {
+                        ["id"] = TextOf(reply, "id"),
+                        ["kind"] = TextOf(reply, "kind"),
+                        ["text"] = Truncate(TextOf(reply, "text"), 160),
+                        ["replyText"] = Truncate(TextOf(reply, "replyText"), 200)
+                    });
+                }
+
+                snapshot["recentReplies"] = replyRows;
             }
         }
         catch (LoopbackApiException)
@@ -138,21 +169,27 @@ public sealed class AgentPromptComposer(
         try
         {
             var endpoint = await memory.ResolveEndpointAsync(ct);
-            var facts = await memory.ListTopFactsAsync(endpoint, MaxMemoryFacts, ct);
+            var facts = (await memory.ListTopFactsAsync(endpoint, MaxMemoryFacts, ct)).Take(MaxMemoryFacts).ToList();
             if (facts.Count > 0)
             {
-                snapshot["memoryFacts"] = facts.Select(fact => new Dictionary<string, object?>
+                var factRows = new JsonArray();
+                foreach (var fact in facts)
                 {
-                    ["content"] = Truncate(fact.Content, 240),
-                    ["createdAt"] = fact.CreatedAt.ToString("yyyy-MM-dd"),
-                }).ToList();
+                    factRows.Add(new JsonObject
+                    {
+                        ["content"] = Truncate(fact.Content, 240),
+                        ["createdAt"] = fact.CreatedAt.ToString("yyyy-MM-dd"),
+                    });
+                }
+
+                snapshot["memoryFacts"] = factRows;
             }
         }
         catch (GrimoireMemoryException)
         {
         }
 
-        return JsonSerializer.Serialize(snapshot, AgentLoopbackClient.JsonOptions);
+        return snapshot.ToJsonString(AgentLoopbackClient.JsonOptions);
     }
 
     private static IEnumerable<JsonElement> EnumerateJson(JsonElement payload)
