@@ -111,6 +111,30 @@ public static class SettingsApi
                 "Must be greater than 0.");
         }
 
+        if (request.AgentBaseUrl is not null && !IsValidHttpUrl(request.AgentBaseUrl))
+        {
+            return InvalidSetting(nameof(request.AgentBaseUrl), "Must be a valid http(s) URL.");
+        }
+
+        if (request.AgentModel is not null)
+        {
+            var trimmedAgentModel = request.AgentModel.Trim();
+            if (trimmedAgentModel.Length == 0 || trimmedAgentModel.Length > 100)
+            {
+                return InvalidSetting(nameof(request.AgentModel), "Must be between 1 and 100 characters.");
+            }
+        }
+
+        if (request.AgentPerTurnMaxTokens is < 1)
+        {
+            return InvalidSetting(nameof(request.AgentPerTurnMaxTokens), "Must be greater than 0.");
+        }
+
+        if (request.AgentDailyBudget is < 0)
+        {
+            return InvalidSetting(nameof(request.AgentDailyBudget), "Must be 0 or greater.");
+        }
+
         var reindexRecommended = await ChangesEmbeddingInputsAsync(settings, request, ct);
 
         if (request.EmbeddingProvider is not null)
@@ -186,6 +210,35 @@ public static class SettingsApi
                 request.NotificationNudgeIntervalMinutes.Value.ToString(CultureInfo.InvariantCulture), ct);
         }
 
+        if (request.AgentBaseUrl is not null)
+        {
+            await settings.SetAsync(SettingKeys.AgentBaseUrl, request.AgentBaseUrl.Trim(), ct);
+        }
+
+        if (request.AgentModel is not null)
+        {
+            await settings.SetAsync(SettingKeys.AgentModel, request.AgentModel.Trim(), ct);
+        }
+
+        if (!string.IsNullOrEmpty(request.AgentApiKey))
+        {
+            await settings.SetAsync(SettingKeys.AgentApiKey, request.AgentApiKey, ct);
+        }
+
+        if (request.AgentPerTurnMaxTokens is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.AgentPerTurnMaxTokens,
+                request.AgentPerTurnMaxTokens.Value.ToString(CultureInfo.InvariantCulture), ct);
+        }
+
+        if (request.AgentDailyBudget is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.AgentDailyBudget,
+                request.AgentDailyBudget.Value.ToString(CultureInfo.InvariantCulture), ct);
+        }
+
         var updated = await ReadSettingsAsync(settings, ct);
         return Results.Ok(new UpdateSettingsResponse(
             updated.EmbeddingProvider,
@@ -200,6 +253,11 @@ public static class SettingsApi
             updated.PlanningMaterializationSync,
             updated.NotificationNudgeMode,
             updated.NotificationNudgeIntervalMinutes,
+            updated.AgentBaseUrl,
+            updated.AgentModel,
+            updated.AgentApiKeyConfigured,
+            updated.AgentPerTurnMaxTokens,
+            updated.AgentDailyBudget,
             reindexRecommended));
     }
 
@@ -283,11 +341,29 @@ public static class SettingsApi
             int.TryParse(notificationNudgeIntervalRaw, out var nudgeInterval) && nudgeInterval > 0
                 ? nudgeInterval
                 : SettingDefaults.NotificationNudgeIntervalMinutes;
+        var agentBaseUrl = await settings.GetOrDefaultAsync(SettingKeys.AgentBaseUrl, SettingDefaults.AgentBaseUrl, ct);
+        var agentModel = await settings.GetOrDefaultAsync(SettingKeys.AgentModel, SettingDefaults.AgentModel, ct);
+        var agentApiKeyConfigured = await settings.HasAsync(SettingKeys.AgentApiKey, ct);
+        var agentPerTurnMaxTokensRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentPerTurnMaxTokens,
+            SettingDefaults.AgentPerTurnMaxTokens.ToString(CultureInfo.InvariantCulture), ct);
+        var agentPerTurnMaxTokens =
+            int.TryParse(agentPerTurnMaxTokensRaw, out var perTurnMaxTokens) && perTurnMaxTokens > 0
+                ? perTurnMaxTokens
+                : SettingDefaults.AgentPerTurnMaxTokens;
+        var agentDailyBudgetRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentDailyBudget,
+            SettingDefaults.AgentDailyBudget.ToString(CultureInfo.InvariantCulture), ct);
+        var agentDailyBudget =
+            int.TryParse(agentDailyBudgetRaw, out var dailyBudget) && dailyBudget >= 0
+                ? dailyBudget
+                : SettingDefaults.AgentDailyBudget;
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
             planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
-            planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes);
+            planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
+            agentBaseUrl, agentModel, agentApiKeyConfigured, agentPerTurnMaxTokens, agentDailyBudget);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

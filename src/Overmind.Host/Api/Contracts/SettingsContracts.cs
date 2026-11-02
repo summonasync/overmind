@@ -12,7 +12,12 @@ public sealed record SettingsResponse(
     string PlanningAgentNamingRulesDefault,
     string PlanningMaterializationSync,
     string NotificationNudgeMode,
-    int NotificationNudgeIntervalMinutes);
+    int NotificationNudgeIntervalMinutes,
+    string AgentBaseUrl,
+    string AgentModel,
+    bool AgentApiKeyConfigured,
+    int AgentPerTurnMaxTokens,
+    int AgentDailyBudget);
 
 public sealed record UpdateSettingsResponse(
     string EmbeddingProvider,
@@ -27,6 +32,11 @@ public sealed record UpdateSettingsResponse(
     string PlanningMaterializationSync,
     string NotificationNudgeMode,
     int NotificationNudgeIntervalMinutes,
+    string AgentBaseUrl,
+    string AgentModel,
+    bool AgentApiKeyConfigured,
+    int AgentPerTurnMaxTokens,
+    int AgentDailyBudget,
     bool ReindexRecommended);
 
 public sealed record UpdateSettingsRequest(
@@ -41,7 +51,12 @@ public sealed record UpdateSettingsRequest(
     string? PlanningAgentNamingRulesDefault,
     string? PlanningMaterializationSync,
     string? NotificationNudgeMode,
-    int? NotificationNudgeIntervalMinutes);
+    int? NotificationNudgeIntervalMinutes,
+    string? AgentBaseUrl,
+    string? AgentModel,
+    string? AgentApiKey,
+    int? AgentPerTurnMaxTokens,
+    int? AgentDailyBudget);
 
 public sealed record TestSettingsRequest(
     string? Provider,

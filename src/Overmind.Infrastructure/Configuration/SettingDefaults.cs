@@ -21,6 +21,11 @@ public static class SettingDefaults
     public const string GrimoireWired = "false";
     public const string GrimoireInstallChannel = "";
 
+    public const string AgentBaseUrl = "https://open.bigmodel.cn/api/paas/v4";
+    public const string AgentModel = "glm-4.6";
+    public const int AgentPerTurnMaxTokens = 8192;
+    public const int AgentDailyBudget = 0;
+
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];
     public static readonly string[] PlanningMaterializationDefaults = ["off", "on", "archive"];
     public static readonly string[] PlanningMaterializationSyncModes = ["on", "off"];

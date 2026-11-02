@@ -8,6 +8,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Grimoire;
 using Overmind.Infrastructure.Kits;
+using Overmind.Infrastructure.Llm;
 using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Notifications;
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<FtsSearchService>();
 
         services.AddScoped<EmbeddingProviderFactory>();
+        services.AddScoped<ILlmChatClientFactory, LlmChatClientFactory>();
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());

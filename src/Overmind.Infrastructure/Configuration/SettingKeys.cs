@@ -20,4 +20,10 @@ public static class SettingKeys
     public const string GrimoireBookName = "grimoire.bookName";
     public const string GrimoireWired = "grimoire.wired";
     public const string GrimoireInstallChannel = "grimoire.installChannel";
+
+    public const string AgentBaseUrl = "agent.baseUrl";
+    public const string AgentApiKey = "agent.apiKey";
+    public const string AgentModel = "agent.model";
+    public const string AgentPerTurnMaxTokens = "agent.perTurnMaxTokens";
+    public const string AgentDailyBudget = "agent.dailyBudget";
 }

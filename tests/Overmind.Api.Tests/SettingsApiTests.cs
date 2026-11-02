@@ -453,4 +453,117 @@ public sealed class SettingsApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Get_IncludesAgentDefaults_AndNeverExposesApiKey()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        var document = JsonDocument.Parse(json);
+
+        document.RootElement.GetProperty("agentBaseUrl").GetString()
+            .ShouldBe("https://open.bigmodel.cn/api/paas/v4");
+        document.RootElement.GetProperty("agentModel").GetString().ShouldBe("glm-4.6");
+        document.RootElement.GetProperty("agentApiKeyConfigured").GetBoolean().ShouldBeFalse();
+        document.RootElement.GetProperty("agentPerTurnMaxTokens").GetInt32().ShouldBe(8192);
+        document.RootElement.GetProperty("agentDailyBudget").GetInt32().ShouldBe(0);
+        document.RootElement.EnumerateObject()
+            .Any(p => p.Name.Equals("agentApiKey", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Put_AgentSettings_Persist_AndKeyStaysWriteOnly()
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new
+        {
+            AgentBaseUrl = "http://127.0.0.1:19101/v4",
+            AgentModel = "  glm-4.6-air  ",
+            AgentApiKey = "agent-secret-42",
+            AgentPerTurnMaxTokens = 4096,
+            AgentDailyBudget = 2000000,
+        });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putJson = await put.Content.ReadAsStringAsync();
+        putJson.ShouldNotContain("agent-secret-42");
+        var putDocument = JsonDocument.Parse(putJson);
+        putDocument.RootElement.GetProperty("agentBaseUrl").GetString().ShouldBe("http://127.0.0.1:19101/v4");
+        putDocument.RootElement.GetProperty("agentModel").GetString().ShouldBe("glm-4.6-air");
+        putDocument.RootElement.GetProperty("agentApiKeyConfigured").GetBoolean().ShouldBeTrue();
+        putDocument.RootElement.GetProperty("agentPerTurnMaxTokens").GetInt32().ShouldBe(4096);
+        putDocument.RootElement.GetProperty("agentDailyBudget").GetInt32().ShouldBe(2000000);
+
+        using var get = await _client.GetAsync("/api/settings");
+        var json = await get.Content.ReadAsStringAsync();
+        json.ShouldNotContain("agent-secret-42");
+
+        var document = JsonDocument.Parse(json);
+        document.RootElement.GetProperty("agentBaseUrl").GetString().ShouldBe("http://127.0.0.1:19101/v4");
+        document.RootElement.GetProperty("agentModel").GetString().ShouldBe("glm-4.6-air");
+        document.RootElement.GetProperty("agentApiKeyConfigured").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Put_AgentPartialUpdate_KeepsOtherAgentSettings()
+    {
+        await _client.PutAsJsonAsync("/api/settings", new { AgentModel = "glm-4.6-air", AgentPerTurnMaxTokens = 2048 });
+
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentBaseUrl = "http://127.0.0.1:19102/v4" });
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentBaseUrl").GetString().ShouldBe("http://127.0.0.1:19102/v4");
+        document.RootElement.GetProperty("agentModel").GetString().ShouldBe("glm-4.6-air");
+        document.RootElement.GetProperty("agentPerTurnMaxTokens").GetInt32().ShouldBe(2048);
+    }
+
+    [Theory]
+    [InlineData("not a url")]
+    [InlineData("ftp://127.0.0.1:19101")]
+    public async Task Put_RejectsInvalidAgentBaseUrl(string baseUrl)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentBaseUrl = baseUrl });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Put_RejectsEmptyAgentModel(string model)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentModel = model });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-100)]
+    public async Task Put_RejectsNonPositiveAgentPerTurnMaxTokens(int maxTokens)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentPerTurnMaxTokens = maxTokens });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_RejectsNegativeAgentDailyBudget()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentDailyBudget = -1 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_ZeroAgentDailyBudget_IsAcceptedAsDisabled()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentDailyBudget = 0 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentDailyBudget").GetInt32().ShouldBe(0);
+    }
 }
