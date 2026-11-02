@@ -56,6 +56,12 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     String(settings.notificationNudgeIntervalMinutes),
   );
   const [intervalError, setIntervalError] = useState<Error | null>(null);
+  const [agentBaseUrl, setAgentBaseUrl] = useState(settings.agentBaseUrl);
+  const [agentModel, setAgentModel] = useState(settings.agentModel);
+  const [agentApiKey, setAgentApiKey] = useState("");
+  const [agentPerTurnMaxTokens, setAgentPerTurnMaxTokens] = useState(String(settings.agentPerTurnMaxTokens));
+  const [agentDailyBudget, setAgentDailyBudget] = useState(String(settings.agentDailyBudget));
+  const [agentError, setAgentError] = useState<Error | null>(null);
   const [syncedSettings, setSyncedSettings] = useState(settings);
 
   if (syncedSettings !== settings) {
@@ -72,6 +78,12 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     setNotificationNudgeMode(settings.notificationNudgeMode);
     setNotificationNudgeIntervalMinutes(String(settings.notificationNudgeIntervalMinutes));
     setIntervalError(null);
+    setAgentBaseUrl(settings.agentBaseUrl);
+    setAgentModel(settings.agentModel);
+    setAgentApiKey("");
+    setAgentPerTurnMaxTokens(String(settings.agentPerTurnMaxTokens));
+    setAgentDailyBudget(String(settings.agentDailyBudget));
+    setAgentError(null);
   }
 
   const handleSubmit = (event: FormEvent) => {
@@ -81,6 +93,17 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       setIntervalError(new Error("Nag interval must be a whole number of minutes greater than zero."));
       return;
     }
+    const perTurnMaxTokens = Number(agentPerTurnMaxTokens);
+    if (!Number.isSafeInteger(perTurnMaxTokens) || perTurnMaxTokens <= 0) {
+      setAgentError(new Error("Per-turn max tokens must be a whole number greater than zero."));
+      return;
+    }
+    const dailyBudget = Number(agentDailyBudget);
+    if (!Number.isSafeInteger(dailyBudget) || dailyBudget < 0) {
+      setAgentError(new Error("Daily budget must be a whole number of zero or greater."));
+      return;
+    }
+    setAgentError(null);
     onSubmit({
       embeddingProvider,
       ollamaBaseUrl: ollamaBaseUrl.trim(),
@@ -93,6 +116,11 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       planningAgentNamingRulesDefault: planningAgentNamingRulesDefault.trim(),
       notificationNudgeMode,
       notificationNudgeIntervalMinutes: minutes,
+      agentBaseUrl: agentBaseUrl.trim(),
+      agentModel: agentModel.trim(),
+      agentApiKey: agentApiKey.trim(),
+      agentPerTurnMaxTokens: perTurnMaxTokens,
+      agentDailyBudget: dailyBudget,
     });
   };
 
@@ -288,7 +316,69 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
         ) : null}
       </div>
 
-      <ErrorText error={intervalError ?? error} />
+      <div className="space-y-3 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground">Agent</h3>
+        <p className="text-xs text-muted">
+          OpenAI-compatible endpoint for the embedded management agent that chats on the Agent chat
+          page. The API key is stored server-side and never rendered back.
+        </p>
+        <Field label="Base URL" htmlFor="agent-base-url">
+          <Input
+            id="agent-base-url"
+            value={agentBaseUrl}
+            onChange={(event) => setAgentBaseUrl(event.target.value)}
+            placeholder="https://open.bigmodel.cn/api/paas/v4"
+          />
+        </Field>
+        <Field label="Model" htmlFor="agent-model">
+          <Input
+            id="agent-model"
+            value={agentModel}
+            onChange={(event) => setAgentModel(event.target.value)}
+            placeholder="glm-4.6"
+          />
+        </Field>
+        <Field label="API key" htmlFor="agent-api-key">
+          <Input
+            id="agent-api-key"
+            type="password"
+            value={agentApiKey}
+            onChange={(event) => setAgentApiKey(event.target.value)}
+            placeholder={settings.agentApiKeyConfigured ? "Configured — enter to replace" : "Enter API key"}
+            autoComplete="off"
+          />
+        </Field>
+        {settings.agentApiKeyConfigured ? (
+          <Badge tone="success">API key configured</Badge>
+        ) : (
+          <Badge tone="warning">No API key configured</Badge>
+        )}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Per-turn max tokens" htmlFor="agent-per-turn-max-tokens">
+            <Input
+              id="agent-per-turn-max-tokens"
+              type="number"
+              min={1}
+              step={1}
+              value={agentPerTurnMaxTokens}
+              onChange={(event) => setAgentPerTurnMaxTokens(event.target.value)}
+            />
+          </Field>
+          <Field label="Daily budget (tokens)" htmlFor="agent-daily-budget">
+            <Input
+              id="agent-daily-budget"
+              type="number"
+              min={0}
+              step={1}
+              value={agentDailyBudget}
+              onChange={(event) => setAgentDailyBudget(event.target.value)}
+            />
+          </Field>
+        </div>
+        <p className="text-xs text-muted">A daily budget of 0 keeps the agent unrestricted.</p>
+      </div>
+
+      <ErrorText error={intervalError ?? agentError ?? error} />
       <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : "Save settings"}
       </Button>

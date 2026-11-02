@@ -68,6 +68,23 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   return text.length === 0 ? (undefined as T) : (JSON.parse(text) as T);
 }
 
+export async function apiStream(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+  const response = await fetch(`${resolveBaseUrl()}/api${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "text/event-stream",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw await readError(response);
+  }
+  return response;
+}
+
 export function apiGet<T>(path: string): Promise<T> {
   return request<T>(path, { method: "GET" });
 }

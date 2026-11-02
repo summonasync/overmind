@@ -25,6 +25,11 @@ export function updateSettings(values: SettingsFormValues): Promise<UpdateSettin
     planningAgentNamingRulesDefault: values.planningAgentNamingRulesDefault,
     notificationNudgeMode: values.notificationNudgeMode,
     notificationNudgeIntervalMinutes: values.notificationNudgeIntervalMinutes,
+    agentBaseUrl: values.agentBaseUrl || null,
+    agentModel: values.agentModel || null,
+    agentApiKey: values.agentApiKey || null,
+    agentPerTurnMaxTokens: values.agentPerTurnMaxTokens,
+    agentDailyBudget: values.agentDailyBudget,
   });
 }
 

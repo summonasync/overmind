@@ -1,0 +1,115 @@
+import { apiDelete, apiGet, apiPost, apiStream } from "@/shared/api/client";
+import type {
+  AgentConversation,
+  AgentConversationsPayload,
+  AgentHistoryPayload,
+  AgentMessageRole,
+} from "@/features/agent-chat/types";
+import { readSseEvents } from "@/features/agent-chat/lib/sse";
+import { parseAgentStreamFrame } from "@/features/agent-chat/lib/stream-frame";
+
+interface ConversationResponse {
+  id: string;
+  projectId: string | null;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface MessageResponse {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface AgentHistoryQuery {
+  limit?: number;
+  before?: string;
+}
+
+export interface AgentStreamHandlers {
+  onDelta: (text: string) => void;
+  onCompleted: (messageId: string | null) => void;
+  onFailed: (error: string) => void;
+  signal?: AbortSignal;
+}
+
+function toConversation(response: ConversationResponse): AgentConversation {
+  return {
+    id: response.id,
+    projectId: response.projectId,
+    title: response.title,
+    createdAt: response.createdAt,
+    updatedAt: response.updatedAt,
+  };
+}
+
+function toMessage(response: MessageResponse) {
+  const role: AgentMessageRole = response.role === "assistant" ? "assistant" : "user";
+  return { id: response.id, role, content: response.content, createdAt: response.createdAt };
+}
+
+export function listAgentConversations(projectId: string | null): Promise<AgentConversationsPayload> {
+  const suffix = projectId === null ? "" : `?projectId=${encodeURIComponent(projectId)}`;
+  return apiGet<AgentConversationsPayload>(`/agent/conversations${suffix}`);
+}
+
+export function createAgentConversation(
+  projectId: string | null,
+  title: string | null,
+): Promise<AgentConversation> {
+  return apiPost<ConversationResponse>("/agent/conversations", { projectId, title }).then(toConversation);
+}
+
+export function deleteAgentConversation(conversationId: string): Promise<void> {
+  return apiDelete(`/agent/conversations/${encodeURIComponent(conversationId)}`);
+}
+
+export async function listAgentHistory(
+  conversationId: string,
+  query: AgentHistoryQuery = {},
+): Promise<AgentHistoryPayload> {
+  const search = new URLSearchParams();
+  if (query.limit !== undefined) {
+    search.set("limit", String(query.limit));
+  }
+  if (query.before !== undefined) {
+    search.set("before", query.before);
+  }
+  const queryString = search.toString();
+  const suffix = queryString.length > 0 ? `?${queryString}` : "";
+  const payload = await apiGet<{ items: MessageResponse[] }>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/messages${suffix}`,
+  );
+  return { items: payload.items.map(toMessage) };
+}
+
+export async function streamAgentReply(
+  conversationId: string,
+  text: string,
+  handlers: AgentStreamHandlers,
+): Promise<void> {
+  const response = await apiStream(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/messages/stream`,
+    { text },
+    handlers.signal,
+  );
+  if (!response.body) {
+    throw new Error("The chat stream returned no body.");
+  }
+
+  await readSseEvents(response.body, (event) => {
+    const frame = parseAgentStreamFrame(event.name, event.data);
+    if (frame === null) {
+      return;
+    }
+    if (frame.kind === "delta") {
+      handlers.onDelta(frame.text);
+    } else if (frame.kind === "completed") {
+      handlers.onCompleted(frame.messageId);
+    } else {
+      handlers.onFailed(frame.error);
+    }
+  });
+}

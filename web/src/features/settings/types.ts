@@ -16,6 +16,11 @@ export interface SettingsResponse {
   planningAgentNamingRulesDefault: string;
   notificationNudgeMode: NotificationNudgeMode;
   notificationNudgeIntervalMinutes: number;
+  agentBaseUrl: string;
+  agentModel: string;
+  agentApiKeyConfigured: boolean;
+  agentPerTurnMaxTokens: number;
+  agentDailyBudget: number;
 }
 
 export interface UpdateSettingsResponse extends SettingsResponse {
@@ -34,6 +39,11 @@ export interface SettingsFormValues {
   planningAgentNamingRulesDefault: string;
   notificationNudgeMode: NotificationNudgeMode;
   notificationNudgeIntervalMinutes: number;
+  agentBaseUrl: string;
+  agentModel: string;
+  agentApiKey: string;
+  agentPerTurnMaxTokens: number;
+  agentDailyBudget: number;
 }
 
 export interface TestSettingsValues {

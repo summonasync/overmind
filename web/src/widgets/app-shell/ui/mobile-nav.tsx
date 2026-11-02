@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { BellRing, BookOpen, Folder, Search, Settings, type LucideIcon } from "lucide-react";
+import { BellRing, BookOpen, Bot, Folder, Search, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
 import { AttentionBadge } from "@/widgets/app-shell/ui/attention-badge";
 
@@ -14,6 +14,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Projects", icon: Folder },
   { href: "/attention", label: "Attention", icon: BellRing },
+  { href: "/agent-chat", label: "Agent chat", icon: Bot },
   { href: "/search", label: "Search", icon: Search },
   { href: "/wiki", label: "Wiki", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
