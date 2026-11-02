@@ -438,6 +438,14 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.WaveTextTooLong,
             $"Wave message text is {length} characters; the cap is {cap}.");
 
+    public static PlanningException MissingConversation(Guid conversationId) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingConversation,
+            $"Conversation '{conversationId}' was not found.");
+
+    public static PlanningException ConversationTextTooLong(int length, int cap) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ConversationTextTooLong,
+            $"Conversation message text is {length} characters; the cap is {cap}.");
+
     public static PlanningException MissingDirective(Guid directiveId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingDirective,
             $"Directive '{directiveId}' was not found on this feature — it may live on another feature, " +

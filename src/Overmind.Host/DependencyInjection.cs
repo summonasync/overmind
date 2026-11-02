@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
+using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Grimoire;
@@ -34,6 +35,7 @@ public static class DependencyInjection
 
         services.AddScoped<EmbeddingProviderFactory>();
         services.AddScoped<ILlmChatClientFactory, LlmChatClientFactory>();
+        services.AddSingleton<IConversationStreamSource, PlaceholderConversationStreamSource>();
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());
@@ -110,6 +112,9 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<UpdateTagRequest>, UpdateTagRequestValidator>();
         services.AddSingleton<IValidator<CreateNotificationRequest>, CreateNotificationRequestValidator>();
         services.AddSingleton<IValidator<ReplyNotificationRequest>, ReplyNotificationRequestValidator>();
+        services.AddSingleton<IValidator<CreateConversationRequest>, CreateConversationRequestValidator>();
+        services.AddSingleton<IValidator<RenameConversationRequest>, RenameConversationRequestValidator>();
+        services.AddSingleton<IValidator<SendConversationMessageRequest>, SendConversationMessageRequestValidator>();
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
@@ -165,6 +170,8 @@ public static class DependencyInjection
         services.AddScoped<WaveChatService>();
         services.AddScoped<WaveParticipantService>();
         services.AddScoped<AgentWakeService>();
+        services.AddScoped<ConversationStore>();
+        services.AddScoped<ConversationMessageStore>();
         services.AddSingleton<WakeDropWriter>();
         services.AddSingleton<WakeDropFanout>();
         services.AddScoped<WaveChatRetentionSweeper>();

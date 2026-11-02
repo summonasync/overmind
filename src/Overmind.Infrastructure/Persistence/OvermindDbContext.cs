@@ -39,6 +39,8 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningOperationRecord> PlanningOperationRecords => Set<PlanningOperationRecord>();
     public DbSet<WaveMessage> WaveMessages => Set<WaveMessage>();
     public DbSet<WaveWatermark> WaveWatermarks => Set<WaveWatermark>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -415,6 +417,31 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             builder.Property(w => w.Alias).HasMaxLength(WaveWatermark.MaxIdentityLength).UseCollation("NOCASE");
+        });
+
+        modelBuilder.Entity<Conversation>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(c => c.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(c => c.Title).HasMaxLength(Conversation.MaxTitleLength);
+
+            builder.HasIndex(c => new { c.ProjectId, c.UpdatedAt });
+        });
+
+        modelBuilder.Entity<ConversationMessage>(builder =>
+        {
+            builder.HasOne<Conversation>()
+                .WithMany()
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(m => m.Role).HasMaxLength(ConversationMessage.MaxRoleLength);
+            builder.Property(m => m.Content).HasMaxLength(ConversationMessage.MaxTextLength);
+
+            builder.HasIndex(m => new { m.ConversationId, m.CreatedAt });
         });
     }
 }

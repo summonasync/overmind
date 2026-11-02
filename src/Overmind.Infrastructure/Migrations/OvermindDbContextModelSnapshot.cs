@@ -154,6 +154,61 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("ContextEntries");
                 });
 
+            modelBuilder.Entity("Overmind.Core.Conversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "UpdatedAt");
+
+                    b.ToTable("Conversations");
+                });
+
+            modelBuilder.Entity("Overmind.Core.ConversationMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(32000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.ToTable("ConversationMessages");
+                });
+
             modelBuilder.Entity("Overmind.Core.EntryAck", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1010,6 +1065,23 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasOne("Overmind.Core.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.Conversation", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Overmind.Core.ConversationMessage", b =>
+                {
+                    b.HasOne("Overmind.Core.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
