@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 
@@ -44,6 +45,32 @@ public static class AgentPlanningApi
     private static RouteHandlerBuilder LockToClaim(this RouteHandlerBuilder builder) =>
         builder.AddEndpointFilter(OperationReplayFilter.Instance)
             .AddEndpointFilter(ClaimLockFilter.Instance);
+
+    private static async Task<DelegatedApprovalGrant?> ResolveDelegationAsync(
+        Guid projectId,
+        HttpRequest http,
+        EmbeddedAgentSessionState sessionState,
+        DelegatedApprovalGate delegation,
+        CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var callerSession))
+        {
+            return null;
+        }
+
+        return await delegation.AuthorizeAsync(
+            projectId,
+            callerSession,
+            sessionState.SessionId,
+            ReadDelegatedBy(http),
+            ct);
+    }
+
+    private static Guid? ReadDelegatedBy(HttpRequest http) =>
+        http.Headers.TryGetValue(AgentLoopbackClient.DelegatedByHeader, out var raw) &&
+        Guid.TryParse(raw[^1], out var parsed)
+            ? parsed
+            : null;
 
     public static RouteGroupBuilder MapAgentPlanningApi(this IEndpointRouteBuilder routes)
     {
@@ -257,7 +284,10 @@ public static class AgentPlanningApi
         ValidatePlanningArtifactRequest? request,
         PlanningArtifactService artifactService,
         PlanningPolicy policy,
+        DelegatedApprovalGate delegation,
+        EmbeddedAgentSessionState sessionState,
         OvermindDbContext db,
+        HttpRequest http,
         CancellationToken ct)
     {
         var asMigrated = request?.AsMigrated == true;
@@ -299,12 +329,22 @@ public static class AgentPlanningApi
             : null;
         var documentGated = target.Kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan;
 
+        string? delegatedNote = null;
+        if (!asMigrated && documentGated &&
+            await ResolveDelegationAsync(target.ProjectId, http, sessionState, delegation, ct) is { } grant)
+        {
+            delegatedNote = DelegatedApprovalGate.ProvenanceLine(grant);
+        }
+
         PlanningArtifact artifact;
         try
         {
             artifact = await artifactService.ValidateAsync(
-                id, migrationNote, PlanningLogSource.Agent,
-                requireHumanProof: !asMigrated && documentGated, ct: ct);
+                id,
+                migrationNote ?? delegatedNote,
+                PlanningLogSource.Agent,
+                requireHumanProof: delegatedNote is null && !asMigrated && documentGated,
+                ct: ct);
         }
         catch (PlanningException ex)
         {
@@ -409,7 +449,10 @@ public static class AgentPlanningApi
         SetPlanningFeatureStatusRequest request,
         IValidator<SetPlanningFeatureStatusRequest> validator,
         PlanningFeatureService service,
+        DelegatedApprovalGate delegation,
+        EmbeddedAgentSessionState sessionState,
         OvermindDbContext db,
+        HttpRequest http,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -423,10 +466,18 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(PlanningException.FeatureStatusNotAllowedForAgent(request.Status));
         }
 
+        string? delegatedProvenance = null;
+        if (request.Status == PlanningFeatureStatus.Done &&
+            await ResolveDelegationAsync(projectId, http, sessionState, delegation, ct) is { } grant)
+        {
+            delegatedProvenance = DelegatedApprovalGate.ProvenanceLine(grant);
+        }
+
         try
         {
             await service.SetStatusAsync(
-                projectId, slug, request.Status, request.LogNote, requireHumanTap: true, ct);
+                projectId, slug, request.Status, request.LogNote,
+                requireHumanTap: delegatedProvenance is null, ct, delegatedProvenance);
         }
         catch (PlanningException ex)
         {

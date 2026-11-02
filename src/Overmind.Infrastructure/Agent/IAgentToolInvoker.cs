@@ -5,7 +5,7 @@ namespace Overmind.Infrastructure.Agent;
 
 public interface IAgentToolInvoker
 {
-    IReadOnlyList<AITool> CreateTools();
+    IReadOnlyList<AITool> CreateTools(bool includeHumanGated);
 
-    Task<JsonElement> InvokeAsync(string toolName, JsonElement arguments, CancellationToken ct);
+    Task<JsonElement> InvokeAsync(string toolName, JsonElement arguments, AgentToolInvocation invocation, CancellationToken ct);
 }

@@ -105,20 +105,27 @@ public static class PlanningAgentTools
                 .Build(),
             ct));
 
-    private static AgentToolSpec SetFeatureStatusSpec(AgentLoopbackClient api) => new(
-        "planning_set_feature_status",
-        "Moves a feature status: done closes the feature (needs a result artifact plus human approval — refused otherwise), inProgress rolls back from review. logNote is mandatory and carries the provenance.",
-        """
-        {"type":"object","properties":{"projectId":{"type":"string"},"slug":{"type":"string"},"status":{"type":"string"},"logNote":{"type":"string"}},"required":["projectId","slug","status","logNote"]}
-        """,
-        async (args, ct) => await api.PostAsync(
-            $"{ProjectPath(AgentToolArgs.RequiredProjectId(args))}/features/{Uri.EscapeDataString(AgentToolArgs.RequiredString(args, "slug"))}/status",
-            new
-            {
-                status = AgentToolArgs.RequiredString(args, "status"),
-                logNote = AgentToolArgs.RequiredString(args, "logNote")
-            },
-            ct));
+    private static AgentToolSpec SetFeatureStatusSpec(AgentLoopbackClient api)
+    {
+        string StatusPath(JsonElement args) =>
+            $"{ProjectPath(AgentToolArgs.RequiredProjectId(args))}/features/{Uri.EscapeDataString(AgentToolArgs.RequiredString(args, "slug"))}/status";
+        object Payload(JsonElement args) => new
+        {
+            status = AgentToolArgs.RequiredString(args, "status"),
+            logNote = AgentToolArgs.RequiredString(args, "logNote")
+        };
+
+        return new AgentToolSpec(
+            "planning_set_feature_status",
+            "Moves a feature status: done closes the feature (needs a result artifact plus a human tap or, when the project delegates approvals, an explicit owner instruction in the conversation), inProgress rolls back from review. logNote is mandatory and carries the provenance.",
+            """
+            {"type":"object","properties":{"projectId":{"type":"string"},"slug":{"type":"string"},"status":{"type":"string"},"logNote":{"type":"string"}},"required":["projectId","slug","status","logNote"]}
+            """,
+            async (args, ct) => await api.PostAsync(StatusPath(args), Payload(args), ct),
+            AgentToolCategory.Standard,
+            (args, instructionMessageId, ct) => api.PostAsync(
+                StatusPath(args), Payload(args), DelegatedHeaders(instructionMessageId), ct));
+    }
 
     private static AgentToolSpec SetFeaturePrioritySpec(AgentLoopbackClient api) => new(
         "planning_set_feature_priority",
@@ -447,19 +454,27 @@ public static class PlanningAgentTools
             new { targetPath = AgentToolArgs.RequiredString(args, "targetPath") },
             ct));
 
-    private static AgentToolSpec ValidateSpec(AgentLoopbackClient api) => new(
-        "planning_validate",
-        "Validates a spec, plan or result artifact. Reserved for delegated approvals: the embedded loop must not call this until delegated approvals are enabled — the server still requires human proof and returns 409 without it.",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"asMigrated":{"type":"boolean"},"logNote":{"type":"string"}},"required":["artifactId"]}
-        """,
-        async (args, ct) => await api.PostAsync(
-            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/validate",
-            new AgentToolPayload()
-                .Set("asMigrated", AgentToolArgs.OptionalBool(args, "asMigrated"))
-                .Set("logNote", AgentToolArgs.OptionalString(args, "logNote"))
-                .Build(),
-            ct),
-        AgentToolCategory.HumanGated);
+    private static AgentToolSpec ValidateSpec(AgentLoopbackClient api)
+    {
+        string ValidatePath(JsonElement args) =>
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/validate";
+        Dictionary<string, object?> Payload(JsonElement args) => new AgentToolPayload()
+            .Set("asMigrated", AgentToolArgs.OptionalBool(args, "asMigrated"))
+            .Set("logNote", AgentToolArgs.OptionalString(args, "logNote"))
+            .Build();
 
+        return new AgentToolSpec(
+            "planning_validate",
+            "Validates a spec, plan or result artifact. Without delegated approvals the server requires a live approval-notification reply and 409s without one; when the project delegates approvals, the owner's chat instruction in the current turn is accepted as the human proof.",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"asMigrated":{"type":"boolean"},"logNote":{"type":"string"}},"required":["artifactId"]}
+            """,
+            async (args, ct) => await api.PostAsync(ValidatePath(args), Payload(args), ct),
+            AgentToolCategory.HumanGated,
+            (args, instructionMessageId, ct) => api.PostAsync(
+                ValidatePath(args), Payload(args), DelegatedHeaders(instructionMessageId), ct));
+    }
+
+    private static IReadOnlyDictionary<string, string> DelegatedHeaders(Guid instructionMessageId) =>
+        new Dictionary<string, string> { [AgentLoopbackClient.DelegatedByHeader] = instructionMessageId.ToString() };
 }

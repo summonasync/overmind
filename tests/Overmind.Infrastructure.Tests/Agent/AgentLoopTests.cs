@@ -20,11 +20,14 @@ public sealed class AgentLoopTests : IDisposable
     private readonly EmbeddedAgentSessionState _sessionState = new();
     private readonly Conversation _conversation;
     private readonly ConversationMessageStore _messages;
+    private bool _delegationEnabled;
 
     public AgentLoopTests()
     {
-        _tools.CreateTools().Returns([]);
-        _tools.InvokeAsync(Arg.Any<string>(), Arg.Any<JsonElement>(), Arg.Any<CancellationToken>())
+        _tools.CreateTools(Arg.Any<bool>()).Returns([]);
+        _tools
+            .InvokeAsync(
+                Arg.Any<string>(), Arg.Any<JsonElement>(), Arg.Any<AgentToolInvocation>(), Arg.Any<CancellationToken>())
             .Returns(call => JsonSerializer.SerializeToElement(new { ok = true }));
         _conversation = Conversation.Create(null, "loop tests");
         using var context = _temp.CreateContext();
@@ -63,6 +66,7 @@ public sealed class AgentLoopTests : IDisposable
         await _tools.Received(1).InvokeAsync(
             "planning_task_queue",
             Arg.Is<JsonElement>(args => args.GetProperty("projectId").GetString() == "019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"),
+            Arg.Any<AgentToolInvocation>(),
             Arg.Any<CancellationToken>());
 
         var secondRound = client.Requests[1];
@@ -149,6 +153,56 @@ public sealed class AgentLoopTests : IDisposable
         frames[0].Text.ShouldNotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public async Task DelegationArmed_ResolvesOwnerInstructionAndArmsToolCalls()
+    {
+        var instruction = await _messages.AppendAsync(
+            _conversation.Id, ConversationMessage.UserRole, "approve spec of 007", CancellationToken.None);
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Validating. "),
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_validate", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(50)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("Validated."),
+            FakeAgentChatClient.UsageUpdate(10)
+        ]);
+        _delegationEnabled = true;
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        await CollectAsync(loop);
+
+        await _tools.Received(1).InvokeAsync(
+            "planning_validate",
+            Arg.Any<JsonElement>(),
+            Arg.Is<AgentToolInvocation>(invocation =>
+                invocation.DelegationArmed && invocation.InstructionMessageId == instruction.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GuardNotificationFailure_StillYieldsFailedFrameAndPersistsUsage()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("digging"),
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_list_features", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(9_000)
+        ]);
+        _notifier
+            .NotifyGuardAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("notification channel down")));
+        var loop = CreateLoop(client, perTurnMaxTokens: 8_192, dailyBudget: 10_000);
+
+        var frames = await CollectAsync(loop);
+
+        var failed = frames.Last();
+        failed.Kind.ShouldBe(ConversationStreamEventKind.Failed);
+        failed.Code.ShouldBe(AgentLoop.PerTurnCapCode);
+        _budget.Used.ShouldBe(9_000);
+    }
+
     private AgentLoop CreateLoop(IChatClient? client = null, int perTurnMaxTokens = 8_192, int dailyBudget = 0)
     {
         var settingsProvider = Substitute.For<IAgentRunSettingsProvider>();
@@ -172,6 +226,11 @@ public sealed class AgentLoopTests : IDisposable
             _sessionState,
             settingsProvider);
 
+        var delegation = Substitute.For<IAgentDelegationGate>();
+        delegation
+            .IsEnabledAsync(Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => (Guid?)callInfo[0] == _conversation.ProjectId && _delegationEnabled);
+
         return new AgentLoop(
             StubFactory(client),
             prompts,
@@ -181,6 +240,7 @@ public sealed class AgentLoopTests : IDisposable
             _notifier,
             _messages,
             registrar,
+            delegation,
             NullLogger<AgentLoop>.Instance);
     }
 

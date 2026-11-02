@@ -231,7 +231,7 @@ public sealed partial class PlanningFeatureService
 
     public async Task<PlanningFeature> SetStatusAsync(
         Guid projectId, string slug, PlanningFeatureStatus status, string logNote,
-        bool requireHumanTap = false, CancellationToken ct = default)
+        bool requireHumanTap = false, CancellationToken ct = default, string? delegatedProvenance = null)
     {
         if (string.IsNullOrWhiteSpace(logNote))
         {
@@ -273,6 +273,10 @@ public sealed partial class PlanningFeatureService
             if (humanTap is { } tappedAt)
             {
                 feature.AppendLog(FeatureDoneGate.ProvenanceLine(feature, tappedAt), PlanningLogSource.Agent);
+            }
+            else if (delegatedProvenance is { } provenance)
+            {
+                feature.AppendLog(provenance, PlanningLogSource.Agent);
             }
 
             ReleaseClaimOnDone(feature, PlanningLogSource.Agent);

@@ -767,6 +767,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("DelegateApprovals")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("TEXT");

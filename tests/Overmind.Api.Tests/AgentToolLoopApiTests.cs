@@ -75,6 +75,7 @@ public sealed class AgentToolLoopApiTests : IDisposable
                 title = "Agent tool demo",
                 body = "<goal>\nDispatched through the embedded loop.\n</goal>"
             }),
+            default,
             CancellationToken.None);
 
         created.GetProperty("slug").GetString().ShouldNotBeNull();
@@ -82,6 +83,7 @@ public sealed class AgentToolLoopApiTests : IDisposable
         var materialized = await registry.InvokeAsync(
             "planning_materialize",
             JsonSerializer.SerializeToElement(new { projectId = project.Id.ToString(), force = false }),
+            default,
             CancellationToken.None);
 
         materialized.TryGetProperty("error", out _).ShouldBeFalse(

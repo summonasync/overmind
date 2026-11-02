@@ -55,4 +55,15 @@ public sealed class ConversationMessageStore
         page.Reverse();
         return page;
     }
+
+    public async Task<ConversationMessage?> LatestAsync(
+        Guid conversationId, string role, CancellationToken ct = default)
+    {
+        return await _db.ConversationMessages
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.Role == role)
+            .OrderByDescending(m => m.CreatedAt)
+            .ThenByDescending(m => m.Id)
+            .FirstOrDefaultAsync(ct);
+    }
 }

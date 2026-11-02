@@ -17,6 +17,7 @@ public sealed class AgentLoop(
     IAgentGuardNotifier notifier,
     ConversationMessageStore auditTrail,
     EmbeddedAgentSessionRegistrar sessionRegistrar,
+    IAgentDelegationGate delegationGate,
     ILogger<AgentLoop> logger)
 {
     public const int MaxIterations = 12;
@@ -42,7 +43,12 @@ public sealed class AgentLoop(
         }
 
         var messages = new List<ChatMessage>(await prompts.ComposeAsync(conversation, history, userText, ct));
-        var options = BuildOptions(tools);
+        var delegationArmed = await delegationGate.IsEnabledAsync(conversation.ProjectId, ct);
+        Guid? instructionMessageId = delegationArmed
+            ? (await auditTrail.LatestAsync(conversation.Id, ConversationMessage.UserRole, ct))?.Id
+            : null;
+        var options = BuildOptions(tools, delegationArmed);
+        var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId);
         var usage = new AgentTurnUsage();
         var day = DateOnly.FromDateTime(DateTime.UtcNow);
         var dailyUsed = await budget.GetUsedAsync(day, ct);
@@ -58,7 +64,7 @@ public sealed class AgentLoop(
             if (round > MaxIterations)
             {
                 var detail = $"The agent stopped after {MaxIterations} tool rounds (max iterations guard).";
-                await notifier.NotifyGuardAsync("Agent turn stopped by a guard", detail, conversation.ProjectId, ct);
+                await NotifyGuardAsync("Agent turn stopped by a guard", detail, conversation.ProjectId, ct);
                 yield return ConversationStreamEvent.Failed(detail, MaxIterationsCode);
                 yield break;
             }
@@ -69,16 +75,17 @@ public sealed class AgentLoop(
                 yield return frame;
             }
 
+            dailyUsed = await budget.AddUsageAsync(day, usage.Total - roundResult.UsageBeforeRound, ct);
+
             if (settings.PerTurnMaxTokens > 0 && usage.Total > settings.PerTurnMaxTokens)
             {
                 var detail =
                     $"Per-turn token cap exceeded: {usage.Total} tokens used, the cap is {settings.PerTurnMaxTokens}.";
-                await notifier.NotifyGuardAsync("Agent turn stopped by a guard", detail, conversation.ProjectId, ct);
+                await NotifyGuardAsync("Agent turn stopped by a guard", detail, conversation.ProjectId, ct);
                 yield return ConversationStreamEvent.Failed(detail, PerTurnCapCode);
                 yield break;
             }
 
-            dailyUsed = await budget.AddUsageAsync(day, usage.Total - roundResult.UsageBeforeRound, ct);
             if (settings.DailyBudget > 0 && dailyUsed >= settings.DailyBudget)
             {
                 yield return await DailyBudgetExhaustedAsync(conversation, settings, dailyUsed, ct);
@@ -97,18 +104,34 @@ public sealed class AgentLoop(
             }
 
             messages.Add(BuildAssistantMessage(roundResult));
-            foreach (var toolMessage in await RunCallsAsync(conversation, roundResult.Calls, ct))
+            foreach (var toolMessage in await RunCallsAsync(conversation, roundResult.Calls, invocation, ct))
             {
                 messages.Add(toolMessage);
             }
         }
     }
 
-    private static ChatOptions BuildOptions(IAgentToolInvoker tools) => new()
+    private static ChatOptions BuildOptions(IAgentToolInvoker tools, bool includeHumanGated) => new()
     {
         ToolMode = ChatToolMode.Auto,
-        Tools = [.. tools.CreateTools()]
+        Tools = [.. tools.CreateTools(includeHumanGated)]
     };
+
+    private async Task NotifyGuardAsync(string title, string detail, Guid? projectId, CancellationToken ct)
+    {
+        try
+        {
+            await notifier.NotifyGuardAsync(title, detail, projectId, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Guard notification was not delivered for project {ProjectId}", projectId);
+        }
+    }
 
     private async Task<ConversationStreamEvent> DailyBudgetExhaustedAsync(
         Conversation conversation,
@@ -117,7 +140,7 @@ public sealed class AgentLoop(
         CancellationToken ct)
     {
         var detail = $"Daily budget exhausted: {dailyUsed} of {settings.DailyBudget} tokens used today.";
-        await notifier.NotifyGuardAsync("Agent daily budget exhausted", detail, conversation.ProjectId, ct);
+        await NotifyGuardAsync("Agent daily budget exhausted", detail, conversation.ProjectId, ct);
         return ConversationStreamEvent.Failed(detail, DailyBudgetCode);
     }
 
@@ -156,6 +179,7 @@ public sealed class AgentLoop(
     private async Task<IReadOnlyList<ChatMessage>> RunCallsAsync(
         Conversation conversation,
         IReadOnlyList<FunctionCallContent> calls,
+        AgentToolInvocation invocation,
         CancellationToken ct)
     {
         var results = new List<ChatMessage>();
@@ -168,7 +192,7 @@ public sealed class AgentLoop(
             var label = JsonSerializer.Serialize(new { tool = call.Name }, AgentLoopbackClient.JsonOptions);
             await AppendAuditAsync(conversation.Id, label, ct);
 
-            var result = await tools.InvokeAsync(call.Name, arguments, ct);
+            var result = await tools.InvokeAsync(call.Name, arguments, invocation, ct);
             results.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(call.CallId, result)]));
         }
 
