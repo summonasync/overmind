@@ -61,6 +61,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
   const [agentApiKey, setAgentApiKey] = useState("");
   const [agentPerTurnMaxTokens, setAgentPerTurnMaxTokens] = useState(String(settings.agentPerTurnMaxTokens));
   const [agentDailyBudget, setAgentDailyBudget] = useState(String(settings.agentDailyBudget));
+  const [agentInstructions, setAgentInstructions] = useState(settings.agentInstructions);
   const [agentError, setAgentError] = useState<Error | null>(null);
   const [syncedSettings, setSyncedSettings] = useState(settings);
 
@@ -83,6 +84,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     setAgentApiKey("");
     setAgentPerTurnMaxTokens(String(settings.agentPerTurnMaxTokens));
     setAgentDailyBudget(String(settings.agentDailyBudget));
+    setAgentInstructions(settings.agentInstructions);
     setAgentError(null);
   }
 
@@ -121,6 +123,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       agentApiKey: agentApiKey.trim(),
       agentPerTurnMaxTokens: perTurnMaxTokens,
       agentDailyBudget: dailyBudget,
+      agentInstructions: agentInstructions.trim(),
     });
   };
 
@@ -376,6 +379,17 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
           </Field>
         </div>
         <p className="text-xs text-muted">A daily budget of 0 keeps the agent unrestricted.</p>
+        <Field label="Instructions" htmlFor="agent-instructions">
+          <Textarea
+            id="agent-instructions"
+            rows={5}
+            maxLength={4000}
+            value={agentInstructions}
+            onChange={(event) => setAgentInstructions(event.target.value)}
+            placeholder="Extra instructions appended to the agent's system prompt…"
+          />
+        </Field>
+        <p className="text-xs text-muted">{agentInstructions.length}/4000 · Applied on the agent&apos;s next turn.</p>
       </div>
 
       <ErrorText error={intervalError ?? agentError ?? error} />

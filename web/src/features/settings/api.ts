@@ -30,6 +30,7 @@ export function updateSettings(values: SettingsFormValues): Promise<UpdateSettin
     agentApiKey: values.agentApiKey || null,
     agentPerTurnMaxTokens: values.agentPerTurnMaxTokens,
     agentDailyBudget: values.agentDailyBudget,
+    agentInstructions: values.agentInstructions,
   });
 }
 

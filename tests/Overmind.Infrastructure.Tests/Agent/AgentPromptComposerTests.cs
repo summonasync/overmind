@@ -6,6 +6,7 @@ using Microsoft.Extensions.AI;
 using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Grimoire;
 using Shouldly;
 using Xunit;
@@ -168,6 +169,53 @@ public sealed class AgentPromptComposerTests
         snapshot["memoryFacts"]!.AsArray().ShouldHaveSingleItem();
     }
 
+    [Fact]
+    public async Task ComposeAsync_WithInstructions_AppendsDelimitedBlockAfterBootstrapSections()
+    {
+        const string instructions = "Be terse. Skip pleasantries.";
+        var composer = CreateComposer(FakeMemory(), instructions: instructions);
+
+        var messages = await composer.ComposeAsync(_conversation, [], "status?", CancellationToken.None);
+        var system = messages[0].Text;
+
+        var markerIndex = system.IndexOf("Bootstrap snapshot (may be partial):", StringComparison.Ordinal);
+        var headerIndex = system.IndexOf(AgentPromptComposer.InstructionsHeader, StringComparison.Ordinal);
+        markerIndex.ShouldBeGreaterThanOrEqualTo(0);
+        headerIndex.ShouldBeGreaterThan(markerIndex);
+        system.ShouldEndWith(instructions);
+
+        var snapshot = SnapshotOf(system);
+        snapshot.Select(node => node.Key)
+            .ShouldBe(["projects", "queue", "recentReplies", "memoryFacts"], ignoreOrder: false);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ComposeAsync_WithoutInstructions_PromptStaysByteIdenticalToBootstrapOnly(string instructions)
+    {
+        var composer = CreateComposer(FakeMemory(), instructions: instructions);
+
+        var messages = await composer.ComposeAsync(_conversation, [], "status?", CancellationToken.None);
+        var system = messages[0].Text;
+
+        system.ShouldNotContain(AgentPromptComposer.InstructionsHeader);
+        system.TrimEnd().ShouldEndWith("}");
+        system.ShouldEndWith(Environment.NewLine);
+    }
+
+    [Fact]
+    public async Task ComposeAsync_OverCapInstructions_TruncatesAtTheCap()
+    {
+        var composer = CreateComposer(FakeMemory(), instructions: new string('i', 4500));
+
+        var messages = await composer.ComposeAsync(_conversation, [], "status?", CancellationToken.None);
+        var system = messages[0].Text;
+
+        system.ShouldEndWith(new string('i', SettingDefaults.AgentInstructionsMaxLength));
+        system.ShouldNotContain(new string('i', SettingDefaults.AgentInstructionsMaxLength + 1));
+    }
+
     private static IGrimoireMemoryClient FakeMemory()
     {
         var memory = Substitute.For<IGrimoireMemoryClient>();
@@ -186,7 +234,14 @@ public sealed class AgentPromptComposerTests
         const string marker = "Bootstrap snapshot (may be partial):";
         var start = system.IndexOf(marker, StringComparison.Ordinal);
         start.ShouldBeGreaterThanOrEqualTo(0);
-        return JsonNode.Parse(system[(start + marker.Length)..].TrimEnd())!.AsObject();
+        var tail = system[(start + marker.Length)..];
+        var terminator = tail.IndexOf(AgentPromptComposer.InstructionsHeader, StringComparison.Ordinal);
+        if (terminator >= 0)
+        {
+            tail = tail[..terminator];
+        }
+
+        return JsonNode.Parse(tail.TrimEnd())!.AsObject();
     }
 
     private static RouteHandler Routes(
@@ -225,7 +280,8 @@ public sealed class AgentPromptComposerTests
     private static AgentPromptComposer CreateComposer(
         IGrimoireMemoryClient memory,
         RouteHandler? routes = null,
-        bool failingBoard = false)
+        bool failingBoard = false,
+        string instructions = "")
     {
         HttpMessageHandler handler = failingBoard
             ? new StatusHandler(HttpStatusCode.InternalServerError)
@@ -234,7 +290,7 @@ public sealed class AgentPromptComposerTests
         var settings = Substitute.For<IAgentRunSettingsProvider>();
         settings
             .GetAsync(Arg.Any<CancellationToken>())
-            .Returns(new AgentRunSettings("overmind-agent", 8192, 0));
+            .Returns(new AgentRunSettings("overmind-agent", 8192, 0, instructions));
         return new AgentPromptComposer(
             new AgentLoopbackClient(http),
             settings,

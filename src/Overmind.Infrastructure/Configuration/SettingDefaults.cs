@@ -26,6 +26,9 @@ public static class SettingDefaults
     public const string AgentAlias = "overmind-agent";
     public const int AgentPerTurnMaxTokens = 8192;
     public const int AgentDailyBudget = 0;
+    public const string AgentInstructions = "";
+    public const int AgentInstructionsMaxLength = 4000;
+
     public const string AgentGrimoireBaseUrl = "";
     public const string AgentGrimoireTome = "crew";
     public const int AgentGrimoireCompactionHours = 24;

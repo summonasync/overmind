@@ -21,6 +21,7 @@ export interface SettingsResponse {
   agentApiKeyConfigured: boolean;
   agentPerTurnMaxTokens: number;
   agentDailyBudget: number;
+  agentInstructions: string;
 }
 
 export interface UpdateSettingsResponse extends SettingsResponse {
@@ -44,6 +45,7 @@ export interface SettingsFormValues {
   agentApiKey: string;
   agentPerTurnMaxTokens: number;
   agentDailyBudget: number;
+  agentInstructions: string;
 }
 
 export interface TestSettingsValues {

@@ -28,6 +28,7 @@ public static class SettingKeys
     public const string AgentPerTurnMaxTokens = "agent.perTurnMaxTokens";
     public const string AgentDailyBudget = "agent.dailyBudget";
     public const string AgentDailyBudgetUsedPrefix = "agent.budget.used.";
+    public const string AgentInstructions = "agent.instructions";
     public const string AgentGrimoireBaseUrl = "agent.grimoire.baseUrl";
     public const string AgentGrimoireTome = "agent.grimoire.tome";
     public const string AgentGrimoireCompactionHours = "agent.grimoire.compactionHours";
