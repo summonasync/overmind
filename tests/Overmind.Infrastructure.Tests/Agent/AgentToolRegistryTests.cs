@@ -1,5 +1,7 @@
 using System.Text.Json;
+using NSubstitute;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Grimoire;
 using Shouldly;
 using Xunit;
 
@@ -128,7 +130,8 @@ public sealed class AgentToolRegistryTests
         var http = new HttpClient(handler ?? new RecordingHandler()) { BaseAddress = new Uri("http://127.0.0.1:1") };
         var state = new EmbeddedAgentSessionState();
         state.Set(Guid.NewGuid());
-        return new AgentToolRegistry(new AgentLoopbackClient(http), state);
+        return new AgentToolRegistry(
+            new AgentLoopbackClient(http), state, Substitute.For<IGrimoireMemoryClient>());
     }
 
     private static JsonElement EmptyArgs() => JsonSerializer.SerializeToElement(new { });

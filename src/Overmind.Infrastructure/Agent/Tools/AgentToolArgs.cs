@@ -64,6 +64,20 @@ public static class AgentToolArgs
                 : throw new ArgumentException($"Argument '{name}' must be an integer.");
     }
 
+    public static double? OptionalDouble(JsonElement args, string name)
+    {
+        if (!args.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var parsed)
+            ? parsed
+            : value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : throw new ArgumentException($"Argument '{name}' must be a number.");
+    }
+
     public static bool OptionalBool(JsonElement args, string name, bool fallback = false)
     {
         if (!args.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)

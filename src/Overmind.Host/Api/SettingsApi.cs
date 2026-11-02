@@ -135,6 +135,29 @@ public static class SettingsApi
             return InvalidSetting(nameof(request.AgentDailyBudget), "Must be 0 or greater.");
         }
 
+        if (request.AgentGrimoireBaseUrl is not null &&
+            request.AgentGrimoireBaseUrl.Trim().Length > 0 &&
+            !IsValidHttpUrl(request.AgentGrimoireBaseUrl))
+        {
+            return InvalidSetting(
+                nameof(request.AgentGrimoireBaseUrl),
+                "Must be empty (auto-detect via the grimoire integration) or a valid http(s) URL.");
+        }
+
+        if (request.AgentGrimoireTome is not null)
+        {
+            var trimmedTome = request.AgentGrimoireTome.Trim();
+            if (trimmedTome.Length == 0 || trimmedTome.Length > 64)
+            {
+                return InvalidSetting(nameof(request.AgentGrimoireTome), "Must be between 1 and 64 characters.");
+            }
+        }
+
+        if (request.AgentGrimoireCompactionHours is < 0)
+        {
+            return InvalidSetting(nameof(request.AgentGrimoireCompactionHours), "Must be 0 or greater.");
+        }
+
         var reindexRecommended = await ChangesEmbeddingInputsAsync(settings, request, ct);
 
         if (request.EmbeddingProvider is not null)
@@ -252,6 +275,23 @@ public static class SettingsApi
                 request.AgentDailyBudget.Value.ToString(CultureInfo.InvariantCulture), ct);
         }
 
+        if (request.AgentGrimoireBaseUrl is not null)
+        {
+            await settings.SetAsync(SettingKeys.AgentGrimoireBaseUrl, request.AgentGrimoireBaseUrl.Trim(), ct);
+        }
+
+        if (request.AgentGrimoireTome is not null)
+        {
+            await settings.SetAsync(SettingKeys.AgentGrimoireTome, request.AgentGrimoireTome.Trim(), ct);
+        }
+
+        if (request.AgentGrimoireCompactionHours is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.AgentGrimoireCompactionHours,
+                request.AgentGrimoireCompactionHours.Value.ToString(CultureInfo.InvariantCulture), ct);
+        }
+
         var updated = await ReadSettingsAsync(settings, ct);
         return Results.Ok(new UpdateSettingsResponse(
             updated.EmbeddingProvider,
@@ -272,6 +312,9 @@ public static class SettingsApi
             updated.AgentAlias,
             updated.AgentPerTurnMaxTokens,
             updated.AgentDailyBudget,
+            updated.AgentGrimoireBaseUrl,
+            updated.AgentGrimoireTome,
+            updated.AgentGrimoireCompactionHours,
             reindexRecommended));
     }
 
@@ -373,12 +416,24 @@ public static class SettingsApi
                 ? dailyBudget
                 : SettingDefaults.AgentDailyBudget;
         var agentAlias = await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct);
+        var agentGrimoireBaseUrl = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentGrimoireBaseUrl, SettingDefaults.AgentGrimoireBaseUrl, ct);
+        var agentGrimoireTome = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentGrimoireTome, SettingDefaults.AgentGrimoireTome, ct);
+        var agentGrimoireCompactionHoursRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentGrimoireCompactionHours,
+            SettingDefaults.AgentGrimoireCompactionHours.ToString(CultureInfo.InvariantCulture), ct);
+        var agentGrimoireCompactionHours =
+            int.TryParse(agentGrimoireCompactionHoursRaw, out var compactionHours) && compactionHours >= 0
+                ? compactionHours
+                : SettingDefaults.AgentGrimoireCompactionHours;
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
             planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
             planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
-            agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget);
+            agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget,
+            agentGrimoireBaseUrl, agentGrimoireTome, agentGrimoireCompactionHours);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

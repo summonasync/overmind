@@ -566,4 +566,86 @@ public sealed class SettingsApiTests : IDisposable
         var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         document.RootElement.GetProperty("agentDailyBudget").GetInt32().ShouldBe(0);
     }
+
+    [Fact]
+    public async Task Get_GrimoireMemoryDefaults_AutoDetectCrewAndDailyCompaction()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        document.RootElement.GetProperty("agentGrimoireBaseUrl").GetString().ShouldBe("");
+        document.RootElement.GetProperty("agentGrimoireTome").GetString().ShouldBe("crew");
+        document.RootElement.GetProperty("agentGrimoireCompactionHours").GetInt32().ShouldBe(24);
+    }
+
+    [Fact]
+    public async Task Put_GrimoireMemorySettings_Persist()
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new
+        {
+            AgentGrimoireBaseUrl = "http://127.0.0.1:4770",
+            AgentGrimoireTome = "  whispers  ",
+            AgentGrimoireCompactionHours = 12,
+        });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("agentGrimoireBaseUrl").GetString().ShouldBe("http://127.0.0.1:4770");
+        putDocument.RootElement.GetProperty("agentGrimoireTome").GetString().ShouldBe("whispers");
+        putDocument.RootElement.GetProperty("agentGrimoireCompactionHours").GetInt32().ShouldBe(12);
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentGrimoireBaseUrl").GetString().ShouldBe("http://127.0.0.1:4770");
+        document.RootElement.GetProperty("agentGrimoireTome").GetString().ShouldBe("whispers");
+        document.RootElement.GetProperty("agentGrimoireCompactionHours").GetInt32().ShouldBe(12);
+    }
+
+    [Fact]
+    public async Task Put_EmptyGrimoireBaseUrl_IsAcceptedAsAutoDetect()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentGrimoireBaseUrl = "   " });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentGrimoireBaseUrl").GetString().ShouldBe("");
+    }
+
+    [Theory]
+    [InlineData("not a url")]
+    [InlineData("ftp://127.0.0.1:4770")]
+    public async Task Put_RejectsInvalidGrimoireBaseUrl(string baseUrl)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentGrimoireBaseUrl = baseUrl });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Put_RejectsEmptyGrimoireTome(string tome)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentGrimoireTome = tome });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_RejectsNegativeGrimoireCompactionHours()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentGrimoireCompactionHours = -1 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Put_ZeroGrimoireCompactionHours_IsAcceptedAsDisabled()
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentGrimoireCompactionHours = 0 });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentGrimoireCompactionHours").GetInt32().ShouldBe(0);
+    }
 }

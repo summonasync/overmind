@@ -47,6 +47,9 @@ public static class DependencyInjection
         services.AddScoped<IAgentDelegationGate>(provider => provider.GetRequiredService<DelegatedApprovalGate>());
         services.AddSingleton<AgentToolRegistry>();
         services.AddSingleton<IAgentToolInvoker>(provider => provider.GetRequiredService<AgentToolRegistry>());
+        services.AddSingleton<IGrimoireMemoryClient, GrimoireMemoryClient>();
+        services.AddScoped<GrimoireCompactionRunner>();
+        services.AddHostedService<GrimoireCompactionSweepService>();
         services.AddScoped<IAgentPromptComposer, AgentPromptComposer>();
         services.AddScoped<IAgentRunSettingsProvider, AgentRunSettingsProvider>();
         services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();

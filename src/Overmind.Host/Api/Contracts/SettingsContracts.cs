@@ -18,7 +18,10 @@ public sealed record SettingsResponse(
     bool AgentApiKeyConfigured,
     string AgentAlias,
     int AgentPerTurnMaxTokens,
-    int AgentDailyBudget);
+    int AgentDailyBudget,
+    string AgentGrimoireBaseUrl,
+    string AgentGrimoireTome,
+    int AgentGrimoireCompactionHours);
 
 public sealed record UpdateSettingsResponse(
     string EmbeddingProvider,
@@ -39,6 +42,9 @@ public sealed record UpdateSettingsResponse(
     string AgentAlias,
     int AgentPerTurnMaxTokens,
     int AgentDailyBudget,
+    string AgentGrimoireBaseUrl,
+    string AgentGrimoireTome,
+    int AgentGrimoireCompactionHours,
     bool ReindexRecommended);
 
 public sealed record UpdateSettingsRequest(
@@ -59,7 +65,10 @@ public sealed record UpdateSettingsRequest(
     string? AgentApiKey,
     string? AgentAlias,
     int? AgentPerTurnMaxTokens,
-    int? AgentDailyBudget);
+    int? AgentDailyBudget,
+    string? AgentGrimoireBaseUrl,
+    string? AgentGrimoireTome,
+    int? AgentGrimoireCompactionHours);
 
 public sealed record TestSettingsRequest(
     string? Provider,

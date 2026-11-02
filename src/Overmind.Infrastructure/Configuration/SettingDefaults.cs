@@ -26,6 +26,9 @@ public static class SettingDefaults
     public const string AgentAlias = "overmind-agent";
     public const int AgentPerTurnMaxTokens = 8192;
     public const int AgentDailyBudget = 0;
+    public const string AgentGrimoireBaseUrl = "";
+    public const string AgentGrimoireTome = "crew";
+    public const int AgentGrimoireCompactionHours = 24;
 
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];
     public static readonly string[] PlanningMaterializationDefaults = ["off", "on", "archive"];

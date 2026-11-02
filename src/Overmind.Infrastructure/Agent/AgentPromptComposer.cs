@@ -2,17 +2,20 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Overmind.Core;
+using Overmind.Infrastructure.Grimoire;
 
 namespace Overmind.Infrastructure.Agent;
 
 public sealed class AgentPromptComposer(
     AgentLoopbackClient api,
-    IAgentRunSettingsProvider settingsProvider) : IAgentPromptComposer
+    IAgentRunSettingsProvider settingsProvider,
+    IGrimoireMemoryClient memory) : IAgentPromptComposer
 {
     public const int MaxHistoryMessages = 24;
     public const int MaxSnapshotProjects = 8;
     public const int MaxQueueRowsPerProject = 10;
     public const int MaxRecentReplies = 5;
+    public const int MaxMemoryFacts = 5;
 
     public async Task<IReadOnlyList<ChatMessage>> ComposeAsync(
         Conversation conversation,
@@ -130,6 +133,23 @@ public sealed class AgentPromptComposer(
         catch (LoopbackApiException)
         {
             snapshot["degraded"] = "the snapshot is incomplete because a board read failed";
+        }
+
+        try
+        {
+            var endpoint = await memory.ResolveEndpointAsync(ct);
+            var facts = await memory.ListTopFactsAsync(endpoint, MaxMemoryFacts, ct);
+            if (facts.Count > 0)
+            {
+                snapshot["memoryFacts"] = facts.Select(fact => new Dictionary<string, object?>
+                {
+                    ["content"] = Truncate(fact.Content, 240),
+                    ["createdAt"] = fact.CreatedAt.ToString("yyyy-MM-dd"),
+                }).ToList();
+            }
+        }
+        catch (GrimoireMemoryException)
+        {
         }
 
         return JsonSerializer.Serialize(snapshot, AgentLoopbackClient.JsonOptions);

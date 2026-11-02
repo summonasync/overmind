@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Overmind.Infrastructure.Agent.Tools;
+using Overmind.Infrastructure.Grimoire;
 
 namespace Overmind.Infrastructure.Agent;
 
@@ -23,7 +24,8 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
 
     public AgentToolRegistry(
         AgentLoopbackClient api,
-        EmbeddedAgentSessionState sessionState)
+        EmbeddedAgentSessionState sessionState,
+        IGrimoireMemoryClient memory)
     {
         var specs = PlanningAgentTools.Build(api)
             .Concat(EntryAgentTools.Build(api))
@@ -32,6 +34,7 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             .Concat(WaveAgentTools.Build(api, sessionState))
             .Concat(KitAgentTools.Build(api))
             .Concat(BoardAgentTools.Build(api))
+            .Concat(MemoryAgentTools.Build(memory))
             .ToList();
 
         _specs = specs
@@ -71,6 +74,10 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
                 : await spec.Invoke(arguments, ct);
         }
         catch (LoopbackApiException ex)
+        {
+            return Error(ex.Message);
+        }
+        catch (GrimoireMemoryException ex)
         {
             return Error(ex.Message);
         }
