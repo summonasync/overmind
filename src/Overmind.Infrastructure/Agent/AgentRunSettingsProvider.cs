@@ -10,7 +10,9 @@ public sealed class AgentRunSettingsProvider(AppSettingsService settings) : IAge
         var alias = await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct);
         var perTurn = await ReadIntAsync(SettingKeys.AgentPerTurnMaxTokens, SettingDefaults.AgentPerTurnMaxTokens, ct);
         var daily = await ReadIntAsync(SettingKeys.AgentDailyBudget, SettingDefaults.AgentDailyBudget, ct);
-        return new AgentRunSettings(alias.Trim(), perTurn, daily);
+        var instructions = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentInstructions, SettingDefaults.AgentInstructions, ct);
+        return new AgentRunSettings(alias.Trim(), perTurn, daily, instructions);
     }
 
     private async Task<int> ReadIntAsync(string key, int fallback, CancellationToken ct)

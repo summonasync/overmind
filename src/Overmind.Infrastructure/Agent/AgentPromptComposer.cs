@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using Overmind.Core;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Grimoire;
 
 namespace Overmind.Infrastructure.Agent;
@@ -18,6 +19,7 @@ public sealed class AgentPromptComposer(
     public const int MaxQueueRows = 24;
     public const int MaxRecentReplies = 5;
     public const int MaxMemoryFacts = 5;
+    public const string InstructionsHeader = "Owner instructions (standing rules from the human owner):";
 
     public async Task<IReadOnlyList<ChatMessage>> ComposeAsync(
         Conversation conversation,
@@ -69,7 +71,26 @@ public sealed class AgentPromptComposer(
         builder.AppendLine();
         builder.AppendLine("Bootstrap snapshot (may be partial):");
         builder.AppendLine(await ComposeSnapshotAsync(projectId, ct));
+        AppendOwnerInstructions(builder, settings.Instructions);
         return builder.ToString();
+    }
+
+    private static void AppendOwnerInstructions(StringBuilder builder, string instructions)
+    {
+        var text = instructions.Trim();
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        if (text.Length > SettingDefaults.AgentInstructionsMaxLength)
+        {
+            text = text[..SettingDefaults.AgentInstructionsMaxLength];
+        }
+
+        builder.AppendLine();
+        builder.AppendLine(InstructionsHeader);
+        builder.Append(text);
     }
 
     private async Task<string> ComposeSnapshotAsync(Guid? projectId, CancellationToken ct)

@@ -648,4 +648,62 @@ public sealed class SettingsApiTests : IDisposable
         var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         document.RootElement.GetProperty("agentGrimoireCompactionHours").GetInt32().ShouldBe(0);
     }
+
+    [Fact]
+    public async Task Get_IncludesAgentInstructions_EmptyByDefault()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentInstructions").GetString().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Put_AgentInstructions_RoundTrips_AndSurvivesPartialUpdates()
+    {
+        using var put = await _client.PutAsJsonAsync(
+            "/api/settings", new { AgentInstructions = "Be terse. Answer in Russian." });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("agentInstructions").GetString().ShouldBe("Be terse. Answer in Russian.");
+
+        await _client.PutAsJsonAsync("/api/settings", new { AgentModel = "glm-4.6-air" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentInstructions").GetString().ShouldBe("Be terse. Answer in Russian.");
+    }
+
+    [Fact]
+    public async Task Put_EmptyAgentInstructions_ClearsBackToDefault()
+    {
+        await _client.PutAsJsonAsync("/api/settings", new { AgentInstructions = "be terse" });
+
+        using var clear = await _client.PutAsJsonAsync("/api/settings", new { AgentInstructions = "" });
+
+        clear.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await clear.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentInstructions").GetString().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Put_AgentInstructions_AcceptsAtCap()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { AgentInstructions = new string('x', 4000) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentInstructions").GetString().ShouldBe(new string('x', 4000));
+    }
+
+    [Fact]
+    public async Task Put_RejectsAgentInstructionsOverCap()
+    {
+        using var response = await _client.PutAsJsonAsync(
+            "/api/settings", new { AgentInstructions = new string('x', 4001) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }
