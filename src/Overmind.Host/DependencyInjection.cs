@@ -135,6 +135,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<CreateConversationRequest>, CreateConversationRequestValidator>();
         services.AddSingleton<IValidator<RenameConversationRequest>, RenameConversationRequestValidator>();
         services.AddSingleton<IValidator<SendConversationMessageRequest>, SendConversationMessageRequestValidator>();
+        services.AddSingleton<IValidator<MarkConversationReadRequest>, MarkConversationReadRequestValidator>();
 
         services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
@@ -192,6 +193,7 @@ public static class DependencyInjection
         services.AddScoped<AgentWakeService>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ConversationMessageStore>();
+        services.AddScoped<ConversationReadStore>();
         services.AddSingleton<WakeDropWriter>();
         services.AddSingleton<WakeDropFanout>();
         services.AddScoped<WaveChatRetentionSweeper>();

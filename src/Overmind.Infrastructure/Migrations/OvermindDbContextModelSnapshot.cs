@@ -163,6 +163,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("LastReadMessageId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("TEXT");
 

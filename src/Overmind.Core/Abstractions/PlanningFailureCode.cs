@@ -83,5 +83,6 @@ public enum PlanningFailureCode
     MissingWaveRoom,
     WaveTextTooLong,
     MissingConversation,
-    ConversationTextTooLong
+    ConversationTextTooLong,
+    MissingConversationMessage
 }
