@@ -1,8 +1,31 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Overmind.Core;
+using Overmind.Host.Loopback;
+using Overmind.Infrastructure.Agent;
 
 namespace Overmind.Api.Tests;
+
+public sealed class StubConversationStreamSource : IConversationStreamSource
+{
+    public async IAsyncEnumerable<ConversationStreamEvent> StreamAsync(
+        Conversation conversation,
+        IReadOnlyList<ConversationMessage> history,
+        string userText,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.Yield();
+        yield return ConversationStreamEvent.Delta("stub delta one ");
+        yield return ConversationStreamEvent.ToolCall("planning_task_queue");
+        yield return ConversationStreamEvent.Delta("stub delta two");
+        yield return ConversationStreamEvent.Completed(321);
+    }
+}
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
@@ -40,6 +63,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Overmind:DatabasePath"] = _databasePath,
                 ["Overmind:BindUrl"] = string.Empty,
             }));
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IConversationStreamSource>();
+            services.AddSingleton<IConversationStreamSource, StubConversationStreamSource>();
+            services.AddSingleton<HttpMessageHandler>(sp => new EmbeddedAgentSessionHandler(
+                sp.GetRequiredService<IServer>() is TestServer testServer
+                    ? testServer.CreateHandler()
+                    : new SocketsHttpHandler { UseProxy = false },
+                sp.GetRequiredService<EmbeddedAgentSessionState>()));
+        });
     }
 
     protected override void Dispose(bool disposing)

@@ -164,14 +164,21 @@ public static class AgentChatApi
                         reply.Append(streamEvent.Text);
                         await WriteFrameAsync(body, "delta", new { text = streamEvent.Text }, ct);
                         break;
+                    case ConversationStreamEventKind.ToolCall:
+                        await WriteFrameAsync(body, "tool", new { tool = streamEvent.ToolName }, ct);
+                        break;
                     case ConversationStreamEventKind.Completed:
                         Guid? messageId = reply.Length > 0
                             ? (await messages.AppendAsync(conversationId, ConversationMessage.AssistantRole, reply.ToString(), ct)).Id
                             : null;
-                        await WriteFrameAsync(body, "completed", new { messageId }, ct);
+                        await WriteFrameAsync(body, "completed", new { messageId, tokensUsed = streamEvent.TokensUsed }, ct);
                         break;
                     case ConversationStreamEventKind.Failed:
-                        await WriteFrameAsync(body, "failed", new { error = streamEvent.Text }, ct);
+                        await WriteFrameAsync(body, "failed", new { error = streamEvent.Text, code = streamEvent.Code }, ct);
+                        break;
+                    default:
+                        await WriteFrameAsync(
+                            body, "failed", new { error = "The chat stream sent an unknown event.", code = "unknownStreamEvent" }, ct);
                         break;
                 }
             }

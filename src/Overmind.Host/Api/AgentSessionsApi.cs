@@ -49,10 +49,11 @@ public static class AgentSessionsApi
         var role = request.Role?.Trim();
         if (role is null ||
             (!role.Equals(AgentSession.DefaultRole, StringComparison.Ordinal) &&
-             !role.Equals(AgentSession.MarshalRole, StringComparison.Ordinal)))
+             !role.Equals(AgentSession.MarshalRole, StringComparison.Ordinal) &&
+             !role.Equals(AgentSession.EmbeddedRole, StringComparison.Ordinal)))
         {
             return HttpErrors.BadRequest(
-                $"Role must be '{AgentSession.DefaultRole}' or '{AgentSession.MarshalRole}'.");
+                $"Role must be '{AgentSession.DefaultRole}', '{AgentSession.MarshalRole}' or '{AgentSession.EmbeddedRole}'.");
         }
 
         var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == id, ct);

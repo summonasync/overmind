@@ -34,8 +34,23 @@ public static class DependencyInjection
         services.AddScoped<FtsSearchService>();
 
         services.AddScoped<EmbeddingProviderFactory>();
+        services.AddSingleton<LlmChatClientCache>();
         services.AddScoped<ILlmChatClientFactory, LlmChatClientFactory>();
-        services.AddSingleton<IConversationStreamSource, PlaceholderConversationStreamSource>();
+        services.AddSingleton<Overmind.Host.Loopback.LoopbackOrigin>();
+        services.AddSingleton<EmbeddedAgentSessionState>();
+        services.AddSingleton(sp => sp.GetRequiredService<Overmind.Host.Loopback.LoopbackOrigin>()
+            .CreateClient(sp.GetRequiredService<EmbeddedAgentSessionState>()));
+        services.AddSingleton<AgentLoopbackClient>();
+        services.AddScoped<IAgentGuardNotifier, AgentLoopbackGuardNotifier>();
+        services.AddScoped<EmbeddedAgentSessionRegistrar>();
+        services.AddSingleton<AgentToolRegistry>();
+        services.AddSingleton<IAgentToolInvoker>(provider => provider.GetRequiredService<AgentToolRegistry>());
+        services.AddScoped<IAgentPromptComposer, AgentPromptComposer>();
+        services.AddScoped<IAgentRunSettingsProvider, AgentRunSettingsProvider>();
+        services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();
+        services.AddScoped<AgentLoop>();
+        services.AddScoped<IConversationStreamSource, LlmConversationStreamSource>();
+        services.AddHostedService<AgentLoopHostedService>();
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());

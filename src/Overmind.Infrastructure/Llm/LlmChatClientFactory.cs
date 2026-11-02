@@ -13,10 +13,12 @@ public sealed class LlmChatClientFactory : ILlmChatClientFactory
     public static readonly TimeSpan ChatTimeout = TimeSpan.FromSeconds(120);
 
     private readonly AppSettingsService _settings;
+    private readonly LlmChatClientCache _cache;
 
-    public LlmChatClientFactory(AppSettingsService settings)
+    public LlmChatClientFactory(AppSettingsService settings, LlmChatClientCache cache)
     {
         _settings = settings;
+        _cache = cache;
     }
 
     public async Task<bool> IsConfiguredAsync(CancellationToken ct) =>
@@ -33,7 +35,7 @@ public sealed class LlmChatClientFactory : ILlmChatClientFactory
         var baseUrl = await _settings.GetOrDefaultAsync(SettingKeys.AgentBaseUrl, SettingDefaults.AgentBaseUrl, ct);
         var model = await _settings.GetOrDefaultAsync(SettingKeys.AgentModel, SettingDefaults.AgentModel, ct);
 
-        return CreateChatClient(new(CreateChatHandler(baseUrl)) { Timeout = ChatTimeout }, baseUrl, apiKey, model);
+        return await _cache.GetOrCreateAsync(baseUrl, apiKey, model, ct);
     }
 
     internal static IChatClient CreateChatClient(HttpClient http, string baseUrl, string apiKey, string model) =>

@@ -225,6 +225,19 @@ public static class SettingsApi
             await settings.SetAsync(SettingKeys.AgentApiKey, request.AgentApiKey, ct);
         }
 
+        if (request.AgentAlias is not null)
+        {
+            var trimmedAlias = request.AgentAlias.Trim();
+            if (trimmedAlias.Length == 0 || trimmedAlias.Length > AgentSession.MaxIdentityLength)
+            {
+                return InvalidSetting(
+                    nameof(request.AgentAlias),
+                    $"Must be between 1 and {AgentSession.MaxIdentityLength} characters.");
+            }
+
+            await settings.SetAsync(SettingKeys.AgentAlias, trimmedAlias, ct);
+        }
+
         if (request.AgentPerTurnMaxTokens is not null)
         {
             await settings.SetAsync(
@@ -256,6 +269,7 @@ public static class SettingsApi
             updated.AgentBaseUrl,
             updated.AgentModel,
             updated.AgentApiKeyConfigured,
+            updated.AgentAlias,
             updated.AgentPerTurnMaxTokens,
             updated.AgentDailyBudget,
             reindexRecommended));
@@ -358,12 +372,13 @@ public static class SettingsApi
             int.TryParse(agentDailyBudgetRaw, out var dailyBudget) && dailyBudget >= 0
                 ? dailyBudget
                 : SettingDefaults.AgentDailyBudget;
+        var agentAlias = await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct);
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
             planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
             planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
-            agentBaseUrl, agentModel, agentApiKeyConfigured, agentPerTurnMaxTokens, agentDailyBudget);
+            agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

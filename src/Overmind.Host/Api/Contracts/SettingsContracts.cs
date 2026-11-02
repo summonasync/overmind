@@ -16,6 +16,7 @@ public sealed record SettingsResponse(
     string AgentBaseUrl,
     string AgentModel,
     bool AgentApiKeyConfigured,
+    string AgentAlias,
     int AgentPerTurnMaxTokens,
     int AgentDailyBudget);
 
@@ -35,6 +36,7 @@ public sealed record UpdateSettingsResponse(
     string AgentBaseUrl,
     string AgentModel,
     bool AgentApiKeyConfigured,
+    string AgentAlias,
     int AgentPerTurnMaxTokens,
     int AgentDailyBudget,
     bool ReindexRecommended);
@@ -55,6 +57,7 @@ public sealed record UpdateSettingsRequest(
     string? AgentBaseUrl,
     string? AgentModel,
     string? AgentApiKey,
+    string? AgentAlias,
     int? AgentPerTurnMaxTokens,
     int? AgentDailyBudget);
 

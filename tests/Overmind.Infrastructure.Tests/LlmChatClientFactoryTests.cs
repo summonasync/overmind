@@ -12,12 +12,13 @@ namespace Overmind.Infrastructure.Tests;
 public sealed class LlmChatClientFactoryTests : IDisposable
 {
     private readonly TempDatabase _temp = new();
+    private readonly LlmChatClientCache _cache = new();
 
     [Fact]
     public async Task CreateAsync_WithoutApiKey_ReturnsNullAndReportsUnconfigured()
     {
         await using var context = _temp.CreateContext();
-        var factory = new LlmChatClientFactory(new Configuration.AppSettingsService(context));
+        var factory = new LlmChatClientFactory(new Configuration.AppSettingsService(context), _cache);
 
         var client = await factory.CreateAsync(CancellationToken.None);
 
@@ -31,7 +32,7 @@ public sealed class LlmChatClientFactoryTests : IDisposable
         await using var context = _temp.CreateContext();
         var settings = new Configuration.AppSettingsService(context);
         await settings.SetAsync(SettingKeys.AgentApiKey, "   ", CancellationToken.None);
-        var factory = new LlmChatClientFactory(settings);
+        var factory = new LlmChatClientFactory(settings, _cache);
 
         (await factory.IsConfiguredAsync(CancellationToken.None)).ShouldBeFalse();
         (await factory.CreateAsync(CancellationToken.None)).ShouldBeNull();
@@ -43,7 +44,7 @@ public sealed class LlmChatClientFactoryTests : IDisposable
         await using var context = _temp.CreateContext();
         var settings = new Configuration.AppSettingsService(context);
         await settings.SetAsync(SettingKeys.AgentApiKey, "glm-secret", CancellationToken.None);
-        var factory = new LlmChatClientFactory(settings);
+        var factory = new LlmChatClientFactory(settings, _cache);
 
         var client = await factory.CreateAsync(CancellationToken.None);
 
@@ -116,5 +117,9 @@ public sealed class LlmChatClientFactoryTests : IDisposable
 
         """;
 
-    public void Dispose() => _temp.Dispose();
+    public void Dispose()
+    {
+        _cache.Dispose();
+        _temp.Dispose();
+    }
 }

@@ -5,6 +5,7 @@ public sealed class AgentSession
     public const int MaxIdentityLength = 32;
     public const string PlaceholderAlias = "agent";
     public const string MarshalRole = "marshal";
+    public const string EmbeddedRole = "embedded";
     public const string DefaultRole = "worker";
 
     private AgentSession()
@@ -123,8 +124,16 @@ public sealed class AgentSession
     public static string NormalizeRole(string role)
     {
         var trimmed = role?.Trim();
-        return trimmed is not null && trimmed.Equals(MarshalRole, StringComparison.Ordinal)
-            ? MarshalRole
-            : DefaultRole;
+        if (trimmed is null)
+        {
+            return DefaultRole;
+        }
+
+        if (trimmed.Equals(MarshalRole, StringComparison.Ordinal))
+        {
+            return MarshalRole;
+        }
+
+        return trimmed.Equals(EmbeddedRole, StringComparison.Ordinal) ? EmbeddedRole : DefaultRole;
     }
 }
