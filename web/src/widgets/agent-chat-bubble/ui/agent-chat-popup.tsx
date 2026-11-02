@@ -8,6 +8,7 @@ import {
   AgentMessageList,
   useAgentChat,
   useAgentConversationList,
+  useConversationRestore,
 } from "@/features/agent-chat";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
@@ -29,6 +30,12 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
         onConversationChange(null);
       }
     },
+  });
+  useConversationRestore({
+    conversations: list.conversations,
+    isPending: list.isPending,
+    selectedId: conversationId,
+    select: onConversationChange,
   });
   const chat = useAgentChat({
     conversationId,
