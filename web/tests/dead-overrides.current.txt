@@ -1,12 +1,13 @@
 dead-override sweep — current run
 css chunks measured: 1
-denominator: 39 call-site(s) with className · 3 primitive(s) with base density (badge, button, select) · 0 dead token(s) on 0 site(s)
+denominator: 43 call-site(s) with className · 3 primitive(s) with base density (badge, button, select) · 0 dead token(s) on 0 site(s)
 
 dead — call-site token loses to the primitive base token (0)
 
 unmeasured — token or base rule missing from generated css (0)
 
-live — call-site token wins (3)
-web/src/features/wave-chat/components/wave-chat-panel.tsx:216  text-xs  (beats text-xs)
+live — call-site token wins (4)
+web/src/features/agent-chat/components/agent-message-list.tsx:95  text-xs  (beats text-xs)
+web/src/features/wave-chat/components/wave-chat-panel.tsx:220  text-xs  (beats text-xs)
 web/src/features/wave-chat/components/wave-message-list.tsx:95  text-xs  (beats text-xs)
 web/src/features/wave-chat/components/wave-message-list.tsx:98  text-xs  (beats text-xs)

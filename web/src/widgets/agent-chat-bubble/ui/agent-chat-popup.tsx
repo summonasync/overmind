@@ -1,16 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, X } from "lucide-react";
 import {
   AgentComposer,
   AgentConversationList,
   AgentMessageList,
-  agentChatKeys,
-  agentConversationsQueryOptions,
-  deleteAgentConversation,
   useAgentChat,
+  useAgentConversationList,
 } from "@/features/agent-chat";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
@@ -25,38 +22,28 @@ interface AgentChatPopupProps {
 
 export function AgentChatPopup({ conversationId, onConversationChange, onClose }: AgentChatPopupProps) {
   const [listOpen, setListOpen] = useState(false);
-  const [listError, setListError] = useState<Error | null>(null);
-  const queryClient = useQueryClient();
-  const conversations = useQuery(agentConversationsQueryOptions(null));
+  const list = useAgentConversationList({
+    projectId: null,
+    onRemoved: (removedId) => {
+      if (conversationId === removedId) {
+        onConversationChange(null);
+      }
+    },
+  });
   const chat = useAgentChat({
     conversationId,
     projectId: null,
     onConversationCreated: (conversation) => onConversationChange(conversation.id),
   });
 
-  const activeConversation = (conversations.data?.items ?? []).find(
-    (conversation) => conversation.id === conversationId,
-  );
+  const activeConversation = list.conversations.find((conversation) => conversation.id === conversationId);
   const activeTitle = activeConversation?.title?.trim() || null;
-  const surfaceError = conversations.error ?? chat.historyError ?? listError;
+  const surfaceError = list.error ?? chat.historyError;
 
   const openConversation = (conversationId: string) => {
-    setListError(null);
+    list.clearError();
     onConversationChange(conversationId);
     setListOpen(false);
-  };
-
-  const removeConversation = async (targetId: string) => {
-    setListError(null);
-    try {
-      await deleteAgentConversation(targetId);
-      if (conversationId === targetId) {
-        onConversationChange(null);
-      }
-      queryClient.invalidateQueries({ queryKey: agentChatKeys.conversations(null) });
-    } catch (error) {
-      setListError(error instanceof Error ? error : new Error(String(error)));
-    }
   };
 
   return (
@@ -93,14 +80,14 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
         </button>
         {listOpen ? (
           <div className="max-h-40 overflow-y-auto px-2 pb-2">
-            {conversations.isPending ? (
+            {list.isPending ? (
               <LoadingState label="Loading conversations…" />
             ) : (
               <AgentConversationList
-                conversations={conversations.data?.items ?? []}
+                conversations={list.conversations}
                 activeId={conversationId}
                 onOpen={openConversation}
-                onDelete={removeConversation}
+                onDelete={list.remove}
               />
             )}
           </div>
@@ -113,13 +100,13 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
       ) : null}
       <section aria-label="Conversation" className="flex min-h-0 flex-1 flex-col px-2 pt-2">
         <AgentMessageList
+          conversationId={conversationId}
           messages={chat.messages}
           streaming={chat.streaming}
           historyLoading={conversationId !== null && chat.historyLoading}
           canLoadOlder={chat.canLoadOlder}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
-          scrollKey={conversationId ?? "new"}
         />
       </section>
       <div className="shrink-0 p-2">

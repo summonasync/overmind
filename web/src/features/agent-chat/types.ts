@@ -27,3 +27,18 @@ export type AgentStreamFrame =
   | { kind: "delta"; text: string }
   | { kind: "completed"; messageId: string | null }
   | { kind: "failed"; error: string };
+
+export interface AgentReadState {
+  conversationId: string;
+  lastReadMessageId: string | null;
+}
+
+export type ChatTurnOutcome =
+  | { kind: "idle" }
+  | { kind: "completed"; delegated: boolean; completedAtMs: number }
+  | { kind: "failed"; failedAtMs: number };
+
+export interface AgentChatActivity {
+  streaming: boolean;
+  lastTurn: ChatTurnOutcome;
+}
