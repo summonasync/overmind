@@ -4,7 +4,7 @@ import { useEffect, useMemo, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { markAgentConversationRead } from "@/features/agent-chat/api";
 import { agentChatKeys } from "@/features/agent-chat/queries";
-import { seenTracker } from "@/features/agent-chat/lib/seen-tracker";
+import { latestReportableId, seenTracker } from "@/features/agent-chat/lib/seen-tracker";
 import type { AgentMessage } from "@/features/agent-chat/types";
 
 export function useSeenMessageTracking(
@@ -14,6 +14,15 @@ export function useSeenMessageTracking(
 ) {
   const queryClient = useQueryClient();
   const orderedIds = useMemo(() => messages.map((message) => message.id), [messages]);
+  const tailId = useMemo(() => latestReportableId(orderedIds), [orderedIds]);
+
+  useEffect(() => {
+    if (conversationId === null || tailId === null) {
+      return;
+    }
+    seenTracker.markSeen(conversationId, tailId);
+    seenTracker.observeCandidates(conversationId, orderedIds);
+  }, [conversationId, tailId, orderedIds]);
 
   useEffect(() => {
     seenTracker.setFlusher(async (entries) => {
