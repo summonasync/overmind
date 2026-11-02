@@ -4,6 +4,7 @@ import type {
   AgentConversationsPayload,
   AgentHistoryPayload,
   AgentMessageRole,
+  AgentReadState,
 } from "@/features/agent-chat/types";
 import { readSseEvents } from "@/features/agent-chat/lib/sse";
 import { parseAgentStreamFrame } from "@/features/agent-chat/lib/stream-frame";
@@ -21,6 +22,11 @@ interface MessageResponse {
   role: string;
   content: string;
   createdAt: string;
+}
+
+interface ReadStateResponse {
+  conversationId: string;
+  lastReadMessageId: string | null;
 }
 
 export interface AgentHistoryQuery {
@@ -64,6 +70,21 @@ export function createAgentConversation(
 
 export function deleteAgentConversation(conversationId: string): Promise<void> {
   return apiDelete(`/agent/conversations/${encodeURIComponent(conversationId)}`);
+}
+
+export function markAgentConversationRead(
+  conversationId: string,
+  lastReadMessageId: string,
+): Promise<AgentReadState> {
+  return apiPost<ReadStateResponse>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/read`,
+    { lastReadMessageId },
+  );
+}
+
+export async function fetchAgentUnreadCount(): Promise<number> {
+  const response = await apiGet<{ count: number }>("/agent/conversations/unread");
+  return response.count;
 }
 
 export async function listAgentHistory(

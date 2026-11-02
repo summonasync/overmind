@@ -18,11 +18,13 @@ public static class AgentChatApi
         var human = routes.MapGroup("/api");
         human.MapPost("/agent/conversations", CreateForHuman);
         human.MapGet("/agent/conversations", ListForHuman);
+        human.MapGet("/agent/conversations/unread", UnreadForHuman);
         human.MapGet("/agent/conversations/{id:guid}", GetForHuman);
         human.MapPut("/agent/conversations/{id:guid}", RenameForHuman);
         human.MapDelete("/agent/conversations/{id:guid}", DeleteForHuman);
         human.MapGet("/agent/conversations/{id:guid}/messages", HistoryForHuman);
         human.MapPost("/agent/conversations/{id:guid}/messages/stream", StreamForHuman);
+        human.MapPost("/agent/conversations/{id:guid}/read", MarkReadForHuman);
 
         return human;
     }
@@ -98,6 +100,33 @@ public static class AgentChatApi
         var deleted = await conversations.DeleteAsync(id, ct);
         return deleted ? Results.NoContent() : NotFound(id);
     }
+
+    private static async Task<IResult> MarkReadForHuman(
+        Guid id,
+        MarkConversationReadRequest request,
+        IValidator<MarkConversationReadRequest> validator,
+        ConversationReadStore reads,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        try
+        {
+            var conversation = await reads.MarkReadAsync(id, request.LastReadMessageId, ct);
+            return Results.Ok(new ConversationReadStateResponse(conversation.Id, conversation.LastReadMessageId));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    private static async Task<IResult> UnreadForHuman(ConversationReadStore reads, CancellationToken ct) =>
+        Results.Ok(new UnreadCountResponse(await reads.CountUnreadAsync(ct)));
 
     private static async Task<IResult> HistoryForHuman(
         Guid id,

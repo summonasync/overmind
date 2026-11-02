@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAgentConversation,
@@ -9,9 +9,14 @@ import {
 } from "@/features/agent-chat/api";
 import { agentChatKeys, agentHistoryQueryOptions } from "@/features/agent-chat/queries";
 import { AGENT_HISTORY_PAGE_LIMIT, agentTitlePreview } from "@/features/agent-chat/lib/limits";
+import {
+  reportTurnAborted,
+  reportTurnCompleted,
+  reportTurnFailed,
+  reportTurnStarted,
+} from "@/features/agent-chat/lib/chat-activity-store";
+import { approvalSettingsQueryOptions } from "@/features/projects";
 import type { AgentConversation, AgentMessage, AgentHistoryPayload } from "@/features/agent-chat/types";
-
-const PENDING_ASSISTANT_ID = "pending-assistant";
 
 interface UseAgentChatArgs {
   conversationId: string | null;
@@ -21,6 +26,7 @@ interface UseAgentChatArgs {
 
 export function useAgentChat({ conversationId, projectId, onConversationCreated }: UseAgentChatArgs) {
   const queryClient = useQueryClient();
+  const pendingAssistantId = `pending-assistant${useId()}`;
   const [streaming, setStreaming] = useState(false);
   const [sendError, setSendError] = useState<Error | null>(null);
   const [historyDrained, setHistoryDrained] = useState(false);
@@ -49,6 +55,17 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
     queryClient.invalidateQueries({ queryKey: agentChatKeys.conversations(projectId) });
   };
 
+  const completeTurn = (targetProjectId: string | null) => {
+    if (targetProjectId === null) {
+      reportTurnCompleted(false);
+      return;
+    }
+    queryClient
+      .fetchQuery(approvalSettingsQueryOptions(targetProjectId))
+      .then((settings) => reportTurnCompleted(settings.delegateApprovals))
+      .catch(() => reportTurnCompleted(false));
+  };
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (trimmed.length === 0 || streaming) {
@@ -70,15 +87,16 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       mutateHistory(activeId, (items) => [
         ...items,
         { id: `pending-user-${now}`, role: "user", content: trimmed, createdAt: now },
-        { id: PENDING_ASSISTANT_ID, role: "assistant", content: "", createdAt: now },
+        { id: pendingAssistantId, role: "assistant", content: "", createdAt: now },
       ]);
       setStreaming(true);
+      reportTurnStarted();
       await streamAgentReply(activeId, trimmed, {
         signal: controller.signal,
         onDelta: (delta) =>
           mutateHistory(activeId, (items) =>
             items.map((message) =>
-              message.id === PENDING_ASSISTANT_ID
+              message.id === pendingAssistantId
                 ? { ...message, content: message.content + delta }
                 : message,
             ),
@@ -86,17 +104,19 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
         onCompleted: (messageId) => {
           mutateHistory(activeId, (items) =>
             messageId === null
-              ? items.filter((message) => message.id !== PENDING_ASSISTANT_ID)
+              ? items.filter((message) => message.id !== pendingAssistantId)
               : items.map((message) =>
-                  message.id === PENDING_ASSISTANT_ID ? { ...message, id: messageId } : message,
+                  message.id === pendingAssistantId ? { ...message, id: messageId } : message,
                 ),
           );
+          completeTurn(projectId);
         },
         onFailed: (error) => {
           mutateHistory(activeId, (items) =>
-            items.filter((message) => message.id !== PENDING_ASSISTANT_ID),
+            items.filter((message) => message.id !== pendingAssistantId),
           );
           setSendError(new Error(error));
+          reportTurnFailed();
         },
       });
       queryClient.invalidateQueries({ queryKey: agentChatKeys.history(activeId) });
@@ -104,16 +124,18 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
     } catch (error) {
       if (targetId !== null) {
         mutateHistory(targetId, (items) =>
-          items.filter((message) => message.id !== PENDING_ASSISTANT_ID),
+          items.filter((message) => message.id !== pendingAssistantId),
         );
       }
       if (error instanceof DOMException && error.name === "AbortError") {
+        reportTurnAborted();
         if (targetId !== null) {
           queryClient.invalidateQueries({ queryKey: agentChatKeys.history(targetId) });
           invalidateConversations();
         }
       } else {
         setSendError(error instanceof Error ? error : new Error(String(error)));
+        reportTurnFailed();
       }
     } finally {
       abortRef.current = null;

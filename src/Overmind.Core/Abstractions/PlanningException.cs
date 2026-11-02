@@ -442,6 +442,10 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingConversation,
             $"Conversation '{conversationId}' was not found.");
 
+    public static PlanningException MissingConversationMessage(Guid messageId, Guid conversationId) =>
+        new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingConversationMessage,
+            $"Message '{messageId}' was not found in conversation '{conversationId}'.");
+
     public static PlanningException ConversationTextTooLong(int length, int cap) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ConversationTextTooLong,
             $"Conversation message text is {length} characters; the cap is {cap}.");

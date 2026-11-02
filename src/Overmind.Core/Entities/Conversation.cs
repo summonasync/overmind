@@ -13,6 +13,7 @@ public sealed class Conversation
     public string? Title { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
+    public Guid? LastReadMessageId { get; private set; }
 
     public static Conversation Create(Guid? projectId, string? title)
     {
@@ -30,6 +31,12 @@ public sealed class Conversation
     {
         Title = NormalizeTitle(title);
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarkRead(Guid messageId)
+    {
+        LastReadMessageId = messageId;
+        Touch();
     }
 
     public void Touch(DateTime? at = null)

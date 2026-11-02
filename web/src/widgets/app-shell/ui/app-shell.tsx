@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useState, type ReactNode } from "react";
 import background from "@/shared/assets/brand/background.png";
 import { InfoPanelProvider } from "@/widgets/app-shell/lib/info-panel-context";
+import { AgentChatBubble } from "@/widgets/agent-chat-bubble";
 import { ApprovalBubble } from "@/widgets/app-shell/ui/approval-bubble";
 import { AttentionSurfaces } from "@/widgets/app-shell/ui/attention-surfaces";
 import { AppTopbar } from "@/widgets/app-shell/ui/app-topbar";
@@ -59,6 +60,7 @@ export function AppShell({ children }: AppShellProps) {
           <ApprovalBubble />
         </Suspense>
         <AttentionSurfaces />
+        <AgentChatBubble />
       </div>
     </InfoPanelProvider>
   );

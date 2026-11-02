@@ -7,29 +7,33 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
 import { AGENT_SCROLL_BOTTOM_THRESHOLD } from "@/features/agent-chat/lib/limits";
+import { useSeenMessageTracking } from "@/features/agent-chat/lib/use-seen-tracking";
 import type { AgentMessage } from "@/features/agent-chat/types";
 
 interface AgentMessageListProps {
+  conversationId: string | null;
   messages: AgentMessage[];
   streaming: boolean;
   historyLoading: boolean;
   canLoadOlder: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => Promise<void>;
-  scrollKey: string;
 }
 
 export function AgentMessageList({
+  conversationId,
   messages,
   streaming,
   historyLoading,
   canLoadOlder,
   loadingOlder,
   onLoadOlder,
-  scrollKey,
 }: AgentMessageListProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
+  const scrollKey = conversationId ?? "new";
+
+  useSeenMessageTracking(conversationId, messages, containerRef);
 
   useEffect(() => {
     nearBottomRef.current = true;
@@ -126,6 +130,7 @@ function MessageRow({ message }: MessageRowProps) {
   const author = message.role === "user" ? "You" : "Agent";
   return (
     <li
+      data-agent-message-id={message.id}
       className={cn(
         "rounded-md px-2.5 py-2",
         message.role === "user" ? "bg-primary/5" : "bg-surface-raised/50",

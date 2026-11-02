@@ -1,12 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
-import { listAgentConversations, listAgentHistory } from "@/features/agent-chat/api";
+import { fetchAgentUnreadCount, listAgentConversations, listAgentHistory } from "@/features/agent-chat/api";
 import { AGENT_HISTORY_PAGE_LIMIT } from "@/features/agent-chat/lib/limits";
+import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
 
 export const agentChatKeys = {
   all: ["agent-chat"] as const,
   conversations: (projectId: string | null) =>
     [...agentChatKeys.all, "conversations", projectId ?? "none"] as const,
   history: (conversationId: string) => [...agentChatKeys.all, "history", conversationId] as const,
+  unread: () => [...agentChatKeys.all, "unread"] as const,
 };
 
 export const agentConversationsQueryOptions = (projectId: string | null) =>
@@ -22,3 +24,10 @@ export function agentHistoryQueryOptions(conversationId: string) {
     enabled: conversationId.length > 0,
   });
 }
+
+export const agentUnreadCountQueryOptions = () =>
+  queryOptions({
+    queryKey: agentChatKeys.unread(),
+    queryFn: fetchAgentUnreadCount,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
+  });

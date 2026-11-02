@@ -28,3 +28,11 @@ public sealed class SendConversationMessageRequestValidator : AbstractValidator<
             .WithMessage($"Text must not exceed {ConversationMessage.MaxTextLength} characters.");
     }
 }
+
+public sealed class MarkConversationReadRequestValidator : AbstractValidator<MarkConversationReadRequest>
+{
+    public MarkConversationReadRequestValidator()
+    {
+        RuleFor(x => x.LastReadMessageId).NotEmpty();
+    }
+}
