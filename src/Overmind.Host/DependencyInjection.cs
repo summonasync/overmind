@@ -66,7 +66,12 @@ public static class DependencyInjection
         services.AddSingleton<ConversationTurnGate>();
         services.AddScoped<TelegramChatStore>();
         services.AddScoped<TelegramReplySender>();
+        services.AddScoped<TelegramNotificationDeliveryStore>();
         services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
+        services.AddSingleton<INotificationDeliveryChannel>(provider => new TelegramNotificationFanout(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            () => provider.GetRequiredService<BrowserOrigin>().BoundOrigin,
+            provider.GetRequiredService<ILogger<TelegramNotificationFanout>>()));
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());

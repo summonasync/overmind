@@ -9,6 +9,7 @@ using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Tests.Agent;
 using Overmind.Infrastructure.Llm;
+using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Telegram;
 using Shouldly;
@@ -266,6 +267,13 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
             new TelegramReplySender(
                 _cache,
                 new TelegramTransportOptionsProvider(new AppSettingsService(_temp.CreateContext()))),
+            new TelegramNotificationDeliveryStore(_temp.CreateContext()),
+            new NotificationsService(
+                _temp.CreateContext(),
+                new ReplyAutoActFanout(
+                    _temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
+                TestWakeFanout.Create(_temp).Fanout,
+                []),
             new CollectingLogger<TelegramAgentChatHandler>(logs));
 
         return new HandlerRig(handler, streamSource, conversation, logs);

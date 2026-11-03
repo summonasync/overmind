@@ -6,6 +6,8 @@ public sealed class BrowserOrigin
 
     public void Bind(Uri origin) => _origin = origin;
 
+    public Uri? BoundOrigin => _origin;
+
     public Uri Resolve(HttpContext context) =>
         _origin ?? BrowserUri.FromLoopback(new Uri($"{context.Request.Scheme}://{context.Request.Host}"));
 }

@@ -6,7 +6,7 @@ public sealed class TelegramReplySender(
     TelegramBotClientCache clientCache,
     TelegramTransportOptionsProvider optionsProvider)
 {
-    public async Task<int> SendAsync(long chatId, IReadOnlyList<string> chunks, CancellationToken ct = default)
+    public async Task<IReadOnlyList<long>> SendAsync(long chatId, IReadOnlyList<string> chunks, CancellationToken ct = default)
     {
         var transport = await optionsProvider.GetAsync(ct);
         if (!transport.IsRunnable)
@@ -15,13 +15,13 @@ public sealed class TelegramReplySender(
         }
 
         var client = clientCache.GetOrCreate(transport).Client;
-        var delivered = 0;
+        var delivered = new List<long>();
         try
         {
             foreach (var chunk in chunks)
             {
-                await client.SendMessage(chatId, chunk, cancellationToken: ct);
-                delivered++;
+                var message = await client.SendMessage(chatId, chunk, cancellationToken: ct);
+                delivered.Add(message.Id);
             }
 
             return delivered;
@@ -32,7 +32,7 @@ public sealed class TelegramReplySender(
         }
         catch (Exception ex)
         {
-            throw new TelegramReplyDeliveryException(delivered, ex);
+            throw new TelegramReplyDeliveryException(delivered.Count, ex);
         }
     }
 }

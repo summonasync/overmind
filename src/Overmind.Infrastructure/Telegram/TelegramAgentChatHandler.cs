@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Notifications;
 
 namespace Overmind.Infrastructure.Telegram;
 
@@ -11,14 +12,29 @@ public sealed class TelegramAgentChatHandler(
     IConversationStreamSource streamSource,
     ConversationTurnGate turns,
     TelegramReplySender sender,
+    TelegramNotificationDeliveryStore deliveries,
+    NotificationsService notifications,
     ILogger<TelegramAgentChatHandler> logger) : ITelegramMessageHandler
 {
     public const int MaxAttempts = 3;
     public const string BusyReplyText =
         "Another turn is still running in this conversation; send the message again once it finishes.";
+    public const string ReplyRegisteredAck = "Reply registered.";
+    public const string ReplyFailedNotice =
+        "The reply could not be registered after 3 attempts; the failure was logged. Try again later.";
 
     public async Task HandleAsync(TelegramIncomingMessage message, CancellationToken ct)
     {
+        if (message.RepliedToMessageId is { } repliedTo)
+        {
+            var notificationId = await deliveries.FindNotificationIdAsync(message.ChatId, repliedTo, ct);
+            if (notificationId is { } id)
+            {
+                await RegisterNotificationReplyAsync(id, message, ct);
+                return;
+            }
+        }
+
         var conversation = await chats.GetOrCreateConversationAsync(message.ChatId, ct);
         if (!turns.TryEnter(conversation.Id))
         {
@@ -33,6 +49,41 @@ public sealed class TelegramAgentChatHandler(
         finally
         {
             turns.Exit(conversation.Id);
+        }
+    }
+
+    private async Task RegisterNotificationReplyAsync(
+        Guid notificationId, TelegramIncomingMessage message, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await notifications.ReplyAsync(notificationId, message.Text, ct);
+                await SendNoticeQuietlyAsync(message.ChatId, ReplyRegisteredAck, ct);
+                return;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (attempt >= MaxAttempts)
+                {
+                    logger.LogError(
+                        ex,
+                        "Telegram reply from chat {ChatId} dead-lettered: registering the reply to notification {NotificationId} failed {Attempts} times",
+                        message.ChatId, notificationId, attempt);
+                    await SendNoticeQuietlyAsync(message.ChatId, ReplyFailedNotice, ct);
+                    return;
+                }
+
+                logger.LogWarning(
+                    ex,
+                    "Registering the telegram reply to notification {NotificationId} failed on attempt {Attempt}; retrying",
+                    notificationId, attempt);
+            }
         }
     }
 

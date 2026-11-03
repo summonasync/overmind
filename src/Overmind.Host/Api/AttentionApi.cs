@@ -1,5 +1,6 @@
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Planning;
 
 namespace Overmind.Host.Api;

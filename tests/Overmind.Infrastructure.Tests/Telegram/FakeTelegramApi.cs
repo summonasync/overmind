@@ -79,8 +79,20 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         """
         .Trim();
 
-    public static string SentMessageResponse() =>
-        """{"ok":true,"result":{"message_id":5,"date":1760000000,"chat":{"id":42,"type":"private"}}}""";
+    public static string SentMessageResponse(long messageId = 5) =>
+        "{\"ok\":true,\"result\":{\"message_id\":" + messageId +
+        ",\"date\":1760000000,\"chat\":{\"id\":42,\"type\":\"private\"}}}";
+
+    public static string ReplyTextUpdate(long chatId, string text, int updateId, int repliedToMessageId) =>
+        "{\"update_id\":" + updateId +
+        ",\"message\":{\"message_id\":" + updateId +
+        ",\"from\":{\"id\":" + chatId + ",\"is_bot\":false,\"first_name\":\"Owner\"}" +
+        ",\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}" +
+        ",\"date\":1760000000" +
+        ",\"text\":\"" + text + "\"" +
+        ",\"reply_to_message\":{\"message_id\":" + repliedToMessageId +
+        ",\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}" +
+        ",\"date\":1760000000,\"text\":\"earlier bot message\"}}}";
 
     public static string TextlessUpdate(long chatId, int updateId) =>
         $$$"""

@@ -8,7 +8,8 @@ namespace Overmind.Infrastructure.Notifications;
 public sealed class NotificationsService(
     OvermindDbContext db,
     ReplyAutoActFanout autoAct,
-    WakeDropFanout wakeDrop)
+    WakeDropFanout wakeDrop,
+    IEnumerable<INotificationDeliveryChannel> deliveryChannels)
 {
     public const int ListCapacity = 50;
 
@@ -29,6 +30,11 @@ public sealed class NotificationsService(
         var notification = AgentNotification.Create(kind, text, projectId, featureSlug, tab, agent);
         db.AgentNotifications.Add(notification);
         await db.SaveChangesAsync(ct);
+
+        foreach (var channel in deliveryChannels)
+        {
+            _ = channel.TryDeliverAsync(notification, CancellationToken.None);
+        }
 
         return notification;
     }

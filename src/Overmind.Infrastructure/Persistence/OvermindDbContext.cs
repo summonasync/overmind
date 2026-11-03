@@ -42,6 +42,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
     public DbSet<TelegramChatMapping> TelegramChatMappings => Set<TelegramChatMapping>();
+    public DbSet<TelegramNotificationDelivery> TelegramNotificationDeliveries => Set<TelegramNotificationDelivery>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -452,6 +453,16 @@ public sealed class OvermindDbContext : DbContext
             builder.HasOne<Conversation>()
                 .WithMany()
                 .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelegramNotificationDelivery>(builder =>
+        {
+            builder.HasKey(d => new { d.ChatId, d.MessageId });
+
+            builder.HasOne<AgentNotification>()
+                .WithMany()
+                .HasForeignKey(d => d.NotificationId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -1,4 +1,4 @@
-namespace Overmind.Host.Api;
+namespace Overmind.Infrastructure.Notifications;
 
 public static class NotificationLinks
 {

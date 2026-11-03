@@ -121,6 +121,27 @@ public sealed class TelegramPollingRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_ReplyToBotMessage_CarriesRepliedToMessageId()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.ReplyTextUpdate(42, "approve", 9, 5));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Handler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            var message = rig.Handler.Messages.Single();
+            message.RepliedToMessageId.ShouldBe(5L);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_ConfirmedUpdatesAreNotRedelivered()
     {
         var rig = CreateRig();

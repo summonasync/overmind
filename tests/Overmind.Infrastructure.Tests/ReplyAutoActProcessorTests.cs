@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
@@ -6,6 +7,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
+using Overmind.Infrastructure.Wake;
 using Shouldly;
 using Xunit;
 
@@ -353,6 +355,7 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
         var dispatcher = TestPlanningDispatcher.Create(_context, _materializer);
         return new ReplyAutoActProcessor(
             _context,
+            CreateNotificationsService(),
             new PlanningArtifactService(
                 _context, dispatcher, new TaskDependencyService(_context, dispatcher)),
             new PlanningFeatureService(
@@ -364,5 +367,16 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
                 NullLogger<PlanningFeatureService>.Instance),
             new FeatureDependencyService(_context, dispatcher),
             NullLogger<ReplyAutoActProcessor>.Instance);
+    }
+
+    private NotificationsService CreateNotificationsService()
+    {
+        var scopeFactory = new ServiceCollection().BuildServiceProvider()
+            .GetRequiredService<IServiceScopeFactory>();
+        return new NotificationsService(
+            _context,
+            new ReplyAutoActFanout(_context, new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
+            new WakeDropFanout(scopeFactory, NullLogger<WakeDropFanout>.Instance),
+            []);
     }
 }

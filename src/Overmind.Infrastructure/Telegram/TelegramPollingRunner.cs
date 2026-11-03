@@ -100,7 +100,8 @@ public sealed class TelegramPollingRunner(
 
         try
         {
-            await handler.HandleAsync(new TelegramIncomingMessage(message.Chat.Id, message.Text), ct);
+            await handler.HandleAsync(
+                new TelegramIncomingMessage(message.Chat.Id, message.Text, message.ReplyToMessage?.MessageId), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

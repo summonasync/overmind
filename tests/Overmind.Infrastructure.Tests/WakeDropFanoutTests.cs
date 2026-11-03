@@ -93,7 +93,8 @@ public sealed class WakeDropFanoutTests : IDisposable
             _context,
             new ReplyAutoActFanout(
                 _context, new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
-            _fanout);
+            _fanout,
+            []);
 
         await notifications.ReplyAsync(notification.Id, "approved", CancellationToken.None);
 
