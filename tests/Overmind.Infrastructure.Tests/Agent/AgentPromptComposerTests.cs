@@ -49,7 +49,9 @@ public sealed class AgentPromptComposerTests
         system.ShouldNotContain("\"queue\"");
         system.ShouldNotContain("\"recentReplies\"");
         system.ShouldNotContain("\"memoryFacts\"");
-        system.ShouldNotContain("Bootstrap snapshot");
+        system.ShouldNotContain("snapshot");
+        system.ShouldContain("get_board_context");
+        system.ShouldContain("resolve it from get_board_context or list_projects");
     }
 
     [Fact]
@@ -87,7 +89,7 @@ public sealed class AgentPromptComposerTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task ComposeAsync_WithoutInstructions_PromptEndsOnTheRulesBlock(string instructions)
+    public async Task ComposeAsync_WithoutInstructions_PromptEndsOnTheContextInstruction(string instructions)
     {
         var composer = CreateComposer(instructions);
 
@@ -95,7 +97,7 @@ public sealed class AgentPromptComposerTests
         var system = messages[0].Text;
 
         system.ShouldNotContain(AgentPromptComposer.InstructionsHeader);
-        system.TrimEnd().ShouldEndWith("instead of guessing.");
+        system.TrimEnd().ShouldEndWith("resolve them from the tool result.");
         system.ShouldEndWith(Environment.NewLine);
     }
 

@@ -51,11 +51,13 @@ public sealed class AgentPromptComposer(IAgentRunSettingsProvider settingsProvid
 
             Rules:
             - The board (database) is the source of truth; BACKLOG/ on disk is a read-only mirror. Never trust a status read from a file.
-            - Always pass projectId explicitly; resolve it from the snapshot below or list_projects.
+            - Always pass projectId explicitly; resolve it from get_board_context or list_projects.
             - planning_validate and done flips are human-door actions: never call planning_validate, and never expect done to succeed. A draft spec or plan of yours waits for the human; delegated approvals are a separate capability.
             - Every planning mutation needs a logNote: say why.
             - Feature priority changes only on the user's explicit approval in this conversation.
             - If something surprises you, tell the human with notify_human instead of guessing.
+
+            Call get_board_context at the start of a turn when board state matters; never guess project ids - resolve them from the tool result.
             """);
         AppendOwnerInstructions(builder, settings.Instructions);
         return builder.ToString();
