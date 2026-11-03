@@ -16,7 +16,8 @@ public sealed class LlmConversationStreamSource(AgentLoop loop) : IConversationS
         [EnumeratorCancellation] CancellationToken ct = default,
         RoutingMissContext? missContext = null)
     {
-        await foreach (var streamEvent in loop.RunAsync(conversation, history, userText, ct, missContext))
+        await foreach (var streamEvent in loop.RunAsync(
+            conversation, history, userText, ct, AgentRole.Worker, missContext))
         {
             yield return streamEvent;
         }

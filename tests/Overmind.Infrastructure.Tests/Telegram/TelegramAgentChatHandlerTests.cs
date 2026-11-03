@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Tests.Agent;
 using Overmind.Infrastructure.Llm;
@@ -293,6 +294,7 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
             new ConversationMessageStore(_temp.CreateContext()),
             registrar,
             delegation,
+            new AgentRouteRecorder(new AgentRouteMemoryStore()),
             NullLogger<AgentLoop>.Instance);
 
         return (new LlmConversationStreamSource(loop), budget);
