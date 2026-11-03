@@ -18,6 +18,9 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
     public const string DelegatedDispatchMissingMessage =
         "'{0}' has no delegated dispatch path and cannot be called under delegated approvals.";
 
+    public const string ConversationScopeMissingMessage =
+        "'{0}' works on the current conversation, but this turn carries no conversation scope.";
+
     private readonly Dictionary<string, AgentToolSpec> _specs;
     private readonly IReadOnlyList<AITool> _tools;
     private readonly IReadOnlyList<AITool> _toolsWithHumanGated;
@@ -25,7 +28,8 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
     public AgentToolRegistry(
         AgentLoopbackClient api,
         EmbeddedAgentSessionState sessionState,
-        IGrimoireMemoryClient memory)
+        IGrimoireMemoryClient memory,
+        ConversationMessageStore messages)
     {
         var specs = PlanningAgentTools.Build(api)
             .Concat(EntryAgentTools.Build(api))
@@ -35,6 +39,7 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             .Concat(KitAgentTools.Build(api))
             .Concat(BoardAgentTools.Build(api))
             .Concat(MemoryAgentTools.Build(memory))
+            .Concat(ConversationHistoryAgentTools.Build(messages))
             .ToList();
 
         _specs = specs
@@ -67,10 +72,17 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
 
         try
         {
-            return invocation.DelegationArmed &&
-                   invocation.InstructionMessageId is { } instructionId &&
-                   spec.DelegatedInvoke is { } delegated
-                ? await delegated(arguments, instructionId, ct)
+            if (invocation.DelegationArmed &&
+                invocation.InstructionMessageId is { } instructionId &&
+                spec.DelegatedInvoke is { } delegated)
+            {
+                return await delegated(arguments, instructionId, ct);
+            }
+
+            return spec.ConversationInvoke is { } conversationScoped
+                ? invocation.ConversationId is { } conversationId
+                    ? await conversationScoped(arguments, conversationId, ct)
+                    : Error(string.Format(ConversationScopeMissingMessage, name))
                 : await spec.Invoke(arguments, ct);
         }
         catch (LoopbackApiException ex)

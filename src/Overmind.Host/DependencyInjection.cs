@@ -45,8 +45,8 @@ public static class DependencyInjection
         services.AddScoped<EmbeddedAgentSessionRegistrar>();
         services.AddScoped<DelegatedApprovalGate>();
         services.AddScoped<IAgentDelegationGate>(provider => provider.GetRequiredService<DelegatedApprovalGate>());
-        services.AddSingleton<AgentToolRegistry>();
-        services.AddSingleton<IAgentToolInvoker>(provider => provider.GetRequiredService<AgentToolRegistry>());
+        services.AddScoped<AgentToolRegistry>();
+        services.AddScoped<IAgentToolInvoker>(provider => provider.GetRequiredService<AgentToolRegistry>());
         services.AddSingleton<IGrimoireMemoryClient, GrimoireMemoryClient>();
         services.AddScoped<GrimoireCompactionRunner>();
         services.AddHostedService<GrimoireCompactionSweepService>();

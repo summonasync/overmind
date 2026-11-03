@@ -203,14 +203,60 @@ public sealed class AgentLoopTests : IDisposable
         _budget.Used.ShouldBe(9_000);
     }
 
-    private AgentLoop CreateLoop(IChatClient? client = null, int perTurnMaxTokens = 8_192, int dailyBudget = 0)
+    [Fact]
+    public async Task LongConversation_TurnsOnWindowedContextAndKeepsStorageIntact()
+    {
+        for (var turn = 1; turn <= 30; turn++)
+        {
+            await _messages.AppendAsync(
+                _conversation.Id, ConversationMessage.UserRole, $"user {turn}", CancellationToken.None);
+            await _messages.AppendAsync(
+                _conversation.Id, ConversationMessage.AssistantRole, $"assistant {turn}", CancellationToken.None);
+        }
+
+        var feed = await _messages.ListPageAsync(_conversation.Id, ct: CancellationToken.None);
+        feed.Count.ShouldBe(ConversationMessageStore.DefaultHistoryLimit);
+
+        var composed = new List<IReadOnlyList<ConversationMessage>>();
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Answered from the window."),
+            FakeAgentChatClient.UsageUpdate(40)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000, onCompose: composed.Add);
+
+        var frames = await CollectAsync(loop, feed);
+
+        frames.Last().Kind.ShouldBe(ConversationStreamEventKind.Completed);
+        var window = composed.Single();
+        window.Count.ShouldBe(ConversationContextWindow.MaxMessages);
+        var expected = new List<string>();
+        for (var turn = 21; turn <= 30; turn++)
+        {
+            expected.Add($"user {turn}");
+            expected.Add($"assistant {turn}");
+        }
+
+        window.Select(message => message.Content).ShouldBe(expected);
+        window.ShouldNotContain(message => message.Content == "sort the board");
+
+        var stored = await _messages.ListPageAsync(
+            _conversation.Id, limit: ConversationMessageStore.MaxHistoryLimit, ct: CancellationToken.None);
+        stored.Count.ShouldBe(60);
+    }
+
+    private AgentLoop CreateLoop(
+        IChatClient? client = null,
+        int perTurnMaxTokens = 8_192,
+        int dailyBudget = 0,
+        Action<IReadOnlyList<ConversationMessage>>? onCompose = null)
     {
         var settingsProvider = Substitute.For<IAgentRunSettingsProvider>();
         settingsProvider.GetAsync(Arg.Any<CancellationToken>())
             .Returns(new AgentRunSettings("overmind-agent", perTurnMaxTokens, dailyBudget));
 
         var prompts = Substitute.For<IAgentPromptComposer>();
-        prompts.ComposeAsync(
+        var compose = prompts.ComposeAsync(
                 Arg.Any<Conversation>(),
                 Arg.Any<IReadOnlyList<ConversationMessage>>(),
                 Arg.Any<string>(),
@@ -220,6 +266,10 @@ public sealed class AgentLoopTests : IDisposable
                 new(ChatRole.System, "system prompt"),
                 new(ChatRole.User, (string)callInfo[2]!)
             });
+        if (onCompose is not null)
+        {
+            compose.AndDoes(callInfo => onCompose(callInfo.ArgAt<IReadOnlyList<ConversationMessage>>(1)));
+        }
 
         var registrar = new EmbeddedAgentSessionRegistrar(
             new AgentLoopbackClient(new HttpClient { BaseAddress = new Uri("http://127.0.0.1:1") }),
@@ -251,10 +301,11 @@ public sealed class AgentLoopTests : IDisposable
         return factory;
     }
 
-    private async Task<List<ConversationStreamEvent>> CollectAsync(AgentLoop loop)
+    private async Task<List<ConversationStreamEvent>> CollectAsync(
+        AgentLoop loop, IReadOnlyList<ConversationMessage>? history = null)
     {
         var frames = new List<ConversationStreamEvent>();
-        await foreach (var frame in loop.RunAsync(_conversation, [], "sort the board", CancellationToken.None))
+        await foreach (var frame in loop.RunAsync(_conversation, history ?? [], "sort the board", CancellationToken.None))
         {
             frames.Add(frame);
         }
