@@ -19,4 +19,18 @@ public sealed class TelegramNotificationDeliveryStore(OvermindDbContext db)
             .Where(d => d.ChatId == chatId && d.MessageId == messageId)
             .Select(d => (Guid?)d.NotificationId)
             .FirstOrDefaultAsync(ct);
+
+    public async Task<AgentNotification?> FindNotificationAsync(long chatId, long messageId, CancellationToken ct = default)
+    {
+        var notification = await db.TelegramNotificationDeliveries
+            .AsNoTracking()
+            .Where(d => d.ChatId == chatId && d.MessageId == messageId)
+            .Join(
+                db.AgentNotifications.AsNoTracking(),
+                delivery => delivery.NotificationId,
+                notification => notification.Id,
+                (_, notification) => notification)
+            .FirstOrDefaultAsync(ct);
+        return notification;
+    }
 }

@@ -106,7 +106,7 @@ public sealed class TelegramAgentChatHandler(
                 var outcome = await CollectReplyAsync(conversation, history, message.Text, ct);
                 if (outcome.Refusal is { } refusal)
                 {
-                    await sender.SendAsync(message.ChatId, TelegramReplySplitter.Split(refusal), ct);
+                    await sender.SendAsync(message.ChatId, TelegramReplySplitter.Split(refusal), ct: ct);
                     return;
                 }
 
@@ -201,7 +201,7 @@ public sealed class TelegramAgentChatHandler(
 
         try
         {
-            await sender.SendAsync(chatId, TelegramReplySplitter.Split(plain), ct);
+            await sender.SendAsync(chatId, TelegramReplySplitter.Split(plain), ct: ct);
         }
         catch (TelegramReplyDeliveryException ex) when (ex.DeliveredChunks > 0)
         {
@@ -216,7 +216,7 @@ public sealed class TelegramAgentChatHandler(
     {
         try
         {
-            await sender.SendAsync(chatId, TelegramReplySplitter.Split(text), ct);
+            await sender.SendAsync(chatId, TelegramReplySplitter.Split(text), ct: ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

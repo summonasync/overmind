@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<TelegramReplySender>();
         services.AddScoped<TelegramNotificationDeliveryStore>();
         services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
+        services.AddScoped<ITelegramCallbackHandler, TelegramNotificationCallbackHandler>();
         services.AddSingleton<INotificationDeliveryChannel>(provider => new TelegramNotificationFanout(
             provider.GetRequiredService<IServiceScopeFactory>(),
             () => provider.GetRequiredService<BrowserOrigin>().BoundOrigin,
