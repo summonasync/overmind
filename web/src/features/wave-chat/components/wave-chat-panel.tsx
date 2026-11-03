@@ -28,7 +28,7 @@ import {
 } from "@/features/wave-chat/lib/history-window";
 import { DEFAULT_OWNER_ALIAS, loadOwnerAlias, saveOwnerAlias } from "@/features/wave-chat/lib/owner-alias";
 import { ALL_ROOM } from "@/features/wave-chat/lib/room-order";
-import { loadSeenMap, markSeen } from "@/features/wave-chat/lib/seen";
+import { loadSeenMap, markSeen, subscribeSeenMap } from "@/features/wave-chat/lib/seen";
 import {
   unreadCounts,
   type RoomStreams,
@@ -75,7 +75,11 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
       setSeen(loadSeenMap(projectId));
       setSeenReady(true);
     });
-    return () => cancelAnimationFrame(frame);
+    const unsubscribe = subscribeSeenMap(projectId, setSeen);
+    return () => {
+      cancelAnimationFrame(frame);
+      unsubscribe();
+    };
   }, [projectId]);
 
   const board = useWaveRooms(projectId);
@@ -137,6 +141,11 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
       setSeen((current) => ({ ...current, [activeRoom]: leaving.createdAt }));
     }
     setSelectedRoom(room);
+  };
+
+  const markActiveRoomSeen = (at: string) => {
+    markSeen(projectId, activeRoom, at);
+    setSeen((current) => ({ ...current, [activeRoom]: at }));
   };
 
   const changeAlias = (alias: string) => {
@@ -251,6 +260,7 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
               onlyUnread={onlyUnread}
               onShowMore={showMore}
               onShowAll={showAll}
+              onMarkSeen={markActiveRoomSeen}
               scrollKey={activeRoom}
             />
             {hint}

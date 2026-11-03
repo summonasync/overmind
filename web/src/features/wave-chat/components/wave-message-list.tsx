@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/cn";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -11,6 +11,7 @@ import type { UnreadWindow } from "@/features/wave-chat/lib/history-window";
 import type { WaveMessage } from "@/features/wave-chat/types";
 
 const CONTEXT_TAIL_LIMIT = 5;
+const BOTTOM_FOLLOW_THRESHOLD_PX = 64;
 
 interface WaveMessageListProps {
   messages: WaveMessage[];
@@ -22,6 +23,7 @@ interface WaveMessageListProps {
   onlyUnread: boolean;
   onShowMore: () => Promise<void>;
   onShowAll: () => Promise<void>;
+  onMarkSeen: (at: string) => void;
   scrollKey: string;
 }
 
@@ -35,10 +37,15 @@ export function WaveMessageList({
   onlyUnread,
   onShowMore,
   onShowAll,
+  onMarkSeen,
   scrollKey,
 }: WaveMessageListProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const unreadAnchorRef = useRef<HTMLLIElement | null>(null);
+  const [missedCount, setMissedCount] = useState(0);
+  const atBottomRef = useRef(true);
+  const lastRoomRef = useRef<string | null>(null);
+  const lastPageRef = useRef<{ count: number; firstId: string | null }>({ count: 0, firstId: null });
   const { read, unread, live } = sliceByUnread(messages, window);
   const hasUnread = unread.length > 0;
   const context = onlyUnread
@@ -47,21 +54,62 @@ export function WaveMessageList({
       ? read.slice(-CONTEXT_TAIL_LIMIT)
       : read;
 
-  const ready = messages.length > 0;
-
-  useEffect(() => {
-    if (!ready) {
-      return;
-    }
-    if (hasUnread) {
-      unreadAnchorRef.current?.scrollIntoView({ block: "start" });
-      return;
-    }
+  useLayoutEffect(() => {
     const container = containerRef.current;
+    if (container === null) {
+      return;
+    }
+    const roomChanged = lastRoomRef.current !== scrollKey;
+    const previous = lastPageRef.current;
+    const firstId = messages[0]?.id ?? null;
+    const appended = messages.length > previous.count && firstId === previous.firstId;
+    lastRoomRef.current = scrollKey;
+    lastPageRef.current = { count: messages.length, firstId };
+
+    if (roomChanged) {
+      setMissedCount(0);
+      if (hasUnread) {
+        unreadAnchorRef.current?.scrollIntoView({ block: "start" });
+      } else {
+        container.scrollTop = container.scrollHeight;
+      }
+      atBottomRef.current = isNearBottom(container);
+      return;
+    }
+    if (!appended) {
+      return;
+    }
+    if (atBottomRef.current) {
+      container.scrollTop = container.scrollHeight;
+      setMissedCount(0);
+      return;
+    }
+    setMissedCount((current) => current + messages.length - previous.count);
+  }, [messages, scrollKey, hasUnread]);
+
+  const handleScroll = () => {
+    const container = containerRef.current;
+    if (container === null) {
+      return;
+    }
+    atBottomRef.current = isNearBottom(container);
+    if (atBottomRef.current && missedCount > 0) {
+      setMissedCount(0);
+    }
+  };
+
+  const jumpToNewest = () => {
+    const container = containerRef.current;
+    const newest = messages[messages.length - 1];
     if (container !== null) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [scrollKey, hasUnread, ready]);
+    atBottomRef.current = true;
+    setMissedCount(0);
+    if (newest !== undefined) {
+      onMarkSeen(newest.createdAt);
+    }
+  };
 
   if (messages.length === 0) {
     return (
@@ -89,43 +137,63 @@ export function WaveMessageList({
   };
 
   return (
-    <div ref={containerRef} className="max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-surface">
-      {canPageBack && !onlyUnread ? (
-        <div className="flex items-center justify-center gap-2 border-b border-border px-3 py-2">
-          <Button variant="ghost" className="text-xs" disabled={paging} onClick={pageKeepingViewport(onShowMore)}>
-            Show more
-          </Button>
-          <Button variant="ghost" className="text-xs" disabled={paging} onClick={pageKeepingViewport(onShowAll)}>
-            Show all
-          </Button>
-        </div>
-      ) : null}
-      <ol className="flex flex-col gap-2 p-3">
-        {context.map((message) => (
-          <MessageRow key={message.id} message={message} ownerAlias={ownerAlias} dimmed />
-        ))}
-        {unread.map((message, index) => (
-          <MessageRow
-            key={message.id}
-            message={message}
-            ownerAlias={ownerAlias}
-            unread
-            anchorRef={index === 0 ? unreadAnchorRef : undefined}
-          />
-        ))}
-        {hasUnread && live.length > 0 ? (
-          <li aria-hidden="true" className="flex items-center gap-2 px-1 text-xs text-muted">
-            <span className="h-px flex-1 bg-border" />
-            new
-            <span className="h-px flex-1 bg-border" />
-          </li>
+    <div className="relative">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-surface"
+      >
+        {canPageBack && !onlyUnread ? (
+          <div className="flex items-center justify-center gap-2 border-b border-border px-3 py-2">
+            <Button variant="ghost" className="text-xs" disabled={paging} onClick={pageKeepingViewport(onShowMore)}>
+              Show more
+            </Button>
+            <Button variant="ghost" className="text-xs" disabled={paging} onClick={pageKeepingViewport(onShowAll)}>
+              Show all
+            </Button>
+          </div>
         ) : null}
-        {live.map((message) => (
-          <MessageRow key={message.id} message={message} ownerAlias={ownerAlias} />
-        ))}
-      </ol>
+        <ol className="flex flex-col gap-2 p-3">
+          {context.map((message) => (
+            <MessageRow key={message.id} message={message} ownerAlias={ownerAlias} dimmed />
+          ))}
+          {unread.map((message, index) => (
+            <MessageRow
+              key={message.id}
+              message={message}
+              ownerAlias={ownerAlias}
+              unread
+              anchorRef={index === 0 ? unreadAnchorRef : undefined}
+            />
+          ))}
+          {hasUnread && live.length > 0 ? (
+            <li aria-hidden="true" className="flex items-center gap-2 px-1 text-xs text-muted">
+              <span className="h-px flex-1 bg-border" />
+              new
+              <span className="h-px flex-1 bg-border" />
+            </li>
+          ) : null}
+          {live.map((message) => (
+            <MessageRow key={message.id} message={message} ownerAlias={ownerAlias} />
+          ))}
+        </ol>
+      </div>
+      {missedCount > 0 ? (
+        <Button
+          onClick={jumpToNewest}
+          aria-live="polite"
+          aria-label={`Jump to ${missedCount} new ${missedCount === 1 ? "message" : "messages"}`}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-lg"
+        >
+          {missedCount} new {missedCount === 1 ? "message" : "messages"}
+        </Button>
+      ) : null}
     </div>
   );
+}
+
+function isNearBottom(container: HTMLElement): boolean {
+  return container.scrollHeight - container.scrollTop - container.clientHeight <= BOTTOM_FOLLOW_THRESHOLD_PX;
 }
 
 interface MessageRowProps {
