@@ -956,6 +956,25 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("Tags");
                 });
 
+            modelBuilder.Entity("Overmind.Core.TelegramChatMapping", b =>
+                {
+                    b.Property<long>("ChatId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ChatId");
+
+                    b.HasIndex("ConversationId");
+
+                    b.ToTable("TelegramChatMappings");
+                });
+
             modelBuilder.Entity("Overmind.Core.WaveMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1300,6 +1319,15 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("Entry");
 
                     b.Navigation("Kit");
+                });
+
+            modelBuilder.Entity("Overmind.Core.TelegramChatMapping", b =>
+                {
+                    b.HasOne("Overmind.Core.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Overmind.Core.WaveMessage", b =>

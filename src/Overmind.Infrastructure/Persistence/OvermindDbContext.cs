@@ -41,6 +41,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<WaveWatermark> WaveWatermarks => Set<WaveWatermark>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
+    public DbSet<TelegramChatMapping> TelegramChatMappings => Set<TelegramChatMapping>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -442,6 +443,16 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(m => m.Content).HasMaxLength(ConversationMessage.MaxTextLength);
 
             builder.HasIndex(m => new { m.ConversationId, m.CreatedAt });
+        });
+
+        modelBuilder.Entity<TelegramChatMapping>(builder =>
+        {
+            builder.HasKey(m => m.ChatId);
+
+            builder.HasOne<Conversation>()
+                .WithMany()
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

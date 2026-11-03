@@ -224,6 +224,26 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RunAsync_ThrowingHandler_KeepsPolling()
+    {
+        var rig = CreateRig(wireHandler: false, throwingHandler: true);
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "first", 1));
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "second", 2));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.ThrowingHandler!.Invocations.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.ThrowingHandler.Invocations.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
     public void Dispose() => _temp.Dispose();
 
     private static async Task<bool> WaitForAsync(Func<bool> condition)
@@ -242,11 +262,12 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         return match.Success ? int.Parse(match.Groups[1].Value) : null;
     }
 
-    private Rig CreateRig(bool wireHandler = true)
+    private Rig CreateRig(bool wireHandler = true, bool throwingHandler = false)
     {
         var api = new FakeTelegramApi();
         var factory = new StubTelegramBotClientFactory(api);
         var messages = new RecordingTelegramMessageHandler();
+        var throwing = new ThrowingTelegramMessageHandler();
         var logs = new List<string>();
 
         var services = new ServiceCollection();
@@ -258,16 +279,20 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         {
             services.AddSingleton<ITelegramMessageHandler>(messages);
         }
+        else if (throwingHandler)
+        {
+            services.AddSingleton<ITelegramMessageHandler>(throwing);
+        }
 
-        services.AddSingleton<ILogger<TelegramPollingRunner>>(new CollectingLogger(logs));
+        services.AddSingleton<ILogger<TelegramPollingRunner>>(new CollectingLogger<TelegramPollingRunner>(logs));
 
         var provider = services.BuildServiceProvider();
         var runner = new TelegramPollingRunner(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            factory,
+            new TelegramBotClientCache(factory),
             provider.GetRequiredService<ILogger<TelegramPollingRunner>>());
 
-        return new Rig(runner, api, messages, factory, provider, logs);
+        return new Rig(runner, api, messages, throwingHandler ? throwing : null, factory, provider, logs);
     }
 
     private async Task ConfigureAsync(bool enabled, string allowlist, string? token = TestToken)
@@ -299,6 +324,7 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         TelegramPollingRunner Runner,
         FakeTelegramApi Api,
         RecordingTelegramMessageHandler Handler,
+        ThrowingTelegramMessageHandler? ThrowingHandler,
         StubTelegramBotClientFactory Factory,
         ServiceProvider Provider,
         List<string> Logs)
@@ -309,20 +335,6 @@ public sealed class TelegramPollingRunnerTests : IDisposable
             {
                 return [.. Logs];
             }
-        }
-    }
-
-    private sealed class StubTelegramBotClientFactory(FakeTelegramApi api) : ITelegramBotClientFactory
-    {
-        public int CreatedCount { get; private set; }
-
-        public TelegramBotClientHandle Create(TelegramTransportOptions options)
-        {
-            CreatedCount++;
-            var httpClient = new HttpClient(api) { Timeout = Timeout.InfiniteTimeSpan };
-            var client = new TelegramBotClient(
-                new TelegramBotClientOptions(options.BotToken!, "http://localhost/fake/"), httpClient);
-            return new TelegramBotClientHandle(client, httpClient);
         }
     }
 
@@ -339,20 +351,14 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         }
     }
 
-    private sealed class CollectingLogger(List<string> sink) : ILogger<TelegramPollingRunner>
+    private sealed class ThrowingTelegramMessageHandler : ITelegramMessageHandler
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public SemaphoreSlim Invocations { get; } = new(0);
 
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter)
+        public Task HandleAsync(TelegramIncomingMessage message, CancellationToken ct)
         {
-            lock (sink)
-            {
-                sink.Add($"{logLevel}: {formatter(state, exception)} :: {exception?.GetType().Name}");
-            }
+            Invocations.Release();
+            throw new InvalidOperationException("the handler is broken on purpose");
         }
     }
 }

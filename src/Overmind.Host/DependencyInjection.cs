@@ -60,8 +60,13 @@ public static class DependencyInjection
         services.AddHostedService<AgentLoopHostedService>();
         services.AddScoped<TelegramTransportOptionsProvider>();
         services.AddSingleton<ITelegramBotClientFactory, TelegramBotClientFactory>();
+        services.AddSingleton<TelegramBotClientCache>();
         services.AddSingleton<TelegramPollingRunner>();
         services.AddHostedService<TelegramPollingService>();
+        services.AddSingleton<ConversationTurnGate>();
+        services.AddScoped<TelegramChatStore>();
+        services.AddScoped<TelegramReplySender>();
+        services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());

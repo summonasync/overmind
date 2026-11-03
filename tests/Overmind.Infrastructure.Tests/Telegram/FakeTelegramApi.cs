@@ -79,6 +79,9 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         """
         .Trim();
 
+    public static string SentMessageResponse() =>
+        """{"ok":true,"result":{"message_id":5,"date":1760000000,"chat":{"id":42,"type":"private"}}}""";
+
     public static string TextlessUpdate(long chatId, int updateId) =>
         $$$"""
         {"update_id":{{{updateId}}},"message":{"message_id":{{{updateId}}},"from":{"id":{{{chatId}}},"is_bot":false,"first_name":"Owner"},"chat":{"id":{{{chatId}}},"type":"private"},"date":1760000000}}

@@ -8,15 +8,13 @@ namespace Overmind.Infrastructure.Telegram;
 
 public sealed class TelegramPollingRunner(
     IServiceScopeFactory scopeFactory,
-    ITelegramBotClientFactory botClientFactory,
+    TelegramBotClientCache clientCache,
     ILogger<TelegramPollingRunner> logger)
 {
     internal static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan ErrorDelay = TimeSpan.FromSeconds(5);
     internal const int LongPollSeconds = 50;
 
-    private TelegramBotClientHandle? _client;
-    private string? _clientToken;
     private int _offset;
     private bool _missingHandlerLogged;
 
@@ -35,12 +33,12 @@ public sealed class TelegramPollingRunner(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Telegram polling cycle failed; retrying shortly");
-                DropClient();
+                clientCache.Invalidate();
                 await WaitQuietlyAsync(ErrorDelay, ct);
             }
         }
 
-        DropClient();
+        clientCache.Invalidate();
     }
 
     private async Task PollCycleAsync(CancellationToken ct)
@@ -50,7 +48,7 @@ public sealed class TelegramPollingRunner(
         var options = await provider.GetAsync(ct);
         if (!options.IsRunnable)
         {
-            DropClient();
+            clientCache.Invalidate();
             await WaitQuietlyAsync(IdleDelay, ct);
             return;
         }
@@ -71,7 +69,7 @@ public sealed class TelegramPollingRunner(
 
         _missingHandlerLogged = false;
 
-        var updates = await EnsureClient(options)
+        var updates = await clientCache.GetOrCreate(options)
             .Client.GetUpdates(
                 offset: _offset == 0 ? null : _offset,
                 timeout: LongPollSeconds,
@@ -112,26 +110,6 @@ public sealed class TelegramPollingRunner(
         {
             logger.LogWarning(ex, "Telegram message from chat {ChatId} failed handling", message.Chat.Id);
         }
-    }
-
-    private TelegramBotClientHandle EnsureClient(TelegramTransportOptions options)
-    {
-        if (_client is not null && _clientToken == options.BotToken)
-        {
-            return _client;
-        }
-
-        DropClient();
-        _client = botClientFactory.Create(options);
-        _clientToken = options.BotToken;
-        return _client;
-    }
-
-    private void DropClient()
-    {
-        _client?.Dispose();
-        _client = null;
-        _clientToken = null;
     }
 
     private async Task WaitQuietlyAsync(TimeSpan delay, CancellationToken ct)

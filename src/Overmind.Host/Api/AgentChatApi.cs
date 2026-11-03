@@ -152,6 +152,7 @@ public static class AgentChatApi
         ConversationStore conversations,
         ConversationMessageStore messages,
         IConversationStreamSource streamSource,
+        ConversationTurnGate turns,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -169,7 +170,7 @@ public static class AgentChatApi
         var history = await messages.ListPageAsync(id, ct: ct);
         await messages.AppendAsync(id, ConversationMessage.UserRole, request.Text, ct);
 
-        return Results.Stream(body => StreamReplyAsync(body, id, conversation, history, request.Text, messages, streamSource, ct), SseContentType);
+        return Results.Stream(body => StreamReplyAsync(body, id, conversation, history, request.Text, messages, streamSource, turns, ct), SseContentType);
     }
 
     private static async Task StreamReplyAsync(
@@ -180,9 +181,11 @@ public static class AgentChatApi
         string userText,
         ConversationMessageStore messages,
         IConversationStreamSource streamSource,
+        ConversationTurnGate turns,
         CancellationToken ct)
     {
         var reply = new StringBuilder();
+        turns.Enter(conversationId);
         try
         {
             await foreach (var streamEvent in streamSource.StreamAsync(conversation, history, userText, ct))
@@ -219,6 +222,10 @@ public static class AgentChatApi
         catch (Exception)
         {
             await WriteFrameAsync(body, "failed", new { error = "The chat stream failed." }, CancellationToken.None);
+        }
+        finally
+        {
+            turns.Exit(conversationId);
         }
     }
 
