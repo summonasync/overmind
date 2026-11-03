@@ -337,7 +337,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             id="agent-base-url"
             value={agentBaseUrl}
             onChange={(event) => setAgentBaseUrl(event.target.value)}
-            placeholder="https://open.bigmodel.cn/api/paas/v4"
+            placeholder="https://api.z.ai/api/paas/v4"
           />
         </Field>
         <Field label="Model" htmlFor="agent-model">
@@ -345,7 +345,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             id="agent-model"
             value={agentModel}
             onChange={(event) => setAgentModel(event.target.value)}
-            placeholder="glm-4.6"
+            placeholder="glm-5.3-flash"
           />
         </Field>
         <Field label="API key" htmlFor="agent-api-key">

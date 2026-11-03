@@ -2,7 +2,7 @@ namespace Overmind.Infrastructure.Grimoire;
 
 public interface IGrimoireMemoryClient
 {
-    Task<GrimoireMemoryEndpoint> ResolveEndpointAsync(CancellationToken ct);
+    Task<GrimoireMemoryEndpoint> ResolveEndpointAsync(GrimoireTomeTarget target, CancellationToken ct);
 
     Task<GrimoireMemoryWriteResult> RememberAsync(
         GrimoireMemoryEndpoint endpoint, GrimoireMemoryWriteRequest request, CancellationToken ct);

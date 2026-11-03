@@ -76,7 +76,7 @@ public sealed class AgentLoop(
                 yield return frame;
             }
 
-            dailyUsed = await budget.AddUsageAsync(day, usage.Total - roundResult.UsageBeforeRound, ct);
+            dailyUsed = await budget.AddUsageAsync(day, usage.Output - roundResult.UsageBeforeOutput, ct);
 
             if (settings.PerTurnMaxTokens > 0 && usage.Total > settings.PerTurnMaxTokens)
             {
@@ -153,7 +153,7 @@ public sealed class AgentLoop(
         AgentRoundResult roundResult,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        roundResult.UsageBeforeRound = usage.Total;
+        roundResult.UsageBeforeOutput = usage.Output;
         await foreach (var update in client.GetStreamingResponseAsync(messages, options, ct))
         {
             if (update.Text.Length > 0)
@@ -228,16 +228,19 @@ public sealed class AgentLoop(
     {
         public StringBuilder Text { get; } = new();
         public List<FunctionCallContent> Calls { get; } = [];
-        public long UsageBeforeRound { get; set; }
+        public long UsageBeforeOutput { get; set; }
     }
 
     private sealed class AgentTurnUsage
     {
         public long Total { get; private set; }
 
+        public long Output { get; private set; }
+
         public void Add(UsageDetails usage)
         {
             Total += usage.TotalTokenCount ?? (usage.InputTokenCount ?? 0) + (usage.OutputTokenCount ?? 0);
+            Output += usage.OutputTokenCount ?? usage.TotalTokenCount ?? usage.InputTokenCount ?? 0;
         }
     }
 }

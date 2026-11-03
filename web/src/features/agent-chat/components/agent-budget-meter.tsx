@@ -33,17 +33,19 @@ export function AgentBudgetMeter({ className }: AgentBudgetMeterProps) {
 
 function MeterBody({ usage }: { usage: AgentUsage }) {
   const state = resolveBudgetMeterState(usage);
+  const spent = `${formatTokenCount(usage.spentToday)} output tokens today`;
+
   if (state === "off") {
     return (
-      <span className="whitespace-nowrap text-muted" title="Daily token budget is disabled">
-        Budget off
+      <span className="whitespace-nowrap text-muted" title="Daily budget is off">
+        {spent}
       </span>
     );
   }
 
   const exhausted = state === "exhausted";
   const percent = Math.min(100, Math.round((usage.spentToday / usage.dailyBudget) * 100));
-  const tooltip = `${usage.spentToday.toLocaleString("en-US")} of ${usage.dailyBudget.toLocaleString("en-US")} tokens used today`;
+  const tooltip = `${usage.spentToday.toLocaleString("en-US")} of ${usage.dailyBudget.toLocaleString("en-US")} output tokens used today, resets at 00:00 UTC`;
 
   return (
     <span className="flex items-center gap-2" title={tooltip}>

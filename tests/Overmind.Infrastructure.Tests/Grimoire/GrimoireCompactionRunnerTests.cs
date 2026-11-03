@@ -56,8 +56,11 @@ public sealed class GrimoireCompactionRunnerTests : IDisposable
         var writeBody = JsonDocument.Parse(write.Body).RootElement;
         writeBody.GetProperty("kind").GetString()!.ShouldBe("fact");
         writeBody.GetProperty("scope").GetString()!.ShouldBe("global");
-        writeBody.GetProperty("tome").GetString()!.ShouldBe("crew");
+        writeBody.GetProperty("tome").GetString()!.ShouldBe("overmind-agent");
         writeBody.GetProperty("importance").GetDouble().ShouldBe(0.7);
+
+        var candidates = _fixture.Server.Single(HttpMethod.Get, "/api/compaction/candidates");
+        candidates.Query.ShouldContain("tome=overmind-agent");
         var writeTags = writeBody.GetProperty("tags").EnumerateArray().Select(tag => tag.GetString()).ToList();
         writeTags.ShouldContain("overmind://actor/overmind-agent");
         writeTags.ShouldContain("overmind://vendor/overmind-host");
@@ -192,7 +195,7 @@ internal sealed class FixedTextChatClient(string text) : IChatClient
 
 internal sealed class UnavailableMemoryClient : IGrimoireMemoryClient
 {
-    public Task<GrimoireMemoryEndpoint> ResolveEndpointAsync(CancellationToken ct) =>
+    public Task<GrimoireMemoryEndpoint> ResolveEndpointAsync(GrimoireTomeTarget target, CancellationToken ct) =>
         throw new GrimoireMemoryException("grimoire memory is unavailable: nothing is listening");
 
     public Task<GrimoireMemoryWriteResult> RememberAsync(

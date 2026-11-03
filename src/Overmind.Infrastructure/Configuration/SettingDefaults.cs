@@ -21,8 +21,8 @@ public static class SettingDefaults
     public const string GrimoireWired = "false";
     public const string GrimoireInstallChannel = "";
 
-    public const string AgentBaseUrl = "https://open.bigmodel.cn/api/paas/v4";
-    public const string AgentModel = "glm-4.6";
+    public const string AgentBaseUrl = "https://api.z.ai/api/paas/v4";
+    public const string AgentModel = "glm-5.3-flash";
     public const string AgentAlias = "overmind-agent";
     public const int AgentPerTurnMaxTokens = 8192;
     public const int AgentDailyBudget = 0;
@@ -32,6 +32,8 @@ public static class SettingDefaults
 
     public const string AgentGrimoireBaseUrl = "";
     public const string AgentGrimoireTome = "crew";
+    public const string AgentGrimoirePersonalTome = "";
+    public const string AgentGrimoireCrewTome = "crew";
     public const int AgentGrimoireCompactionHours = 24;
 
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];

@@ -31,7 +31,7 @@ public sealed class AgentUsageApiTests
     }
 
     [Fact]
-    public async Task Usage_WithPartialSpend_ReportsRemainingBudget()
+    public async Task Usage_WithPartialOutputSpend_ReportsRemainingBudget()
     {
         using var factory = new ApiFactory();
         await SeedAsync(factory, dailyBudget: 1000, spent: 400);
@@ -46,7 +46,7 @@ public sealed class AgentUsageApiTests
     }
 
     [Fact]
-    public async Task Usage_WhenBudgetExhausted_RemainingClampsToZero()
+    public async Task Usage_WhenOutputBudgetExhausted_RemainingClampsToZero()
     {
         using var factory = new ApiFactory();
         await SeedAsync(factory, dailyBudget: 1000, spent: 1250);
