@@ -56,6 +56,14 @@ public sealed class ConversationMessageStore
         return page;
     }
 
+    public async Task<ConversationMessage?> FindAsync(
+        Guid conversationId, Guid messageId, CancellationToken ct = default)
+    {
+        return await _db.ConversationMessages
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ConversationId == conversationId && m.Id == messageId, ct);
+    }
+
     public async Task<ConversationMessage?> LatestAsync(
         Guid conversationId, string role, CancellationToken ct = default)
     {

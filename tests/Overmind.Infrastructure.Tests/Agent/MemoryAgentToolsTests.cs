@@ -7,8 +7,10 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests.Agent;
 
-public sealed class MemoryAgentToolsTests
+public sealed class MemoryAgentToolsTests : IDisposable
 {
+    private readonly TempDatabase _temp = new();
+
     private static readonly GrimoireMemoryEndpoint Endpoint = new("http://127.0.0.1:19997", "crew", "overmind-agent");
     private static readonly Guid RememberedId = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
@@ -139,13 +141,17 @@ public sealed class MemoryAgentToolsTests
             Arg.Any<GrimoireMemoryEndpoint>(), Arg.Any<GrimoireMemoryWriteRequest>(), Arg.Any<CancellationToken>());
     }
 
-    private static AgentToolRegistry CreateRegistry(IGrimoireMemoryClient memory)
+    private AgentToolRegistry CreateRegistry(IGrimoireMemoryClient memory)
     {
         var http = new HttpClient(new StubHandler()) { BaseAddress = new Uri("http://127.0.0.1:1") };
         var state = new EmbeddedAgentSessionState();
         state.Set(Guid.NewGuid());
-        return new AgentToolRegistry(new AgentLoopbackClient(http), state, memory);
+        return new AgentToolRegistry(
+            new AgentLoopbackClient(http), state, memory,
+            new ConversationMessageStore(_temp.CreateContext()));
     }
+
+    public void Dispose() => _temp.Dispose();
 
     private sealed class StubHandler : HttpMessageHandler
     {
