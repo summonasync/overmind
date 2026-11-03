@@ -53,8 +53,8 @@ test("the token input is write-only with a configured badge", () => {
 
 test("the allowlist editor validates chat ids before saving", () => {
   const source = section();
-  assert.ok(source.includes("/^\\d{1,15}$/"));
-  assert.ok(source.includes("is not a Telegram chat id"));
+  assert.ok(source.includes("/^-?\\d{1,15}$/"));
+  assert.ok(source.includes("group chats are negative"));
 });
 
 test("the settings page renders the telegram section", () => {

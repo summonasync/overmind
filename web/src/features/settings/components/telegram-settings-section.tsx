@@ -39,8 +39,8 @@ export function TelegramSettingsSection({ settings }: TelegramSettingsSectionPro
       .filter((token) => token.length > 0);
     const ids: number[] = [];
     for (const token of tokens) {
-      if (!/^\d{1,15}$/.test(token)) {
-        setParseError(new Error(`'${token}' is not a Telegram chat id — ids are plain positive numbers.`));
+      if (!/^-?\d{1,15}$/.test(token)) {
+        setParseError(new Error(`'${token}' is not a Telegram chat id — ids are integers, group chats are negative.`));
         return null;
       }
 

@@ -208,6 +208,29 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
         SentTexts().ShouldBe([TelegramAgentChatHandler.ReplyFailedNotice]);
     }
 
+    [Fact]
+    public async Task FullDeliveryFailure_RetriesWithoutLeavingAStaleAssistantRow()
+    {
+        var firstChunk = new string('a', 3_000);
+        var secondChunk = new string('b', 3_000);
+        _api.QueueResponse("""{"ok":false,"error_code":500,"description":"first chunk broke"}""");
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var stream = new StubStreamSource(
+        [
+            [ConversationStreamEvent.Delta($"{firstChunk}\n\n{secondChunk}"), ConversationStreamEvent.Completed(10)]
+        ]);
+        var rig = await CreateHandlerAsync(stream);
+
+        await rig.Handler.HandleAsync(new TelegramIncomingMessage(OwnerChatId, "split me"), CancellationToken.None);
+
+        stream.Invocations.ShouldBe(2);
+        _api.RequestCount.ShouldBe(3);
+        await using var context = _temp.CreateContext();
+        context.ConversationMessages.Count(row => row.ConversationId == rig.Conversation.Id
+            && row.Role == ConversationMessage.AssistantRole).ShouldBe(1);
+    }
+
     public void Dispose()
     {
         _cache.Dispose();

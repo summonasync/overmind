@@ -189,7 +189,7 @@ public sealed class TelegramAgentChatHandler(
         {
             await sender.SendAsync(chatId, TelegramReplySplitter.Split(plain), ct);
         }
-        catch (TelegramReplyDeliveryException)
+        catch (TelegramReplyDeliveryException ex) when (ex.DeliveredChunks > 0)
         {
             await messages.AppendAsync(conversationId, ConversationMessage.AssistantRole, reply, ct);
             throw;
