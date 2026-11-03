@@ -6,10 +6,21 @@ public sealed class AgentRouteRecorder(IAgentRouteStore store)
 {
     public const string NotAnalyzedReason = "not analyzed";
     public const string UnknownDomain = "unknown";
+    public const int MaxTrackedConversations = 512;
 
     private readonly ConcurrentDictionary<Guid, bool> _analyzed = [];
 
-    public void BeginTurn(Guid conversationId) => _analyzed[conversationId] = false;
+    public void BeginTurn(Guid conversationId)
+    {
+        if (_analyzed.Count >= MaxTrackedConversations)
+        {
+            _analyzed.Clear();
+        }
+
+        _analyzed[conversationId] = false;
+    }
+
+    public void EndTurn(Guid conversationId) => _analyzed.TryRemove(conversationId, out _);
 
     public bool TurnAnalyzed(Guid conversationId) =>
         _analyzed.TryGetValue(conversationId, out var analyzed) && analyzed;

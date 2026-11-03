@@ -514,6 +514,25 @@ public sealed class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task BounceCall_ClampsTheReasonToTheRowLimits()
+    {
+        var rowdyReason = new string('X', 300).Replace("X", "Wave cleanup ") + "!!!";
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.ToolCallUpdate("c1", "bounce_turn", JsonSerializer.Serialize(new { reason = rowdyReason })),
+            FakeAgentChatClient.UsageUpdate(50)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        var frames = await CollectAsync(loop);
+
+        var bounced = frames.Single(frame => frame.Kind == ConversationStreamEventKind.Bounced);
+        bounced.Text!.Length.ShouldBe(AgentRouteText.MaxMissReasonLength);
+        bounced.Text.ShouldNotContain("!!!");
+        bounced.Text.ShouldBe(bounced.Text.ToLowerInvariant());
+    }
+
+    [Fact]
     public async Task WorkerTurnWithoutRecordRoute_RecordsUnanalyzedRow()
     {
         var client = new FakeAgentChatClient(

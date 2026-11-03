@@ -95,6 +95,7 @@ public sealed class AgentLoop(
             if (workerTurn)
             {
                 await RecordRouteFallbackAsync(conversation, userText, ct);
+                routeRecorder.EndTurn(conversation.Id);
             }
         }
     }
@@ -223,8 +224,9 @@ public sealed class AgentLoop(
 
         return value switch
         {
-            string text => text.Trim(),
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString()?.Trim() ?? string.Empty,
+            string text => AgentRouteText.Clamp(text, AgentRouteText.MaxMissReasonLength),
+            JsonElement { ValueKind: JsonValueKind.String } element =>
+                AgentRouteText.Clamp(element.GetString(), AgentRouteText.MaxMissReasonLength),
             _ => string.Empty
         };
     }

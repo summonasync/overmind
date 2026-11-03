@@ -63,4 +63,30 @@ public sealed class AgentRouteRecorderTests
         rows.ShouldContain(row => row.MissReason == AgentRouteRecorder.NotAnalyzedReason);
     }
 
+    [Fact]
+    public void EndTurn_DropsTheConversationMark()
+    {
+        _recorder.BeginTurn(Conversation);
+        _recorder.EndTurn(Conversation);
+
+        _recorder.TurnAnalyzed(Conversation).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task BeginTurn_EvictsTrackedConversationsAtTheCap()
+    {
+        _recorder.BeginTurn(Conversation);
+        await _recorder.RecordAnalysisAsync(Conversation, "board planning tasks", "planning", "miss");
+
+        for (var i = 0; i < AgentRouteRecorder.MaxTrackedConversations; i++)
+        {
+            _recorder.BeginTurn(Guid.NewGuid());
+        }
+
+        _recorder.TurnAnalyzed(Conversation).ShouldBeFalse();
+
+        await _recorder.RecordUnanalyzedAsync(Conversation, "sort the board");
+        (await _store.HotHeadAsync(10))
+            .ShouldContain(row => row.MissReason == AgentRouteRecorder.NotAnalyzedReason);
+    }
 }
