@@ -54,6 +54,11 @@ export function AgentChatPanel({ hint }: AgentChatPanelProps) {
     router.replace(value.length > 0 ? `/agent-chat?project=${encodeURIComponent(value)}` : "/agent-chat");
   };
 
+  const startNewChat = () => {
+    list.clearError();
+    setSelectedId(null);
+  };
+
   return (
     <div>
       <PageHeader
@@ -75,6 +80,7 @@ export function AgentChatPanel({ hint }: AgentChatPanelProps) {
             activeId={selectedId}
             onOpen={setSelectedId}
             onDelete={list.remove}
+            onNewChat={startNewChat}
           />
           <section aria-label="Conversation" className="flex min-w-0 flex-col gap-3">
             <AgentMessageList
