@@ -38,6 +38,7 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             .Concat(WaveAgentTools.Build(api, sessionState))
             .Concat(KitAgentTools.Build(api))
             .Concat(BoardAgentTools.Build(api))
+            .Concat(ContextAgentTools.Build(api, memory))
             .Concat(MemoryAgentTools.Build(memory))
             .Concat(ConversationHistoryAgentTools.Build(messages))
             .ToList();
