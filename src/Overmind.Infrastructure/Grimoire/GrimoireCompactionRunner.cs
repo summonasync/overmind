@@ -16,7 +16,7 @@ public sealed class GrimoireCompactionRunner(
         GrimoireMemoryEndpoint endpoint;
         try
         {
-            endpoint = await memory.ResolveEndpointAsync(ct);
+            endpoint = await memory.ResolveEndpointAsync(GrimoireTomeTarget.Personal, ct);
         }
         catch (GrimoireMemoryException ex)
         {

@@ -32,6 +32,8 @@ public static class SettingDefaults
 
     public const string AgentGrimoireBaseUrl = "";
     public const string AgentGrimoireTome = "crew";
+    public const string AgentGrimoirePersonalTome = "";
+    public const string AgentGrimoireCrewTome = "crew";
     public const int AgentGrimoireCompactionHours = 24;
 
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];
