@@ -1,8 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Overmind.Core;
-using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Shouldly;
 using Xunit;
 
@@ -27,8 +26,8 @@ public sealed class AgentRoutesApiTests : IDisposable
     [Fact]
     public async Task List_ReturnsRoutesOrderedByHitsWithoutAuth()
     {
-        await SeedAsync("route plain", 0);
-        await SeedAsync("route popular", 2);
+        await SeedAsync("route plain", 1);
+        await SeedAsync("route popular", 3);
 
         var response = await _client.GetAsync("/api/agent/routes");
 
@@ -37,15 +36,16 @@ public sealed class AgentRoutesApiTests : IDisposable
         payload.ShouldNotBeNull();
         payload.Routes.Count.ShouldBe(2);
         payload.Routes[0].Pattern.ShouldBe("route popular");
-        payload.Routes[0].HitCount.ShouldBe(2);
+        payload.Routes[0].HitCount.ShouldBe(3);
         payload.Routes[1].Status.ShouldBe("provisional");
         payload.Routes[1].Source.ShouldBe("learned");
+        payload.Routes[1].TargetAgent.ShouldBeNull();
     }
 
     [Fact]
     public async Task Promote_ExistingRoute_ConfirmsIt()
     {
-        var route = await SeedAsync("route promotable", 0);
+        var route = await SeedAsync("route promotable", 1);
 
         var response = await _client.PostAsync($"/api/agent/routes/{route.Id}/promote", null);
 
@@ -68,8 +68,8 @@ public sealed class AgentRoutesApiTests : IDisposable
     [Fact]
     public async Task Clear_RemovesEveryRoute()
     {
-        await SeedAsync("route one", 0);
-        await SeedAsync("route two", 1);
+        await SeedAsync("route one", 1);
+        await SeedAsync("route two", 2);
 
         var response = await _client.DeleteAsync("/api/agent/routes");
 
@@ -79,15 +79,15 @@ public sealed class AgentRoutesApiTests : IDisposable
         (await ListAsync()).ShouldBeEmpty();
     }
 
-    private async Task<AgentRoute> SeedAsync(string pattern, int extraHits)
+    private async Task<AgentRouteRecord> SeedAsync(string pattern, int records)
     {
         using var scope = _factory.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<AgentRouteStore>();
-        var route = await store.RecordAsync(
-            pattern, "wave", "worker", "no matching row", AgentRouteSource.Learned, CancellationToken.None);
-        for (var hit = 0; hit < extraHits; hit++)
+        var store = scope.ServiceProvider.GetRequiredService<IAgentRouteStore>();
+        AgentRouteRecord route = null!;
+        for (var record = 0; record < records; record++)
         {
-            await store.RecordAsync(pattern, "wave", "worker", "repeat ask", AgentRouteSource.Learned, CancellationToken.None);
+            route = await store.RecordAsync(
+                new AgentRouteRecording(pattern, "wave", "seeded by the api test"), CancellationToken.None);
         }
 
         return route;
@@ -107,13 +107,13 @@ public sealed class AgentRoutesApiTests : IDisposable
         Guid Id,
         string Pattern,
         string Domain,
-        string TargetAgent,
+        string? TargetAgent,
         string MissReason,
         string Status,
         string Source,
         int HitCount,
-        DateTime LastHitAt,
-        DateTime CreatedAt);
+        DateTimeOffset LastHitAt,
+        DateTimeOffset CreatedAt);
 
     private sealed record PromoteResponsePayload(Guid Id, string Status);
 

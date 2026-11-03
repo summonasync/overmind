@@ -16,15 +16,15 @@ namespace Overmind.Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Pattern = table.Column<string>(type: "TEXT", maxLength: 300, nullable: false),
-                    Domain = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TargetAgent = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    MissReason = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
+                    Pattern = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
+                    Domain = table.Column<string>(type: "TEXT", maxLength: 40, nullable: false),
+                    TargetAgent = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
+                    MissReason = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
                     Status = table.Column<int>(type: "INTEGER", nullable: false),
                     HitCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    LastHitAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                     Source = table.Column<int>(type: "INTEGER", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    LastHitAt = table.Column<long>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {

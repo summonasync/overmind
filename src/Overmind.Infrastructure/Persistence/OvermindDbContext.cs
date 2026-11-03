@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Materialization;
 
 namespace Overmind.Infrastructure.Persistence;
@@ -43,7 +44,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
     public DbSet<TelegramChatMapping> TelegramChatMappings => Set<TelegramChatMapping>();
     public DbSet<TelegramNotificationDelivery> TelegramNotificationDeliveries => Set<TelegramNotificationDelivery>();
-    public DbSet<AgentRoute> AgentRoutes => Set<AgentRoute>();
+    public DbSet<AgentRouteRow> AgentRoutes => Set<AgentRouteRow>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -467,12 +468,19 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<AgentRoute>(builder =>
+        modelBuilder.Entity<AgentRouteRow>(builder =>
         {
-            builder.Property(r => r.Pattern).HasMaxLength(AgentRoute.MaxPatternLength);
-            builder.Property(r => r.Domain).HasMaxLength(AgentRoute.MaxDomainLength);
-            builder.Property(r => r.TargetAgent).HasMaxLength(AgentRoute.MaxTargetAgentLength);
-            builder.Property(r => r.MissReason).HasMaxLength(AgentRoute.MaxMissReasonLength);
+            builder.Property(r => r.Pattern).HasMaxLength(AgentRouteText.MaxPatternLength);
+            builder.Property(r => r.Domain).HasMaxLength(AgentRouteText.MaxDomainLength);
+            builder.Property(r => r.TargetAgent).HasMaxLength(AgentRouteRow.MaxTargetAgentLength);
+            builder.Property(r => r.MissReason).HasMaxLength(AgentRouteText.MaxMissReasonLength);
+
+            builder.Property(r => r.LastHitAt).HasConversion(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero));
+            builder.Property(r => r.CreatedAt).HasConversion(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero));
 
             builder.HasIndex(r => r.Pattern).IsUnique();
             builder.HasIndex(r => r.HitCount);

@@ -397,7 +397,8 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
             Conversation conversation,
             IReadOnlyList<ConversationMessage> history,
             string userText,
-            [EnumeratorCancellation] CancellationToken ct = default)
+            [EnumeratorCancellation] CancellationToken ct = default,
+            RoutingMissContext? missContext = null)
         {
             Invocations++;
             if (AlwaysThrow || Invocations <= ThrowFirstInvocations)

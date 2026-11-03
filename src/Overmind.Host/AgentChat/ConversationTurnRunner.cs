@@ -66,7 +66,10 @@ public sealed class ConversationTurnRunner(
                     turn.Publish(streamEvent);
                     break;
                 case ConversationStreamEventKind.ToolCall:
+                case ConversationStreamEventKind.Routed:
                     turn.Publish(streamEvent);
+                    break;
+                case ConversationStreamEventKind.Bounced:
                     break;
                 case ConversationStreamEventKind.Completed:
                     Guid? messageId = turn.HasReply

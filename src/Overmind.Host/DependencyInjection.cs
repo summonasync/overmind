@@ -6,6 +6,7 @@ using Overmind.Host.AgentChat;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Grimoire;
@@ -58,6 +59,10 @@ public static class DependencyInjection
         services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();
         services.AddScoped<AgentLoop>();
         services.AddScoped<IConversationStreamSource, LlmConversationStreamSource>();
+        services.AddScoped<IRouterPromptComposer, RouterPromptComposer>();
+        services.AddScoped<IntentRouter>();
+        services.AddScoped<RouterChatResponder>();
+        services.AddScoped<RouterConversationStreamSource>();
         services.AddSingleton<ConversationTurnRunner>();
         services.AddSingleton<ConversationTurnRegistry>();
         services.AddHostedService<AgentLoopHostedService>();
@@ -212,7 +217,8 @@ public static class DependencyInjection
         services.AddScoped<AgentWakeService>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ConversationMessageStore>();
-        services.AddScoped<AgentRouteStore>();
+        services.AddScoped<IAgentRouteStore, AgentRouteEntityStore>();
+        services.AddScoped<AgentRouteRecorder>();
         services.AddScoped<ConversationReadStore>();
         services.AddSingleton<WakeDropWriter>();
         services.AddSingleton<WakeDropFanout>();

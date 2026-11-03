@@ -6,5 +6,7 @@ public enum ConversationStreamEventKind
     Completed = 1,
     Failed = 2,
     ToolCall = 3,
-    Aborted = 4
+    Aborted = 4,
+    Routed = 5,
+    Bounced = 6
 }

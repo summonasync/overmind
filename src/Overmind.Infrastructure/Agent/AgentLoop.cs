@@ -29,7 +29,8 @@ public sealed class AgentLoop(
         Conversation conversation,
         IReadOnlyList<ConversationMessage> history,
         string userText,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default,
+        RoutingMissContext? missContext = null)
     {
         await sessionRegistrar.EnsureRegisteredAsync(ct);
 
@@ -44,6 +45,10 @@ public sealed class AgentLoop(
 
         var messages = new List<ChatMessage>(
             await prompts.ComposeAsync(conversation, ConversationContextWindow.Apply(history), userText, ct));
+        if (missContext is { } miss && messages.Count > 0)
+        {
+            messages[0] = new ChatMessage(ChatRole.System, $"{messages[0].Text}\n\n{miss.Describe()}");
+        }
         var delegationArmed = await delegationGate.IsEnabledAsync(conversation.ProjectId, ct);
         Guid? instructionMessageId = delegationArmed
             ? (await auditTrail.LatestAsync(conversation.Id, ConversationMessage.UserRole, ct))?.Id

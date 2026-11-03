@@ -233,6 +233,15 @@ public static class AgentChatApi
                 case ConversationStreamEventKind.ToolCall:
                     await WriteFrameAsync(body, "tool", new { tool = streamEvent.ToolName }, CancellationToken.None);
                     break;
+                case ConversationStreamEventKind.Routed:
+                    await WriteFrameAsync(
+                        body,
+                        "route",
+                        new { target = streamEvent.RouteTarget, source = streamEvent.RouteSource?.ToString().ToLowerInvariant() },
+                        CancellationToken.None);
+                    break;
+                case ConversationStreamEventKind.Bounced:
+                    break;
                 case ConversationStreamEventKind.Completed:
                     await WriteFrameAsync(
                         body, "completed", new { messageId = streamEvent.MessageId, tokensUsed = streamEvent.TokensUsed }, CancellationToken.None);
