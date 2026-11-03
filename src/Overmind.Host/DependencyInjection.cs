@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<AgentLoopbackClient>();
         services.AddScoped<IAgentGuardNotifier, AgentLoopbackGuardNotifier>();
         services.AddScoped<EmbeddedAgentSessionRegistrar>();
+        services.AddScoped<ApprovalPolicy>();
         services.AddScoped<DelegatedApprovalGate>();
         services.AddScoped<IAgentDelegationGate>(provider => provider.GetRequiredService<DelegatedApprovalGate>());
         services.AddSingleton<AgentToolRegistry>();

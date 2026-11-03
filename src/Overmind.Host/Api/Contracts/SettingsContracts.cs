@@ -22,7 +22,8 @@ public sealed record SettingsResponse(
     string AgentGrimoireBaseUrl,
     string AgentGrimoireTome,
     int AgentGrimoireCompactionHours,
-    string AgentInstructions);
+    string AgentInstructions,
+    string AgentDelegateApprovalsDefault);
 
 public sealed record UpdateSettingsResponse(
     string EmbeddingProvider,
@@ -47,6 +48,7 @@ public sealed record UpdateSettingsResponse(
     string AgentGrimoireTome,
     int AgentGrimoireCompactionHours,
     string AgentInstructions,
+    string AgentDelegateApprovalsDefault,
     bool ReindexRecommended);
 
 public sealed record UpdateSettingsRequest(
@@ -71,7 +73,8 @@ public sealed record UpdateSettingsRequest(
     string? AgentGrimoireBaseUrl,
     string? AgentGrimoireTome,
     int? AgentGrimoireCompactionHours,
-    string? AgentInstructions);
+    string? AgentInstructions,
+    string? AgentDelegateApprovalsDefault);
 
 public sealed record TestSettingsRequest(
     string? Provider,

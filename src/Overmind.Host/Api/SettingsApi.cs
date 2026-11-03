@@ -166,6 +166,15 @@ public static class SettingsApi
                 $"Must be at most {SettingDefaults.AgentInstructionsMaxLength} characters.");
         }
 
+        if (request.AgentDelegateApprovalsDefault is not null &&
+            !SettingDefaults.AgentDelegateApprovalsDefaults.Contains(
+                request.AgentDelegateApprovalsDefault, StringComparer.OrdinalIgnoreCase))
+        {
+            return InvalidSetting(
+                nameof(request.AgentDelegateApprovalsDefault),
+                $"Must be one of: {string.Join(", ", SettingDefaults.AgentDelegateApprovalsDefaults)}.");
+        }
+
         var reindexRecommended = await ChangesEmbeddingInputsAsync(settings, request, ct);
 
         if (request.EmbeddingProvider is not null)
@@ -305,6 +314,13 @@ public static class SettingsApi
             await settings.SetAsync(SettingKeys.AgentInstructions, request.AgentInstructions, ct);
         }
 
+        if (request.AgentDelegateApprovalsDefault is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.AgentDelegateApprovalsDefault,
+                request.AgentDelegateApprovalsDefault.ToLowerInvariant(), ct);
+        }
+
         var updated = await ReadSettingsAsync(settings, ct);
         return Results.Ok(new UpdateSettingsResponse(
             updated.EmbeddingProvider,
@@ -329,6 +345,7 @@ public static class SettingsApi
             updated.AgentGrimoireTome,
             updated.AgentGrimoireCompactionHours,
             updated.AgentInstructions,
+            updated.AgentDelegateApprovalsDefault,
             reindexRecommended));
     }
 
@@ -443,13 +460,16 @@ public static class SettingsApi
                 : SettingDefaults.AgentGrimoireCompactionHours;
         var agentInstructions = await settings.GetOrDefaultAsync(
             SettingKeys.AgentInstructions, SettingDefaults.AgentInstructions, ct);
+        var agentDelegateApprovalsDefault = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentDelegateApprovalsDefault, SettingDefaults.AgentDelegateApprovalsDefault, ct);
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
             planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
             planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
             agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget,
-            agentGrimoireBaseUrl, agentGrimoireTome, agentGrimoireCompactionHours, agentInstructions);
+            agentGrimoireBaseUrl, agentGrimoireTome, agentGrimoireCompactionHours, agentInstructions,
+            agentDelegateApprovalsDefault);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

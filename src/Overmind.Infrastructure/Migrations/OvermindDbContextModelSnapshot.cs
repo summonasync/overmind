@@ -770,7 +770,7 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("DelegateApprovals")
+                    b.Property<int>("DelegateApprovals")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Description")

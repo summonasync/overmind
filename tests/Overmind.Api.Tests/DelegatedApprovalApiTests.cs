@@ -40,15 +40,60 @@ public sealed class DelegatedApprovalApiTests : IDisposable
 
         var fresh = await _client.GetFromJsonAsync<ApprovalSettingsJson>(
             ApprovalSettingsUrl(project.Id), JsonOptions);
-        fresh!.DelegateApprovals.ShouldBeFalse();
+        fresh!.DelegateApprovals.ShouldBe("unset");
+        fresh.EffectiveDelegateApprovals.ShouldBeFalse();
 
-        var updated = await _client.PutAsJsonAsync(ApprovalSettingsUrl(project.Id), new { DelegateApprovals = true });
+        var updated = await _client.PutAsJsonAsync(ApprovalSettingsUrl(project.Id), new { DelegateApprovals = "On" });
         updated.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await updated.Content.ReadFromJsonAsync<ApprovalSettingsJson>(JsonOptions))!.DelegateApprovals.ShouldBeTrue();
+        var updatedSettings = await updated.Content.ReadFromJsonAsync<ApprovalSettingsJson>(JsonOptions);
+        updatedSettings!.DelegateApprovals.ShouldBe("on");
+        updatedSettings.EffectiveDelegateApprovals.ShouldBeTrue();
 
         var stored = await _client.GetFromJsonAsync<ApprovalSettingsJson>(
             ApprovalSettingsUrl(project.Id), JsonOptions);
-        stored!.DelegateApprovals.ShouldBeTrue();
+        stored!.DelegateApprovals.ShouldBe("on");
+        stored.EffectiveDelegateApprovals.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ApprovalSettings_UnsetProject_InheritsGlobalDefault()
+    {
+        var project = await CreateProjectAsync();
+        await SetAgentDelegateApprovalsDefaultAsync("on");
+
+        var stored = await _client.GetFromJsonAsync<ApprovalSettingsJson>(
+            ApprovalSettingsUrl(project.Id), JsonOptions);
+
+        stored!.DelegateApprovals.ShouldBe("unset");
+        stored.EffectiveDelegateApprovals.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_UnsetProjectWithGlobalDefaultOn_SucceedsWithDelegatedProvenance()
+    {
+        var project = await CreateProjectAsync();
+        await SetAgentDelegateApprovalsDefaultAsync("on");
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+        var spec = await CreateAgentArtifactAsync(project.Id, "feat", new { Kind = "spec", Body = "spec" });
+        var instructionId = await SendInstructionAsync(project.Id, "approve spec of feat");
+
+        var response = await SendAsync(AgentValidateUrl(spec.Id), HttpMethod.Post, _sessionId, instructionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var artifact = await _client.GetFromJsonAsync<ArtifactJson>(AgentReadUrl(spec.Id), JsonOptions);
+        artifact!.Body.ShouldContain(DelegatedApprovalGate.ProvenanceMarker);
+        artifact.Body.ShouldContain($"owner message {instructionId}");
+    }
+
+    [Fact]
+    public async Task UpdateApprovalSettings_RejectsUnknownMode()
+    {
+        var project = await CreateProjectAsync();
+
+        var updated = await _client.PutAsJsonAsync(
+            ApprovalSettingsUrl(project.Id), new { DelegateApprovals = "sometimes" });
+
+        updated.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -227,7 +272,14 @@ public sealed class DelegatedApprovalApiTests : IDisposable
     private async Task EnableDelegationAsync(Guid projectId)
     {
         var updated = await _client.PutAsJsonAsync(
-            ApprovalSettingsUrl(projectId), new { DelegateApprovals = true });
+            ApprovalSettingsUrl(projectId), new { DelegateApprovals = "On" });
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task SetAgentDelegateApprovalsDefaultAsync(string value)
+    {
+        var updated = await _client.PutAsJsonAsync(
+            "/api/settings", new { AgentDelegateApprovalsDefault = value }, JsonOptions);
         updated.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -273,7 +325,7 @@ public sealed class DelegatedApprovalApiTests : IDisposable
     private static string AgentReadUrl(Guid artifactId) =>
         $"/api/agent/planning/artifacts/{artifactId}";
 
-    private sealed record ApprovalSettingsJson(bool DelegateApprovals);
+    private sealed record ApprovalSettingsJson(string DelegateApprovals, bool EffectiveDelegateApprovals);
 
     private sealed record ProjectJson(Guid Id, string Name, string DiskPath);
 
