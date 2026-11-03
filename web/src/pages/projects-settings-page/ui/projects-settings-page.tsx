@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import { ErrorText } from "@/shared/ui/error-text";
@@ -22,6 +23,7 @@ import {
 } from "@/features/projects";
 import type { ProjectFormValues, ProjectResponse } from "@/features/projects";
 import { PlanningWorkflowSettings, BacklogImportSection, usePlanningBoard } from "@/features/planning";
+import { settingsQueryOptions } from "@/features/settings";
 import { featureNumber } from "@/shared/lib/feature-number";
 
 const DETAILS_BASE_PATH = "/settings/projects";
@@ -33,6 +35,7 @@ function ProjectsSettingsPageContent() {
   const { data: projects, loading, error } = useProjectList();
   const { create, update, remove } = useProjectMutations();
   const { data: board } = usePlanningBoard(detailId);
+  const { data: globalSettings } = useQuery(settingsQueryOptions());
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectResponse | null>(null);
@@ -128,7 +131,11 @@ function ProjectsSettingsPageContent() {
             </div>
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Agent approvals</h3>
-              <ProjectApprovalSettings key={detail.id} projectId={detail.id} />
+              <ProjectApprovalSettings
+                key={detail.id}
+                projectId={detail.id}
+                globalDelegateApprovalsDefault={globalSettings?.agentDelegateApprovalsDefault}
+              />
             </div>
           </>
         ) : null}

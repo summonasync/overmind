@@ -25,7 +25,7 @@ export function AgentBudgetMeter({ className }: AgentBudgetMeterProps) {
   const data = usage.data;
 
   return (
-    <div className={cn("shrink-0 text-xs", className)} title="Token spend for today, resets at midnight">
+    <div className={cn("shrink-0 text-xs", className)}>
       {data === undefined ? null : <MeterBody usage={data} />}
     </div>
   );
@@ -33,21 +33,30 @@ export function AgentBudgetMeter({ className }: AgentBudgetMeterProps) {
 
 function MeterBody({ usage }: { usage: AgentUsage }) {
   const state = resolveBudgetMeterState(usage);
+  const spent = `${formatTokenCount(usage.spentToday)} output tokens today`;
+
   if (state === "off") {
     return (
-      <span className="whitespace-nowrap text-muted" title="Daily token budget is disabled">
-        Budget off
+      <span className="whitespace-nowrap text-muted" title="Daily budget is off">
+        {spent}
       </span>
     );
   }
 
   const exhausted = state === "exhausted";
   const percent = Math.min(100, Math.round((usage.spentToday / usage.dailyBudget) * 100));
-  const tooltip = `${usage.spentToday.toLocaleString("en-US")} of ${usage.dailyBudget.toLocaleString("en-US")} tokens used today`;
+  const tooltip = `${usage.spentToday.toLocaleString("en-US")} of ${usage.dailyBudget.toLocaleString("en-US")} output tokens used today, resets at 00:00 UTC`;
 
   return (
     <span className="flex items-center gap-2" title={tooltip}>
-      <span className="h-1 w-16 overflow-hidden rounded-full bg-muted/40" aria-hidden>
+      <span
+        className="h-1 w-16 overflow-hidden rounded-full bg-muted/40"
+        role="progressbar"
+        aria-label="Daily token budget"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+      >
         <span
           className={cn("block h-full rounded-full", FILL_BY_STATE[state])}
           style={{ width: `${percent}%` }}

@@ -13,7 +13,6 @@ namespace Overmind.Api.Tests;
 public sealed class AgentUsageApiTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
     [Fact]
     public async Task Usage_WithBudgetOff_RemainingTodayIsNull()
@@ -32,7 +31,7 @@ public sealed class AgentUsageApiTests
     }
 
     [Fact]
-    public async Task Usage_WithPartialSpend_ReportsRemainingBudget()
+    public async Task Usage_WithPartialOutputSpend_ReportsRemainingBudget()
     {
         using var factory = new ApiFactory();
         await SeedAsync(factory, dailyBudget: 1000, spent: 400);
@@ -47,7 +46,7 @@ public sealed class AgentUsageApiTests
     }
 
     [Fact]
-    public async Task Usage_WhenBudgetExhausted_RemainingClampsToZero()
+    public async Task Usage_WhenOutputBudgetExhausted_RemainingClampsToZero()
     {
         using var factory = new ApiFactory();
         await SeedAsync(factory, dailyBudget: 1000, spent: 1250);
@@ -63,6 +62,7 @@ public sealed class AgentUsageApiTests
 
     private static async Task SeedAsync(ApiFactory factory, int dailyBudget, long spent)
     {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         await using var scope = factory.Services.CreateAsyncScope();
         var settings = scope.ServiceProvider.GetRequiredService<AppSettingsService>();
         await settings.SetAsync(
@@ -72,7 +72,7 @@ public sealed class AgentUsageApiTests
         if (spent > 0)
         {
             var budget = scope.ServiceProvider.GetRequiredService<IAgentBudgetStore>();
-            await budget.AddUsageAsync(Today, spent, CancellationToken.None);
+            await budget.AddUsageAsync(today, spent, CancellationToken.None);
         }
     }
 

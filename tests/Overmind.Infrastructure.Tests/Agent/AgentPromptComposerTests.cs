@@ -16,6 +16,8 @@ namespace Overmind.Infrastructure.Tests.Agent;
 public sealed class AgentPromptComposerTests
 {
     private static readonly GrimoireMemoryEndpoint Endpoint = new("http://127.0.0.1:19996", "crew", "overmind-agent");
+    private static readonly GrimoireMemoryEndpoint PersonalEndpoint =
+        new("http://127.0.0.1:19996", "overmind-agent", "overmind-agent");
 
     private static readonly Guid ProjectOne = Guid.NewGuid();
     private static readonly Guid ProjectTwo = Guid.NewGuid();
@@ -52,7 +54,7 @@ public sealed class AgentPromptComposerTests
     {
         var memory = FakeMemory();
         memory
-            .ResolveEndpointAsync(Arg.Any<CancellationToken>())
+            .ResolveEndpointAsync(Arg.Any<GrimoireTomeTarget>(), Arg.Any<CancellationToken>())
             .Returns<GrimoireMemoryEndpoint>(_ => throw new GrimoireMemoryException(
                 "grimoire memory is unavailable: no running grimoire instance was detected"));
         var composer = CreateComposer(memory);
@@ -96,7 +98,7 @@ public sealed class AgentPromptComposerTests
         replyRow.Select(node => node.Key)
             .ShouldBe(["id", "kind", "text", "replyText"], ignoreOrder: false);
 
-        snapshot["memoryFacts"]!.AsArray().ShouldHaveSingleItem();
+        snapshot["memoryFacts"]!.AsArray().Count.ShouldBe(2);
     }
 
     [Fact]
@@ -166,7 +168,7 @@ public sealed class AgentPromptComposerTests
 
         snapshot.Select(node => node.Key).ShouldBe(["degraded", "memoryFacts"], ignoreOrder: false);
         snapshot["degraded"]!.GetValue<string>().ShouldContain("board read failed");
-        snapshot["memoryFacts"]!.AsArray().ShouldHaveSingleItem();
+        snapshot["memoryFacts"]!.AsArray().Count.ShouldBe(2);
     }
 
     [Fact]
@@ -216,10 +218,49 @@ public sealed class AgentPromptComposerTests
         system.ShouldNotContain(new string('i', SettingDefaults.AgentInstructionsMaxLength + 1));
     }
 
+    [Fact]
+    public async Task ComposeAsync_FactsFromBothTomes_LabeledBySource()
+    {
+        var memory = FakeMemory();
+        memory.ResolveEndpointAsync(GrimoireTomeTarget.Personal, Arg.Any<CancellationToken>()).Returns(PersonalEndpoint);
+        memory
+            .ListTopFactsAsync(PersonalEndpoint, AgentPromptComposer.MaxMemoryFacts, Arg.Any<CancellationToken>())
+            .Returns([Fact("owner reviews every spec before validation")]);
+        var composer = CreateComposer(memory);
+
+        var messages = await composer.ComposeAsync(_conversation, [], "status?", CancellationToken.None);
+        var snapshot = SnapshotOf(messages[0].Text);
+
+        var rows = snapshot["memoryFacts"]!.AsArray();
+        rows.Count.ShouldBe(2);
+        rows[0]!.AsObject()["source"]!.GetValue<string>().ShouldBe("personal");
+        rows[0]!.AsObject()["content"]!.GetValue<string>().ShouldBe("owner reviews every spec before validation");
+        rows[1]!.AsObject()["source"]!.GetValue<string>().ShouldBe("crew");
+    }
+
+    [Fact]
+    public async Task ComposeAsync_PersonalTomeDown_CrewFactsStillCompose()
+    {
+        var memory = FakeMemory();
+        memory
+            .ResolveEndpointAsync(GrimoireTomeTarget.Personal, Arg.Any<CancellationToken>())
+            .Returns<GrimoireMemoryEndpoint>(_ => throw new GrimoireMemoryException("personal tome is down"));
+        var composer = CreateComposer(memory);
+
+        var messages = await composer.ComposeAsync(_conversation, [], "status?", CancellationToken.None);
+        var snapshot = SnapshotOf(messages[0].Text);
+
+        var rows = snapshot["memoryFacts"]!.AsArray();
+        rows.Count.ShouldBe(1);
+        rows[0]!.AsObject()["source"]!.GetValue<string>().ShouldBe("crew");
+    }
+
     private static IGrimoireMemoryClient FakeMemory()
     {
         var memory = Substitute.For<IGrimoireMemoryClient>();
-        memory.ResolveEndpointAsync(Arg.Any<CancellationToken>()).Returns(Endpoint);
+        memory
+            .ResolveEndpointAsync(Arg.Any<GrimoireTomeTarget>(), Arg.Any<CancellationToken>())
+            .Returns(Endpoint);
         memory
             .ListTopFactsAsync(Endpoint, AgentPromptComposer.MaxMemoryFacts, Arg.Any<CancellationToken>())
             .Returns([Fact("delegation changes who executes, never whether a human decided")]);

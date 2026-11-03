@@ -17,6 +17,7 @@ import {
 
 interface ProjectApprovalSettingsProps {
   projectId: string;
+  globalDelegateApprovalsDefault?: "on" | "off";
 }
 
 const OVERRIDE_LABELS: Record<DelegateApprovalsOverride, string> = {
@@ -25,7 +26,10 @@ const OVERRIDE_LABELS: Record<DelegateApprovalsOverride, string> = {
   off: "Off",
 };
 
-export function ProjectApprovalSettings({ projectId }: ProjectApprovalSettingsProps) {
+export function ProjectApprovalSettings({
+  projectId,
+  globalDelegateApprovalsDefault,
+}: ProjectApprovalSettingsProps) {
   const { data: settings, loading, error } = useApprovalSettings(projectId);
   const update = useApprovalSettingsMutation(projectId);
   const [delegateApprovals, setDelegateApprovals] = useState<DelegateApprovalsOverride>("unset");
@@ -70,7 +74,9 @@ export function ProjectApprovalSettings({ projectId }: ProjectApprovalSettingsPr
           ))}
         </Select>
       </Field>
-      <p className="text-sm font-medium text-foreground">{effectiveSummary(settings)}</p>
+      <p className="text-sm font-medium text-foreground">
+        {effectiveSummary(settings, globalDelegateApprovalsDefault)}
+      </p>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={update.isPending}>
           {update.isPending ? "Saving…" : "Save approvals"}
@@ -82,9 +88,16 @@ export function ProjectApprovalSettings({ projectId }: ProjectApprovalSettingsPr
   );
 }
 
-function effectiveSummary(settings: ApprovalSettingsResponse): string {
+function effectiveSummary(
+  settings: ApprovalSettingsResponse,
+  globalDefault: "on" | "off" | undefined,
+): string {
   const state = settings.effectiveDelegateApprovals ? "enabled" : "disabled";
-  return settings.delegateApprovals === "unset"
-    ? `Currently: ${state} (inherited: global ${settings.effectiveDelegateApprovals ? "on" : "off"})`
-    : `Currently: ${state} (project override)`;
+  if (settings.delegateApprovals === "unset") {
+    return `Currently: ${state} (inherited: global ${settings.effectiveDelegateApprovals ? "on" : "off"})`;
+  }
+  if (globalDefault !== undefined && (globalDefault === "on") === settings.effectiveDelegateApprovals) {
+    return `Currently: ${state} (matches global default)`;
+  }
+  return `Currently: ${state} (project override)`;
 }

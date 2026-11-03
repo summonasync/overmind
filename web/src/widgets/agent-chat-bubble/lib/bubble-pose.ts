@@ -26,11 +26,11 @@ export function resolveBubblePose(input: BubblePoseInput): BubblePose {
   if (input.activity.lastTurn.kind === "failed") {
     return "confused";
   }
-  if (isSmugActive(input.activity, input.nowMs)) {
-    return "smug";
-  }
   if (!input.open && input.unreadCount > 0) {
     return "yelling";
+  }
+  if (isSmugActive(input.activity, input.nowMs)) {
+    return "smug";
   }
   return "sleeping";
 }

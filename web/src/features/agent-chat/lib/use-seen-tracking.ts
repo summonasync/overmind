@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, type RefObject } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { markAgentConversationRead } from "@/features/agent-chat/api";
 import { agentChatKeys } from "@/features/agent-chat/queries";
@@ -15,6 +15,12 @@ export function useSeenMessageTracking(
   const queryClient = useQueryClient();
   const orderedIds = useMemo(() => messages.map((message) => message.id), [messages]);
   const tailId = useMemo(() => latestReportableId(orderedIds), [orderedIds]);
+  const orderedIdsRef = useRef(orderedIds);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    orderedIdsRef.current = orderedIds;
+  }, [orderedIds]);
 
   useEffect(() => {
     if (conversationId === null || tailId === null) {
@@ -55,15 +61,27 @@ export function useSeenMessageTracking(
           seen = true;
         }
         if (seen) {
-          seenTracker.observeCandidates(conversationId, orderedIds);
+          seenTracker.observeCandidates(conversationId, orderedIdsRef.current);
         }
       },
       { root: container, threshold: 0.6 },
     );
+    observerRef.current = observer;
+    return () => {
+      observer.disconnect();
+      observerRef.current = null;
+    };
+  }, [conversationId, containerRef]);
+
+  useEffect(() => {
+    const observer = observerRef.current;
+    const container = containerRef.current;
+    if (observer === null || container === null || conversationId === null) {
+      return;
+    }
     for (const row of container.querySelectorAll<HTMLElement>("[data-agent-message-id]")) {
       observer.observe(row);
     }
-    return () => observer.disconnect();
   }, [conversationId, orderedIds, containerRef]);
 
   useEffect(() => {

@@ -26,7 +26,8 @@ export interface AgentHistoryPayload {
 export type AgentStreamFrame =
   | { kind: "delta"; text: string }
   | { kind: "completed"; messageId: string | null }
-  | { kind: "failed"; error: string };
+  | { kind: "failed"; error: string }
+  | { kind: "aborted" };
 
 export interface AgentReadState {
   conversationId: string;

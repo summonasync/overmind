@@ -182,6 +182,83 @@ public sealed class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task DailyBudget_CountsCompletionTokensOnly()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the board. "),
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_list_features", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(60_000, 1_500)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("Done."),
+            FakeAgentChatClient.UsageUpdate(65_000, 800)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000_000);
+
+        await CollectAsync(loop);
+
+        _budget.Used.ShouldBe(2_300);
+    }
+
+    [Fact]
+    public async Task DailyBudget_TripsOnOutputWhileTotalStaysUnderTheCap()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the board. "),
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_list_features", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(60_000, 1_500)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("Wrapping up."),
+            FakeAgentChatClient.UsageUpdate(65_000, 800)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000_000, dailyBudget: 2_000);
+
+        var frames = await CollectAsync(loop);
+
+        var failed = frames.Last();
+        failed.Kind.ShouldBe(ConversationStreamEventKind.Failed);
+        failed.Code.ShouldBe(AgentLoop.DailyBudgetCode);
+        failed.Text!.ShouldContain("2300");
+        client.RoundsServed.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task PerTurnCap_StillCountsTotalTokensWhileDailyStaysOnOutput()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Reading the whole board."),
+            FakeAgentChatClient.UsageUpdate(100_000, 500)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 8_192);
+
+        var frames = await CollectAsync(loop);
+
+        var failed = frames.Last();
+        failed.Kind.ShouldBe(ConversationStreamEventKind.Failed);
+        failed.Code.ShouldBe(AgentLoop.PerTurnCapCode);
+        _budget.Used.ShouldBe(500);
+    }
+
+    [Fact]
+    public async Task UsageWithoutSplitFields_KeepsCountingTowardTheDailyBudget()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking."),
+            FakeAgentChatClient.UsageUpdate(4_000)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000_000);
+
+        await CollectAsync(loop);
+
+        _budget.Used.ShouldBe(4_000);
+    }
+
+    [Fact]
     public async Task GuardNotificationFailure_StillYieldsFailedFrameAndPersistsUsage()
     {
         var client = new FakeAgentChatClient(

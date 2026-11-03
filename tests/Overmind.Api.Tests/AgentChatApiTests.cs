@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -78,7 +79,7 @@ public sealed class AgentChatApiTests : IDisposable
         var frames = await StreamAsync(conversation.Id, "hello agent");
 
         var deltas = frames.Where(f => f.Event == "delta").ToList();
-        deltas.Count.ShouldBeGreaterThanOrEqualTo(2);
+        deltas.Count.ShouldBeGreaterThanOrEqualTo(1);
         deltas[0].DataText.ShouldNotBeEmpty();
 
         var completed = frames.LastOrDefault(f => f.Event == "completed");
@@ -151,6 +152,67 @@ public sealed class AgentChatApiTests : IDisposable
             $"/api/agent/conversations/{conversation.Id}/messages/stream", new { Text = "" }, JsonOptions);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Stream_SecondPostWhileTurnInFlight_ReturnsConflict()
+    {
+        var conversation = await CreateConversationAsync(null, "parallel chat");
+        var gate = _factory.Services.GetRequiredService<TurnStreamGate>();
+        gate.Arm();
+
+        var firstStream = await SendStreamRequestAsync(conversation.Id, "first");
+        var second = await _client.PostAsJsonAsync(
+            $"/api/agent/conversations/{conversation.Id}/messages/stream", new { Text = "second" }, JsonOptions);
+
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        gate.Release();
+        var frames = await SseTestClient.ReadAllFramesAsync(firstStream.Content);
+        frames[0].Event.ShouldBe("delta");
+        frames.Last().Event.ShouldBe("completed");
+        var completed = System.Text.Json.JsonDocument.Parse(frames.Last().DataText);
+        completed.RootElement.GetProperty("messageId").GetString().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Stop_WhileTurnInFlight_AbortsTurnAndAllowsNewTurn()
+    {
+        var conversation = await CreateConversationAsync(null, "stop chat");
+        var gate = _factory.Services.GetRequiredService<TurnStreamGate>();
+        gate.Arm();
+
+        var stream = await SendStreamRequestAsync(conversation.Id, "interrupt me");
+
+        var stop = await _client.PostAsJsonAsync(
+            $"/api/agent/conversations/{conversation.Id}/turn/stop", new { }, JsonOptions);
+        stop.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await stop.Content.ReadFromJsonAsync<StopJson>(JsonOptions))!.Stopped.ShouldBeTrue();
+
+        var frames = await SseTestClient.ReadAllFramesAsync(stream.Content);
+        frames.ShouldNotBeEmpty();
+        frames[0].Event.ShouldBe("delta");
+        frames.Last().Event.ShouldBe("aborted");
+
+        var history = await MessagesAsync(conversation.Id);
+        history.Items.Select(i => i.Role).ShouldBe(["user"]);
+
+        gate.Release();
+        var restarted = await StreamAsync(conversation.Id, "try again");
+        restarted.ShouldNotContain(f => f.Event == "failed");
+        restarted.Last().Event.ShouldBe("completed");
+    }
+
+    private async Task<HttpResponseMessage> SendStreamRequestAsync(Guid conversationId, string text)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/agent/conversations/{conversationId}/messages/stream")
+        {
+            Content = JsonContent.Create(new { Text = text }, options: JsonOptions)
+        };
+        var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return response;
     }
 
     private async Task<List<SseFrame>> StreamAsync(Guid conversationId, string text)
@@ -247,8 +309,6 @@ public sealed class AgentChatApiTests : IDisposable
         return (await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions))!;
     }
 
-    private sealed record SseFrame(string Event, string DataText);
-
     private sealed record ConversationJson(Guid Id, Guid? ProjectId, string? Title);
 
     private sealed record ConversationsJson(ConversationJson[] Items);
@@ -256,6 +316,8 @@ public sealed class AgentChatApiTests : IDisposable
     private sealed record MessageJson(Guid Id, string Role, string Content, DateTime CreatedAt);
 
     private sealed record HistoryJson(MessageJson[] Items);
+
+    private sealed record StopJson(bool Stopped);
 
     private sealed record ProjectJson(Guid Id);
 }

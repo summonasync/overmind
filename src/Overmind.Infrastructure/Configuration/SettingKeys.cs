@@ -32,6 +32,8 @@ public static class SettingKeys
     public const string AgentDelegateApprovalsDefault = "agent.delegateApprovalsDefault";
     public const string AgentGrimoireBaseUrl = "agent.grimoire.baseUrl";
     public const string AgentGrimoireTome = "agent.grimoire.tome";
+    public const string AgentGrimoirePersonalTome = "agent.grimoire.personalTome";
+    public const string AgentGrimoireCrewTome = "agent.grimoire.crewTome";
     public const string AgentGrimoireCompactionHours = "agent.grimoire.compactionHours";
 
     public const string TelegramEnabled = "telegram.enabled";
