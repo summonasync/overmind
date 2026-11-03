@@ -16,6 +16,7 @@ using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
+using Overmind.Infrastructure.Telegram;
 using Overmind.Infrastructure.VectorSearch;
 using Overmind.Infrastructure.Wake;
 using Overmind.Infrastructure.Wave;
@@ -57,6 +58,10 @@ public static class DependencyInjection
         services.AddScoped<AgentLoop>();
         services.AddScoped<IConversationStreamSource, LlmConversationStreamSource>();
         services.AddHostedService<AgentLoopHostedService>();
+        services.AddScoped<TelegramTransportOptionsProvider>();
+        services.AddSingleton<ITelegramBotClientFactory, TelegramBotClientFactory>();
+        services.AddSingleton<TelegramPollingRunner>();
+        services.AddHostedService<TelegramPollingService>();
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());

@@ -2,6 +2,7 @@ using System.Globalization;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Telegram;
 using Overmind.Infrastructure.VectorSearch;
 
 namespace Overmind.Host.Api;
@@ -175,6 +176,13 @@ public static class SettingsApi
                 $"Must be one of: {string.Join(", ", SettingDefaults.AgentDelegateApprovalsDefaults)}.");
         }
 
+        if (request.TelegramAllowedChatIds is { Length: > 100 })
+        {
+            return InvalidSetting(
+                nameof(request.TelegramAllowedChatIds),
+                "Must contain at most 100 chat ids.");
+        }
+
         var reindexRecommended = await ChangesEmbeddingInputsAsync(settings, request, ct);
 
         if (request.EmbeddingProvider is not null)
@@ -321,6 +329,25 @@ public static class SettingsApi
                 request.AgentDelegateApprovalsDefault.ToLowerInvariant(), ct);
         }
 
+        if (request.TelegramEnabled is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.TelegramEnabled,
+                request.TelegramEnabled.Value ? "true" : "false", ct);
+        }
+
+        if (!string.IsNullOrEmpty(request.TelegramBotToken))
+        {
+            await settings.SetAsync(SettingKeys.TelegramBotToken, request.TelegramBotToken, ct);
+        }
+
+        if (request.TelegramAllowedChatIds is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.TelegramAllowedChatIds,
+                string.Join(",", request.TelegramAllowedChatIds), ct);
+        }
+
         var updated = await ReadSettingsAsync(settings, ct);
         return Results.Ok(new UpdateSettingsResponse(
             updated.EmbeddingProvider,
@@ -346,7 +373,10 @@ public static class SettingsApi
             updated.AgentGrimoireCompactionHours,
             updated.AgentInstructions,
             updated.AgentDelegateApprovalsDefault,
-            reindexRecommended));
+            reindexRecommended,
+            updated.TelegramEnabled,
+            updated.TelegramBotTokenConfigured,
+            updated.TelegramAllowedChatIds));
     }
 
     private static async Task<IResult> TestSettings(
@@ -462,6 +492,11 @@ public static class SettingsApi
             SettingKeys.AgentInstructions, SettingDefaults.AgentInstructions, ct);
         var agentDelegateApprovalsDefault = await settings.GetOrDefaultAsync(
             SettingKeys.AgentDelegateApprovalsDefault, SettingDefaults.AgentDelegateApprovalsDefault, ct);
+        var telegramEnabledRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.TelegramEnabled, SettingDefaults.TelegramEnabled, ct);
+        var telegramBotTokenConfigured = await settings.HasAsync(SettingKeys.TelegramBotToken, ct);
+        var telegramAllowedChatIdsRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.TelegramAllowedChatIds, SettingDefaults.TelegramAllowedChatIds, ct);
 
         return new SettingsResponse(
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
@@ -469,7 +504,10 @@ public static class SettingsApi
             planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
             agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget,
             agentGrimoireBaseUrl, agentGrimoireTome, agentGrimoireCompactionHours, agentInstructions,
-            agentDelegateApprovalsDefault);
+            agentDelegateApprovalsDefault,
+            bool.TryParse(telegramEnabledRaw, out var telegramEnabled) && telegramEnabled,
+            telegramBotTokenConfigured,
+            [.. TelegramTransportOptionsProvider.ParseChatIds(telegramAllowedChatIdsRaw)]);
     }
 
     private static async Task<bool> ChangesEmbeddingInputsAsync(

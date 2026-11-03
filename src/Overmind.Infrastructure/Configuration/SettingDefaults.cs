@@ -34,6 +34,9 @@ public static class SettingDefaults
     public const string AgentGrimoireTome = "crew";
     public const int AgentGrimoireCompactionHours = 24;
 
+    public const string TelegramEnabled = "false";
+    public const string TelegramAllowedChatIds = "";
+
     public static readonly string[] EmbeddingProviders = ["onnx", "ollama", "openai"];
     public static readonly string[] PlanningMaterializationDefaults = ["off", "on", "archive"];
     public static readonly string[] PlanningMaterializationSyncModes = ["on", "off"];

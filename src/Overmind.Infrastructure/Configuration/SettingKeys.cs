@@ -33,4 +33,8 @@ public static class SettingKeys
     public const string AgentGrimoireBaseUrl = "agent.grimoire.baseUrl";
     public const string AgentGrimoireTome = "agent.grimoire.tome";
     public const string AgentGrimoireCompactionHours = "agent.grimoire.compactionHours";
+
+    public const string TelegramEnabled = "telegram.enabled";
+    public const string TelegramBotToken = "telegram.botToken";
+    public const string TelegramAllowedChatIds = "telegram.allowedChatIds";
 }

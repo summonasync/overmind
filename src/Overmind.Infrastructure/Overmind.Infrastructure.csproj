@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.ML.Tokenizers" />
     <PackageReference Include="OpenAI" />
     <PackageReference Include="Qdrant.Client" />
+    <PackageReference Include="Telegram.Bot" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Materialization\platforms.json" />
