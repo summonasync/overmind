@@ -49,6 +49,12 @@ public sealed class AgentLoop(
             ? (await auditTrail.LatestAsync(conversation.Id, ConversationMessage.UserRole, ct))?.Id
             : null;
         var options = BuildOptions(tools, delegationArmed);
+        logger.LogInformation(
+            "Agent turn for conversation {ConversationId} composed {SystemPromptChars} system prompt chars, {HistoryChars} history chars, {ToolSchemaChars} tool schema chars",
+            conversation.Id,
+            SystemPromptChars(messages),
+            HistoryChars(messages),
+            ToolSchemaChars(options.Tools));
         var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId, conversation.Id);
         var usage = new AgentTurnUsage();
         var day = AgentBudgetDay.Current();
@@ -75,6 +81,16 @@ public sealed class AgentLoop(
             {
                 yield return frame;
             }
+
+            var roundTotal = usage.Total - roundResult.TotalUsageBeforeOutput;
+            var roundOutput = usage.Output - roundResult.UsageBeforeOutput;
+            logger.LogInformation(
+                "Agent round {Round} of conversation {ConversationId} used {InputTokens} input, {OutputTokens} output and {TotalTokens} total tokens",
+                round,
+                conversation.Id,
+                roundTotal - roundOutput,
+                roundOutput,
+                roundTotal);
 
             dailyUsed = await budget.AddUsageAsync(day, usage.Output - roundResult.UsageBeforeOutput, ct);
 
@@ -118,6 +134,16 @@ public sealed class AgentLoop(
         Tools = [.. tools.CreateTools(includeHumanGated)]
     };
 
+    private static int SystemPromptChars(IReadOnlyList<ChatMessage> messages) =>
+        messages.Count > 0 && messages[0].Role == ChatRole.System ? messages[0].Text.Length : 0;
+
+    private static int HistoryChars(IReadOnlyList<ChatMessage> messages) =>
+        messages.Skip(1).Take(messages.Count - 2).Sum(message => message.Text.Length);
+
+    private static int ToolSchemaChars(IList<AITool> tools) =>
+        tools.Sum(tool => tool.Name.Length + tool.Description.Length +
+            (tool is AIFunction function ? function.JsonSchema.GetRawText().Length : 0));
+
     private async Task NotifyGuardAsync(string title, string detail, Guid? projectId, CancellationToken ct)
     {
         try
@@ -154,6 +180,7 @@ public sealed class AgentLoop(
         [EnumeratorCancellation] CancellationToken ct)
     {
         roundResult.UsageBeforeOutput = usage.Output;
+        roundResult.TotalUsageBeforeOutput = usage.Total;
         await foreach (var update in client.GetStreamingResponseAsync(messages, options, ct))
         {
             if (update.Text.Length > 0)
@@ -229,6 +256,7 @@ public sealed class AgentLoop(
         public StringBuilder Text { get; } = new();
         public List<FunctionCallContent> Calls { get; } = [];
         public long UsageBeforeOutput { get; set; }
+        public long TotalUsageBeforeOutput { get; set; }
     }
 
     private sealed class AgentTurnUsage

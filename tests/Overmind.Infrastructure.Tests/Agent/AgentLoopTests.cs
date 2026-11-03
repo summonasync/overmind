@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Tools;
 using Overmind.Infrastructure.Llm;
 using Overmind.Infrastructure.Persistence;
 using Shouldly;
@@ -322,11 +324,119 @@ public sealed class AgentLoopTests : IDisposable
         stored.Count.ShouldBe(60);
     }
 
+    [Fact]
+    public async Task ToolRounds_LogPerRoundUsageDeltas()
+    {
+        var logger = new CapturingLogger<AgentLoop>();
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the queue. "),
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_task_queue", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(60_000, 1_500)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The queue is clear."),
+            FakeAgentChatClient.UsageUpdate(65_000, 800)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000_000, logger: logger);
+
+        await CollectAsync(loop);
+
+        var rounds = logger.Entries
+            .Select(entry => entry.Values.ToDictionary(pair => pair.Key, pair => pair.Value))
+            .Where(values => values.ContainsKey("Round"))
+            .ToList();
+        rounds.Count.ShouldBe(2);
+
+        rounds[0]["Round"].ShouldBe(1);
+        rounds[0]["ConversationId"].ShouldBe(_conversation.Id);
+        Convert.ToInt64(rounds[0]["InputTokens"]).ShouldBe(60_000);
+        Convert.ToInt64(rounds[0]["OutputTokens"]).ShouldBe(1_500);
+        Convert.ToInt64(rounds[0]["TotalTokens"]).ShouldBe(61_500);
+
+        rounds[1]["Round"].ShouldBe(2);
+        rounds[1]["ConversationId"].ShouldBe(_conversation.Id);
+        Convert.ToInt64(rounds[1]["InputTokens"]).ShouldBe(65_000);
+        Convert.ToInt64(rounds[1]["OutputTokens"]).ShouldBe(800);
+        Convert.ToInt64(rounds[1]["TotalTokens"]).ShouldBe(65_800);
+    }
+
+    [Fact]
+    public async Task TurnStart_LogsPromptAndToolSchemaSizes()
+    {
+        var logger = new CapturingLogger<AgentLoop>();
+        const string toolSchema = """{"type":"object","properties":{"projectId":{"type":"string"}}}""";
+        _tools.CreateTools(Arg.Any<bool>()).Returns(
+        [
+            new AgentToolFunction(new AgentToolSpec(
+                "test_tool",
+                "Does test things",
+                toolSchema,
+                (_, _) => Task.FromResult(JsonSerializer.SerializeToElement(new { ok = true }))))
+        ]);
+        await _messages.AppendAsync(
+            _conversation.Id, ConversationMessage.UserRole, "what moved on the board", CancellationToken.None);
+        await _messages.AppendAsync(
+            _conversation.Id, ConversationMessage.AssistantRole, "two features moved", CancellationToken.None);
+        var feed = await _messages.ListPageAsync(_conversation.Id, ct: CancellationToken.None);
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Done."),
+            FakeAgentChatClient.UsageUpdate(10)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000, logger: logger);
+
+        await CollectAsync(loop, feed);
+
+        var compose = logger.Entries.Single(entry => entry.Values.Any(pair => pair.Key == "SystemPromptChars"));
+        var values = compose.Values.ToDictionary(pair => pair.Key, pair => pair.Value);
+        values["ConversationId"].ShouldBe(_conversation.Id);
+        Convert.ToInt64(values["SystemPromptChars"]).ShouldBe("system prompt".Length);
+        Convert.ToInt64(values["HistoryChars"]).ShouldBe(feed.Sum(row => row.Content.Length));
+        Convert.ToInt64(values["ToolSchemaChars"]).ShouldBe(
+            "test_tool".Length + "Does test things".Length +
+            JsonDocument.Parse(toolSchema).RootElement.GetRawText().Length);
+    }
+
+    [Fact]
+    public async Task Telemetry_LogsNoConversationOrToolContent()
+    {
+        var logger = new CapturingLogger<AgentLoop>();
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the queue. "),
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_task_queue", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(120)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The queue is clear."),
+            FakeAgentChatClient.UsageUpdate(180)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000, logger: logger);
+
+        await CollectAsync(loop);
+
+        logger.Entries.ShouldNotBeEmpty();
+        foreach (var entry in logger.Entries)
+        {
+            var text = entry.Message + " " + string.Join(" ", entry.Values.Select(pair => $"{pair.Key}={pair.Value}"));
+            foreach (var content in new[]
+                     {
+                         "sort the board", "Checking the queue", "The queue is clear",
+                         "planning_task_queue", "019712af"
+                     })
+            {
+                text.ShouldNotContain(content);
+            }
+        }
+    }
+
     private AgentLoop CreateLoop(
         IChatClient? client = null,
         int perTurnMaxTokens = 8_192,
         int dailyBudget = 0,
-        Action<IReadOnlyList<ConversationMessage>>? onCompose = null)
+        Action<IReadOnlyList<ConversationMessage>>? onCompose = null,
+        ILogger<AgentLoop>? logger = null)
     {
         var settingsProvider = Substitute.For<IAgentRunSettingsProvider>();
         settingsProvider.GetAsync(Arg.Any<CancellationToken>())
@@ -338,10 +448,15 @@ public sealed class AgentLoopTests : IDisposable
                 Arg.Any<IReadOnlyList<ConversationMessage>>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
-            .Returns(callInfo => new List<ChatMessage>
+            .Returns(callInfo =>
             {
-                new(ChatRole.System, "system prompt"),
-                new(ChatRole.User, (string)callInfo[2]!)
+                var messages = new List<ChatMessage> { new(ChatRole.System, "system prompt") };
+                messages.AddRange(callInfo.ArgAt<IReadOnlyList<ConversationMessage>>(1).Select(
+                    row => new ChatMessage(
+                        row.Role == ConversationMessage.UserRole ? ChatRole.User : ChatRole.Assistant,
+                        row.Content)));
+                messages.Add(new ChatMessage(ChatRole.User, (string)callInfo[2]!));
+                return messages;
             });
         if (onCompose is not null)
         {
@@ -368,7 +483,7 @@ public sealed class AgentLoopTests : IDisposable
             _messages,
             registrar,
             delegation,
-            NullLogger<AgentLoop>.Instance);
+            logger ?? NullLogger<AgentLoop>.Instance);
     }
 
     private ILlmChatClientFactory StubFactory(IChatClient? client)
