@@ -43,6 +43,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
     public DbSet<TelegramChatMapping> TelegramChatMappings => Set<TelegramChatMapping>();
     public DbSet<TelegramNotificationDelivery> TelegramNotificationDeliveries => Set<TelegramNotificationDelivery>();
+    public DbSet<AgentRoute> AgentRoutes => Set<AgentRoute>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -464,6 +465,17 @@ public sealed class OvermindDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(d => d.NotificationId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AgentRoute>(builder =>
+        {
+            builder.Property(r => r.Pattern).HasMaxLength(AgentRoute.MaxPatternLength);
+            builder.Property(r => r.Domain).HasMaxLength(AgentRoute.MaxDomainLength);
+            builder.Property(r => r.TargetAgent).HasMaxLength(AgentRoute.MaxTargetAgentLength);
+            builder.Property(r => r.MissReason).HasMaxLength(AgentRoute.MaxMissReasonLength);
+
+            builder.HasIndex(r => r.Pattern).IsUnique();
+            builder.HasIndex(r => r.HitCount);
         });
     }
 }

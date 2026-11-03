@@ -212,6 +212,7 @@ public static class DependencyInjection
         services.AddScoped<AgentWakeService>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ConversationMessageStore>();
+        services.AddScoped<AgentRouteStore>();
         services.AddScoped<ConversationReadStore>();
         services.AddSingleton<WakeDropWriter>();
         services.AddSingleton<WakeDropFanout>();
