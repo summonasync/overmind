@@ -12,6 +12,7 @@ public sealed class IntentRouter(
     IRouterPromptComposer prompts,
     ILlmChatClientFactory chatFactory,
     IAgentRouteStore routes,
+    IRouteVectorIndex routeVectors,
     IAgentBudgetStore budget,
     ILogger<IntentRouter> logger)
 {
@@ -46,6 +47,18 @@ public sealed class IntentRouter(
                 match.TargetAgent ?? RoutingTargets.Worker,
                 RoutingSource.Learned,
                 new RoutingMissContext($"learned pattern match: {match.Pattern}", hotHead.Count));
+        }
+
+        if (await routeVectors.MatchTopAsync(userText, ct) is { } semantic && semantic.IsRoutable)
+        {
+            logger.LogInformation(
+                "Router matched conversation {ConversationId} to semantically similar route {RouteId} in {Domain} with score {Score}",
+                conversation.Id, semantic.RouteId, semantic.Domain, semantic.Score);
+            return new RoutingDecision(
+                semantic.Target ?? RoutingTargets.Worker,
+                RoutingSource.Learned,
+                new RoutingMissContext(
+                    $"semantic route match: {semantic.Domain} (score {semantic.Score:F2})", hotHead.Count));
         }
 
         return await ClassifyAsync(conversation, history, userText, hotHead, ct);

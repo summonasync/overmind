@@ -15,6 +15,7 @@ public sealed class IntentRouterTests : IDisposable
 {
     private readonly TempDatabase _db = new();
     private readonly IAgentRouteStore _store;
+    private readonly IRouteVectorIndex _vectors = Substitute.For<IRouteVectorIndex>();
     private readonly ILlmChatClientFactory _chatFactory = Substitute.For<ILlmChatClientFactory>();
     private readonly CountingBudgetStore _budget = new();
     private readonly IntentRouter _router;
@@ -27,6 +28,7 @@ public sealed class IntentRouterTests : IDisposable
             new RouterPromptComposer(),
             _chatFactory,
             _store,
+            _vectors,
             _budget,
             NullLogger<IntentRouter>.Instance);
     }
@@ -76,6 +78,76 @@ public sealed class IntentRouterTests : IDisposable
             _conversation, [], "how big is the unread count right now?", hotHead, CancellationToken.None);
 
         decision.Source.ShouldBe(RoutingSource.Learned);
+    }
+
+    [Fact]
+    public async Task RouteAsync_SemanticMatchOnRephrasedVariant_RoutesLearnedWithoutModelCall()
+    {
+        _vectors
+            .MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new RouteVectorMatch(Guid.NewGuid(), "wave", "worker", 0.91f));
+
+        var decision = await _router.RouteAsync(
+            _conversation, [], "what unread stuff is waiting in my telegram chats?", [], CancellationToken.None);
+
+        decision.Target.ShouldBe(RoutingTargets.Worker);
+        decision.Source.ShouldBe(RoutingSource.Learned);
+        decision.Miss.Reason.ShouldContain("semantic route match");
+        decision.Miss.Reason.ShouldContain("wave");
+        _ = _chatFactory.DidNotReceiveWithAnyArgs().CreateAsync(default);
+    }
+
+    [Fact]
+    public async Task RouteAsync_BelowThresholdSemanticMatch_FallsThroughToClassification()
+    {
+        _vectors
+            .MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new RouteVectorMatch(Guid.NewGuid(), "wave", "worker", RouteVectorMatch.Threshold - 0.05f));
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("""{"target":"chat","reason":"small talk"}"""),
+            FakeAgentChatClient.UsageUpdate(4, 6),
+        ]);
+        _chatFactory.CreateAsync(Arg.Any<CancellationToken>()).Returns(client);
+
+        var decision = await _router.RouteAsync(_conversation, [], "hey there!", [], CancellationToken.None);
+
+        decision.Target.ShouldBe(RoutingTargets.Chat);
+        decision.Source.ShouldBe(RoutingSource.Classification);
+        decision.Miss.Reason.ShouldContain("small talk");
+    }
+
+    [Fact]
+    public async Task RouteAsync_VectorIndexUnavailable_FallsThroughToClassification()
+    {
+        _vectors
+            .MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((RouteVectorMatch?)null);
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("""{"target":"worker","reason":"router degraded to keyword-only"}"""),
+        ]);
+        _chatFactory.CreateAsync(Arg.Any<CancellationToken>()).Returns(client);
+
+        var decision = await _router.RouteAsync(_conversation, [], "build the weekly report", [], CancellationToken.None);
+
+        decision.Target.ShouldBe(RoutingTargets.Worker);
+        decision.Source.ShouldBe(RoutingSource.Classification);
+        decision.Miss.Reason.ShouldContain("router degraded to keyword-only");
+    }
+
+    [Fact]
+    public async Task RouteAsync_KeywordMatchTakesPrecedence_VectorIndexIsNotConsulted()
+    {
+        await _store.RecordAsync(
+            new AgentRouteRecording("wave chat unread", "wave", "learned ask"), CancellationToken.None);
+        var hotHead = await _router.GetHotHeadAsync(CancellationToken.None);
+
+        var decision = await _router.RouteAsync(
+            _conversation, [], "please show the wave chat unread count", hotHead, CancellationToken.None);
+
+        decision.Source.ShouldBe(RoutingSource.Learned);
+        await _vectors.DidNotReceive().MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

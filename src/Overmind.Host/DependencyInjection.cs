@@ -217,7 +217,15 @@ public static class DependencyInjection
         services.AddScoped<AgentWakeService>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ConversationMessageStore>();
-        services.AddScoped<IAgentRouteStore, AgentRouteEntityStore>();
+        services.AddScoped<AgentRouteEntityStore>();
+        services.AddScoped<Overmind.Infrastructure.VectorSearch.QdrantRouteVectorIndex>();
+        services.AddScoped<Overmind.Infrastructure.Agent.Routes.IRouteVectorIndex>(
+            provider => provider.GetRequiredService<Overmind.Infrastructure.VectorSearch.QdrantRouteVectorIndex>());
+        services.AddScoped<Overmind.Infrastructure.Agent.Routes.IAgentRouteStore>(provider =>
+            new Overmind.Infrastructure.Agent.Routes.RouteVectorIndexingStore(
+                provider.GetRequiredService<AgentRouteEntityStore>(),
+                provider.GetRequiredService<Overmind.Infrastructure.Agent.Routes.IRouteVectorIndex>(),
+                provider.GetRequiredService<ILogger<Overmind.Infrastructure.Agent.Routes.RouteVectorIndexingStore>>()));
         services.AddScoped<AgentRouteRecorder>();
         services.AddScoped<ConversationReadStore>();
         services.AddSingleton<WakeDropWriter>();

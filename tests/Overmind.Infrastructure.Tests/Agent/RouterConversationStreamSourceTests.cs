@@ -28,6 +28,7 @@ public sealed class RouterConversationStreamSourceTests : IDisposable
             new RouterPromptComposer(),
             _chatFactory,
             _store,
+            Substitute.For<IRouteVectorIndex>(),
             new CountingBudgetStore(),
             NullLogger<IntentRouter>.Instance);
         _source = new RouterConversationStreamSource(
