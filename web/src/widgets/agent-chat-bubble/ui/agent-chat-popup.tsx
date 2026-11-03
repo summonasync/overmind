@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import {
+  AgentBudgetMeter,
   AgentComposer,
   AgentConversationList,
   AgentMessageList,
@@ -62,11 +63,12 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <Zerling pose="sleeping" size={24} />
         <span className="text-sm font-semibold text-foreground">Agent chat</span>
+        <AgentBudgetMeter className="ml-auto" />
         <button
           type="button"
           onClick={onClose}
           aria-label="Close agent chat"
-          className="ml-auto rounded p-1 text-muted transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="rounded p-1 text-muted transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <X size={14} aria-hidden />
         </button>

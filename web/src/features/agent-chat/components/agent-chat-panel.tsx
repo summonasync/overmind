@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
+import { AgentBudgetMeter } from "@/features/agent-chat/components/agent-budget-meter";
 import { AgentComposer } from "@/features/agent-chat/components/agent-composer";
 import { AgentConversationList } from "@/features/agent-chat/components/agent-conversation-list";
 import { AgentMessageList } from "@/features/agent-chat/components/agent-message-list";
@@ -55,7 +56,11 @@ export function AgentChatPanel({ hint }: AgentChatPanelProps) {
 
   return (
     <div>
-      <PageHeader title="Agent chat" description={PANEL_DESCRIPTION} />
+      <PageHeader
+        title="Agent chat"
+        description={PANEL_DESCRIPTION}
+        actions={<AgentBudgetMeter />}
+      />
       {hint}
       <ErrorText error={list.error ?? chat.historyError} />
       <div className="mb-4">

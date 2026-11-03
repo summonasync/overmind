@@ -33,6 +33,13 @@ export interface AgentReadState {
   lastReadMessageId: string | null;
 }
 
+export interface AgentUsage {
+  dailyBudget: number;
+  spentToday: number;
+  remainingToday: number | null;
+  perTurnMaxTokens: number;
+}
+
 export type ChatTurnOutcome =
   | { kind: "idle" }
   | { kind: "completed"; delegated: boolean; completedAtMs: number }
