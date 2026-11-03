@@ -62,7 +62,7 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
     }
     queryClient
       .fetchQuery(approvalSettingsQueryOptions(targetProjectId))
-      .then((settings) => reportTurnCompleted(settings.delegateApprovals))
+      .then((settings) => reportTurnCompleted(settings.effectiveDelegateApprovals))
       .catch(() => reportTurnCompleted(false));
   };
 

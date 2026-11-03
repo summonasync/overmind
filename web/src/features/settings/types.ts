@@ -4,6 +4,8 @@ export type PlanningValidationDefault = "on" | "off";
 
 export type NotificationNudgeMode = "quiet" | "nag" | "mini";
 
+export type AgentDelegateApprovalsDefault = "on" | "off";
+
 export interface SettingsResponse {
   embeddingProvider: string;
   ollamaBaseUrl: string;
@@ -22,6 +24,7 @@ export interface SettingsResponse {
   agentPerTurnMaxTokens: number;
   agentDailyBudget: number;
   agentInstructions: string;
+  agentDelegateApprovalsDefault: AgentDelegateApprovalsDefault;
 }
 
 export interface UpdateSettingsResponse extends SettingsResponse {
@@ -46,6 +49,7 @@ export interface SettingsFormValues {
   agentPerTurnMaxTokens: number;
   agentDailyBudget: number;
   agentInstructions: string;
+  agentDelegateApprovalsDefault: AgentDelegateApprovalsDefault;
 }
 
 export interface TestSettingsValues {

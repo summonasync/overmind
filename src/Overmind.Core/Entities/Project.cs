@@ -39,7 +39,7 @@ public sealed partial class Project
     public string? NumberPrefix { get; private set; }
     public bool IsFavorite { get; private set; }
     public bool AutoActOnReplies { get; private set; }
-    public bool DelegateApprovals { get; private set; }
+    public DelegateApprovalsOverride DelegateApprovals { get; private set; }
     public List<PlanningLane> Lanes { get; private set; } = [];
 
     public static Project Create(string name, string diskPath, string description = "")
@@ -55,6 +55,7 @@ public sealed partial class Project
             Description = description.Trim(),
             PlanningMaterialization = PlanningMaterialization.Inherit,
             RequireHumanValidation = HumanValidationOverride.Unset,
+            DelegateApprovals = DelegateApprovalsOverride.Unset,
             NumberStyle = ProjectNumberStyle.Hash,
             IsFavorite = false,
             AutoActOnReplies = true,
@@ -96,7 +97,7 @@ public sealed partial class Project
 
     public void SetAutoActOnReplies(bool enabled) => AutoActOnReplies = enabled;
 
-    public void SetDelegateApprovals(bool enabled) => DelegateApprovals = enabled;
+    public void SetDelegateApprovals(DelegateApprovalsOverride mode) => DelegateApprovals = mode;
 
     public void SetNumbering(ProjectNumberStyle style, string? numberPrefix)
     {

@@ -41,6 +41,15 @@ export interface ClaimSettingsResponse {
   agentNamingRules: string | null;
 }
 
+export type DelegateApprovalsOverride = "unset" | "on" | "off";
+
+export const DELEGATE_APPROVALS_OVERRIDES: readonly DelegateApprovalsOverride[] = [
+  "unset",
+  "on",
+  "off",
+];
+
 export interface ApprovalSettingsResponse {
-  delegateApprovals: boolean;
+  delegateApprovals: DelegateApprovalsOverride;
+  effectiveDelegateApprovals: boolean;
 }

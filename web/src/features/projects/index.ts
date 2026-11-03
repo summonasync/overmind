@@ -1,7 +1,7 @@
 export { ProjectDetail } from "./components/project-detail";
 export { FeatureNumberSettings } from "./components/feature-number-settings";
 export { ClaimSettingsSection } from "./components/claim-settings-section";
-export { ProjectApprovalSettingsToggle } from "./components/project-approval-settings-toggle";
+export { ProjectApprovalSettings } from "./components/project-approval-settings";
 export { ProjectForm } from "./components/project-form";
 export { ProjectList } from "./components/project-list";
 export { ProjectManifestSection } from "./components/project-manifest-section";
@@ -32,6 +32,7 @@ export {
 export type {
   ApprovalSettingsResponse,
   ClaimSettingsResponse,
+  DelegateApprovalsOverride,
   ProjectAutoActResponse,
   ProjectFormValues,
   ProjectManifestImportResponse,

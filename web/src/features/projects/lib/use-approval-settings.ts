@@ -3,7 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { updateApprovalSettings } from "@/features/projects/api";
 import { approvalSettingsQueryOptions, projectKeys } from "@/features/projects/queries";
-import type { ApprovalSettingsResponse } from "@/features/projects/types";
+import type {
+  ApprovalSettingsResponse,
+  DelegateApprovalsOverride,
+} from "@/features/projects/types";
 
 export function useApprovalSettings(projectId: string) {
   const query = useQuery(approvalSettingsQueryOptions(projectId));
@@ -15,11 +18,15 @@ export function useApprovalSettingsMutation(projectId: string) {
   const settingsKey = projectKeys.approvalSettings(projectId);
 
   return useMutation({
-    mutationFn: (delegateApprovals: boolean) => updateApprovalSettings(projectId, delegateApprovals),
+    mutationFn: (delegateApprovals: DelegateApprovalsOverride) =>
+      updateApprovalSettings(projectId, delegateApprovals),
     onMutate: async (delegateApprovals) => {
       await queryClient.cancelQueries({ queryKey: settingsKey });
       const snapshot = queryClient.getQueryData<ApprovalSettingsResponse>(settingsKey);
-      queryClient.setQueryData<ApprovalSettingsResponse>(settingsKey, { delegateApprovals });
+      queryClient.setQueryData<ApprovalSettingsResponse>(settingsKey, {
+        delegateApprovals,
+        effectiveDelegateApprovals: optimisticEffective(delegateApprovals, snapshot),
+      });
       return { snapshot };
     },
     onError: (_error, _delegateApprovals, context) => {
@@ -31,4 +38,17 @@ export function useApprovalSettingsMutation(projectId: string) {
       queryClient.invalidateQueries({ queryKey: settingsKey });
     },
   });
+}
+
+function optimisticEffective(
+  delegateApprovals: DelegateApprovalsOverride,
+  snapshot: ApprovalSettingsResponse | undefined,
+): boolean {
+  if (delegateApprovals === "on") {
+    return true;
+  }
+  if (delegateApprovals === "off") {
+    return false;
+  }
+  return snapshot?.effectiveDelegateApprovals ?? false;
 }
