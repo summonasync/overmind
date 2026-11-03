@@ -34,7 +34,7 @@ public sealed class WakeDropFanoutTests : IDisposable
         var (fanout, services) = TestWakeFanout.Create(_db, _root);
         _fanout = fanout;
         _services = services;
-        _chat = new WaveChatService(_context, _fanout);
+        _chat = new WaveChatService(_context, _fanout, new StubWaveChatBroadcaster());
     }
 
     public void Dispose()

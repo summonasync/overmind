@@ -1,8 +1,11 @@
+using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
+using Overmind.Host.WaveChat;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Wave;
 
@@ -10,6 +13,11 @@ namespace Overmind.Host.Api;
 
 public static class WaveChatApi
 {
+    private const string SseContentType = "text/event-stream";
+
+    private static readonly JsonSerializerOptions FrameJson = new(JsonSerializerDefaults.Web);
+    private static readonly byte[] HeartbeatFrame = ": ping\n\n"u8.ToArray();
+
     public static RouteGroupBuilder MapWaveChatApi(this IEndpointRouteBuilder routes)
     {
         var human = routes.MapGroup("/api");
@@ -17,6 +25,7 @@ public static class WaveChatApi
         human.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/unread", UnreadForHuman);
         human.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/messages", HistoryForHuman);
         human.MapGet("/projects/{projectId:guid}/wave/rooms", RoomsForHuman);
+        human.MapGet("/projects/{projectId:guid}/wave/stream", StreamForHuman);
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/wave/rooms/{room}/messages", PostForAgent);
@@ -190,6 +199,97 @@ public static class WaveChatApi
         {
             return PlanningErrors.Map(ex);
         }
+    }
+
+    private static async Task<IResult> StreamForHuman(
+        Guid projectId,
+        [FromQuery] DateTime? since,
+        WaveChatService chat,
+        WaveSseHub hub,
+        WaveStreamOptions options,
+        CancellationToken ct)
+    {
+        try
+        {
+            await chat.RequireProjectAsync(projectId, ct);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+
+        return Results.Stream(body => StreamProjectAsync(body, hub, chat, projectId, since, options, ct), SseContentType);
+    }
+
+    private static async Task StreamProjectAsync(
+        Stream body,
+        WaveSseHub hub,
+        WaveChatService chat,
+        Guid projectId,
+        DateTime? since,
+        WaveStreamOptions options,
+        CancellationToken ct)
+    {
+        await using var subscription = hub.Subscribe(projectId);
+        await body.FlushAsync(ct);
+
+        var seen = new HashSet<Guid>();
+        foreach (var message in await chat.ListSinceAsync(projectId, since, ct: ct))
+        {
+            seen.Add(message.Id);
+            await WriteFrameAsync(body, message, ct);
+        }
+
+        while (true)
+        {
+            using var heartbeatGate = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            Task<bool> pending = subscription.Messages.WaitToReadAsync(heartbeatGate.Token).AsTask();
+            bool available;
+            try
+            {
+                available = await pending.WaitAsync(options.HeartbeatInterval, ct);
+            }
+            catch (TimeoutException)
+            {
+                heartbeatGate.Cancel();
+                try
+                {
+                    await pending;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                await body.WriteAsync(HeartbeatFrame, ct);
+                await body.FlushAsync(ct);
+                continue;
+            }
+
+            if (!available)
+            {
+                break;
+            }
+
+            while (subscription.Messages.TryRead(out var message))
+            {
+                if (!seen.Add(message.Id))
+                {
+                    continue;
+                }
+
+                await WriteFrameAsync(body, message, ct);
+            }
+        }
+    }
+
+    private static async Task WriteFrameAsync(Stream body, WaveMessage message, CancellationToken ct)
+    {
+        await body.WriteAsync("event: message\n"u8.ToArray(), ct);
+        await body.WriteAsync(
+            Encoding.UTF8.GetBytes(
+                $"data: {JsonSerializer.Serialize(new WaveStreamFrame(message.Room, ToResponse(message)), FrameJson)}\n\n"),
+            ct);
+        await body.FlushAsync(ct);
     }
 
     private static async Task<IResult> PostAsync(

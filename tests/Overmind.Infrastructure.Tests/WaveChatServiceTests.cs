@@ -54,6 +54,16 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Post_AfterCommit_PublishesTheMessageToTheBroadcaster()
+    {
+        var message = await Service().PostAsync(_projectId, "backend", "Dan", AgentSession.DefaultRole, "broadcast me");
+
+        _broadcaster.Published
+            .Select(p => (p.ProjectId, p.Room, p.Message.Id))
+            .ShouldBe([(_projectId, "Backend", message.Id)]);
+    }
+
+    [Fact]
     public async Task Post_UnknownLane_ThrowsMissingWaveRoom_WithRosterInDetail()
     {
         var ex = await Should.ThrowAsync<PlanningException>(() =>
@@ -551,7 +561,9 @@ public sealed class WaveChatServiceTests : IDisposable
         return posted;
     }
 
-    private WaveChatService Service() => new(_context, _wakeFanout);
+    private readonly StubWaveChatBroadcaster _broadcaster = new();
+
+    private WaveChatService Service() => new(_context, _wakeFanout, _broadcaster);
 
     private async Task<int> CountAsync() =>
         await _context.WaveMessages.CountAsync();

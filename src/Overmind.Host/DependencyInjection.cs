@@ -21,6 +21,7 @@ using Overmind.Infrastructure.Telegram;
 using Overmind.Infrastructure.VectorSearch;
 using Overmind.Infrastructure.Wake;
 using Overmind.Infrastructure.Wave;
+using Overmind.Host.WaveChat;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -67,6 +68,9 @@ public static class DependencyInjection
         services.AddSingleton<TelegramPollingRunner>();
         services.AddHostedService<TelegramPollingService>();
         services.AddSingleton<ConversationTurnGate>();
+        services.AddSingleton<WaveSseHub>();
+        services.AddSingleton(WaveStreamOptions.Default);
+        services.AddSingleton<IWaveChatBroadcaster>(provider => provider.GetRequiredService<WaveSseHub>());
         services.AddScoped<TelegramChatStore>();
         services.AddScoped<TelegramReplySender>();
         services.AddScoped<TelegramNotificationDeliveryStore>();
