@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { useRef, useState, type CSSProperties } from "react";
+import { ChevronDown, Maximize2, Minimize2, X } from "lucide-react";
 import {
   AgentComposer,
   AgentConversationList,
@@ -14,6 +14,10 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { Zerling } from "@/shared/ui/zerling";
 import { cn } from "@/shared/lib/cn";
+import { usePanelGeometryState, setPanelMaximized } from "@/widgets/agent-chat-bubble/lib/panel-geometry-store";
+import { usePanelDrag } from "@/widgets/agent-chat-bubble/lib/use-panel-drag";
+import { usePanelResize } from "@/widgets/agent-chat-bubble/lib/use-panel-resize";
+import { usePanelViewportClamp } from "@/widgets/agent-chat-bubble/lib/use-panel-viewport-clamp";
 
 interface AgentChatPopupProps {
   conversationId: string | null;
@@ -23,6 +27,11 @@ interface AgentChatPopupProps {
 
 export function AgentChatPopup({ conversationId, onConversationChange, onClose }: AgentChatPopupProps) {
   const [listOpen, setListOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const { geometry, maximized } = usePanelGeometryState();
+  const drag = usePanelDrag(panelRef);
+  const resizeHandleProps = usePanelResize(panelRef);
+  usePanelViewportClamp();
   const list = useAgentConversationList({
     projectId: null,
     onRemoved: (removedId) => {
@@ -53,20 +62,53 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
     setListOpen(false);
   };
 
+  const panelStyle =
+    geometry !== null && !maximized
+      ? ({
+          "--panel-left": `${geometry.x}px`,
+          "--panel-top": `${geometry.y}px`,
+          "--panel-width": `${geometry.width}px`,
+          "--panel-height": `${geometry.height}px`,
+        } as CSSProperties)
+      : undefined;
+
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-label="Agent chat"
-      className="pointer-events-auto flex max-h-[min(70dvh,32rem)] w-[min(380px,calc(100vw-2rem))] animate-bubble-pop flex-col overflow-hidden rounded-xl border border-border-strong bg-surface-raised shadow-xl sm:h-[520px] sm:max-h-[calc(100dvh-10rem)] sm:w-[380px]"
+      style={panelStyle}
+      className={cn(
+        "pointer-events-auto relative flex max-h-[min(70dvh,32rem)] w-[min(380px,calc(100vw-2rem))] animate-bubble-pop flex-col overflow-hidden rounded-xl border border-border-strong bg-surface-raised shadow-xl",
+        maximized
+          ? "sm:fixed sm:left-2 sm:top-2 sm:h-[calc(100dvh-1rem)] sm:max-h-none sm:w-[calc(100vw-1rem)]"
+          : geometry !== null
+            ? "sm:fixed sm:left-[var(--panel-left)] sm:top-[var(--panel-top)] sm:h-[var(--panel-height)] sm:max-h-none sm:w-[var(--panel-width)]"
+            : "sm:h-[520px] sm:max-h-[calc(100dvh-10rem)] sm:w-[380px]",
+      )}
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+      <header
+        onPointerDown={drag.onPointerDown}
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-b border-border px-3 py-2",
+          drag.dragging ? "cursor-grabbing select-none" : maximized ? undefined : "sm:cursor-grab sm:touch-none",
+        )}
+      >
         <Zerling pose="sleeping" size={24} />
         <span className="text-sm font-semibold text-foreground">Agent chat</span>
         <button
           type="button"
+          onClick={() => setPanelMaximized(!maximized)}
+          aria-label={maximized ? "Restore agent chat size" : "Maximize agent chat"}
+          className="hidden rounded p-1 text-muted transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:inline-flex"
+        >
+          {maximized ? <Minimize2 size={14} aria-hidden /> : <Maximize2 size={14} aria-hidden />}
+        </button>
+        <button
+          type="button"
           onClick={onClose}
           aria-label="Close agent chat"
-          className="ml-auto rounded p-1 text-muted transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="rounded p-1 text-muted transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <X size={14} aria-hidden />
         </button>
@@ -124,6 +166,25 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
           onStop={chat.stop}
         />
       </div>
+      {!maximized ? (
+        <>
+          <div
+            {...resizeHandleProps("left")}
+            aria-hidden
+            className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-ew-resize touch-none sm:block"
+          />
+          <div
+            {...resizeHandleProps("bottom")}
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 z-10 hidden h-1.5 cursor-ns-resize touch-none sm:block"
+          />
+          <div
+            {...resizeHandleProps("corner")}
+            aria-hidden
+            className="absolute bottom-0 left-0 z-10 hidden h-3 w-3 cursor-nesw-resize touch-none sm:block"
+          />
+        </>
+      ) : null}
     </div>
   );
 }
