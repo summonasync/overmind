@@ -43,6 +43,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
     public DbSet<TelegramChatMapping> TelegramChatMappings => Set<TelegramChatMapping>();
+    public DbSet<TelegramValidatorMapping> TelegramValidatorMappings => Set<TelegramValidatorMapping>();
     public DbSet<TelegramNotificationDelivery> TelegramNotificationDeliveries => Set<TelegramNotificationDelivery>();
     public DbSet<AgentRouteRow> AgentRoutes => Set<AgentRouteRow>();
 
@@ -451,6 +452,18 @@ public sealed class OvermindDbContext : DbContext
         modelBuilder.Entity<TelegramChatMapping>(builder =>
         {
             builder.HasKey(m => m.ChatId);
+
+            builder.HasOne<Conversation>()
+                .WithMany()
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelegramValidatorMapping>(builder =>
+        {
+            builder.HasKey(m => m.Id);
+
+            builder.HasIndex(m => new { m.ChatId, m.ProjectId }).IsUnique();
 
             builder.HasOne<Conversation>()
                 .WithMany()

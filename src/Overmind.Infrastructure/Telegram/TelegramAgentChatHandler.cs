@@ -14,6 +14,7 @@ public sealed class TelegramAgentChatHandler(
     TelegramReplySender sender,
     TelegramNotificationDeliveryStore deliveries,
     NotificationsService notifications,
+    INotificationValidatorRunner validator,
     ILogger<TelegramAgentChatHandler> logger) : ITelegramMessageHandler
 {
     public const int MaxAttempts = 3;
@@ -59,8 +60,13 @@ public sealed class TelegramAgentChatHandler(
         {
             try
             {
-                await notifications.ReplyAsync(notificationId, message.Text, ct);
+                var notification = await notifications.ReplyAsync(notificationId, message.Text, ct);
                 await SendNoticeQuietlyAsync(message.ChatId, ReplyRegisteredAck, ct);
+                if (notification is not null)
+                {
+                    await validator.RunAsync(message.ChatId, notification, message.Text, ct);
+                }
+
                 return;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
