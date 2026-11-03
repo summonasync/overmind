@@ -25,10 +25,7 @@ export function AgentBudgetMeter({ className }: AgentBudgetMeterProps) {
   const data = usage.data;
 
   return (
-    <div
-      className={cn("shrink-0 text-xs", className)}
-      title="Output tokens written by the agent today, resets at 00:00 UTC"
-    >
+    <div className={cn("shrink-0 text-xs", className)}>
       {data === undefined ? null : <MeterBody usage={data} />}
     </div>
   );
@@ -52,7 +49,14 @@ function MeterBody({ usage }: { usage: AgentUsage }) {
 
   return (
     <span className="flex items-center gap-2" title={tooltip}>
-      <span className="h-1 w-16 overflow-hidden rounded-full bg-muted/40" aria-hidden>
+      <span
+        className="h-1 w-16 overflow-hidden rounded-full bg-muted/40"
+        role="progressbar"
+        aria-label="Daily token budget"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+      >
         <span
           className={cn("block h-full rounded-full", FILL_BY_STATE[state])}
           style={{ width: `${percent}%` }}
