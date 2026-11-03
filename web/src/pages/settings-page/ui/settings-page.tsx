@@ -8,7 +8,13 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { Zerling } from "@/shared/ui/zerling";
 import { healthKeys } from "@/features/health";
 import { GrimoireStatusTile } from "@/features/grimoire";
-import { ReindexButton, SettingsForm, useSettings, useSettingsMutations } from "@/features/settings";
+import {
+  ReindexButton,
+  SettingsForm,
+  TelegramSettingsSection,
+  useSettings,
+  useSettingsMutations,
+} from "@/features/settings";
 import type { ReindexReport, SettingsFormValues } from "@/features/settings";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { AttentionSettingsSection } from "@/pages/settings-page/ui/attention-settings-section";
@@ -112,6 +118,8 @@ export function SettingsPage() {
         </section>
 
         <AttentionSettingsSection />
+
+        <TelegramSettingsSection settings={settings} />
 
         <GrimoireStatusTile />
       </div>

@@ -23,7 +23,10 @@ public sealed record SettingsResponse(
     string AgentGrimoireTome,
     int AgentGrimoireCompactionHours,
     string AgentInstructions,
-    string AgentDelegateApprovalsDefault);
+    string AgentDelegateApprovalsDefault,
+    bool TelegramEnabled,
+    bool TelegramBotTokenConfigured,
+    long[] TelegramAllowedChatIds);
 
 public sealed record UpdateSettingsResponse(
     string EmbeddingProvider,
@@ -49,7 +52,10 @@ public sealed record UpdateSettingsResponse(
     int AgentGrimoireCompactionHours,
     string AgentInstructions,
     string AgentDelegateApprovalsDefault,
-    bool ReindexRecommended);
+    bool ReindexRecommended,
+    bool TelegramEnabled,
+    bool TelegramBotTokenConfigured,
+    long[] TelegramAllowedChatIds);
 
 public sealed record UpdateSettingsRequest(
     string? EmbeddingProvider,
@@ -74,7 +80,10 @@ public sealed record UpdateSettingsRequest(
     string? AgentGrimoireTome,
     int? AgentGrimoireCompactionHours,
     string? AgentInstructions,
-    string? AgentDelegateApprovalsDefault);
+    string? AgentDelegateApprovalsDefault,
+    bool? TelegramEnabled,
+    string? TelegramBotToken,
+    long[]? TelegramAllowedChatIds);
 
 public sealed record TestSettingsRequest(
     string? Provider,

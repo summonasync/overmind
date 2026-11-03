@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { reindex, testSettings, updateSettings } from "@/features/settings/api";
+import { reindex, testSettings, updateSettings, updateTelegramSettings } from "@/features/settings/api";
 import { settingsKeys, settingsQueryOptions } from "@/features/settings/queries";
-import type { SettingsFormValues, TestSettingsValues } from "@/features/settings/types";
+import type { SettingsFormValues, TelegramSettingsValues, TestSettingsValues } from "@/features/settings/types";
 
 export function useSettings() {
   const query = useQuery(settingsQueryOptions());
@@ -18,6 +18,11 @@ export function useSettingsMutations() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.current() }),
   });
 
+  const telegramSave = useMutation({
+    mutationFn: (values: TelegramSettingsValues) => updateTelegramSettings(values),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.current() }),
+  });
+
   const test = useMutation({
     mutationFn: (values: TestSettingsValues) => testSettings(values),
   });
@@ -26,5 +31,5 @@ export function useSettingsMutations() {
     mutationFn: () => reindex(),
   });
 
-  return { save, test, rebuild };
+  return { save, telegramSave, test, rebuild };
 }

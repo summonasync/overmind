@@ -8,6 +8,7 @@ namespace Overmind.Infrastructure.Notifications;
 
 public sealed class ReplyAutoActProcessor(
     OvermindDbContext db,
+    NotificationsService notifications,
     PlanningArtifactService artifacts,
     PlanningFeatureService features,
     FeatureDependencyService dependencies,
@@ -156,14 +157,14 @@ public sealed class ReplyAutoActProcessor(
     private async Task NotifyAuthorAsync(
         AgentNotification notification, string text, CancellationToken ct)
     {
-        db.AgentNotifications.Add(AgentNotification.Create(
+        await notifications.CreateAsync(
             NotificationKind.Info,
             text,
             notification.ProjectId,
             notification.FeatureSlug,
             notification.Tab,
-            notification.Agent));
-        await db.SaveChangesAsync(ct);
+            notification.Agent,
+            ct);
     }
 
     private async Task<PlanningArtifact?> ResolveDocumentAsync(Guid featureId, string? tab, CancellationToken ct)

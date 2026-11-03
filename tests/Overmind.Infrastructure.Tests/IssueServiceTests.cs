@@ -72,7 +72,8 @@ public sealed class IssueServiceTests : IDisposable
                     context,
                     new ReplyAutoActQueue(),
                     NullLogger<ReplyAutoActFanout>.Instance),
-                _wakeFanout),
+                _wakeFanout,
+                []),
             new FeatureClaimService(context, TestPlanningDispatcher.Create(context, _materializer)),
             TestPlanningDispatcher.Create(context, _materializer));
 

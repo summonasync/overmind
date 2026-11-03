@@ -25,10 +25,19 @@ export interface SettingsResponse {
   agentDailyBudget: number;
   agentInstructions: string;
   agentDelegateApprovalsDefault: AgentDelegateApprovalsDefault;
+  telegramEnabled: boolean;
+  telegramBotTokenConfigured: boolean;
+  telegramAllowedChatIds: number[];
 }
 
 export interface UpdateSettingsResponse extends SettingsResponse {
   reindexRecommended: boolean;
+}
+
+export interface TelegramSettingsValues {
+  telegramEnabled: boolean;
+  telegramBotToken: string;
+  telegramAllowedChatIds: number[];
 }
 
 export interface SettingsFormValues {

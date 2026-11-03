@@ -17,6 +17,7 @@ using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
+using Overmind.Infrastructure.Telegram;
 using Overmind.Infrastructure.VectorSearch;
 using Overmind.Infrastructure.Wake;
 using Overmind.Infrastructure.Wave;
@@ -60,6 +61,20 @@ public static class DependencyInjection
         services.AddSingleton<ConversationTurnRunner>();
         services.AddSingleton<ConversationTurnRegistry>();
         services.AddHostedService<AgentLoopHostedService>();
+        services.AddScoped<TelegramTransportOptionsProvider>();
+        services.AddSingleton<ITelegramBotClientFactory, TelegramBotClientFactory>();
+        services.AddSingleton<TelegramBotClientCache>();
+        services.AddSingleton<TelegramPollingRunner>();
+        services.AddHostedService<TelegramPollingService>();
+        services.AddSingleton<ConversationTurnGate>();
+        services.AddScoped<TelegramChatStore>();
+        services.AddScoped<TelegramReplySender>();
+        services.AddScoped<TelegramNotificationDeliveryStore>();
+        services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
+        services.AddSingleton<INotificationDeliveryChannel>(provider => new TelegramNotificationFanout(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            () => provider.GetRequiredService<BrowserOrigin>().BoundOrigin,
+            provider.GetRequiredService<ILogger<TelegramNotificationFanout>>()));
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();
         services.AddScoped<ISemanticSearch>(provider => provider.GetRequiredService<QdrantSemanticSearch>());

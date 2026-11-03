@@ -9,6 +9,7 @@ using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
+using Overmind.Infrastructure.Wake;
 using Shouldly;
 using Xunit;
 
@@ -224,6 +225,13 @@ public sealed class ReplyAutoActWorkerTests : IDisposable
                 dispatcher,
                 NullLogger<PlanningFeatureService>.Instance))
             .AddSingleton(new FeatureDependencyService(workerContext, dispatcher))
+            .AddSingleton(new NotificationsService(
+                workerContext,
+                new ReplyAutoActFanout(workerContext, queue, NullLogger<ReplyAutoActFanout>.Instance),
+                new WakeDropFanout(
+                    new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+                    NullLogger<WakeDropFanout>.Instance),
+                []))
             .AddSingleton<ILogger<ReplyAutoActProcessor>>(NullLogger<ReplyAutoActProcessor>.Instance)
             .AddSingleton<ReplyAutoActProcessor>();
 

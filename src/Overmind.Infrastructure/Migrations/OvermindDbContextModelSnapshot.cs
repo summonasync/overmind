@@ -956,6 +956,46 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("Tags");
                 });
 
+            modelBuilder.Entity("Overmind.Core.TelegramChatMapping", b =>
+                {
+                    b.Property<long>("ChatId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ChatId");
+
+                    b.HasIndex("ConversationId");
+
+                    b.ToTable("TelegramChatMappings");
+                });
+
+            modelBuilder.Entity("Overmind.Core.TelegramNotificationDelivery", b =>
+                {
+                    b.Property<long>("ChatId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ChatId", "MessageId");
+
+                    b.HasIndex("NotificationId");
+
+                    b.ToTable("TelegramNotificationDeliveries");
+                });
+
             modelBuilder.Entity("Overmind.Core.WaveMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1300,6 +1340,24 @@ namespace Overmind.Infrastructure.Migrations
                     b.Navigation("Entry");
 
                     b.Navigation("Kit");
+                });
+
+            modelBuilder.Entity("Overmind.Core.TelegramChatMapping", b =>
+                {
+                    b.HasOne("Overmind.Core.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.TelegramNotificationDelivery", b =>
+                {
+                    b.HasOne("Overmind.Core.AgentNotification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Overmind.Core.WaveMessage", b =>

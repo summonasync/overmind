@@ -35,4 +35,8 @@ public static class SettingKeys
     public const string AgentGrimoirePersonalTome = "agent.grimoire.personalTome";
     public const string AgentGrimoireCrewTome = "agent.grimoire.crewTome";
     public const string AgentGrimoireCompactionHours = "agent.grimoire.compactionHours";
+
+    public const string TelegramEnabled = "telegram.enabled";
+    public const string TelegramBotToken = "telegram.botToken";
+    public const string TelegramAllowedChatIds = "telegram.allowedChatIds";
 }

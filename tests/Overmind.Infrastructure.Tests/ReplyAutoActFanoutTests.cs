@@ -137,7 +137,8 @@ public sealed class ReplyAutoActFanoutTests : IDisposable
         var service = new NotificationsService(
             _context,
             new ReplyAutoActFanout(broken, _queue, NullLogger<ReplyAutoActFanout>.Instance),
-            _wakeFanout);
+            _wakeFanout,
+            []);
 
         var replied = await service.ReplyAsync(notification.Id, "approved", CancellationToken.None);
 
