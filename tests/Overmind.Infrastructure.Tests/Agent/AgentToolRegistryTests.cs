@@ -7,8 +7,10 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests.Agent;
 
-public sealed class AgentToolRegistryTests
+public sealed class AgentToolRegistryTests : IDisposable
 {
+    private readonly TempDatabase _temp = new();
+
     [Fact]
     public void Build_ExposesAllFamiliesWithoutDuplicateNames()
     {
@@ -52,7 +54,7 @@ public sealed class AgentToolRegistryTests
         var result = await registry.InvokeAsync(
             "planning_validate",
             JsonSerializer.SerializeToElement(new { artifactId = Guid.NewGuid() }),
-            new AgentToolInvocation(true, null),
+            new AgentToolInvocation(true, null, Guid.NewGuid()),
             CancellationToken.None);
 
         result.GetProperty("error").GetString()!.ShouldContain("no owner instruction");
@@ -68,7 +70,7 @@ public sealed class AgentToolRegistryTests
         var result = await registry.InvokeAsync(
             "planning_validate",
             JsonSerializer.SerializeToElement(new { artifactId = Guid.NewGuid() }),
-            new AgentToolInvocation(true, instructionId),
+            new AgentToolInvocation(true, instructionId, Guid.NewGuid()),
             CancellationToken.None);
 
         result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());
@@ -103,7 +105,7 @@ public sealed class AgentToolRegistryTests
         var result = await registry.InvokeAsync(
             "planning_set_feature_status",
             JsonSerializer.SerializeToElement(new { projectId = Guid.NewGuid(), slug = "feat", status = "done", logNote = "owner said close it" }),
-            new AgentToolInvocation(true, instructionId),
+            new AgentToolInvocation(true, instructionId, Guid.NewGuid()),
             CancellationToken.None);
 
         result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());
@@ -125,14 +127,27 @@ public sealed class AgentToolRegistryTests
         result.GetProperty("error").GetString()!.ShouldContain("'title' is required");
     }
 
-    private static AgentToolRegistry CreateRegistry(RecordingHandler? handler = null)
+    [Fact]
+    public void Build_IncludesConversationHistoryAmongStandardTools()
+    {
+        var registry = CreateRegistry();
+
+        registry.CreateTools(includeHumanGated: false)
+            .Select(tool => tool.Name)
+            .ShouldContain("conversation_history");
+    }
+
+    private AgentToolRegistry CreateRegistry(RecordingHandler? handler = null)
     {
         var http = new HttpClient(handler ?? new RecordingHandler()) { BaseAddress = new Uri("http://127.0.0.1:1") };
         var state = new EmbeddedAgentSessionState();
         state.Set(Guid.NewGuid());
         return new AgentToolRegistry(
-            new AgentLoopbackClient(http), state, Substitute.For<IGrimoireMemoryClient>());
+            new AgentLoopbackClient(http), state, Substitute.For<IGrimoireMemoryClient>(),
+            new ConversationMessageStore(_temp.CreateContext()));
     }
+
+    public void Dispose() => _temp.Dispose();
 
     private static JsonElement EmptyArgs() => JsonSerializer.SerializeToElement(new { });
 

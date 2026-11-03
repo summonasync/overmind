@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
@@ -19,7 +20,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     {
         using var context = _temp.CreateContext();
         var project = Project.Create("gate-tests", "/tmp/gate-tests");
-        project.SetDelegateApprovals(true);
+        project.SetDelegateApprovals(DelegateApprovalsOverride.On);
         var conversation = Conversation.Create(project.Id, "delegation chat");
         var session = AgentSession.Create("overmind-agent", "overmind-host", AgentSession.EmbeddedRole);
         context.Projects.Add(project);
@@ -42,7 +43,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
         var fresh = Project.Create("gate-fresh", "/tmp/gate-fresh");
         context.Projects.Add(fresh);
         await context.SaveChangesAsync();
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
 
         (await gate.IsEnabledAsync(fresh.Id)).ShouldBeFalse();
         (await gate.IsEnabledAsync(_projectId)).ShouldBeTrue();
@@ -51,7 +52,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     [Fact]
     public async Task IsEnabledAsync_NullProject_IsOff()
     {
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
 
         (await gate.IsEnabledAsync(null)).ShouldBeFalse();
     }
@@ -59,7 +60,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     [Fact]
     public async Task AuthorizeAsync_FlagOnWithEmbeddedSessionAndInstruction_Grants()
     {
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
 
         var grant = await gate.AuthorizeAsync(_projectId, _embeddedSessionId, _embeddedSessionId, _instruction.Id);
 
@@ -75,9 +76,9 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     {
         using var context = _temp.CreateContext();
         var project = await context.Projects.SingleAsync(p => p.Id == _projectId);
-        project.SetDelegateApprovals(false);
+        project.SetDelegateApprovals(DelegateApprovalsOverride.Off);
         await context.SaveChangesAsync();
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
 
         var grant = await gate.AuthorizeAsync(_projectId, _embeddedSessionId, _embeddedSessionId, _instruction.Id);
 
@@ -85,9 +86,26 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     }
 
     [Fact]
+    public async Task AuthorizeAsync_UnsetWithGlobalDefaultOn_Grants()
+    {
+        using var context = _temp.CreateContext();
+        var project = await context.Projects.SingleAsync(p => p.Id == _projectId);
+        project.SetDelegateApprovals(DelegateApprovalsOverride.Unset);
+        await context.SaveChangesAsync();
+        await new AppSettingsService(_temp.CreateContext())
+            .SetAsync(SettingKeys.AgentDelegateApprovalsDefault, "on", CancellationToken.None);
+
+        var grant = await Gate()
+            .AuthorizeAsync(_projectId, _embeddedSessionId, _embeddedSessionId, _instruction.Id);
+
+        grant.ShouldNotBeNull();
+        grant.InstructionMessageId.ShouldBe(_instruction.Id);
+    }
+
+    [Fact]
     public async Task AuthorizeAsync_ForeignCallerSession_IsRefused()
     {
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
         var externalSession = Guid.NewGuid();
 
         var grant = await gate.AuthorizeAsync(_projectId, externalSession, _embeddedSessionId, _instruction.Id);
@@ -102,7 +120,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
         var worker = AgentSession.Create("outside-agent", "claude");
         context.AgentSessions.Add(worker);
         await context.SaveChangesAsync();
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
 
         var grant = await gate.AuthorizeAsync(_projectId, worker.Id, worker.Id, _instruction.Id);
 
@@ -112,7 +130,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     [Fact]
     public async Task AuthorizeAsync_AssistantMessage_IsRefused()
     {
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
         var reply = await Store().AppendAsync(
             _conversationId, ConversationMessage.AssistantRole, "on it", CancellationToken.None);
 
@@ -126,14 +144,14 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     {
         using var context = _temp.CreateContext();
         var otherProject = Project.Create("gate-other", "/tmp/gate-other");
-        otherProject.SetDelegateApprovals(true);
+        otherProject.SetDelegateApprovals(DelegateApprovalsOverride.On);
         var otherConversation = Conversation.Create(otherProject.Id, "other chat");
         context.Projects.Add(otherProject);
         context.Conversations.Add(otherConversation);
         await context.SaveChangesAsync();
         var foreignMessage = await Store().AppendAsync(
             otherConversation.Id, ConversationMessage.UserRole, "approve spec of 007 here", CancellationToken.None);
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
 
         var grant = await gate.AuthorizeAsync(_projectId, _embeddedSessionId, _embeddedSessionId, foreignMessage.Id);
 
@@ -143,7 +161,7 @@ public sealed class DelegatedApprovalGateTests : IDisposable
     [Fact]
     public async Task AuthorizeAsync_LongInstruction_IsExcerptedToOneLine()
     {
-        var gate = new DelegatedApprovalGate(_temp.CreateContext());
+        var gate = Gate();
         var longText = new string('x', 120) + "\nsecond line";
         var message = await Store().AppendAsync(
             _conversationId, ConversationMessage.UserRole, longText, CancellationToken.None);
@@ -153,6 +171,10 @@ public sealed class DelegatedApprovalGateTests : IDisposable
         grant!.InstructionExcerpt.Length.ShouldBe(80);
         grant.InstructionExcerpt.ShouldNotContain("\n");
     }
+
+    private DelegatedApprovalGate Gate() => new(
+        _temp.CreateContext(),
+        new ApprovalPolicy(_temp.CreateContext(), new AppSettingsService(_temp.CreateContext())));
 
     private ConversationMessageStore Store() => new(_temp.CreateContext());
 

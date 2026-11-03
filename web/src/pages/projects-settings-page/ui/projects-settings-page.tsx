@@ -11,7 +11,7 @@ import { ProjectsInfoPanel, useInfoPanel } from "@/widgets/app-shell";
 import {
   ClaimSettingsSection,
   FeatureNumberSettings,
-  ProjectApprovalSettingsToggle,
+  ProjectApprovalSettings,
   ProjectAutoActToggle,
   ProjectDetail,
   ProjectForm,
@@ -128,7 +128,7 @@ function ProjectsSettingsPageContent() {
             </div>
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Agent approvals</h3>
-              <ProjectApprovalSettingsToggle key={detail.id} projectId={detail.id} />
+              <ProjectApprovalSettings key={detail.id} projectId={detail.id} />
             </div>
           </>
         ) : null}

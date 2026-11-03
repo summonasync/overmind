@@ -31,6 +31,7 @@ export function updateSettings(values: SettingsFormValues): Promise<UpdateSettin
     agentPerTurnMaxTokens: values.agentPerTurnMaxTokens,
     agentDailyBudget: values.agentDailyBudget,
     agentInstructions: values.agentInstructions,
+    agentDelegateApprovalsDefault: values.agentDelegateApprovalsDefault,
   });
 }
 

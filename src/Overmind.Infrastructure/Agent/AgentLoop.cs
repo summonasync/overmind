@@ -42,13 +42,14 @@ public sealed class AgentLoop(
             yield break;
         }
 
-        var messages = new List<ChatMessage>(await prompts.ComposeAsync(conversation, history, userText, ct));
+        var messages = new List<ChatMessage>(
+            await prompts.ComposeAsync(conversation, ConversationContextWindow.Apply(history), userText, ct));
         var delegationArmed = await delegationGate.IsEnabledAsync(conversation.ProjectId, ct);
         Guid? instructionMessageId = delegationArmed
             ? (await auditTrail.LatestAsync(conversation.Id, ConversationMessage.UserRole, ct))?.Id
             : null;
         var options = BuildOptions(tools, delegationArmed);
-        var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId);
+        var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId, conversation.Id);
         var usage = new AgentTurnUsage();
         var day = AgentBudgetDay.Current();
         var dailyUsed = await budget.GetUsedAsync(day, ct);

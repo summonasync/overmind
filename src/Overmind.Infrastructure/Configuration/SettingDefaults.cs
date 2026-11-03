@@ -28,6 +28,7 @@ public static class SettingDefaults
     public const int AgentDailyBudget = 0;
     public const string AgentInstructions = "";
     public const int AgentInstructionsMaxLength = 4000;
+    public const string AgentDelegateApprovalsDefault = "off";
 
     public const string AgentGrimoireBaseUrl = "";
     public const string AgentGrimoireTome = "crew";
@@ -37,5 +38,6 @@ public static class SettingDefaults
     public static readonly string[] PlanningMaterializationDefaults = ["off", "on", "archive"];
     public static readonly string[] PlanningMaterializationSyncModes = ["on", "off"];
     public static readonly string[] PlanningRequireHumanValidationDefaults = ["on", "off"];
+    public static readonly string[] AgentDelegateApprovalsDefaults = ["on", "off"];
     public static readonly string[] NotificationNudgeModes = ["quiet", "nag", "mini"];
 }

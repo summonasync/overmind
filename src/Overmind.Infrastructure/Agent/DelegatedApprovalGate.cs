@@ -4,7 +4,7 @@ using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.Agent;
 
-public sealed class DelegatedApprovalGate(OvermindDbContext db) : IAgentDelegationGate
+public sealed class DelegatedApprovalGate(OvermindDbContext db, ApprovalPolicy policy) : IAgentDelegationGate
 {
     public const string ProvenanceMarker = "[delegated by owner via chat]";
     private const int MaxExcerptLength = 80;
@@ -16,10 +16,7 @@ public sealed class DelegatedApprovalGate(OvermindDbContext db) : IAgentDelegati
             return false;
         }
 
-        return await db.Projects
-            .Where(p => p.Id == projectId)
-            .Select(p => p.DelegateApprovals)
-            .FirstOrDefaultAsync(ct);
+        return await policy.ResolveDelegateApprovalsAsync(projectId.Value, ct);
     }
 
     public async Task<DelegatedApprovalGrant?> AuthorizeAsync(
