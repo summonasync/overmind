@@ -82,17 +82,6 @@ public sealed class RouteVectorCollectionTests
     }
 
     [Fact]
-    public void Threshold_GatesTheRoutingDecision()
-    {
-        new RouteVectorMatch(Guid.NewGuid(), "planning", "worker", RouteVectorMatch.Threshold)
-            .IsRoutable.ShouldBeTrue();
-        new RouteVectorMatch(Guid.NewGuid(), "planning", "worker", RouteVectorMatch.Threshold - 0.01f)
-            .IsRoutable.ShouldBeFalse();
-        new RouteVectorMatch(Guid.NewGuid(), "planning", "worker", 0.99f)
-            .IsRoutable.ShouldBeTrue();
-    }
-
-    [Fact]
     public void CollectionName_IsDedicatedToRoutes() =>
         RouteVectorCollection.Name.ShouldBe("overmind_routes");
 }

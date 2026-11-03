@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent.Routes;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Llm;
 
 namespace Overmind.Infrastructure.Agent;
@@ -14,6 +16,7 @@ public sealed class IntentRouter(
     IAgentRouteStore routes,
     IRouteVectorIndex routeVectors,
     IAgentBudgetStore budget,
+    AppSettingsService settings,
     ILogger<IntentRouter> logger)
 {
     public const int HotHeadSize = 12;
@@ -49,19 +52,34 @@ public sealed class IntentRouter(
                 new RoutingMissContext($"learned pattern match: {match.Pattern}", hotHead.Count));
         }
 
-        if (await routeVectors.MatchTopAsync(userText, ct) is { } semantic && semantic.IsRoutable)
+        if (await routeVectors.MatchTopAsync(userText, ct) is { } semantic)
         {
-            logger.LogInformation(
-                "Router matched conversation {ConversationId} to semantically similar route {RouteId} in {Domain} with score {Score}",
-                conversation.Id, semantic.RouteId, semantic.Domain, semantic.Score);
-            return new RoutingDecision(
-                semantic.Target ?? RoutingTargets.Worker,
-                RoutingSource.Learned,
-                new RoutingMissContext(
-                    $"semantic route match: {semantic.Domain} (score {semantic.Score:F2})", hotHead.Count));
+            var threshold = await ReadMatchThresholdAsync(ct);
+            if (semantic.Score >= threshold)
+            {
+                logger.LogInformation(
+                    "Router matched conversation {ConversationId} to semantically similar route {RouteId} in {Domain} with score {Score} above the {Threshold} gate",
+                    conversation.Id, semantic.RouteId, semantic.Domain, semantic.Score, threshold);
+                return new RoutingDecision(
+                    semantic.Target ?? RoutingTargets.Worker,
+                    RoutingSource.Learned,
+                    new RoutingMissContext(
+                        $"semantic route match: {semantic.Domain} (score {semantic.Score:F2})", hotHead.Count));
+            }
         }
 
         return await ClassifyAsync(conversation, history, userText, hotHead, ct);
+    }
+
+    private async Task<double> ReadMatchThresholdAsync(CancellationToken ct)
+    {
+        var raw = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentRouteMatchThreshold,
+            SettingDefaults.AgentRouteMatchThreshold.ToString(CultureInfo.InvariantCulture), ct);
+        return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var threshold) &&
+            threshold is > 0 and < 1
+                ? threshold
+                : SettingDefaults.AgentRouteMatchThreshold;
     }
 
     public async Task<RoutingDecision> ReRouteAsync(

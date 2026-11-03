@@ -4,6 +4,7 @@ using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Agent.Routes;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Llm;
 using Overmind.Infrastructure.Persistence;
 using Shouldly;
@@ -30,6 +31,7 @@ public sealed class RouterConversationStreamSourceTests : IDisposable
             _store,
             Substitute.For<IRouteVectorIndex>(),
             new CountingBudgetStore(),
+            new AppSettingsService(_db.CreateContext()),
             NullLogger<IntentRouter>.Instance);
         _source = new RouterConversationStreamSource(
             router,

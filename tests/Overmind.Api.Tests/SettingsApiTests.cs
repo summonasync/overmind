@@ -558,6 +558,33 @@ public sealed class SettingsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Put_AgentRouteMatchThreshold_RoundTrips_AndSurvivesPartialUpdates()
+    {
+        var put = await _client.PutAsJsonAsync("/api/settings", new { AgentRouteMatchThreshold = 0.643 });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("agentRouteMatchThreshold").GetDouble().ShouldBe(0.643);
+
+        await _client.PutAsJsonAsync("/api/settings", new { AgentModel = "glm-4.6-air" });
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("agentRouteMatchThreshold").GetDouble().ShouldBe(0.643);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    [InlineData(-0.2)]
+    public async Task Put_RejectsOutOfRangeAgentRouteMatchThreshold(double threshold)
+    {
+        using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentRouteMatchThreshold = threshold });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Put_ZeroAgentDailyBudget_IsAcceptedAsDisabled()
     {
         using var response = await _client.PutAsJsonAsync("/api/settings", new { AgentDailyBudget = 0 });

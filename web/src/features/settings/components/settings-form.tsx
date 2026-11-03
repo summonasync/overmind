@@ -63,6 +63,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
   const [agentApiKey, setAgentApiKey] = useState("");
   const [agentPerTurnMaxTokens, setAgentPerTurnMaxTokens] = useState(String(settings.agentPerTurnMaxTokens));
   const [agentDailyBudget, setAgentDailyBudget] = useState(String(settings.agentDailyBudget));
+  const [agentRouteMatchThreshold, setAgentRouteMatchThreshold] = useState(String(settings.agentRouteMatchThreshold));
   const [agentInstructions, setAgentInstructions] = useState(settings.agentInstructions);
   const [agentDelegateApprovalsDefault, setAgentDelegateApprovalsDefault] = useState(
     settings.agentDelegateApprovalsDefault,
@@ -89,6 +90,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     setAgentApiKey("");
     setAgentPerTurnMaxTokens(String(settings.agentPerTurnMaxTokens));
     setAgentDailyBudget(String(settings.agentDailyBudget));
+    setAgentRouteMatchThreshold(String(settings.agentRouteMatchThreshold));
     setAgentInstructions(settings.agentInstructions);
     setAgentDelegateApprovalsDefault(settings.agentDelegateApprovalsDefault);
     setAgentError(null);
@@ -111,6 +113,11 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       setAgentError(new Error("Daily budget must be a whole number of zero or greater."));
       return;
     }
+    const routeMatchThreshold = Number(agentRouteMatchThreshold);
+    if (!Number.isFinite(routeMatchThreshold) || routeMatchThreshold <= 0 || routeMatchThreshold >= 1) {
+      setAgentError(new Error("Route match threshold must be a number between 0 and 1 (exclusive)."));
+      return;
+    }
     setAgentError(null);
     onSubmit({
       embeddingProvider,
@@ -129,6 +136,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       agentApiKey: agentApiKey.trim(),
       agentPerTurnMaxTokens: perTurnMaxTokens,
       agentDailyBudget: dailyBudget,
+      agentRouteMatchThreshold: routeMatchThreshold,
       agentInstructions: agentInstructions.trim(),
       agentDelegateApprovalsDefault,
     });
@@ -386,6 +394,22 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
           </Field>
         </div>
         <p className="text-xs text-muted">A daily budget of 0 keeps the agent unrestricted.</p>
+        <Field label="Route match threshold" htmlFor="agent-route-match-threshold">
+          <Input
+            id="agent-route-match-threshold"
+            type="number"
+            min={0.05}
+            max={0.95}
+            step={0.01}
+            value={agentRouteMatchThreshold}
+            onChange={(event) => setAgentRouteMatchThreshold(event.target.value)}
+          />
+        </Field>
+        <p className="text-xs text-muted">
+          Semantic similarity a rephrased request needs before a learned route fires without a
+          classification call. Live probing on nomic-embed-text suggests 0.58; raise it when routes
+          match too eagerly.
+        </p>
         <Field label="Delegate approvals default" htmlFor="agent-delegate-approvals-default">
           <Select
             id="agent-delegate-approvals-default"

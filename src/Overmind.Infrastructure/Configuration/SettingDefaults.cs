@@ -25,6 +25,7 @@ public static class SettingDefaults
     public const string AgentModel = "glm-5.3-flash";
     public const string AgentAlias = "overmind-agent";
     public const int AgentPerTurnMaxTokens = 8192;
+    public const double AgentRouteMatchThreshold = 0.58;
     public const int AgentDailyBudget = 0;
     public const string AgentInstructions = "";
     public const int AgentInstructionsMaxLength = 4000;
