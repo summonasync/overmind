@@ -408,3 +408,7 @@ dist/
 src/OvermindCrewKit/.claude/settings.local.json
 
 .idea/
+
+# Overmind materialized mirrors (board-owned; the board is the source of truth)
+BACKLOG/
+ENTRIES/
