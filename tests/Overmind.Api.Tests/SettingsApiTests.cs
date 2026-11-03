@@ -464,8 +464,8 @@ public sealed class SettingsApiTests : IDisposable
         var document = JsonDocument.Parse(json);
 
         document.RootElement.GetProperty("agentBaseUrl").GetString()
-            .ShouldBe("https://open.bigmodel.cn/api/paas/v4");
-        document.RootElement.GetProperty("agentModel").GetString().ShouldBe("glm-4.6");
+            .ShouldBe("https://api.z.ai/api/paas/v4");
+        document.RootElement.GetProperty("agentModel").GetString().ShouldBe("glm-5.3-flash");
         document.RootElement.GetProperty("agentApiKeyConfigured").GetBoolean().ShouldBeFalse();
         document.RootElement.GetProperty("agentPerTurnMaxTokens").GetInt32().ShouldBe(8192);
         document.RootElement.GetProperty("agentDailyBudget").GetInt32().ShouldBe(0);
