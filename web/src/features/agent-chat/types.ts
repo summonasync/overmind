@@ -23,11 +23,19 @@ export interface AgentHistoryPayload {
   items: AgentMessage[];
 }
 
+export type AgentRoutingSource = "structural" | "learned" | "classification";
+
+export interface AgentRouteTrace {
+  target: string;
+  source: AgentRoutingSource | null;
+}
+
 export type AgentStreamFrame =
   | { kind: "delta"; text: string }
   | { kind: "completed"; messageId: string | null }
   | { kind: "failed"; error: string }
-  | { kind: "aborted" };
+  | { kind: "aborted" }
+  | { kind: "route"; target: string; source: AgentRoutingSource | null };
 
 export interface AgentReadState {
   conversationId: string;

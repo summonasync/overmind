@@ -18,7 +18,12 @@ import {
   reportTurnStarted,
 } from "@/features/agent-chat/lib/chat-activity-store";
 import { approvalSettingsQueryOptions } from "@/features/projects";
-import type { AgentConversation, AgentMessage, AgentHistoryPayload } from "@/features/agent-chat/types";
+import type {
+  AgentConversation,
+  AgentMessage,
+  AgentHistoryPayload,
+  AgentRouteTrace,
+} from "@/features/agent-chat/types";
 
 interface UseAgentChatArgs {
   conversationId: string | null;
@@ -32,6 +37,7 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
   const [streaming, setStreaming] = useState(false);
   const [sendError, setSendError] = useState<Error | null>(null);
   const [historyDrained, setHistoryDrained] = useState(false);
+  const [routeTraces, setRouteTraces] = useState<AgentRouteTrace[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const [syncedId, setSyncedId] = useState(conversationId);
@@ -40,6 +46,7 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
     setSyncedId(conversationId);
     setSendError(null);
     setHistoryDrained(false);
+    setRouteTraces([]);
   }
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -55,6 +62,13 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
 
   const invalidateConversations = () => {
     queryClient.invalidateQueries({ queryKey: agentChatKeys.conversations(projectId) });
+  };
+
+  const appendRouteTrace = (trace: AgentRouteTrace) => {
+    if (trace.target.trim().length === 0) {
+      return;
+    }
+    setRouteTraces((current) => [...current, trace]);
   };
 
   const completeTurn = (targetProjectId: string | null) => {
@@ -134,6 +148,7 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
         reportTurnAborted();
         queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
       },
+      onRoute: appendRouteTrace,
     })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -184,8 +199,10 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       ]);
       setStreaming(true);
       reportTurnStarted();
+      setRouteTraces([]);
       await streamAgentReply(activeId, trimmed, {
         signal: controller.signal,
+        onRoute: appendRouteTrace,
         onDelta: (delta) =>
           mutateHistory(activeId, (items) =>
             items.map((message) =>
@@ -274,6 +291,7 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
     historyError: history.error,
     streaming,
     sendError,
+    routeTraces,
     canLoadOlder: !historyDrained && !streaming && messages.length >= AGENT_HISTORY_PAGE_LIMIT,
     loadingOlder,
     send,
