@@ -186,6 +186,7 @@ public sealed class TelegramNotificationBridgeTests : IDisposable
             scoped.ServiceProvider.GetRequiredService<TelegramReplySender>(),
             scoped.ServiceProvider.GetRequiredService<TelegramNotificationDeliveryStore>(),
             scoped.ServiceProvider.GetRequiredService<NotificationsService>(),
+            Substitute.For<INotificationValidatorRunner>(),
             new CollectingLogger<TelegramAgentChatHandler>(logs));
 
         return new HandlerRig(handler, stream, logs);
