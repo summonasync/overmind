@@ -16,8 +16,9 @@ export interface WaveStreamHandlers {
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 15_000;
 const RECONNECT_RESET_AFTER_MS = 10_000;
+const IDLE_WATCHDOG_MS = 60_000;
 
-const ROLES: readonly WaveRole[] = ["owner", "worker", "marshal"];
+const ROLES: readonly WaveRole[] = ["owner", "worker", "marshal", "embedded"];
 
 export async function runWaveStream(
   projectId: string,
@@ -26,9 +27,11 @@ export async function runWaveStream(
 ): Promise<void> {
   let delay = RECONNECT_BASE_DELAY_MS;
   while (!signal.aborted) {
-    const openedAt = Date.now();
+    let openedLiveAt = 0;
     try {
-      await openWaveStream(projectId, handlers, signal);
+      await openWaveStream(projectId, handlers, signal, () => {
+        openedLiveAt = Date.now();
+      });
     } catch {
       if (signal.aborted) {
         return;
@@ -37,7 +40,7 @@ export async function runWaveStream(
     if (signal.aborted) {
       return;
     }
-    if (Date.now() - openedAt >= RECONNECT_RESET_AFTER_MS) {
+    if (openedLiveAt > 0 && Date.now() - openedLiveAt >= RECONNECT_RESET_AFTER_MS) {
       delay = RECONNECT_BASE_DELAY_MS;
     }
     handlers.onStatus(true);
@@ -50,6 +53,7 @@ async function openWaveStream(
   projectId: string,
   handlers: WaveStreamHandlers,
   signal: AbortSignal,
+  onOpen: () => void,
 ): Promise<void> {
   const cursor = handlers.getCursor();
   const search = new URLSearchParams();
@@ -58,23 +62,54 @@ async function openWaveStream(
     search.set("sinceId", cursor.sinceId);
   }
   const suffix = search.size > 0 ? `?${search.toString()}` : "";
-  const response = await apiStreamGet(`/projects/${projectId}/wave/stream${suffix}`, signal);
-  if (!response.ok) {
-    throw new Error(`The wave stream connect failed (${response.status}).`);
-  }
-  if (!response.body) {
-    throw new Error("The wave stream returned no body.");
-  }
-  handlers.onStatus(false);
-  await readSseEvents(response.body, (event) => {
-    if (event.name !== "message") {
-      return;
+  const controller = new AbortController();
+  const abortWithParent = () => controller.abort();
+  signal.addEventListener("abort", abortWithParent);
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  const armIdleWatchdog = () => {
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
     }
-    const message = parseWaveStreamFrame(event.data);
-    if (message !== null) {
-      handlers.onMessage(message);
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      controller.abort();
+    }, IDLE_WATCHDOG_MS);
+  };
+  try {
+    const response = await apiStreamGet(`/projects/${projectId}/wave/stream${suffix}`, controller.signal);
+    if (!response.ok) {
+      throw new Error(`The wave stream connect failed (${response.status}).`);
     }
-  });
+    if (!response.body) {
+      throw new Error("The wave stream returned no body.");
+    }
+    handlers.onStatus(false);
+    onOpen();
+    armIdleWatchdog();
+    const body = response.body.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, sink) {
+          armIdleWatchdog();
+          sink.enqueue(chunk);
+        },
+      }),
+    );
+    await readSseEvents(body, (event) => {
+      if (event.name !== "message") {
+        return;
+      }
+      const message = parseWaveStreamFrame(event.data);
+      if (message !== null) {
+        handlers.onMessage(message);
+      }
+    });
+  } finally {
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
+    }
+    signal.removeEventListener("abort", abortWithParent);
+    controller.abort();
+  }
 }
 
 export function parseWaveStreamFrame(data: string): WaveMessage | null {

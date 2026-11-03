@@ -5,12 +5,14 @@ const roleTextClasses: Record<WaveRole, string> = {
   owner: "text-primary",
   worker: "text-agent",
   marshal: "text-marshal",
+  embedded: "text-agent",
 };
 
 const roleBadgeTones: Record<WaveRole, BadgeTone> = {
   owner: "primary",
   worker: "agent",
   marshal: "marshal",
+  embedded: "agent",
 };
 
 export function roleTextClassOf(role: WaveRole): string {

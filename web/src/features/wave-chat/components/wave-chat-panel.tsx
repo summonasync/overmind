@@ -209,7 +209,7 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
       <PageHeader
         title="Wave chat"
         description={PANEL_DESCRIPTION}
-        actions={streamStatus === "reconnecting" ? <WaveStreamChip /> : undefined}
+        actions={<WaveStreamChip />}
       />
       <ErrorText error={board.error ?? pageError} />
       {board.loading ? (
