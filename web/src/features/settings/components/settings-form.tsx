@@ -11,6 +11,7 @@ import { Textarea } from "@/shared/ui/textarea";
 import { TestVerdicts } from "@/features/settings/components/test-verdicts";
 import type { VectorSearchHealth } from "@/shared/api/types";
 import type {
+  AgentDelegateApprovalsDefault,
   NotificationNudgeMode,
   PlanningMaterializationDefault,
   PlanningValidationDefault,
@@ -23,6 +24,7 @@ const PROVIDERS = ["onnx", "ollama", "openai"] as const;
 const MATERIALIZATION_DEFAULTS = ["off", "on", "archive"] as const satisfies readonly PlanningMaterializationDefault[];
 const VALIDATION_DEFAULTS = ["on", "off"] as const satisfies readonly PlanningValidationDefault[];
 const NUDGE_MODES = ["quiet", "nag", "mini"] as const satisfies readonly NotificationNudgeMode[];
+const DELEGATE_APPROVALS_DEFAULTS = ["on", "off"] as const satisfies readonly AgentDelegateApprovalsDefault[];
 
 interface SettingsFormProps {
   settings: SettingsResponse;
@@ -62,6 +64,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
   const [agentPerTurnMaxTokens, setAgentPerTurnMaxTokens] = useState(String(settings.agentPerTurnMaxTokens));
   const [agentDailyBudget, setAgentDailyBudget] = useState(String(settings.agentDailyBudget));
   const [agentInstructions, setAgentInstructions] = useState(settings.agentInstructions);
+  const [agentDelegateApprovalsDefault, setAgentDelegateApprovalsDefault] = useState(
+    settings.agentDelegateApprovalsDefault,
+  );
   const [agentError, setAgentError] = useState<Error | null>(null);
   const [syncedSettings, setSyncedSettings] = useState(settings);
 
@@ -85,6 +90,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
     setAgentPerTurnMaxTokens(String(settings.agentPerTurnMaxTokens));
     setAgentDailyBudget(String(settings.agentDailyBudget));
     setAgentInstructions(settings.agentInstructions);
+    setAgentDelegateApprovalsDefault(settings.agentDelegateApprovalsDefault);
     setAgentError(null);
   }
 
@@ -124,6 +130,7 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       agentPerTurnMaxTokens: perTurnMaxTokens,
       agentDailyBudget: dailyBudget,
       agentInstructions: agentInstructions.trim(),
+      agentDelegateApprovalsDefault,
     });
   };
 
@@ -379,6 +386,27 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
           </Field>
         </div>
         <p className="text-xs text-muted">A daily budget of 0 keeps the agent unrestricted.</p>
+        <Field label="Delegate approvals default" htmlFor="agent-delegate-approvals-default">
+          <Select
+            id="agent-delegate-approvals-default"
+            value={agentDelegateApprovalsDefault}
+            onChange={(event) =>
+              setAgentDelegateApprovalsDefault(event.target.value as AgentDelegateApprovalsDefault)
+            }
+            className="w-full"
+          >
+            {DELEGATE_APPROVALS_DEFAULTS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <p className="text-xs text-muted">
+          Projects set to Inherit follow this default: when on, the embedded agent may execute
+          validate and done actions on the owner&apos;s explicit chat instruction. Override it per
+          project in the project&apos;s agent approvals section.
+        </p>
         <Field label="Instructions" htmlFor="agent-instructions">
           <Textarea
             id="agent-instructions"

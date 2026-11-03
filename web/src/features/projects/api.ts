@@ -2,6 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type {
   ApprovalSettingsResponse,
   ClaimSettingsResponse,
+  DelegateApprovalsOverride,
   ProjectAutoActResponse,
   ProjectFormValues,
   ProjectManifestImportResponse,
@@ -81,7 +82,7 @@ export function getApprovalSettings(id: string): Promise<ApprovalSettingsRespons
 
 export function updateApprovalSettings(
   id: string,
-  delegateApprovals: boolean,
+  delegateApprovals: DelegateApprovalsOverride,
 ): Promise<ApprovalSettingsResponse> {
   return apiPut<ApprovalSettingsResponse>(`/projects/${id}/approval-settings`, {
     delegateApprovals,
