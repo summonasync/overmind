@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 
@@ -7,9 +8,11 @@ namespace Overmind.Infrastructure.Agent;
 public sealed class RouterConversationStreamSource(
     IntentRouter router,
     RouterChatResponder chat,
-    IConversationStreamSource worker,
+    [FromKeyedServices(RouterConversationStreamSource.WorkerStreamSourceKey)] IConversationStreamSource worker,
     ILogger<RouterConversationStreamSource> logger) : IConversationStreamSource
 {
+    public const string WorkerStreamSourceKey = "worker";
+
     public async IAsyncEnumerable<ConversationStreamEvent> StreamAsync(
         Conversation conversation,
         IReadOnlyList<ConversationMessage> history,

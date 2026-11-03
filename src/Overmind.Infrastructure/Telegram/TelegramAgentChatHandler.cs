@@ -156,6 +156,7 @@ public sealed class TelegramAgentChatHandler(
     {
         var reply = new StringBuilder();
         string? refusal = null;
+        string? trace = null;
         await foreach (var streamEvent in streamSource.StreamAsync(conversation, history, userText, ct))
         {
             switch (streamEvent.Kind)
@@ -163,14 +164,27 @@ public sealed class TelegramAgentChatHandler(
                 case ConversationStreamEventKind.Delta:
                     reply.Append(streamEvent.Text);
                     break;
+                case ConversationStreamEventKind.Routed:
+                    trace ??= RoutingTrace(streamEvent);
+                    break;
                 case ConversationStreamEventKind.Failed:
                     refusal = streamEvent.Text;
                     break;
             }
         }
 
+        if (trace is not null && reply.Length > 0)
+        {
+            reply.Insert(0, trace + "\n\n");
+        }
+
         return new TurnOutcome(reply.ToString(), refusal);
     }
+
+    private static string RoutingTrace(ConversationStreamEvent streamEvent) =>
+        streamEvent.RouteSource == RoutingSource.Learned
+            ? $"→ {streamEvent.RouteTarget} · learned"
+            : $"→ {streamEvent.RouteTarget}";
 
     private async Task DeliverReplyAsync(Guid conversationId, long chatId, string reply, CancellationToken ct)
     {

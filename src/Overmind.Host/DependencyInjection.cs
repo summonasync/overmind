@@ -58,7 +58,10 @@ public static class DependencyInjection
         services.AddScoped<IAgentRunSettingsProvider, AgentRunSettingsProvider>();
         services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();
         services.AddScoped<AgentLoop>();
-        services.AddScoped<IConversationStreamSource, LlmConversationStreamSource>();
+        services.AddKeyedScoped<IConversationStreamSource, LlmConversationStreamSource>(
+            RouterConversationStreamSource.WorkerStreamSourceKey);
+        services.AddScoped<IConversationStreamSource>(provider =>
+            provider.GetRequiredService<RouterConversationStreamSource>());
         services.AddScoped<IRouterPromptComposer, RouterPromptComposer>();
         services.AddScoped<IntentRouter>();
         services.AddScoped<RouterChatResponder>();

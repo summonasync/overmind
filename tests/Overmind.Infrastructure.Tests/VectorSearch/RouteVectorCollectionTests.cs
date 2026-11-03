@@ -1,3 +1,4 @@
+using Overmind.Core;
 using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.VectorSearch;
 using Qdrant.Client.Grpc;
@@ -61,6 +62,23 @@ public sealed class RouteVectorCollectionTests
         point.Payload.Add(RouteVectorCollection.RouteId, "not-a-guid");
 
         RouteVectorCollection.ToMatch(point).ShouldBeNull();
+    }
+
+    [Fact]
+    public void ToMatch_BlankTarget_FallsBackToTheWorkerDefault()
+    {
+        var point = RouteVectorCollection.ToPoint(
+            Guid.NewGuid(), "sort board", new RouteVectorPayload("planning", null, "provisional", 1), [0.1f]);
+        var scored = new ScoredPoint { Id = point.Id, Score = 0.9f };
+        foreach (var pair in point.Payload)
+        {
+            scored.Payload.Add(pair.Key, pair.Value);
+        }
+
+        var match = RouteVectorCollection.ToMatch(scored);
+
+        match.ShouldNotBeNull();
+        match.Target.ShouldBe(RoutingTargets.Worker);
     }
 
     [Fact]

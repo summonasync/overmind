@@ -59,6 +59,64 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task RoundTrip_LearnedRoute_PrefixesTheReplyWithTheTraceLine()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var rig = await CreateHandlerAsync(new StubStreamSource(
+        [
+            ConversationStreamEvent.Routed(RoutingTargets.Worker, RoutingSource.Learned),
+            ConversationStreamEvent.Delta("Queue is clear."),
+            ConversationStreamEvent.Completed(30)
+        ]));
+
+        await rig.Handler.HandleAsync(new TelegramIncomingMessage(OwnerChatId, "privet"), CancellationToken.None);
+
+        SentTexts().ShouldBe(["→ worker · learned\n\nQueue is clear."]);
+    }
+
+    [Fact]
+    public async Task RoundTrip_ClassifiedRoute_PrefixesTheReplyWithTheTargetOnly()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var rig = await CreateHandlerAsync(new StubStreamSource(
+        [
+            ConversationStreamEvent.Routed(RoutingTargets.Chat, RoutingSource.Classification),
+            ConversationStreamEvent.Delta("Hello there."),
+            ConversationStreamEvent.Completed(30)
+        ]));
+
+        await rig.Handler.HandleAsync(new TelegramIncomingMessage(OwnerChatId, "privet"), CancellationToken.None);
+
+        SentTexts().ShouldBe(["→ chat\n\nHello there."]);
+    }
+
+    [Fact]
+    public async Task NotificationReply_DoesNotTouchTheStreamSource()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var stream = new StubStreamSource([[]]);
+        var notifications = new NotificationsService(
+            _temp.CreateContext(),
+            new ReplyAutoActFanout(_temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
+            TestWakeFanout.Create(_temp).Fanout,
+            []);
+        var rig = await CreateHandlerAsync(stream, notifications);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, 9, notification.Id);
+        }
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "approved", RepliedToMessageId: 9), CancellationToken.None);
+
+        stream.Invocations.ShouldBe(0);
+        SentTexts().ShouldBe([TelegramAgentChatHandler.ReplyRegisteredAck]);
+    }
+
+    [Fact]
     public async Task RoundTrip_ReusesTheMappedConversationOnTheNextMessage()
     {
         _api.QueueResponse(FakeTelegramApi.SentMessageResponse());

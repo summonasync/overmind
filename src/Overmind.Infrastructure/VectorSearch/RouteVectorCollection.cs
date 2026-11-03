@@ -1,3 +1,4 @@
+using Overmind.Core;
 using Overmind.Infrastructure.Agent.Routes;
 using Qdrant.Client.Grpc;
 using static Qdrant.Client.Grpc.Conditions;
@@ -48,6 +49,10 @@ public static class RouteVectorCollection
         }
 
         var target = payload.TryGetValue(Target, out var targetValue) ? targetValue.StringValue : null;
-        return new RouteVectorMatch(id, domain.StringValue, target, point.Score);
+        return new RouteVectorMatch(
+            id,
+            domain.StringValue,
+            string.IsNullOrWhiteSpace(target) ? RoutingTargets.Worker : target,
+            point.Score);
     }
 }
