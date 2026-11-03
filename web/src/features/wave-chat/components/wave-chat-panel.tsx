@@ -14,6 +14,7 @@ import { WaveMessageList } from "@/features/wave-chat/components/wave-message-li
 import { WaveRoomHeader } from "@/features/wave-chat/components/wave-room-header";
 import { WaveRoomList } from "@/features/wave-chat/components/wave-room-list";
 import { WaveRoster } from "@/features/wave-chat/components/wave-roster";
+import { WaveStreamChip } from "@/features/wave-chat/components/wave-stream-chip";
 import {
   absorbMessages,
   clearRoomHistoryDrained,
@@ -38,6 +39,8 @@ import {
   useWaveParticipants,
   useWaveRooms,
 } from "@/features/wave-chat/lib/use-wave-chat";
+import { useWaveStream } from "@/features/wave-chat/lib/use-wave-stream";
+import { useWaveStreamStatus } from "@/features/wave-chat/lib/wave-stream-state";
 import { syncFeedCache, waveFeedQueryOptions } from "@/features/wave-chat/queries";
 
 const PANEL_DESCRIPTION =
@@ -79,14 +82,22 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
   const roster = useWaveParticipants(projectId);
   const { post } = useWaveMessageMutations(projectId);
 
+  const streamStatus = useWaveStreamStatus();
   const feedOptions = useMemo(
     () =>
       board.rooms.map((room) =>
-        waveFeedQueryOptions(projectId, room.room, seen[room.room] ?? null, seenReady),
+        waveFeedQueryOptions(
+          projectId,
+          room.room,
+          seen[room.room] ?? null,
+          seenReady,
+          streamStatus === "open",
+        ),
       ),
-    [board.rooms, projectId, seen, seenReady],
+    [board.rooms, projectId, seen, seenReady, streamStatus],
   );
   const feeds = useQueries({ queries: feedOptions });
+  useWaveStream(projectId, feeds.some((feed) => feed.isSuccess));
 
   const streams: RoomStreams = {};
   board.rooms.forEach((room, index) => {
@@ -195,7 +206,11 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
 
   return (
     <div>
-      <PageHeader title="Wave chat" description={PANEL_DESCRIPTION} />
+      <PageHeader
+        title="Wave chat"
+        description={PANEL_DESCRIPTION}
+        actions={streamStatus === "reconnecting" ? <WaveStreamChip /> : undefined}
+      />
       <ErrorText error={board.error ?? pageError} />
       {board.loading ? (
         <LoadingState label="Loading rooms…" />

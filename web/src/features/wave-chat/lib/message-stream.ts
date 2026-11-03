@@ -9,7 +9,7 @@ export function mergeMessages(known: WaveMessage[], incoming: WaveMessage[]): Wa
   return [...byId.values()].sort(compareChronology);
 }
 
-function compareChronology(left: WaveMessage, right: WaveMessage): number {
+export function compareChronology(left: WaveMessage, right: WaveMessage): number {
   const byTime = instantOf(left.createdAt) - instantOf(right.createdAt);
   if (byTime !== 0) {
     return byTime;

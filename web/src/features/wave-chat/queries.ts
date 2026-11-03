@@ -41,6 +41,7 @@ export function waveFeedQueryOptions(
   room: string,
   lastSeenAt: string | null,
   enabled: boolean,
+  pollingPaused: boolean,
 ) {
   return queryOptions({
     queryKey: waveChatKeys.feed(projectId, room),
@@ -61,7 +62,7 @@ export function waveFeedQueryOptions(
       return roomStream(projectId, room);
     },
     enabled,
-    refetchInterval: LIVE_SYNC_INTERVAL_MS,
+    refetchInterval: pollingPaused ? false : LIVE_SYNC_INTERVAL_MS,
   });
 }
 
