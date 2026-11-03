@@ -60,6 +60,12 @@ test("delegated completion is smug only inside the hold window", () => {
   assert.equal(poseOf(false, 1, aged), "yelling");
 });
 
+test("unread beats a fresh smug on a closed bubble", () => {
+  const fresh = { streaming: false, lastTurn: completed(true) };
+  assert.equal(poseOf(false, 1, fresh), "yelling");
+  assert.equal(poseOf(true, 1, fresh), "smug");
+});
+
 test("plain completion never turns smug", () => {
   const activity = { streaming: false, lastTurn: completed(false) };
   assert.equal(poseOf(false, 0, activity), "sleeping");

@@ -21,6 +21,7 @@ export function useAgentConversationList({ projectId, onRemoved }: UseAgentConve
       await deleteAgentConversation(conversationId);
       onRemoved?.(conversationId);
       queryClient.invalidateQueries({ queryKey: agentChatKeys.conversations(projectId) });
+      queryClient.invalidateQueries({ queryKey: agentChatKeys.unread() });
     } catch (error) {
       setRemoveError(error instanceof Error ? error : new Error(String(error)));
     }
