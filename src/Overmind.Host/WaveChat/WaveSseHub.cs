@@ -54,16 +54,16 @@ public sealed class WaveSseHub : IWaveChatBroadcaster
     {
         lock (_gate)
         {
-            if (!_topics.TryGetValue(projectId, out var subscribers))
+            if (_topics.TryGetValue(projectId, out var subscribers))
             {
-                return;
-            }
-
-            subscribers.Remove(channel);
-            if (subscribers.Count == 0)
-            {
-                _topics.Remove(projectId);
+                subscribers.Remove(channel);
+                if (subscribers.Count == 0)
+                {
+                    _topics.Remove(projectId);
+                }
             }
         }
+
+        channel.Writer.TryComplete();
     }
 }

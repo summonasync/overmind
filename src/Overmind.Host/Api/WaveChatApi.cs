@@ -204,21 +204,20 @@ public static class WaveChatApi
     private static async Task<IResult> StreamForHuman(
         Guid projectId,
         [FromQuery] DateTime? since,
+        [FromQuery] Guid? sinceId,
         WaveChatService chat,
         WaveSseHub hub,
         WaveStreamOptions options,
+        OvermindDbContext db,
         CancellationToken ct)
     {
-        try
+        if (await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, ct) is null)
         {
-            await chat.RequireProjectAsync(projectId, ct);
-        }
-        catch (PlanningException ex)
-        {
-            return PlanningErrors.Map(ex);
+            return PlanningErrors.Map(PlanningException.MissingProject(projectId));
         }
 
-        return Results.Stream(body => StreamProjectAsync(body, hub, chat, projectId, since, options, ct), SseContentType);
+        return Results.Stream(
+            body => StreamProjectAsync(body, hub, chat, projectId, since, sinceId, options, ct), SseContentType);
     }
 
     private static async Task StreamProjectAsync(
@@ -227,58 +226,81 @@ public static class WaveChatApi
         WaveChatService chat,
         Guid projectId,
         DateTime? since,
+        Guid? sinceId,
         WaveStreamOptions options,
         CancellationToken ct)
     {
         await using var subscription = hub.Subscribe(projectId);
         await body.FlushAsync(ct);
 
-        var seen = new HashSet<Guid>();
-        foreach (var message in await chat.ListSinceAsync(projectId, since, ct: ct))
+        HashSet<Guid>? seen = null;
+        if (since is { } anchor)
         {
-            seen.Add(message.Id);
-            await WriteFrameAsync(body, message, ct);
+            var backfill = await chat.ListSinceAsync(projectId, anchor, sinceId, ct: ct);
+            seen = [.. backfill.Select(m => m.Id)];
+            foreach (var message in backfill)
+            {
+                await WriteFrameAsync(body, message, ct);
+            }
         }
 
-        while (true)
+        var dedupOpen = seen is not null;
+        using var heartbeat = new PeriodicTimer(options.HeartbeatInterval);
+        CancellationTokenSource tickGate = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<bool> pending = subscription.Messages.WaitToReadAsync(ct).AsTask();
+
+        try
         {
-            using var heartbeatGate = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            Task<bool> pending = subscription.Messages.WaitToReadAsync(heartbeatGate.Token).AsTask();
-            bool available;
-            try
+            while (true)
             {
-                available = await pending.WaitAsync(options.HeartbeatInterval, ct);
-            }
-            catch (TimeoutException)
-            {
-                heartbeatGate.Cancel();
-                try
+                Task<bool> ticked = heartbeat.WaitForNextTickAsync(tickGate.Token).AsTask();
+
+                if (await Task.WhenAny(pending, ticked) != ticked)
                 {
-                    await pending;
+                    tickGate.Cancel();
+                    try
+                    {
+                        await ticked;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+
+                    tickGate.Dispose();
+                    tickGate = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+                    if (!await pending)
+                    {
+                        break;
+                    }
+
+                    while (subscription.Messages.TryRead(out var message))
+                    {
+                        if (seen is { } window && !(dedupOpen ? window.Add(message.Id) : window.Contains(message.Id)))
+                        {
+                            continue;
+                        }
+
+                        await WriteFrameAsync(body, message, ct);
+                    }
+
+                    dedupOpen = false;
+                    pending = subscription.Messages.WaitToReadAsync(ct).AsTask();
+                    continue;
                 }
-                catch (OperationCanceledException)
+
+                if (!await ticked)
                 {
+                    break;
                 }
 
                 await body.WriteAsync(HeartbeatFrame, ct);
                 await body.FlushAsync(ct);
-                continue;
             }
-
-            if (!available)
-            {
-                break;
-            }
-
-            while (subscription.Messages.TryRead(out var message))
-            {
-                if (!seen.Add(message.Id))
-                {
-                    continue;
-                }
-
-                await WriteFrameAsync(body, message, ct);
-            }
+        }
+        finally
+        {
+            tickGate.Dispose();
         }
     }
 

@@ -339,6 +339,38 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Since_CompositeCursor_DoesNotSkipMessagesSharingTheCursorTimestamp()
+    {
+        var service = Service();
+        var first = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "cursor");
+        var second = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "next");
+        var third = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "later");
+        await BackdateAsync(first.Id, first.CreatedAt);
+        await BackdateAsync(second.Id, first.CreatedAt);
+
+        var ordered = await Service().ListSinceAsync(_projectId, first.CreatedAt.AddMilliseconds(-1));
+        var cursor = ordered[0];
+
+        var page = await Service().ListSinceAsync(_projectId, first.CreatedAt, cursor.Id);
+
+        page.Select(m => m.Id).ShouldBe([ordered[1].Id, third.Id]);
+    }
+
+    [Fact]
+    public async Task Since_WithoutSinceId_StaysStrictlyAfterTheTimestamp()
+    {
+        var service = Service();
+        var first = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "first");
+        var second = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "second");
+        await BackdateAsync(first.Id, first.CreatedAt);
+        await BackdateAsync(second.Id, first.CreatedAt);
+
+        var page = await Service().ListSinceAsync(_projectId, first.CreatedAt);
+
+        page.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Peek_MirrorsTheUnreadSelection_WithoutAdvancingTheWatermark()
     {
         var service = Service();

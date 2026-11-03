@@ -173,7 +173,8 @@ public sealed class WaveChatService
 
     public async Task<IReadOnlyList<WaveMessage>> ListSinceAsync(
         Guid projectId,
-        DateTime? since = null,
+        DateTime since,
+        Guid? sinceId = null,
         int? limit = null,
         CancellationToken ct = default)
     {
@@ -183,7 +184,8 @@ public sealed class WaveChatService
         return await _db.WaveMessages
             .AsNoTracking()
             .Where(m => m.ProjectId == projectId)
-            .Where(m => since == null || m.CreatedAt > since)
+            .Where(m => m.CreatedAt > since
+                || (m.CreatedAt == since && sinceId != null && m.Id.CompareTo(sinceId.Value) > 0))
             .OrderBy(m => m.CreatedAt)
             .ThenBy(m => m.Id)
             .Take(capped)
@@ -237,7 +239,7 @@ public sealed class WaveChatService
             ?? throw PlanningException.MissingWaveRoom(normalized, roster);
     }
 
-    public async Task<Project> RequireProjectAsync(Guid projectId, CancellationToken ct) =>
+    private async Task<Project> RequireProjectAsync(Guid projectId, CancellationToken ct) =>
         await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)
         ?? throw PlanningException.MissingProject(projectId);
 }
