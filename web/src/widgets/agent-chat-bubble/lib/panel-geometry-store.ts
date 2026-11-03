@@ -88,7 +88,7 @@ function setState(next: PanelGeometryState): void {
 function persist(): void {
   const stored: StoredPanelGeometry = {
     version: STORAGE_VERSION,
-    geometry: state.geometry,
+    geometry: state.geometry === null ? null : clampPanelGeometry(state.geometry, readViewportSize()),
     maximized: state.maximized,
   };
   try {

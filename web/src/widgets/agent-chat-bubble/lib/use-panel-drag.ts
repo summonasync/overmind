@@ -36,6 +36,7 @@ export function usePanelDrag(panelRef: RefObject<HTMLDivElement | null>) {
       event.preventDefault();
       const startPoint = { x: event.clientX, y: event.clientY };
       const startGeometry = ensurePanelGeometryFromRect(panel.getBoundingClientRect());
+      const viewport = readViewportSize();
       activeRef.current = true;
       setDragging(true);
 
@@ -46,7 +47,7 @@ export function usePanelDrag(panelRef: RefObject<HTMLDivElement | null>) {
             y: startGeometry.y + (moveEvent.clientY - startPoint.y),
           },
           startGeometry,
-          readViewportSize(),
+          viewport,
         );
         setPanelGeometry({ ...startGeometry, ...position });
       };
@@ -56,11 +57,18 @@ export function usePanelDrag(panelRef: RefObject<HTMLDivElement | null>) {
         window.removeEventListener("pointermove", handleMove);
         window.removeEventListener("pointerup", handleFinish);
         window.removeEventListener("pointercancel", handleFinish);
+        window.removeEventListener("keydown", handleKeyDown);
         commitPanelGeometry();
+      };
+      const handleKeyDown = (keyEvent: KeyboardEvent) => {
+        if (keyEvent.key === "Escape") {
+          handleFinish();
+        }
       };
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleFinish);
       window.addEventListener("pointercancel", handleFinish);
+      window.addEventListener("keydown", handleKeyDown);
     },
     [panelRef],
   );

@@ -39,6 +39,7 @@ export function usePanelResize(panelRef: RefObject<HTMLDivElement | null>) {
         event.preventDefault();
         const startPoint = { x: event.clientX, y: event.clientY };
         const startGeometry = ensurePanelGeometryFromRect(panel.getBoundingClientRect());
+        const viewport = readViewportSize();
         activeRef.current = true;
 
         const handleMove = (moveEvent: PointerEvent) => {
@@ -49,12 +50,12 @@ export function usePanelResize(panelRef: RefObject<HTMLDivElement | null>) {
               width: edge === "bottom" ? startGeometry.width : startGeometry.width - dx,
               height: edge === "left" ? startGeometry.height : startGeometry.height + dy,
             },
-            readViewportSize(),
+            viewport,
           );
           const position = clampPanelPosition(
             { x: startGeometry.x + (startGeometry.width - size.width), y: startGeometry.y },
             size,
-            readViewportSize(),
+            viewport,
           );
           setPanelGeometry({ ...position, ...size });
         };
@@ -63,11 +64,18 @@ export function usePanelResize(panelRef: RefObject<HTMLDivElement | null>) {
           window.removeEventListener("pointermove", handleMove);
           window.removeEventListener("pointerup", handleFinish);
           window.removeEventListener("pointercancel", handleFinish);
+          window.removeEventListener("keydown", handleKeyDown);
           commitPanelGeometry();
+        };
+        const handleKeyDown = (keyEvent: KeyboardEvent) => {
+          if (keyEvent.key === "Escape") {
+            handleFinish();
+          }
         };
         window.addEventListener("pointermove", handleMove);
         window.addEventListener("pointerup", handleFinish);
         window.addEventListener("pointercancel", handleFinish);
+        window.addEventListener("keydown", handleKeyDown);
       },
     }),
     [panelRef],
