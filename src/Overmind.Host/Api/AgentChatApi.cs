@@ -3,6 +3,7 @@ using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Overmind.Core;
+using Overmind.Host.AgentChat;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Agent;
@@ -24,6 +25,8 @@ public static class AgentChatApi
         human.MapDelete("/agent/conversations/{id:guid}", DeleteForHuman);
         human.MapGet("/agent/conversations/{id:guid}/messages", HistoryForHuman);
         human.MapPost("/agent/conversations/{id:guid}/messages/stream", StreamForHuman);
+        human.MapGet("/agent/conversations/{id:guid}/turn/stream", AttachTurnForHuman);
+        human.MapPost("/agent/conversations/{id:guid}/turn/stop", StopTurnForHuman);
         human.MapPost("/agent/conversations/{id:guid}/read", MarkReadForHuman);
 
         return human;
@@ -151,7 +154,7 @@ public static class AgentChatApi
         IValidator<SendConversationMessageRequest> validator,
         ConversationStore conversations,
         ConversationMessageStore messages,
-        IConversationStreamSource streamSource,
+        ConversationTurnRegistry turns,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -169,56 +172,82 @@ public static class AgentChatApi
         var history = await messages.ListPageAsync(id, ct: ct);
         await messages.AppendAsync(id, ConversationMessage.UserRole, request.Text, ct);
 
-        return Results.Stream(body => StreamReplyAsync(body, id, conversation, history, request.Text, messages, streamSource, ct), SseContentType);
+        var turn = turns.TryCreate(conversation);
+        if (turn is null)
+        {
+            return HttpErrors.Conflict(
+                "A reply is already being generated for this conversation. Stop it or wait for it to finish.",
+                "Turn Already Running");
+        }
+
+        var events = turn.Subscribe(ct);
+        turns.Start(turn, conversation, history, request.Text);
+        return Results.Stream(body => StreamTurnAsync(body, events), SseContentType);
     }
 
-    private static async Task StreamReplyAsync(
-        Stream body,
-        Guid conversationId,
-        Conversation conversation,
-        IReadOnlyList<ConversationMessage> history,
-        string userText,
-        ConversationMessageStore messages,
-        IConversationStreamSource streamSource,
+    private static async Task<IResult> AttachTurnForHuman(
+        Guid id,
+        ConversationStore conversations,
+        ConversationTurnRegistry turns,
         CancellationToken ct)
     {
-        var reply = new StringBuilder();
-        try
+        var conversation = await conversations.GetAsync(id, ct);
+        if (conversation is null)
         {
-            await foreach (var streamEvent in streamSource.StreamAsync(conversation, history, userText, ct))
+            return NotFound(id);
+        }
+
+        var turn = turns.Find(id);
+        if (turn is null)
+        {
+            return Results.NoContent();
+        }
+
+        var events = turn.Subscribe(ct);
+        return Results.Stream(body => StreamTurnAsync(body, events), SseContentType);
+    }
+
+    private static async Task<IResult> StopTurnForHuman(
+        Guid id,
+        ConversationStore conversations,
+        ConversationTurnRegistry turns,
+        CancellationToken ct)
+    {
+        var conversation = await conversations.GetAsync(id, ct);
+        return conversation is null
+            ? NotFound(id)
+            : Results.Ok(new ConversationTurnStopResponse(turns.TryStop(id)));
+    }
+
+    private static async Task StreamTurnAsync(
+        Stream body,
+        IAsyncEnumerable<ConversationStreamEvent> events)
+    {
+        await foreach (var streamEvent in events)
+        {
+            switch (streamEvent.Kind)
             {
-                switch (streamEvent.Kind)
-                {
-                    case ConversationStreamEventKind.Delta:
-                        reply.Append(streamEvent.Text);
-                        await WriteFrameAsync(body, "delta", new { text = streamEvent.Text }, ct);
-                        break;
-                    case ConversationStreamEventKind.ToolCall:
-                        await WriteFrameAsync(body, "tool", new { tool = streamEvent.ToolName }, ct);
-                        break;
-                    case ConversationStreamEventKind.Completed:
-                        Guid? messageId = reply.Length > 0
-                            ? (await messages.AppendAsync(conversationId, ConversationMessage.AssistantRole, reply.ToString(), ct)).Id
-                            : null;
-                        await WriteFrameAsync(body, "completed", new { messageId, tokensUsed = streamEvent.TokensUsed }, ct);
-                        break;
-                    case ConversationStreamEventKind.Failed:
-                        await WriteFrameAsync(body, "failed", new { error = streamEvent.Text, code = streamEvent.Code }, ct);
-                        break;
-                    default:
-                        await WriteFrameAsync(
-                            body, "failed", new { error = "The chat stream sent an unknown event.", code = "unknownStreamEvent" }, ct);
-                        break;
-                }
+                case ConversationStreamEventKind.Delta:
+                    await WriteFrameAsync(body, "delta", new { text = streamEvent.Text }, CancellationToken.None);
+                    break;
+                case ConversationStreamEventKind.ToolCall:
+                    await WriteFrameAsync(body, "tool", new { tool = streamEvent.ToolName }, CancellationToken.None);
+                    break;
+                case ConversationStreamEventKind.Completed:
+                    await WriteFrameAsync(
+                        body, "completed", new { messageId = streamEvent.MessageId, tokensUsed = streamEvent.TokensUsed }, CancellationToken.None);
+                    break;
+                case ConversationStreamEventKind.Failed:
+                    await WriteFrameAsync(body, "failed", new { error = streamEvent.Text, code = streamEvent.Code }, CancellationToken.None);
+                    break;
+                case ConversationStreamEventKind.Aborted:
+                    await WriteFrameAsync(body, "aborted", new { }, CancellationToken.None);
+                    break;
+                default:
+                    await WriteFrameAsync(
+                        body, "failed", new { error = "The chat stream sent an unknown event.", code = "unknownStreamEvent" }, CancellationToken.None);
+                    break;
             }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            await WriteFrameAsync(body, "failed", new { error = "The chat stream failed." }, CancellationToken.None);
         }
     }
 

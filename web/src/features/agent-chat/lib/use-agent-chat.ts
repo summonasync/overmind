@@ -3,8 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  attachAgentTurn,
   createAgentConversation,
   listAgentHistory,
+  stopAgentTurn,
   streamAgentReply,
 } from "@/features/agent-chat/api";
 import { agentChatKeys, agentHistoryQueryOptions } from "@/features/agent-chat/queries";
@@ -66,12 +68,103 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       .catch(() => reportTurnCompleted(false));
   };
 
+  const ensurePendingAssistant = (targetId: string) => {
+    mutateHistory(targetId, (items) =>
+      items.some((message) => message.id === pendingAssistantId)
+        ? items
+        : [...items, { id: pendingAssistantId, role: "assistant", content: "", createdAt: new Date().toISOString() }],
+    );
+  };
+
+  const attachRef = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
+
+  useEffect(() => {
+    if (conversationId === null || sendingRef.current) {
+      return;
+    }
+    const controller = new AbortController();
+    attachRef.current = controller;
+    attachAgentTurn(conversationId, {
+      signal: controller.signal,
+      onAttached: () => {
+        if (!controller.signal.aborted) {
+          setStreaming(true);
+        }
+      },
+      onDelta: (delta) => {
+        ensurePendingAssistant(conversationId);
+        mutateHistory(conversationId, (items) =>
+          items.map((message) =>
+            message.id === pendingAssistantId ? { ...message, content: message.content + delta } : message,
+          ),
+        );
+      },
+      onCompleted: (messageId) => {
+        if (messageId === null) {
+          mutateHistory(conversationId, (items) =>
+            items.filter((message) => message.id !== pendingAssistantId),
+          );
+        } else {
+          mutateHistory(conversationId, (items) =>
+            items.map((message) =>
+              message.id === pendingAssistantId ? { ...message, id: messageId } : message,
+            ),
+          );
+        }
+        setStreaming(false);
+        completeTurn(projectId);
+        queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+        invalidateConversations();
+      },
+      onFailed: (error) => {
+        mutateHistory(conversationId, (items) =>
+          items.filter((message) => message.id !== pendingAssistantId),
+        );
+        setStreaming(false);
+        setSendError(new Error(error));
+        reportTurnFailed();
+        queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+      },
+      onAborted: () => {
+        mutateHistory(conversationId, (items) =>
+          items.filter((message) => message.id !== pendingAssistantId),
+        );
+        setStreaming(false);
+        reportTurnAborted();
+        queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+      },
+    })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        mutateHistory(conversationId, (items) =>
+          items.filter((message) => message.id !== pendingAssistantId),
+        );
+        setStreaming(false);
+      })
+      .finally(() => {
+        if (attachRef.current === controller) {
+          attachRef.current = null;
+        }
+      });
+    return () => {
+      controller.abort();
+      if (attachRef.current === controller) {
+        attachRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (trimmed.length === 0 || streaming) {
       return;
     }
     setSendError(null);
+    sendingRef.current = true;
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -139,12 +232,17 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       }
     } finally {
       abortRef.current = null;
+      sendingRef.current = false;
       setStreaming(false);
     }
   };
 
   const stop = () => {
     abortRef.current?.abort();
+    attachRef.current?.abort();
+    if (conversationId !== null) {
+      void stopAgentTurn(conversationId).catch(() => undefined);
+    }
   };
 
   const loadOlder = async () => {

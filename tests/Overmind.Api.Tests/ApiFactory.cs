@@ -11,7 +11,7 @@ using Overmind.Infrastructure.Agent;
 
 namespace Overmind.Api.Tests;
 
-public sealed class StubConversationStreamSource : IConversationStreamSource
+public sealed class StubConversationStreamSource(TurnStreamGate gate) : IConversationStreamSource
 {
     public async IAsyncEnumerable<ConversationStreamEvent> StreamAsync(
         Conversation conversation,
@@ -22,6 +22,8 @@ public sealed class StubConversationStreamSource : IConversationStreamSource
         await Task.Yield();
         yield return ConversationStreamEvent.Delta("stub delta one ");
         yield return ConversationStreamEvent.ToolCall("planning_task_queue");
+        await gate.WaitAsync(ct);
+        gate.ObserveCancellation(ct.IsCancellationRequested);
         yield return ConversationStreamEvent.Delta("stub delta two");
         yield return ConversationStreamEvent.Completed(321);
     }
@@ -65,8 +67,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             }));
         builder.ConfigureServices(services =>
         {
+            services.AddSingleton<TurnStreamGate>();
             services.RemoveAll<IConversationStreamSource>();
-            services.AddSingleton<IConversationStreamSource, StubConversationStreamSource>();
+            services.AddSingleton<IConversationStreamSource>(sp =>
+                new StubConversationStreamSource(sp.GetRequiredService<TurnStreamGate>()));
             services.AddSingleton<HttpMessageHandler>(sp => new EmbeddedAgentSessionHandler(
                 sp.GetRequiredService<IServer>() is TestServer testServer
                     ? testServer.CreateHandler()

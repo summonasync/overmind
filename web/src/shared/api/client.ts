@@ -85,6 +85,14 @@ export async function apiStream(path: string, body: unknown, signal?: AbortSigna
   return response;
 }
 
+export async function apiStreamGet(path: string, signal?: AbortSignal): Promise<Response> {
+  const response = await fetch(`${resolveBaseUrl()}/api${path}`, {
+    headers: { Accept: "text/event-stream" },
+    signal,
+  });
+  return response;
+}
+
 export function apiGet<T>(path: string): Promise<T> {
   return request<T>(path, { method: "GET" });
 }
