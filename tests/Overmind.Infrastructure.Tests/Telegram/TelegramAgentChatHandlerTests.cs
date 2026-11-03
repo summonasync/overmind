@@ -186,6 +186,28 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
         SentTexts().ShouldBe(["telegram reply body"]);
     }
 
+    [Fact]
+    public async Task NotificationReply_RegisterFailure_RetriesUpToCapThenDeadLetters()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var notifications = CreateNotificationsService();
+        var rig = await CreateHandlerAsync(new StubStreamSource([[]]), notifications);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, 5, notification.Id);
+        }
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "approve", RepliedToMessageId: 5), CancellationToken.None);
+
+        rig.LogSnapshot().ShouldContain(line => line.Contains("failed on attempt 1; retrying"));
+        rig.LogSnapshot().ShouldContain(line => line.StartsWith("Error:") && line.Contains("dead-lettered"));
+        SentTexts().ShouldBe([TelegramAgentChatHandler.ReplyFailedNotice]);
+    }
+
     public void Dispose()
     {
         _cache.Dispose();
@@ -253,7 +275,8 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
         return (new LlmConversationStreamSource(loop), budget);
     }
 
-    private async Task<HandlerRig> CreateHandlerAsync(IConversationStreamSource streamSource)
+    private async Task<HandlerRig> CreateHandlerAsync(
+        IConversationStreamSource streamSource, NotificationsService? notificationsService = null)
     {
         await ConfigureTransportAsync();
         var chats = new TelegramChatStore(_temp.CreateContext());
@@ -268,15 +291,22 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
                 _cache,
                 new TelegramTransportOptionsProvider(new AppSettingsService(_temp.CreateContext()))),
             new TelegramNotificationDeliveryStore(_temp.CreateContext()),
-            new NotificationsService(
-                _temp.CreateContext(),
-                new ReplyAutoActFanout(
-                    _temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
-                TestWakeFanout.Create(_temp).Fanout,
-                []),
+            notificationsService ?? CreateNotificationsService(),
             new CollectingLogger<TelegramAgentChatHandler>(logs));
 
         return new HandlerRig(handler, streamSource, conversation, logs);
+    }
+
+    private NotificationsService CreateNotificationsService()
+    {
+        var broken = _temp.CreateContext();
+        broken.Dispose();
+        return new NotificationsService(
+            broken,
+            new ReplyAutoActFanout(
+                _temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
+            TestWakeFanout.Create(_temp).Fanout,
+            []);
     }
 
     private async Task ConfigureTransportAsync()

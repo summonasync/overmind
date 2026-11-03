@@ -96,6 +96,24 @@ public sealed class TelegramNotificationFanoutTests : IDisposable
         mappings.Select(row => row.ChatId).ShouldBe([42L]);
     }
 
+    [Fact]
+    public async Task TryDeliver_FirstChatFailure_StillDeliversTheRemainingChats()
+    {
+        await ConfigureTransportAsync("42,43");
+        _api.QueueResponse("""{"ok":false,"error_code":500,"description":"first chat broke"}""");
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse(messageId: 31));
+        var fanout = CreateFanout();
+        var notification = await SaveNotificationAsync(NotificationKind.Info, "fan out", null, null);
+
+        await fanout.TryDeliverAsync(notification, CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(2);
+        await using var context = _temp.CreateContext();
+        var mappings = await context.TelegramNotificationDeliveries.ToListAsync();
+        mappings.Select(row => row.ChatId).ShouldBe([43L]);
+        mappings.ShouldAllBe(row => row.MessageId == 31L);
+    }
+
     public void Dispose()
     {
         foreach (var disposable in _disposables)

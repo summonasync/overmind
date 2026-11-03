@@ -10,7 +10,6 @@ public static partial class TelegramMarkdownStripper
     private static readonly Regex Italic = ItalicPattern();
     private static readonly Regex Strikethrough = StrikethroughPattern();
     private static readonly Regex InlineCode = InlineCodePattern();
-    private static readonly Regex Headings = HeadingPattern();
 
     public static string Strip(string markdown)
     {
@@ -24,10 +23,9 @@ public static partial class TelegramMarkdownStripper
             ? match.Groups[2].Value
             : $"{match.Groups[1].Value} ({match.Groups[2].Value})");
         text = Bold.Replace(text, "$1$2");
-        text = Italic.Replace(text, "$1$2");
+        text = Italic.Replace(text, "$1");
         text = Strikethrough.Replace(text, "$1");
         text = InlineCode.Replace(text, "$1");
-        text = Headings.Replace(text, string.Empty);
         return text.Trim();
     }
 
@@ -40,7 +38,7 @@ public static partial class TelegramMarkdownStripper
     [GeneratedRegex("\\*\\*(.+?)\\*\\*|__(.+?)__", RegexOptions.Compiled | RegexOptions.Singleline)]
     private static partial Regex BoldPattern();
 
-    [GeneratedRegex("(?<!\\*)\\*([^*\\n]+?)\\*(?!\\*)|(?<!_)_([^_\\n]+?)_(?!_)", RegexOptions.Compiled)]
+    [GeneratedRegex("(?<!\\*)\\*([^*\\n]+?)\\*(?!\\*)", RegexOptions.Compiled)]
     private static partial Regex ItalicPattern();
 
     [GeneratedRegex("~~(.+?)~~", RegexOptions.Compiled | RegexOptions.Singleline)]
@@ -48,7 +46,4 @@ public static partial class TelegramMarkdownStripper
 
     [GeneratedRegex("`([^`]+)`", RegexOptions.Compiled)]
     private static partial Regex InlineCodePattern();
-
-    [GeneratedRegex("^#{1,6}[ \\t]+", RegexOptions.Compiled | RegexOptions.Multiline)]
-    private static partial Regex HeadingPattern();
 }

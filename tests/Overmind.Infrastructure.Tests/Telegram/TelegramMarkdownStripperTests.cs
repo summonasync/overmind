@@ -9,8 +9,15 @@ public sealed class TelegramMarkdownStripperTests
     [Fact]
     public void Strip_RemovesEmphasisAndCodeMarkers()
     {
-        TelegramMarkdownStripper.Strip("**bold** and _italic_ and ~~gone~~ and `code`")
+        TelegramMarkdownStripper.Strip("**bold** and *italic* and ~~gone~~ and `code`")
             .ShouldBe("bold and italic and gone and code");
+    }
+
+    [Fact]
+    public void Strip_KeepsSnakeCaseIdentifiersIntact()
+    {
+        TelegramMarkdownStripper.Strip("check get_user_data and user_id in `fn_call`")
+            .ShouldBe("check get_user_data and user_id in fn_call");
     }
 
     [Fact]
@@ -28,10 +35,10 @@ public sealed class TelegramMarkdownStripperTests
     }
 
     [Fact]
-    public void Strip_BareHeadingMarkersAreRemoved()
+    public void Strip_KeepsHeadingMarkersAsPlainText()
     {
-        TelegramMarkdownStripper.Strip("## Plan\n\n### Details here")
-            .ShouldBe("Plan\n\nDetails here");
+        TelegramMarkdownStripper.Strip("## Plan\n\nDetails here")
+            .ShouldBe("## Plan\n\nDetails here");
     }
 
     [Fact]

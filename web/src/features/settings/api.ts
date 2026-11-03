@@ -4,6 +4,7 @@ import type {
   ReindexReport,
   SettingsFormValues,
   SettingsResponse,
+  TelegramSettingsValues,
   TestSettingsValues,
   UpdateSettingsResponse,
 } from "@/features/settings/types";
@@ -32,6 +33,14 @@ export function updateSettings(values: SettingsFormValues): Promise<UpdateSettin
     agentDailyBudget: values.agentDailyBudget,
     agentInstructions: values.agentInstructions,
     agentDelegateApprovalsDefault: values.agentDelegateApprovalsDefault,
+  });
+}
+
+export function updateTelegramSettings(values: TelegramSettingsValues): Promise<UpdateSettingsResponse> {
+  return apiPut<UpdateSettingsResponse>("/settings", {
+    telegramEnabled: values.telegramEnabled,
+    telegramBotToken: values.telegramBotToken || null,
+    telegramAllowedChatIds: values.telegramAllowedChatIds,
   });
 }
 

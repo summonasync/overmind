@@ -30,9 +30,23 @@ public sealed class TelegramNotificationFanout(
 
             foreach (var chatId in options.AllowedChatIds)
             {
-                foreach (var messageId in await sender.SendAsync(chatId, [text], ct))
+                try
                 {
-                    await deliveries.SaveAsync(chatId, messageId, notification.Id, ct);
+                    foreach (var messageId in await sender.SendAsync(chatId, [text], ct))
+                    {
+                        await deliveries.SaveAsync(chatId, messageId, notification.Id, ct);
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(
+                        ex,
+                        "Telegram delivery to chat {ChatId} failed for notification {NotificationId}; remaining chats continue",
+                        chatId, notification.Id);
                 }
             }
         }
