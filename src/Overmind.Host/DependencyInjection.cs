@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
+using Overmind.Host.AgentChat;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Agent;
@@ -56,6 +57,8 @@ public static class DependencyInjection
         services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();
         services.AddScoped<AgentLoop>();
         services.AddScoped<IConversationStreamSource, LlmConversationStreamSource>();
+        services.AddSingleton<ConversationTurnRunner>();
+        services.AddSingleton<ConversationTurnRegistry>();
         services.AddHostedService<AgentLoopHostedService>();
         services.AddSingleton<VectorSearchHealthCache>();
         services.AddScoped<QdrantSemanticSearch>();

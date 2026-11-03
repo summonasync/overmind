@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiStream } from "@/shared/api/client";
+import { apiDelete, apiGet, apiPost, apiStream, apiStreamGet } from "@/shared/api/client";
 import type {
   AgentConversation,
   AgentConversationsPayload,
@@ -39,6 +39,8 @@ export interface AgentStreamHandlers {
   onDelta: (text: string) => void;
   onCompleted: (messageId: string | null) => void;
   onFailed: (error: string) => void;
+  onAborted?: () => void;
+  onAttached?: () => void;
   signal?: AbortSignal;
 }
 
@@ -111,6 +113,51 @@ export async function listAgentHistory(
   return { items: payload.items.map(toMessage) };
 }
 
+export async function attachAgentTurn(
+  conversationId: string,
+  handlers: AgentStreamHandlers,
+): Promise<"attached" | "idle"> {
+  const response = await apiStreamGet(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/turn/stream`,
+    handlers.signal,
+  );
+  if (response.status === 204) {
+    return "idle";
+  }
+  if (!response.ok) {
+    throw new Error(`The chat turn attach failed (${response.status}).`);
+  }
+  if (!response.body) {
+    throw new Error("The chat turn attach returned no body.");
+  }
+
+  handlers.onAttached?.();
+
+  await readSseEvents(response.body, (event) => {
+    const frame = parseAgentStreamFrame(event.name, event.data);
+    if (frame === null) {
+      return;
+    }
+    if (frame.kind === "delta") {
+      handlers.onDelta(frame.text);
+    } else if (frame.kind === "completed") {
+      handlers.onCompleted(frame.messageId);
+    } else if (frame.kind === "aborted") {
+      handlers.onAborted?.();
+    } else {
+      handlers.onFailed(frame.error);
+    }
+  });
+  return "attached";
+}
+
+export function stopAgentTurn(conversationId: string): Promise<boolean> {
+  return apiPost<{ stopped: boolean }>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/turn/stop`,
+    {},
+  ).then((payload) => payload.stopped);
+}
+
 export async function streamAgentReply(
   conversationId: string,
   text: string,
@@ -134,6 +181,8 @@ export async function streamAgentReply(
       handlers.onDelta(frame.text);
     } else if (frame.kind === "completed") {
       handlers.onCompleted(frame.messageId);
+    } else if (frame.kind === "aborted") {
+      handlers.onAborted?.();
     } else {
       handlers.onFailed(frame.error);
     }

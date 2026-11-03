@@ -23,4 +23,6 @@ public sealed record ConversationHistoryResponse(ConversationMessageResponse[] I
 
 public sealed record ConversationReadStateResponse(Guid ConversationId, Guid? LastReadMessageId);
 
+public sealed record ConversationTurnStopResponse(bool Stopped);
+
 public sealed record UnreadCountResponse(int Count);

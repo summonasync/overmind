@@ -24,5 +24,8 @@ export function parseAgentStreamFrame(name: string, data: string): AgentStreamFr
   if (name === "failed" && typeof record.error === "string") {
     return { kind: "failed", error: record.error };
   }
+  if (name === "aborted") {
+    return { kind: "aborted" };
+  }
   return null;
 }
