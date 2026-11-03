@@ -35,7 +35,7 @@ public sealed class GrimoireMemoryClientTests : IDisposable
         var client = CreateClient();
         await ConfigureAsync(overrideUrl: StubBaseUrl.ToString());
 
-        var endpoint = await client.ResolveEndpointAsync(CancellationToken.None);
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None);
 
         endpoint.BaseUrl.ShouldBe(StubBaseUrl.ToString().TrimEnd('/'));
         endpoint.Tome.ShouldBe("crew");
@@ -50,7 +50,7 @@ public sealed class GrimoireMemoryClientTests : IDisposable
         await ConfigureAsync(overrideUrl: StubBaseUrl.ToString());
 
         var failure = await Should.ThrowAsync<GrimoireMemoryException>(
-            () => client.ResolveEndpointAsync(CancellationToken.None));
+            () => client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None));
 
         failure.Message.ShouldContain("failed its health probe");
     }
@@ -61,7 +61,7 @@ public sealed class GrimoireMemoryClientTests : IDisposable
         var client = CreateClient();
         ConfigureDetection(binaryPath: "/usr/local/bin/grimoire", configPort: 51234);
 
-        var endpoint = await client.ResolveEndpointAsync(CancellationToken.None);
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None);
 
         endpoint.BaseUrl.ShouldBe("http://127.0.0.1:51234");
     }
@@ -75,7 +75,7 @@ public sealed class GrimoireMemoryClientTests : IDisposable
             .Returns(new GrimoireVersionProbe(false, null));
 
         var failure = await Should.ThrowAsync<GrimoireMemoryException>(
-            () => client.ResolveEndpointAsync(CancellationToken.None));
+            () => client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None));
 
         failure.Message.ShouldContain("no running grimoire instance was detected");
     }
@@ -86,7 +86,7 @@ public sealed class GrimoireMemoryClientTests : IDisposable
         var client = CreateClient();
         await ConfigureAsync(overrideUrl: StubBaseUrl.ToString(), tome: "whispers", alias: "billy-jr");
 
-        var endpoint = await client.ResolveEndpointAsync(CancellationToken.None);
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None);
 
         endpoint.Tome.ShouldBe("whispers");
         endpoint.ActorAlias.ShouldBe("billy-jr");
@@ -98,9 +98,57 @@ public sealed class GrimoireMemoryClientTests : IDisposable
         var client = CreateClient();
         await ConfigureAsync(overrideUrl: StubBaseUrl.ToString(), tome: "   ");
 
-        var endpoint = await client.ResolveEndpointAsync(CancellationToken.None);
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None);
 
         endpoint.Tome.ShouldBe("crew");
+    }
+
+    [Fact]
+    public async Task ResolveEndpointAsync_PersonalTomeDefaultsToAgentAlias()
+    {
+        var client = CreateClient();
+        await ConfigureAsync(overrideUrl: StubBaseUrl.ToString(), alias: "billy-jr");
+
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Personal, CancellationToken.None);
+
+        endpoint.Tome.ShouldBe("billy-jr");
+    }
+
+    [Fact]
+    public async Task ResolveEndpointAsync_ConfiguredPersonalTomeWinsOverAlias()
+    {
+        var client = CreateClient();
+        await ConfigureAsync(overrideUrl: StubBaseUrl.ToString(), personalTome: "diary", alias: "billy-jr");
+
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Personal, CancellationToken.None);
+
+        endpoint.Tome.ShouldBe("diary");
+    }
+
+    [Fact]
+    public async Task ResolveEndpointAsync_CrewTomeSettingWinsOverLegacyTome()
+    {
+        var client = CreateClient();
+        await ConfigureAsync(overrideUrl: StubBaseUrl.ToString(), tome: "whispers", crewTome: "ship");
+
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Crew, CancellationToken.None);
+
+        endpoint.Tome.ShouldBe("ship");
+    }
+
+    [Fact]
+    public async Task ResolveEndpointAsync_PersonalUnavailableMessageCarriesBootstrapHint()
+    {
+        var client = CreateClient();
+        _locator.Locate(Arg.Any<string?>()).Returns((string?)null);
+        _cli.ProbeVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new GrimoireVersionProbe(false, null));
+
+        var failure = await Should.ThrowAsync<GrimoireMemoryException>(
+            () => client.ResolveEndpointAsync(GrimoireTomeTarget.Personal, CancellationToken.None));
+
+        failure.Message.ShouldContain("agent.grimoire.personalTome");
+        failure.Message.ShouldContain("created by grimoire on the first write");
     }
 
     [Fact]
@@ -261,7 +309,12 @@ public sealed class GrimoireMemoryClientTests : IDisposable
             provider.GetRequiredService<IServiceScopeFactory>(), new HttpClient(_server));
     }
 
-    private async Task ConfigureAsync(string? overrideUrl = null, string? tome = null, string? alias = null)
+    private async Task ConfigureAsync(
+        string? overrideUrl = null,
+        string? tome = null,
+        string? alias = null,
+        string? personalTome = null,
+        string? crewTome = null)
     {
         await using var context = _temp.CreateContext();
         var settings = new AppSettingsService(context);
@@ -278,6 +331,16 @@ public sealed class GrimoireMemoryClientTests : IDisposable
         if (alias is not null)
         {
             await settings.SetAsync(SettingKeys.AgentAlias, alias, CancellationToken.None);
+        }
+
+        if (personalTome is not null)
+        {
+            await settings.SetAsync(SettingKeys.AgentGrimoirePersonalTome, personalTome, CancellationToken.None);
+        }
+
+        if (crewTome is not null)
+        {
+            await settings.SetAsync(SettingKeys.AgentGrimoireCrewTome, crewTome, CancellationToken.None);
         }
     }
 

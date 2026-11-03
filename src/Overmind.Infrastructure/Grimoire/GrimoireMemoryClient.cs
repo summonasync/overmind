@@ -29,14 +29,13 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
         _http = http;
     }
 
-    public async Task<GrimoireMemoryEndpoint> ResolveEndpointAsync(CancellationToken ct)
+    public async Task<GrimoireMemoryEndpoint> ResolveEndpointAsync(GrimoireTomeTarget target, CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateAsyncScope();
         var settings = scope.ServiceProvider.GetRequiredService<AppSettingsService>();
         var overrideUrl = (await settings.GetOrDefaultAsync(
             SettingKeys.AgentGrimoireBaseUrl, SettingDefaults.AgentGrimoireBaseUrl, ct)).Trim();
-        var tome = ResolveTome(await settings.GetOrDefaultAsync(
-            SettingKeys.AgentGrimoireTome, SettingDefaults.AgentGrimoireTome, ct));
+        var tome = await ResolveTomeAsync(settings, target, ct);
         var alias = (await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct)).Trim();
 
         if (overrideUrl.Length > 0)
@@ -45,7 +44,7 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
             if (!await IsHealthyAsync(baseUrl, ct))
             {
                 throw new GrimoireMemoryException(
-                    $"grimoire memory is unavailable: the override '{baseUrl}' failed its health probe");
+                    $"grimoire memory is unavailable: the override '{baseUrl}' failed its health probe{BootstrapHint(target, tome)}");
             }
 
             return new GrimoireMemoryEndpoint(baseUrl, tome, alias);
@@ -59,8 +58,36 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
 
         throw new GrimoireMemoryException(
             $"grimoire memory is unavailable: no running grimoire instance was detected " +
-            $"(detection status: {detection.Status}) and '{SettingKeys.AgentGrimoireBaseUrl}' is not set");
+            $"(detection status: {detection.Status}) and '{SettingKeys.AgentGrimoireBaseUrl}' is not set{BootstrapHint(target, tome)}");
     }
+
+    private async Task<string> ResolveTomeAsync(AppSettingsService settings, GrimoireTomeTarget target, CancellationToken ct)
+    {
+        if (target == GrimoireTomeTarget.Personal)
+        {
+            var personal = ((await settings.GetAsync(SettingKeys.AgentGrimoirePersonalTome, ct)) ?? string.Empty).Trim();
+            if (personal.Length > 0)
+            {
+                return personal;
+            }
+
+            return (await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct)).Trim();
+        }
+
+        var crew = ((await settings.GetAsync(SettingKeys.AgentGrimoireCrewTome, ct)) ?? string.Empty).Trim();
+        if (crew.Length > 0)
+        {
+            return crew;
+        }
+
+        var legacy = ((await settings.GetAsync(SettingKeys.AgentGrimoireTome, ct)) ?? string.Empty).Trim();
+        return legacy.Length > 0 ? legacy : SettingDefaults.AgentGrimoireCrewTome;
+    }
+
+    private static string BootstrapHint(GrimoireTomeTarget target, string tome) => target == GrimoireTomeTarget.Personal
+        ? $" (the personal tome '{tome}' is created by grimoire on the first write; " +
+          $"'{SettingKeys.AgentGrimoirePersonalTome}' overrides the name, the default is agent.alias)"
+        : string.Empty;
 
     public async Task<GrimoireMemoryWriteResult> RememberAsync(
         GrimoireMemoryEndpoint endpoint, GrimoireMemoryWriteRequest request, CancellationToken ct)
@@ -136,10 +163,6 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
                 ct),
             $"POST /api/memories/{memoryId}/forget",
             ct);
-
-    private static string ResolveTome(string configured) => configured.Trim().Length > 0
-        ? configured.Trim()
-        : SettingDefaults.AgentGrimoireTome;
 
     private static string BuildListQuery(GrimoireMemoryEndpoint endpoint, string? kind, string? tag, int limit)
     {

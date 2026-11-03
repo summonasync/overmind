@@ -187,27 +187,35 @@ public sealed class AgentPromptComposer(
             snapshot["degraded"] = "the snapshot is incomplete because a board read failed";
         }
 
-        try
+        var factRows = new JsonArray();
+        foreach (var (target, source) in new[]
+                 {
+                     (GrimoireTomeTarget.Personal, "personal"),
+                     (GrimoireTomeTarget.Crew, "crew"),
+                 })
         {
-            var endpoint = await memory.ResolveEndpointAsync(ct);
-            var facts = (await memory.ListTopFactsAsync(endpoint, MaxMemoryFacts, ct)).Take(MaxMemoryFacts).ToList();
-            if (facts.Count > 0)
+            try
             {
-                var factRows = new JsonArray();
-                foreach (var fact in facts)
+                var endpoint = await memory.ResolveEndpointAsync(target, ct);
+                var facts = await memory.ListTopFactsAsync(endpoint, MaxMemoryFacts, ct);
+                foreach (var fact in facts.Take(MaxMemoryFacts - factRows.Count))
                 {
                     factRows.Add(new JsonObject
                     {
                         ["content"] = Truncate(fact.Content, 240),
                         ["createdAt"] = fact.CreatedAt.ToString("yyyy-MM-dd"),
+                        ["source"] = source,
                     });
                 }
-
-                snapshot["memoryFacts"] = factRows;
+            }
+            catch (GrimoireMemoryException)
+            {
             }
         }
-        catch (GrimoireMemoryException)
+
+        if (factRows.Count > 0)
         {
+            snapshot["memoryFacts"] = factRows;
         }
 
         return snapshot.ToJsonString(AgentLoopbackClient.JsonOptions);
