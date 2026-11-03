@@ -1,8 +1,11 @@
+using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
+using Overmind.Host.WaveChat;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Wave;
 
@@ -10,6 +13,11 @@ namespace Overmind.Host.Api;
 
 public static class WaveChatApi
 {
+    private const string SseContentType = "text/event-stream";
+
+    private static readonly JsonSerializerOptions FrameJson = new(JsonSerializerDefaults.Web);
+    private static readonly byte[] HeartbeatFrame = ": ping\n\n"u8.ToArray();
+
     public static RouteGroupBuilder MapWaveChatApi(this IEndpointRouteBuilder routes)
     {
         var human = routes.MapGroup("/api");
@@ -17,6 +25,7 @@ public static class WaveChatApi
         human.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/unread", UnreadForHuman);
         human.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/messages", HistoryForHuman);
         human.MapGet("/projects/{projectId:guid}/wave/rooms", RoomsForHuman);
+        human.MapGet("/projects/{projectId:guid}/wave/stream", StreamForHuman);
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/wave/rooms/{room}/messages", PostForAgent);
@@ -190,6 +199,119 @@ public static class WaveChatApi
         {
             return PlanningErrors.Map(ex);
         }
+    }
+
+    private static async Task<IResult> StreamForHuman(
+        Guid projectId,
+        [FromQuery] DateTime? since,
+        [FromQuery] Guid? sinceId,
+        WaveChatService chat,
+        WaveSseHub hub,
+        WaveStreamOptions options,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        if (await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, ct) is null)
+        {
+            return PlanningErrors.Map(PlanningException.MissingProject(projectId));
+        }
+
+        return Results.Stream(
+            body => StreamProjectAsync(body, hub, chat, projectId, since, sinceId, options, ct), SseContentType);
+    }
+
+    private static async Task StreamProjectAsync(
+        Stream body,
+        WaveSseHub hub,
+        WaveChatService chat,
+        Guid projectId,
+        DateTime? since,
+        Guid? sinceId,
+        WaveStreamOptions options,
+        CancellationToken ct)
+    {
+        await using var subscription = hub.Subscribe(projectId);
+        await body.FlushAsync(ct);
+
+        HashSet<Guid>? seen = null;
+        if (since is { } anchor)
+        {
+            var backfill = await chat.ListSinceAsync(projectId, anchor, sinceId, ct: ct);
+            seen = [.. backfill.Select(m => m.Id)];
+            foreach (var message in backfill)
+            {
+                await WriteFrameAsync(body, message, ct);
+            }
+        }
+
+        var dedupOpen = seen is not null;
+        using var heartbeat = new PeriodicTimer(options.HeartbeatInterval);
+        CancellationTokenSource tickGate = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<bool> pending = subscription.Messages.WaitToReadAsync(ct).AsTask();
+
+        try
+        {
+            while (true)
+            {
+                Task<bool> ticked = heartbeat.WaitForNextTickAsync(tickGate.Token).AsTask();
+
+                if (await Task.WhenAny(pending, ticked) != ticked)
+                {
+                    tickGate.Cancel();
+                    try
+                    {
+                        await ticked;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+
+                    tickGate.Dispose();
+                    tickGate = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+                    if (!await pending)
+                    {
+                        break;
+                    }
+
+                    while (subscription.Messages.TryRead(out var message))
+                    {
+                        if (seen is { } window && !(dedupOpen ? window.Add(message.Id) : window.Contains(message.Id)))
+                        {
+                            continue;
+                        }
+
+                        await WriteFrameAsync(body, message, ct);
+                    }
+
+                    dedupOpen = false;
+                    pending = subscription.Messages.WaitToReadAsync(ct).AsTask();
+                    continue;
+                }
+
+                if (!await ticked)
+                {
+                    break;
+                }
+
+                await body.WriteAsync(HeartbeatFrame, ct);
+                await body.FlushAsync(ct);
+            }
+        }
+        finally
+        {
+            tickGate.Dispose();
+        }
+    }
+
+    private static async Task WriteFrameAsync(Stream body, WaveMessage message, CancellationToken ct)
+    {
+        await body.WriteAsync("event: message\n"u8.ToArray(), ct);
+        await body.WriteAsync(
+            Encoding.UTF8.GetBytes(
+                $"data: {JsonSerializer.Serialize(new WaveStreamFrame(message.Room, ToResponse(message)), FrameJson)}\n\n"),
+            ct);
+        await body.FlushAsync(ct);
     }
 
     private static async Task<IResult> PostAsync(

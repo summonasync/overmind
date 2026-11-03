@@ -9,7 +9,7 @@ import {
   sliceByUnread,
   unreadExceedsWindow,
 } from "../src/features/wave-chat/lib/history-window.ts";
-import { loadLastSeen, loadSeenMap, markSeen } from "../src/features/wave-chat/lib/seen.ts";
+import { loadLastSeen, loadSeenMap, markSeen, subscribeSeenMap } from "../src/features/wave-chat/lib/seen.ts";
 import type { WaveMessage } from "../src/features/wave-chat/types.ts";
 
 const message = (id: string, createdAt: string, text = "signal"): WaveMessage => ({
@@ -92,7 +92,11 @@ interface FakeStorage {
   setItem(key: string, value: string): void;
 }
 
-function installFakeSession(): Map<string, string> {
+type StorageListener = (event: { key: string | null; newValue: string | null }) => void;
+
+const storageListeners = new Set<StorageListener>();
+
+function installFakeStorage(): Map<string, string> {
   const store = new Map<string, string>();
   const storage: FakeStorage = {
     getItem: (key) => (store.has(key) ? (store.get(key) as string) : null),
@@ -100,11 +104,26 @@ function installFakeSession(): Map<string, string> {
       store.set(key, value);
     },
   };
-  (globalThis as { window?: unknown }).window = { sessionStorage: storage };
+  storageListeners.clear();
+  (globalThis as { window?: unknown }).window = {
+    localStorage: storage,
+    addEventListener: (_type: string, listener: StorageListener) => {
+      storageListeners.add(listener);
+    },
+    removeEventListener: (_type: string, listener: StorageListener) => {
+      storageListeners.delete(listener);
+    },
+  };
   return store;
 }
 
-const fakeStore = installFakeSession();
+function emitStorageEvent(key: string | null, newValue: string | null): void {
+  for (const listener of storageListeners) {
+    listener({ key, newValue });
+  }
+}
+
+const fakeStore = installFakeStorage();
 
 test("markSeen persists a room stamp that survives a reload", () => {
   fakeStore.clear();
@@ -149,5 +168,29 @@ test("without a browser session the helpers degrade to no-ops", () => {
   assert.equal(loadLastSeen("proj-1", "backend"), null);
   markSeen("proj-1", "backend", "2026-10-24T10:05:00Z");
   assert.equal(loadLastSeen("proj-1", "backend"), null);
-  installFakeSession();
+  installFakeStorage();
+});
+
+test("a foreign-tab storage event updates the listener without echoing a write", () => {
+  fakeStore.clear();
+  const updates: Record<string, string>[] = [];
+  const unsubscribe = subscribeSeenMap("proj-1", (next) => updates.push(next));
+  emitStorageEvent("overmind.wave-chat.seen.proj-1", JSON.stringify({ backend: "2026-10-24T10:05:00Z" }));
+  assert.deepEqual(updates, [{ backend: "2026-10-24T10:05:00Z" }]);
+  assert.equal(fakeStore.size, 0);
+  emitStorageEvent("overmind.wave-chat.seen.proj-2", JSON.stringify({ backend: "x" }));
+  assert.equal(updates.length, 1);
+  unsubscribe();
+  emitStorageEvent("overmind.wave-chat.seen.proj-1", "{}");
+  assert.equal(updates.length, 1);
+});
+
+test("a cleared or malformed storage payload degrades to an empty seen map", () => {
+  fakeStore.clear();
+  const updates: Record<string, string>[] = [];
+  const unsubscribe = subscribeSeenMap("proj-1", (next) => updates.push(next));
+  emitStorageEvent("overmind.wave-chat.seen.proj-1", "{not json");
+  emitStorageEvent(null, null);
+  assert.deepEqual(updates, [{}, {}]);
+  unsubscribe();
 });

@@ -14,6 +14,7 @@ import { WaveMessageList } from "@/features/wave-chat/components/wave-message-li
 import { WaveRoomHeader } from "@/features/wave-chat/components/wave-room-header";
 import { WaveRoomList } from "@/features/wave-chat/components/wave-room-list";
 import { WaveRoster } from "@/features/wave-chat/components/wave-roster";
+import { WaveStreamChip } from "@/features/wave-chat/components/wave-stream-chip";
 import {
   absorbMessages,
   clearRoomHistoryDrained,
@@ -27,7 +28,7 @@ import {
 } from "@/features/wave-chat/lib/history-window";
 import { DEFAULT_OWNER_ALIAS, loadOwnerAlias, saveOwnerAlias } from "@/features/wave-chat/lib/owner-alias";
 import { ALL_ROOM } from "@/features/wave-chat/lib/room-order";
-import { loadSeenMap, markSeen } from "@/features/wave-chat/lib/seen";
+import { loadSeenMap, markSeen, subscribeSeenMap } from "@/features/wave-chat/lib/seen";
 import {
   unreadCounts,
   type RoomStreams,
@@ -38,6 +39,8 @@ import {
   useWaveParticipants,
   useWaveRooms,
 } from "@/features/wave-chat/lib/use-wave-chat";
+import { useWaveStream } from "@/features/wave-chat/lib/use-wave-stream";
+import { useWaveStreamStatus } from "@/features/wave-chat/lib/wave-stream-state";
 import { syncFeedCache, waveFeedQueryOptions } from "@/features/wave-chat/queries";
 
 const PANEL_DESCRIPTION =
@@ -72,21 +75,33 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
       setSeen(loadSeenMap(projectId));
       setSeenReady(true);
     });
-    return () => cancelAnimationFrame(frame);
+    const unsubscribe = subscribeSeenMap(projectId, setSeen);
+    return () => {
+      cancelAnimationFrame(frame);
+      unsubscribe();
+    };
   }, [projectId]);
 
   const board = useWaveRooms(projectId);
   const roster = useWaveParticipants(projectId);
   const { post } = useWaveMessageMutations(projectId);
 
+  const streamStatus = useWaveStreamStatus();
   const feedOptions = useMemo(
     () =>
       board.rooms.map((room) =>
-        waveFeedQueryOptions(projectId, room.room, seen[room.room] ?? null, seenReady),
+        waveFeedQueryOptions(
+          projectId,
+          room.room,
+          seen[room.room] ?? null,
+          seenReady,
+          streamStatus === "open",
+        ),
       ),
-    [board.rooms, projectId, seen, seenReady],
+    [board.rooms, projectId, seen, seenReady, streamStatus],
   );
   const feeds = useQueries({ queries: feedOptions });
+  useWaveStream(projectId, feeds.some((feed) => feed.isSuccess));
 
   const streams: RoomStreams = {};
   board.rooms.forEach((room, index) => {
@@ -126,6 +141,11 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
       setSeen((current) => ({ ...current, [activeRoom]: leaving.createdAt }));
     }
     setSelectedRoom(room);
+  };
+
+  const markActiveRoomSeen = (at: string) => {
+    markSeen(projectId, activeRoom, at);
+    setSeen((current) => ({ ...current, [activeRoom]: at }));
   };
 
   const changeAlias = (alias: string) => {
@@ -195,7 +215,11 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
 
   return (
     <div>
-      <PageHeader title="Wave chat" description={PANEL_DESCRIPTION} />
+      <PageHeader
+        title="Wave chat"
+        description={PANEL_DESCRIPTION}
+        actions={<WaveStreamChip />}
+      />
       <ErrorText error={board.error ?? pageError} />
       {board.loading ? (
         <LoadingState label="Loading rooms…" />
@@ -236,6 +260,7 @@ export function WaveChatPanel({ hint }: WaveChatPanelProps) {
               onlyUnread={onlyUnread}
               onShowMore={showMore}
               onShowAll={showAll}
+              onMarkSeen={markActiveRoomSeen}
               scrollKey={activeRoom}
             />
             {hint}

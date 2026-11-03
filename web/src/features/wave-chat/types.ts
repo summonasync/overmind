@@ -1,4 +1,4 @@
-export type WaveRole = "owner" | "worker" | "marshal";
+export type WaveRole = "owner" | "worker" | "marshal" | "embedded";
 
 export interface WaveRoom {
   room: string;

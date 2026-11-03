@@ -7,7 +7,7 @@ import type {
   AgentReadState,
   AgentUsage,
 } from "@/features/agent-chat/types";
-import { readSseEvents } from "@/features/agent-chat/lib/sse";
+import { readSseEvents } from "@/shared/lib/sse";
 import { parseAgentStreamFrame } from "@/features/agent-chat/lib/stream-frame";
 
 interface ConversationResponse {

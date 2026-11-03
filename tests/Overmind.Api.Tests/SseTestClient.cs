@@ -43,7 +43,7 @@ public static class SseTestClient
         }
     }
 
-    private static SseFrame? ParseFrame(string raw)
+    public static SseFrame? ParseFrame(string raw)
     {
         string? name = null;
         var data = new StringBuilder();

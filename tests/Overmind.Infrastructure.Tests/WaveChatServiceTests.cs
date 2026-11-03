@@ -54,6 +54,16 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Post_AfterCommit_PublishesTheMessageToTheBroadcaster()
+    {
+        var message = await Service().PostAsync(_projectId, "backend", "Dan", AgentSession.DefaultRole, "broadcast me");
+
+        _broadcaster.Published
+            .Select(p => (p.ProjectId, p.Room, p.Message.Id))
+            .ShouldBe([(_projectId, "Backend", message.Id)]);
+    }
+
+    [Fact]
     public async Task Post_UnknownLane_ThrowsMissingWaveRoom_WithRosterInDetail()
     {
         var ex = await Should.ThrowAsync<PlanningException>(() =>
@@ -329,6 +339,38 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Since_CompositeCursor_DoesNotSkipMessagesSharingTheCursorTimestamp()
+    {
+        var service = Service();
+        var first = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "cursor");
+        var second = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "next");
+        var third = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "later");
+        await BackdateAsync(first.Id, first.CreatedAt);
+        await BackdateAsync(second.Id, first.CreatedAt);
+
+        var ordered = await Service().ListSinceAsync(_projectId, first.CreatedAt.AddMilliseconds(-1));
+        var cursor = ordered[0];
+
+        var page = await Service().ListSinceAsync(_projectId, first.CreatedAt, cursor.Id);
+
+        page.Select(m => m.Id).ShouldBe([ordered[1].Id, third.Id]);
+    }
+
+    [Fact]
+    public async Task Since_WithoutSinceId_StaysStrictlyAfterTheTimestamp()
+    {
+        var service = Service();
+        var first = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "first");
+        var second = await service.PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, "second");
+        await BackdateAsync(first.Id, first.CreatedAt);
+        await BackdateAsync(second.Id, first.CreatedAt);
+
+        var page = await Service().ListSinceAsync(_projectId, first.CreatedAt);
+
+        page.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Peek_MirrorsTheUnreadSelection_WithoutAdvancingTheWatermark()
     {
         var service = Service();
@@ -551,7 +593,9 @@ public sealed class WaveChatServiceTests : IDisposable
         return posted;
     }
 
-    private WaveChatService Service() => new(_context, _wakeFanout);
+    private readonly StubWaveChatBroadcaster _broadcaster = new();
+
+    private WaveChatService Service() => new(_context, _wakeFanout, _broadcaster);
 
     private async Task<int> CountAsync() =>
         await _context.WaveMessages.CountAsync();

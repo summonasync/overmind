@@ -64,8 +64,9 @@ test("the composer posts exactly the owner identity and the text", () => {
 
 test("rooms, feeds and the roster poll on the shared live-sync interval", () => {
   const queries = sliceFile("queries.ts");
-  assert.equal(queries.split("refetchInterval: LIVE_SYNC_INTERVAL_MS").length - 1, 3);
+  assert.equal(queries.split("LIVE_SYNC_INTERVAL_MS").length - 1, 4);
   assert.ok(queries.includes('import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync"'));
+  assert.ok(queries.includes("refetchInterval: pollingPaused ? false : LIVE_SYNC_INTERVAL_MS"));
 });
 
 test("the roster reads the participants endpoint through the shared client", () => {
@@ -194,12 +195,13 @@ test("the unread window anchors at the open-time stamp and the first arrival", (
   assert.ok(panel.includes("at: newestMessage?.createdAt ?? null,"));
 });
 
-test("seen state persists through the shared session store under the wave-chat namespace", () => {
+test("seen state persists through localStorage under the wave-chat namespace", () => {
   const seen = sliceFile("lib/seen.ts");
-  assert.ok(seen.includes('session-json'));
+  assert.ok(seen.includes('local-json'));
   assert.ok(seen.includes('"overmind.wave-chat.seen."'));
   assert.ok(seen.includes("export function loadLastSeen(projectId: string, room: string)"));
   assert.ok(seen.includes("export function markSeen(projectId: string, room: string, at: string)"));
+  assert.ok(seen.includes('addEventListener("storage"'));
 });
 
 test("the tail math mirrors the server contract: 20 floor, 500 ceiling, plus-five context", () => {
@@ -228,9 +230,16 @@ test("scroll anchors to the first unread message or the bottom when nothing is u
   const list = sliceFile("components/wave-message-list.tsx");
   assert.ok(list.includes('scrollIntoView({ block: "start" })'));
   assert.ok(list.includes("container.scrollTop = container.scrollHeight"));
-  assert.ok(list.includes("[scrollKey, hasUnread, ready]"));
-  assert.ok(list.includes("const ready = messages.length > 0"));
-  assert.ok(list.includes("if (!ready)"));
+  assert.ok(list.includes("useLayoutEffect"));
+  assert.ok(list.includes("lastRoomRef.current !== scrollKey"));
+});
+
+test("new arrivals follow the viewport at the bottom and count into the pill when scrolled up", () => {
+  const list = sliceFile("components/wave-message-list.tsx");
+  assert.ok(list.includes("BOTTOM_FOLLOW_THRESHOLD_PX = 64"));
+  assert.ok(list.includes("atBottomRef.current"));
+  assert.ok(list.includes("setMissedCount"));
+  assert.ok(list.includes("onMarkSeen(newest.createdAt)"));
 });
 
 test("paging keeps the viewport instead of jumping the reader around", () => {

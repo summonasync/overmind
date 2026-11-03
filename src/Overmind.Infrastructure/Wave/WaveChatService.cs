@@ -18,11 +18,13 @@ public sealed class WaveChatService
 
     private readonly OvermindDbContext _db;
     private readonly WakeDropFanout _wakeDrop;
+    private readonly IWaveChatBroadcaster _broadcaster;
 
-    public WaveChatService(OvermindDbContext db, WakeDropFanout wakeDrop)
+    public WaveChatService(OvermindDbContext db, WakeDropFanout wakeDrop, IWaveChatBroadcaster broadcaster)
     {
         _db = db;
         _wakeDrop = wakeDrop;
+        _broadcaster = broadcaster;
     }
 
     public async Task<WaveMessage> PostAsync(
@@ -42,6 +44,7 @@ public sealed class WaveChatService
         var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, authorRole, text);
         _db.WaveMessages.Add(message);
         await _db.SaveChangesAsync(ct);
+        _broadcaster.Publish(projectId, normalizedRoom, message);
         foreach (var alias in message.MentionList)
         {
             _ = _wakeDrop.WakeAsync(alias);
@@ -166,6 +169,27 @@ public sealed class WaveChatService
 
         page.Reverse();
         return page;
+    }
+
+    public async Task<IReadOnlyList<WaveMessage>> ListSinceAsync(
+        Guid projectId,
+        DateTime since,
+        Guid? sinceId = null,
+        int? limit = null,
+        CancellationToken ct = default)
+    {
+        await RequireProjectAsync(projectId, ct);
+        var capped = Math.Clamp(limit ?? MaxHistoryLimit, 1, MaxHistoryLimit);
+
+        return await _db.WaveMessages
+            .AsNoTracking()
+            .Where(m => m.ProjectId == projectId)
+            .Where(m => m.CreatedAt > since
+                || (m.CreatedAt == since && sinceId != null && m.Id.CompareTo(sinceId.Value) > 0))
+            .OrderBy(m => m.CreatedAt)
+            .ThenBy(m => m.Id)
+            .Take(capped)
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<WaveRoomSummary>> ListRoomsAsync(Guid projectId, CancellationToken ct = default)

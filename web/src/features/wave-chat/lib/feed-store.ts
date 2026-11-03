@@ -1,4 +1,4 @@
-import { mergeMessages } from "./message-stream.ts";
+import { compareChronology, mergeMessages } from "./message-stream.ts";
 import type { WaveMessage } from "@/features/wave-chat/types";
 
 const streams = new Map<string, WaveMessage[]>();
@@ -6,6 +6,21 @@ const drained = new Map<string, boolean>();
 
 export function roomStream(projectId: string, room: string): WaveMessage[] {
   return streams.get(storeKey(projectId, room)) ?? [];
+}
+
+export function newestProjectMessage(projectId: string): WaveMessage | null {
+  const prefix = `${projectId}:`;
+  let newest: WaveMessage | null = null;
+  for (const [key, messages] of streams) {
+    if (!key.startsWith(prefix) || messages.length === 0) {
+      continue;
+    }
+    const candidate = messages[messages.length - 1];
+    if (newest === null || compareChronology(candidate, newest) > 0) {
+      newest = candidate;
+    }
+  }
+  return newest;
 }
 
 export function roomHistoryDrained(projectId: string, room: string): boolean {
