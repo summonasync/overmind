@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Agent.Tools;
 using Overmind.Infrastructure.Llm;
 using Overmind.Infrastructure.Persistence;
@@ -20,6 +21,8 @@ public sealed class AgentLoopTests : IDisposable
     private readonly IAgentGuardNotifier _notifier = Substitute.For<IAgentGuardNotifier>();
     private readonly FakeBudgetStore _budget = new();
     private readonly EmbeddedAgentSessionState _sessionState = new();
+    private readonly IAgentRouteStore _routeStore = new AgentRouteMemoryStore();
+    private readonly AgentRouteRecorder _routes;
     private readonly Conversation _conversation;
     private readonly ConversationMessageStore _messages;
     private bool _delegationEnabled;
@@ -36,6 +39,7 @@ public sealed class AgentLoopTests : IDisposable
         context.Conversations.Add(_conversation);
         context.SaveChanges();
         _messages = new ConversationMessageStore(_temp.CreateContext());
+        _routes = new AgentRouteRecorder(_routeStore);
         _sessionState.Set(Guid.NewGuid());
     }
 
@@ -431,6 +435,169 @@ public sealed class AgentLoopTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task BounceCall_EndsTurnWithVerdictAndRecordsTheDegradationRow()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("That one is not mine. "),
+            FakeAgentChatClient.ToolCallUpdate("c1", "bounce_turn", """{"reason":"belongs to the planning specialist"}"""),
+            FakeAgentChatClient.UsageUpdate(50)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        var frames = await CollectAsync(loop);
+
+        frames.Select(frame => frame.Kind).ShouldBe([
+            ConversationStreamEventKind.Delta,
+            ConversationStreamEventKind.ToolCall,
+            ConversationStreamEventKind.Bounced,
+            ConversationStreamEventKind.Completed
+        ]);
+        frames[1].ToolName.ShouldBe("bounce_turn");
+        frames[2].Text.ShouldBe("belongs to the planning specialist");
+
+        var rows = await _routeStore.HotHeadAsync(10, CancellationToken.None);
+        var row = rows.Single();
+        row.Pattern.ShouldBe("sort the board");
+        row.Domain.ShouldBe(AgentRouteRecorder.UnknownDomain);
+        row.MissReason.ShouldBe(AgentRouteRecorder.NotAnalyzedReason);
+        row.HitCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RecordRouteCall_StoresAgentAnalyzedRowAndSkipsDegradation()
+    {
+        _tools
+            .InvokeAsync(
+                "record_route",
+                Arg.Any<JsonElement>(),
+                Arg.Any<AgentToolInvocation>(),
+                Arg.Any<CancellationToken>())
+            .Returns(async callInfo =>
+            {
+                var invocation = callInfo.ArgAt<AgentToolInvocation>(2);
+                await _routes.RecordAnalysisAsync(
+                    invocation.ConversationId!.Value,
+                    "board planning tasks",
+                    "planning",
+                    "no keywords in hot head",
+                    callInfo.ArgAt<CancellationToken>(3));
+                return JsonSerializer.SerializeToElement(new { recorded = true });
+            });
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking. "),
+            FakeAgentChatClient.ToolCallUpdate(
+                "c1",
+                "record_route",
+                """{"domain":"planning","missReason":"no keywords in hot head","suggestedPattern":"board planning tasks"}"""),
+            FakeAgentChatClient.UsageUpdate(60)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("Done."),
+            FakeAgentChatClient.UsageUpdate(40)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        var frames = await CollectAsync(loop);
+
+        frames.Last().Kind.ShouldBe(ConversationStreamEventKind.Completed);
+        var row = (await _routeStore.HotHeadAsync(10, CancellationToken.None)).Single();
+        row.Pattern.ShouldBe("board planning tasks");
+        row.Domain.ShouldBe("planning");
+        row.MissReason.ShouldBe("no keywords in hot head");
+        row.HitCount.ShouldBe(1);
+        row.Status.ShouldBe(AgentRouteStatus.Provisional);
+        row.Source.ShouldBe(AgentRouteSource.Learned);
+        row.Pattern.ShouldNotContain("sort the board");
+    }
+
+    [Fact]
+    public async Task BounceCall_ClampsTheReasonToTheRowLimits()
+    {
+        var rowdyReason = new string('X', 300).Replace("X", "Wave cleanup ") + "!!!";
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.ToolCallUpdate("c1", "bounce_turn", JsonSerializer.Serialize(new { reason = rowdyReason })),
+            FakeAgentChatClient.UsageUpdate(50)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        var frames = await CollectAsync(loop);
+
+        var bounced = frames.Single(frame => frame.Kind == ConversationStreamEventKind.Bounced);
+        bounced.Text!.Length.ShouldBe(AgentRouteText.MaxMissReasonLength);
+        bounced.Text.ShouldNotContain("!!!");
+        bounced.Text.ShouldBe(bounced.Text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task WorkerTurnWithoutRecordRoute_RecordsUnanalyzedRow()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Sorted."),
+            FakeAgentChatClient.UsageUpdate(30)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        await CollectAsync(loop);
+
+        var row = (await _routeStore.HotHeadAsync(10, CancellationToken.None)).Single();
+        row.Pattern.ShouldBe("sort the board");
+        row.Domain.ShouldBe(AgentRouteRecorder.UnknownDomain);
+        row.MissReason.ShouldBe(AgentRouteRecorder.NotAnalyzedReason);
+    }
+
+    [Fact]
+    public async Task WorkerTurn_TelemetryCarriesWorkerRoleTag()
+    {
+        var logger = new CapturingLogger<AgentLoop>();
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Sorted."),
+            FakeAgentChatClient.UsageUpdate(30)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000, logger: logger);
+
+        await CollectAsync(loop);
+
+        logger.Entries.ShouldNotBeEmpty();
+        foreach (var entry in logger.Entries)
+        {
+            var values = entry.Values.ToDictionary(pair => pair.Key, pair => pair.Value);
+            if (values.ContainsKey("Round") || values.ContainsKey("SystemPromptChars"))
+            {
+                values["Role"].ShouldBe("worker");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RouterTurn_SkipsRouteRowsAndTagsRouterRole()
+    {
+        var logger = new CapturingLogger<AgentLoop>();
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Router chat answer."),
+            FakeAgentChatClient.UsageUpdate(30)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000, logger: logger);
+
+        var frames = await CollectAsync(loop, role: AgentRole.Router);
+
+        frames.Last().Kind.ShouldBe(ConversationStreamEventKind.Completed);
+        (await _routeStore.HotHeadAsync(10, CancellationToken.None)).ShouldBeEmpty();
+        var roles = logger.Entries
+            .Select(entry => entry.Values.ToDictionary(pair => pair.Key, pair => pair.Value))
+            .Where(values => values.ContainsKey("Role"))
+            .Select(values => values["Role"])
+            .ToList();
+        roles.ShouldNotBeEmpty();
+        roles.All(value => (string?)value == "router").ShouldBeTrue();
+    }
+
     private AgentLoop CreateLoop(
         IChatClient? client = null,
         int perTurnMaxTokens = 8_192,
@@ -483,6 +650,7 @@ public sealed class AgentLoopTests : IDisposable
             _messages,
             registrar,
             delegation,
+            _routes,
             logger ?? NullLogger<AgentLoop>.Instance);
     }
 
@@ -494,10 +662,13 @@ public sealed class AgentLoopTests : IDisposable
     }
 
     private async Task<List<ConversationStreamEvent>> CollectAsync(
-        AgentLoop loop, IReadOnlyList<ConversationMessage>? history = null)
+        AgentLoop loop,
+        IReadOnlyList<ConversationMessage>? history = null,
+        AgentRole role = AgentRole.Worker)
     {
         var frames = new List<ConversationStreamEvent>();
-        await foreach (var frame in loop.RunAsync(_conversation, history ?? [], "sort the board", CancellationToken.None))
+        await foreach (var frame in loop.RunAsync(
+            _conversation, history ?? [], "sort the board", CancellationToken.None, role))
         {
             frames.Add(frame);
         }

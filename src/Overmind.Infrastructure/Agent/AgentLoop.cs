@@ -4,6 +4,8 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
+using Overmind.Infrastructure.Agent.Routes;
+using Overmind.Infrastructure.Agent.Tools;
 using Overmind.Infrastructure.Llm;
 
 namespace Overmind.Infrastructure.Agent;
@@ -18,6 +20,7 @@ public sealed class AgentLoop(
     ConversationMessageStore auditTrail,
     EmbeddedAgentSessionRegistrar sessionRegistrar,
     IAgentDelegationGate delegationGate,
+    AgentRouteRecorder routeRecorder,
     ILogger<AgentLoop> logger)
 {
     public const int MaxIterations = 12;
@@ -29,7 +32,9 @@ public sealed class AgentLoop(
         Conversation conversation,
         IReadOnlyList<ConversationMessage> history,
         string userText,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default,
+        AgentRole role = AgentRole.Worker,
+        RoutingMissContext? missContext = null)
     {
         await sessionRegistrar.EnsureRegisteredAsync(ct);
 
@@ -44,17 +49,22 @@ public sealed class AgentLoop(
 
         var messages = new List<ChatMessage>(
             await prompts.ComposeAsync(conversation, ConversationContextWindow.Apply(history), userText, ct));
+        if (missContext is { } miss && messages.Count > 0)
+        {
+            messages[0] = new ChatMessage(ChatRole.System, $"{messages[0].Text}\n\n{miss.Describe()}");
+        }
         var delegationArmed = await delegationGate.IsEnabledAsync(conversation.ProjectId, ct);
         Guid? instructionMessageId = delegationArmed
             ? (await auditTrail.LatestAsync(conversation.Id, ConversationMessage.UserRole, ct))?.Id
             : null;
         var options = BuildOptions(tools, delegationArmed);
         logger.LogInformation(
-            "Agent turn for conversation {ConversationId} composed {SystemPromptChars} system prompt chars, {HistoryChars} history chars, {ToolSchemaChars} tool schema chars",
+            "Agent turn for conversation {ConversationId} composed {SystemPromptChars} system prompt chars, {HistoryChars} history chars, {ToolSchemaChars} tool schema chars, {Role} role",
             conversation.Id,
             SystemPromptChars(messages),
             HistoryChars(messages),
-            ToolSchemaChars(options.Tools));
+            ToolSchemaChars(options.Tools),
+            RoleTag(role));
         var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId, conversation.Id);
         var usage = new AgentTurnUsage();
         var day = AgentBudgetDay.Current();
@@ -66,6 +76,43 @@ public sealed class AgentLoop(
             yield break;
         }
 
+        var workerTurn = role == AgentRole.Worker;
+        if (workerTurn)
+        {
+            routeRecorder.BeginTurn(conversation.Id);
+        }
+
+        try
+        {
+            await foreach (var frame in RunRoundsAsync(
+                conversation, client, messages, options, invocation, usage, settings, day, dailyUsed, role, ct))
+            {
+                yield return frame;
+            }
+        }
+        finally
+        {
+            if (workerTurn)
+            {
+                await RecordRouteFallbackAsync(conversation, userText, ct);
+                routeRecorder.EndTurn(conversation.Id);
+            }
+        }
+    }
+
+    private async IAsyncEnumerable<ConversationStreamEvent> RunRoundsAsync(
+        Conversation conversation,
+        IChatClient client,
+        List<ChatMessage> messages,
+        ChatOptions options,
+        AgentToolInvocation invocation,
+        AgentTurnUsage usage,
+        AgentRunSettings settings,
+        DateOnly day,
+        long dailyUsed,
+        AgentRole role,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
         for (var round = 1; ; round++)
         {
             if (round > MaxIterations)
@@ -85,12 +132,13 @@ public sealed class AgentLoop(
             var roundTotal = usage.Total - roundResult.TotalUsageBeforeOutput;
             var roundOutput = usage.Output - roundResult.UsageBeforeOutput;
             logger.LogInformation(
-                "Agent round {Round} of conversation {ConversationId} used {InputTokens} input, {OutputTokens} output and {TotalTokens} total tokens",
+                "Agent round {Round} of conversation {ConversationId} used {InputTokens} input, {OutputTokens} output and {TotalTokens} total tokens, {Role} role",
                 round,
                 conversation.Id,
                 roundTotal - roundOutput,
                 roundOutput,
-                roundTotal);
+                roundTotal,
+                RoleTag(role));
 
             dailyUsed = await budget.AddUsageAsync(day, usage.Output - roundResult.UsageBeforeOutput, ct);
 
@@ -111,6 +159,21 @@ public sealed class AgentLoop(
 
             if (roundResult.Calls.Count == 0)
             {
+                yield return ConversationStreamEvent.Completed(usage.Total);
+                yield break;
+            }
+
+            if (roundResult.Calls.FirstOrDefault(IsBounceCall) is { } bounceCall)
+            {
+                yield return ConversationStreamEvent.ToolCall(bounceCall.Name);
+                await AppendAuditAsync(conversation.Id, ToolLabel(bounceCall.Name), ct);
+                var reason = BounceReason(bounceCall);
+                logger.LogInformation(
+                    "Agent turn for conversation {ConversationId} ended with a {Role} bounce, reason {BounceReason}",
+                    conversation.Id,
+                    RoleTag(role),
+                    reason);
+                yield return ConversationStreamEvent.Bounced(reason);
                 yield return ConversationStreamEvent.Completed(usage.Total);
                 yield break;
             }
@@ -143,6 +206,47 @@ public sealed class AgentLoop(
     private static int ToolSchemaChars(IList<AITool> tools) =>
         tools.Sum(tool => tool.Name.Length + tool.Description.Length +
             (tool is AIFunction function ? function.JsonSchema.GetRawText().Length : 0));
+
+    private static string RoleTag(AgentRole role) => role.ToString().ToLowerInvariant();
+
+    private static bool IsBounceCall(FunctionCallContent call) => call.Name == RouteAgentTools.BounceToolName;
+
+    private static string ToolLabel(string toolName) =>
+        JsonSerializer.Serialize(new { tool = toolName }, AgentLoopbackClient.JsonOptions);
+
+    private static string BounceReason(FunctionCallContent call)
+    {
+        if (call.Arguments is not { } arguments ||
+            !arguments.TryGetValue("reason", out var value))
+        {
+            return string.Empty;
+        }
+
+        return value switch
+        {
+            string text => AgentRouteText.Clamp(text, AgentRouteText.MaxMissReasonLength),
+            JsonElement { ValueKind: JsonValueKind.String } element =>
+                AgentRouteText.Clamp(element.GetString(), AgentRouteText.MaxMissReasonLength),
+            _ => string.Empty
+        };
+    }
+
+    private async Task RecordRouteFallbackAsync(Conversation conversation, string userText, CancellationToken ct)
+    {
+        try
+        {
+            await routeRecorder.RecordUnanalyzedAsync(conversation.Id, userText, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Route fallback row was not recorded for conversation {ConversationId}",
+                conversation.Id);
+        }
+    }
 
     private async Task NotifyGuardAsync(string title, string detail, Guid? projectId, CancellationToken ct)
     {
@@ -217,7 +321,7 @@ public sealed class AgentLoop(
                 ? JsonSerializer.SerializeToElement(raw, AgentLoopbackClient.JsonOptions)
                 : JsonSerializer.SerializeToElement(new { }, AgentLoopbackClient.JsonOptions);
 
-            var label = JsonSerializer.Serialize(new { tool = call.Name }, AgentLoopbackClient.JsonOptions);
+            var label = ToolLabel(call.Name);
             await AppendAuditAsync(conversation.Id, label, ct);
 
             var result = await tools.InvokeAsync(call.Name, arguments, invocation, ct);

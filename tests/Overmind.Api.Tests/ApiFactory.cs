@@ -17,7 +17,8 @@ public sealed class StubConversationStreamSource(TurnStreamGate gate) : IConvers
         Conversation conversation,
         IReadOnlyList<ConversationMessage> history,
         string userText,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default,
+        RoutingMissContext? missContext = null)
     {
         await Task.Yield();
         yield return ConversationStreamEvent.Delta("stub delta one ");

@@ -5,6 +5,7 @@ import type {
   AgentHistoryPayload,
   AgentMessageRole,
   AgentReadState,
+  AgentRouteTrace,
   AgentUsage,
 } from "@/features/agent-chat/types";
 import { readSseEvents } from "@/shared/lib/sse";
@@ -41,6 +42,7 @@ export interface AgentStreamHandlers {
   onFailed: (error: string) => void;
   onAborted?: () => void;
   onAttached?: () => void;
+  onRoute?: (trace: AgentRouteTrace) => void;
   signal?: AbortSignal;
 }
 
@@ -144,6 +146,8 @@ export async function attachAgentTurn(
       handlers.onCompleted(frame.messageId);
     } else if (frame.kind === "aborted") {
       handlers.onAborted?.();
+    } else if (frame.kind === "route") {
+      handlers.onRoute?.({ target: frame.target, source: frame.source });
     } else {
       handlers.onFailed(frame.error);
     }
@@ -183,6 +187,8 @@ export async function streamAgentReply(
       handlers.onCompleted(frame.messageId);
     } else if (frame.kind === "aborted") {
       handlers.onAborted?.();
+    } else if (frame.kind === "route") {
+      handlers.onRoute?.({ target: frame.target, source: frame.source });
     } else {
       handlers.onFailed(frame.error);
     }

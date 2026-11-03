@@ -1,4 +1,4 @@
-import type { AgentStreamFrame } from "@/features/agent-chat/types";
+import type { AgentRoutingSource, AgentStreamFrame } from "@/features/agent-chat/types";
 
 export function parseAgentStreamFrame(name: string, data: string): AgentStreamFrame | null {
   let payload: unknown;
@@ -27,5 +27,16 @@ export function parseAgentStreamFrame(name: string, data: string): AgentStreamFr
   if (name === "aborted") {
     return { kind: "aborted" };
   }
+  if (name === "route" && typeof record.target === "string") {
+    return {
+      kind: "route",
+      target: record.target,
+      source: parseRoutingSource(record.source),
+    };
+  }
   return null;
+}
+
+function parseRoutingSource(value: unknown): AgentRoutingSource | null {
+  return value === "structural" || value === "learned" || value === "classification" ? value : null;
 }

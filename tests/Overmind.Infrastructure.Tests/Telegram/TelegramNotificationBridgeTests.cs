@@ -323,7 +323,8 @@ public sealed class TelegramNotificationBridgeTests : IDisposable
             Conversation conversation,
             IReadOnlyList<ConversationMessage> history,
             string userText,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default,
+            RoutingMissContext? missContext = null)
         {
             Invocations++;
             await Task.Yield();

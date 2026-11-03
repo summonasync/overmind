@@ -6,5 +6,6 @@ public interface IConversationStreamSource
         Conversation conversation,
         IReadOnlyList<ConversationMessage> history,
         string userText,
-        CancellationToken ct);
+        CancellationToken ct,
+        RoutingMissContext? missContext = null);
 }

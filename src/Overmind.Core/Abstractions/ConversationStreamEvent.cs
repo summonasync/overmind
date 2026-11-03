@@ -6,7 +6,9 @@ public sealed record ConversationStreamEvent(
     string? ToolName = null,
     long? TokensUsed = null,
     string? Code = null,
-    Guid? MessageId = null)
+    Guid? MessageId = null,
+    string? RouteTarget = null,
+    RoutingSource? RouteSource = null)
 {
     public static ConversationStreamEvent Delta(string text) =>
         new(ConversationStreamEventKind.Delta, text);
@@ -22,4 +24,10 @@ public sealed record ConversationStreamEvent(
 
     public static ConversationStreamEvent Aborted() =>
         new(ConversationStreamEventKind.Aborted);
+
+    public static ConversationStreamEvent Routed(string target, RoutingSource source) =>
+        new(ConversationStreamEventKind.Routed, RouteTarget: target, RouteSource: source);
+
+    public static ConversationStreamEvent Bounced(string reason) =>
+        new(ConversationStreamEventKind.Bounced, reason);
 }

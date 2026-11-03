@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Agent.Tools;
 using Overmind.Infrastructure.Grimoire;
 
@@ -29,7 +30,8 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
         AgentLoopbackClient api,
         EmbeddedAgentSessionState sessionState,
         IGrimoireMemoryClient memory,
-        ConversationMessageStore messages)
+        ConversationMessageStore messages,
+        AgentRouteRecorder routeRecorder)
     {
         var specs = PlanningAgentTools.Build(api)
             .Concat(EntryAgentTools.Build(api))
@@ -41,6 +43,7 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             .Concat(ContextAgentTools.Build(api, memory))
             .Concat(MemoryAgentTools.Build(memory))
             .Concat(ConversationHistoryAgentTools.Build(messages))
+            .Concat(RouteAgentTools.Build(routeRecorder, messages))
             .ToList();
 
         _specs = specs

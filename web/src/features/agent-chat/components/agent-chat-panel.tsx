@@ -80,6 +80,7 @@ export function AgentChatPanel({ hint }: AgentChatPanelProps) {
             <AgentMessageList
               conversationId={selectedId}
               messages={chat.messages}
+              routeTraces={chat.routeTraces}
               streaming={chat.streaming}
               historyLoading={selectedId !== null && chat.historyLoading}
               canLoadOlder={chat.canLoadOlder}

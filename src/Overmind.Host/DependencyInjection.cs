@@ -6,6 +6,7 @@ using Overmind.Host.AgentChat;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Grimoire;
@@ -58,7 +59,14 @@ public static class DependencyInjection
         services.AddScoped<IAgentRunSettingsProvider, AgentRunSettingsProvider>();
         services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();
         services.AddScoped<AgentLoop>();
-        services.AddScoped<IConversationStreamSource, LlmConversationStreamSource>();
+        services.AddKeyedScoped<IConversationStreamSource, LlmConversationStreamSource>(
+            RouterConversationStreamSource.WorkerStreamSourceKey);
+        services.AddScoped<IConversationStreamSource>(provider =>
+            provider.GetRequiredService<RouterConversationStreamSource>());
+        services.AddScoped<IRouterPromptComposer, RouterPromptComposer>();
+        services.AddScoped<IntentRouter>();
+        services.AddScoped<RouterChatResponder>();
+        services.AddScoped<RouterConversationStreamSource>();
         services.AddSingleton<ConversationTurnRunner>();
         services.AddSingleton<ConversationTurnRegistry>();
         services.AddHostedService<AgentLoopHostedService>();
@@ -216,6 +224,16 @@ public static class DependencyInjection
         services.AddScoped<AgentWakeService>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ConversationMessageStore>();
+        services.AddScoped<AgentRouteEntityStore>();
+        services.AddScoped<Overmind.Infrastructure.VectorSearch.QdrantRouteVectorIndex>();
+        services.AddScoped<Overmind.Infrastructure.Agent.Routes.IRouteVectorIndex>(
+            provider => provider.GetRequiredService<Overmind.Infrastructure.VectorSearch.QdrantRouteVectorIndex>());
+        services.AddScoped<Overmind.Infrastructure.Agent.Routes.IAgentRouteStore>(provider =>
+            new Overmind.Infrastructure.Agent.Routes.RouteVectorIndexingStore(
+                provider.GetRequiredService<AgentRouteEntityStore>(),
+                provider.GetRequiredService<Overmind.Infrastructure.Agent.Routes.IRouteVectorIndex>(),
+                provider.GetRequiredService<ILogger<Overmind.Infrastructure.Agent.Routes.RouteVectorIndexingStore>>()));
+        services.AddScoped<AgentRouteRecorder>();
         services.AddScoped<ConversationReadStore>();
         services.AddSingleton<WakeDropWriter>();
         services.AddSingleton<WakeDropFanout>();

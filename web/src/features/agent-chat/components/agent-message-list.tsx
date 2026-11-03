@@ -8,11 +8,13 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
 import { AGENT_SCROLL_BOTTOM_THRESHOLD } from "@/features/agent-chat/lib/limits";
 import { useSeenMessageTracking } from "@/features/agent-chat/lib/use-seen-tracking";
-import type { AgentMessage } from "@/features/agent-chat/types";
+import { AgentRouteTraceRow } from "@/features/agent-chat/components/agent-route-trace";
+import type { AgentMessage, AgentRouteTrace } from "@/features/agent-chat/types";
 
 interface AgentMessageListProps {
   conversationId: string | null;
   messages: AgentMessage[];
+  routeTraces: AgentRouteTrace[];
   streaming: boolean;
   historyLoading: boolean;
   canLoadOlder: boolean;
@@ -23,6 +25,7 @@ interface AgentMessageListProps {
 export function AgentMessageList({
   conversationId,
   messages,
+  routeTraces,
   streaming,
   historyLoading,
   canLoadOlder,
@@ -54,7 +57,7 @@ export function AgentMessageList({
     if (container !== null) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [messages, streaming]);
+  }, [messages, routeTraces, streaming]);
 
   const handleScroll = () => {
     const container = containerRef.current;
@@ -111,6 +114,7 @@ export function AgentMessageList({
           {messages.map((message) => (
             <MessageRow key={message.id} message={message} />
           ))}
+          <AgentRouteTraceRow traces={routeTraces} />
           {streaming ? (
             <li className="px-2.5 py-1 text-xs text-muted">
               <span className="animate-pulse">The agent is replying…</span>

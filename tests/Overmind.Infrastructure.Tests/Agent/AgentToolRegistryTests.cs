@@ -1,6 +1,7 @@
 using System.Text.Json;
 using NSubstitute;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Grimoire;
 using Shouldly;
 using Xunit;
@@ -137,6 +138,16 @@ public sealed class AgentToolRegistryTests : IDisposable
             .ShouldContain("conversation_history");
     }
 
+    [Fact]
+    public void Build_IncludesRouteLearningAndBounceAmongStandardTools()
+    {
+        var registry = CreateRegistry();
+
+        var names = registry.CreateTools(includeHumanGated: false).Select(tool => tool.Name).ToList();
+        names.ShouldContain("record_route");
+        names.ShouldContain("bounce_turn");
+    }
+
     private AgentToolRegistry CreateRegistry(RecordingHandler? handler = null)
     {
         var http = new HttpClient(handler ?? new RecordingHandler()) { BaseAddress = new Uri("http://127.0.0.1:1") };
@@ -144,7 +155,8 @@ public sealed class AgentToolRegistryTests : IDisposable
         state.Set(Guid.NewGuid());
         return new AgentToolRegistry(
             new AgentLoopbackClient(http), state, Substitute.For<IGrimoireMemoryClient>(),
-            new ConversationMessageStore(_temp.CreateContext()));
+            new ConversationMessageStore(_temp.CreateContext()),
+            new AgentRouteRecorder(new AgentRouteMemoryStore()));
     }
 
     public void Dispose() => _temp.Dispose();

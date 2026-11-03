@@ -1063,6 +1063,56 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("WaveWatermarks");
                 });
 
+            modelBuilder.Entity("Overmind.Infrastructure.Agent.Routes.AgentRouteRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HitCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastHitAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MissReason")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Pattern")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TargetAgent")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HitCount");
+
+                    b.HasIndex("Pattern")
+                        .IsUnique();
+
+                    b.ToTable("AgentRoutes");
+                });
+
             modelBuilder.Entity("Overmind.Infrastructure.Materialization.MaterializedFile", b =>
                 {
                     b.Property<Guid>("Id")

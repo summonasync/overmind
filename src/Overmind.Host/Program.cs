@@ -192,6 +192,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapTagsApi();
     app.MapNotificationsApi();
     app.MapAgentChatApi();
+    app.MapAgentRoutesApi();
     app.MapAttentionApi();
     app.MapShutdownApi();
 

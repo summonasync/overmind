@@ -1,6 +1,7 @@
 using System.Text.Json;
 using NSubstitute;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Grimoire;
 using Shouldly;
 using Xunit;
@@ -299,7 +300,8 @@ public sealed class MemoryAgentToolsTests : IDisposable
         state.Set(Guid.NewGuid());
         return new AgentToolRegistry(
             new AgentLoopbackClient(http), state, memory,
-            new ConversationMessageStore(_temp.CreateContext()));
+            new ConversationMessageStore(_temp.CreateContext()),
+            new AgentRouteRecorder(new AgentRouteMemoryStore()));
     }
 
     public void Dispose() => _temp.Dispose();

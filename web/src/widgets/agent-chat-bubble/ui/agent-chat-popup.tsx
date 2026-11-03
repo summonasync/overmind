@@ -153,6 +153,7 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
         <AgentMessageList
           conversationId={conversationId}
           messages={chat.messages}
+          routeTraces={chat.routeTraces}
           streaming={chat.streaming}
           historyLoading={conversationId !== null && chat.historyLoading}
           canLoadOlder={chat.canLoadOlder}
