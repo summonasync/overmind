@@ -63,4 +63,17 @@ public sealed class FakeAgentChatClient(params ChatResponseUpdate[][] rounds) : 
     {
         Contents = [new UsageContent(new UsageDetails { TotalTokenCount = totalTokens })]
     };
+
+    public static ChatResponseUpdate UsageUpdate(long inputTokens, long outputTokens) => new()
+    {
+        Contents =
+        [
+            new UsageContent(new UsageDetails
+            {
+                InputTokenCount = inputTokens,
+                OutputTokenCount = outputTokens,
+                TotalTokenCount = inputTokens + outputTokens
+            })
+        ]
+    };
 }
