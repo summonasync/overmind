@@ -3,6 +3,7 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { ChevronDown, Maximize2, Minimize2, X } from "lucide-react";
 import {
+  AgentBudgetMeter,
   AgentComposer,
   AgentConversationList,
   AgentMessageList,
@@ -112,6 +113,7 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
         >
           <X size={14} aria-hidden />
         </button>
+        <AgentBudgetMeter className="ml-auto" />
       </header>
       <div className="shrink-0 border-b border-border">
         <button

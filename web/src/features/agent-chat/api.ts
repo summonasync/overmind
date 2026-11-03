@@ -5,6 +5,7 @@ import type {
   AgentHistoryPayload,
   AgentMessageRole,
   AgentReadState,
+  AgentUsage,
 } from "@/features/agent-chat/types";
 import { readSseEvents } from "@/features/agent-chat/lib/sse";
 import { parseAgentStreamFrame } from "@/features/agent-chat/lib/stream-frame";
@@ -85,6 +86,10 @@ export function markAgentConversationRead(
 export async function fetchAgentUnreadCount(): Promise<number> {
   const response = await apiGet<{ count: number }>("/agent/conversations/unread");
   return response.count;
+}
+
+export function fetchAgentUsage(): Promise<AgentUsage> {
+  return apiGet<AgentUsage>("/agent/usage");
 }
 
 export async function listAgentHistory(

@@ -51,7 +51,7 @@ public sealed class AgentLoop(
         var options = BuildOptions(tools, delegationArmed);
         var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId, conversation.Id);
         var usage = new AgentTurnUsage();
-        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        var day = AgentBudgetDay.Current();
         var dailyUsed = await budget.GetUsedAsync(day, ct);
 
         if (settings.DailyBudget > 0 && dailyUsed >= settings.DailyBudget)
