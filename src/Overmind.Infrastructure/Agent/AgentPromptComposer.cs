@@ -194,11 +194,17 @@ public sealed class AgentPromptComposer(
                      (GrimoireTomeTarget.Crew, "crew"),
                  })
         {
+            if (factRows.Count >= MaxMemoryFacts)
+            {
+                break;
+            }
+
             try
             {
                 var endpoint = await memory.ResolveEndpointAsync(target, ct);
                 var facts = await memory.ListTopFactsAsync(endpoint, MaxMemoryFacts, ct);
-                foreach (var fact in facts.Take(MaxMemoryFacts - factRows.Count))
+                var remaining = MaxMemoryFacts - factRows.Count;
+                foreach (var fact in facts.Take(remaining))
                 {
                     factRows.Add(new JsonObject
                     {

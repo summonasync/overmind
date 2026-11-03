@@ -37,6 +37,10 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
             SettingKeys.AgentGrimoireBaseUrl, SettingDefaults.AgentGrimoireBaseUrl, ct)).Trim();
         var tome = await ResolveTomeAsync(settings, target, ct);
         var alias = (await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct)).Trim();
+        if (alias.Length == 0)
+        {
+            alias = SettingDefaults.AgentAlias;
+        }
 
         if (overrideUrl.Length > 0)
         {
@@ -44,7 +48,7 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
             if (!await IsHealthyAsync(baseUrl, ct))
             {
                 throw new GrimoireMemoryException(
-                    $"grimoire memory is unavailable: the override '{baseUrl}' failed its health probe{BootstrapHint(target, tome)}");
+                    $"grimoire memory is unavailable: the override '{baseUrl}' failed its health probe");
             }
 
             return new GrimoireMemoryEndpoint(baseUrl, tome, alias);
@@ -71,7 +75,8 @@ public sealed class GrimoireMemoryClient : IGrimoireMemoryClient
                 return personal;
             }
 
-            return (await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct)).Trim();
+            var alias = (await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct)).Trim();
+            return alias.Length > 0 ? alias : SettingDefaults.AgentAlias;
         }
 
         var crew = ((await settings.GetAsync(SettingKeys.AgentGrimoireCrewTome, ct)) ?? string.Empty).Trim();

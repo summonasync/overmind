@@ -137,6 +137,18 @@ public sealed class GrimoireMemoryClientTests : IDisposable
     }
 
     [Fact]
+    public async Task ResolveEndpointAsync_WhitespaceAlias_PersonalTomeStillResolvesToDefault()
+    {
+        var client = CreateClient();
+        await ConfigureAsync(overrideUrl: StubBaseUrl.ToString(), alias: "   ");
+
+        var endpoint = await client.ResolveEndpointAsync(GrimoireTomeTarget.Personal, CancellationToken.None);
+
+        endpoint.Tome.ShouldBe("overmind-agent");
+        endpoint.ActorAlias.ShouldBe("overmind-agent");
+    }
+
+    [Fact]
     public async Task ResolveEndpointAsync_PersonalUnavailableMessageCarriesBootstrapHint()
     {
         var client = CreateClient();

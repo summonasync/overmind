@@ -202,6 +202,55 @@ public sealed class MemoryAgentToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task InvokeAsync_MemoryRecall_OneTomeEmptyOtherFailed_ReturnsEmptyArray()
+    {
+        var memory = Substitute.For<IGrimoireMemoryClient>();
+        memory.ResolveEndpointAsync(GrimoireTomeTarget.Personal, Arg.Any<CancellationToken>()).Returns(PersonalEndpoint);
+        memory.ResolveEndpointAsync(GrimoireTomeTarget.Crew, Arg.Any<CancellationToken>()).Returns(CrewEndpoint);
+        memory
+            .RecallAsync(PersonalEndpoint, "quiet week", null, null, 5, Arg.Any<CancellationToken>())
+            .Returns([]);
+        memory
+            .RecallAsync(CrewEndpoint, "quiet week", null, null, 5, Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<GrimoireMemoryRecord>>(_ => throw new GrimoireMemoryException("crew call failed with 500"));
+        var registry = CreateRegistry(memory);
+
+        var result = await registry.InvokeAsync(
+            "memory_recall",
+            JsonSerializer.SerializeToElement(new { query = "quiet week" }),
+            default,
+            CancellationToken.None);
+
+        result.ValueKind.ShouldBe(JsonValueKind.Array);
+        result.EnumerateArray().Count().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_MemoryRecall_NegativeLimit_ClampedToOne()
+    {
+        var memory = Substitute.For<IGrimoireMemoryClient>();
+        memory.ResolveEndpointAsync(GrimoireTomeTarget.Personal, Arg.Any<CancellationToken>()).Returns(PersonalEndpoint);
+        memory.ResolveEndpointAsync(GrimoireTomeTarget.Crew, Arg.Any<CancellationToken>()).Returns(CrewEndpoint);
+        memory
+            .RecallAsync(PersonalEndpoint, "budget", null, null, 1, Arg.Any<CancellationToken>())
+            .Returns([]);
+        memory
+            .RecallAsync(CrewEndpoint, "budget", null, null, 1, Arg.Any<CancellationToken>())
+            .Returns([]);
+        var registry = CreateRegistry(memory);
+
+        var result = await registry.InvokeAsync(
+            "memory_recall",
+            JsonSerializer.SerializeToElement(new { query = "budget", limit = -3 }),
+            default,
+            CancellationToken.None);
+
+        result.ValueKind.ShouldBe(JsonValueKind.Array);
+        await memory.Received(1).RecallAsync(
+            PersonalEndpoint, "budget", null, null, 1, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task InvokeAsync_MemoryRecall_BothTomesDown_ReturnsHonestUnavailableError()
     {
         var memory = Substitute.For<IGrimoireMemoryClient>();

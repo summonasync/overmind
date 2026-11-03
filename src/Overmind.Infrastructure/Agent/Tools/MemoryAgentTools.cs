@@ -75,7 +75,7 @@ public static class MemoryAgentTools
             var query = AgentToolArgs.RequiredString(args, "query");
             var kind = AgentToolArgs.OptionalString(args, "kind");
             var tag = AgentToolArgs.OptionalString(args, "tag");
-            var limit = AgentToolArgs.OptionalInt(args, "limit") ?? 5;
+            var limit = Math.Max(1, AgentToolArgs.OptionalInt(args, "limit") ?? 5);
 
             var hits = new List<object>(limit);
             var failures = new List<string>();
@@ -105,7 +105,7 @@ public static class MemoryAgentTools
                 }
             }
 
-            if (hits.Count == 0 && failures.Count > 0)
+            if (failures.Count == 2)
             {
                 throw new GrimoireMemoryException(string.Join(" | ", failures));
             }
