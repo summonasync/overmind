@@ -131,6 +131,12 @@ public static class SettingsApi
             return InvalidSetting(nameof(request.AgentPerTurnMaxTokens), "Must be greater than 0.");
         }
 
+        if (request.AgentRouteMatchThreshold is <= 0 or >= 1)
+        {
+            return InvalidSetting(
+                nameof(request.AgentRouteMatchThreshold), "Must be between 0 and 1 (exclusive).");
+        }
+
         if (request.AgentDailyBudget is < 0)
         {
             return InvalidSetting(nameof(request.AgentDailyBudget), "Must be 0 or greater.");
@@ -293,6 +299,13 @@ public static class SettingsApi
                 request.AgentPerTurnMaxTokens.Value.ToString(CultureInfo.InvariantCulture), ct);
         }
 
+        if (request.AgentRouteMatchThreshold is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.AgentRouteMatchThreshold,
+                request.AgentRouteMatchThreshold.Value.ToString(CultureInfo.InvariantCulture), ct);
+        }
+
         if (request.AgentDailyBudget is not null)
         {
             await settings.SetAsync(
@@ -368,6 +381,7 @@ public static class SettingsApi
             updated.AgentAlias,
             updated.AgentPerTurnMaxTokens,
             updated.AgentDailyBudget,
+            updated.AgentRouteMatchThreshold,
             updated.AgentGrimoireBaseUrl,
             updated.AgentGrimoireTome,
             updated.AgentGrimoireCompactionHours,
@@ -476,6 +490,14 @@ public static class SettingsApi
             int.TryParse(agentDailyBudgetRaw, out var dailyBudget) && dailyBudget >= 0
                 ? dailyBudget
                 : SettingDefaults.AgentDailyBudget;
+        var agentRouteMatchThresholdRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.AgentRouteMatchThreshold,
+            SettingDefaults.AgentRouteMatchThreshold.ToString(CultureInfo.InvariantCulture), ct);
+        var agentRouteMatchThreshold =
+            double.TryParse(agentRouteMatchThresholdRaw, NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var routeMatchThreshold) && routeMatchThreshold is > 0 and < 1
+                ? routeMatchThreshold
+                : SettingDefaults.AgentRouteMatchThreshold;
         var agentAlias = await settings.GetOrDefaultAsync(SettingKeys.AgentAlias, SettingDefaults.AgentAlias, ct);
         var agentGrimoireBaseUrl = await settings.GetOrDefaultAsync(
             SettingKeys.AgentGrimoireBaseUrl, SettingDefaults.AgentGrimoireBaseUrl, ct);
@@ -503,6 +525,7 @@ public static class SettingsApi
             planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
             planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
             agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget,
+            agentRouteMatchThreshold,
             agentGrimoireBaseUrl, agentGrimoireTome, agentGrimoireCompactionHours, agentInstructions,
             agentDelegateApprovalsDefault,
             bool.TryParse(telegramEnabledRaw, out var telegramEnabled) && telegramEnabled,

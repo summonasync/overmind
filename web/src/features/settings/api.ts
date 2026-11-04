@@ -31,6 +31,7 @@ export function updateSettings(values: SettingsFormValues): Promise<UpdateSettin
     agentApiKey: values.agentApiKey || null,
     agentPerTurnMaxTokens: values.agentPerTurnMaxTokens,
     agentDailyBudget: values.agentDailyBudget,
+    agentRouteMatchThreshold: values.agentRouteMatchThreshold,
     agentInstructions: values.agentInstructions,
     agentDelegateApprovalsDefault: values.agentDelegateApprovalsDefault,
   });

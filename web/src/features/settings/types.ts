@@ -23,6 +23,7 @@ export interface SettingsResponse {
   agentApiKeyConfigured: boolean;
   agentPerTurnMaxTokens: number;
   agentDailyBudget: number;
+  agentRouteMatchThreshold: number;
   agentInstructions: string;
   agentDelegateApprovalsDefault: AgentDelegateApprovalsDefault;
   telegramEnabled: boolean;
@@ -57,6 +58,7 @@ export interface SettingsFormValues {
   agentApiKey: string;
   agentPerTurnMaxTokens: number;
   agentDailyBudget: number;
+  agentRouteMatchThreshold: number;
   agentInstructions: string;
   agentDelegateApprovalsDefault: AgentDelegateApprovalsDefault;
 }

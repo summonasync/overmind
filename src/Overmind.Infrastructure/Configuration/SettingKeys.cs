@@ -28,6 +28,7 @@ public static class SettingKeys
     public const string AgentPerTurnMaxTokens = "agent.perTurnMaxTokens";
     public const string AgentDailyBudget = "agent.dailyBudget";
     public const string AgentDailyBudgetUsedPrefix = "agent.budget.used.";
+    public const string AgentRouteMatchThreshold = "agent.routeMatchThreshold";
     public const string AgentInstructions = "agent.instructions";
     public const string AgentDelegateApprovalsDefault = "agent.delegateApprovalsDefault";
     public const string AgentGrimoireBaseUrl = "agent.grimoire.baseUrl";

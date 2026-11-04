@@ -4,7 +4,9 @@ using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Agent.Routes;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Llm;
+using System.Globalization;
 using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
@@ -18,18 +20,21 @@ public sealed class IntentRouterTests : IDisposable
     private readonly IRouteVectorIndex _vectors = Substitute.For<IRouteVectorIndex>();
     private readonly ILlmChatClientFactory _chatFactory = Substitute.For<ILlmChatClientFactory>();
     private readonly CountingBudgetStore _budget = new();
+    private readonly AppSettingsService _settings;
     private readonly IntentRouter _router;
     private readonly Conversation _conversation = Conversation.Create(null, "router decisions");
 
     public IntentRouterTests()
     {
         _store = new AgentRouteEntityStore(_db.CreateContext());
+        _settings = new AppSettingsService(_db.CreateContext());
         _router = new IntentRouter(
             new RouterPromptComposer(),
             _chatFactory,
             _store,
             _vectors,
             _budget,
+            _settings,
             NullLogger<IntentRouter>.Instance);
     }
 
@@ -98,11 +103,53 @@ public sealed class IntentRouterTests : IDisposable
     }
 
     [Fact]
+    public async Task RouteAsync_DogfoodProbedScore_RoutesSemanticallyWithoutClassification()
+    {
+        _vectors
+            .MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new RouteVectorMatch(Guid.NewGuid(), "board", "worker", 0.643f));
+
+        var decision = await _router.RouteAsync(
+            _conversation, [], "arrange my backlog rows by priority", [], CancellationToken.None);
+
+        decision.Target.ShouldBe(RoutingTargets.Worker);
+        decision.Source.ShouldBe(RoutingSource.Learned);
+        decision.Miss.Reason.ShouldContain("0.64");
+        _ = _chatFactory.DidNotReceiveWithAnyArgs().CreateAsync(default);
+    }
+
+    [Theory]
+    [InlineData(0.5, RoutingSource.Learned)]
+    [InlineData(0.58, RoutingSource.Learned)]
+    [InlineData(0.643, RoutingSource.Learned)]
+    [InlineData(0.7, RoutingSource.Classification)]
+    public async Task RouteAsync_ConfiguredThreshold_GatesTheSemanticMatch(
+        double threshold, RoutingSource expected)
+    {
+        await _settings.SetAsync(
+            SettingKeys.AgentRouteMatchThreshold,
+            threshold.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
+        _vectors
+            .MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new RouteVectorMatch(Guid.NewGuid(), "board", "worker", 0.643f));
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("""{"target":"chat","reason":"small talk"}"""),
+            FakeAgentChatClient.UsageUpdate(4, 6),
+        ]);
+        _chatFactory.CreateAsync(Arg.Any<CancellationToken>()).Returns(client);
+
+        var decision = await _router.RouteAsync(_conversation, [], "arrange my backlog rows by priority", [], CancellationToken.None);
+
+        decision.Source.ShouldBe(expected);
+    }
+
+    [Fact]
     public async Task RouteAsync_BelowThresholdSemanticMatch_FallsThroughToClassification()
     {
         _vectors
             .MatchTopAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new RouteVectorMatch(Guid.NewGuid(), "wave", "worker", RouteVectorMatch.Threshold - 0.05f));
+            .Returns(new RouteVectorMatch(Guid.NewGuid(), "wave", "worker", 0.5f));
         var client = new FakeAgentChatClient(
         [
             FakeAgentChatClient.TextUpdate("""{"target":"chat","reason":"small talk"}"""),
