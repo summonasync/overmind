@@ -63,6 +63,12 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
     setListOpen(false);
   };
 
+  const startNewChat = () => {
+    list.clearError();
+    onConversationChange(null);
+    setListOpen(false);
+  };
+
   const panelStyle =
     geometry !== null && !maximized
       ? ({
@@ -139,6 +145,7 @@ export function AgentChatPopup({ conversationId, onConversationChange, onClose }
                 activeId={conversationId}
                 onOpen={openConversation}
                 onDelete={list.remove}
+                onNewChat={startNewChat}
               />
             )}
           </div>
