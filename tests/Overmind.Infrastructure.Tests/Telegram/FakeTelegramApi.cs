@@ -9,12 +9,21 @@ public sealed class FakeTelegramApi : HttpMessageHandler
 
     private readonly object _lock = new();
     private readonly Queue<string> _pendingResponses = new();
+    private readonly Dictionary<string, string> _pathFailures = new();
 
     public List<Captured> Requests { get; } = [];
     public SemaphoreSlim RequestArrived { get; } = new(0);
 
     public void QueueUpdate(string updateJson) =>
         QueueResponse($$"""{"ok":true,"result":[{{updateJson}}]}""");
+
+    public void FailPath(string pathSuffix, string json)
+    {
+        lock (_lock)
+        {
+            _pathFailures[pathSuffix] = json;
+        }
+    }
 
     public void QueueResponse(string json)
     {
@@ -43,9 +52,12 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         string json;
         lock (_lock)
         {
-            json = _pendingResponses.Count > 0
-                ? _pendingResponses.Dequeue()
-                : """{"ok":true,"result":[]}""";
+            var failure = _pathFailures.FirstOrDefault(pair =>
+                request.RequestUri!.AbsolutePath.Contains(pair.Key, StringComparison.Ordinal));
+            json = failure.Value
+                ?? (_pendingResponses.Count > 0
+                    ? _pendingResponses.Dequeue()
+                    : """{"ok":true,"result":[]}""");
         }
 
         return new HttpResponseMessage(HttpStatusCode.OK)
@@ -99,4 +111,21 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         {"update_id":{{{updateId}}},"message":{"message_id":{{{updateId}}},"from":{"id":{{{chatId}}},"is_bot":false,"first_name":"Owner"},"chat":{"id":{{{chatId}}},"type":"private"},"date":1760000000}}
         """
         .Trim();
+
+    public static string CallbackQueryUpdate(
+        long chatId,
+        string data,
+        int updateId,
+        int messageId,
+        string callbackQueryId,
+        string? username = "owner",
+        string firstName = "Owner") =>
+        "{\"update_id\":" + updateId +
+        ",\"callback_query\":{\"id\":\"" + callbackQueryId + "\"" +
+        ",\"from\":{\"id\":" + chatId + ",\"is_bot\":false,\"first_name\":\"" + firstName + "\"" +
+        (username is null ? string.Empty : ",\"username\":\"" + username + "\"") +
+        "},\"message\":{\"message_id\":" + messageId +
+        ",\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}" +
+        ",\"date\":1760000000,\"text\":\"[approval] approve the plan\"}" +
+        ",\"data\":\"" + data + "\"}}";
 }

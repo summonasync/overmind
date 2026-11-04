@@ -142,6 +142,121 @@ public sealed class TelegramPollingRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_CallbackQueryUpdate_IsDispatchedToCallbackHandler()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        var data = "notif:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111:approve";
+        rig.Api.QueueUpdate(FakeTelegramApi.CallbackQueryUpdate(42, data, 1, messageId: 5, callbackQueryId: "cq-1"));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.CallbackHandler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            var callback = rig.CallbackHandler.Callbacks.Single();
+            callback.ChatId.ShouldBe(42L);
+            callback.CallbackQueryId.ShouldBe("cq-1");
+            callback.MessageId.ShouldBe(5);
+            callback.From.ShouldBe("@owner");
+            callback.MessageText.ShouldBe("[approval] approve the plan");
+            callback.Data.ShouldBe(data);
+            (await WaitForAsync(() => rig.Api.RequestCount >= 2)).ShouldBeTrue();
+            OffsetOf(rig.Api.Request(1)).ShouldBe(2);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_CallbackQueryWithoutUsername_CarriesTheFirstName()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(
+            FakeTelegramApi.CallbackQueryUpdate(42, "notif:x:approve", 2, messageId: 6, callbackQueryId: "cq-2", username: null));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.CallbackHandler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            rig.CallbackHandler.Callbacks.Single().From.ShouldBe("Owner");
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_CallbackQueryFromForeignChat_IsDispatchedUnfiltered()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(
+            FakeTelegramApi.CallbackQueryUpdate(999, "notif:x:approve", 7, messageId: 9, callbackQueryId: "cq-7"));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.CallbackHandler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            rig.CallbackHandler.Callbacks.Single().ChatId.ShouldBe(999L);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_CallbackQueryWithoutHandler_IsStillConfirmed()
+    {
+        var rig = CreateRig(wireCallbackHandler: false);
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(
+            FakeTelegramApi.CallbackQueryUpdate(42, "notif:x:approve", 3, messageId: 5, callbackQueryId: "cq-3"));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            await Task.Delay(300);
+
+            rig.CallbackHandler.Received.CurrentCount.ShouldBe(0);
+            OffsetOf(rig.Api.Request(1)).ShouldBe(4);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ThrowingCallbackHandler_KeepsPolling()
+    {
+        var rig = CreateRig(wireCallbackHandler: false, throwingCallbackHandler: true);
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(
+            FakeTelegramApi.CallbackQueryUpdate(42, "notif:x:approve", 1, messageId: 5, callbackQueryId: "cq-1"));
+        rig.Api.QueueUpdate(
+            FakeTelegramApi.CallbackQueryUpdate(42, "notif:x:decline", 2, messageId: 5, callbackQueryId: "cq-2"));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.ThrowingCallbackHandler!.Invocations.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.ThrowingCallbackHandler.Invocations.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_ConfirmedUpdatesAreNotRedelivered()
     {
         var rig = CreateRig();
@@ -283,12 +398,18 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         return match.Success ? int.Parse(match.Groups[1].Value) : null;
     }
 
-    private Rig CreateRig(bool wireHandler = true, bool throwingHandler = false)
+    private Rig CreateRig(
+        bool wireHandler = true,
+        bool throwingHandler = false,
+        bool wireCallbackHandler = true,
+        bool throwingCallbackHandler = false)
     {
         var api = new FakeTelegramApi();
         var factory = new StubTelegramBotClientFactory(api);
         var messages = new RecordingTelegramMessageHandler();
         var throwing = new ThrowingTelegramMessageHandler();
+        var callbacks = new RecordingTelegramCallbackHandler();
+        var throwingCallbacks = new ThrowingTelegramCallbackHandler();
         var logs = new List<string>();
 
         var services = new ServiceCollection();
@@ -305,6 +426,15 @@ public sealed class TelegramPollingRunnerTests : IDisposable
             services.AddSingleton<ITelegramMessageHandler>(throwing);
         }
 
+        if (wireCallbackHandler)
+        {
+            services.AddSingleton<ITelegramCallbackHandler>(callbacks);
+        }
+        else if (throwingCallbackHandler)
+        {
+            services.AddSingleton<ITelegramCallbackHandler>(throwingCallbacks);
+        }
+
         services.AddSingleton<ILogger<TelegramPollingRunner>>(new CollectingLogger<TelegramPollingRunner>(logs));
 
         var provider = services.BuildServiceProvider();
@@ -313,7 +443,9 @@ public sealed class TelegramPollingRunnerTests : IDisposable
             new TelegramBotClientCache(factory),
             provider.GetRequiredService<ILogger<TelegramPollingRunner>>());
 
-        return new Rig(runner, api, messages, throwingHandler ? throwing : null, factory, provider, logs);
+        return new Rig(
+            runner, api, messages, throwingHandler ? throwing : null, callbacks,
+            throwingCallbackHandler ? throwingCallbacks : null, factory, provider, logs);
     }
 
     private async Task ConfigureAsync(bool enabled, string allowlist, string? token = TestToken)
@@ -346,6 +478,8 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         FakeTelegramApi Api,
         RecordingTelegramMessageHandler Handler,
         ThrowingTelegramMessageHandler? ThrowingHandler,
+        RecordingTelegramCallbackHandler CallbackHandler,
+        ThrowingTelegramCallbackHandler? ThrowingCallbackHandler,
         StubTelegramBotClientFactory Factory,
         ServiceProvider Provider,
         List<string> Logs)
@@ -380,6 +514,30 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         {
             Invocations.Release();
             throw new InvalidOperationException("the handler is broken on purpose");
+        }
+    }
+
+    private sealed class RecordingTelegramCallbackHandler : ITelegramCallbackHandler
+    {
+        public ConcurrentQueue<TelegramCallback> Callbacks { get; } = new();
+        public SemaphoreSlim Received { get; } = new(0);
+
+        public Task HandleAsync(TelegramCallback callback, CancellationToken ct)
+        {
+            Callbacks.Enqueue(callback);
+            Received.Release();
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingTelegramCallbackHandler : ITelegramCallbackHandler
+    {
+        public SemaphoreSlim Invocations { get; } = new(0);
+
+        public Task HandleAsync(TelegramCallback callback, CancellationToken ct)
+        {
+            Invocations.Release();
+            throw new InvalidOperationException("the callback handler is broken on purpose");
         }
     }
 }

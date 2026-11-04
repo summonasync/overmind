@@ -1,4 +1,5 @@
 using Telegram.Bot;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Overmind.Infrastructure.Telegram;
 
@@ -6,7 +7,11 @@ public sealed class TelegramReplySender(
     TelegramBotClientCache clientCache,
     TelegramTransportOptionsProvider optionsProvider)
 {
-    public async Task<IReadOnlyList<long>> SendAsync(long chatId, IReadOnlyList<string> chunks, CancellationToken ct = default)
+    public async Task<IReadOnlyList<long>> SendAsync(
+        long chatId,
+        IReadOnlyList<string> chunks,
+        InlineKeyboardMarkup? replyMarkup = null,
+        CancellationToken ct = default)
     {
         var transport = await optionsProvider.GetAsync(ct);
         if (!transport.IsRunnable)
@@ -20,7 +25,7 @@ public sealed class TelegramReplySender(
         {
             foreach (var chunk in chunks)
             {
-                var message = await client.SendMessage(chatId, chunk, cancellationToken: ct);
+                var message = await client.SendMessage(chatId, chunk, replyMarkup: replyMarkup, cancellationToken: ct);
                 delivered.Add(message.Id);
             }
 

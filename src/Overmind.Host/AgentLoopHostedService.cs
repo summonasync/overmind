@@ -60,6 +60,8 @@ public sealed class AgentLoopHostedService(
             using var scope = scopeFactory.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<EmbeddedAgentSessionRegistrar>()
                 .EndAsync(CancellationToken.None);
+            await scope.ServiceProvider.GetRequiredService<NotificationValidatorSessionRegistrar>()
+                .EndAsync(CancellationToken.None);
         }
         catch (Exception)
         {

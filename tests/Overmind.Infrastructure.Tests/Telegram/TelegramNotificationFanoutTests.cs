@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -50,6 +51,43 @@ public sealed class TelegramNotificationFanoutTests : IDisposable
         mappings.Count.ShouldBe(2);
         mappings.Select(row => row.MessageId).ShouldBe([11L, 12L], true);
         mappings.ShouldAllBe(row => row.NotificationId == notification.Id && (row.ChatId == 42L || row.ChatId == 43L));
+    }
+
+    [Theory]
+    [InlineData(NotificationKind.Approval)]
+    [InlineData(NotificationKind.Question)]
+    public async Task TryDeliver_GateKind_AttachesTheTwoButtonKeyboard(NotificationKind kind)
+    {
+        await ConfigureTransportAsync("42");
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse(messageId: 11));
+        var fanout = CreateFanout();
+        var notification = await SaveNotificationAsync(kind, "gate decision", "159-telegram-connector", "spec");
+
+        await fanout.TryDeliverAsync(notification, CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        using var document = JsonDocument.Parse(_api.Request(0).Body);
+        var buttons = document.RootElement.GetProperty("reply_markup").GetProperty("inline_keyboard")[0];
+        buttons.GetArrayLength().ShouldBe(2);
+        buttons[0].GetProperty("text").GetString().ShouldBe("✅ Approve");
+        buttons[0].GetProperty("callback_data").GetString().ShouldBe($"notif:{notification.Id}:approve");
+        buttons[1].GetProperty("text").GetString().ShouldBe("❌ Decline");
+        buttons[1].GetProperty("callback_data").GetString().ShouldBe($"notif:{notification.Id}:decline");
+    }
+
+    [Fact]
+    public async Task TryDeliver_InfoKind_SendsNoKeyboard()
+    {
+        await ConfigureTransportAsync("42");
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var fanout = CreateFanout();
+
+        await fanout.TryDeliverAsync(
+            await SaveNotificationAsync(NotificationKind.Info, "heads up", null, null), CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        using var document = JsonDocument.Parse(_api.Request(0).Body);
+        document.RootElement.TryGetProperty("reply_markup", out _).ShouldBeFalse();
     }
 
     [Fact]

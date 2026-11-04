@@ -63,6 +63,25 @@ public static class DependencyInjection
             RouterConversationStreamSource.WorkerStreamSourceKey);
         services.AddScoped<IConversationStreamSource>(provider =>
             provider.GetRequiredService<RouterConversationStreamSource>());
+        services.AddKeyedSingleton<EmbeddedAgentSessionState>(NotificationValidatorSessionRegistrar.Alias);
+        services.AddScoped<NotificationValidatorSessionRegistrar>();
+        services.AddScoped<NotificationValidatorPromptComposer>();
+        services.AddScoped<NotificationValidatorToolInvoker>();
+        services.AddKeyedScoped<AgentLoop>(NotificationValidatorSessionRegistrar.Alias, (provider, _) =>
+        {
+            var registrar = new NotificationValidatorSessionRegistrar(
+                provider.GetRequiredService<AgentLoopbackClient>(),
+                provider.GetRequiredKeyedService<EmbeddedAgentSessionState>(
+                    NotificationValidatorSessionRegistrar.Alias),
+                provider.GetRequiredService<IAgentRunSettingsProvider>());
+            return ActivatorUtilities.CreateInstance<AgentLoop>(
+                provider,
+                provider.GetRequiredService<NotificationValidatorPromptComposer>(),
+                provider.GetRequiredService<NotificationValidatorToolInvoker>(),
+                registrar);
+        });
+        services.AddScoped<INotificationValidatorRunner, NotificationValidatorRunner>();
+        services.AddScoped<TelegramValidatorConversationStore>();
         services.AddScoped<IRouterPromptComposer, RouterPromptComposer>();
         services.AddScoped<IntentRouter>();
         services.AddScoped<RouterChatResponder>();
@@ -83,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<TelegramReplySender>();
         services.AddScoped<TelegramNotificationDeliveryStore>();
         services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
+        services.AddScoped<ITelegramCallbackHandler, TelegramNotificationCallbackHandler>();
         services.AddSingleton<INotificationDeliveryChannel>(provider => new TelegramNotificationFanout(
             provider.GetRequiredService<IServiceScopeFactory>(),
             () => provider.GetRequiredService<BrowserOrigin>().BoundOrigin,

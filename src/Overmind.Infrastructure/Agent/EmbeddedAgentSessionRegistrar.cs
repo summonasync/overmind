@@ -1,9 +1,10 @@
 namespace Overmind.Infrastructure.Agent;
 
-public sealed class EmbeddedAgentSessionRegistrar(
+public class EmbeddedAgentSessionRegistrar(
     AgentLoopbackClient api,
     EmbeddedAgentSessionState state,
-    IAgentRunSettingsProvider settingsProvider)
+    IAgentRunSettingsProvider settingsProvider,
+    string? aliasOverride = null)
 {
     public const string Vendor = "overmind-host";
 
@@ -27,7 +28,7 @@ public sealed class EmbeddedAgentSessionRegistrar(
             var settings = await settingsProvider.GetAsync(ct);
             var response = await api.PostAsync(
                 "/api/agent/sessions",
-                new { alias = settings.Alias, vendor = Vendor, role = Overmind.Core.AgentSession.EmbeddedRole },
+                new { alias = aliasOverride ?? settings.Alias, vendor = Vendor, role = Overmind.Core.AgentSession.EmbeddedRole },
                 ct);
 
             var sessionId = response.GetProperty("id").GetGuid();

@@ -246,6 +246,53 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task NotificationReply_RecordsProofAndHandsTheNotificationToTheValidator()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var validator = Substitute.For<INotificationValidatorRunner>();
+        var notifications = CreateWorkingNotificationsService();
+        var rig = await CreateHandlerAsync(new StubStreamSource([[]]), notifications, validator);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, 11, notification.Id);
+        }
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "lgtm approve it", RepliedToMessageId: 11), CancellationToken.None);
+
+        SentTexts().ShouldContain(TelegramAgentChatHandler.ReplyRegisteredAck);
+        await validator.Received(1).RunAsync(
+            OwnerChatId,
+            Arg.Is<AgentNotification>(seeded => seeded.Id == notification.Id),
+            "lgtm approve it",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task NotificationReply_RegisterFailure_SkipsTheValidator()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var validator = Substitute.For<INotificationValidatorRunner>();
+        var rig = await CreateHandlerAsync(new StubStreamSource([[]]), CreateNotificationsService(), validator);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, 12, notification.Id);
+        }
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "approve", RepliedToMessageId: 12), CancellationToken.None);
+
+        await validator.DidNotReceive().RunAsync(
+            Arg.Any<long>(), Arg.Any<AgentNotification>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task NotificationReply_RegisterFailure_RetriesUpToCapThenDeadLetters()
     {
         _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
@@ -359,7 +406,9 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
     }
 
     private async Task<HandlerRig> CreateHandlerAsync(
-        IConversationStreamSource streamSource, NotificationsService? notificationsService = null)
+        IConversationStreamSource streamSource,
+        NotificationsService? notificationsService = null,
+        INotificationValidatorRunner? validator = null)
     {
         await ConfigureTransportAsync();
         var chats = new TelegramChatStore(_temp.CreateContext());
@@ -375,6 +424,7 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
                 new TelegramTransportOptionsProvider(new AppSettingsService(_temp.CreateContext()))),
             new TelegramNotificationDeliveryStore(_temp.CreateContext()),
             notificationsService ?? CreateNotificationsService(),
+            validator ?? Substitute.For<INotificationValidatorRunner>(),
             new CollectingLogger<TelegramAgentChatHandler>(logs));
 
         return new HandlerRig(handler, streamSource, conversation, logs);
@@ -386,6 +436,16 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
         broken.Dispose();
         return new NotificationsService(
             broken,
+            new ReplyAutoActFanout(
+                _temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
+            TestWakeFanout.Create(_temp).Fanout,
+            []);
+    }
+
+    private NotificationsService CreateWorkingNotificationsService()
+    {
+        return new NotificationsService(
+            _temp.CreateContext(),
             new ReplyAutoActFanout(
                 _temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
             TestWakeFanout.Create(_temp).Fanout,

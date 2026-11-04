@@ -68,18 +68,62 @@ public sealed class TelegramPollingRunner(
         }
 
         _missingHandlerLogged = false;
+        var callbackHandler = scope.ServiceProvider.GetService<ITelegramCallbackHandler>();
 
         var updates = await clientCache.GetOrCreate(options)
             .Client.GetUpdates(
                 offset: _offset == 0 ? null : _offset,
                 timeout: LongPollSeconds,
-                allowedUpdates: [UpdateType.Message],
+                allowedUpdates: [UpdateType.Message, UpdateType.CallbackQuery],
                 cancellationToken: ct);
         foreach (var update in updates)
         {
             _offset = update.Id + 1;
+            if (update.CallbackQuery is { } query)
+            {
+                await DispatchCallbackAsync(callbackHandler, query, ct);
+                continue;
+            }
+
             await ProcessUpdateAsync(handler, update, options, ct);
         }
+    }
+
+    private async Task DispatchCallbackAsync(ITelegramCallbackHandler? handler, CallbackQuery query, CancellationToken ct)
+    {
+        var message = query.Message;
+        if (message is null)
+        {
+            logger.LogDebug("Telegram callback {CallbackQueryId} carries no message; ignored", query.Id);
+            return;
+        }
+
+        if (handler is null)
+        {
+            logger.LogDebug(
+                "Telegram callback {CallbackQueryId} from chat {ChatId} arrived while no callback handler is wired; ignored",
+                query.Id, message.Chat.Id);
+            return;
+        }
+
+        try
+        {
+            await handler.HandleAsync(ToCallback(query, message), ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Telegram callback from chat {ChatId} failed dispatch", message.Chat.Id);
+        }
+    }
+
+    private static TelegramCallback ToCallback(CallbackQuery query, Message message)
+    {
+        var from = query.From.Username is { } username ? $"@{username}" : query.From.FirstName;
+        return new TelegramCallback(message.Chat.Id, query.Id, message.Id, from, message.Text, query.Data);
     }
 
     internal async Task ProcessUpdateAsync(
