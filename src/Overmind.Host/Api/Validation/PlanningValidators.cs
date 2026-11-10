@@ -48,11 +48,6 @@ public sealed class UpdatePlanningFeatureByAgentRequestValidator
 
         RuleFor(x => x.LogNote).NotEmpty();
 
-        RuleFor(x => x)
-            .Must(x => x.Title is not null || x.Body is not null || x.Priority is not null ||
-                       x.Lane is not null || x.CodeSurfaces is not null)
-            .WithMessage("Provide at least one editable field: title, body, priority, lane, codeSurfaces.");
-
         RuleFor(x => x.Title)
             .Must(t => !string.IsNullOrWhiteSpace(t))
             .WithMessage("Title must be non-empty text when provided.")

@@ -1877,7 +1877,7 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdateFeature_MissingLogNote_Returns400()
+    public async Task UpdateFeature_MissingLogNote_Returns400NamingLogNoteRule()
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
@@ -1887,24 +1887,34 @@ public sealed class AgentPlanningApiTests : IDisposable
             new { Title = "Renamed feature", LogNote = "" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var messages = body.GetProperty("errors").GetProperty("LogNote").EnumerateArray();
+        messages.ShouldContain(m => m.GetString()!.Contains("empty", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task UpdateFeature_AllEditableFieldsEmpty_Returns400NamingFields()
+    public async Task UpdateFeature_LogNoteOnly_AppendsSingleAgentLine()
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
 
         var response = await _client.PostAsJsonAsync(
             AgentFeatureUpdateUrl(project.Id, "feat"),
-            new { LogNote = "empty edit" });
+            new { LogNote = "documented decision" });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        var messages = body.GetProperty("errors").EnumerateObject().SelectMany(e => e.Value.EnumerateArray());
-        messages.ShouldContain(m => m.GetString()!.Contains("title", StringComparison.Ordinal));
-        messages.ShouldContain(m => m.GetString()!.Contains("body", StringComparison.Ordinal));
-        messages.ShouldContain(m => m.GetString()!.Contains("priority", StringComparison.Ordinal));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<FeatureUpdateJson>(JsonOptions);
+        echo!.Slug.ShouldBe("feat");
+        echo.Status.ShouldBe("draft");
+        echo.Version.ShouldBe(1);
+        echo.BodyChars.ShouldBeGreaterThan(0);
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        var marker = "[agent] — documented decision";
+        feature!.Title.ShouldBe("Feature");
+        feature.Body.Split(marker).Length.ShouldBe(2);
+        feature.Body.ShouldContain($"- {DateTime.UtcNow:yyyy-MM-dd} {marker}");
     }
 
     [Theory]

@@ -278,6 +278,55 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpdateFeature_LogNoteOnly_AppendsAgentLinesAndKeepsFields()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Original Title", "body content", FeaturePriority.P3);
+
+        await service.UpdateAsync(_projectId, "feat", null, null, null, "documented decision", PlanningLogSource.Agent);
+        var updated = await service.UpdateAsync(
+            _projectId, "feat", null, null, null, "second note", PlanningLogSource.Agent);
+
+        updated.Title.ShouldBe("Original Title");
+        updated.Body.ShouldStartWith("body content");
+        updated.Priority.ShouldBe(FeaturePriority.P3);
+        updated.Version.ShouldBe(1);
+
+        var lines = PlanningLog.Parse(updated.Body);
+        lines.Count.ShouldBe(2);
+        lines[0].Source.ShouldBe(PlanningLogSource.Agent);
+        lines[0].Text.ShouldBe("documented decision");
+        lines[1].Source.ShouldBe(PlanningLogSource.Agent);
+        lines[1].Text.ShouldBe("second note");
+        updated.LastLogLine.ShouldBe(lines[1].Text);
+    }
+
+    [Fact]
+    public async Task UpdateFeature_LogNoteOnly_NonDraft_BumpsVersion()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "body");
+        await service.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Ready, default);
+
+        var updated = await service.UpdateAsync(
+            _projectId, "feat", null, null, null, "agent note", PlanningLogSource.Agent);
+
+        updated.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        updated.Version.ShouldBe(2);
+        updated.LastLogLine.ShouldBe("agent note");
+    }
+
+    [Fact]
+    public async Task UpdateFeature_LogNoteOnly_MissingFeature_ThrowsNotFound()
+    {
+        var service = CreateFeatureService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.UpdateAsync(_projectId, "ghost", null, null, null, "note", PlanningLogSource.Agent));
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
+    [Fact]
     public async Task UpdateFeature_StatusChange_BumpsVersion()
     {
         var service = CreateFeatureService();
