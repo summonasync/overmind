@@ -354,24 +354,9 @@ public sealed partial class PlanningFeatureService
             return match;
         }
 
-        return BirthLaneAsync(projectId, trimmed, roster);
-    }
-
-    private string BirthLaneAsync(Guid projectId, string name, IReadOnlyList<string> roster)
-    {
-        if (!PlanningLane.IsAddressableName(name))
-        {
-            throw PlanningException.InvalidLaneName(name);
-        }
-
-        if (roster.Count >= LaneService.MaxLanesPerProject)
-        {
-            throw PlanningException.LaneRosterTooLarge(roster.Count + 1, LaneService.MaxLanesPerProject);
-        }
-
-        var lane = PlanningLane.Create(projectId, name, contour: null, serialOrder: null);
-        _db.PlanningLanes.Add(lane);
-        return lane.Name;
+        var birthed = LaneService.Birth(projectId, trimmed, roster);
+        _db.PlanningLanes.Add(birthed);
+        return birthed.Name;
     }
 
     private async Task RetireEmptyLanesAsync(Guid projectId, PlanningFeature? actor, CancellationToken ct)
