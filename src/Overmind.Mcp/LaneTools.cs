@@ -57,6 +57,57 @@ public sealed class LaneTools
         };
     }
 
+    [McpServerTool(Name = "planning_create_lane", Destructive = false, Idempotent = true)]
+    [Description("Births one lane on the project's lane roster — the create door that planning_set_lanes refuses: set_lanes only reshapes known lanes and fails with LaneBirthRestricted on an unknown name, while this tool and planning_update_feature's lane field are the two paths that actually add lanes. name is required (max 64, unique per project, addressable as a single URL path segment — no slash, backslash or control character, never a bare dot or dot-dot); contour, priority (0-3, mirroring feature priorities p0-p3) and boundAlias (optional, max 32) ride along. Birth is idempotent by echo: a name already on the roster (case-insensitive) is not an error — the stored row comes back unchanged and nothing is written, so a retry after a dropped connection is safe; a concurrent race that slips past the dedupe surfaces as 409 LaneNameDuplicate. The roster caps at 64 lanes per project — over the cap fails with LaneRosterTooLarge. No claim lock is involved: lanes are roster rows, not board artifacts, so creating one never blocks on or touches a feature claim. Creating a lane moves no features; features join it via planning_update_feature's lane field. Returns a one-line echo of the stored lane.")]
+    public async Task<CallToolResult> CreateLane(
+        [Description("Name of the lane to birth: max 64, no slash, backslash or control character, never a bare dot or dot-dot. Trimmed before the write; the echo carries the stored spelling.")] string name,
+        [Description("Free text description of the code contour this lane covers.")] string? contour = null,
+        [Description("Optional priority 0-3 mirroring feature priorities p0-p3 (lane columns sort priority asc, nulls last); omit for none.")] int? priority = null,
+        [Description("Optional agent alias to bind the lane to, max 32; omit to leave the lane free for adoption via session_identity_set.")] string? boundAlias = null,
+        [Description("Id of the project the roster belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new McpException("name is required: the lane to birth, max 64, addressable as a single URL path segment.");
+        }
+
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
+
+        var payload = new JsonObject { ["name"] = name.Trim() };
+        if (contour is not null)
+        {
+            payload["contour"] = contour;
+        }
+
+        if (priority is not null)
+        {
+            payload["priority"] = priority.Value;
+        }
+
+        if (boundAlias is not null)
+        {
+            payload["boundAlias"] = boundAlias;
+        }
+
+        var lane = await _mutations.SendAsync(() => _api.PostAsync(
+            $"/api/agent/projects/{resolved}/planning/lanes",
+            payload,
+            ct), readback: null, ct);
+
+        var stored = lane.GetProperty("name").GetString() ?? name.Trim();
+        return new CallToolResult
+        {
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = $"Lane '{stored}' is in the roster — born now, or the echo of an existing one (case-insensitive)."
+                }
+            ]
+        };
+    }
+
     [McpServerTool(Name = "planning_remove_lane", Destructive = true, Idempotent = true)]
     [Description("Removes one lane from the project's lane roster — the only manual removal path: planning_set_lanes never deletes, and a lane whose last open feature leaves or closes retires itself. Refuses with 409 LaneStillOccupied while the lane still holds open features, naming their slugs — close them as done or move them to another lane first. A delete on an unknown name is an idempotent no-op. Removing a lane touches no features: the lane field is a plain name reference, never an FK. Returns the resulting roster with per-lane holder and open-feature counts.")]
     public async Task<CallToolResult> RemoveLane(

@@ -28,6 +28,19 @@ public sealed class LaneToolContractTests : IAsyncLifetime
         })
     }.ToJsonString();
 
+    private static readonly string LaneRowJson = new System.Text.Json.Nodes.JsonObject
+    {
+        ["name"] = "frontend",
+        ["contour"] = "web/src",
+        ["serialOrder"] = null,
+        ["priority"] = 0,
+        ["boundAlias"] = null,
+        ["liveSurfaces"] = new System.Text.Json.Nodes.JsonArray(),
+        ["openFeatureCount"] = 0,
+        ["holder"] = null,
+        ["features"] = new System.Text.Json.Nodes.JsonArray()
+    }.ToJsonString();
+
     private StubOvermindApi _stub = null!;
     private OvermindApiClient _api = null!;
 
@@ -235,6 +248,77 @@ public sealed class LaneToolContractTests : IAsyncLifetime
         await Tool().SetLanes(Element(encoded), Canned.ProjectId);
 
         _stub.Requests.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateLane_PostsTheLaneThroughTheBirthDoor()
+    {
+        _stub.Route("POST", LanesRoute, 200, LaneRowJson);
+
+        var result = await Tool().CreateLane("frontend", "web/src", 0, "johan", Canned.ProjectId);
+
+        var request = _stub.Requests.Single(r => r.Method == "POST");
+        request.Path.ShouldBe(LanesRoute);
+        request.Body.ShouldContain("\"name\":\"frontend\"");
+        request.Body.ShouldContain("\"contour\":\"web/src\"");
+        request.Body.ShouldContain("\"priority\":0");
+        request.Body.ShouldContain("\"boundAlias\":\"johan\"");
+        Text(result).ShouldBe(
+            "Lane 'frontend' is in the roster — born now, or the echo of an existing one (case-insensitive).");
+    }
+
+    [Fact]
+    public async Task CreateLane_Duplicate_EchoesTheSameStoredRow()
+    {
+        _stub.Route("POST", LanesRoute, 200, LaneRowJson);
+
+        var first = await Tool().CreateLane("frontend", projectId: Canned.ProjectId);
+        var second = await Tool().CreateLane("FRONTEND", projectId: Canned.ProjectId);
+
+        _stub.Requests.Count(r => r.Method == "POST").ShouldBe(2);
+        Text(first).ShouldBe(Text(second));
+    }
+
+    [Fact]
+    public async Task CreateLane_OmittedOptionals_PayloadCarriesOnlyTheName()
+    {
+        _stub.Route("POST", LanesRoute, 200, LaneRowJson);
+
+        await Tool().CreateLane("frontend", projectId: Canned.ProjectId);
+
+        _stub.Requests.Single(r => r.Method == "POST").Body.ShouldBe("""{"name":"frontend"}""");
+    }
+
+    [Fact]
+    public async Task CreateLane_BlankName_IsRefusedBeforeTheWire()
+    {
+        var ex = await Should.ThrowAsync<McpException>(() => Tool().CreateLane("   ", projectId: Canned.ProjectId));
+
+        ex.Message.ShouldBe(
+            "name is required: the lane to birth, max 64, addressable as a single URL path segment.");
+        _stub.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateLane_HostRefusal_SurfacesTheDetail()
+    {
+        _stub.Route("POST", LanesRoute, 409,
+            """{"title":"LaneRosterTooLarge","detail":"Lane roster would hold 65 lanes; the cap is 64."}""");
+
+        var ex = await Should.ThrowAsync<McpException>(() => Tool().CreateLane("overflow", projectId: Canned.ProjectId));
+
+        ex.Message.ShouldContain("the cap is 64");
+    }
+
+    [Fact]
+    public async Task CreateLane_ResolvesTheProjectThroughTheOnboardCwd()
+    {
+        _stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
+        _stub.Route("POST", LanesRoute, 200, LaneRowJson);
+
+        await Tool().CreateLane("frontend");
+
+        _stub.Requests.Single(r => r.Path == LanesRoute).Method.ShouldBe("POST");
     }
 
     [Fact]

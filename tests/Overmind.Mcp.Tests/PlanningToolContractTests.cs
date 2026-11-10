@@ -187,7 +187,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
 
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(37);
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(38);
     }
 
     [Fact]
@@ -2479,6 +2479,43 @@ public class PlanningToolContractTests : McpSessionTestBase
         description.ShouldContain("the only manual removal path");
         description.ShouldContain("409 LaneStillOccupied");
         description.ShouldContain("idempotent no-op");
+    }
+
+    [Fact]
+    public async Task PlanningCreateLane_Description_TeachesTheBirthDoor()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_create_lane"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("planning_set_lanes refuses");
+        description.ShouldContain("idempotent by echo");
+        description.ShouldContain("case-insensitive");
+        description.ShouldContain("409 LaneNameDuplicate");
+        description.ShouldContain("LaneRosterTooLarge");
+        description.ShouldContain("No claim lock is involved");
+    }
+
+    [Fact]
+    public async Task PlanningCreateLane_Schema_MakesOnlyNameRequired()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_create_lane")!;
+
+        var required = tool["inputSchema"]!["required"]!.AsArray()
+            .Select(r => r!.GetValue<string>())
+            .ToArray();
+        required.ShouldBe(["name"]);
+
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("contour");
+        properties.ShouldContainKey("priority");
+        properties.ShouldContainKey("boundAlias");
+        properties.ShouldContainKey("projectId");
     }
 
     [Fact]

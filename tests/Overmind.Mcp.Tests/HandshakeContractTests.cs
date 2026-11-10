@@ -66,7 +66,7 @@ public class HandshakeContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_ExposesExactlyTheSixtyTwoTools()
+    public async Task ToolsList_ExposesExactlyTheSixtyThreeTools()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -85,7 +85,7 @@ public class HandshakeContractTests : McpSessionTestBase
             "planning_ack_directive", "planning_add_feature_dependency", "planning_append_directive",
             "planning_append_log",
             "planning_claim_feature",
-            "planning_create_feature", "planning_current_task",
+            "planning_create_feature", "planning_create_lane", "planning_current_task",
             "planning_delete_artifact", "planning_edit_log", "planning_export_backlog", "planning_feature_code", "planning_import_feature",
             "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features", "planning_list_lanes",
             "planning_materialize", "planning_materialize_status", "planning_move_feature",
