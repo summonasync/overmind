@@ -2964,6 +2964,106 @@ public sealed class AgentPlanningApiTests : IDisposable
         filteredSpec.MissingSections.ShouldBe([]);
     }
 
+    [Theory]
+    [InlineData("goal,refs")]
+    [InlineData("goal refs")]
+    [InlineData("refs\tgoal")]
+    public async Task FeatureRead_Sections_NarrowsTheBodyToBodyOrderRegardlessOfRequestOrder(string sections)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature",
+            body: "# Feature\n\n<goal>\nShip it.\n</goal>\n\n<refs>\nIssue 42.\n</refs>\n");
+
+        var response = await _client.GetAsync(
+            $"{AgentFeatureUrl(project.Id, "feat")}?sections={Uri.EscapeDataString(sections)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray()
+            .ShouldBe(["slug", "title", "body", "status", "priority", "version", "createdAt", "updatedAt",
+                "artifacts", "isBlocked", "blockedBy", "blocks", "claimedByAlias", "claimedByVendor",
+                "claimedAt", "claimState", "claimedByHuman", "pinnedBranch", "pinnedWorktreePath",
+                "lane", "codeSurfaces", "potentialOverlaps", "openDirectives", "missingSections"]);
+
+        var read = JsonSerializer.Deserialize<FeatureJson>(raw, JsonOptions);
+        read!.Body.ShouldBe("<goal>\nShip it.\n</goal>\n<refs>\nIssue 42.\n</refs>");
+        read.MissingSections.ShouldBe([]);
+    }
+
+    [Fact]
+    public async Task FeatureRead_WithoutSections_KeepsTheFullBodyAndNoMissingSectionsKey()
+    {
+        var project = await CreateProjectAsync();
+        const string body = "# Feature\n\n<goal>\nShip it.\n</goal>\n";
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body: body);
+
+        var response = await _client.GetAsync(AgentFeatureUrl(project.Id, "feat"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        var names = JsonDocument.Parse(raw).RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        names.ShouldNotContain("missingSections");
+        names.Last().ShouldBe("openDirectives");
+
+        var read = JsonSerializer.Deserialize<FeatureJson>(raw, JsonOptions);
+        read!.Body.ShouldBe(body);
+        read.MissingSections.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task FeatureRead_SectionsWithAbsentNames_ReportsMissingSectionsSoftly()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature",
+            body: "# Feature\n\n<goal>\nShip it.\n</goal>\n");
+
+        var mixed = await _client.GetAsync($"{AgentFeatureUrl(project.Id, "feat")}?sections=goal,banana");
+        mixed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var mixedRead = JsonSerializer.Deserialize<FeatureJson>(
+            await mixed.Content.ReadAsStringAsync(), JsonOptions);
+        mixedRead!.Body.ShouldBe("<goal>\nShip it.\n</goal>");
+        mixedRead.MissingSections.ShouldBe(["banana"]);
+
+        var allMissing = await _client.GetAsync($"{AgentFeatureUrl(project.Id, "feat")}?sections=nope");
+        allMissing.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var allMissingRead = JsonSerializer.Deserialize<FeatureJson>(
+            await allMissing.Content.ReadAsStringAsync(), JsonOptions);
+        allMissingRead!.Body.ShouldBe("");
+        allMissingRead.MissingSections.ShouldBe(["nope"]);
+    }
+
+    [Fact]
+    public async Task FeatureRead_Sections_FencedGoalExample_DoesNotMatch()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature",
+            body: "# Feature\n\nProse:\n\n```xml\n<goal>Example only.</goal>\n```\n");
+
+        var response = await _client.GetAsync($"{AgentFeatureUrl(project.Id, "feat")}?sections=goal");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var read = JsonSerializer.Deserialize<FeatureJson>(
+            await response.Content.ReadAsStringAsync(), JsonOptions);
+        read!.Body.ShouldBe("");
+        read.MissingSections.ShouldBe(["goal"]);
+    }
+
+    [Fact]
+    public async Task FeatureRead_Sections_NarrowsTheRosterReadToo()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature",
+            body: "# Feature\n\n<goal>\nShip it.\n</goal>\n\n<refs>\nIssue 42.\n</refs>\n");
+
+        var response = await _client.GetAsync(
+            $"{AgentFeatureUrl(project.Id, "feat")}?includeArtifacts=false&sections=refs,goal");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var read = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        read.GetProperty("body").GetString().ShouldBe("<goal>\nShip it.\n</goal>\n<refs>\nIssue 42.\n</refs>");
+        read.GetProperty("missingSections").EnumerateArray().Select(n => n.GetString()).ShouldBe([]);
+    }
+
     private void SeedRawBody(Guid artifactId, string body)
     {
         using var scope = _factory.Services.CreateScope();
@@ -3309,11 +3409,12 @@ public sealed class AgentPlanningApiTests : IDisposable
         return (project!, root);
     }
 
-    private async Task<FeatureJson> CreateAgentFeatureAsync(Guid projectId, string slug, string title, string? priority = null)
+    private async Task<FeatureJson> CreateAgentFeatureAsync(
+        Guid projectId, string slug, string title, string? priority = null, string? body = null)
     {
         var response = await _client.PostAsJsonAsync(
             $"/api/agent/projects/{projectId}/planning/features",
-            new { Slug = slug, Title = title, Body = "", Priority = priority });
+            new { Slug = slug, Title = title, Body = body ?? "", Priority = priority });
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var feature = await response.Content.ReadFromJsonAsync<FeatureJson>(JsonOptions);
@@ -3393,7 +3494,8 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record FeatureJson(
         string Slug, string Title, string Body, string Status,
         int Version, DateTime CreatedAt, DateTime UpdatedAt, ArtifactJson[] Artifacts,
-        string? PinnedBranch = null, string? PinnedWorktreePath = null);
+        string? PinnedBranch = null, string? PinnedWorktreePath = null,
+        string[]? MissingSections = null);
 
     public sealed record PinJson(
         string Slug, string? PinnedBranch, string? PinnedWorktreePath, int Version, string LastLogLine);

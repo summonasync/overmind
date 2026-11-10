@@ -68,18 +68,30 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
+    [Description("Reads one feature: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; with sections, the cheapest read: the body narrows to the named sections, returned in body order, absent names land in missingSections, and the full read stays byte-faithful to storage. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
     public async Task<JsonElement> ReadFeature(
         [Description("Slug of the feature, as shown on the board.")] string slug,
         [Description("Set false for the cheap read: the feature body plus a roster summary (kind, order, status, brief for tasks, acTicked/acTotal) without artifact bodies or log lines. Default true returns every artifact in full.")] bool? includeArtifacts = null,
+        [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections, returned in body order.")] string? sections = null,
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var url = $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}";
+        var query = new List<string>();
         if (includeArtifacts == false)
         {
-            url += "?includeArtifacts=false";
+            query.Add("includeArtifacts=false");
+        }
+
+        if (!string.IsNullOrWhiteSpace(sections))
+        {
+            query.Add($"sections={Uri.EscapeDataString(sections)}");
+        }
+
+        if (query.Count > 0)
+        {
+            url += $"?{string.Join('&', query)}";
         }
 
         var feature = await Guarded(() => _api.GetAsync(url, ct));

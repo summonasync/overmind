@@ -1147,6 +1147,30 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task PlanningReadFeature_Sections_ParameterPinsTheOptionalCheapRead()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        var tool = tools["planning_read_feature"]!;
+        var description = tool["description"]!.GetValue<string>();
+        description.ShouldContain("missingSections");
+        description.ShouldContain("byte-faithful to storage");
+
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("sections");
+        properties["sections"]!["description"]!.GetValue<string>().ShouldContain("returned in body order");
+
+        var required = tool["inputSchema"]!["required"]?.AsArray();
+        if (required is not null)
+        {
+            required.ShouldNotContain(node => node!.GetValue<string>() == "sections");
+        }
+    }
+
+    [Fact]
     public async Task PlanningReadArtifactDiff_Description_PinsTheLadderAdjacencyAndTrailingNewline()
     {
         var response = await Driver.ListToolsAsync();
@@ -1368,6 +1392,48 @@ public class PlanningToolContractTests : McpSessionTestBase
             "GET",
             $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}")
             .Query.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task PlanningReadFeature_WithSections_PassesTheQueryAndMirrorsTheProjection()
+    {
+        Stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
+            Canned.PlanningFeatureSectionedJson);
+
+        var response = await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["sections"] = "goal,log"
+        });
+
+        var request = FindRequest(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}");
+        ParseQuery(request.Query)["sections"].ShouldBe("goal,log");
+
+        var feature = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        feature["body"]!.GetValue<string>().ShouldBe("<goal>\nShip the demo.\n</goal>");
+        feature["missingSections"]!.ToJsonString().ShouldBe("""["log"]""");
+    }
+
+    [Fact]
+    public async Task PlanningReadFeature_SectionsWithRoster_CombinesTheQuery()
+    {
+        await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["includeArtifacts"] = false,
+            ["sections"] = "goal"
+        });
+
+        var request = FindRequest(
+            "GET",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}");
+        ParseQuery(request.Query)["includeArtifacts"].ShouldBe("false");
+        ParseQuery(request.Query)["sections"].ShouldBe("goal");
     }
 
     [Fact]

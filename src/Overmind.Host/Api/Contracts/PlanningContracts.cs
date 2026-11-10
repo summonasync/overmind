@@ -176,7 +176,8 @@ public sealed record PlanningFeatureResponse(
     string? Lane = null,
     string[]? CodeSurfaces = null,
     PotentialOverlap[]? PotentialOverlaps = null,
-    OpenDirectiveResponse[]? OpenDirectives = null);
+    OpenDirectiveResponse[]? OpenDirectives = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? MissingSections = null);
 
 public sealed record OpenDirectiveResponse(
     Guid Id,
@@ -222,7 +223,8 @@ public sealed record PlanningFeatureRosterResponse(
     int OpenDirectiveCount,
     string? Lane = null,
     string[]? CodeSurfaces = null,
-    PotentialOverlap[]? PotentialOverlaps = null);
+    PotentialOverlap[]? PotentialOverlaps = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? MissingSections = null);
 
 public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
 

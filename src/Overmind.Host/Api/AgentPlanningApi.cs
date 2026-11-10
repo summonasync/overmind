@@ -399,7 +399,7 @@ public static class AgentPlanningApi
         return [.. state.BlockedBy];
     }
 
-    private static List<string> RequestedSections(string? sections)
+    internal static List<string> RequestedSections(string? sections)
     {
         if (string.IsNullOrWhiteSpace(sections))
         {
