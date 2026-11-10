@@ -30,13 +30,20 @@ public sealed class WaveSnapshotTools
         "pins matched first and flagged, stale pins reported): the git listing is cached briefly, so repeated snapshots " +
         "in one marshal pass do not spawn git processes per request; a cwd outside any git repository is an expected " +
         "condition reported as the short discoverySkipped marker, while a genuine discovery failure degrades to " +
-        "discoveryError — the rest of the payload is unaffected either way. compact=true projects every section to " +
+        "discoveryError — the rest of the payload is unaffected either way. Each queue row's potentialOverlaps is " +
+        "an advisory projection, never a block: overlap rows report glob collisions between in-flight features so " +
+        "a marshal or a human can judge them. Each matches entry pairs one side's glob with the partner's " +
+        "(pattern, partnerPattern) and labels the kind: exact means the two globs are literally equal strings " +
+        "(both features declare the same file or directory), sharedDirectory means the patterns only share a " +
+        "boundary directory prefix and may be completely disjoint — a disjoint-file-set verdict stays the " +
+        "marshal's or the human's call. compact=true projects every section to " +
         "coordination-critical fields only and stays sparse: null values, empty arrays and default scalars " +
         "(readiness 0, stale false, isBlocked false, openDirectiveCount 0) disappear; queue rows drop briefExcerpt, " +
         "taskCounts, spec/plan statuses and materializer stamps, keep task progress only when taskTotal > 0, claim " +
         "fields only when claimedByAlias is set and lane fields only when lane is set; claims drop lastActivityAt " +
         "and claimedByHuman=false; entries drop snippets and empty tags; discovery rows drop the per-row workspace " +
-        "(the top-level workspace stays); code pins and blockers pass through unchanged. default false keeps the " +
+        "(the top-level workspace stays); code pins and blockers pass through unchanged, and queue rows keep " +
+        "potentialOverlaps verbatim (withFeature, sharedGlobs, matches). default false keeps the " +
         "full payload. projectId is required; project resolution never creates a project row.")]
     public async Task<JsonElement> WaveSnapshot(
         [Description("Id of the project to snapshot.")] Guid? projectId = null,
