@@ -161,9 +161,13 @@ public sealed class PlanningFeature
                 throw PlanningException.PatchSectionNameNotParseable(section);
             }
 
-            if (remove)
+            var inlineOnly = !remove && PlanningSectionCanonicalizer.HasInlineSection(section, Body);
+            if (remove || inlineOnly)
             {
-                throw PlanningException.PatchSectionNotFound(section, PlanningSections.List(Body));
+                throw PlanningException.PatchSectionNotFound(
+                    section,
+                    PlanningSections.List(Body),
+                    inlineOnly ? PlanningException.InlineSectionHint(section) : null);
             }
 
             Body = PlanningSections.Insert(
