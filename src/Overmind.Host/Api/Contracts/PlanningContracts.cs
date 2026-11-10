@@ -133,7 +133,9 @@ public sealed record CreateLaneRequest(
 
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
-public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs);
+public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs, PotentialOverlapMatch[]? Matches = null);
+
+public sealed record PotentialOverlapMatch(string Pattern, string PartnerPattern, FeatureOverlapMatchKind Kind);
 
 public sealed record LaneFeatureResponse(
     string Slug,

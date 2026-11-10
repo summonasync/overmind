@@ -2,7 +2,10 @@ using Overmind.Core;
 
 namespace Overmind.Infrastructure.Planning;
 
-public sealed record FeatureOverlapRow(string WithFeatureSlug, IReadOnlyList<string> SharedGlobs);
+public sealed record FeatureOverlapRow(
+    string WithFeatureSlug,
+    IReadOnlyList<string> SharedGlobs,
+    IReadOnlyList<FeatureOverlapMatch> Matches);
 
 public static class CodeSurfaceOverlapProjection
 {
@@ -33,14 +36,41 @@ public static class CodeSurfaceOverlapProjection
                     continue;
                 }
 
-                Append(overlaps, inFlight[i].Id, new FeatureOverlapRow(inFlight[j].Slug, shared));
-                Append(overlaps, inFlight[j].Id, new FeatureOverlapRow(inFlight[i].Slug, shared));
+                Append(overlaps, inFlight[i].Id,
+                    new FeatureOverlapRow(
+                        inFlight[j].Slug, shared, Matches(inFlight[i].Surfaces, inFlight[j].Surfaces)));
+                Append(overlaps, inFlight[j].Id,
+                    new FeatureOverlapRow(
+                        inFlight[i].Slug, shared, Matches(inFlight[j].Surfaces, inFlight[i].Surfaces)));
             }
         }
 
         return overlaps.ToDictionary(
             pair => pair.Key,
             pair => (IReadOnlyList<FeatureOverlapRow>)[.. pair.Value.Take(MaxRowsPerFeature)]);
+    }
+
+    private static IReadOnlyList<FeatureOverlapMatch> Matches(
+        IReadOnlyList<string> surfaces, IReadOnlyList<string> partnerSurfaces)
+    {
+        var matches = new List<FeatureOverlapMatch>();
+        foreach (var pattern in CodeSurfaceOverlap.SharedGlobs(surfaces, partnerSurfaces, SharedGlobsCap))
+        {
+            var best = CodeSurfaceOverlap.BestPartnerPattern(pattern, partnerSurfaces);
+            if (best is null)
+            {
+                continue;
+            }
+
+            matches.Add(new FeatureOverlapMatch(
+                pattern,
+                best,
+                CodeSurfaceOverlap.IsExactMatch(pattern, best)
+                    ? FeatureOverlapMatchKind.Exact
+                    : FeatureOverlapMatchKind.SharedDirectory));
+        }
+
+        return matches;
     }
 
     private static bool IsInFlight(CodeSurfaceFeatureRow feature) =>
