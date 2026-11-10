@@ -287,6 +287,66 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
     }
 
     [Fact]
+    public void Remove_WholeSection_CollapsesIntoTheMarkerLine()
+    {
+        var body = "before\n\n<goal>\nold text\n</goal>\n\nafter";
+
+        var result = PlanningSections.Remove("goal", body, "<removed 2026-11-10 — superseded>");
+
+        result.ShouldBe("before\n\n<removed 2026-11-10 — superseded>\n\nafter");
+    }
+
+    [Fact]
+    public void Remove_MissingSection_ThrowsInsteadOfCreating()
+    {
+        var body = "# Title\n\nno anchored tags";
+
+        Should.Throw<InvalidOperationException>(() => PlanningSections.Remove("goal", body, "<removed — x>"))
+            .Message.ShouldContain("goal");
+    }
+
+    [Fact]
+    public void Remove_SectionAtBodyEnd_TrailingNewlinePreserved()
+    {
+        var body = "a\n<goal>\nx\n</goal>\n";
+
+        var result = PlanningSections.Remove("goal", body, "<removed 2026-11-10 — gone>");
+
+        result.ShouldBe("a\n<removed 2026-11-10 — gone>\n");
+    }
+
+    [Fact]
+    public void Remove_CrlfBody_KeepsLineEndings()
+    {
+        var body = "# Plan\r\n\r\n<goal>\r\nfirst\r\n</goal>\r\n";
+
+        var result = PlanningSections.Remove("goal", body, "<removed 2026-11-10 — rework>");
+
+        result.ShouldBe("# Plan\r\n\r\n<removed 2026-11-10 — rework>\r\n");
+    }
+
+    [Fact]
+    public void Remove_TombstonedSection_StopsResolvingWhileTraceStays()
+    {
+        var body = "intro\n\n<goal>\nold\n</goal>\n\ntail";
+
+        var result = PlanningSections.Remove("goal", body, "<removed 2026-11-10 — dead>");
+
+        PlanningSections.Find("goal", result).ShouldBeNull();
+        result.ShouldContain("<removed 2026-11-10 — dead>");
+    }
+
+    [Fact]
+    public void Remove_DuplicateNames_RemovesTheLastAnchoredPairOnly()
+    {
+        var body = "<goal>\nfirst pair\n</goal>\n\nmiddle\n\n<goal>\nsecond pair\n</goal>\n";
+
+        var result = PlanningSections.Remove("goal", body, "<removed 2026-11-10 — dup>");
+
+        result.ShouldBe("<goal>\nfirst pair\n</goal>\n\nmiddle\n\n<removed 2026-11-10 — dup>\n");
+    }
+
+    [Fact]
     public void List_ReturnsNamesInDocumentOrder()
     {
         var body = "<goal>\nx\n</goal>\n\n<context>\ny\n</context>\n\n<log>\n- a\n</log>\n";

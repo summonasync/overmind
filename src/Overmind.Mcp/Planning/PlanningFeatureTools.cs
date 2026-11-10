@@ -237,6 +237,48 @@ public sealed class PlanningFeatureTools
             ct, operationId), FeatureLogReadback(resolved, slug, logNote), ct);
     }
 
+    [McpServerTool(Name = "planning_patch_feature", Destructive = false, Idempotent = false)]
+    [Description("Changes one section of a feature document in place without resending the body — the middle tier between logNote-only notes and the full-body planning_update_feature: replaces one XML section or inserts a missing one; the rest of the body stays byte-identical. A section absent from the body is instead INSERTED — with the content, or declared-empty ('(none)') when content is omitted. Feature bodies carry the XML vocabulary only: no heading mode ('## Address'), no acceptance-criteria ticks, no briefs, no amendments — those belong to planning_patch_artifact. The tombstone mode: remove=true together with reason replaces the resolved section — wrapper tags included — with a single '<removed YYYY-MM-DD — reason>' line (remove without reason is refused; content must be omitted with remove). Guards: the <log> section is append-only — patching it is a 400; a logNote-only append belongs to planning_update_feature. Replacing an existing section without content, an unparseable section name, and a remove of an absent section are 400s naming the name and the sections present. logNote is mandatory and lands as a dated [agent] line in the feature log; the version bumps by the same rule as planning_update_feature (draft keeps its version, any other status bumps it). The door is claim-locked like every mutating feature door.")]
+    public async Task<JsonElement> PatchFeature(
+        [Description("Slug of the feature to patch, as shown on the board.")] string slug,
+        [Description("XML section name to patch (e.g. goal, refs, obstacles): lowercase tag grammar — letters, digits and hyphens starting with a letter; the only address mode on feature bodies.")] string section,
+        [Description("Required note recorded as a dated [agent] line in the feature log — why the section changed.")] string logNote,
+        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty; must be omitted with remove=true.")] string? content = null,
+        [Description("Set true together with section + reason to tombstone the resolved section: the wrapper tags collapse into a single '<removed YYYY-MM-DD — reason>' line.")] bool remove = false,
+        [Description("Reason carried in the '<removed YYYY-MM-DD — reason>' tombstone line; required when remove=true.")] string? reason = null,
+        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(logNote))
+        {
+            throw new McpException(FeaturePatchNoteRequired);
+        }
+
+        var payload = new JsonObject
+        {
+            ["section"] = section.Trim(),
+            ["logNote"] = logNote,
+            ["remove"] = remove
+        };
+
+        if (!string.IsNullOrWhiteSpace(content))
+        {
+            payload["content"] = content;
+        }
+
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            payload["reason"] = reason.Trim();
+        }
+
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
+        return await _mutations.SendAsync(() => _api.PostAsync(
+            $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}/patch",
+            payload,
+            ct, operationId), FeatureLogReadback(resolved, slug, logNote), ct);
+    }
+
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
     [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, taskCounts (todo/inProgress/review/done/blocked, sums to taskTotal), readiness 0-3, blockedBy, isBlocked, plus claim state when claimed: claimedByAlias, claimedByVendor, claimedAt and claimState (alive | stale | ended — stale claims are take-over-able via planning_claim_feature). Every entry also carries the ceremony context: phase (drafting | writing spec | planning | plan validated | in progress | review | done — derived server-side from spec/plan/task state, the lifecycle status column stays the source of truth) and briefExcerpt (the first <goal> paragraph capped at ~500 chars; null when the feature has no goal — one-glance ceremony context without opening the feature). Rows also carry the feature timestamps: createdAt (when the feature was created) and updatedAt (when it last changed — the same stamp the board view reports). Every row projects the background materializer's lag — pendingMutations (mutations enqueued but not yet mirrored), lastAttemptAt, lastSuccessAt, stale (true while pendingMutations > 0 or the last attempt failed) — a clean BACKLOG/ tree with stale=true means the mirror is behind. limit truncates to the first N entries; omit it for the full queue.")]
     public async Task<JsonElement> TaskQueue(

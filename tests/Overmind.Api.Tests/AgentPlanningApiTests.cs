@@ -1937,6 +1937,197 @@ public sealed class AgentPlanningApiTests : IDisposable
     }
 
     [Fact]
+    public async Task PatchFeature_ReplacesOneSection_OtherSectionsStayByteStable()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body:
+            "<goal>\nShip it.\n</goal>\n\n<refs>\nSpec d1.\n</refs>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "goal", Content = "Ship it faster.", LogNote = "goal sharpened" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echo = await response.Content.ReadFromJsonAsync<FeaturePatchJson>(JsonOptions);
+        echo!.Slug.ShouldBe("feat");
+        echo.Section.ShouldBe("goal");
+        echo.Status.ShouldBe("draft");
+        echo.Version.ShouldBe(1);
+        echo.LastLogLine.ShouldBe("goal sharpened");
+
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldStartWith("<goal>\nShip it faster.\n</goal>\n\n<refs>\nSpec d1.\n</refs>\n");
+        feature.Body.ShouldContain($"{DateTime.UtcNow:yyyy-MM-dd} [agent] — goal sharpened");
+    }
+
+    [Fact]
+    public async Task PatchFeature_InsertsMissingSectionAtBodyTail()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body:
+            "<goal>\nShip it.\n</goal>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "obstacles", Content = "None yet.", LogNote = "recording obstacles section" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldStartWith("<goal>\nShip it.\n</goal>\n<obstacles>\nNone yet.\n</obstacles>\n");
+    }
+
+    [Fact]
+    public async Task PatchFeature_InsertWithoutContent_LandsDeclaredEmpty()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body: "<goal>\nShip it.\n</goal>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "refs", LogNote = "declaring refs" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldStartWith("<goal>\nShip it.\n</goal>\n<refs>\n(none)\n</refs>\n");
+    }
+
+    [Fact]
+    public async Task PatchFeature_RemoveWithReason_TombstonesTheWholeSection()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body:
+            "<goal>\nShip it.\n</goal>\n\n<refs>\nKeep me.\n</refs>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new
+            {
+                Section = "goal",
+                Remove = true,
+                Reason = "goal folded into the spec",
+                LogNote = "tombstoned the goal"
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            AgentFeatureUrl(project.Id, "feat"), JsonOptions);
+        feature!.Body.ShouldStartWith(
+            $"<removed {DateTime.UtcNow:yyyy-MM-dd} — goal folded into the spec>\n\n<refs>\nKeep me.\n</refs>\n");
+        feature.Body.ShouldNotContain("<goal>");
+    }
+
+    [Fact]
+    public async Task PatchFeature_RemoveWithoutReason_Returns400NamingReason()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body: "<goal>\nShip it.\n</goal>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "goal", Remove = true, LogNote = "removing" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        body.GetProperty("errors").TryGetProperty("Reason", out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task PatchFeature_RemoveOfAbsentSection_Returns400NamingItAndThePresent()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body: "<goal>\nShip it.\n</goal>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "scope", Remove = true, Reason = "no scope needed", LogNote = "removing scope" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("PatchSectionNotFound");
+        problem.Detail!.ShouldContain("Section 'scope' was not found");
+        problem.Detail.ShouldContain("Sections present: goal");
+    }
+
+    [Fact]
+    public async Task PatchFeature_UnparseableSectionName_Returns400WithGrammar()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "Big Goal", Content = "text", LogNote = "n" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var messages = body.GetProperty("errors").GetProperty("Section").EnumerateArray();
+        messages.ShouldContain(m => m.GetString()!.Contains("lowercase tag name"));
+    }
+
+    [Fact]
+    public async Task PatchFeature_MissingLogNote_Returns400NamingLogNoteRule()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "goal", Content = "text", LogNote = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var messages = body.GetProperty("errors").GetProperty("LogNote").EnumerateArray();
+        messages.ShouldContain(m => m.GetString()!.Contains("empty", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task PatchFeature_ExistingSectionWithoutContent_Returns400TeachingInsert()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature", body: "<goal>\nShip it.\n</goal>\n");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "goal", LogNote = "content-less probe" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("SectionContentRequiredForReplace");
+        problem.Detail!.ShouldContain("a content-less section patch only inserts a missing section");
+    }
+
+    [Fact]
+    public async Task PatchFeature_LogSection_Returns400PointingAtTheAppendDoor()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "feat"),
+            new { Section = "log", Content = "rewritten history", LogNote = "history probe" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("PatchLogSectionNotReplaceable");
+        problem.Detail!.ShouldContain("append-only");
+    }
+
+    [Fact]
+    public async Task PatchFeature_MissingFeature_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            AgentFeaturePatchUrl(project.Id, "ghost"),
+            new { Section = "goal", Content = "text", LogNote = "n" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task PinCode_AgentDoor_SetsPinWithTheAgentMarker()
     {
         var project = await CreateProjectAsync();
@@ -3262,6 +3453,9 @@ public sealed class AgentPlanningApiTests : IDisposable
     private static string AgentFeatureUpdateUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}/update";
 
+    private static string AgentFeaturePatchUrl(Guid projectId, string slug) =>
+        $"/api/agent/projects/{projectId}/planning/features/{slug}/patch";
+
     private static string AgentFeatureUrl(Guid projectId, string slug) =>
         $"/api/agent/projects/{projectId}/planning/features/{slug}";
 
@@ -3538,6 +3732,9 @@ public sealed class AgentPlanningApiTests : IDisposable
     public sealed record FeatureMutationJson(string Slug, string Status, int Version, string LastLogLine);
 
     public sealed record FeatureUpdateJson(string Slug, string Status, int Version, DateTime UpdatedAt, int BodyChars);
+
+    public sealed record FeaturePatchJson(
+        string Slug, string Section, string Status, int Version, int BodyChars, string LastLogLine);
 
     public sealed record ArtifactMutationJson(Guid Id, string Status, int Version, string LastLogLine);
 

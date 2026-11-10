@@ -79,6 +79,32 @@ public sealed class UpdatePlanningFeatureByAgentRequestValidator
     }
 }
 
+public sealed class PatchPlanningFeatureRequestValidator : AbstractValidator<PatchPlanningFeatureRequest>
+{
+    public PatchPlanningFeatureRequestValidator()
+    {
+        RuleFor(x => x.Section).NotEmpty()
+            .Must(PlanningSections.IsNameParseable)
+            .WithMessage(
+                "Section must be a lowercase tag name: letters, digits and hyphens, starting with a letter " +
+                "(e.g. 'goal', 'anti-scope', 'my-tag') — an unparseable name could never be found again.");
+
+        RuleFor(x => x.LogNote).NotEmpty();
+
+        RuleFor(x => x.Reason).NotEmpty()
+            .When(x => x.Remove);
+
+        RuleFor(x => x.Content).Null()
+            .WithMessage("content must be omitted when remove=true — the tombstone line replaces the section and carries the reason only.")
+            .When(x => x.Remove);
+
+        RuleFor(x => x.Content)
+            .Must(c => !string.IsNullOrWhiteSpace(c))
+            .WithMessage("content must be non-empty text when provided — omit it to insert a declared-empty section.")
+            .When(x => !x.Remove && x.Content is not null);
+    }
+}
+
 public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest>
 {
     public SetLanesRequestValidator()

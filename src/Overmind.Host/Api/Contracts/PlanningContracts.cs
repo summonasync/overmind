@@ -305,6 +305,22 @@ public sealed record PlanningFeatureAgentUpdateResponse(
     DateTime UpdatedAt,
     int BodyChars);
 
+public sealed record PatchPlanningFeatureRequest(
+    string Section,
+    string? Content,
+    string LogNote,
+    string? Source = null,
+    string? Reason = null,
+    bool Remove = false);
+
+public sealed record PlanningFeaturePatchResponse(
+    string Slug,
+    string Section,
+    PlanningFeatureStatus Status,
+    int Version,
+    int BodyChars,
+    string LastLogLine);
+
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 
 public sealed record DeclinePlanningArtifactRequest(string? Reason = null);

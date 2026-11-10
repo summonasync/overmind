@@ -42,6 +42,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_set_feature_status",
             "planning_task_queue",
             "planning_update_feature",
+            "planning_patch_feature",
             "planning_move_feature",
             "planning_set_feature_priority",
             "planning_feature_code",
@@ -186,7 +187,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
 
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(36);
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(37);
     }
 
     [Fact]
@@ -2642,6 +2643,146 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["slug"] = Canned.PlanningSlug,
             ["title"] = "Renamed",
             ["logNote"] = "rename probe"
+        });
+
+        ToolErrorText(response).ShouldContain("Feature 'demo-feature' was not found.");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningPatchFeature_Description_PinsTheSectionPatchPitch()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["planning_patch_feature"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("without resending the body");
+        description.ShouldContain("INSERTED — with the content, or declared-empty ('(none)') when content is omitted");
+        description.ShouldContain("no heading mode");
+        description.ShouldContain("planning_patch_artifact");
+        description.ShouldContain("'<removed YYYY-MM-DD — reason>'");
+        description.ShouldContain("logNote is mandatory");
+        description.ShouldContain("claim-locked");
+    }
+
+    [Fact]
+    public async Task PlanningPatchFeature_Schema_MakesSectionAndLogNoteRequired()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_patch_feature")!;
+
+        var required = tool["inputSchema"]!["required"]!.AsArray()
+            .Select(r => r!.GetValue<string>())
+            .ToArray();
+        required.ShouldNotContain("projectId");
+        required.ShouldContain("slug");
+        required.ShouldContain("section");
+        required.ShouldContain("logNote");
+        required.ShouldNotContain("content");
+        required.ShouldNotContain("reason");
+        required.ShouldNotContain("remove");
+
+        var properties = tool["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("projectId");
+        properties.ShouldContainKey("slug");
+        properties.ShouldContainKey("section");
+        properties.ShouldContainKey("logNote");
+        properties.ShouldContainKey("content");
+        properties.ShouldContainKey("reason");
+        properties.ShouldContainKey("remove");
+    }
+
+    [Fact]
+    public async Task PlanningPatchFeature_PostsSectionAndContent_PassesEchoThrough()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["section"] = "goal",
+            ["content"] = "Ship the demo faster.",
+            ["logNote"] = "goal sharpened"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal) &&
+            r.Path.Contains("/planning/features/", StringComparison.Ordinal));
+        request.Path.ShouldBe(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/patch");
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body["section"]!.GetValue<string>().ShouldBe("goal");
+        body["content"]!.GetValue<string>().ShouldBe("Ship the demo faster.");
+        body["logNote"]!.GetValue<string>().ShouldBe("goal sharpened");
+        body["remove"]!.GetValue<bool>().ShouldBeFalse();
+        body.ContainsKey("reason").ShouldBeFalse();
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!;
+        echo["slug"]!.GetValue<string>().ShouldBe(Canned.PlanningSlug);
+        echo["section"]!.GetValue<string>().ShouldBe("goal");
+        echo["version"]!.GetValue<int>().ShouldBe(7);
+        echo["bodyChars"]!.GetValue<int>().ShouldBe(480);
+        echo["lastLogLine"]!.GetValue<string>().ShouldBe("feature patch recorded on the board");
+    }
+
+    [Fact]
+    public async Task PlanningPatchFeature_PostsRemoveWithReason_OmitsContent()
+    {
+        await Driver.CallToolAsync("planning_patch_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["section"] = "refs",
+            ["remove"] = true,
+            ["reason"] = "folded into the spec",
+            ["logNote"] = "tombstoned refs"
+        });
+
+        var request = Stub.Requests.Single(r =>
+            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
+        var body = JsonNode.Parse(request.Body)!.AsObject();
+        body["section"]!.GetValue<string>().ShouldBe("refs");
+        body["remove"]!.GetValue<bool>().ShouldBeTrue();
+        body["reason"]!.GetValue<string>().ShouldBe("folded into the spec");
+        body.ContainsKey("content").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningPatchFeature_BlankLogNote_RejectedClientSide()
+    {
+        var response = await Driver.CallToolAsync("planning_patch_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["section"] = "goal",
+            ["logNote"] = ""
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("logNote is required");
+        Stub.Requests.ShouldNotContain(r =>
+            r.Method == "POST" && r.Path.EndsWith("/planning/features/" + Canned.PlanningSlug + "/patch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlanningPatchFeature_UnknownFeature_SurfacesApiErrorAsToolError()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/patch",
+            404,
+            Canned.PlanningFeatureNotFoundJson);
+
+        var response = await Driver.CallToolAsync("planning_patch_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["section"] = "goal",
+            ["content"] = "text",
+            ["logNote"] = "patch probe"
         });
 
         ToolErrorText(response).ShouldContain("Feature 'demo-feature' was not found.");

@@ -39,7 +39,7 @@ public sealed class ClaimLockExemptionApiTests : IDisposable
 
     public static TheoryData<string> LockedMutations => new(
     [
-        "set_feature_status", "update_feature", "queue_move", "set_feature_priority", "pin_feature_code",
+        "set_feature_status", "update_feature", "patch_feature", "queue_move", "set_feature_priority", "pin_feature_code",
         "add_feature_dependency", "remove_feature_dependency", "upsert_artifact", "upsert_tasks",
         "set_artifact_status", "append_log", "edit_log", "patch_artifact", "validate", "delete_artifact",
     ]);
@@ -155,6 +155,8 @@ public sealed class ClaimLockExemptionApiTests : IDisposable
                 new { Status = "inProgress", LogNote = "moving" }),
             "update_feature" => (HttpMethod.Post, $"{featureUrl}/update",
                 new { Title = "Renamed", LogNote = "rename" }),
+            "patch_feature" => (HttpMethod.Post, $"{featureUrl}/patch",
+                new { Section = "goal", Content = "Patched under a foreign claim.", LogNote = "patch" }),
             "queue_move" => (HttpMethod.Post, $"{featureUrl}/queue-move", new { Move = "last" }),
             "set_feature_priority" => (HttpMethod.Post, $"{featureUrl}/priority", new { Priority = "p1" }),
             "pin_feature_code" => (HttpMethod.Post, $"{featureUrl}/pin-code",

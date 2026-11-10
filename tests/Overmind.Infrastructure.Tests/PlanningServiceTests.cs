@@ -340,6 +340,150 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task PatchFeature_ReplaceSection_KeepsTheRestAndStampsTheAgentLine()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(
+            _projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n\n<refs>\nSpec d1.\n</refs>\n");
+
+        var patched = await service.PatchAsync(
+            _projectId, "feat", "goal", "Ship it faster.", remove: false, reason: null,
+            "goal sharpened", PlanningLogSource.Agent);
+
+        patched.Body.ShouldStartWith("<goal>\nShip it faster.\n</goal>\n\n<refs>\nSpec d1.\n</refs>\n");
+        patched.Body.ShouldContain($"{DateTime.UtcNow:yyyy-MM-dd} [agent] — goal sharpened");
+        patched.Version.ShouldBe(1);
+        patched.LastLogLine.ShouldBe("goal sharpened");
+
+        var lines = PlanningLog.Parse(patched.Body);
+        lines.Single().Source.ShouldBe(PlanningLogSource.Agent);
+    }
+
+    [Fact]
+    public async Task PatchFeature_NonDraft_BumpsVersion()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+        await service.UpdateAsync(_projectId, "feat", null, null, PlanningFeatureStatus.Ready, default);
+
+        var patched = await service.PatchAsync(
+            _projectId, "feat", "goal", "Ship it faster.", remove: false, reason: null,
+            "goal sharpened", PlanningLogSource.Agent);
+
+        patched.Status.ShouldBe(PlanningFeatureStatus.Ready);
+        patched.Version.ShouldBe(2);
+        patched.LastLogLine.ShouldBe("goal sharpened");
+    }
+
+    [Fact]
+    public async Task PatchFeature_InsertMissingSection_AppendsAtBodyTail()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+
+        var patched = await service.PatchAsync(
+            _projectId, "feat", "obstacles", "None yet.", remove: false, reason: null,
+            "recording obstacles", PlanningLogSource.Agent);
+
+        patched.Body.ShouldStartWith("<goal>\nShip it.\n</goal>\n<obstacles>\nNone yet.\n</obstacles>\n");
+    }
+
+    [Fact]
+    public async Task PatchFeature_InsertWithoutContent_LandsDeclaredEmpty()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+
+        var patched = await service.PatchAsync(
+            _projectId, "feat", "refs", null, remove: false, reason: null,
+            "declaring refs", PlanningLogSource.Agent);
+
+        patched.Body.ShouldStartWith("<goal>\nShip it.\n</goal>\n<refs>\n(none)\n</refs>\n");
+    }
+
+    [Fact]
+    public async Task PatchFeature_RemoveWithReason_TombstonesTheWholeSection()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(
+            _projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n\n<refs>\nKeep me.\n</refs>\n");
+
+        var patched = await service.PatchAsync(
+            _projectId, "feat", "goal", null, remove: true, reason: "goal folded into the spec",
+            "tombstoned the goal", PlanningLogSource.Agent);
+
+        patched.Body.ShouldStartWith(
+            $"<removed {DateTime.UtcNow:yyyy-MM-dd} — goal folded into the spec>\n\n<refs>\nKeep me.\n</refs>\n");
+        patched.Body.ShouldNotContain("<goal>");
+    }
+
+    [Fact]
+    public async Task PatchFeature_RemoveOfAbsentSection_ThrowsNotFoundNamingPresent()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.PatchAsync(
+            _projectId, "feat", "scope", null, remove: true, reason: "no scope needed",
+            "removing scope", PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Message.ShouldContain("Section 'scope' was not found");
+        ex.Message.ShouldContain("Sections present: goal");
+    }
+
+    [Fact]
+    public async Task PatchFeature_RemoveWithoutReason_ThrowsReasonRequired()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.PatchAsync(
+            _projectId, "feat", "goal", null, remove: true, reason: null,
+            "removing", PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchRemoveReasonRequired);
+    }
+
+    [Fact]
+    public async Task PatchFeature_LogSection_ThrowsLogNotReplaceable()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.PatchAsync(
+            _projectId, "feat", "log", "rewritten history", remove: false, reason: null,
+            "history probe", PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchLogSectionNotReplaceable);
+    }
+
+    [Fact]
+    public async Task PatchFeature_ReplaceOfExistingWithoutContent_ThrowsContentRequired()
+    {
+        var service = CreateFeatureService();
+        await service.CreateAsync(_projectId, "feat", "Title", "<goal>\nShip it.\n</goal>\n");
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.PatchAsync(
+            _projectId, "feat", "goal", null, remove: false, reason: null,
+            "content-less probe", PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.SectionContentRequiredForReplace);
+    }
+
+    [Fact]
+    public async Task PatchFeature_MissingFeature_ThrowsNotFound()
+    {
+        var service = CreateFeatureService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(() => service.PatchAsync(
+            _projectId, "ghost", "goal", "text", remove: false, reason: null,
+            "note", PlanningLogSource.Agent));
+
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
+    }
+
+    [Fact]
     public async Task CreateFeature_ExplicitPriority_Persisted()
     {
         var service = CreateFeatureService();
