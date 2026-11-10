@@ -161,7 +161,7 @@ public sealed class LaneToolContractTests : IAsyncLifetime
 
         Text(result).ShouldBe(
             "No lanes in the roster — the payload wrote nothing: an empty payload is a no-op, " +
-            "and lanes are born via planning_update_feature (lane=...).");
+            "and lanes are born via planning_create_lane or planning_update_feature (lane=...).");
     }
 
     [Fact]

@@ -2447,8 +2447,11 @@ public class PlanningToolContractTests : McpSessionTestBase
         description.ShouldContain("UPSERT of known lanes");
         description.ShouldContain("lanes absent from the payload are never touched");
         description.ShouldContain("An empty array is an explicit no-op");
-        description.ShouldContain("planning_update_feature as the only birth path");
+        description.ShouldContain("the birth doors are planning_create_lane and assignment via planning_update_feature's lane field");
         description.ShouldContain("planning_remove_lane");
+        description.ShouldNotContain("only birth path");
+        description.ShouldNotContain("full replace");
+        description.ShouldNotContain("deleted");
         description.ShouldNotContain("wholesale");
         description.ShouldNotContain("clears the roster");
     }
