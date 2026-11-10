@@ -11,6 +11,7 @@ namespace Overmind.Mcp;
 public sealed class WaveChatTools
 {
     private const int CompactTextLength = 200;
+    private const int SignalTextCap = 500;
 
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
@@ -35,6 +36,7 @@ public sealed class WaveChatTools
         [Description("Id of the project the room belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        TextCapLint.Cap(text, SignalTextCap);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var message = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{resolved}/wave/rooms/{room}/messages",
