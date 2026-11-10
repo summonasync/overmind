@@ -20,7 +20,7 @@ public static class LanesApi
     {
         var human = routes.MapGroup("/api");
         human.MapGet(LanePathPrefix + CollectionLiteral, List);
-        human.MapPost(LanePathPrefix + CollectionLiteral, CreateRefused);
+        human.MapPost(LanePathPrefix + CollectionLiteral, Create);
         human.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);
         human.MapPut(LanePathPrefix + RosterLiteral, Set);
         human.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
@@ -28,7 +28,7 @@ public static class LanesApi
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapGet(LanePathPrefix + CollectionLiteral, List);
-        agent.MapPost(LanePathPrefix + CollectionLiteral, CreateRefused);
+        agent.MapPost(LanePathPrefix + CollectionLiteral, Create);
         agent.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);
         agent.MapPut(LanePathPrefix + RosterLiteral, Set);
         agent.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
@@ -50,8 +50,34 @@ public static class LanesApi
         }
     }
 
-    internal static IResult CreateRefused(HttpRequest request) =>
-        PlanningErrors.Map(PlanningException.LanePostBirthRestricted(request.Path.ToString().TrimEnd('/')));
+    internal static async Task<IResult> Create(
+        Guid projectId,
+        CreateLaneRequest request,
+        IValidator<CreateLaneRequest> validator,
+        LaneService lanes,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        try
+        {
+            var lane = await lanes.CreateLaneAsync(
+                projectId, request.Name, request.Contour, request.Priority, request.BoundAlias, ct);
+            return Results.Ok(ToRow(lane));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+        catch (ArgumentException ex)
+        {
+            return HttpErrors.BadRequest(ex.Message);
+        }
+    }
 
     internal static async Task<IResult> Set(
         Guid projectId,
@@ -157,20 +183,22 @@ public static class LanesApi
         }
     }
 
-    private static LanesResponse ToResponse(IReadOnlyList<LaneRow> roster) => new(
-        [.. roster.Select(lane => new LaneRowResponse(
-            lane.Name,
-            lane.Contour,
-            lane.SerialOrder,
-            lane.Priority,
-            lane.BoundAlias,
-            [.. lane.LiveSurfaces.Select(s => new LiveSurfaceResponse(s.Glob, s.Owner))],
-            lane.OpenFeatureCount,
-            lane.Holder is { } holder
-                ? new LaneHolderResponse(holder.Alias, holder.Vendor, holder.ClaimState)
-                : null,
-            [.. lane.Features.Select(f => new LaneFeatureResponse(
-                f.Slug, f.Status, f.ClaimedByAlias, f.ClaimedByVendor, f.ClaimState))]))]);
+    private static LaneRowResponse ToRow(LaneRow lane) => new(
+        lane.Name,
+        lane.Contour,
+        lane.SerialOrder,
+        lane.Priority,
+        lane.BoundAlias,
+        [.. lane.LiveSurfaces.Select(s => new LiveSurfaceResponse(s.Glob, s.Owner))],
+        lane.OpenFeatureCount,
+        lane.Holder is { } holder
+            ? new LaneHolderResponse(holder.Alias, holder.Vendor, holder.ClaimState)
+            : null,
+        [.. lane.Features.Select(f => new LaneFeatureResponse(
+            f.Slug, f.Status, f.ClaimedByAlias, f.ClaimedByVendor, f.ClaimState))]);
+
+    private static LanesResponse ToResponse(IReadOnlyList<LaneRow> roster) =>
+        new([.. roster.Select(ToRow)]);
 
     private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes) =>
     [

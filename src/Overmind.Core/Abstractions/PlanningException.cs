@@ -400,16 +400,8 @@ public sealed class PlanningException : Exception
     public static PlanningException LaneBirthRestricted(string name) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneBirthRestricted,
             $"Lane '{name}' is not in the roster and set_lanes no longer births lanes — a payload may only " +
-            "reshape lanes that already exist, and an empty payload is a no-op. The assigning act is the birth: " +
-            "assign the lane to a feature via planning_update_feature (lane=...) and the row is auto-created " +
-            "with an empty contour and no priority.");
-
-    public static PlanningException LanePostBirthRestricted(string path) =>
-        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneBirthRestricted,
-            $"'POST {path}' writes nothing: a lane is born only when a feature joins it, so a roster row " +
-            "without features cannot be created directly. The assigning act is the birth — assign the lane " +
-            "to a feature via planning_update_feature (lane=...) and the row is auto-created with an empty " +
-            "contour and no priority.");
+            "reshape lanes that already exist, and an empty payload is a no-op. Use planning_create_lane " +
+            "(or assignment via planning_update_feature) as the birth door.");
 
     public static PlanningException LaneStillOccupied(string lane, IReadOnlyList<string> slugs) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneStillOccupied,

@@ -162,6 +162,17 @@ public sealed class UpdateLaneRequestValidator : AbstractValidator<UpdateLaneReq
     }
 }
 
+public sealed class CreateLaneRequestValidator : AbstractValidator<CreateLaneRequest>
+{
+    public CreateLaneRequestValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
+        RuleFor(x => x.Contour).MaximumLength(PlanningLane.MaxContourLength);
+        RuleFor(x => x.BoundAlias).MaximumLength(PlanningLane.MaxBoundAliasLength);
+        RuleFor(x => x.Priority).InclusiveBetween(0, PlanningLane.MaxPriority).When(x => x.Priority.HasValue);
+    }
+}
+
 public sealed class CreatePlanningArtifactRequestValidator : AbstractValidator<CreatePlanningArtifactRequest>
 {
     public CreatePlanningArtifactRequestValidator()

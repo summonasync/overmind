@@ -176,6 +176,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
         services.AddSingleton<IValidator<SetLanesRequest>, SetLanesRequestValidator>();
         services.AddSingleton<IValidator<UpdateLaneRequest>, UpdateLaneRequestValidator>();
+        services.AddSingleton<IValidator<CreateLaneRequest>, CreateLaneRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveRequest>, AppendPlanningDirectiveRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveHumanRequest>, AppendPlanningDirectiveHumanRequestValidator>();
         services.AddSingleton<IValidator<PostWaveMessageRequest>, PostWaveMessageRequestValidator>();

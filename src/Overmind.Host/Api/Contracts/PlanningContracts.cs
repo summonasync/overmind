@@ -125,6 +125,12 @@ public sealed record UpdateLaneRequest(
     LiveSurfaceRequest[]? LiveSurfaces = null,
     string? BoundAlias = null);
 
+public sealed record CreateLaneRequest(
+    string Name,
+    string? Contour = null,
+    int? Priority = null,
+    string? BoundAlias = null);
+
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
 public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs);

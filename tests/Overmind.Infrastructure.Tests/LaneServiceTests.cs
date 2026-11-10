@@ -113,7 +113,7 @@ public sealed class LaneServiceTests : IDisposable
 
         ex.Code.ShouldBe(PlanningFailureCode.LaneBirthRestricted);
         ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
-        ex.Message.ShouldContain("planning_update_feature");
+        ex.Message.ShouldContain("planning_create_lane");
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
     }
 
