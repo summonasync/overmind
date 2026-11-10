@@ -428,7 +428,7 @@ public sealed class PlanningException : Exception
 
     public static PlanningException WaveTextTooLong(int length, int cap) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.WaveTextTooLong,
-            $"Wave message text is {length} characters; the cap is {cap}.");
+            $"text is {length} chars; cap is {cap}; cut {length - cap}");
 
     public static PlanningException MissingConversation(Guid conversationId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingConversation,

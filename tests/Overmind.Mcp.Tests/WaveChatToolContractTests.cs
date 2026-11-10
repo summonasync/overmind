@@ -110,12 +110,12 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
     public async Task PostMessage_TextTooLong_SurfacesTheNamedError()
     {
         _stub.Route("POST", $"{RoomsRoute}/([^/]+)/messages", 400,
-            """{"title":"WaveTextTooLong","detail":"Wave message text is 512 characters; the cap is 500."}""");
+            """{"title":"WaveTextTooLong","detail":"text is 512 chars; cap is 500; cut 12"}""");
 
         var ex = await Should.ThrowAsync<McpException>(
             () => Tool().PostMessage("all", "flood", Canned.ProjectId));
 
-        ex.Message.ShouldContain("the cap is 500");
+        ex.Message.ShouldContain("text is 512 chars; cap is 500; cut 12");
     }
 
     [Fact]

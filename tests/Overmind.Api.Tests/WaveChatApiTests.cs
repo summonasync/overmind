@@ -76,7 +76,7 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Post_TextOverCap_Returns400WithNamedCode()
+    public async Task Post_TextOverCap_Returns400WithNamedCodeAndTheNumbers()
     {
         var projectId = await CreateProjectAsync();
 
@@ -84,6 +84,20 @@ public sealed class WaveChatApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ProblemTitleAsync(response)).ShouldBe("WaveTextTooLong");
+        (await ProblemDetailAsync(response)).ShouldBe("text is 501 chars; cap is 500; cut 1");
+    }
+
+    [Fact]
+    public async Task Post_AgentDoor_TextOverCap_CarriesTheSameNumbers()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var response = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/messages", new { Text = new string('x', 614) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemTitleAsync(response)).ShouldBe("WaveTextTooLong");
+        (await ProblemDetailAsync(response)).ShouldBe("text is 614 chars; cap is 500; cut 114");
     }
 
     [Fact]
@@ -471,6 +485,12 @@ public sealed class WaveChatApiTests : IDisposable
     {
         var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
         return problem["title"]!.GetValue<string>();
+    }
+
+    private async Task<string> ProblemDetailAsync(HttpResponseMessage response)
+    {
+        var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        return problem["detail"]!.GetValue<string>();
     }
 
     private async Task<Guid> CreateProjectAsync()
