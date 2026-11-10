@@ -42,6 +42,68 @@ public sealed class CodeSurfaceOverlapTests
         CodeSurfaceOverlap.GlobsOverlap("README.md", "readme.md").ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("README.md", "README.md", true)]
+    [InlineData("skills/squeezr/**", "skills/squeezr/**", true)]
+    [InlineData("README.md", "readme.md", false)]
+    [InlineData("src/web/**", "src/web/**/*.ts", false)]
+    [InlineData("src/web/**", "src/api/**", false)]
+    public void IsExactMatch_MatchesOnlyOrdinalEquality(string left, string right, bool expected)
+    {
+        CodeSurfaceOverlap.IsExactMatch(left, right).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void BestPartnerPattern_LiterallyEqualPartnerWinsOverLongerPrefix()
+    {
+        CodeSurfaceOverlap.BestPartnerPattern(
+            "src/web/**", ["src/web/components/**", "src/web/**"]).ShouldBe("src/web/**");
+    }
+
+    [Fact]
+    public void BestPartnerPattern_LongestSharedLiteralPrefixWins()
+    {
+        CodeSurfaceOverlap.BestPartnerPattern(
+            "src/web/**", ["src/api/**", "src/web/components/**"]).ShouldBe("src/web/components/**");
+    }
+
+    [Fact]
+    public void BestPartnerPattern_PrefixTieBreaksOrdinallyFirst()
+    {
+        CodeSurfaceOverlap.BestPartnerPattern(
+            "src/**", ["src/beta/**", "src/alpha/**"]).ShouldBe("src/alpha/**");
+    }
+
+    [Fact]
+    public void BestPartnerPattern_EqualPrefixPartners_TieBreaksOrdinallyFirst()
+    {
+        CodeSurfaceOverlap.BestPartnerPattern(
+            "src/web/**", ["src/web/**/*.tsx", "src/web/**/*.ts"]).ShouldBe("src/web/**/*.ts");
+    }
+
+    [Fact]
+    public void BestPartnerPattern_SkipsNonOverlappingPartners()
+    {
+        CodeSurfaceOverlap.BestPartnerPattern(
+            "src/web/**", ["src/api/**", "docs/**", "src/web/App.tsx"]).ShouldBe("src/web/App.tsx");
+    }
+
+    [Fact]
+    public void BestPartnerPattern_NoOverlap_ReturnsNull()
+    {
+        CodeSurfaceOverlap.BestPartnerPattern("src/web/**", ["src/api/**", "docs/**"]).ShouldBeNull();
+        CodeSurfaceOverlap.BestPartnerPattern("src/web/**", []).ShouldBeNull();
+    }
+
+    [Fact]
+    public void BestPartnerPattern_SharedDirectorySiblings_ArePartnersButNotExact()
+    {
+        var partner = CodeSurfaceOverlap.BestPartnerPattern("tests/A*.cs", ["tests/B*.cs"]);
+
+        partner.ShouldBe("tests/B*.cs");
+        CodeSurfaceOverlap.IsExactMatch("tests/A*.cs", partner!).ShouldBeFalse();
+    }
+
     [Fact]
     public void LiteralPrefix_StripsAtFirstWildcardSegment()
     {
