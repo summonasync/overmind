@@ -213,7 +213,55 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task DiskPathChange_Returns409WhilePlanningFilesTracked()
+    public async Task DiskPathChange_FullMirrorCopyAtCandidate_SucceedsAndUpdatesPath()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+
+        var candidate = Path.Combine(_sandboxDir, "moved");
+        CopyDirectory(_projectDir, candidate);
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}",
+            new { Name = project.Name, DiskPath = candidate, Description = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        updated.ShouldNotBeNull();
+        updated!.DiskPath.ShouldBe(candidate);
+    }
+
+    [Fact]
+    public async Task DiskPathChange_DriftedAndMissingMirrorFiles_Returns409WithNamesAndTotals()
+    {
+        var project = await CreateProjectWithMaterializationAsync("on");
+        await CreateFeatureAsync(project.Id, "feat", "Feature");
+        await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/feat/artifacts",
+            new { Kind = "task", Body = "# Task One", Order = 1 });
+
+        var candidate = Path.Combine(_sandboxDir, "moved");
+        CopyDirectory(_projectDir, candidate);
+        await File.AppendAllTextAsync(
+            Path.Combine(candidate, "BACKLOG", "feat", "feature.md"), "\nhand edit\n");
+        File.Delete(Path.Combine(candidate, "BACKLOG", "feat", "tasks", "01-task-one.md"));
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}",
+            new { Name = project.Name, DiskPath = candidate, Description = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Detail.ShouldNotBeNull();
+        problem.Detail!.ShouldStartWith(
+            "Mirror verification failed: 2 of 2 files drifted or missing at the candidate path.");
+        problem.Detail.ShouldContain("BACKLOG/feat/feature.md");
+        problem.Detail.ShouldContain("BACKLOG/feat/tasks/01-task-one.md");
+    }
+
+    [Fact]
+    public async Task DiskPathChange_TrackedMirrorWithoutCandidateDirectory_Returns400BeforeVerification()
     {
         var project = await CreateProjectWithMaterializationAsync("on");
         await CreateFeatureAsync(project.Id, "feat", "Feature");
@@ -222,7 +270,36 @@ public sealed class PlanningMaterializationTests : IDisposable, IAsyncLifetime
             $"/api/projects/{project.Id}",
             new { Name = project.Name, DiskPath = Path.Combine(_sandboxDir, "elsewhere"), Description = "" });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Detail!.ShouldContain("Candidate path does not exist or is not a directory.");
+    }
+
+    [Fact]
+    public async Task DiskPathChange_EmptyMirror_StillChangesFreelyWithoutCandidate()
+    {
+        var project = await CreateProjectWithMaterializationAsync("off");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}",
+            new { Name = project.Name, DiskPath = Path.Combine(_sandboxDir, "never-created"), Description = "" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        updated.ShouldNotBeNull();
+        updated!.DiskPath.ShouldBe(Path.Combine(_sandboxDir, "never-created"));
+    }
+
+    private static void CopyDirectory(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(target, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination);
+        }
     }
 
     [Fact]
