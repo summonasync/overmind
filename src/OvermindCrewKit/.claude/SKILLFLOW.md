@@ -24,8 +24,8 @@ gates, sub-agent briefing, capability matrix) are owned by the `overmind-ceremon
 | Tasks | feature-orchestrator | task artifacts with `<goal>/<scope>/<anti-scope>/<constraints>/<acceptance-criteria>/<refs>/<obstacles>/<log>` | — |
 
 The feature is created on the board (`planning_create_feature`) when it enters the backlog, **before Phase 0**.
-| 2 Implement | `dotnet-coder` / `web-coder` / `node-coder` / `js-platform-coder` / `maui-coder` (Sonnet) | code + `<obstacles>`/`<log>` patched into the task artifact | `nuget-licensing-guard` before any NuGet change |
-| 3 Review | `dotnet-code-reviewer` / `web-code-reviewer` / `node-code-reviewer` / `js-platform-code-reviewer` (Sonnet); depth from the task's `review:` flag — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `audits/review-NNN-NN.md` + audit-entry on the board (first line = machine-parsable verdict per the CLAUDE.md provenance rule, `feature:NNN` tag, pointer to the file) | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
+| 2 Implement | `dotnet-coder` / `web-coder` / `node-coder` / `js-platform-coder` / `maui-coder` / `rust-coder` (Sonnet) | code + `<obstacles>`/`<log>` patched into the task artifact | `nuget-licensing-guard` before any NuGet change; `cargo-licensing-guard` before any crate change |
+| 3 Review | `dotnet-code-reviewer` / `web-code-reviewer` / `node-code-reviewer` / `js-platform-code-reviewer` / `rust-code-reviewer` (Sonnet); depth from the task's `review:` flag — `light` (default) = code reviewer, `hard` = + `architect-review` (Light checklist) | `audits/review-NNN-NN.md` + audit-entry on the board (first line = machine-parsable verdict per the CLAUDE.md provenance rule, `feature:NNN` tag, pointer to the file) | BLOCKER → Phase 4; Security BLOCKER → STOP, human only |
 | 4 Fix loop | coder ← review comments | updated code | back to Phase 3 |
 | 5 Arch gate | `architect-review` Hard checklist (end of sprint phase / big refactor only) | `audits/architect-review-YYYY-MM-DD.md` + ADR in `TECHNICAL-SOLUTIONS.md` | — |
 
@@ -36,6 +36,7 @@ The feature is created on the board (`planning_create_feature`) when it enters t
 | `web-coder` | Next.js/React FULL-STACK apps: UI + RSC + Server Actions + BFF + API routes; SPAs; UI component libraries | standalone Node services; Electron/RN |
 | `node-coder` | Standalone Node services (Express and derivatives: Fastify/Nest/Hono), workers, scripts/CLI/tooling, non-UI npm libraries | anything inside a Next.js repository; UI |
 | `js-platform-coder` | Electron + React Native: main/preload processes, native modules, navigation, multi-platform (2–3 targets) builds | web and pure-backend code |
+| `rust-coder` | Rust workspaces: desktop apps (Tauri/egui/Slint/Iced/Dioxus cores and CLI shells), Rust backend services, library crates | web/TS UI inside a webview shell (→ `web-coder`); C#, Go, Node, Python code |
 
 Monorepos containing a Next app + a standalone Node service: both coders, tasks split by app/repo boundary (never by file inside the Next app).
 
