@@ -240,10 +240,14 @@ marshal for the wave lead). The owner sees real aliases in role colors in the wa
 
 ## Gates (human approval points)
 
-1. **Spec gate** — spec artifact `draft` → user approves (in chat, or `overmind_notify`
-   kind=`approval` + `overmind_replies`) → `planning_validate`. No plan work before this.
-2. **Plan gate** — same flow for the plan artifact. No task breakdown before this.
-3. **Feature done** — two prerequisites, both enforced server-side (409 teaches the fix):
+1. **Spec + plan gate (one tap)** — write the spec, then the plan from it, and present
+   BOTH in one approval notification (artifact ids + options + recommendation). One fresh
+   human reply validates the spec AND the plan of the same feature in one pass
+   (`planning_validate` twice against the same reply; any body edit to either voids it for
+   both). No task breakdown before both artifacts are validated. The two-gate sequence
+   (spec → tap → validate → plan → tap → validate) is the fallback when the user asks for
+   per-artifact control or the plan depends on spec-gate feedback.
+2. **Feature done** — two prerequisites, both enforced server-side (409 teaches the fix):
    (a) a `result` artifact must exist on the feature; (b) a FRESH human tap — `overmind_notify`
    kind=`approval` → the user's reply must be newer than the result's last update (same proof
    mechanics as validation gates; editing the result voids the tap). The done log line carries
@@ -251,10 +255,16 @@ marshal for the wave lead). The owner sees real aliases in role colors in the wa
    The code lands through a PR: result artifact → branch pushed and `gh pr create` into the
    main GitHub repo → the human approves the PR (GitHub UI or explicit approval in chat) → the
    agent merges (`gh pr merge --merge`, branch deleted) → the done tap closes the feature.
-4. When `humanGate=on` (validation block in onboard), `planning_validate` returns STOP —
+3. When `humanGate=on` (validation block in onboard), `planning_validate` returns STOP —
    the human approves in the Overmind UI; do not retry in a loop, notify and wait.
-5. **Gate presentations are Socratic too** — an approval request is never a bare «ok?»: artifact
+4. **Gate presentations are Socratic too** — an approval request is never a bare «ok?»: artifact
    summary + explicit options (approve / change X / rework Y) + your recommendation.
+5. **Gate reply polling is mandatory.** After sending `overmind_notify` with kind=`approval` or
+   kind=`question`, the session MUST schedule a recurring reply check every 5-10 minutes and keep
+   it until the human's reply arrives - then act on it (validate / rework / flip) and cancel the
+   tick. Firing a gate and silently idling is a violation. Claude Code: session cron (`CronCreate`)
+   prompting an `overmind_wake_peek` / `overmind_replies` check; other runtimes: their scheduler
+   equivalent (the Wake ritual below is the mechanics).
 
 ## Wake ritual (190)
 
