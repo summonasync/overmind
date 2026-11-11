@@ -404,21 +404,99 @@ public sealed class LanesApiTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task PostLane_IsRefused_OnBothDoors(bool agentDoor)
+    public async Task PostLane_CreatesTheLane_AndEchoesTheRow_OnBothDoors(bool agentDoor)
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"{Door(agentDoor)}/projects/{project.Id}/planning/lanes",
+            new { Name = "backend", Contour = "api/src", Priority = 2, BoundAlias = "van" });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = await post.Content.ReadFromJsonAsync<LaneJson>(JsonOptions);
+        echoed!.Name.ShouldBe("backend");
+        echoed.Contour.ShouldBe("api/src");
+        echoed.SerialOrder.ShouldBeNull();
+        echoed.Priority.ShouldBe(2);
+        echoed.BoundAlias.ShouldBe("van");
+        echoed.OpenFeatureCount.ShouldBe(0);
+        echoed.Holder.ShouldBeNull();
+        echoed.Features.ShouldBeEmpty();
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: !agentDoor);
+        var lane = roster!.Lanes.ShouldHaveSingleItem();
+        lane.Name.ShouldBe("backend");
+        lane.Contour.ShouldBe("api/src");
+        lane.Priority.ShouldBe(2);
+        lane.BoundAlias.ShouldBe("van");
+    }
+
+    [Fact]
+    public async Task PostLane_CaseInsensitiveDuplicate_EchoesTheStoredRowWithoutADuplicate()
     {
         var project = await CreateProjectAsync();
         await SeedLaneAsync(project.Id, "frontend");
 
         var post = await _client.PostAsJsonAsync(
-            $"{Door(agentDoor)}/projects/{project.Id}/planning/lanes",
-            new { Name = "backend", Contour = "api/src", SerialOrder = 1, Priority = 2 });
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = "FRONTEND", Contour = "ignored", Priority = 2 });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var echoed = await post.Content.ReadFromJsonAsync<LaneJson>(JsonOptions);
+        echoed!.Name.ShouldBe("frontend");
+        echoed.Contour.ShouldBeNull();
+        echoed.Priority.ShouldBeNull();
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
+        roster!.Lanes.ShouldHaveSingleItem().Name.ShouldBe("frontend");
+    }
+
+    [Fact]
+    public async Task PostLane_NameOverTheCap_Returns400NamingTheField()
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes",
+            new { Name = new string('x', PlanningLane.MaxNameLength + 1) });
+
+        post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await post.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("Name");
+        (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task PostLane_NameTheRouteCannotAddress_Returns400InvalidLaneName()
+    {
+        var project = await CreateProjectAsync();
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes",
+            new { Name = @"infra\win" });
 
         post.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await post.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Title.ShouldBe("LaneBirthRestricted");
-        problem.Detail!.ShouldContain("planning_update_feature");
+        problem!.Title.ShouldBe("InvalidLaneName");
+        (await GetRosterAsync(project.Id, agentDoor: true))!.Lanes.ShouldBeEmpty();
+    }
 
-        var roster = await GetRosterAsync(project.Id, agentDoor: !agentDoor);
+    [Fact]
+    public async Task SetLanes_UnknownLane_RefusesAndNamesTheCreateDoor()
+    {
+        var project = await CreateProjectAsync();
+        await SeedLaneAsync(project.Id, "frontend");
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend" }, new { Name = "ghost" } } });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await put.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("LaneBirthRestricted");
+        problem.Detail!.ShouldContain("planning_create_lane");
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
         roster!.Lanes.ShouldHaveSingleItem().Name.ShouldBe("frontend");
     }
 

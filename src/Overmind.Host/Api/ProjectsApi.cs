@@ -4,6 +4,8 @@ using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Manifest;
+using Overmind.Infrastructure.Materialization;
+using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Host.Api;
@@ -116,6 +118,7 @@ public static class ProjectsApi
         Guid id,
         UpdateProjectRequest request,
         IValidator<UpdateProjectRequest> validator,
+        PlanningPolicy policy,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -138,24 +141,39 @@ public static class ProjectsApi
             return HttpErrors.Conflict($"A project named '{name}' already exists.");
         }
 
+        var candidateDiskPath = request.DiskPath.Trim();
         var diskPathComparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        if (!string.Equals(project.DiskPath, request.DiskPath.Trim(), diskPathComparison))
+        if (!string.Equals(project.DiskPath, candidateDiskPath, diskPathComparison))
         {
             var hasActiveKits = await db.ProjectKits.AnyAsync(pk => pk.ProjectId == id && pk.IsActive, ct);
-            var hasMaterializedFiles = await db.MaterializedFiles.AnyAsync(m => m.ProjectId == id, ct);
-            var hasPlanningFiles = await db.PlanningMaterializedFiles.AnyAsync(m => m.ProjectId == id, ct);
-            if (hasActiveKits || hasMaterializedFiles || hasPlanningFiles)
+            if (hasActiveKits)
             {
                 return HttpErrors.Conflict(
                     $"DiskPath of project '{id}' cannot be changed while kits are active or files are materialized; deactivate kits first.");
+            }
+
+            var strategy = await policy.ResolveMaterializationAsync(id, ct);
+            var mirrorRows = await LoadMirrorRowsAsync(db, id, strategy, ct);
+            if (mirrorRows.Length > 0)
+            {
+                if (!Directory.Exists(candidateDiskPath))
+                {
+                    return HttpErrors.BadRequest("Candidate path does not exist or is not a directory.");
+                }
+
+                var verification = await MirrorVerifier.VerifyAsync(candidateDiskPath, mirrorRows, ct);
+                if (!verification.Passed)
+                {
+                    return HttpErrors.Conflict(verification.Describe());
+                }
             }
         }
 
         var tracked = db.Entry(project);
         tracked.Property(p => p.Name).CurrentValue = name;
-        tracked.Property(p => p.DiskPath).CurrentValue = request.DiskPath.Trim();
+        tracked.Property(p => p.DiskPath).CurrentValue = candidateDiskPath;
         tracked.Property(p => p.Description).CurrentValue = request.Description?.Trim() ?? string.Empty;
         if (request.SetManifest)
         {
@@ -191,6 +209,23 @@ public static class ProjectsApi
 
         await db.SaveChangesAsync(ct);
         return Results.Ok(ProjectMapper.ToResponse(project));
+    }
+
+    private static async Task<MirrorFileRow[]> LoadMirrorRowsAsync(
+        OvermindDbContext db, Guid projectId, PlanningMaterialization strategy, CancellationToken ct)
+    {
+        var planningRows = strategy == PlanningMaterialization.On
+            ? await db.PlanningMaterializedFiles
+                .Where(m => m.ProjectId == projectId)
+                .Select(m => new MirrorFileRow(m.RelativePath, m.Sha256))
+                .ToListAsync(ct)
+            : [];
+        var kitRows = await db.MaterializedFiles
+            .Where(m => m.ProjectId == projectId)
+            .Select(m => new MirrorFileRow(m.RelativePath, m.Sha256))
+            .ToListAsync(ct);
+
+        return [.. planningRows, .. kitRows];
     }
 
     private static bool TryParseNumberStyle(string? value, out ProjectNumberStyle? style)

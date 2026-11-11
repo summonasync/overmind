@@ -48,11 +48,6 @@ public sealed class UpdatePlanningFeatureByAgentRequestValidator
 
         RuleFor(x => x.LogNote).NotEmpty();
 
-        RuleFor(x => x)
-            .Must(x => x.Title is not null || x.Body is not null || x.Priority is not null ||
-                       x.Lane is not null || x.CodeSurfaces is not null)
-            .WithMessage("Provide at least one editable field: title, body, priority, lane, codeSurfaces.");
-
         RuleFor(x => x.Title)
             .Must(t => !string.IsNullOrWhiteSpace(t))
             .WithMessage("Title must be non-empty text when provided.")
@@ -81,6 +76,32 @@ public sealed class UpdatePlanningFeatureByAgentRequestValidator
             .Must(CodeSurfaceRules.IsValidEntry)
             .WithMessage(CodeSurfaceRules.EntryMessage)
             .When(x => x.CodeSurfaces is not null);
+    }
+}
+
+public sealed class PatchPlanningFeatureRequestValidator : AbstractValidator<PatchPlanningFeatureRequest>
+{
+    public PatchPlanningFeatureRequestValidator()
+    {
+        RuleFor(x => x.Section).NotEmpty()
+            .Must(PlanningSections.IsNameParseable)
+            .WithMessage(
+                "Section must be a lowercase tag name: letters, digits and hyphens, starting with a letter " +
+                "(e.g. 'goal', 'anti-scope', 'my-tag') — an unparseable name could never be found again.");
+
+        RuleFor(x => x.LogNote).NotEmpty();
+
+        RuleFor(x => x.Reason).NotEmpty()
+            .When(x => x.Remove);
+
+        RuleFor(x => x.Content).Null()
+            .WithMessage("content must be omitted when remove=true — the tombstone line replaces the section and carries the reason only.")
+            .When(x => x.Remove);
+
+        RuleFor(x => x.Content)
+            .Must(c => !string.IsNullOrWhiteSpace(c))
+            .WithMessage("content must be non-empty text when provided — omit it to insert a declared-empty section.")
+            .When(x => !x.Remove && x.Content is not null);
     }
 }
 
@@ -138,6 +159,17 @@ public sealed class UpdateLaneRequestValidator : AbstractValidator<UpdateLaneReq
             .WithMessage("liveSurfaces entries are invalid: " +
                          CodeSurfaceRules.EntryMessage + " " + CodeSurfaceRules.LiveSurfaceOwnerMessage)
             .When(x => x.LiveSurfaces is not null);
+    }
+}
+
+public sealed class CreateLaneRequestValidator : AbstractValidator<CreateLaneRequest>
+{
+    public CreateLaneRequestValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
+        RuleFor(x => x.Contour).MaximumLength(PlanningLane.MaxContourLength);
+        RuleFor(x => x.BoundAlias).MaximumLength(PlanningLane.MaxBoundAliasLength);
+        RuleFor(x => x.Priority).InclusiveBetween(0, PlanningLane.MaxPriority).When(x => x.Priority.HasValue);
     }
 }
 

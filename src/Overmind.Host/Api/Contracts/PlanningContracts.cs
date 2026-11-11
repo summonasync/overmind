@@ -125,9 +125,17 @@ public sealed record UpdateLaneRequest(
     LiveSurfaceRequest[]? LiveSurfaces = null,
     string? BoundAlias = null);
 
+public sealed record CreateLaneRequest(
+    string Name,
+    string? Contour = null,
+    int? Priority = null,
+    string? BoundAlias = null);
+
 public sealed record LaneHolderResponse(string Alias, string Vendor, AgentSessionLiveness ClaimState);
 
-public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs);
+public sealed record PotentialOverlap(string WithFeature, string[] SharedGlobs, PotentialOverlapMatch[]? Matches = null);
+
+public sealed record PotentialOverlapMatch(string Pattern, string PartnerPattern, FeatureOverlapMatchKind Kind);
 
 public sealed record LaneFeatureResponse(
     string Slug,
@@ -176,7 +184,8 @@ public sealed record PlanningFeatureResponse(
     string? Lane = null,
     string[]? CodeSurfaces = null,
     PotentialOverlap[]? PotentialOverlaps = null,
-    OpenDirectiveResponse[]? OpenDirectives = null);
+    OpenDirectiveResponse[]? OpenDirectives = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? MissingSections = null);
 
 public sealed record OpenDirectiveResponse(
     Guid Id,
@@ -222,7 +231,8 @@ public sealed record PlanningFeatureRosterResponse(
     int OpenDirectiveCount,
     string? Lane = null,
     string[]? CodeSurfaces = null,
-    PotentialOverlap[]? PotentialOverlaps = null);
+    PotentialOverlap[]? PotentialOverlaps = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? MissingSections = null);
 
 public sealed record AddPlanningFeatureDependencyRequest(string BlockedBy);
 
@@ -302,6 +312,22 @@ public sealed record PlanningFeatureAgentUpdateResponse(
     int Version,
     DateTime UpdatedAt,
     int BodyChars);
+
+public sealed record PatchPlanningFeatureRequest(
+    string Section,
+    string? Content,
+    string LogNote,
+    string? Source = null,
+    string? Reason = null,
+    bool Remove = false);
+
+public sealed record PlanningFeaturePatchResponse(
+    string Slug,
+    string Section,
+    PlanningFeatureStatus Status,
+    int Version,
+    int BodyChars,
+    string LastLogLine);
 
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 

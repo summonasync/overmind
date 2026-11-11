@@ -615,4 +615,22 @@ public class PlanningFeatureTests
         feature.PinnedWorktreePath.ShouldBe("/repo/wt");
         PlanningLog.Parse(feature.Body).Last().Text.ShouldBe("code pin set: worktree '/repo/wt'");
     }
+
+    [Fact]
+    public void PatchSection_InsertWithInlineSection_RefusesInsteadOfAppendingADuplicate()
+    {
+        var body = "<goal>Ship the parser.</goal>\n";
+        var feature = PlanningFeature.Create(ProjectId, "001-auth", "Auth flow", body);
+
+        var ex = Should.Throw<PlanningException>(() =>
+            feature.PatchSection("goal", "Revised goal.", remove: false, reason: null, "patch probe", PlanningLogSource.Agent));
+
+        ex.Code.ShouldBe(PlanningFailureCode.PatchSectionNotFound);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("A one-line '<goal>…</goal>' section exists");
+        ex.Message.ShouldContain("re-send the body once");
+        feature.Body.ShouldBe(body);
+        feature.Version.ShouldBe(1);
+        PlanningLog.Parse(feature.Body).ShouldBeEmpty();
+    }
 }

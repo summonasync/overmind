@@ -229,6 +229,37 @@ public sealed partial class PlanningFeatureService
         return feature;
     }
 
+    public async Task<PlanningFeature> PatchAsync(
+        Guid projectId, string slug, string section, string? content,
+        bool remove, string? reason, string logNote, PlanningLogSource source,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(logNote))
+        {
+            throw PlanningException.FeatureLogNoteRequired();
+        }
+
+        var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId, ct);
+        if (!projectExists)
+        {
+            throw PlanningException.MissingProject(projectId);
+        }
+
+        var feature = await _db.PlanningFeatures
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
+
+        if (feature is null)
+        {
+            throw PlanningException.MissingFeature(slug);
+        }
+
+        feature.PatchSection(section, content, remove, reason, logNote, source);
+
+        await _db.SaveChangesAsync(ct);
+        await _materialization.DispatchAsync(projectId, ct);
+        return feature;
+    }
+
     public async Task<PlanningFeature> SetStatusAsync(
         Guid projectId, string slug, PlanningFeatureStatus status, string logNote,
         bool requireHumanTap = false, CancellationToken ct = default, string? delegatedProvenance = null)
@@ -323,24 +354,9 @@ public sealed partial class PlanningFeatureService
             return match;
         }
 
-        return BirthLaneAsync(projectId, trimmed, roster);
-    }
-
-    private string BirthLaneAsync(Guid projectId, string name, IReadOnlyList<string> roster)
-    {
-        if (!PlanningLane.IsAddressableName(name))
-        {
-            throw PlanningException.InvalidLaneName(name);
-        }
-
-        if (roster.Count >= LaneService.MaxLanesPerProject)
-        {
-            throw PlanningException.LaneRosterTooLarge(roster.Count + 1, LaneService.MaxLanesPerProject);
-        }
-
-        var lane = PlanningLane.Create(projectId, name, contour: null, serialOrder: null);
-        _db.PlanningLanes.Add(lane);
-        return lane.Name;
+        var birthed = LaneService.Birth(projectId, trimmed, roster);
+        _db.PlanningLanes.Add(birthed);
+        return birthed.Name;
     }
 
     private async Task RetireEmptyLanesAsync(Guid projectId, PlanningFeature? actor, CancellationToken ct)

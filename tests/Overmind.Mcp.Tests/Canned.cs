@@ -150,6 +150,9 @@ public static class Canned
         }
         """;
 
+    public const string PlanningFeatureSectionedJson =
+        """{"slug":"demo-feature","title":"Demo feature","body":"<goal>\nShip the demo.\n</goal>","status":"inProgress","priority":"p1","version":4,"createdAt":"2026-09-08T10:00:00Z","updatedAt":"2026-09-10T08:00:00Z","artifacts":[],"missingSections":["log"]}""";
+
     public const string PlanningArtifactRosterJson =
         """
         {"artifacts":[

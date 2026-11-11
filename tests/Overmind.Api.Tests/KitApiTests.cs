@@ -1,6 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Overmind.Core;
+using Overmind.Infrastructure.Materialization;
+using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
 
@@ -241,6 +247,57 @@ public sealed class KitApiTests : IDisposable
         var updated = await allowed.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
         updated.ShouldNotBeNull();
         updated!.DiskPath.ShouldBe(otherDir);
+    }
+
+    [Fact]
+    public async Task Update_OrphanedKitRows_AreVerifiedAtCandidateDiskPath()
+    {
+        var project = await CreateProjectAsync();
+        var kit = await CreateKitAsync("orphan-rows", 1);
+
+        var candidate = Path.Combine(_sandboxDir, "relocated");
+        Directory.CreateDirectory(candidate);
+        var orphanPath = Path.Combine(candidate, "docs", "orphan.md");
+        const string orphanContent = "# orphaned skill bytes\n";
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            db.MaterializedFiles.Add(MaterializedFile.Create(
+                project.Id,
+                kit.Id,
+                AgentPlatform.Claude,
+                "docs/orphan.md",
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(orphanContent)))));
+            db.SaveChanges();
+        }
+
+        var blocked = await _client.PutAsJsonAsync($"/api/projects/{project.Id}", new
+        {
+            Name = project.Name,
+            DiskPath = candidate,
+            Description = project.Description,
+        });
+
+        blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await blocked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Detail!.ShouldContain("1 of 1 files drifted or missing");
+        problem.Detail.ShouldContain("docs/orphan.md");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(orphanPath)!);
+        await File.WriteAllTextAsync(orphanPath, orphanContent);
+
+        var allowed = await _client.PutAsJsonAsync($"/api/projects/{project.Id}", new
+        {
+            Name = project.Name,
+            DiskPath = candidate,
+            Description = project.Description,
+        });
+
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await allowed.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        updated!.DiskPath.ShouldBe(candidate);
     }
 
     [Fact]

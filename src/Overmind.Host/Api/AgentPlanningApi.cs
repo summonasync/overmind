@@ -84,6 +84,7 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
+        group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/patch", PatchFeature).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/queue-move", PlanningQueueApi.QueueMove).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/priority", SetFeaturePriority).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/pin-code", PlanningCodePinApi.PinCodeForAgent).LockToClaim();
@@ -399,7 +400,7 @@ public static class AgentPlanningApi
         return [.. state.BlockedBy];
     }
 
-    private static List<string> RequestedSections(string? sections)
+    internal static List<string> RequestedSections(string? sections)
     {
         if (string.IsNullOrWhiteSpace(sections))
         {
@@ -515,6 +516,39 @@ public static class AgentPlanningApi
 
             return Results.Ok(new PlanningFeatureAgentUpdateResponse(
                 feature.Slug, feature.Status, feature.Version, feature.UpdatedAt, feature.Body.Length));
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
+    }
+
+    internal static async Task<IResult> PatchFeature(
+        Guid projectId,
+        string slug,
+        PatchPlanningFeatureRequest request,
+        IValidator<PatchPlanningFeatureRequest> validator,
+        PlanningFeatureService service,
+        CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+        {
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
+        var section = request.Section.Trim();
+
+        try
+        {
+            var feature = await service.PatchAsync(
+                projectId, slug, section, request.Content,
+                request.Remove, request.Reason, request.LogNote,
+                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent), ct);
+
+            return Results.Ok(new PlanningFeaturePatchResponse(
+                feature.Slug, section, feature.Status, feature.Version,
+                feature.Body.Length, feature.LastLogLine));
         }
         catch (PlanningException ex)
         {

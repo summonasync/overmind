@@ -88,6 +88,48 @@ public sealed class TelegramNotificationFanoutTests : IDisposable
         _api.RequestCount.ShouldBe(1);
         using var document = JsonDocument.Parse(_api.Request(0).Body);
         document.RootElement.TryGetProperty("reply_markup", out _).ShouldBeFalse();
+        document.RootElement.TryGetProperty("entities", out _).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(NotificationKind.Approval)]
+    [InlineData(NotificationKind.Info)]
+    public async Task TryDeliver_ProjectNotification_PrependsTheBoldProjectName(NotificationKind kind)
+    {
+        await ConfigureTransportAsync("42");
+        var projectId = await SaveProjectAsync("Overmind");
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var fanout = CreateFanout();
+        var notification = await SaveNotificationAsync(kind, "approve <the> plan", "159-telegram-connector", null, projectId);
+
+        await fanout.TryDeliverAsync(notification, CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        using var document = JsonDocument.Parse(_api.Request(0).Body);
+        document.RootElement.TryGetProperty("parse_mode", out _).ShouldBeFalse();
+        SentText(_api.Request(0)).ShouldStartWith("Overmind\n\n");
+        SentText(_api.Request(0)).ShouldContain($"[{kind.ToString().ToLowerInvariant()}] approve <the> plan");
+
+        var entity = document.RootElement.GetProperty("entities")[0];
+        entity.GetProperty("type").GetString().ShouldBe("bold");
+        entity.GetProperty("offset").GetInt32().ShouldBe(0);
+        entity.GetProperty("length").GetInt32().ShouldBe("Overmind".Length);
+    }
+
+    [Fact]
+    public async Task TryDeliver_ProjectNotificationWithoutButtons_KeepsTheHeaderPlainDelivery()
+    {
+        await ConfigureTransportAsync("42");
+        var projectId = await SaveProjectAsync("Overmind");
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var fanout = CreateFanout();
+        var notification = await SaveNotificationAsync(NotificationKind.Info, "heads up", null, null, projectId);
+
+        await fanout.TryDeliverAsync(notification, CancellationToken.None);
+
+        using var document = JsonDocument.Parse(_api.Request(0).Body);
+        document.RootElement.TryGetProperty("reply_markup", out _).ShouldBeFalse();
+        SentText(_api.Request(0)).ShouldBe("Overmind\n\n[info] heads up");
     }
 
     [Fact]
@@ -183,13 +225,22 @@ public sealed class TelegramNotificationFanoutTests : IDisposable
     }
 
     private async Task<AgentNotification> SaveNotificationAsync(
-        NotificationKind kind, string text, string? featureSlug, string? tab)
+        NotificationKind kind, string text, string? featureSlug, string? tab, Guid? projectId = null)
     {
         await using var context = _temp.CreateContext();
-        var notification = AgentNotification.Create(kind, text, null, featureSlug, tab);
+        var notification = AgentNotification.Create(kind, text, projectId, featureSlug, tab);
         context.AgentNotifications.Add(notification);
         await context.SaveChangesAsync();
         return notification;
+    }
+
+    private async Task<Guid> SaveProjectAsync(string name)
+    {
+        await using var context = _temp.CreateContext();
+        var project = Project.Create(name, "/tmp/overmind");
+        context.Projects.Add(project);
+        await context.SaveChangesAsync();
+        return project.Id;
     }
 
     private async Task ConfigureTransportAsync(string allowlist, bool enabled = true)

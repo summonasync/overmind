@@ -48,6 +48,39 @@ public static class CodeSurfaceOverlap
         return shared;
     }
 
+    public static bool IsExactMatch(string left, string right) =>
+        string.Equals(left, right, StringComparison.Ordinal);
+
+    public static string? BestPartnerPattern(string glob, IReadOnlyList<string> partners)
+    {
+        ArgumentNullException.ThrowIfNull(partners);
+
+        string? best = null;
+        var bestShared = -1;
+        foreach (var candidate in partners)
+        {
+            if (!GlobsOverlap(glob, candidate))
+            {
+                continue;
+            }
+
+            if (IsExactMatch(glob, candidate))
+            {
+                return candidate;
+            }
+
+            var shared = SharedPrefixLength(LiteralPrefix(glob), LiteralPrefix(candidate));
+            if (shared > bestShared
+                || (shared == bestShared && string.CompareOrdinal(candidate, best) < 0))
+            {
+                best = candidate;
+                bestShared = shared;
+            }
+        }
+
+        return best;
+    }
+
     internal static string LiteralPrefix(string glob)
     {
         var segments = glob.Split('/');
@@ -70,6 +103,20 @@ public static class CodeSurfaceOverlap
         return lastLiteral < 0
             ? string.Empty
             : string.Concat(string.Join('/', segments[..(lastLiteral + 1)]), "/");
+    }
+
+    private static int SharedPrefixLength(string left, string right)
+    {
+        var max = Math.Min(left.Length, right.Length);
+        for (var i = 0; i < max; i++)
+        {
+            if (left[i] != right[i])
+            {
+                return i;
+            }
+        }
+
+        return max;
     }
 
     private static bool BoundaryPrefixOverlaps(string left, string right)

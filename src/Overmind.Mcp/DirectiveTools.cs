@@ -8,6 +8,8 @@ namespace Overmind.Mcp;
 [McpServerToolType]
 public sealed class DirectiveTools
 {
+    private const int DirectiveTextCap = 2000;
+
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
     private readonly ProjectResolver _projects;
@@ -35,6 +37,7 @@ public sealed class DirectiveTools
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        TextCapLint.Cap(text, DirectiveTextCap);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var directive = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{resolved}/planning/features/{slug}/directives",

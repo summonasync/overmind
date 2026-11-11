@@ -63,6 +63,35 @@ public static partial class PlanningSections
         return string.Concat(body.AsSpan(0, openEnd), wrapped, body.AsSpan(section.CloseIndex));
     }
 
+    // Remove is the tombstone twin of Replace: the whole anchored pair — wrapper lines included —
+    // collapses into the caller's marker line, so the section stops resolving while the trace stays.
+    public static string Remove(string name, string body, string markerLine)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(body);
+        ArgumentNullException.ThrowIfNull(markerLine);
+
+        var section = Find(name, body)
+            ?? throw new InvalidOperationException($"Section '{name}' not found.");
+
+        var openEnd = section.OpenIndex + section.OpenLength;
+        if (body[openEnd - 1] == '\r')
+        {
+            openEnd--;
+        }
+
+        var newLine = body[openEnd] == '\r' ? "\r\n" : "\n";
+        var closeEnd = body.IndexOf('\n', section.CloseIndex) is { } lineFeed && lineFeed >= 0
+            ? lineFeed + 1
+            : body.Length;
+
+        return string.Concat(
+            body.AsSpan(0, section.OpenIndex),
+            markerLine,
+            newLine,
+            body.AsSpan(closeEnd));
+    }
+
     // Insert is the append-side twin of Replace: patch cannot create a section, so a patch of a
     // declared-but-absent section lands here. Absent or blank content renders the declared-empty
     // marker so every task section is either caller-written or visibly empty — never missing.

@@ -51,6 +51,9 @@ internal static class PlanningToolResponses
     internal const string FeatureStatusNoteRequired =
         "logNote is required for feature status moves: the note is recorded as a dated line in the feature log and carries the provenance (who asked for the move).";
 
+    internal const string FeaturePatchNoteRequired =
+        "logNote is required for feature patches: the note is recorded as a dated line in the feature log — why the section changed.";
+
     internal const string PatchShapeError =
         "A patch carries exactly one of: a section (content optional — a missing section is inserted, declared-empty when content is omitted), an acceptance-criteria tick or un-tick (acIndex or exact acText), or a task brief — never several and never none.";
 

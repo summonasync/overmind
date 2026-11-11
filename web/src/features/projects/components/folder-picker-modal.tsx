@@ -32,21 +32,10 @@ interface PickerBodyProps {
 
 function FolderPickerBody({ onSelect, onClose }: PickerBodyProps) {
   const [path, setPath] = useState<string | null>(null);
-  const roots = useBrowseRoots();
-  const directory = useDirectory(path);
 
   return (
     <div className="flex flex-col gap-3">
-      <nav aria-label="Folder path" className="flex flex-wrap items-center">
-        <PathCrumbs path={path} onNavigate={setPath} />
-      </nav>
-      <div className="max-h-72 min-h-32 overflow-y-auto rounded-md border border-border bg-surface p-1">
-        {path === null ? (
-          <RootsList query={roots} onOpen={setPath} />
-        ) : (
-          <DirectoryList query={directory} onOpen={setPath} />
-        )}
-      </div>
+      <FolderBrowser path={path} onNavigate={setPath} />
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           Cancel
@@ -62,6 +51,31 @@ function FolderPickerBody({ onSelect, onClose }: PickerBodyProps) {
         >
           Select current folder
         </Button>
+      </div>
+    </div>
+  );
+}
+
+interface FolderBrowserProps {
+  path: string | null;
+  onNavigate: (path: string | null) => void;
+}
+
+export function FolderBrowser({ path, onNavigate }: FolderBrowserProps) {
+  const roots = useBrowseRoots();
+  const directory = useDirectory(path);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <nav aria-label="Folder path" className="flex flex-wrap items-center">
+        <PathCrumbs path={path} onNavigate={onNavigate} />
+      </nav>
+      <div className="max-h-72 min-h-32 overflow-y-auto rounded-md border border-border bg-surface p-1">
+        {path === null ? (
+          <RootsList query={roots} onOpen={onNavigate} />
+        ) : (
+          <DirectoryList query={directory} onOpen={onNavigate} />
+        )}
       </div>
     </div>
   );

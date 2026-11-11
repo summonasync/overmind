@@ -108,6 +108,37 @@ public sealed class LaneService
         return await ProjectAsync(projectId, ct);
     }
 
+    public async Task<LaneRow> CreateLaneAsync(
+        Guid projectId, string name, string? contour = null, int? priority = null,
+        string? boundAlias = null, CancellationToken ct = default)
+    {
+        ValidateRoster([new LaneUpsert(name, contour, null, priority, BoundAlias: boundAlias)]);
+        await RequireProjectAsync(projectId, ct);
+
+        var existing = await _db.PlanningLanes
+            .Where(l => l.ProjectId == projectId)
+            .ToListAsync(ct);
+        var stored = existing.FirstOrDefault(l => Matches(name, l.Name));
+
+        if (stored is null)
+        {
+            _db.PlanningLanes.Add(Birth(
+                projectId, name.Trim(), [.. existing.Select(l => l.Name)], contour, priority, boundAlias));
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
+        {
+            throw PlanningException.LaneNameDuplicate(name.Trim());
+        }
+
+        var roster = await ProjectAsync(projectId, ct);
+        return roster.First(l => Matches(name, l.Name));
+    }
+
     public async Task<IReadOnlyList<LaneRow>> DeleteLaneAsync(
         Guid projectId, string name, CancellationToken ct = default)
     {
@@ -310,6 +341,23 @@ public sealed class LaneService
                 throw PlanningException.LaneNameDuplicate(name);
             }
         }
+    }
+
+    internal static PlanningLane Birth(
+        Guid projectId, string name, IReadOnlyList<string> roster,
+        string? contour = null, int? priority = null, string? boundAlias = null)
+    {
+        if (!PlanningLane.IsAddressableName(name))
+        {
+            throw PlanningException.InvalidLaneName(name);
+        }
+
+        if (roster.Count >= MaxLanesPerProject)
+        {
+            throw PlanningException.LaneRosterTooLarge(roster.Count + 1, MaxLanesPerProject);
+        }
+
+        return PlanningLane.Create(projectId, name, contour, serialOrder: null, priority, boundAlias: boundAlias);
     }
 
     private static bool Matches(string left, string right) =>

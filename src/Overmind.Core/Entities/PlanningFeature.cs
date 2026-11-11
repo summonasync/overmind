@@ -137,6 +137,56 @@ public sealed class PlanningFeature
         }
     }
 
+    public void PatchSection(
+        string section, string? content, bool remove, string? reason,
+        string logNote, PlanningLogSource source)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(section);
+        ArgumentException.ThrowIfNullOrWhiteSpace(logNote);
+
+        if (string.Equals(section, "log", StringComparison.OrdinalIgnoreCase))
+        {
+            throw PlanningException.PatchLogSectionNotReplaceable();
+        }
+
+        if (remove && string.IsNullOrWhiteSpace(reason))
+        {
+            throw PlanningException.PatchRemoveReasonRequired(section);
+        }
+
+        if (!PlanningSections.TryFind(section, Body, out _))
+        {
+            if (!PlanningSections.IsNameParseable(section))
+            {
+                throw PlanningException.PatchSectionNameNotParseable(section);
+            }
+
+            var inlineOnly = !remove && PlanningSectionCanonicalizer.HasInlineSection(section, Body);
+            if (remove || inlineOnly)
+            {
+                throw PlanningException.PatchSectionNotFound(
+                    section,
+                    PlanningSections.List(Body),
+                    inlineOnly ? PlanningException.InlineSectionHint(section) : null);
+            }
+
+            Body = PlanningSections.Insert(
+                section, Body, content is null ? null : PlanningSectionCanonicalizer.Canonicalize(content));
+            Update(null, null, logNote, source);
+            return;
+        }
+
+        if (!remove && content is null)
+        {
+            throw PlanningException.SectionContentRequiredForReplace(section);
+        }
+
+        Body = remove
+            ? PlanningSections.Remove(section, Body, PlanningHeadingSections.TombstoneLine(reason!))
+            : PlanningSections.Replace(section, Body, PlanningSectionCanonicalizer.Canonicalize(content!));
+        Update(null, null, logNote, source);
+    }
+
     public void SetStatus(PlanningFeatureStatus status)
     {
         Status = status;

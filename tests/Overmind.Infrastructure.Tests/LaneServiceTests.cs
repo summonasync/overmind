@@ -113,7 +113,7 @@ public sealed class LaneServiceTests : IDisposable
 
         ex.Code.ShouldBe(PlanningFailureCode.LaneBirthRestricted);
         ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
-        ex.Message.ShouldContain("planning_update_feature");
+        ex.Message.ShouldContain("planning_create_lane");
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
     }
 
@@ -920,6 +920,98 @@ public sealed class LaneServiceTests : IDisposable
         (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
         var body = (await _context.PlanningFeatures.SingleAsync(f => f.Slug == "011-imported")).Body;
         PlanningLog.Parse(body).ShouldNotContain(l => l.Source == PlanningLogSource.Auto);
+    }
+
+    [Fact]
+    public async Task CreateLane_NewName_BirthsTheRowAndEchoesIt()
+    {
+        var service = CreateService();
+
+        var lane = await service.CreateLaneAsync(_projectId, "frontend", "web/src", 0, "van-darkholme");
+
+        lane.Name.ShouldBe("frontend");
+        lane.Contour.ShouldBe("web/src");
+        lane.Priority.ShouldBe(0);
+        lane.BoundAlias.ShouldBe("van-darkholme");
+        lane.SerialOrder.ShouldBeNull();
+        lane.OpenFeatureCount.ShouldBe(0);
+        lane.Features.ShouldBeEmpty();
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task CreateLane_ExistingNameCaseInsensitive_EchoesTheStoredRowWithoutADuplicate()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("frontend", "web/src");
+
+        var lane = await service.CreateLaneAsync(_projectId, "Frontend", "api/src", 2, "billy-jr");
+
+        lane.Name.ShouldBe("frontend");
+        lane.Contour.ShouldBe("web/src");
+        lane.Priority.ShouldBeNull();
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task CreateLane_NewNameOverTheCap_Throws()
+    {
+        var service = CreateService();
+        foreach (var index in Enumerable.Range(0, LaneService.MaxLanesPerProject))
+        {
+            await SeedLaneAsync($"lane-{index}");
+        }
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.CreateLaneAsync(_projectId, "overflow"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.LaneRosterTooLarge);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId))
+            .ShouldBe(LaneService.MaxLanesPerProject);
+    }
+
+    [Fact]
+    public async Task CreateLane_AtTheCap_ExistingNameStillEchoes()
+    {
+        var service = CreateService();
+        foreach (var index in Enumerable.Range(0, LaneService.MaxLanesPerProject))
+        {
+            await SeedLaneAsync($"lane-{index}");
+        }
+
+        var lane = await service.CreateLaneAsync(_projectId, "LANE-0");
+
+        lane.Name.ShouldBe("lane-0");
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId))
+            .ShouldBe(LaneService.MaxLanesPerProject);
+    }
+
+    [Theory]
+    [InlineData("web/src")]
+    [InlineData(@"infra\win")]
+    [InlineData("edge\ttail")]
+    [InlineData(".")]
+    [InlineData("..")]
+    public async Task CreateLane_NameTheRouteCannotAddress_ThrowsLikeTheBirthPath(string name)
+    {
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => CreateService().CreateLaneAsync(_projectId, name));
+
+        ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        (await _context.PlanningLanes.CountAsync(l => l.ProjectId == _projectId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task CreateLane_UnknownProject_ThrowsNotFound()
+    {
+        var missingProject = Guid.NewGuid();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => CreateService().CreateLaneAsync(missingProject, "frontend"));
+
+        ex.Code.ShouldBe(PlanningFailureCode.MissingProject);
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
     }
 
     private async Task CreateFeatureAsync(string slug, string? lane)

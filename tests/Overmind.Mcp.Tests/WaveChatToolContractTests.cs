@@ -110,12 +110,33 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
     public async Task PostMessage_TextTooLong_SurfacesTheNamedError()
     {
         _stub.Route("POST", $"{RoomsRoute}/([^/]+)/messages", 400,
-            """{"title":"WaveTextTooLong","detail":"Wave message text is 512 characters; the cap is 500."}""");
+            """{"title":"WaveTextTooLong","detail":"text is 512 chars; cap is 500; cut 12"}""");
 
         var ex = await Should.ThrowAsync<McpException>(
             () => Tool().PostMessage("all", "flood", Canned.ProjectId));
 
-        ex.Message.ShouldContain("the cap is 500");
+        ex.Message.ShouldContain("text is 512 chars; cap is 500; cut 12");
+    }
+
+    [Fact]
+    public async Task PostMessage_OverCap_RefusedLocallyBeforeAnyRequest()
+    {
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().PostMessage("all", new string('x', 501)));
+
+        ex.Message.ShouldBe("text is 501 chars; cap is 500; cut 1");
+        _stub.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task PostMessage_AtCap_ReachesTheWire()
+    {
+        var atCap = new string('x', 500);
+
+        var posted = await Tool().PostMessage("all", atCap, Canned.ProjectId);
+
+        Text(posted).ShouldContain("posted to 'all'");
+        _stub.Requests.Single(r => r.Method == "POST").Body.ShouldContain($"\"text\":\"{atCap}\"");
     }
 
     [Fact]

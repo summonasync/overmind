@@ -158,6 +158,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<CreatePlanningFeatureRequest>, CreatePlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<UpdatePlanningFeatureRequest>, UpdatePlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<UpdatePlanningFeatureByAgentRequest>, UpdatePlanningFeatureByAgentRequestValidator>();
+        services.AddSingleton<IValidator<PatchPlanningFeatureRequest>, PatchPlanningFeatureRequestValidator>();
         services.AddSingleton<IValidator<CreatePlanningArtifactRequest>, CreatePlanningArtifactRequestValidator>();
         services.AddSingleton<IValidator<CreatePlanningTasksRequest>, CreatePlanningTasksRequestValidator>();
         services.AddSingleton<IValidator<UpdatePlanningArtifactRequest>, UpdatePlanningArtifactRequestValidator>();
@@ -175,6 +176,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<PlanningQueueReorderRequest>, PlanningQueueReorderRequestValidator>();
         services.AddSingleton<IValidator<SetLanesRequest>, SetLanesRequestValidator>();
         services.AddSingleton<IValidator<UpdateLaneRequest>, UpdateLaneRequestValidator>();
+        services.AddSingleton<IValidator<CreateLaneRequest>, CreateLaneRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveRequest>, AppendPlanningDirectiveRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningDirectiveHumanRequest>, AppendPlanningDirectiveHumanRequestValidator>();
         services.AddSingleton<IValidator<PostWaveMessageRequest>, PostWaveMessageRequestValidator>();

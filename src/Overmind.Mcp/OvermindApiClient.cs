@@ -123,23 +123,22 @@ public sealed class OvermindApiClient
         {
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                var detail = await ReadProblemDetailAsync(response, ct);
-                throw new ApiNotFoundException(detail ?? $"overmind API resource not found ({operation})");
+                var problem = await ProblemDetailsReader.ReadAsync(response, ct);
+                var missing = problem?.Detail ?? problem?.Title;
+                throw new ApiNotFoundException(missing ?? $"overmind API resource not found ({operation})");
             }
 
             if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
             {
-                var detail = await ReadProblemDetailAsync(response, ct);
+                var problem = await ProblemDetailsReader.ReadAsync(response, ct);
+                var unavailable = problem?.Detail ?? problem?.Title;
                 throw new SemanticSearchUnavailableException(
-                    $"vector search unavailable: {detail ?? "semantic search is down; use mode=fulltext"}");
+                    $"vector search unavailable: {unavailable ?? "semantic search is down; use mode=fulltext"}");
             }
 
             if (!response.IsSuccessStatusCode)
             {
-                var detail = await ReadProblemDetailAsync(response, ct);
-                throw new ApiStatusException(
-                    (int)response.StatusCode,
-                    $"overmind API returned {(int)response.StatusCode} ({operation}): {detail ?? response.ReasonPhrase}");
+                throw new ApiStatusException((int)response.StatusCode, await DescribeAsync(response, operation, ct));
             }
 
             var payload = await response.Content.ReadAsStringAsync(ct);
@@ -157,25 +156,21 @@ public sealed class OvermindApiClient
         }
     }
 
-    private static async Task<string?> ReadProblemDetailAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<string> DescribeAsync(HttpResponseMessage response, string operation, CancellationToken ct)
     {
-        try
-        {
-            var payload = await response.Content.ReadAsStringAsync(ct);
-            if (payload.Length == 0)
-            {
-                return null;
-            }
+        var problem = await ProblemDetailsReader.ReadAsync(response, ct);
+        var detail = problem?.Detail ?? problem?.Title ?? response.ReasonPhrase;
+        var message = $"overmind API returned {(int)response.StatusCode} ({operation}): {detail}";
 
-            using var document = JsonDocument.Parse(payload);
-            var root = document.RootElement;
-            var detail = root.TryGetProperty("detail", out var d) ? d.GetString() : null;
-            var title = root.TryGetProperty("title", out var t) ? t.GetString() : null;
-            return detail ?? title;
-        }
-        catch (Exception)
+        if (response.StatusCode == HttpStatusCode.BadRequest && problem is not null)
         {
-            return null;
+            var errors = ProblemDetailsReader.FormatErrors(problem);
+            if (errors.Length > 0)
+            {
+                message += $". Errors: {errors}";
+            }
         }
+
+        return message;
     }
 }

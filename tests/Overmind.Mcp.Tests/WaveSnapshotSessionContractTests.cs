@@ -34,6 +34,10 @@ public sealed class WaveSnapshotSessionContractTests : McpSessionTestBase
         description.ShouldContain("discoveryError");
         description.ShouldContain("cached");
         description.ShouldContain("projectId is required");
+        description.ShouldContain("advisory projection, never a block");
+        description.ShouldContain("literally equal");
+        description.ShouldContain("sharedDirectory");
+        description.ShouldContain("potentialOverlaps verbatim");
 
         var properties = tools["overmind_wave_snapshot"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("projectId");

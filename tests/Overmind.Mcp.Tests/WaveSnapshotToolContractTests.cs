@@ -80,8 +80,14 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
             ["laneBoundAlias"] = "johan",
             ["potentialOverlaps"] = new JsonArray(new JsonObject
             {
-                ["withFeatureSlug"] = "other-feature",
-                ["sharedGlobs"] = new JsonArray("src/web/**")
+                ["withFeature"] = "other-feature",
+                ["sharedGlobs"] = new JsonArray("src/web/**"),
+                ["matches"] = new JsonArray(new JsonObject
+                {
+                    ["pattern"] = "src/web/**",
+                    ["partnerPattern"] = "src/web/**",
+                    ["kind"] = "exact"
+                })
             }),
             ["pendingMutations"] = 0,
             ["lastAttemptAt"] = "2026-10-17T10:00:00Z",
@@ -207,7 +213,7 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         row.TryGetProperty("stale", out _).ShouldBeFalse();
         row.TryGetProperty("claimedByHuman", out _).ShouldBeFalse();
         row.TryGetProperty("laneHolder", out _).ShouldBeFalse();
-        row.GetProperty("potentialOverlaps")[0].GetProperty("withFeatureSlug").GetString().ShouldBe("other-feature");
+        row.GetProperty("potentialOverlaps")[0].GetProperty("withFeature").GetString().ShouldBe("other-feature");
 
         row.TryGetProperty("briefExcerpt", out _).ShouldBeFalse();
         row.TryGetProperty("taskCounts", out _).ShouldBeFalse();
@@ -218,6 +224,26 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         row.TryGetProperty("pendingMutations", out _).ShouldBeFalse();
         row.TryGetProperty("lastAttemptAt", out _).ShouldBeFalse();
         row.TryGetProperty("lastSuccessAt", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_CarriesOverlapMatchesThroughFullAndCompact()
+    {
+        _stub.RouteGet(SnapshotRoute, FullSnapshotJson);
+
+        var full = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId);
+        var compact = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, compact: true);
+
+        foreach (var result in new[] { full, compact })
+        {
+            var overlap = result.GetProperty("queue").EnumerateArray().Single()
+                .GetProperty("potentialOverlaps").EnumerateArray().Single();
+            overlap.GetProperty("withFeature").GetString().ShouldBe("other-feature");
+            var match = overlap.GetProperty("matches").EnumerateArray().Single();
+            match.GetProperty("pattern").GetString().ShouldBe("src/web/**");
+            match.GetProperty("partnerPattern").GetString().ShouldBe("src/web/**");
+            match.GetProperty("kind").GetString().ShouldBe("exact");
+        }
     }
 
     [Fact]

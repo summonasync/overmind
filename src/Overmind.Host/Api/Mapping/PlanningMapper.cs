@@ -107,7 +107,11 @@ public static class PlanningMapper
     private static PotentialOverlap[] Overlaps(IReadOnlyList<FeatureOverlapRow>? rows) =>
         rows is null || rows.Count == 0
             ? []
-            : [.. rows.Select(r => new PotentialOverlap(r.WithFeatureSlug, [.. r.SharedGlobs]))];
+            : [.. rows.Select(r => new PotentialOverlap(
+                r.WithFeatureSlug,
+                [.. r.SharedGlobs],
+                [.. r.Matches.Select(m => new PotentialOverlapMatch(
+                    m.Pattern, m.PartnerPattern, m.Kind))]))];
 
     private static CodeSurfaceFeatureRow ToSurfaceRow(PlanningFeature feature) =>
         new(feature.Id, feature.Slug, feature.Status, feature.ClaimSessionId, feature.CodeSurfaces);

@@ -146,6 +146,27 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
         ex.Message.ShouldContain("was not found");
     }
 
+    [Fact]
+    public async Task AppendDirective_OverCap_RefusedLocallyBeforeAnyRequest()
+    {
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AppendDirective(Canned.PlanningSlug, new string('x', 2001)));
+
+        ex.Message.ShouldBe("text is 2001 chars; cap is 2000; cut 1");
+        _stub.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AppendDirective_AtCap_ReachesTheWire()
+    {
+        _stub.Route("POST", AppendRoute, 200, DirectiveJson);
+        var atCap = new string('x', 2000);
+
+        await Tool().AppendDirective(Canned.PlanningSlug, atCap, Canned.ProjectId);
+
+        _stub.Requests.Single(r => r.Method == "POST").Body.ShouldContain($"\"text\":\"{atCap}\"");
+    }
+
     private static string Text(CallToolResult result) =>
         ((TextContentBlock)result.Content[0]).Text;
 

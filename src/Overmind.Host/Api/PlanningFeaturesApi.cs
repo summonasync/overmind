@@ -165,6 +165,7 @@ public static class PlanningFeaturesApi
         Guid projectId,
         string slug,
         bool? includeArtifacts,
+        string? sections,
         OvermindDbContext db,
         FeatureClaimService claims,
         FeatureDependencyService dependencies,
@@ -188,22 +189,40 @@ public static class PlanningFeaturesApi
             .GetValueOrDefault(feature.Id);
         var overlapIndex = await OverlapIndexAsync(db, projectId, ct);
         var openDirectives = await directives.ListOpenAsync(feature.Id, ct);
+        var requested = AgentPlanningApi.RequestedSections(sections);
+        var sliced = requested.Count > 0
+            ? PlanningSections.FilteredRead(feature.Body, requested)
+            : null;
 
         if (includeArtifacts == false)
         {
-            return Results.Ok(PlanningMapper.ToFeatureRosterResponse(
+            var roster = PlanningMapper.ToFeatureRosterResponse(
                 feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
                 await BlockedStatesAsync(taskDependencies, feature, ct), claimState,
                 overlaps: overlapIndex.GetValueOrDefault(feature.Id),
-                openDirectiveCount: openDirectives.Count));
+                openDirectiveCount: openDirectives.Count);
+            return Results.Ok(Narrow(roster, sliced));
         }
 
-        return Results.Ok(PlanningMapper.ToFeatureResponse(
+        var response = PlanningMapper.ToFeatureResponse(
             feature, await dependencies.ListDependenciesAsync(projectId, slug, ct),
             await BlockedStatesAsync(taskDependencies, feature, ct), claimState,
             overlaps: overlapIndex.GetValueOrDefault(feature.Id),
-            openDirectives: openDirectives));
+            openDirectives: openDirectives);
+        return Results.Ok(Narrow(response, sliced));
     }
+
+    private static PlanningFeatureRosterResponse Narrow(
+        PlanningFeatureRosterResponse response, PlanningFilteredRead? sliced) =>
+        sliced is null
+            ? response
+            : response with { Body = sliced.Body, MissingSections = [.. sliced.MissingNames] };
+
+    private static PlanningFeatureResponse Narrow(
+        PlanningFeatureResponse response, PlanningFilteredRead? sliced) =>
+        sliced is null
+            ? response
+            : response with { Body = sliced.Body, MissingSections = [.. sliced.MissingNames] };
 
     internal static async Task<IResult> ListArtifacts(
         Guid projectId,

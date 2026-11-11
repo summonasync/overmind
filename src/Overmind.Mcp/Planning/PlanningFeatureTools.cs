@@ -68,18 +68,30 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature in full: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
+    [Description("Reads one feature: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; with sections, the cheapest read: the body narrows to the named sections, returned in body order, absent names land in missingSections, and the full read stays byte-faithful to storage. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
     public async Task<JsonElement> ReadFeature(
         [Description("Slug of the feature, as shown on the board.")] string slug,
         [Description("Set false for the cheap read: the feature body plus a roster summary (kind, order, status, brief for tasks, acTicked/acTotal) without artifact bodies or log lines. Default true returns every artifact in full.")] bool? includeArtifacts = null,
+        [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections, returned in body order.")] string? sections = null,
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var url = $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}";
+        var query = new List<string>();
         if (includeArtifacts == false)
         {
-            url += "?includeArtifacts=false";
+            query.Add("includeArtifacts=false");
+        }
+
+        if (!string.IsNullOrWhiteSpace(sections))
+        {
+            query.Add($"sections={Uri.EscapeDataString(sections)}");
+        }
+
+        if (query.Count > 0)
+        {
+            url += $"?{string.Join('&', query)}";
         }
 
         var feature = await Guarded(() => _api.GetAsync(url, ct));
@@ -221,6 +233,48 @@ public sealed class PlanningFeatureTools
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         return await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}/update",
+            payload,
+            ct, operationId), FeatureLogReadback(resolved, slug, logNote), ct);
+    }
+
+    [McpServerTool(Name = "planning_patch_feature", Destructive = false, Idempotent = false)]
+    [Description("Changes one section of a feature document in place without resending the body — the middle tier between logNote-only notes and the full-body planning_update_feature: replaces one XML section or inserts a missing one; the rest of the body stays byte-identical. A section absent from the body is instead INSERTED — with the content, or declared-empty ('(none)') when content is omitted. Feature bodies carry the XML vocabulary only: no heading mode ('## Address'), no acceptance-criteria ticks, no briefs, no amendments — those belong to planning_patch_artifact. The tombstone mode: remove=true together with reason replaces the resolved section — wrapper tags included — with a single '<removed YYYY-MM-DD — reason>' line (remove without reason is refused; content must be omitted with remove). Guards: the <log> section is append-only — patching it is a 400; a logNote-only append belongs to planning_update_feature. Replacing an existing section without content, an unparseable section name, and a remove of an absent section are 400s naming the name and the sections present. logNote is mandatory and lands as a dated [agent] line in the feature log; the version bumps by the same rule as planning_update_feature (draft keeps its version, any other status bumps it). The door is claim-locked like every mutating feature door.")]
+    public async Task<JsonElement> PatchFeature(
+        [Description("Slug of the feature to patch, as shown on the board.")] string slug,
+        [Description("XML section name to patch (e.g. goal, refs, obstacles): lowercase tag grammar — letters, digits and hyphens starting with a letter; the only address mode on feature bodies.")] string section,
+        [Description("Required note recorded as a dated [agent] line in the feature log — why the section changed.")] string logNote,
+        [Description("Full replacement content of the section; omit it to insert a missing section declared-empty; must be omitted with remove=true.")] string? content = null,
+        [Description("Set true together with section + reason to tombstone the resolved section: the wrapper tags collapse into a single '<removed YYYY-MM-DD — reason>' line.")] bool remove = false,
+        [Description("Reason carried in the '<removed YYYY-MM-DD — reason>' tombstone line; required when remove=true.")] string? reason = null,
+        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description(OperationIdDescription)] Guid? operationId = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(logNote))
+        {
+            throw new McpException(FeaturePatchNoteRequired);
+        }
+
+        var payload = new JsonObject
+        {
+            ["section"] = section.Trim(),
+            ["logNote"] = logNote,
+            ["remove"] = remove
+        };
+
+        if (!string.IsNullOrWhiteSpace(content))
+        {
+            payload["content"] = content;
+        }
+
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            payload["reason"] = reason.Trim();
+        }
+
+        var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
+        return await _mutations.SendAsync(() => _api.PostAsync(
+            $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}/patch",
             payload,
             ct, operationId), FeatureLogReadback(resolved, slug, logNote), ct);
     }
