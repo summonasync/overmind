@@ -10,6 +10,7 @@ export { ProjectAutoActToggle } from "./components/project-auto-act-toggle";
 export { ProjectFavoriteToggle } from "./components/project-favorite-toggle";
 export { ProjectTree } from "./components/project-tree";
 export { FolderPickerModal } from "./components/folder-picker-modal";
+export { ProjectMovedDialog } from "./components/project-moved-dialog";
 export {
   useProjectAutoActToggle,
   useProjectFavoriteToggle,
