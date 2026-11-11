@@ -65,7 +65,7 @@ public sealed class TelegramNotificationCallbackHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Handle_SecondPress_AnswersAlreadyDecidedWithoutOverwrite()
+    public async Task Handle_SecondPress_AnswersAlreadyDecidedAndSwapsTheKeyboard()
     {
         await ConfigureTransportAsync();
         var notificationId = await SeedPendingNotificationAsync();
@@ -82,14 +82,98 @@ public sealed class TelegramNotificationCallbackHandlerTests : IDisposable
                 $"notif:{notificationId:D}:decline"),
             CancellationToken.None);
 
-        _api.RequestCount.ShouldBe(3);
+        _api.RequestCount.ShouldBe(4);
         _api.Request(2).Path.ShouldContain("answerCallbackQuery");
-        AnswerText(_api.Request(2)).ShouldBe(TelegramNotificationCallbackHandler.AlreadyDecidedAnswer);
+        AnswerText(_api.Request(2))
+            .ShouldBe($"Already decided: approved via telegram button by @owner");
+        _api.Request(3).Path.ShouldContain("editMessageReplyMarkup");
+        DecidedButton(_api.Request(3))
+            .ShouldBe(("already decided: approved", $"notif:{notificationId:D}:approve"));
         _api.Requests.Count(captured => captured.Path.Contains("editMessageText")).ShouldBe(1);
 
         await using var context = _temp.CreateContext();
         var stored = await context.AgentNotifications.SingleAsync(n => n.Id == notificationId);
         stored.ReplyText.ShouldBe("approved via telegram button by @owner");
+    }
+
+    [Fact]
+    public async Task Handle_RepeatTapOnDecided_AnswersTheSameWayWithoutOverwrite()
+    {
+        await ConfigureTransportAsync();
+        var notificationId = await SeedPendingNotificationAsync();
+        var handler = CreateHandler();
+
+        await handler.HandleAsync(
+            new TelegramCallback(
+                OwnerChatId, "cq-1", ButtonMessageId, "@owner", OriginalText,
+                $"notif:{notificationId:D}:approve"),
+            CancellationToken.None);
+        await handler.HandleAsync(
+            new TelegramCallback(
+                OwnerChatId, "cq-2", ButtonMessageId, "@owner", OriginalText,
+                $"notif:{notificationId:D}:decline"),
+            CancellationToken.None);
+        await handler.HandleAsync(
+            new TelegramCallback(
+                OwnerChatId, "cq-3", ButtonMessageId, "@owner", OriginalText,
+                $"notif:{notificationId:D}:decline"),
+            CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(6);
+        AnswerText(_api.Request(4))
+            .ShouldBe($"Already decided: approved via telegram button by @owner");
+        DecidedButton(_api.Request(5))
+            .ShouldBe(("already decided: approved", $"notif:{notificationId:D}:approve"));
+
+        await using var context = _temp.CreateContext();
+        var stored = await context.AgentNotifications.SingleAsync(n => n.Id == notificationId);
+        stored.ReplyText.ShouldBe("approved via telegram button by @owner");
+    }
+
+    [Fact]
+    public async Task Handle_LongStoredReply_TruncatesTheAnswerToTheTelegramLimit()
+    {
+        await ConfigureTransportAsync();
+        var notificationId = await SeedDecidedNotificationAsync(new string('x', 300));
+        var handler = CreateHandler();
+
+        await handler.HandleAsync(
+            new TelegramCallback(
+                OwnerChatId, "cq-6", ButtonMessageId, "@owner", OriginalText,
+                $"notif:{notificationId:D}:approve"),
+            CancellationToken.None);
+
+        var answer = AnswerText(_api.Request(0));
+        answer.Length.ShouldBe(TelegramNotificationCallbackHandler.AnswerTextLimit);
+        answer.ShouldStartWith(TelegramNotificationCallbackHandler.AlreadyDecidedPrefix);
+        answer.ShouldEndWith("…");
+        answer.ShouldBe($"{TelegramNotificationCallbackHandler.AlreadyDecidedPrefix}{new string('x', 182)}…");
+
+        await using var context = _temp.CreateContext();
+        var stored = await context.AgentNotifications.SingleAsync(n => n.Id == notificationId);
+        stored.ReplyText.ShouldBe(new string('x', 300));
+    }
+
+    [Fact]
+    public async Task Handle_DecidedSwapFailure_AnswersTheCallbackAndNeverThrows()
+    {
+        await ConfigureTransportAsync();
+        var notificationId = await SeedDecidedNotificationAsync("approved via telegram button by @owner");
+        var handler = CreateHandler();
+        _api.FailPath(
+            "editMessageReplyMarkup",
+            """{"ok":false,"error_code":400,"description":"Bad Request: message can't be edited"}""");
+
+        await handler.HandleAsync(
+            new TelegramCallback(
+                OwnerChatId, "cq-7", ButtonMessageId, "@owner", OriginalText,
+                $"notif:{notificationId:D}:approve"),
+            CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(2);
+        AnswerText(_api.Request(0))
+            .ShouldBe("Already decided: approved via telegram button by @owner");
+        LogSnapshot().ShouldContain(line => line.Contains("Swapping telegram message 5"));
     }
 
     [Fact]
@@ -229,6 +313,25 @@ public sealed class TelegramNotificationCallbackHandlerTests : IDisposable
         await context.SaveChangesAsync();
         await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, ButtonMessageId, notification.Id);
         return notification.Id;
+    }
+
+    private async Task<Guid> SeedDecidedNotificationAsync(string replyText)
+    {
+        var notificationId = await SeedPendingNotificationAsync();
+        await using var context = _temp.CreateContext();
+        var notification = await context.AgentNotifications.SingleAsync(n => n.Id == notificationId);
+        notification.Reply(replyText);
+        await context.SaveChangesAsync();
+        return notificationId;
+    }
+
+    private (string Text, string Data) DecidedButton(FakeTelegramApi.Captured captured)
+    {
+        using var document = JsonDocument.Parse(captured.Body);
+        var button = document.RootElement.GetProperty("reply_markup").GetProperty("inline_keyboard")[0][0];
+        return (
+            button.GetProperty("text").GetString() ?? string.Empty,
+            button.GetProperty("callback_data").GetString() ?? string.Empty);
     }
 
     private async Task ConfigureTransportAsync()

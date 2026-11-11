@@ -11,9 +11,11 @@ public sealed class TelegramNotificationCallbackHandler(
     NotificationsService notifications,
     ILogger<TelegramNotificationCallbackHandler> logger) : ITelegramCallbackHandler
 {
+    public const int AnswerTextLimit = 200;
     public const string InvalidButtonAnswer = "This button is no longer valid.";
     public const string NotAllowedAnswer = "Not allowed.";
     public const string AlreadyDecidedAnswer = "Already decided.";
+    public const string AlreadyDecidedPrefix = "Already decided: ";
     public const string RecordedAnswer = "Decision recorded.";
     public const string FailureAnswer = "The decision could not be recorded; try again.";
 
@@ -67,7 +69,8 @@ public sealed class TelegramNotificationCallbackHandler(
 
         if (notification.RepliedAt is not null)
         {
-            await AnswerAsync(callback, AlreadyDecidedAnswer, ct);
+            await AnswerAsync(callback, AlreadyDecidedText(notification.ReplyText), ct);
+            await SwapToDecidedMarkupAsync(options, callback, data.NotificationId, notification.ReplyText, ct);
             return;
         }
 
@@ -75,6 +78,45 @@ public sealed class TelegramNotificationCallbackHandler(
         await notifications.ReplyAsync(notification.Id, $"{decision} via telegram button by {callback.From}", ct);
         await AnswerAsync(callback, RecordedAnswer, ct);
         await EditDecisionLineAsync(options, callback, decision, ct);
+    }
+
+    private static string AlreadyDecidedText(string? replyText)
+    {
+        if (string.IsNullOrWhiteSpace(replyText))
+        {
+            return AlreadyDecidedAnswer;
+        }
+
+        var text = $"{AlreadyDecidedPrefix}{replyText.Trim()}";
+        return text.Length <= AnswerTextLimit
+            ? text
+            : string.Concat(text.AsSpan(0, AnswerTextLimit - 1), "…");
+    }
+
+    private async Task SwapToDecidedMarkupAsync(
+        TelegramTransportOptions options,
+        TelegramCallback callback,
+        Guid notificationId,
+        string? replyText,
+        CancellationToken ct)
+    {
+        var markup = NotificationKeyboardMarkup.Decided(notificationId, replyText);
+        try
+        {
+            await clientCache.GetOrCreate(options).Client.EditMessageReplyMarkup(
+                callback.ChatId, callback.MessageId, markup, cancellationToken: ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Swapping telegram message {MessageId} in chat {ChatId} to the decided markup failed; the decision stays recorded",
+                callback.MessageId, callback.ChatId);
+        }
     }
 
     private async Task EditDecisionLineAsync(
