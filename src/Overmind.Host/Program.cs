@@ -163,6 +163,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
     app.MapKitsApi();
     app.MapKitImportApi();
     app.MapSettingsApi();
+    app.MapUsageApi();
     app.MapGrimoireApi();
     app.MapHealthApi();
     app.MapSystemApi();

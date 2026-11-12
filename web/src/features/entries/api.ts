@@ -8,6 +8,14 @@ import type {
   TagResponse,
 } from "@/features/entries/types";
 
+function resolveUntilExclusive(until: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) {
+    return until;
+  }
+  const [year, month, day] = until.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
 function buildListQuery(projectId: string, filters: EntryListFilters): string {
   const params = new URLSearchParams();
   if (filters.type) {
@@ -16,8 +24,18 @@ function buildListQuery(projectId: string, filters: EntryListFilters): string {
   if (filters.tag.trim()) {
     params.set("tag", filters.tag.trim());
   }
-  const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  return `/projects/${projectId}/entries${suffix}`;
+  params.set("state", filters.state ?? "all");
+  if (filters.since) {
+    params.set("since", filters.since);
+  }
+  if (filters.until) {
+    params.set("until", resolveUntilExclusive(filters.until));
+  }
+  const author = filters.author?.trim();
+  if (author) {
+    params.set("author", author);
+  }
+  return `/projects/${projectId}/entries?${params.toString()}`;
 }
 
 export function listEntries(

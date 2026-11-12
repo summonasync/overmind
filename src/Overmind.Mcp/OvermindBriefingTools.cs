@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol;
@@ -11,6 +12,12 @@ public sealed class OvermindBriefingTools
 {
     private const int DefaultNotesLimit = 10;
     private const int SnippetCap = 200;
+    private const int RetiredDays = 14;
+    private const int RetiredRowCap = 5;
+
+    private const string ActiveState = "active";
+    private const string LiftedState = "lifted";
+    private const string SupersededState = "superseded";
 
     private const string MemoryLayerNote =
         "Memory layer (Grimoire) — durable crew facts live in the local Grimoire store " +
@@ -19,7 +26,9 @@ public sealed class OvermindBriefingTools
     private const string BriefingDescription =
         "ONE call returns the start-of-work snapshot of a project — the guardrail picture an agent absorbs before any work: " +
         "guards and gates with full bodies, decisions and the latest notes as ~200-character snippets (read_entry for depth), " +
-        "and the tombstone list of buried entries. " +
+        "and the tombstone list of buried entries. Guards, gates and decisions render active entries only — a lifted rule is a rule that no longer applies; " +
+        "decisions carrying enforces=true additionally appear in the guards section marked decision·enforces, and the liftedRecently tail lists entries " +
+        "lifted or superseded within the last 14 days (max 5 rows, newest first: title, state, date, reason snippet, successor title for superseded). " +
         "One consolidated tool by design: four specialized getguards/getgates/getnotes/gettombstones lookups would multiply " +
         "the discovery surface for a single moment-in-time need; list_entries stays the exploration tool, this one is the start ritual. " +
         "When the project's lane roster carries liveSurfaces (globs + owners of running stands watched by a lane), a liveSurfaces section lists them so the start-of-work picture warns before any watched path is touched; the section is absent when no lane watches anything. " +
@@ -55,20 +64,21 @@ public sealed class OvermindBriefingTools
 
         var resolvedProjectId = await _projects.ResolveAsync(projectId, create: false, "for the briefing", ct);
 
-        var guards = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "guard", ct));
-        var gates = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "gate", ct));
-        var decisions = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "decision", ct));
-        var notes = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "note", ct));
+        var guards = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "guard", ActiveState, ct));
+        var gates = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "gate", ActiveState, ct));
+        var decisions = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "decision", ActiveState, ct));
+        var notes = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "note", null, ct));
         var lanes = await Guarded(() => FetchLanesAsync(resolvedProjectId, ct));
-
+        var lifecycle = await Guarded(() => FetchAllEntriesAsync(resolvedProjectId, ct));
 
         var briefing = new JsonObject
         {
             ["projectId"] = resolvedProjectId.ToString(),
-            ["guards"] = FullRows(guards),
+            ["guards"] = GuardRows(guards, decisions),
             ["gates"] = FullRows(gates),
             ["decisions"] = SnippetRows(decisions, int.MaxValue),
             ["notes"] = SnippetRows(notes, limit),
+            ["liftedRecently"] = LiftedRows(lifecycle, DateTimeOffset.UtcNow),
             ["memoryLayer"] = new JsonObject
             {
                 ["note"] = MemoryLayerNote,
@@ -81,7 +91,7 @@ public sealed class OvermindBriefingTools
 
         if (includeTombstones ?? true)
         {
-            var tombstones = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "tombstone", ct));
+            var tombstones = await Guarded(() => FetchEntriesAsync(resolvedProjectId, "tombstone", null, ct));
             briefing["tombstones"] = GraveRows(tombstones);
         }
 
@@ -94,8 +104,19 @@ public sealed class OvermindBriefingTools
         return briefing.Deserialize<JsonElement>();
     }
 
-    private async Task<JsonElement> FetchEntriesAsync(Guid projectId, string type, CancellationToken ct) =>
-        await _api.GetAsync($"/api/projects/{projectId}/entries?type={type}", ct);
+    private async Task<JsonElement> FetchEntriesAsync(Guid projectId, string type, string? state, CancellationToken ct)
+    {
+        var path = $"/api/projects/{projectId}/entries?type={type}";
+        if (state is not null)
+        {
+            path += $"&state={state}";
+        }
+
+        return await _api.GetAsync(path, ct);
+    }
+
+    private async Task<JsonElement> FetchAllEntriesAsync(Guid projectId, CancellationToken ct) =>
+        await _api.GetAsync($"/api/projects/{projectId}/entries", ct);
 
     private async Task<JsonElement> FetchLanesAsync(Guid projectId, CancellationToken ct) =>
         await _api.GetAsync($"/api/agent/projects/{projectId}/planning/lanes", ct);
@@ -144,22 +165,43 @@ public sealed class OvermindBriefingTools
         }
     }
 
+    private static JsonArray GuardRows(JsonElement guards, JsonElement decisions)
+    {
+        var rows = FullRows(guards);
+        foreach (var decision in decisions.EnumerateArray())
+        {
+            if (!decision.TryGetProperty("enforces", out var enforces) || enforces.ValueKind != JsonValueKind.True)
+            {
+                continue;
+            }
+
+            var row = FullRow(decision);
+            row["kind"] = "decision·enforces";
+            rows.Add(row);
+        }
+
+        return rows;
+    }
+
     private static JsonArray FullRows(JsonElement entries)
     {
         var rows = new JsonArray();
         foreach (var entry in entries.EnumerateArray())
         {
-            rows.Add(new JsonObject
-            {
-                ["id"] = entry.GetProperty("id").GetString(),
-                ["title"] = entry.GetProperty("title").GetString(),
-                ["content"] = entry.GetProperty("content").GetString(),
-                ["updatedAt"] = entry.GetProperty("updatedAt").GetString()
-            });
+            rows.Add(FullRow(entry));
         }
 
         return rows;
     }
+
+    private static JsonObject FullRow(JsonElement entry) =>
+        new()
+        {
+            ["id"] = entry.GetProperty("id").GetString(),
+            ["title"] = entry.GetProperty("title").GetString(),
+            ["content"] = entry.GetProperty("content").GetString(),
+            ["updatedAt"] = entry.GetProperty("updatedAt").GetString()
+        };
 
     private static JsonArray SnippetRows(JsonElement entries, int limit)
     {
@@ -193,5 +235,88 @@ public sealed class OvermindBriefingTools
         }
 
         return rows;
+    }
+
+    private static JsonArray LiftedRows(JsonElement entries, DateTimeOffset now)
+    {
+        var titles = Titles(entries);
+        var retired = entries.EnumerateArray()
+            .Select(entry => (Entry: entry, At: StateAt(entry)))
+            .Where(row => IsRetired(row.Entry) && row.At is { } at && now - at <= TimeSpan.FromDays(RetiredDays))
+            .Select(row => (row.Entry, At: row.At!.Value))
+            .OrderByDescending(row => row.At)
+            .Take(RetiredRowCap)
+            .ToArray();
+
+        var rows = new JsonArray();
+        foreach (var (entry, _) in retired)
+        {
+            rows.Add(RetiredRow(entry, titles));
+        }
+
+        return rows;
+    }
+
+    private static bool IsRetired(JsonElement entry) =>
+        entry.TryGetProperty("state", out var state) &&
+        state.ValueKind == JsonValueKind.String &&
+        state.GetString() is LiftedState or SupersededState;
+
+    private static DateTimeOffset? StateAt(JsonElement entry)
+    {
+        if (!entry.TryGetProperty("stateAt", out var stateAt) || stateAt.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return DateTimeOffset.TryParse(
+            stateAt.GetString(),
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal,
+            out var at)
+            ? at
+            : null;
+    }
+
+    private static Dictionary<string, string> Titles(JsonElement entries)
+    {
+        var titles = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in entries.EnumerateArray())
+        {
+            var id = entry.GetProperty("id").GetString();
+            if (id is not null && !titles.ContainsKey(id))
+            {
+                titles[id] = entry.GetProperty("title").GetString() ?? string.Empty;
+            }
+        }
+
+        return titles;
+    }
+
+    private static JsonObject RetiredRow(JsonElement entry, Dictionary<string, string> titles)
+    {
+        var reason = entry.TryGetProperty("stateReason", out var stateReason) &&
+            stateReason.ValueKind == JsonValueKind.String
+                ? stateReason.GetString() ?? string.Empty
+                : string.Empty;
+
+        var row = new JsonObject
+        {
+            ["id"] = entry.GetProperty("id").GetString(),
+            ["title"] = entry.GetProperty("title").GetString(),
+            ["state"] = entry.GetProperty("state").GetString(),
+            ["stateAt"] = entry.GetProperty("stateAt").GetString(),
+            ["reason"] = BriefingSnippet.Clip(reason, SnippetCap)
+        };
+
+        if (entry.TryGetProperty("supersededById", out var successorId) &&
+            successorId.ValueKind == JsonValueKind.String &&
+            successorId.GetString() is { } successor &&
+            titles.TryGetValue(successor, out var successorTitle))
+        {
+            row["successor"] = successorTitle;
+        }
+
+        return row;
     }
 }

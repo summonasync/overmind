@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Wake;
 
 namespace Overmind.Infrastructure.Notifications;
@@ -9,7 +10,8 @@ public sealed class NotificationsService(
     OvermindDbContext db,
     ReplyAutoActFanout autoAct,
     WakeDropFanout wakeDrop,
-    IEnumerable<INotificationDeliveryChannel> deliveryChannels)
+    IEnumerable<INotificationDeliveryChannel> deliveryChannels,
+    PlanningBatchScope? batchScope = null)
 {
     public const int ListCapacity = 50;
 
@@ -29,14 +31,40 @@ public sealed class NotificationsService(
 
         var notification = AgentNotification.Create(kind, text, projectId, featureSlug, tab, agent);
         db.AgentNotifications.Add(notification);
-        await db.SaveChangesAsync(ct);
 
+        if (batchScope is { Active: true })
+        {
+            batchScope.Stage(notification);
+            return notification;
+        }
+
+        await db.SaveChangesAsync(ct);
+        Deliver(notification);
+
+        return notification;
+    }
+
+    public void DeliverStaged()
+    {
+        if (batchScope is not { } batch)
+        {
+            return;
+        }
+
+        foreach (var notification in batch.StagedNotifications)
+        {
+            Deliver(notification);
+        }
+
+        batch.ClearStagedNotifications();
+    }
+
+    private void Deliver(AgentNotification notification)
+    {
         foreach (var channel in deliveryChannels)
         {
             _ = channel.TryDeliverAsync(notification, CancellationToken.None);
         }
-
-        return notification;
     }
 
     public async Task<NotificationsOverview> GetOverviewAsync(

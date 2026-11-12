@@ -35,6 +35,7 @@ import { taskReadiness } from "@/features/planning/lib/task-readiness";
 import type { TaskReadinessSegment } from "@/features/planning/lib/task-readiness";
 import { formatCalendarDate, formatRelativeTime } from "@/shared/lib/relative-time";
 import { FeatureClaimChip } from "@/features/planning/components/feature-claim-chip";
+import { UsageChip } from "@/features/usage";
 import { useDragAutoscroll } from "@/features/planning/lib/use-drag-autoscroll";
 import { useQueueReorder } from "@/features/planning/lib/use-queue-reorder";
 import { featureQueryOptions, planningKeys } from "@/features/planning/queries";
@@ -369,6 +370,7 @@ export function FeatureBoard({
                 {artifactChip("spec", item.specStatus)}
                 {artifactChip("plan", item.planStatus)}
                 <FeatureClaimChip item={item} />
+                <UsageChip projectId={projectId} slug={item.slug} />
               </div>
 
               {brief !== null ? <p className="text-xs text-muted">{brief}</p> : null}

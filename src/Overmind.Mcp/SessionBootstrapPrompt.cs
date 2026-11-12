@@ -10,7 +10,7 @@ namespace Overmind.Mcp;
 public sealed class SessionBootstrapPrompt
 {
     private const string WriteCostRouting =
-        "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact; several tasks at once → planning_upsert_tasks.";
+        "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact; several tasks at once → planning_upsert_tasks; a whole ceremony step (task close, gate present) → planning_batch.";
 
     private const string ReadCostRouting =
         "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.";

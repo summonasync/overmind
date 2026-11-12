@@ -26,6 +26,7 @@ import { FeaturePrioritySelect } from "@/features/planning/components/feature-pr
 import { TaskBoard } from "@/features/planning/components/task-board";
 import { TaskDependenciesPanel } from "@/features/planning/components/task-dependencies-panel";
 import { TaskEditor } from "@/features/planning/components/task-editor";
+import { FeatureUsageSection } from "@/features/usage";
 import { usePlanningFeature, usePlanningMutations } from "@/features/planning/lib/use-planning";
 import { allowedTransitions, featureStatusOptions } from "@/features/planning/lib/feature-transitions";
 import { artifactStatusTone } from "@/features/planning/lib/status-tone";
@@ -192,6 +193,8 @@ export function FeatureWorkspace({ projectId, slug, numbering }: FeatureWorkspac
       <TaskDependenciesPanel featureSlug={slug} numbering={numbering} tasks={tasks} />
 
       <CeremonyStepper feature={feature} activeTab={tab} onSelect={setTab} />
+
+      {tab === "result" ? <FeatureUsageSection projectId={projectId} slug={slug} /> : null}
 
       {feature.body.trim().length > 0 ? (
         <div className="rounded-lg border border-border bg-surface p-4">

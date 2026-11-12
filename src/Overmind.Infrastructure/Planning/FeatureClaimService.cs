@@ -49,7 +49,7 @@ public sealed class FeatureClaimService
                 }
 
                 feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
-                await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
+                await PersistAsync(feature, alias, vendor, effectiveSessionId, now, ct);
                 return feature;
             }
 
@@ -75,7 +75,7 @@ public sealed class FeatureClaimService
 
             feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
             feature.AppendLog(note, source);
-            await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
+            await PersistAsync(feature, alias, vendor, effectiveSessionId, now, ct);
             return feature;
         }
 
@@ -86,7 +86,7 @@ public sealed class FeatureClaimService
 
         feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
         feature.AppendLog($"{alias} by {vendor} claimed the feature", source);
-        await PersistAsync(projectId, alias, vendor, effectiveSessionId, now, ct);
+        await PersistAsync(feature, alias, vendor, effectiveSessionId, now, ct);
         return feature;
     }
 
@@ -105,6 +105,7 @@ public sealed class FeatureClaimService
         {
             feature.Release();
             feature.AppendLog("claim released via the human door", PlanningLogSource.Ui);
+            await ClaimSpanLedger.CloseOpenAsync(_db, feature.Id, DateTime.UtcNow, ct);
             await _db.SaveChangesAsync(ct);
             await _materialization.DispatchAsync(projectId, ct);
             return feature;
@@ -121,6 +122,7 @@ public sealed class FeatureClaimService
         feature.AppendLog(
             $"{session?.Alias ?? "unknown"} by {session?.Vendor ?? "unknown"} released the claim",
             PlanningLogSource.Agent);
+        await ClaimSpanLedger.CloseOpenAsync(_db, feature.Id, DateTime.UtcNow, ct);
         await _db.SaveChangesAsync(ct);
         await _materialization.DispatchAsync(projectId, ct);
         return feature;
@@ -274,7 +276,7 @@ public sealed class FeatureClaimService
         feature.AppendLog(
             $"session restarted, claim adopted by {caller.Alias} by {caller.Vendor}",
             PlanningLogSource.Agent);
-        await PersistAsync(feature.ProjectId, caller.Alias, caller.Vendor, callerId, now, ct);
+        await PersistAsync(feature, caller.Alias, caller.Vendor, callerId, now, ct);
         return true;
     }
 
@@ -315,8 +317,11 @@ public sealed class FeatureClaimService
     }
 
     private async Task PersistAsync(
-        Guid projectId, string alias, string vendor, Guid sessionId, DateTime now, CancellationToken ct)
+        PlanningFeature feature, string alias, string vendor, Guid sessionId,
+        DateTime now, CancellationToken ct)
     {
+        await ClaimSpanLedger.OpenAsync(_db, feature, alias, vendor, sessionId, now, ct);
+
         var session = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
         if (session is null)
         {
@@ -334,7 +339,7 @@ public sealed class FeatureClaimService
         }
 
         await _db.SaveChangesAsync(ct);
-        await _materialization.DispatchAsync(projectId, ct);
+        await _materialization.DispatchAsync(feature.ProjectId, ct);
     }
 
     private async Task EnsureLaneFreeAsync(

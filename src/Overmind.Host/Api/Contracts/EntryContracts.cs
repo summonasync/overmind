@@ -10,13 +10,19 @@ public sealed record CreateEntryRequest(
     string Title,
     string Content,
     string[]? Tags,
-    SkillFileDto[]? SkillFiles);
+    SkillFileDto[]? SkillFiles,
+    bool? Enforces = null);
 
 public sealed record UpdateEntryRequest(
     string Title,
     string Content,
     string[]? Tags,
-    SkillFileDto[]? SkillFiles);
+    SkillFileDto[]? SkillFiles,
+    bool? Enforces = null);
+
+public sealed record EntryLiftRequest(string Reason, string? Proof = null, Guid? SupersededById = null);
+
+public sealed record EntryAppendRequest(string Text);
 
 public sealed record EntryResponse(
     Guid Id,
@@ -30,7 +36,15 @@ public sealed record EntryResponse(
     IReadOnlyList<string> Tags,
     IReadOnlyList<SkillFileDto> SkillFiles,
     IReadOnlyList<EntryReadAck> ReadBy,
-    IReadOnlyList<EntryPointerResponse> Pointers);
+    IReadOnlyList<EntryPointerResponse> Pointers,
+    string State,
+    DateTime? StateAt,
+    string? StateBy,
+    string? StateReason,
+    string? StateProof,
+    Guid? SupersededById,
+    bool Enforces,
+    string? AuthorAlias);
 
 public sealed record EntryReadAck(string? Alias, string? Vendor, DateTime At);
 

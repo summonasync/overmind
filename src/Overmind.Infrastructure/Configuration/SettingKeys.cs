@@ -40,4 +40,6 @@ public static class SettingKeys
     public const string TelegramEnabled = "telegram.enabled";
     public const string TelegramBotToken = "telegram.botToken";
     public const string TelegramAllowedChatIds = "telegram.allowedChatIds";
+
+    public const string UsagePricing = "usage.pricing";
 }

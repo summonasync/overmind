@@ -241,6 +241,73 @@ The latest wave (`137`) shipped parallel-wave coordination — lane rosters,
 claim-time lane checks, a one-call wave snapshot, the directive channel and
 entry read-acks — bringing the MCP surface to 55 tools.
 
+Token-cost attribution is landing slice by slice: `POST /api/usage` ingests
+token records and `GET /api/usage/summary` rolls them up per feature through
+claim spans and per agent. Dollars are computed at read time from the pricing
+table in `GET/PUT /api/settings/usage-pricing` — the defaults cover the Claude
+rows (opus/sonnet/haiku, 2026 prices) and the table is meant to be edited for
+any other model you run.
+
+## Token usage attribution
+
+Overmind can track how many tokens each agent session burns and attribute
+that spend to the feature the session was claiming. The pieces:
+
+- **Ingest** — `POST /api/usage` accepts one record
+  (`alias`, `sessionId`, `ts`, `model`, the four token counters). Unknown
+  aliases and sessions are stored too and simply stay unattributed.
+- **Attribution** — a record lands on a feature when its `alias` matches a
+  claim span (`FeatureClaimSpan`) and its `ts` falls inside the span's
+  `ClaimedAt .. ReleasedAt` window. A record whose `sessionId` also matches
+  the span's Overmind claim session takes priority; records from a different
+  session-id space (a Claude Code session id, for example the Stop hook)
+  attribute by alias and time window against non-human spans. When one alias
+  holds several open spans at once the freshest claim wins — a v1 heuristic
+  that matches how parallel waves actually run. Spans exist from the moment
+  this feature shipped — there is no retroactive attribution for claims made
+  before the spans table was introduced. Records that match no span at all
+  stay unattributed per feature but still count in the per-agent totals.
+- **Pricing** — dollars are computed at read time from the pricing table, so
+  changing prices reprices history. Defaults ship for the Claude models; edit
+  the table via the settings door:
+
+  ```bash
+  curl -X PUT http://127.0.0.1:4761/api/settings/usage-pricing \
+       -H 'Content-Type: application/json' \
+       -d '{"pricing": {"glm-5": {"input": 1.5, "output": 7.0,
+                                   "cacheRead": 0.15, "cacheWrite": 0.3}}}'
+  ```
+
+  Prices are per 1M tokens. An empty table disables dollar math (tokens are
+  still counted).
+
+- **Stop hook** — `scripts/usage-stop-hook.sh` reports per-turn usage from a
+  Claude Code session: on every Stop event it sums the assistant usage
+  appended to the session transcript since the previous Stop and posts it to
+  `POST /api/usage`. It never blocks the session — if Overmind is down or the
+  transcript is unreadable it exits silently and retries the window on the
+  next Stop. **Activation is a manual, human-only step**: wiring a hook edits
+  your own `~/.claude/settings.json`, which agents must never touch. The
+  snippet below is documentation, not something an agent should apply:
+
+  ```json
+  {
+    "hooks": {
+      "Stop": [
+        {
+          "hooks": [
+            { "type": "command",
+              "command": "bash /absolute/path/to/overmind/scripts/usage-stop-hook.sh" }
+          ]
+        }
+      ]
+    }
+  }
+  ```
+
+  The alias comes from `OVERMIND_ALIAS` (falling back to git `user.name`),
+  the base URL from `OVERMIND_HOST` (default `http://127.0.0.1:4761`).
+
 ## Roadmap
 
 | Prio | Scope | Status |

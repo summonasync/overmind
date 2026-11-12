@@ -26,7 +26,13 @@ public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryR
             {
                 files.RuleFor(f => f.RelativePath).NotEmpty();
             });
+        RuleFor(x => x.Enforces)
+            .Must(enforces => enforces != true)
+            .WithMessage(EnforcesDecisionOnly)
+            .When(x => x.Type != EntryType.Decision);
     }
+
+    internal const string EnforcesDecisionOnly = "Only decision entries can carry the enforces flag.";
 }
 
 public sealed class EntryAckHumanRequestValidator : AbstractValidator<EntryAckHumanRequest>
@@ -52,5 +58,21 @@ public sealed class UpdateEntryRequestValidator : AbstractValidator<UpdateEntryR
             {
                 files.RuleFor(f => f.RelativePath).NotEmpty();
             });
+    }
+}
+
+public sealed class EntryLiftRequestValidator : AbstractValidator<EntryLiftRequest>
+{
+    public EntryLiftRequestValidator()
+    {
+        RuleFor(x => x.Reason).NotEmpty();
+    }
+}
+
+public sealed class EntryAppendRequestValidator : AbstractValidator<EntryAppendRequest>
+{
+    public EntryAppendRequestValidator()
+    {
+        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000);
     }
 }

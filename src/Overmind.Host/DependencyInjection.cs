@@ -18,6 +18,7 @@ using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
+using Overmind.Infrastructure.Usage;
 using Overmind.Infrastructure.Telegram;
 using Overmind.Infrastructure.VectorSearch;
 using Overmind.Infrastructure.Wake;
@@ -137,10 +138,14 @@ public static class DependencyInjection
         services.AddScoped<GrimoireIntegrationService>();
 
         services.AddScoped<TaskDependencyService>();
+        services.AddScoped<PlanningBatchScope>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<PlanningArtifactDiffService>();
         services.AddScoped<PlanningOperationStore>();
+        services.AddScoped<PlanningBatchService>();
         services.AddScoped<NotificationsService>();
+        services.AddScoped<UsagePricingCatalog>();
+        services.AddScoped<UsageSummaryService>();
         services.AddScoped<CeremoniesService>();
         services.AddScoped<ManifestImporter>();
         services.AddSingleton<BrowserOrigin>();
@@ -151,6 +156,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<CreateEntryRequest>, CreateEntryRequestValidator>();
         services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
         services.AddSingleton<IValidator<EntryAckHumanRequest>, EntryAckHumanRequestValidator>();
+        services.AddSingleton<IValidator<EntryLiftRequest>, EntryLiftRequestValidator>();
+        services.AddSingleton<IValidator<EntryAppendRequest>, EntryAppendRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();
         services.AddSingleton<IValidator<UpdateKitRequest>, UpdateKitRequestValidator>();
         services.AddSingleton<IValidator<KitScanRequest>, KitScanRequestValidator>();
@@ -165,6 +172,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<SetPlanningFeatureCodePinRequest>, SetPlanningFeatureCodePinRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningFeatureStatusRequest>, SetPlanningFeatureStatusRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
+        services.AddSingleton<IValidator<PlanningBatchRequest>, PlanningBatchRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<EditPlanningLogRequest>, EditPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<DeclinePlanningArtifactRequest>, DeclinePlanningArtifactRequestValidator>();

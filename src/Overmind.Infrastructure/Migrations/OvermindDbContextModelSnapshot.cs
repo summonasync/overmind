@@ -124,6 +124,9 @@ namespace Overmind.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AuthorAlias")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -134,7 +137,33 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<int>("CurrentVersion")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("Enforces")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("active");
+
+                    b.Property<DateTime?>("StateAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StateBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StateProof")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StateReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SupersededById")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
@@ -278,6 +307,51 @@ namespace Overmind.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("EntryVersions");
+                });
+
+            modelBuilder.Entity("Overmind.Core.FeatureClaimSpan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ByHuman")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("ClaimedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FeatureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Vendor")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("FeatureId", "ReleasedAt");
+
+                    b.ToTable("FeatureClaimSpans");
                 });
 
             modelBuilder.Entity("Overmind.Core.FrontmatterKey", b =>
@@ -1024,6 +1098,54 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("TelegramValidatorMappings");
                 });
 
+            modelBuilder.Entity("Overmind.Core.UsageRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CacheReadTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CacheWriteTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Ts")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("Ts");
+
+                    b.HasIndex("Alias", "SessionId");
+
+                    b.ToTable("UsageRecords");
+                });
+
             modelBuilder.Entity("Overmind.Core.WaveMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1247,6 +1369,21 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.FeatureClaimSpan", b =>
+                {
+                    b.HasOne("Overmind.Core.PlanningFeature", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Overmind.Core.Issue", b =>
                 {
                     b.HasOne("Overmind.Core.Project", null)
@@ -1445,6 +1582,14 @@ namespace Overmind.Infrastructure.Migrations
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.UsageRecord", b =>
+                {
+                    b.HasOne("Overmind.Core.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Overmind.Core.WaveMessage", b =>
