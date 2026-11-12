@@ -20,6 +20,7 @@ internal sealed class PlanningCliArgs
         "unclaim",
         "materialization-status",
         "watch",
+        "report",
     };
 
     private PlanningCliArgs(

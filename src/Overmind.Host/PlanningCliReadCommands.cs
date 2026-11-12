@@ -15,6 +15,7 @@ internal static class PlanningCliReadCommands
             "artifact diff" => await DiffAsync(run, ct),
             "materialization-status" => await MaterializationAsync(run, ct),
             "watch" => await PlanningCliWatch.RunAsync(run, ct),
+            "report" => await ReportAsync(run, ct),
             _ => await run.UnknownAsync(),
         };
 
@@ -149,6 +150,26 @@ internal static class PlanningCliReadCommands
         var response = await run.Client.GetAsync(
             $"/api/agent/projects/{project}/planning/materialization-status", query: null, ct);
         await run.WriteAsync(response, PlanningCliBoardText.Materialization, ct);
+        return 0;
+    }
+
+    private static async Task<int> ReportAsync(PlanningCliRun run, CancellationToken ct)
+    {
+        var options = PlanningCliReportOptions.From(run.Args);
+        var project = run.Args.ProjectId();
+        if (run.Failed)
+        {
+            return await run.ReportUsageAsync();
+        }
+
+        var query = new Dictionary<string, string?>
+        {
+            ["since"] = options.Since,
+            ["until"] = options.Until,
+            ["tag"] = options.Tag,
+        };
+        var response = await run.Client.GetAsync($"/api/projects/{project}/entries", query, ct);
+        await run.WriteAsync(response, entries => PlanningCliReportText.Render(entries, options.Day), ct);
         return 0;
     }
 }
