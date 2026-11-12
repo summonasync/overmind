@@ -16,6 +16,7 @@ internal static class PlanningCliCommands
           lanes --project <guid>
           artifact diff <guid|alias> [--from n] [--to n] --project <guid>
           materialization-status --project <guid>
+          watch [--alias a] [--mentions | --replies] [--timeout 30m] [--interval 10s]
 
         draft mutations (agent session required):
           claim <slug> [--alias a] [--vendor v] [--override-lane-check] --project <guid>
@@ -49,6 +50,7 @@ internal static class PlanningCliCommands
         "lanes",
         "artifact diff",
         "materialization-status",
+        "watch",
     };
 
     private static readonly HashSet<string> DraftMutations = new(StringComparer.Ordinal)

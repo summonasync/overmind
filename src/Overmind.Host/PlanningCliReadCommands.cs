@@ -14,6 +14,7 @@ internal static class PlanningCliReadCommands
             "lanes" => await LanesAsync(run, ct),
             "artifact diff" => await DiffAsync(run, ct),
             "materialization-status" => await MaterializationAsync(run, ct),
+            "watch" => await PlanningCliWatch.RunAsync(run, ct),
             _ => await run.UnknownAsync(),
         };
 
