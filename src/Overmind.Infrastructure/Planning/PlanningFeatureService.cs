@@ -146,7 +146,7 @@ public sealed partial class PlanningFeatureService
                 status.Value,
                 $"status moved to '{StatusText(status.Value)}' via ui",
                 PlanningLogSource.Ui);
-            ReleaseClaimOnDone(feature, PlanningLogSource.Ui);
+            await ReleaseClaimOnDoneAsync(feature, PlanningLogSource.Ui, ct);
             doneFlip = status.Value == PlanningFeatureStatus.Done;
         }
 
@@ -310,7 +310,7 @@ public sealed partial class PlanningFeatureService
                 feature.AppendLog(provenance, PlanningLogSource.Agent);
             }
 
-            ReleaseClaimOnDone(feature, PlanningLogSource.Agent);
+            await ReleaseClaimOnDoneAsync(feature, PlanningLogSource.Agent, ct);
         }
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -398,7 +398,8 @@ public sealed partial class PlanningFeatureService
         await _db.SaveChangesAsync(ct);
     }
 
-    private static void ReleaseClaimOnDone(PlanningFeature feature, PlanningLogSource source)
+    private async Task ReleaseClaimOnDoneAsync(
+        PlanningFeature feature, PlanningLogSource source, CancellationToken ct)
     {
         if (feature.Status != PlanningFeatureStatus.Done || feature.ClaimSessionId is null)
         {
@@ -407,6 +408,7 @@ public sealed partial class PlanningFeatureService
 
         feature.Release();
         feature.AppendLog("claim released on done-close", source);
+        await ClaimSpanLedger.CloseOpenAsync(_db, feature.Id, DateTime.UtcNow, ct);
     }
 
     public async Task<PlanningFeature> SetCodePinAsync(
