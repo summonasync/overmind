@@ -430,6 +430,44 @@ public sealed record PlanningArtifactDiffResponse(
     int ToVersion,
     string Diff);
 
+public sealed record PlanningBatchRequest(PlanningBatchOpRequest[] Ops);
+
+public sealed record PlanningBatchOpRequest(
+    string Op,
+    Guid? ArtifactId = null,
+    string? Alias = null,
+    PlanningBatchPatchRequest? Patch = null,
+    string? Note = null,
+    string? Status = null,
+    string? LogNote = null,
+    PlanningTaskUpsertRequest[]? Tasks = null,
+    string? Kind = null,
+    string? Text = null,
+    string? Tab = null,
+    string? FeatureSlug = null,
+    string? From = null);
+
+public sealed record PlanningBatchPatchRequest(
+    string? Op,
+    string? Section,
+    string? Content,
+    int? AcIndex,
+    string? AcText,
+    string? Brief,
+    string? LogNote,
+    string? Reason = null);
+
+public sealed record PlanningBatchResponse(
+    string FeatureSlug,
+    PlanningBatchOpResultResponse[] Results,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null);
+
+public sealed record PlanningBatchOpResultResponse(
+    string Op,
+    int Index,
+    object? Payload = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Error = null);
+
 public sealed record PlanningWorkflowResponse(
     PlanningMaterialization Materialization,
     HumanValidationOverride RequireHumanValidation,

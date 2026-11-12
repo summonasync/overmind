@@ -84,5 +84,8 @@ public enum PlanningFailureCode
     WaveTextTooLong,
     MissingConversation,
     ConversationTextTooLong,
-    MissingConversationMessage
+    MissingConversationMessage,
+    BatchEmpty,
+    InvalidBatchOp,
+    BatchArtifactOutsideFeature
 }
