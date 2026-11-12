@@ -25,6 +25,9 @@ public sealed class OvermindTools
     private const string SkillDeleteRefused =
         "SkillEntryDeleteRefused: skill entries are managed via the Overmind UI — they carry skill files and a kit lifecycle, so delete_entry refuses them.";
 
+    private const string SkillAppendRefused =
+        "SkillEntryAppendRefused: skill entries are managed via the Overmind UI — they carry skill files and a kit lifecycle, so append_entry refuses them.";
+
     private const string KitOwnedEntryText =
         "KitOwnedEntry: entry '{0}' is managed by a skill kit '{1}' — the kit reimport or the UI owns it.";
 
@@ -38,8 +41,11 @@ public sealed class OvermindTools
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-        "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag and q (fulltext). " +
+        "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext) and state (all | active | lifted | superseded). " +
+        "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
         "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
+
+    private const int FollowUpTextCap = 2000;
 
     private const string SearchDescription =
         "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
@@ -73,6 +79,7 @@ public sealed class OvermindTools
     public async Task<JsonElement> ListEntries(
         Guid projectId,
         [Description("Optional entry type filter: note, decision, gate, guard, skill, idea, audit or tombstone.")] string? type = null,
+        [Description("Lifecycle filter: all | active | lifted | superseded. Omit it and the server applies its default — active for the decision/gate/guard trio, all for every other type and when no type is given.")] string? state = null,
         [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
         [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
         [Description("Set true to include full entry bodies; by default only metadata is returned.")] bool include_content = false,
@@ -82,6 +89,11 @@ public sealed class OvermindTools
         if (!string.IsNullOrWhiteSpace(type))
         {
             filters.Add($"type={Uri.EscapeDataString(NormalizeType(type))}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            filters.Add($"state={Uri.EscapeDataString(state.Trim())}");
         }
 
         if (!string.IsNullOrWhiteSpace(tag))
@@ -123,12 +135,13 @@ public sealed class OvermindTools
         Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
 
     [McpServerTool(Name = "write_entry", Destructive = false, Idempotent = false)]
-    [Description("Creates a new entry (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead and never auto-creates a project row.")]
+    [Description("Creates a new entry (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act. The optional enforces flag is decision-only — it marks the decision as a standing rule agents must obey, and the server refuses enforces=true on any other type. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead and never auto-creates a project row.")]
     public async Task<JsonElement> WriteEntry(
         [Description("Entry type: note, decision, gate, guard, idea, audit or tombstone.")] string type,
         [Description("Entry title.")] string title,
         [Description("Markdown body of the entry.")] string content,
         [Description("Optional tags attached to the entry.")] string[]? tags = null,
+        [Description("Decision-only flag marking the decision as a standing rule agents must obey; the server refuses enforces=true on any other type.")] bool? enforces = null,
         [Description("Id of the project to write into; resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
@@ -140,7 +153,8 @@ public sealed class OvermindTools
             type = NormalizeWritableType(type),
             title,
             content,
-            tags
+            tags,
+            enforces
         };
 
         var entry = await Guarded(() => _api.PostAsync("/api/entries", body, ct));
@@ -148,10 +162,11 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "update_entry", Destructive = false, Idempotent = false)]
-    [Description("Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone, keeping its title and tags. Skills are managed via the Overmind UI.")]
+    [Description("Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone, keeping its title and tags. Skills are managed via the Overmind UI. An explicit enforces sets the decision-only standing-rule flag (the server refuses enforces=true on other types); omitting it keeps the current value. To add new information without rewriting the body, append_entry is the cheaper door.")]
     public async Task<JsonElement> UpdateEntry(
         [Description("Id of the entry to update.")] Guid entryId,
         [Description("New markdown body of the entry.")] string content,
+        [Description("Decision-only flag; an explicit value sets it, omitting it keeps the current value. The server refuses enforces=true on non-decisions.")] bool? enforces = null,
         CancellationToken ct = default)
     {
         var existing = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
@@ -164,7 +179,7 @@ public sealed class OvermindTools
 
         var title = existing.GetProperty("title").GetString() ?? string.Empty;
 
-        var entry = await Guarded(() => _api.PutAsync($"/api/entries/{entryId}", new { title, content }, ct));
+        var entry = await Guarded(() => _api.PutAsync($"/api/entries/{entryId}", new { title, content, enforces }, ct));
         return CompactEntry(entry);
     }
 
@@ -221,6 +236,57 @@ public sealed class OvermindTools
             ["deleted"] = true
         };
         return echo.Deserialize<JsonElement>();
+    }
+
+    [McpServerTool(Name = "lift_entry", Destructive = false, Idempotent = true)]
+    [Description("Lifts one standing rule — a guard, gate or decision that no longer applies — without deleting it: " +
+        "the state moves to 'lifted', or to 'superseded' when supersededById points at the replacement entry, and the " +
+        "reason, optional proof, actor and date are stamped on the entry as provenance. The body, title and tags stay " +
+        "untouched; re-lift is allowed with last write winning. A lifted entry leaves the active default listings " +
+        "(list_entries trio default, briefing trio sections) and surfaces in the briefing's liftedRecently tail. " +
+        "Lift refuses skills and tombstones (the UI owns the skill lifecycle; a tombstone is already the ceiling) and " +
+        "validates the supersede target — unknown, cross-project, tombstone or self-reference targets come back as " +
+        "readable errors. For replacement content prefer write_entry + supersededById over a body rewrite.")]
+    public async Task<JsonElement> LiftEntry(
+        [Description("Id of the entry to lift — take it from list_entries or read_entry.")] Guid entryId,
+        [Description("Why the rule no longer applies; stored as the entry's stateReason.")] string reason,
+        [Description("Optional opaque proof of the decision — a notification id or human reply id.")] string? proof = null,
+        [Description("Optional id of the replacement entry; setting it marks the lift as 'superseded' instead of 'lifted'. Must belong to the same project and must not be a tombstone.")] Guid? supersededById = null,
+        CancellationToken ct = default)
+    {
+        var lifted = await Guarded(() => _api.PostAsync(
+            $"/api/entries/{entryId}/lift",
+            new { reason, proof, supersededById },
+            ct));
+
+        return LifecycleEcho(lifted);
+    }
+
+    [McpServerTool(Name = "append_entry", Destructive = false, Idempotent = false)]
+    [Description("Appends a follow-up to an entry — one dated '## Follow-up yyyy-MM-dd' block at the content tail, " +
+        "through the version machinery: the previous content is snapshotted (the version bumps) and stays readable " +
+        "via the versions endpoint, and the search index refreshes. The cheap door for adding new information to a " +
+        "note, decision, gate or guard without a full update_entry rewrite. text is capped at 2000 chars, enforced " +
+        "here before the call; blank text is refused. Skills are managed via the Overmind UI.")]
+    public async Task<JsonElement> AppendEntry(
+        [Description("Id of the entry to append to — take it from list_entries or read_entry.")] Guid entryId,
+        [Description("Follow-up text; the server stamps it under a dated '## Follow-up' heading, max 2000 chars.")] string text,
+        CancellationToken ct = default)
+    {
+        TextCapLint.Cap(text, FollowUpTextCap);
+
+        var existing = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
+        if (string.Equals(existing.GetProperty("type").GetString(), "skill", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new McpException(SkillAppendRefused);
+        }
+
+        var appended = await Guarded(() => _api.PostAsync(
+            $"/api/entries/{entryId}/append",
+            new { text },
+            ct));
+
+        return LifecycleEcho(appended);
     }
 
     [McpServerTool(Name = "search", ReadOnly = true)]
@@ -304,6 +370,27 @@ public sealed class OvermindTools
         }
 
         return compact.Deserialize<JsonElement>();
+    }
+
+    private static JsonElement LifecycleEcho(JsonElement entry)
+    {
+        var echo = new JsonObject
+        {
+            ["id"] = entry.GetProperty("id").GetString(),
+            ["type"] = entry.GetProperty("type").GetString(),
+            ["version"] = entry.GetProperty("currentVersion").GetInt32(),
+            ["state"] = entry.GetProperty("state").GetString(),
+            ["updatedAt"] = entry.GetProperty("updatedAt").GetString(),
+            ["bodyChars"] = entry.GetProperty("content").GetString()?.Length ?? 0
+        };
+
+        var supersededById = entry.GetProperty("supersededById").GetString();
+        if (supersededById is not null)
+        {
+            echo["supersededById"] = supersededById;
+        }
+
+        return echo.Deserialize<JsonElement>();
     }
 
     private static JsonObject SearchHit(JsonElement hit, string query)

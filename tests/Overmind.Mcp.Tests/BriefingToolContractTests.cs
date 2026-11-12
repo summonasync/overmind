@@ -58,12 +58,17 @@ public class BriefingToolContractTests : McpSessionTestBase
         grave["deletedAt"]!.GetValue<string>().ShouldBe("2026-10-04T12:00:00Z");
         grave.ShouldNotContainKey("content");
 
+        briefing.ShouldContainKey("liftedRecently");
+        briefing["liftedRecently"]!.AsArray().Count.ShouldBe(0);
+
         var briefingRequests = Stub.Requests
             .Where(r => r.Path == $"/api/projects/{Canned.ProjectId}/entries")
             .ToList();
-        briefingRequests.Count.ShouldBe(5);
+        briefingRequests.Count.ShouldBe(6);
         briefingRequests.Select(r => ParseQuery(r.Query).GetValueOrDefault("type")).ShouldBe(
-            ["guard", "gate", "decision", "note", "tombstone"]);
+            ["guard", "gate", "decision", "note", null, "tombstone"]);
+        briefingRequests.Select(r => ParseQuery(r.Query).GetValueOrDefault("state")).ShouldBe(
+            ["active", "active", "active", null, null, null]);
         briefingRequests.ShouldAllBe(r => r.Method == "GET");
     }
 
@@ -178,7 +183,7 @@ public class BriefingToolContractTests : McpSessionTestBase
         response["result"]!["isError"].ShouldBeNull();
 
         var briefing = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
-        foreach (var section in new[] { "guards", "gates", "decisions", "notes", "tombstones" })
+        foreach (var section in new[] { "guards", "gates", "decisions", "notes", "tombstones", "liftedRecently" })
         {
             briefing.ContainsKey(section).ShouldBeTrue($"section '{section}' must never be omitted");
             briefing[section]!.AsArray().Count.ShouldBe(0);
@@ -224,7 +229,7 @@ public class BriefingToolContractTests : McpSessionTestBase
         Stub.Requests
             .Where(r => r.Path == $"/api/projects/{Canned.ProjectId}/entries")
             .Select(r => ParseQuery(r.Query).GetValueOrDefault("type"))
-            .ShouldBe(["guard", "gate", "decision", "note"]);
+            .ShouldBe(["guard", "gate", "decision", "note", null]);
     }
 
     [Fact]
@@ -256,7 +261,7 @@ public class BriefingToolContractTests : McpSessionTestBase
         body["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
         body["create"]!.GetValue<bool>().ShouldBeFalse();
 
-        Stub.Requests.Count(r => r.Path == $"/api/projects/{Canned.ProjectId}/entries").ShouldBe(5);
+        Stub.Requests.Count(r => r.Path == $"/api/projects/{Canned.ProjectId}/entries").ShouldBe(6);
     }
 
     [Fact]
@@ -271,7 +276,9 @@ public class BriefingToolContractTests : McpSessionTestBase
         tool["description"]!.GetValue<string>().ShouldBe(
             "ONE call returns the start-of-work snapshot of a project — the guardrail picture an agent absorbs before any work: " +
             "guards and gates with full bodies, decisions and the latest notes as ~200-character snippets (read_entry for depth), " +
-            "and the tombstone list of buried entries. " +
+            "and the tombstone list of buried entries. Guards, gates and decisions render active entries only — a lifted rule is a rule that no longer applies; " +
+            "decisions carrying enforces=true additionally appear in the guards section marked decision·enforces, and the liftedRecently tail lists entries " +
+            "lifted or superseded within the last 14 days (max 5 rows, newest first: title, state, date, reason snippet, successor title for superseded). " +
             "One consolidated tool by design: four specialized getguards/getgates/getnotes/gettombstones lookups would multiply " +
             "the discovery surface for a single moment-in-time need; list_entries stays the exploration tool, this one is the start ritual. " +
             "When the project's lane roster carries liveSurfaces (globs + owners of running stands watched by a lane), a liveSurfaces section lists them so the start-of-work picture warns before any watched path is touched; the section is absent when no lane watches anything. " +
@@ -292,6 +299,170 @@ public class BriefingToolContractTests : McpSessionTestBase
             ParseQuery(req.Query).GetValueOrDefault("type") == "decision"
                 ? new StubOvermindApi.Response(200, DecisionJson(content))
                 : new StubOvermindApi.Response(200, "[]"));
+    }
+
+    [Fact]
+    public async Task Briefing_EnforcesDecision_LandsInTheGuardsSectionMarkedAndStaysInDecisions()
+    {
+        var decision = new JsonObject
+        {
+            ["id"] = "dddddddd-dddd-dddd-dddd-dddddddddddd",
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "decision",
+            ["title"] = "Release freeze",
+            ["content"] = "No releases during the sprint.",
+            ["currentVersion"] = 1,
+            ["createdAt"] = "2026-09-01T10:00:00Z",
+            ["updatedAt"] = "2026-09-01T10:00:00Z",
+            ["tags"] = new JsonArray(),
+            ["skillFiles"] = new JsonArray(),
+            ["state"] = "active",
+            ["stateAt"] = null,
+            ["stateBy"] = null,
+            ["stateReason"] = null,
+            ["stateProof"] = null,
+            ["supersededById"] = null,
+            ["enforces"] = true
+        };
+
+        Stub.Route(
+            "GET",
+            $"/api/projects/{Canned.ProjectId}/entries",
+            req => ParseQuery(req.Query).GetValueOrDefault("type") switch
+            {
+                "decision" => new StubOvermindApi.Response(200, new JsonArray(decision.DeepClone()).ToJsonString()),
+                _ => new StubOvermindApi.Response(200, "[]")
+            });
+
+        var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var briefing = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+
+        var guards = briefing["guards"]!.AsArray();
+        guards.Count.ShouldBe(1);
+        var marked = guards[0]!.AsObject();
+        marked.Select(field => field.Key).ShouldBe(["id", "title", "content", "updatedAt", "kind"]);
+        marked["kind"]!.GetValue<string>().ShouldBe("decision·enforces");
+        marked["title"]!.GetValue<string>().ShouldBe("Release freeze");
+
+        var decisions = briefing["decisions"]!.AsArray();
+        decisions.Count.ShouldBe(1);
+        decisions[0]!["title"]!.GetValue<string>().ShouldBe("Release freeze");
+    }
+
+    [Fact]
+    public async Task Briefing_LiftedRecently_ListsRecentLiftsNewestFirstWithSuccessors()
+    {
+        var freeze = Guid.Parse("5a5a5a5a-5a5a-5a5a-5a5a-5a5a5a5a5a5a");
+        var storage = Guid.Parse("5b5b5b5b-5b5b-5b5b-5b5b-5b5b5b5b5b5b");
+        var postgres = Guid.Parse("5c5c5c5c-5c5c-5c5c-5c5c-5c5c5c5c5c5c");
+        var ancient = Guid.Parse("5d5d5d5d-5d5d-5d5d-5d5d-5d5d5d5d5d5d");
+        var now = DateTimeOffset.UtcNow;
+
+        RouteLifecycleEntries(
+            RetiredEntry(freeze, "gate", "Release freeze", "lifted", now.AddDays(-2), "The release shipped.", null),
+            RetiredEntry(storage, "decision", "Storage choice", "superseded", now.AddDays(-1), "Postgres took over.", postgres),
+            RetiredEntry(postgres, "decision", "Postgres default", "active", now.AddDays(-1), string.Empty, null),
+            RetiredEntry(ancient, "guard", "Ancient guard", "lifted", now.AddDays(-20), "Long gone.", null));
+
+        var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var tail = JsonNode.Parse(Canned.ToolResultText(response))!["liftedRecently"]!.AsArray();
+        tail.Count.ShouldBe(2);
+
+        var newest = tail[0]!.AsObject();
+        newest["id"]!.GetValue<string>().ShouldBe(storage.ToString());
+        newest["title"]!.GetValue<string>().ShouldBe("Storage choice");
+        newest["state"]!.GetValue<string>().ShouldBe("superseded");
+        newest["stateAt"]!.GetValue<string>().ShouldBe(now.AddDays(-1).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture));
+        newest["reason"]!.GetValue<string>().ShouldBe("Postgres took over.");
+        newest["successor"]!.GetValue<string>().ShouldBe("Postgres default");
+
+        var lifted = tail[1]!.AsObject();
+        lifted["state"]!.GetValue<string>().ShouldBe("lifted");
+        lifted.ShouldNotContainKey("successor");
+    }
+
+    [Fact]
+    public async Task Briefing_LiftedRecently_CapsAtFiveRowsNewestFirst()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var entries = Enumerable.Range(1, 6)
+            .Select(i => RetiredEntry(
+                Guid.Parse($"6{i:D7}-0000-0000-0000-000000000000"),
+                "decision",
+                $"Lifted number {i}",
+                "lifted",
+                now.AddHours(-i),
+                $"Reason {i}.",
+                null))
+            .ToArray();
+
+        RouteLifecycleEntries(entries);
+
+        var response = await Driver.CallToolAsync("overmind_briefing", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var tail = JsonNode.Parse(Canned.ToolResultText(response))!["liftedRecently"]!.AsArray();
+        tail.Count.ShouldBe(5);
+        tail[0]!["title"]!.GetValue<string>().ShouldBe("Lifted number 1");
+        tail[4]!["title"]!.GetValue<string>().ShouldBe("Lifted number 5");
+    }
+
+    private void RouteLifecycleEntries(params JsonObject[] entries)
+    {
+        var payload = new JsonArray();
+        foreach (var entry in entries)
+        {
+            payload.Add(entry.DeepClone());
+        }
+
+        Stub.Route(
+            "GET",
+            $"/api/projects/{Canned.ProjectId}/entries",
+            req => ParseQuery(req.Query).ContainsKey("type")
+                ? new StubOvermindApi.Response(200, "[]")
+                : new StubOvermindApi.Response(200, payload.ToJsonString()));
+    }
+
+    private static JsonObject RetiredEntry(
+        Guid id,
+        string type,
+        string title,
+        string state,
+        DateTimeOffset stateAt,
+        string reason,
+        Guid? supersededById)
+    {
+        var stamp = stateAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        return new JsonObject
+        {
+            ["id"] = id.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = type,
+            ["title"] = title,
+            ["content"] = "body",
+            ["currentVersion"] = 1,
+            ["createdAt"] = stamp,
+            ["updatedAt"] = stamp,
+            ["tags"] = new JsonArray(),
+            ["skillFiles"] = new JsonArray(),
+            ["state"] = state,
+            ["stateAt"] = stamp,
+            ["stateBy"] = "Dan (qwen)",
+            ["stateReason"] = reason,
+            ["stateProof"] = null,
+            ["supersededById"] = supersededById?.ToString(),
+            ["enforces"] = false
+        };
     }
 
     private static string DecisionJson(string content)
