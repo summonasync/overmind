@@ -187,7 +187,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
         tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
 
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(38);
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(39);
     }
 
     [Fact]

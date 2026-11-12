@@ -182,7 +182,7 @@ public sealed class PlanningArtifactTools
         return CompactTaskBatch(batch);
     }
 
-    private static JsonArray BuildTaskItems(JsonElement tasks)
+    internal static JsonArray BuildTaskItems(JsonElement tasks)
     {
         if (tasks.ValueKind == JsonValueKind.String)
         {
@@ -289,7 +289,7 @@ public sealed class PlanningArtifactTools
         return payload;
     }
 
-    private static JsonElement CompactTaskBatch(JsonElement batch)
+    internal static JsonElement CompactTaskBatch(JsonElement batch)
     {
         var tasks = new JsonArray();
         foreach (var artifact in batch.GetProperty("artifacts").EnumerateArray())
