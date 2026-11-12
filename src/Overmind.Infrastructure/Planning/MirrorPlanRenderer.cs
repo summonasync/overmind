@@ -156,10 +156,10 @@ internal static class MirrorPlanRenderer
 
     private static string StateMarker(ContextEntry entry, IReadOnlyDictionary<Guid, string> titlesById)
     {
-        var marker = $"> state: {entry.State} {entry.StateAt:yyyy-MM-dd} — {entry.StateReason}";
+        var marker = $"> state: {entry.State} {entry.StateAt:yyyy-MM-dd} — {FrontmatterLine(entry.StateReason ?? string.Empty)}";
         if (entry.SupersededById is { } successorId && titlesById.TryGetValue(successorId, out var successorTitle))
         {
-            marker += $" → {successorTitle}";
+            marker += $" → {FrontmatterLine(successorTitle)}";
         }
 
         return marker;

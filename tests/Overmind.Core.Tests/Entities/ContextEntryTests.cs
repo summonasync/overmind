@@ -246,6 +246,28 @@ public class ContextEntryTests
         Should.Throw<InvalidOperationException>(() =>
                 entry.Lift("why", "Van", null, null))
             .Message.ShouldContain(type.ToString());
+
+        entry.State.ShouldBe(ContextEntry.ActiveState);
+        entry.StateAt.ShouldBeNull();
+        entry.SupersededById.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Lift_ReLiftWithoutSuccessor_OverwritesProvenanceAndClearsSuccessor()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Decision, "pick zebra", "first take");
+
+        entry.Lift("moved to the pipeline gate", "Dan (qwen)", null, Guid.NewGuid());
+        var supersededAt = entry.StateAt!.Value;
+
+        entry.Lift("contradicted by the BFF rule", "Van (claude)", "reply 42", null);
+
+        entry.State.ShouldBe(ContextEntry.LiftedState);
+        entry.StateAt.Value.ShouldBeGreaterThanOrEqualTo(supersededAt);
+        entry.StateBy.ShouldBe("Van (claude)");
+        entry.StateReason.ShouldBe("contradicted by the BFF rule");
+        entry.StateProof.ShouldBe("reply 42");
+        entry.SupersededById.ShouldBeNull();
     }
 
     [Fact]
