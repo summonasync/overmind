@@ -18,6 +18,7 @@ using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Search;
+using Overmind.Infrastructure.Usage;
 using Overmind.Infrastructure.Telegram;
 using Overmind.Infrastructure.VectorSearch;
 using Overmind.Infrastructure.Wake;
@@ -141,6 +142,8 @@ public static class DependencyInjection
         services.AddScoped<PlanningArtifactDiffService>();
         services.AddScoped<PlanningOperationStore>();
         services.AddScoped<NotificationsService>();
+        services.AddScoped<UsagePricingCatalog>();
+        services.AddScoped<UsageSummaryService>();
         services.AddScoped<CeremoniesService>();
         services.AddScoped<ManifestImporter>();
         services.AddSingleton<BrowserOrigin>();

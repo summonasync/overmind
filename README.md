@@ -241,6 +241,13 @@ The latest wave (`137`) shipped parallel-wave coordination — lane rosters,
 claim-time lane checks, a one-call wave snapshot, the directive channel and
 entry read-acks — bringing the MCP surface to 55 tools.
 
+Token-cost attribution is landing slice by slice: `POST /api/usage` ingests
+token records and `GET /api/usage/summary` rolls them up per feature through
+claim spans and per agent. Dollars are computed at read time from the pricing
+table in `GET/PUT /api/settings/usage-pricing` — the defaults cover the Claude
+rows (opus/sonnet/haiku, 2026 prices) and the table is meant to be edited for
+any other model you run.
+
 ## Roadmap
 
 | Prio | Scope | Status |
