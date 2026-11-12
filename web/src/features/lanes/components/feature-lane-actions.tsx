@@ -131,7 +131,7 @@ function NewLaneForm({ lanes, pending, onSubmit, onCancel }: NewLaneFormProps) {
         maxLength={LANE_NAME_MAX_LENGTH}
         autoFocus
         disabled={pending}
-        className="w-40 px-1.5 py-0.5 text-xs"
+        className="w-40"
       />
       <Button
         type="submit"

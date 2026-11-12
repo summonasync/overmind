@@ -44,6 +44,21 @@ public sealed class PlanningException : Exception
     public static PlanningException TaskBatchItem(int index, PlanningException inner) =>
         new(inner.Kind, inner.Code, $"tasks[{index}]: {inner.Message}", inner);
 
+    public static PlanningException BatchOp(int index, PlanningException inner) =>
+        new(inner.Kind, inner.Code, $"ops[{index}]: {inner.Message}", inner);
+
+    public static PlanningException BatchEmpty() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BatchEmpty,
+            "A batch must carry at least one op: an empty ops[] would commit nothing and still spend a materialization pass.");
+
+    public static PlanningException BatchOpInvalid(string requirement) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidBatchOp, requirement);
+
+    public static PlanningException BatchArtifactOutsideFeature(Guid artifactId, string featureSlug) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.BatchArtifactOutsideFeature,
+            $"Artifact '{artifactId}' does not belong to feature '{featureSlug}': batch ops stay on the batch feature — " +
+            "the route's claim check covers that feature only.");
+
     public static PlanningException TaskBatchConcurrentWrite() =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact,
             "A concurrent writer claimed a task order while the batch was saving; the whole batch was rolled back — retry the call.");

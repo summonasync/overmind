@@ -18,8 +18,9 @@ const api = () =>
 const hooks = () =>
   readFileSync(new URL("../src/features/projects/lib/use-projects.ts", import.meta.url), "utf8");
 
+// f8cc73a moved the settings surface into the settings hub at /settings/projects.
 const page = () =>
-  readFileSync(new URL("../src/pages/projects-page/ui/projects-page.tsx", import.meta.url), "utf8");
+  readFileSync(new URL("../src/pages/projects-settings-page/ui/projects-settings-page.tsx", import.meta.url), "utf8");
 
 test("an unset or whitespace-only manifest counts as absent", () => {
   assert.equal(manifestIsAbsent(null), true);

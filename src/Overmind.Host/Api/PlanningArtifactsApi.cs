@@ -414,7 +414,7 @@ public static class PlanningArtifactsApi
     private static IResult ArtifactNotFound(Guid id) =>
         HttpErrors.NotFound($"Artifact '{id}' was not found. {PlanningException.ArtifactNotFoundHint}");
 
-    private static async Task<PlanningFeature> ResolveFeatureOrThrow(
+    internal static async Task<PlanningFeature> ResolveFeatureOrThrow(
         OvermindDbContext db, Guid projectId, string slug, CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);

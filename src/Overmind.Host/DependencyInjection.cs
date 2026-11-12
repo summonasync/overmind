@@ -137,9 +137,11 @@ public static class DependencyInjection
         services.AddScoped<GrimoireIntegrationService>();
 
         services.AddScoped<TaskDependencyService>();
+        services.AddScoped<PlanningBatchScope>();
         services.AddScoped<PlanningArtifactService>();
         services.AddScoped<PlanningArtifactDiffService>();
         services.AddScoped<PlanningOperationStore>();
+        services.AddScoped<PlanningBatchService>();
         services.AddScoped<NotificationsService>();
         services.AddScoped<CeremoniesService>();
         services.AddScoped<ManifestImporter>();
@@ -167,6 +169,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<SetPlanningFeatureCodePinRequest>, SetPlanningFeatureCodePinRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningFeatureStatusRequest>, SetPlanningFeatureStatusRequestValidator>();
         services.AddSingleton<IValidator<SetPlanningArtifactStatusRequest>, SetPlanningArtifactStatusRequestValidator>();
+        services.AddSingleton<IValidator<PlanningBatchRequest>, PlanningBatchRequestValidator>();
         services.AddSingleton<IValidator<AppendPlanningLogRequest>, AppendPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<EditPlanningLogRequest>, EditPlanningLogRequestValidator>();
         services.AddSingleton<IValidator<DeclinePlanningArtifactRequest>, DeclinePlanningArtifactRequestValidator>();

@@ -38,14 +38,15 @@ test("token counts format compactly", () => {
 });
 
 test("meter copy states the output basis and the UTC reset", () => {
+  // e43efcf rebased the copy onto output tokens; 26a4ec0/9d40945 merged title and tooltip into one string.
   const source = meterSource();
-  assert.ok(
-    source.includes("Output tokens written by the agent today, resets at 00:00 UTC"),
-    "the meter title lost the output basis or the UTC reset",
-  );
   assert.ok(
     source.includes("output tokens used today, resets at 00:00 UTC"),
     "the budgeted tooltip lost the output basis or the UTC reset",
+  );
+  assert.ok(
+    source.includes("title={tooltip}"),
+    "the meter title carries the same consolidated copy",
   );
 });
 

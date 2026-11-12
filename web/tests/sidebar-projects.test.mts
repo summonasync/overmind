@@ -2,54 +2,53 @@ import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const sidebar = () =>
-  readFileSync(new URL("../src/widgets/app-shell/ui/app-sidebar.tsx", import.meta.url), "utf8");
+// f8cc73a removed the sidebar; the projects surface now lives in the rail and the tree.
+const rail = () =>
+  readFileSync(new URL("../src/widgets/app-shell/ui/projects-rail.tsx", import.meta.url), "utf8");
 
 const tree = () =>
   readFileSync(new URL("../src/features/projects/components/project-tree.tsx", import.meta.url), "utf8");
 
-test("the projects row shares the nav row geometry", () => {
-  const source = sidebar();
-  const geometry =
-    "flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition-colors";
-  assert.equal(source.split(geometry).length - 1, 2);
-  const activeTone = "border-primary bg-primary/10 text-primary";
-  assert.equal(source.split(activeTone).length - 1, 2);
-  const idleTone = "border-transparent text-muted hover:bg-surface-raised hover:text-foreground";
-  assert.equal(source.split(idleTone).length - 1, 2);
+test("project rows carry the same highlight pair across the tree and the rail list", () => {
+  // f8cc73a split the old nav rhythm into two row sites; both must keep the active/idle tones.
+  for (const source of [tree(), rail()]) {
+    assert.ok(source.includes('"border-primary bg-primary/10 text-primary"'));
+    assert.ok(source.includes('"border-transparent text-muted hover:bg-surface-raised hover:text-foreground"'));
+  }
 });
 
-test("the chevron lives inside the row, right of the label", () => {
-  const source = sidebar();
-  const from = source.indexOf('item.href === "/") {');
-  const branch = source.slice(from, source.indexOf('item.href === "/attention"', from));
-  const linkAt = branch.indexOf("<a");
-  const chevronAt = branch.indexOf("aria-expanded");
-  assert.ok(linkAt > -1);
-  assert.ok(chevronAt > linkAt);
-  assert.ok(
-    branch.includes(
-      'className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"',
-    ),
+test("the folder chevron lives inside the row with a stateful label", () => {
+  // f8cc73a moved the projects chevron from the nav row into each tree folder row, left of the label.
+  const source = tree();
+  const from = source.indexOf(
+    '"group flex min-w-0 items-center gap-0.5 rounded text-muted transition-colors hover:text-foreground"',
   );
-  assert.ok(
-    branch.includes('aria-label={projectsVisible ? "Collapse projects tree" : "Expand projects tree"}'),
-  );
+  const chevronAt = source.indexOf("aria-expanded={expanded}", from);
+  const labelAt = source.indexOf("title={entry.path}", chevronAt);
+  assert.ok(from > -1);
+  assert.ok(chevronAt > from);
+  assert.ok(labelAt > chevronAt);
+  assert.ok(source.includes("aria-label={expanded ? `Collapse ${entry.name}` : `Expand ${entry.name}`}"));
+  assert.ok(source.includes("{expanded ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}"));
 });
 
-test("a project route holds the section open over the saved preference", () => {
-  const source = sidebar();
-  assert.ok(source.includes("const projectsVisible = openOverride ?? (routeHasProject || projectsOpen);"));
-  assert.ok(source.includes('setRouteHasProject(new URLSearchParams(window.location.search).has("project"))'));
+test("a project route mounts the rail over the default contour", () => {
+  // f8cc73a replaced the force-open section with rail mounting; a ?project route still gets the rail.
+  const source = rail();
+  assert.ok(source.includes('const onIssues = pathname === "/issues" && (searchParams?.has("project") ?? false);'));
+  assert.ok(source.includes("if (!onContour && !onIssues) {\n    return null;\n  }"));
 });
 
-test("toggling on a project page stays visit-local, elsewhere it persists", () => {
-  const source = sidebar();
+test("collapsing a route-implied folder stays visit-local, user toggles persist", () => {
+  // f8cc73a killed the visit-local section toggle; the tree toggle keeps the split on route-implied paths.
+  const source = tree();
   assert.ok(
     source.includes(
-      "if (routeHasProject) {\n      setOpenOverride(next);\n      return;\n    }\n    setProjectsOpen(next);\n    saveProjectsSectionOpen(next);",
+      "if (autoExpandedPaths.includes(path)) {\n        setRouteCollapsed((paths) => [...paths, path]);",
     ),
   );
+  assert.ok(source.includes('} else {\n        setExpandedPaths((paths) => paths.filter((value) => value !== path));'));
+  assert.equal(source.includes("saveRouteCollapsed"), false);
 });
 
 test("the tree expands toward the open project on top of the saved paths", () => {
@@ -78,14 +77,15 @@ test("the selection follows the project parameter on any page", () => {
   assert.equal(source.includes('pathname === "/entries"'), false);
 });
 
-test("project rows render the nav rhythm with the primary highlight", () => {
+test("tree project rows render the rail rhythm with the primary highlight", () => {
+  // f8cc73a re-contracted the row from the compact nav rhythm to the rail rhythm.
   const source = tree();
   assert.ok(
     source.includes(
-      '"flex min-w-0 flex-1 items-center gap-1.5 rounded-md border-l-2 px-1 py-1 text-xs font-medium transition-colors"',
+      '"flex min-w-0 flex-1 items-center gap-2 rounded-md border-l-2 px-2 py-2 text-sm font-medium transition-colors"',
     ),
   );
-  assert.ok(source.includes('"border-primary bg-primary/10 text-primary"'));
-  assert.ok(source.includes('"border-transparent text-muted hover:bg-surface-raised hover:text-foreground"'));
+  assert.ok(source.includes('? "border-primary bg-primary/10 text-primary"'));
+  assert.ok(source.includes(': "border-transparent text-muted hover:bg-surface-raised hover:text-foreground"'));
   assert.ok(source.includes('aria-current={active ? "page" : undefined}'));
 });

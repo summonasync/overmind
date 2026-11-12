@@ -125,6 +125,7 @@ builder.Services.AddSingleton<OvermindTools>();
 builder.Services.AddSingleton<OvermindBriefingTools>();
 builder.Services.AddSingleton<PlanningFeatureTools>();
 builder.Services.AddSingleton<PlanningArtifactTools>();
+builder.Services.AddSingleton<PlanningBatchTools>();
 builder.Services.AddSingleton<PlanningMaterializationTools>();
 builder.Services.AddSingleton<PlanningArtifactAliasResolver>();
 builder.Services.AddSingleton<FeatureCodeTools>();
@@ -170,6 +171,7 @@ builder.Services
     .WithTools<OvermindBriefingTools>()
     .WithTools<PlanningFeatureTools>()
     .WithTools<PlanningArtifactTools>()
+    .WithTools<PlanningBatchTools>()
     .WithTools<PlanningMaterializationTools>()
     .WithTools<FeatureCodeTools>()
     .WithTools<WaveSnapshotTools>()

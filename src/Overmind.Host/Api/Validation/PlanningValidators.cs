@@ -257,6 +257,19 @@ public sealed class SetPlanningArtifactStatusRequestValidator : AbstractValidato
     }
 }
 
+public sealed class PlanningBatchRequestValidator : AbstractValidator<PlanningBatchRequest>
+{
+    public PlanningBatchRequestValidator()
+    {
+        RuleFor(x => x.Ops).NotNull()
+            .WithMessage("A batch must carry ops[]: the request without it would commit nothing.");
+        RuleFor(x => x.Ops).NotEmpty()
+            .WithMessage("A batch must carry at least one op: an empty ops[] would commit nothing and still spend a materialization pass.");
+        RuleForEach(x => x.Ops).NotNull()
+            .WithMessage("Every ops[] entry must be an object carrying an op name.");
+    }
+}
+
 public sealed class AppendPlanningLogRequestValidator : AbstractValidator<AppendPlanningLogRequest>
 {
     public AppendPlanningLogRequestValidator()

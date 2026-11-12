@@ -143,6 +143,14 @@ log lines, entries, dependencies, notifications. If your runtime offers direct s
 messaging, a heads-up to a live same-runtime session is a best-effort courtesy, never a
 substitute for the board write.
 
+Silent holder -> a direct poke is legal: if a claim holder ignores chat, message their
+session directly (find it in `ListAgents` - local sessions on this machine list by alias)
+provided it shows up there. Delivery lands in their queue and is processed on their next
+tool round - a nudge, not an interrupt. Absence from that roster proves nothing: a holder
+on another CLI/runtime stays alive and reachable only through the board. The board write
+(directive / chat) remains the guaranteed channel; the direct message rides on top of it,
+never instead of it.
+
 ### 6. Lane chat etiquette (the flow channel)
 Lane chat (`wave_chat_post` / `wave_chat_unread`) is the wave's FLOW channel — the room the
 whole lane reads; it complements the addressed directive channel, never replaces it. Etiquette
