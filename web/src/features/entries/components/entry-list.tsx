@@ -8,6 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { MarkdownViewer } from "@/shared/ui/markdown-viewer";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
+import { EntryStateChip } from "@/features/entries/components/entry-state-chip";
 import { entryTagsQueryOptions } from "@/features/entries/queries";
 import {
   entryReadBody,
@@ -70,6 +71,7 @@ export function EntryList({ entries, onEdit, onDelete, onRead }: EntryListProps)
                 </button>
                 <Icon size={15} aria-hidden className="shrink-0" style={{ color: `var(--color-type-${entry.type})` }} />
                 <Badge tone={meta.tone}>{entry.type}</Badge>
+                <EntryStateChip entry={entry} />
                 <button
                   type="button"
                   onClick={(event) => {

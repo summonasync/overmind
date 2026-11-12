@@ -1,5 +1,11 @@
 import type { AgentPlatform, EntryType } from "@/shared/api/types";
 
+export type EntryState = "active" | "lifted" | "superseded";
+
+export type EntryStateFilter = EntryState | "all";
+
+export const ENTRY_STATES: readonly EntryState[] = ["active", "lifted", "superseded"];
+
 export interface SkillFileDto {
   platform: AgentPlatform;
   relativePath: string;
@@ -17,6 +23,13 @@ export interface EntryResponse {
   updatedAt: string;
   tags: string[];
   skillFiles: SkillFileDto[];
+  state?: EntryState;
+  stateAt?: string | null;
+  stateBy?: string | null;
+  stateReason?: string | null;
+  stateProof?: string | null;
+  supersededById?: string | null;
+  enforces?: boolean;
 }
 
 export interface EntryVersionResponse {
@@ -42,4 +55,5 @@ export interface EntryFormValues {
 export interface EntryListFilters {
   type: EntryType | "";
   tag: string;
+  state?: EntryStateFilter;
 }

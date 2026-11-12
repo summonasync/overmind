@@ -16,8 +16,8 @@ function buildListQuery(projectId: string, filters: EntryListFilters): string {
   if (filters.tag.trim()) {
     params.set("tag", filters.tag.trim());
   }
-  const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  return `/projects/${projectId}/entries${suffix}`;
+  params.set("state", filters.state ?? "all");
+  return `/projects/${projectId}/entries?${params.toString()}`;
 }
 
 export function listEntries(
