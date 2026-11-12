@@ -23,6 +23,7 @@ export interface EntryResponse {
   updatedAt: string;
   tags: string[];
   skillFiles: SkillFileDto[];
+  authorAlias?: string | null;
   state?: EntryState;
   stateAt?: string | null;
   stateBy?: string | null;
@@ -56,4 +57,7 @@ export interface EntryListFilters {
   type: EntryType | "";
   tag: string;
   state?: EntryStateFilter;
+  since?: string;
+  until?: string;
+  author?: string;
 }

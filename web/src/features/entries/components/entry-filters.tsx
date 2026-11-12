@@ -58,8 +58,46 @@ export function EntryFilters({ filters, onChange }: EntryFiltersProps) {
         placeholder="Filter by tag"
         className="w-44"
       />
-      {(filters.type || filters.tag || state !== "all") && (
-        <Button variant="ghost" onClick={() => onChange({ type: "", tag: "", state: undefined })}>
+      <Input
+        aria-label="Filter by author"
+        value={filters.author ?? ""}
+        onChange={(event) => onChange({ ...filters, author: event.target.value })}
+        placeholder="Filter by author"
+        className="w-36"
+      />
+      <Input
+        aria-label="Created from"
+        type="date"
+        value={filters.since ?? ""}
+        onChange={(event) => onChange({ ...filters, since: event.target.value || undefined })}
+        className="w-44"
+      />
+      <Input
+        aria-label="Created to"
+        type="date"
+        value={filters.until ?? ""}
+        onChange={(event) => onChange({ ...filters, until: event.target.value || undefined })}
+        className="w-44"
+      />
+      {(filters.type ||
+        filters.tag ||
+        filters.author ||
+        filters.since ||
+        filters.until ||
+        state !== "all") && (
+        <Button
+          variant="ghost"
+          onClick={() =>
+            onChange({
+              type: "",
+              tag: "",
+              state: undefined,
+              author: undefined,
+              since: undefined,
+              until: undefined,
+            })
+          }
+        >
           Clear
         </Button>
       )}

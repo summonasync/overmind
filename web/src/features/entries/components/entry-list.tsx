@@ -84,6 +84,9 @@ export function EntryList({ entries, onEdit, onDelete, onRead }: EntryListProps)
                 </button>
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                {entry.authorAlias ? (
+                  <span className="text-xs text-muted">by {entry.authorAlias}</span>
+                ) : null}
                 <span className="font-mono text-xs text-muted">v{entry.currentVersion}</span>
                 <Button
                   variant="secondary"
