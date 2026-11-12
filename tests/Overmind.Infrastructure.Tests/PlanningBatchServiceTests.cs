@@ -365,6 +365,60 @@ public sealed class PlanningBatchServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task Batch_PostCommitDeliveryFailure_ReturnsCommittedResultWithWarning()
+    {
+        var featureService = CreateFeatureService();
+        await featureService.CreateAsync(_projectId, "delivery-warn", "D", "body");
+        var throwingChannel = new ThrowingDeliveryChannel();
+        var batchService = new PlanningBatchService(
+            _context,
+            CreateArtifactService(),
+            new NotificationsService(
+                _context,
+                new ReplyAutoActFanout(
+                    _context, new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
+                new WakeDropFanout(
+                    new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+                    NullLogger<WakeDropFanout>.Instance),
+                [throwingChannel],
+                _batchScope),
+            TestPlanningDispatcher.Create(_context, _materializer),
+            _batchScope);
+
+        var result = await batchService.ApplyAsync(_projectId, "delivery-warn",
+        [
+            new PlanningBatchOp(
+                PlanningBatchOpName.Notify,
+                Kind: NotificationKind.Question,
+                Text: "ship it?"),
+        ]);
+
+        result.Warnings.ShouldHaveSingleItem()
+            .ShouldContain("post-commit notification delivery failed");
+        result.Results.ShouldHaveSingleItem();
+
+        using var verify = _db.CreateContext();
+        verify.AgentNotifications.Any(n => n.FeatureSlug == "delivery-warn").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Batch_HappyPathWithoutPostCommitFailures_CarriesNoWarnings()
+    {
+        var featureService = CreateFeatureService();
+        await featureService.CreateAsync(_projectId, "clean-warn", "C", "body");
+
+        var result = await CreateBatchService().ApplyAsync(_projectId, "clean-warn",
+        [
+            new PlanningBatchOp(
+                PlanningBatchOpName.Notify,
+                Kind: NotificationKind.Info,
+                Text: "heads up"),
+        ]);
+
+        result.Warnings.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Batch_ConcurrentWriterClaimsTaskOrder_RollsBackWholeBatchWithRetryHint()
     {
         var featureService = CreateFeatureService();
@@ -451,5 +505,11 @@ public sealed class PlanningBatchServiceTests : IDisposable, IAsyncLifetime
             Delivered.Add(notification.Id);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class ThrowingDeliveryChannel : INotificationDeliveryChannel
+    {
+        public Task TryDeliverAsync(AgentNotification notification, CancellationToken ct) =>
+            throw new InvalidOperationException("telegram fanout is down");
     }
 }

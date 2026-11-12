@@ -27,13 +27,21 @@ public sealed class PlanningBatchService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         batch.Active = true;
+        var warnings = new List<string>();
         PlanningBatchResult result;
         try
         {
             result = await ApplyOpsAsync(feature, ops, ct);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            notifications.DeliverStaged();
+            try
+            {
+                notifications.DeliverStaged();
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"post-commit notification delivery failed: {ex.Message}");
+            }
         }
         catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
         {
@@ -45,9 +53,16 @@ public sealed class PlanningBatchService(
             batch.ClearStagedNotifications();
         }
 
-        await materialization.DispatchAsync(feature.ProjectId, ct);
+        try
+        {
+            await materialization.DispatchAsync(feature.ProjectId, ct);
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"post-commit materialization dispatch failed: {ex.Message}");
+        }
 
-        return result;
+        return warnings.Count == 0 ? result : result with { Warnings = warnings };
     }
 
     private async Task<PlanningBatchResult> ApplyOpsAsync(
