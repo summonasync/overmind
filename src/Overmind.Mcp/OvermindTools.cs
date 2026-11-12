@@ -41,15 +41,25 @@ public sealed class OvermindTools
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-        "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext) and state (all | active | lifted | superseded). " +
+        "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
         "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
         "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
+
+    private const string SinceDescription =
+        "Optional lower bound on createdAt, inclusive: an ISO-8601 instant (2026-11-12T09:30:00Z) or a yyyy-MM-dd date (2026-11-12 means local midnight).";
+
+    private const string UntilDescription =
+        "Optional upper bound on createdAt, exclusive: an ISO-8601 instant or a yyyy-MM-dd date; 2026-11-13 excludes entries created at or after that midnight.";
+
+    private const string AuthorDescription =
+        "Optional author filter: exact alias match, case-insensitive. Entries created by agents carry the agent alias; entries created in the human UI have no author and never match a named author filter.";
 
     private const int FollowUpTextCap = 2000;
 
     private const string SearchDescription =
         "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
         "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
+        "Optional entry-only filters: since/until bound hits by createdAt (since inclusive, until exclusive) and author matches the exact alias case-insensitively — setting any of them drops feature and artifact hits. " +
         "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
         "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.";
 
@@ -82,6 +92,9 @@ public sealed class OvermindTools
         [Description("Lifecycle filter: all | active | lifted | superseded. Omit it and the server applies its default — active for the decision/gate/guard trio, all for every other type and when no type is given.")] string? state = null,
         [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
         [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
+        [Description(SinceDescription)] string? since = null,
+        [Description(UntilDescription)] string? until = null,
+        [Description(AuthorDescription)] string? author = null,
         [Description("Set true to include full entry bodies; by default only metadata is returned.")] bool include_content = false,
         CancellationToken ct = default)
     {
@@ -95,6 +108,10 @@ public sealed class OvermindTools
         {
             filters.Add($"state={Uri.EscapeDataString(state.Trim())}");
         }
+
+        AddRangeFilter(filters, "since", since);
+        AddRangeFilter(filters, "until", until);
+        AddRangeFilter(filters, "author", author);
 
         if (!string.IsNullOrWhiteSpace(tag))
         {
@@ -295,6 +312,9 @@ public sealed class OvermindTools
         [Description("Search query text.")] string query,
         [Description("Optional project id to restrict the search to.")] Guid? projectId = null,
         [Description("Search mode: fulltext (default) or semantic.")] string? mode = null,
+        [Description(SinceDescription)] string? since = null,
+        [Description(UntilDescription)] string? until = null,
+        [Description(AuthorDescription)] string? author = null,
         CancellationToken ct = default)
     {
         var parameters = new List<string> { $"q={Uri.EscapeDataString(query)}" };
@@ -302,6 +322,10 @@ public sealed class OvermindTools
         {
             parameters.Add($"projectId={projectId.Value}");
         }
+
+        AddRangeFilter(parameters, "since", since);
+        AddRangeFilter(parameters, "until", until);
+        AddRangeFilter(parameters, "author", author);
 
         var effectiveMode = string.IsNullOrWhiteSpace(mode) ? "fulltext" : mode.Trim();
         parameters.Add("limit=20");
@@ -457,6 +481,14 @@ public sealed class OvermindTools
         projection["updatedAt"] = entry.GetProperty("updatedAt").GetString();
         projection["contentLength"] = entry.GetProperty("content").GetString()?.Length ?? 0;
         return projection;
+    }
+
+    private static void AddRangeFilter(ICollection<string> parameters, string name, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            parameters.Add($"{name}={Uri.EscapeDataString(value.Trim())}");
+        }
     }
 
     private static string NormalizeType(string type)

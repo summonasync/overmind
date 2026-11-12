@@ -236,7 +236,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
             "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext) and state (all | active | lifted | superseded). " +
+            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
             "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
             "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
 
@@ -244,6 +244,9 @@ public class ToolContractTests : McpSessionTestBase
         properties.ShouldContainKey("tag");
         properties.ShouldContainKey("q");
         properties.ShouldContainKey("state");
+        properties.ShouldContainKey("since");
+        properties.ShouldContainKey("until");
+        properties.ShouldContainKey("author");
         properties.ShouldContainKey("include_content");
     }
 
@@ -768,6 +771,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["search"]!["description"]!.GetValue<string>().ShouldBe(
             "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
             "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
+            "Optional entry-only filters: since/until bound hits by createdAt (since inclusive, until exclusive) and author matches the exact alias case-insensitively — setting any of them drops feature and artifact hits. " +
             "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
             "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.");
     }
