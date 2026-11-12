@@ -20,9 +20,10 @@ const list = () =>
     "utf8",
   );
 
+// f8cc73a moved the settings surface into the settings hub at /settings/projects.
 const page = () =>
   readFileSync(
-    new URL("../src/pages/projects-page/ui/projects-page.tsx", import.meta.url),
+    new URL("../src/pages/projects-settings-page/ui/projects-settings-page.tsx", import.meta.url),
     "utf8",
   );
 
