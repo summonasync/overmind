@@ -79,6 +79,7 @@ overmind planning <verb> [...args] [--json]
 | Claim / unclaim | `planning_claim_feature`, `planning_unclaim_feature` | `claim {slug}`, `unclaim {slug}` |
 | Artifact upsert / patch | `planning_upsert_artifact`, `planning_patch_artifact` | `artifact upsert`, `artifact patch` |
 | Task batch (atomic) | `planning_upsert_tasks` | `tasks batch` |
+| Ceremony batch (atomic, one feature) | `planning_batch` | — (no CLI in v1) |
 | Log append / edit | `planning_append_log`, `planning_edit_log` | `log append`, `log edit` |
 | Task status move | `planning_set_status` (task) | `task status` |
 | Feature update | `planning_update_feature` | `feature update` |
@@ -137,6 +138,7 @@ never worked around. The transport changes; the authority does not.
 | Start-of-work briefing — guards/gates with full bodies, decisions/notes as snippets, tombstone list in one call | `overmind_briefing` | 052 |
 | Materialization to `BACKLOG/` with clobber guard | automatic after mutations; status in `overmind_onboard` | 033, 054 |
 | Batch planning ops (`planning_upsert_tasks`, atomic all-or-nothing) | `planning_upsert_tasks` | 044; live on 007 (7 task artifacts, one call) |
+| Batch ceremony ops — patch + append_log + set_status + upsert_tasks + notify on ONE feature in one call; transaction all-or-nothing (a failing op rolls back everything, error names `ops[i]`); per-op guards, claim lock and human proof preserved; `validate` deliberately not an op (proof is request-scoped); batch-level `operationId` replay; post-commit hook failures surface as `warnings[]` on the committed response; ops cannot reference artifacts CREATED by earlier ops (server-side Guids are unnameable pre-call) | `planning_batch` | 225 |
 | Structured feature dependencies (blockedBy/blocks) | `planning_add_feature_dependency`, `planning_remove_feature_dependency`, `planning_list_feature_dependencies` | 030; wired on 007 |
 | Agent-side import of materialized feature folders | `planning_import_feature` | 058 (OM-7) |
 | Mirror export into an explicit empty target (commit-alongside snapshot; zero tracking rows) | `planning_export_backlog` | 075 |
@@ -326,6 +328,11 @@ notification again — a fresh reply re-stamps `RepliedAt` and re-queues it.
 - **Result**: when all tasks are done — `planning_upsert_artifact(kind=result)` summarizing
   outcome, deviations, follow-ups.
 - **Task close — blast-radius contract (R1):** a task whose `<scope>` changes a symbol must close with one of: (1) the `find_references` caller list for every changed symbol, recorded in the task `<log>`/`<obstacles>` (a `file:line` row list — the tool's native output shape); or (2) the reason no list exists, chosen from a checkable set: `symbol not indexed` · `zero callers reported` · `non-code change (config/docs/migration wiring)` · `worktree/fixture code only`. The review gate checks presence-of-artifact, not quality of judgment — a wrong caller list is a review finding; a missing one is a gate failure.
+
+**Batch recipes (225)** — one turn per ceremony step via `planning_batch(featureSlug, ops[])`; every op all-or-nothing, one result row per op:
+- **Task close**: one batch = patch (tick the AC) + append_log + set_status(done), addressed by `artifactId` or `alias` (`T<order>`, `S`/`P`/`R`) — was three sequential calls. AC-tick parity with the standalone calls is test-pinned (Infrastructure 225 suite).
+- **Gate present**: one batch = append_log + notify(kind=approval, text=…) — the log line and the approval ask land together, the human gets the deep link (featureSlug defaults to the batch feature). `validate` stays its own call: proof is request-scoped and deliberately not an op.
+- Rules: ops may only reference artifacts that exist BEFORE the batch (new artifacts' Guids are unnameable pre-call); a failing op rolls back the whole batch and names `ops[i]`; pass a fresh `operationId` per logical batch for replay.
 
 ## Sub-Agent Briefing Contract (MANDATORY)
 
