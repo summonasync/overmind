@@ -10,15 +10,18 @@ public sealed class PlanningArtifactService
     private readonly OvermindDbContext _db;
     private readonly PlanningMaterializationDispatcher _materialization;
     private readonly TaskDependencyService _taskDependencies;
+    private readonly PlanningBatchScope? _batchScope;
 
     public PlanningArtifactService(
         OvermindDbContext db,
         PlanningMaterializationDispatcher materialization,
-        TaskDependencyService taskDependencies)
+        TaskDependencyService taskDependencies,
+        PlanningBatchScope? batchScope = null)
     {
         _db = db;
         _materialization = materialization;
         _taskDependencies = taskDependencies;
+        _batchScope = batchScope;
     }
 
     public async Task<PlanningArtifact> UpsertAsync(
@@ -187,6 +190,7 @@ public sealed class PlanningArtifactService
             .Include(a => a.BlockedBy)
             .Where(a => a.FeatureId == featureId && a.Kind == PlanningArtifactKind.Task)
             .ToListAsync(ct);
+        StagePendingArtifacts(featureId, PlanningArtifactKind.Task, siblings);
 
         var staged = new List<PlanningArtifact>(tasks.Count);
         var created = 0;
@@ -260,14 +264,12 @@ public sealed class PlanningArtifactService
 
         try
         {
-            await _db.SaveChangesAsync(ct);
+            await SaveAndDispatchAsync(feature.ProjectId, ct);
         }
         catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
         {
             throw PlanningException.TaskBatchConcurrentWrite();
         }
-
-        await _materialization.DispatchAsync(feature.ProjectId, ct);
 
         return new PlanningTaskBatchResult(staged, created, staged.Count - created, blockedOrders);
     }
@@ -371,8 +373,7 @@ public sealed class PlanningArtifactService
 
         feature.Touch();
 
-        await _db.SaveChangesAsync(ct);
-        await _materialization.DispatchAsync(feature.ProjectId, ct);
+        await SaveAndDispatchAsync(feature.ProjectId, ct);
 
         return new PlanningArtifactStatusResult(
             artifact.Id, artifact.Status, artifact.Version, artifact.LastLogLine,
@@ -501,8 +502,7 @@ public sealed class PlanningArtifactService
             feature.Touch();
         }
 
-        await _db.SaveChangesAsync(ct);
-        await _materialization.DispatchAsync(feature.ProjectId, ct);
+        await SaveAndDispatchAsync(feature.ProjectId, ct);
 
         return new PlanningArtifactPatchResult(artifact, noChange, tickedIndex, tickedText);
     }
@@ -625,8 +625,7 @@ public sealed class PlanningArtifactService
         artifact.AppendLog(note, source);
         feature.Touch();
 
-        await _db.SaveChangesAsync(ct);
-        await _materialization.DispatchAsync(feature.ProjectId, ct);
+        await SaveAndDispatchAsync(feature.ProjectId, ct);
 
         return artifact;
     }
@@ -753,6 +752,31 @@ public sealed class PlanningArtifactService
         return artifact;
     }
 
+    private async Task SaveAndDispatchAsync(Guid projectId, CancellationToken ct)
+    {
+        if (_batchScope is { Active: true })
+        {
+            return;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await _materialization.DispatchAsync(projectId, ct);
+    }
+
+    private void StagePendingArtifacts(Guid featureId, PlanningArtifactKind? kind, List<PlanningArtifact> siblings)
+    {
+        if (_batchScope is not { Active: true })
+        {
+            return;
+        }
+
+        siblings.AddRange(_db.PlanningArtifacts.Local.Where(a =>
+            _db.Entry(a).State == EntityState.Added &&
+            a.FeatureId == featureId &&
+            (kind is null || a.Kind == kind) &&
+            siblings.All(s => s.Id != a.Id)));
+    }
+
     private static void TransitionOnArtifactCreate(PlanningFeature feature, PlanningArtifactKind kind)
     {
         if (feature.Status is PlanningFeatureStatus.Draft or PlanningFeatureStatus.Ready)
@@ -814,6 +838,7 @@ public sealed class PlanningArtifactService
         var siblings = await _db.PlanningArtifacts
             .Where(a => a.FeatureId == feature.Id)
             .ToListAsync(ct);
+        StagePendingArtifacts(feature.Id, null, siblings);
 
         var tasks = siblings.Where(a => a.Kind == PlanningArtifactKind.Task).ToList();
         var hasValidatedSpec = siblings.Any(a =>
