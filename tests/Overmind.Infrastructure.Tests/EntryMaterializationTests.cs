@@ -271,6 +271,53 @@ public sealed class EntryMaterializationTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_LiftedAndSupersededEntries_RenderStateMarkerUnderTitle()
+    {
+        var projectId = await SeedProjectAsync(PlanningMaterialization.On);
+        Guid liftedId;
+        Guid supersededId;
+        Guid activeId;
+        DateTime liftedAt;
+        DateTime supersededAt;
+        using (var seed = _db.CreateContext())
+        {
+            var lifted = ContextEntry.Create(
+                projectId, EntryType.Guard, "No Direct Fetch", "The SPA never calls the host directly.");
+            var superseded = ContextEntry.Create(
+                projectId, EntryType.Decision, "Use Postgres", "Old metadata store.");
+            var successor = ContextEntry.Create(
+                projectId, EntryType.Decision, "Use SQLite", "Current metadata store.");
+            var active = ContextEntry.Create(projectId, EntryType.Note, "Plain Note", "Nothing to see.");
+            lifted.Lift("contradicted by the BFF rule", "Van (claude)", "reply 12", null);
+            superseded.Lift("replaced by the sqlite decision", "Dan (qwen)", "reply 30", successor.Id);
+            seed.ContextEntries.AddRange(lifted, superseded, successor, active);
+            await seed.SaveChangesAsync();
+            liftedId = lifted.Id;
+            supersededId = superseded.Id;
+            activeId = active.Id;
+            liftedAt = lifted.StateAt!.Value;
+            supersededAt = superseded.StateAt!.Value;
+        }
+
+        using var ctx = _db.CreateContext();
+        await CreateMaterializer(ctx).SyncAsync(projectId, ct: CancellationToken.None);
+
+        var liftedDoc = await File.ReadAllTextAsync(
+            Path.Combine(_projectDir, $"ENTRIES/guard/no-direct-fetch-{liftedId.ToString("N")[..8]}.md"));
+        liftedDoc.ShouldContain(
+            $"---\n\n> state: lifted {liftedAt:yyyy-MM-dd} — contradicted by the BFF rule\n\n");
+
+        var supersededDoc = await File.ReadAllTextAsync(
+            Path.Combine(_projectDir, $"ENTRIES/decision/use-postgres-{supersededId.ToString("N")[..8]}.md"));
+        supersededDoc.ShouldContain(
+            $"---\n\n> state: superseded {supersededAt:yyyy-MM-dd} — replaced by the sqlite decision → Use SQLite\n\n");
+
+        var activeDoc = await File.ReadAllTextAsync(
+            Path.Combine(_projectDir, $"ENTRIES/note/plain-note-{activeId.ToString("N")[..8]}.md"));
+        activeDoc.ShouldNotContain("> state:");
+    }
+
+    [Fact]
     public async Task Sync_StrategyOff_SkipsEntriesEntirely()
     {
         var projectId = await SeedProjectAsync(PlanningMaterialization.Off);

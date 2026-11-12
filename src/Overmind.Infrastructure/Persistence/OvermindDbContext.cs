@@ -117,6 +117,13 @@ public sealed class OvermindDbContext : DbContext
                 .WithOne()
                 .HasForeignKey(a => a.ContextEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(e => e.State)
+                .HasDefaultValue(ContextEntry.ActiveState);
+
+            builder.Property(e => e.Enforces)
+                .HasDefaultValue(false)
+                .HasSentinel(false);
         });
 
         modelBuilder.Entity<Tag>(builder =>

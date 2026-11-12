@@ -124,6 +124,9 @@ namespace Overmind.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AuthorAlias")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -134,7 +137,33 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<int>("CurrentVersion")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("Enforces")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("active");
+
+                    b.Property<DateTime?>("StateAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StateBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StateProof")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StateReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SupersededById")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")

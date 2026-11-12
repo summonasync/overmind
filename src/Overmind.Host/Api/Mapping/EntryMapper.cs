@@ -32,7 +32,15 @@ public static class EntryMapper
                 .Select(a => new EntryReadAck(a.Alias, a.Vendor, a.At))
                 .ToArray(),
             [.. PointerMarkerGrammar.Parse(entry.Content)
-                .Select(p => new EntryPointerResponse(p.Path, p.Anchor))]);
+                .Select(p => new EntryPointerResponse(p.Path, p.Anchor))],
+            entry.State,
+            entry.StateAt,
+            entry.StateBy,
+            entry.StateReason,
+            entry.StateProof,
+            entry.SupersededById,
+            entry.Enforces,
+            entry.AuthorAlias);
     }
 
     public static SkillFile ToEntity(SkillFileDto dto) =>
