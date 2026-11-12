@@ -31,7 +31,7 @@ internal static class WaveSnapshotCompactor
         }
     }
 
-    private static JsonObject CompactQueueRow(JsonObject row)
+    internal static JsonObject CompactQueueRow(JsonObject row)
     {
         var compact = new JsonObject
         {
