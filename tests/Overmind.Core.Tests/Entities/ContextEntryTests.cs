@@ -32,6 +32,17 @@ public class ContextEntryTests
     }
 
     [Fact]
+    public void Create_LeavesAuthorAliasUnset()
+    {
+        ContextEntry.Create(ProjectId, EntryType.Note, "n", "c").AuthorAlias.ShouldBeNull();
+
+        var skill = ContextEntry.CreateSkill(
+            ProjectId, "reviewer", "reviews code",
+            [SkillFile.Create(AgentPlatform.Claude, "reviewer/SKILL.md", "# Reviewer")]);
+        skill.AuthorAlias.ShouldBeNull();
+    }
+
+    [Fact]
     public void Create_SkillTypeThroughCreate_Throws()
     {
         Should.Throw<InvalidOperationException>(() =>

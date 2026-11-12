@@ -43,7 +43,8 @@ public sealed record EntryResponse(
     string? StateReason,
     string? StateProof,
     Guid? SupersededById,
-    bool Enforces);
+    bool Enforces,
+    string? AuthorAlias);
 
 public sealed record EntryReadAck(string? Alias, string? Vendor, DateTime At);
 

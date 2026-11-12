@@ -39,7 +39,8 @@ public static class EntryMapper
             entry.StateReason,
             entry.StateProof,
             entry.SupersededById,
-            entry.Enforces);
+            entry.Enforces,
+            entry.AuthorAlias);
     }
 
     public static SkillFile ToEntity(SkillFileDto dto) =>

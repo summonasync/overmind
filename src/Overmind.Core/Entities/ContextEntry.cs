@@ -20,6 +20,7 @@ public sealed class ContextEntry
     public string Content { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
+    public string? AuthorAlias { get; private set; }
     public int CurrentVersion { get; private set; }
     public string State { get; private set; } = ActiveState;
     public DateTime? StateAt { get; private set; }

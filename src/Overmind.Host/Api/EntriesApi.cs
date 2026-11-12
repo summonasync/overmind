@@ -40,6 +40,9 @@ public static class EntriesApi
         string? type,
         string? tag,
         string? state,
+        DateTime? since,
+        DateTime? until,
+        string? author,
         string? q,
         OvermindDbContext db,
         FtsSearchService search,
@@ -74,6 +77,7 @@ public static class EntriesApi
                 .Where(e => type is null || (Enum.TryParse<EntryType>(type, ignoreCase: true, out var parsed) && e.Type == parsed))
                 .Where(e => stateFilter == EntryStateFilter.All || e.State == stateFilter)
                 .Where(e => tag is null || e.EntryTags.Any(t => string.Equals(t.Tag.Name, tag, StringComparison.OrdinalIgnoreCase)))
+                .Where(e => EntryQueryFilters.Matches(e, since, until, author))
                 .OrderByDescending(e => e.UpdatedAt)
                 .Select(EntryMapper.ToResponse)
                 .ToArray();
@@ -104,6 +108,8 @@ public static class EntriesApi
             query = query.Where(e => e.EntryTags.Any(t => t.Tag.Name == tag));
         }
 
+        query = EntryQueryFilters.Apply(query, since, until, author);
+
         var listed = await query
             .OrderByDescending(e => e.UpdatedAt)
             .ToListAsync(ct);
@@ -114,6 +120,7 @@ public static class EntriesApi
     private static async Task<IResult> Create(
         CreateEntryRequest request,
         IValidator<CreateEntryRequest> validator,
+        HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
         CancellationToken ct)
@@ -152,6 +159,12 @@ public static class EntriesApi
         if (request.Enforces.HasValue)
         {
             db.Entry(entry).Property(e => e.Enforces).CurrentValue = request.Enforces.Value;
+        }
+
+        var authorAlias = await ResolveAuthorAliasAsync(db, http, ct);
+        if (authorAlias is not null)
+        {
+            db.Entry(entry).Property(e => e.AuthorAlias).CurrentValue = authorAlias;
         }
 
         await db.SaveChangesAsync(ct);
@@ -399,6 +412,17 @@ public static class EntriesApi
         await indexing.IndexAsync(entry, ct);
 
         return Results.Ok(EntryMapper.ToResponse(entry));
+    }
+
+    private static async Task<string?> ResolveAuthorAliasAsync(OvermindDbContext db, HttpRequest http, CancellationToken ct)
+    {
+        if (!SessionHeader.TryRead(http, out var sessionId))
+        {
+            return null;
+        }
+
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        return session?.Alias ?? sessionId.ToString();
     }
 
     private static async Task<string?> ResolveActorAsync(OvermindDbContext db, HttpRequest http, CancellationToken ct)
