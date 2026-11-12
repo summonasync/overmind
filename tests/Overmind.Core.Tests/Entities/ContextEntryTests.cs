@@ -199,4 +199,101 @@ public class ContextEntryTests
         Should.Throw<InvalidOperationException>(() =>
             ContextEntry.CreateTombstone(tombstone, PlanningLogSource.Agent, "Van"));
     }
+
+    [Fact]
+    public void Lift_WithoutSuccessor_SetsLiftedStateWithProvenance()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Decision, "pick zebra", "first take");
+
+        entry.Lift("replaced by the yak decision", "Van (claude)", "reply 42", null);
+
+        entry.State.ShouldBe(ContextEntry.LiftedState);
+        entry.StateAt.ShouldNotBeNull();
+        entry.StateAt.Value.ShouldBeGreaterThanOrEqualTo(entry.CreatedAt);
+        entry.StateBy.ShouldBe("Van (claude)");
+        entry.StateReason.ShouldBe("replaced by the yak decision");
+        entry.StateProof.ShouldBe("reply 42");
+        entry.SupersededById.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Lift_WithSuccessor_SetsSupersededStateAndSuccessorLink()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Gate, "deploy gate", "body");
+        var successor = Guid.NewGuid();
+
+        entry.Lift("moved to the pipeline gate", "Dan (qwen)", null, successor);
+
+        entry.State.ShouldBe(ContextEntry.SupersededState);
+        entry.SupersededById.ShouldBe(successor);
+        entry.StateReason.ShouldBe("moved to the pipeline gate");
+        entry.StateProof.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(EntryType.Skill)]
+    [InlineData(EntryType.Tombstone)]
+    public void Lift_SkillAndTombstoneTypes_Throw(EntryType type)
+    {
+        var entry = type == EntryType.Skill
+            ? ContextEntry.CreateSkill(
+                ProjectId, "reviewer", "reviews code",
+                [SkillFile.Create(AgentPlatform.Claude, "reviewer/SKILL.md", "# Reviewer")])
+            : ContextEntry.CreateTombstone(
+                ContextEntry.Create(ProjectId, EntryType.Note, "plain", "body"),
+                PlanningLogSource.Agent, "Van");
+
+        Should.Throw<InvalidOperationException>(() =>
+                entry.Lift("why", "Van", null, null))
+            .Message.ShouldContain(type.ToString());
+    }
+
+    [Fact]
+    public void Lift_SelfSupersede_Throws()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Decision, "pick zebra", "first take");
+
+        Should.Throw<InvalidOperationException>(() =>
+                entry.Lift("why", "Van", null, entry.Id))
+            .Message.ShouldContain("supersede");
+
+        entry.State.ShouldBe(ContextEntry.ActiveState);
+        entry.StateAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Lift_BlankReason_Throws()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Decision, "pick zebra", "first take");
+
+        Should.Throw<ArgumentException>(() => entry.Lift(" ", null, null, null));
+        entry.State.ShouldBe(ContextEntry.ActiveState);
+    }
+
+    [Fact]
+    public void AppendFollowUp_BumpsVersionAndDatesTheSection()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Note, "n", "base take");
+
+        var version = entry.AppendFollowUp("confirmed after review");
+
+        entry.Content.ShouldBe(
+            $"base take\n\n## Follow-up {DateTime.UtcNow:yyyy-MM-dd}\nconfirmed after review");
+        entry.CurrentVersion.ShouldBe(1);
+        version.Version.ShouldBe(1);
+        version.Content.ShouldBe("base take");
+        version.EntryId.ShouldBe(entry.Id);
+    }
+
+    [Fact]
+    public void AppendFollowUp_BlankText_ThrowsWithoutVersionBump()
+    {
+        var entry = ContextEntry.Create(ProjectId, EntryType.Note, "n", "base take");
+
+        Should.Throw<ArgumentException>(() => entry.AppendFollowUp(" "));
+
+        entry.Content.ShouldBe("base take");
+        entry.CurrentVersion.ShouldBe(0);
+        entry.Versions.ShouldBeEmpty();
+    }
 }

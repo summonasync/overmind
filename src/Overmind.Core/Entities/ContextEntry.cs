@@ -5,6 +5,10 @@ namespace Overmind.Core;
 
 public sealed class ContextEntry
 {
+    public const string ActiveState = "active";
+    public const string LiftedState = "lifted";
+    public const string SupersededState = "superseded";
+
     private ContextEntry()
     {
     }
@@ -17,6 +21,13 @@ public sealed class ContextEntry
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public int CurrentVersion { get; private set; }
+    public string State { get; private set; } = ActiveState;
+    public DateTime? StateAt { get; private set; }
+    public string? StateBy { get; private set; }
+    public string? StateReason { get; private set; }
+    public string? StateProof { get; private set; }
+    public Guid? SupersededById { get; private set; }
+    public bool Enforces { get; private set; }
 
     public List<SkillFile> SkillFiles { get; private set; } = [];
     public List<EntryTag> EntryTags { get; private set; } = [];
@@ -145,6 +156,14 @@ public sealed class ContextEntry
         return snapshot;
     }
 
+    public EntryVersion AppendFollowUp(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        var date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return UpdateContent($"{Content}\n\n## Follow-up {date}\n{text}");
+    }
+
     public void AddTag(Tag tag)
     {
         if (EntryTags.Any(t => t.TagId == tag.Id))
@@ -153,6 +172,29 @@ public sealed class ContextEntry
         }
 
         EntryTags.Add(EntryTag.Create(Id, tag.Id));
+    }
+
+    public void Lift(string reason, string? by, string? proof, Guid? supersededById)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        if (Type is EntryType.Skill or EntryType.Tombstone)
+        {
+            throw new InvalidOperationException(
+                $"{Type} entries have no lifecycle: lifting and superseding apply to living entries only.");
+        }
+
+        if (supersededById == Id)
+        {
+            throw new InvalidOperationException("An entry cannot supersede itself.");
+        }
+
+        State = supersededById.HasValue ? SupersededState : LiftedState;
+        StateAt = DateTime.UtcNow;
+        StateBy = by;
+        StateReason = reason.Trim();
+        StateProof = proof;
+        SupersededById = supersededById;
     }
 
     private static ContextEntry CreateCore(Guid projectId, EntryType type, string title, string content)

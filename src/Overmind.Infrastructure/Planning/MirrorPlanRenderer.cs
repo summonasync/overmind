@@ -66,11 +66,12 @@ internal static class MirrorPlanRenderer
     public static List<MirrorFilePlan> BuildEntryPlans(
         string root, List<ContextEntry> entries, List<PlanningMaterializedFile> rows)
     {
+        var titlesById = entries.ToDictionary(e => e.Id, e => e.Title);
         var plans = new List<MirrorFilePlan>(entries.Count);
         foreach (var entry in entries)
         {
             var id8 = entry.Id.ToString("N")[..8];
-            var document = EntryDocument(entry);
+            var document = EntryDocument(entry, titlesById);
             var freshSlug = BacklogNaming.MirrorSlug(entry.Title, "entry");
             var freshRelative =
                 $"ENTRIES/{EntryMirrorNaming.Directory(entry.Type)}/{freshSlug}-{id8}.md";
@@ -125,7 +126,7 @@ internal static class MirrorPlanRenderer
     private static string FrontmatterLine(string value) =>
         value.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');
 
-    private static string EntryDocument(ContextEntry entry)
+    private static string EntryDocument(ContextEntry entry, IReadOnlyDictionary<Guid, string> titlesById)
     {
         var builder = new StringBuilder();
         builder.Append("---\n");
@@ -144,8 +145,24 @@ internal static class MirrorPlanRenderer
         builder.Append($"createdAt: {entry.CreatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n");
         builder.Append($"updatedAt: {entry.UpdatedAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\n");
         builder.Append("---\n\n");
+        if (entry.StateAt is not null && entry.State != ContextEntry.ActiveState)
+        {
+            builder.Append(StateMarker(entry, titlesById)).Append("\n\n");
+        }
+
         builder.Append(entry.Content);
         return builder.ToString();
+    }
+
+    private static string StateMarker(ContextEntry entry, IReadOnlyDictionary<Guid, string> titlesById)
+    {
+        var marker = $"> state: {entry.State} {entry.StateAt:yyyy-MM-dd} — {entry.StateReason}";
+        if (entry.SupersededById is { } successorId && titlesById.TryGetValue(successorId, out var successorTitle))
+        {
+            marker += $" → {successorTitle}";
+        }
+
+        return marker;
     }
 
     private static string? FirstHeading(string body)
