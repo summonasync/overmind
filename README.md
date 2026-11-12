@@ -256,13 +256,17 @@ that spend to the feature the session was claiming. The pieces:
 - **Ingest** — `POST /api/usage` accepts one record
   (`alias`, `sessionId`, `ts`, `model`, the four token counters). Unknown
   aliases and sessions are stored too and simply stay unattributed.
-- **Attribution** — a record lands on a feature when its `alias` + `sessionId`
-  match a claim span (`FeatureClaimSpan`) and its `ts` falls inside the span's
-  `ClaimedAt .. ReleasedAt` window. Spans exist from the moment this feature
-  shipped — there is no retroactive attribution for claims made before
-  the spans table was introduced, and sessions reported under a different
-  session-id space (for example a Claude Code session id) do not join
-  Overmind claim sessions.
+- **Attribution** — a record lands on a feature when its `alias` matches a
+  claim span (`FeatureClaimSpan`) and its `ts` falls inside the span's
+  `ClaimedAt .. ReleasedAt` window. A record whose `sessionId` also matches
+  the span's Overmind claim session takes priority; records from a different
+  session-id space (a Claude Code session id, for example the Stop hook)
+  attribute by alias and time window against non-human spans. When one alias
+  holds several open spans at once the freshest claim wins — a v1 heuristic
+  that matches how parallel waves actually run. Spans exist from the moment
+  this feature shipped — there is no retroactive attribution for claims made
+  before the spans table was introduced. Records that match no span at all
+  stay unattributed per feature but still count in the per-agent totals.
 - **Pricing** — dollars are computed at read time from the pricing table, so
   changing prices reprices history. Defaults ship for the Claude models; edit
   the table via the settings door:

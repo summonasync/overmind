@@ -35,17 +35,16 @@ public sealed class UsageSummaryService
         var windows = spans
             .GroupBy(s => (s.Alias, s.SessionId))
             .ToDictionary(g => g.Key, g => g.ToList());
+        var byAlias = spans
+            .GroupBy(s => s.Alias, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         var features = new Dictionary<Guid, UsageAccumulator>();
         var agents = new Dictionary<string, UsageAccumulator>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var record in records)
         {
-            var span = FindSpan(windows, record);
-            if (span is null)
-            {
-                continue;
-            }
+            var span = FindSpan(windows, byAlias, record);
 
             prices.TryGetValue(record.Model, out var price);
             var cost = price is null
@@ -55,8 +54,12 @@ public sealed class UsageSummaryService
                    + record.CacheReadTokens * price.CacheRead
                    + record.CacheWriteTokens * price.CacheWrite) / PerMillion;
 
-            Accumulate(features, span.FeatureId).Add(record, cost);
-            Accumulate(agents, span.Alias).Add(record, cost);
+            if (span is not null)
+            {
+                Accumulate(features, span.FeatureId).Add(record, cost);
+            }
+
+            Accumulate(agents, record.Alias).Add(record, cost);
         }
 
         return new UsageSummary(
@@ -89,18 +92,32 @@ public sealed class UsageSummaryService
     }
 
     private static FeatureClaimSpan? FindSpan(
-        Dictionary<(string Alias, Guid SessionId), List<FeatureClaimSpan>> windows, UsageRecord record)
+        Dictionary<(string Alias, Guid SessionId), List<FeatureClaimSpan>> windows,
+        Dictionary<string, List<FeatureClaimSpan>> byAlias,
+        UsageRecord record)
     {
-        if (!windows.TryGetValue((record.Alias, record.SessionId), out var candidates))
+        if (windows.TryGetValue((record.Alias, record.SessionId), out var exactCandidates) &&
+            LatestCovering(exactCandidates, record.Ts) is { } exact)
+        {
+            return exact;
+        }
+
+        if (!byAlias.TryGetValue(record.Alias, out var aliasCandidates))
         {
             return null;
         }
 
+        return LatestCovering(
+            [.. aliasCandidates.Where(s => !s.ByHuman)], record.Ts);
+    }
+
+    private static FeatureClaimSpan? LatestCovering(List<FeatureClaimSpan> candidates, DateTime ts)
+    {
         FeatureClaimSpan? match = null;
         foreach (var span in candidates)
         {
-            var inside = span.ClaimedAt <= record.Ts &&
-                         (span.ReleasedAt is null || record.Ts < span.ReleasedAt);
+            var inside = span.ClaimedAt <= ts &&
+                         (span.ReleasedAt is null || ts < span.ReleasedAt);
             if (inside && (match is null || span.ClaimedAt > match.ClaimedAt))
             {
                 match = span;

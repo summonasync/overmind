@@ -57,7 +57,7 @@ public sealed class UsageSummaryApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Summary_RecordsOutsideTheSpan_StayUnattributed()
+    public async Task Summary_RecordsOutsideTheSpan_StayOutOfFeaturesButShowInAgentTotals()
     {
         var featureId = await SeedFeatureAsync("001-alpha");
         await SeedSpanAsync(featureId, "Dan", _sessionA, DateTime.UtcNow.AddHours(-2), DateTime.UtcNow.AddHours(-1));
@@ -67,7 +67,10 @@ public sealed class UsageSummaryApiTests : IDisposable
         var summary = await GetSummaryAsync();
 
         summary.Features.ShouldBeEmpty();
-        summary.Agents.ShouldBeEmpty();
+        var agent = AssertSingleRow(summary.Agents);
+        agent.Alias.ShouldBe("Dan");
+        agent.Records.ShouldBe(2L);
+        agent.InputTokens.ShouldBe(200L);
     }
 
     [Fact]
@@ -103,7 +106,7 @@ public sealed class UsageSummaryApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Summary_UnknownIdentityRecord_IsAbsent()
+    public async Task Summary_UnknownIdentityRecord_ShowsOnlyInAgentTotals()
     {
         var featureId = await SeedFeatureAsync("001-alpha");
         await SeedSpanAsync(featureId, "Dan", _sessionA, DateTime.UtcNow.AddHours(-2), null);
@@ -112,7 +115,53 @@ public sealed class UsageSummaryApiTests : IDisposable
         var summary = await GetSummaryAsync();
 
         summary.Features.ShouldBeEmpty();
-        summary.Agents.ShouldBeEmpty();
+        var agent = AssertSingleRow(summary.Agents);
+        agent.Alias.ShouldBe("ghost");
+        agent.InputTokens.ShouldBe(100L);
+    }
+
+    [Fact]
+    public async Task Summary_HookRecordWithForeignSession_AttributesByAliasAndTime()
+    {
+        var featureId = await SeedFeatureAsync("001-alpha");
+        await SeedSpanAsync(featureId, "Dan", _sessionA, DateTime.UtcNow.AddHours(-2), null);
+        await IngestAsync("Dan", Guid.NewGuid(), DateTime.UtcNow.AddHours(-1));
+
+        var summary = await GetSummaryAsync();
+
+        var feature = AssertSingleRow(summary.Features);
+        feature.FeatureId.ShouldBe(featureId);
+        feature.Records.ShouldBe(1L);
+        AssertSingleRow(summary.Agents).Alias.ShouldBe("Dan");
+    }
+
+    [Fact]
+    public async Task Summary_HumanSpan_DoesNotAbsorbForeignSessionRecords()
+    {
+        var featureId = await SeedFeatureAsync("001-alpha");
+        await SeedSpanAsync(featureId, "board", _sessionA, DateTime.UtcNow.AddHours(-2), null, byHuman: true);
+        await IngestAsync("board", Guid.NewGuid(), DateTime.UtcNow.AddHours(-1));
+
+        var summary = await GetSummaryAsync();
+
+        summary.Features.ShouldBeEmpty();
+        AssertSingleRow(summary.Agents).Alias.ShouldBe("board");
+    }
+
+    [Fact]
+    public async Task Summary_ForeignSessionAcrossOverlappingSpans_PicksTheFreshestClaim()
+    {
+        var firstId = await SeedFeatureAsync("001-first");
+        var secondId = await SeedFeatureAsync("002-second");
+        await SeedSpanAsync(firstId, "Dan", _sessionA, DateTime.UtcNow.AddHours(-2), null);
+        await SeedSpanAsync(secondId, "Dan", _sessionB, DateTime.UtcNow.AddHours(-1), null);
+        await IngestAsync("Dan", Guid.NewGuid(), DateTime.UtcNow);
+
+        var summary = await GetSummaryAsync();
+
+        var feature = AssertSingleRow(summary.Features);
+        feature.FeatureId.ShouldBe(secondId);
+        AssertSingleRow(summary.Agents).Alias.ShouldBe("Dan");
     }
 
     [Fact]
@@ -219,7 +268,8 @@ public sealed class UsageSummaryApiTests : IDisposable
     }
 
     private async Task SeedSpanAsync(
-        Guid featureId, string alias, Guid sessionId, DateTime claimedAt, DateTime? releasedAt)
+        Guid featureId, string alias, Guid sessionId, DateTime claimedAt,
+        DateTime? releasedAt, bool byHuman = false)
     {
         var released = releasedAt is null
             ? "NULL"
@@ -227,8 +277,8 @@ public sealed class UsageSummaryApiTests : IDisposable
         await ExecuteAsync($"""
             INSERT INTO FeatureClaimSpans (Id, ProjectId, FeatureId, Alias, Vendor, SessionId, ClaimedAt, ReleasedAt, ByHuman)
             VALUES ('{Guid.NewGuid().ToString().ToUpperInvariant()}', '{_projectId.ToString().ToUpperInvariant()}',
-                    '{featureId.ToString().ToUpperInvariant()}', '{alias}', 'qwen', '{sessionId.ToString().ToUpperInvariant()}',
-                    '{claimedAt:yyyy-MM-dd HH:mm:ss.fff}', {released}, 0)
+                    '{featureId.ToString().ToUpperInvariant()}', '{alias}', '{(byHuman ? "human" : "qwen")}', '{sessionId.ToString().ToUpperInvariant()}',
+                    '{claimedAt:yyyy-MM-dd HH:mm:ss.fff}', {released}, {(byHuman ? 1 : 0)})
             """);
     }
 
