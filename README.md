@@ -248,6 +248,62 @@ table in `GET/PUT /api/settings/usage-pricing` — the defaults cover the Claude
 rows (opus/sonnet/haiku, 2026 prices) and the table is meant to be edited for
 any other model you run.
 
+## Token usage attribution
+
+Overmind can track how many tokens each agent session burns and attribute
+that spend to the feature the session was claiming. The pieces:
+
+- **Ingest** — `POST /api/usage` accepts one record
+  (`alias`, `sessionId`, `ts`, `model`, the four token counters). Unknown
+  aliases and sessions are stored too and simply stay unattributed.
+- **Attribution** — a record lands on a feature when its `alias` + `sessionId`
+  match a claim span (`FeatureClaimSpan`) and its `ts` falls inside the span's
+  `ClaimedAt .. ReleasedAt` window. Spans exist from the moment this feature
+  shipped — there is no retroactive attribution for claims made before
+  the spans table was introduced, and sessions reported under a different
+  session-id space (for example a Claude Code session id) do not join
+  Overmind claim sessions.
+- **Pricing** — dollars are computed at read time from the pricing table, so
+  changing prices reprices history. Defaults ship for the Claude models; edit
+  the table via the settings door:
+
+  ```bash
+  curl -X PUT http://127.0.0.1:4761/api/settings/usage-pricing \
+       -H 'Content-Type: application/json' \
+       -d '{"pricing": {"glm-5": {"input": 1.5, "output": 7.0,
+                                   "cacheRead": 0.15, "cacheWrite": 0.3}}}'
+  ```
+
+  Prices are per 1M tokens. An empty table disables dollar math (tokens are
+  still counted).
+
+- **Stop hook** — `scripts/usage-stop-hook.sh` reports per-turn usage from a
+  Claude Code session: on every Stop event it sums the assistant usage
+  appended to the session transcript since the previous Stop and posts it to
+  `POST /api/usage`. It never blocks the session — if Overmind is down or the
+  transcript is unreadable it exits silently and retries the window on the
+  next Stop. **Activation is a manual, human-only step**: wiring a hook edits
+  your own `~/.claude/settings.json`, which agents must never touch. The
+  snippet below is documentation, not something an agent should apply:
+
+  ```json
+  {
+    "hooks": {
+      "Stop": [
+        {
+          "hooks": [
+            { "type": "command",
+              "command": "bash /absolute/path/to/overmind/scripts/usage-stop-hook.sh" }
+          ]
+        }
+      ]
+    }
+  }
+  ```
+
+  The alias comes from `OVERMIND_ALIAS` (falling back to git `user.name`),
+  the base URL from `OVERMIND_HOST` (default `http://127.0.0.1:4761`).
+
 ## Roadmap
 
 | Prio | Scope | Status |
