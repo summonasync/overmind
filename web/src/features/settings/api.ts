@@ -1,6 +1,7 @@
 import { apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type { VectorSearchHealth } from "@/shared/api/types";
 import type {
+  HumanDigestSettingsValues,
   ReindexReport,
   SettingsFormValues,
   SettingsResponse,
@@ -42,6 +43,12 @@ export function updateTelegramSettings(values: TelegramSettingsValues): Promise<
     telegramEnabled: values.telegramEnabled,
     telegramBotToken: values.telegramBotToken || null,
     telegramAllowedChatIds: values.telegramAllowedChatIds,
+  });
+}
+
+export function updateHumanDigestSettings(values: HumanDigestSettingsValues): Promise<UpdateSettingsResponse> {
+  return apiPut<UpdateSettingsResponse>("/settings", {
+    humanDigestEnabled: values.humanDigestEnabled,
   });
 }
 

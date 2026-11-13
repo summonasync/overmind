@@ -16,6 +16,7 @@ import {
   ProjectAutoActToggle,
   ProjectDetail,
   ProjectForm,
+  ProjectHumanDigestToggle,
   ProjectList,
   ProjectManifestSection,
   useProjectList,
@@ -128,6 +129,10 @@ function ProjectsSettingsPageContent() {
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Auto-act</h3>
               <ProjectAutoActToggle key={detail.id} project={detail} />
+            </div>
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Human digest</h3>
+              <ProjectHumanDigestToggle key={detail.id} project={detail} />
             </div>
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <h3 className="text-sm font-semibold text-foreground">Agent approvals</h3>
