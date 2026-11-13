@@ -16,11 +16,13 @@ export { FeatureNumber } from "./components/feature-number";
 export { FeatureNumberBadge } from "./components/feature-number-badge";
 export { FeaturePrioritySelect } from "./components/feature-priority-select";
 export { FeatureWorkspace } from "./components/feature-workspace";
+export { HumanInboxPanel } from "./components/human-inbox-panel";
 export { PlanningWorkflowSettings } from "./components/workflow-settings";
 export { TaskBoard } from "./components/task-board";
 export { TaskDependenciesPanel } from "./components/task-dependencies-panel";
 export { TaskEditor } from "./components/task-editor";
 export {
+  useHumanInbox,
   useMaterializeMutation,
   usePlanningBoard,
   usePlanningDrift,
@@ -32,11 +34,13 @@ export {
   useWorkflowMutations,
 } from "./lib/use-planning";
 export { useFeatureTitle } from "./lib/use-feature-title";
+export { inboxHolderLabel, inboxRowHref } from "./lib/human-inbox";
 export {
   artifactVersionsQueryOptions,
   boardQueryOptions,
   driftQueryOptions,
   featureQueryOptions,
+  humanInboxQueryOptions,
   planningKeys,
   workflowQueryOptions,
 } from "./queries";
@@ -108,6 +112,9 @@ export type {
   PlanningFeatureStatus,
   PlanningImportScanEntry,
   PlanningImportScanReport,
+  PlanningInboxClaimState,
+  PlanningInboxItem,
+  PlanningInboxResponse,
   PlanningLogLine,
   PlanningMaterialization,
   PlanningMaterializationReport,

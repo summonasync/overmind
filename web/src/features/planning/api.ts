@@ -12,6 +12,7 @@ import type {
   PlanningFeatureImportReport,
   PlanningFeatureResponse,
   PlanningImportScanReport,
+  PlanningInboxResponse,
   PlanningMaterializationReport,
   PlanningWorkflowResponse,
   ReorderPlanningQueueValues,
@@ -232,4 +233,8 @@ export function importPlanningFeature(
   return apiPost<PlanningFeatureImportReport>(`/projects/${projectId}/planning/import`, {
     folder,
   });
+}
+
+export function listHumanInbox(projectId: string): Promise<PlanningInboxResponse> {
+  return apiGet<PlanningInboxResponse>(`/human/inbox?projectId=${projectId}`);
 }
