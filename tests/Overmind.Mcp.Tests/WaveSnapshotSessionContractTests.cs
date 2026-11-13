@@ -43,5 +43,7 @@ public sealed class WaveSnapshotSessionContractTests : McpSessionTestBase
         properties.ShouldContainKey("projectId");
         properties.ShouldContainKey("tags");
         properties.ShouldContainKey("entryLimit");
+        properties.ShouldContainKey("fields");
+        properties.ShouldContainKey("compact");
     }
 }

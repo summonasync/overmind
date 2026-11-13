@@ -175,7 +175,7 @@ internal static class PlanningToolResponses
     internal static CallToolResult EchoResult(JsonElement echo) =>
         new() { Content = [new TextContentBlock { Text = echo.GetRawText() }] };
 
-    private static string LastLogLineOf(JsonElement artifact)
+    internal static string LastLogLineOf(JsonElement artifact)
     {
         if (!artifact.TryGetProperty("log", out var log) ||
             log.ValueKind != JsonValueKind.Array ||

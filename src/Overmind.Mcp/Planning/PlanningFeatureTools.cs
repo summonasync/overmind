@@ -27,7 +27,7 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_list_features", ReadOnly = true, Idempotent = true)]
-    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress (taskTotal, taskDone, taskCounts: todo/inProgress/review/done/blocked, sums to taskTotal), plus claim state (claimedByAlias, claimedByVendor, claimedAt, claimState alive|stale|ended) on claimed entries — a stale or ended claim can be taken over via planning_claim_feature. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection. Optional composable filters (AND, all additive — omit everything for the unchanged full board): status (draft|ready|inProgress|done|review), priority (p0-p3), lane (case-insensitive roster name), claimedByAlias (exact stored claim owner, any liveness), unclaimedOnly (features with no claim record).")]
+    [Description("Planning ceremony, step 1: the feature board of a project — slugs, statuses, spec/plan validation and task progress (taskTotal, taskDone, taskCounts: todo/inProgress/review/done/blocked, sums to taskTotal), plus claim state (claimedByAlias, claimedByVendor, claimedAt, claimState alive|stale|ended) on claimed entries — a stale or ended claim can be taken over via planning_claim_feature. Read it before picking work. This is the full board view, not the work order: for what's next read planning_task_queue — the board order IS the queue, and that tool is its projection. Optional composable filters (AND, all additive — omit everything for the unchanged full board): status (draft|ready|inProgress|done|review), priority (p0-p3), lane (case-insensitive roster name), claimedByAlias (exact stored claim owner, any liveness), unclaimedOnly (features with no claim record). Optional projection knobs: fields (comma/space-separated keys — each row collapses to {slug, ...requested} in request order, unknown keys rejected before the call naming the allowed set) or compact (the predefined usual-shape row: identity, phase, progress and claim state); the knobs are mutually exclusive and omitting both returns the full board rows.")]
     public async Task<JsonElement> ListFeatures(
         [Description("Id of the project whose feature board to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description("Optional status filter: draft, ready, inProgress, done or review.")] string? status = null,
@@ -35,12 +35,21 @@ public sealed class PlanningFeatureTools
         [Description("Optional lane filter: case-insensitive match on the lane roster name.")] string? lane = null,
         [Description("Optional priority filter: p0 (critical), p1 (high), p2 (normal), p3 (low).")] string? priority = null,
         [Description("True to return only features with no claim record.")] bool? unclaimedOnly = null,
+        [Description("Optional comma/space-separated row keys to project each board row down to, e.g. title,phase — slug always leads and stays; unknown keys are rejected naming the allowed set; a list naming no keys is a lint error.")] string? fields = null,
+        [Description("True to project each board row to the predefined usual shape (identity, phase, progress and claim state) instead of a custom fields slice; mutually exclusive with fields.")] bool compact = false,
         CancellationToken ct = default)
     {
+        var requested = PlanningFieldProjection.ResolveRequested(fields, compact, PlanningFieldProjection.BoardFields);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var url = $"/api/agent/projects/{resolved}/planning/features{BoardQuery(status, claimedByAlias, lane, priority, unclaimedOnly)}";
+        var board = await Guarded(() => _api.GetAsync(url, ct));
 
-        return await Guarded(() => _api.GetAsync(url, ct));
+        if (compact)
+        {
+            return PlanningFieldProjection.CompactRows(board, null);
+        }
+
+        return requested.Length == 0 ? board : PlanningFieldProjection.ProjectRows(board, null, requested);
     }
 
     private static string BoardQuery(
@@ -68,14 +77,17 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_read_feature", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one feature: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; with sections, the cheapest read: the body narrows to the named sections, returned in body order, absent names land in missingSections, and the full read stays byte-faithful to storage. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs.")]
+    [Description("Reads one feature: its body plus every spec, plan, task and result artifact with statuses and log lines — the most expensive read: the whole feature with all artifacts; with sections, the cheapest read: the body narrows to the named sections, returned in body order, absent names land in missingSections, and the full read stays byte-faithful to storage. The payload carries the claim state when claimed: claimedByAlias, claimedByVendor, claimedAt, claimState (alive | stale | ended). The review field appears on task payloads only. includeArtifacts=false is the cheap read: body plus a roster summary without artifact bodies or logs. Optional projection knobs: compact=true returns the predefined cheap shape — scalars and the claim block stay, body collapses to bodyChars, artifacts become roster rows (kind, order, status, brief, ticks when the payload carries them) with logs collapsed to the last line — composing with sections and includeArtifacts; fields=<keys> instead projects the top-level payload keys ({slug, ...requested}); the knobs are mutually exclusive and omitting both returns the full read.")]
     public async Task<JsonElement> ReadFeature(
         [Description("Slug of the feature, as shown on the board.")] string slug,
         [Description("Set false for the cheap read: the feature body plus a roster summary (kind, order, status, brief for tasks, acTicked/acTotal) without artifact bodies or log lines. Default true returns every artifact in full.")] bool? includeArtifacts = null,
         [Description("Optional comma/space-separated section names, e.g. log,obstacles — narrows the body to those sections, returned in body order.")] string? sections = null,
+        [Description("Optional comma/space-separated top-level payload keys to project the read down to, e.g. status,artifacts — slug always leads and stays; unknown keys are rejected naming the allowed set; a list naming no keys is a lint error.")] string? fields = null,
+        [Description("True to project the read to the predefined cheap shape (scalars, bodyChars, roster artifact rows with last log lines, claim block kept) instead of a custom fields slice; mutually exclusive with fields.")] bool compact = false,
         [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
+        var requested = PlanningFieldProjection.ResolveRequested(fields, compact, PlanningFieldProjection.FeatureReadFields);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var url = $"/api/agent/projects/{resolved}/planning/features/{Uri.EscapeDataString(slug)}";
         var query = new List<string>();
@@ -95,7 +107,14 @@ public sealed class PlanningFeatureTools
         }
 
         var feature = await Guarded(() => _api.GetAsync(url, ct));
-        return KeepReviewOnlyOnTaskArtifacts(feature);
+        var filtered = KeepReviewOnlyOnTaskArtifacts(feature);
+
+        if (compact)
+        {
+            return PlanningFieldProjection.CompactFeatureRead(filtered);
+        }
+
+        return requested.Length == 0 ? filtered : PlanningFieldProjection.ProjectObject(filtered, requested);
     }
 
     [McpServerTool(Name = "planning_list_artifacts", ReadOnly = true, Idempotent = true)]
@@ -280,12 +299,15 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_task_queue", ReadOnly = true, Idempotent = true)]
-    [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, taskCounts (todo/inProgress/review/done/blocked, sums to taskTotal), readiness 0-3, blockedBy, isBlocked, plus claim state when claimed: claimedByAlias, claimedByVendor, claimedAt and claimState (alive | stale | ended — stale claims are take-over-able via planning_claim_feature). Every entry also carries the ceremony context: phase (drafting | writing spec | planning | plan validated | in progress | review | done — derived server-side from spec/plan/task state, the lifecycle status column stays the source of truth) and briefExcerpt (the first <goal> paragraph capped at ~500 chars; null when the feature has no goal — one-glance ceremony context without opening the feature). Rows also carry the feature timestamps: createdAt (when the feature was created) and updatedAt (when it last changed — the same stamp the board view reports). Every row projects the background materializer's lag — pendingMutations (mutations enqueued but not yet mirrored), lastAttemptAt, lastSuccessAt, stale (true while pendingMutations > 0 or the last attempt failed) — a clean BACKLOG/ tree with stale=true means the mirror is behind. limit truncates to the first N entries; omit it for the full queue.")]
+    [Description("Reads the planning queue of a project — the what's-next projection of the board: non-done features sorted priority asc, then queue position; done features drop out. The human reorders it by dragging cards within a priority band; the agent moves features with planning_move_feature, and crossing a band is planning_set_feature_priority with the user's explicit approval. Entries are compact: slug, number, title, priority, status, queuePosition, specStatus, planStatus, taskDone, taskTotal, taskCounts (todo/inProgress/review/done/blocked, sums to taskTotal), readiness 0-3, blockedBy, isBlocked, plus claim state when claimed: claimedByAlias, claimedByVendor, claimedAt and claimState (alive | stale | ended — stale claims are take-over-able via planning_claim_feature). Every entry also carries the ceremony context: phase (drafting | writing spec | planning | plan validated | in progress | review | done — derived server-side from spec/plan/task state, the lifecycle status column stays the source of truth) and briefExcerpt (the first <goal> paragraph capped at ~500 chars; null when the feature has no goal — one-glance ceremony context without opening the feature). Rows also carry the feature timestamps: createdAt (when the feature was created) and updatedAt (when it last changed — the same stamp the board view reports). Every row projects the background materializer's lag — pendingMutations (mutations enqueued but not yet mirrored), lastAttemptAt, lastSuccessAt, stale (true while pendingMutations > 0 or the last attempt failed) — a clean BACKLOG/ tree with stale=true means the mirror is behind. limit truncates to the first N entries; omit it for the full queue. Optional projection knobs: fields (comma/space-separated keys — each row collapses to {slug, ...requested} in request order, unknown keys rejected before the call naming the allowed set) or compact (the predefined usual-shape row: identity, phase, progress and claim state); the knobs are mutually exclusive and omitting both returns the full queue.")]
     public async Task<JsonElement> TaskQueue(
         [Description("Id of the project whose queue to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
         [Description("Optional positive int; truncates the queue to the first N entries.")] int? limit = null,
+        [Description("Optional comma/space-separated row keys to project each queue row down to, e.g. status,taskTotal — slug always leads and stays; unknown keys are rejected naming the allowed set; a list naming no keys is a lint error.")] string? fields = null,
+        [Description("True to project each queue row to the predefined usual shape (identity, phase, progress and claim state) instead of a custom fields slice; mutually exclusive with fields.")] bool compact = false,
         CancellationToken ct = default)
     {
+        var requested = PlanningFieldProjection.ResolveRequested(fields, compact, PlanningFieldProjection.QueueFields);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var url = $"/api/agent/projects/{resolved}/planning/task-queue";
         if (limit is not null)
@@ -293,7 +315,16 @@ public sealed class PlanningFeatureTools
             url += $"?limit={limit}";
         }
 
-        return await Guarded(() => _api.GetAsync(url, ct));
+        var queue = await Guarded(() => _api.GetAsync(url, ct));
+
+        if (compact)
+        {
+            return PlanningFieldProjection.CompactRows(queue, PlanningFieldProjection.QueueRowsProperty);
+        }
+
+        return requested.Length == 0
+            ? queue
+            : PlanningFieldProjection.ProjectRows(queue, PlanningFieldProjection.QueueRowsProperty, requested);
     }
 
     [McpServerTool(Name = "planning_move_feature", Destructive = false, Idempotent = false)]

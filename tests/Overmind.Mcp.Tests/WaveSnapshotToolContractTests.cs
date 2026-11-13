@@ -408,6 +408,156 @@ public sealed class WaveSnapshotToolContractTests : IAsyncLifetime
         git.Calls.Count.ShouldBe(2);
     }
 
+    [Fact]
+    public async Task WaveSnapshot_CompactWithoutFields_KeepsTodaysByteForByteShape()
+    {
+        _stub.RouteGet(SnapshotRoute, FullSnapshotJson);
+
+        var result = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, compact: true);
+
+        result.GetRawText().ShouldBe(ExpectedCompactJson, "the compact shape is a pinned contract");
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_FieldsSlice_ProjectsQueueAndClaims_LeavingOtherSectionsWhole()
+    {
+        _stub.RouteGet(SnapshotRoute, FullSnapshotJson);
+
+        var result = await Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, fields: "status,claimedByAlias");
+
+        var queueRow = result.GetProperty("queue").EnumerateArray().Single();
+        queueRow.EnumerateObject().Select(pair => pair.Name).ShouldBe(["slug", "status", "claimedByAlias"]);
+        queueRow.GetProperty("status").GetString().ShouldBe("inProgress");
+        queueRow.GetProperty("claimedByAlias").GetString().ShouldBe("marshal");
+
+        var claim = result.GetProperty("claims").EnumerateArray().Single();
+        claim.EnumerateObject().Select(pair => pair.Name).ShouldBe(["slug", "status", "claimedByAlias"]);
+
+        result.GetProperty("generatedAt").GetString().ShouldBe("2026-10-17T12:00:00Z");
+        result.GetProperty("coordinationTags").GetArrayLength().ShouldBe(2);
+        result.GetProperty("codeLocations").GetArrayLength().ShouldBe(0);
+
+        var blocker = result.GetProperty("openBlockers").EnumerateArray().Single();
+        blocker.EnumerateObject().Select(pair => pair.Name).ShouldBe(["slug", "openBlockers"]);
+
+        var entry = result.GetProperty("entries").EnumerateArray().Single();
+        entry.EnumerateObject().Select(pair => pair.Name).ShouldBe(["id", "type", "title", "tags", "snippet", "updatedAt"]);
+        entry.GetProperty("snippet").GetString().ShouldContain("lane-a moving");
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_FieldsCoversTheClaimGrammar_PerRowAbsenceDropsKeys()
+    {
+        _stub.RouteGet(SnapshotRoute, FullSnapshotJson);
+
+        var result = await Tool(new StubGitCli())
+            .WaveSnapshot(Canned.ProjectId, fields: "claimedByHuman,lastActivityAt,queuePosition");
+
+        result.GetProperty("queue").EnumerateArray().Single().EnumerateObject()
+            .Select(pair => pair.Name).ShouldBe(["slug", "claimedByHuman", "queuePosition"]);
+
+        var claim = result.GetProperty("claims").EnumerateArray().Single();
+        claim.EnumerateObject().Select(pair => pair.Name).ShouldBe(["slug", "claimedByHuman", "lastActivityAt", "queuePosition"]);
+        claim.GetProperty("claimedByHuman").GetBoolean().ShouldBeFalse();
+        claim.GetProperty("lastActivityAt").GetString().ShouldBe("2026-10-17T11:00:00Z");
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_FieldsUnknownKey_RejectedNamingTheAllowedSet_BeforeAnyHttp()
+    {
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, fields: "slug,banana"));
+
+        ex.Message.ShouldContain("banana");
+        ex.Message.ShouldContain("Allowed fields:");
+        _stub.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_FieldsWithCompact_RejectedNamingBothKnobs_BeforeAnyHttp()
+    {
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, fields: "slug", compact: true));
+
+        ex.Message.ShouldContain("fields and compact are mutually exclusive");
+        _stub.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WaveSnapshot_FieldsWithoutKnobValue_RejectedAsACallerBug()
+    {
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool(new StubGitCli()).WaveSnapshot(Canned.ProjectId, fields: ",,,"));
+
+        ex.Message.ShouldContain("projection of nothing");
+        _stub.Requests.ShouldBeEmpty();
+    }
+
+    private static readonly string ExpectedCompactJson = new JsonObject
+    {
+        ["projectId"] = Canned.ProjectId.ToString(),
+        ["generatedAt"] = "2026-10-17T12:00:00Z",
+        ["coordinationTags"] = new JsonArray("wave-sync", "lane-marshalling"),
+        ["queue"] = new JsonArray(new JsonObject
+        {
+            ["slug"] = "demo-feature",
+            ["number"] = "42",
+            ["title"] = "Demo feature",
+            ["priority"] = "p1",
+            ["status"] = "inProgress",
+            ["queuePosition"] = 2,
+            ["phase"] = "in progress",
+            ["readiness"] = 2,
+            ["taskDone"] = 1,
+            ["taskTotal"] = 2,
+            ["isBlocked"] = true,
+            ["blockedBy"] = new JsonArray("gate-locked"),
+            ["claimedByAlias"] = "marshal",
+            ["claimedByVendor"] = "claude",
+            ["claimedAt"] = "2026-10-17T09:00:00Z",
+            ["claimState"] = "alive",
+            ["lane"] = "frontend",
+            ["laneBoundAlias"] = "johan",
+            ["potentialOverlaps"] = new JsonArray(new JsonObject
+            {
+                ["withFeature"] = "other-feature",
+                ["sharedGlobs"] = new JsonArray("src/web/**"),
+                ["matches"] = new JsonArray(new JsonObject
+                {
+                    ["pattern"] = "src/web/**",
+                    ["partnerPattern"] = "src/web/**",
+                    ["kind"] = "exact"
+                })
+            }),
+            ["openDirectiveCount"] = 1
+        }),
+        ["claims"] = new JsonArray(new JsonObject
+        {
+            ["slug"] = "demo-feature",
+            ["claimedByAlias"] = "marshal",
+            ["claimedByVendor"] = "claude",
+            ["claimedAt"] = "2026-10-17T09:00:00Z",
+            ["claimState"] = "alive",
+            ["queuePosition"] = 2,
+            ["priority"] = "p1",
+            ["status"] = "inProgress"
+        }),
+        ["codeLocations"] = new JsonArray(),
+        ["openBlockers"] = new JsonArray(new JsonObject
+        {
+            ["slug"] = "demo-feature",
+            ["openBlockers"] = new JsonArray("gate-locked")
+        }),
+        ["entries"] = new JsonArray(new JsonObject
+        {
+            ["id"] = "5c1d0000-0000-0000-0000-000000000001",
+            ["type"] = "note",
+            ["title"] = "wave standup",
+            ["tags"] = new JsonArray("wave-sync"),
+            ["updatedAt"] = "2026-10-17T11:30:00Z"
+        })
+    }.ToJsonString();
+
     private WaveSnapshotTools Tool(StubGitCli git, WaveListingCache? cache = null) =>
         new(_api, git, cache ?? new WaveListingCache());
 
