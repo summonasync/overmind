@@ -7,6 +7,8 @@ internal sealed class PlanningCliArgs
         "--json",
         "--override-lane-check",
         "--untick",
+        "--mentions",
+        "--replies",
     };
 
     private static readonly HashSet<string> SingleVerbs = new(StringComparer.OrdinalIgnoreCase)
@@ -17,6 +19,8 @@ internal sealed class PlanningCliArgs
         "claim",
         "unclaim",
         "materialization-status",
+        "watch",
+        "report",
     };
 
     private PlanningCliArgs(

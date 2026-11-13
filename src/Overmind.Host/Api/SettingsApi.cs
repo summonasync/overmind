@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Configuration;
@@ -15,6 +16,8 @@ public static class SettingsApi
         group.MapGet("/settings", GetSettings);
         group.MapPut("/settings", UpdateSettings);
         group.MapPost("/settings/test", TestSettings);
+        group.MapGet("/settings/usage-pricing", GetUsagePricing);
+        group.MapPut("/settings/usage-pricing", UpdateUsagePricing);
         return group;
     }
 
@@ -441,6 +444,57 @@ public static class SettingsApi
 
         return Results.Ok(report);
     }
+
+    private static async Task<IResult> GetUsagePricing(
+        UsagePricingCatalog catalog, CancellationToken ct)
+    {
+        var pricing = await catalog.LoadAsync(ct);
+        return Results.Ok(new UsagePricingResponse(ToPricingEntries(pricing)));
+    }
+
+    private static async Task<IResult> UpdateUsagePricing(
+        UpdateUsagePricingRequest request,
+        UsagePricingCatalog catalog,
+        AppSettingsService settings,
+        CancellationToken ct)
+    {
+        foreach (var (model, price) in request.Pricing)
+        {
+            var name = model.Trim();
+            if (name.Length == 0 || name.Length > UsageRecord.MaxModelLength)
+            {
+                return InvalidSetting(
+                    nameof(request.Pricing),
+                    $"Model names must be between 1 and {UsageRecord.MaxModelLength} characters; got '{model}'.");
+            }
+
+            if (price is null)
+            {
+                return InvalidSetting(nameof(request.Pricing), $"Pricing for '{model}' is required.");
+            }
+
+            if (price.Input < 0 || price.Output < 0 || price.CacheRead < 0 || price.CacheWrite < 0)
+            {
+                return InvalidSetting(
+                    nameof(request.Pricing), $"Prices for '{model}' must not be negative.");
+            }
+        }
+
+        var payload = request.Pricing.ToDictionary(
+            pair => pair.Key.Trim(), pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        await settings.SetAsync(
+            SettingKeys.UsagePricing,
+            JsonSerializer.Serialize(payload, UsagePricingCatalog.SerializerOptions), ct);
+
+        var stored = await catalog.LoadAsync(ct);
+        return Results.Ok(new UsagePricingResponse(ToPricingEntries(stored)));
+    }
+
+    private static IReadOnlyDictionary<string, UsagePricingEntry> ToPricingEntries(
+        IReadOnlyDictionary<string, UsagePricing> pricing) => pricing.ToDictionary(
+        pair => pair.Key,
+        pair => new UsagePricingEntry(
+            pair.Value.Input, pair.Value.Output, pair.Value.CacheRead, pair.Value.CacheWrite));
 
     private static async Task<SettingsResponse> ReadSettingsAsync(
         AppSettingsService settings, CancellationToken ct)

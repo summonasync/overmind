@@ -26,6 +26,9 @@ public static class SearchApi
         Guid? projectId,
         int? limit,
         string? mode,
+        DateTime? since,
+        DateTime? until,
+        string? author,
         FtsSearchService ftsSearch,
         ISemanticSearch semanticSearch,
         OvermindDbContext db,
@@ -100,7 +103,38 @@ public static class SearchApi
             });
         }
 
-        return Results.Ok(new SearchResponse(q, responses));
+        var filtered = await ApplyEntryFiltersAsync(db, responses, since, until, author, ct);
+
+        return Results.Ok(new SearchResponse(q, filtered));
+    }
+
+    private static async Task<IReadOnlyList<SearchHitResponse>> ApplyEntryFiltersAsync(
+        OvermindDbContext db,
+        IReadOnlyList<SearchHitResponse> hits,
+        DateTime? since,
+        DateTime? until,
+        string? author,
+        CancellationToken ct)
+    {
+        if (!since.HasValue && !until.HasValue && string.IsNullOrWhiteSpace(author))
+        {
+            return hits;
+        }
+
+        var entryIds = hits.OfType<EntryHitResponse>().Select(h => h.EntryId).ToArray();
+        var matching = await EntryQueryFilters
+            .Apply(db.ContextEntries.Where(e => entryIds.Contains(e.Id)), since, until, author)
+            .Select(e => e.Id)
+            .ToListAsync(ct);
+
+        var matchingIds = matching.ToHashSet();
+        return hits
+            .Where(hit => hit switch
+            {
+                EntryHitResponse entry => matchingIds.Contains(entry.EntryId),
+                _ => false
+            })
+            .ToArray();
     }
 
     private static async Task<IResult> Reindex(ReindexService reindexService, CancellationToken ct)

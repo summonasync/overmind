@@ -149,7 +149,7 @@ never worked around. The transport changes; the authority does not.
 | Feature code discovery + explicit pin (read-only scan for worktrees and branches carrying the slug or its NNN prefix; a pin `planning_pin_feature_code` overrides the convention — pinned locations list first flagged `pinned`, convention hits follow deduplicated, a pin missing locally is reported stale, never auto-cleared) | `planning_feature_code`, `planning_pin_feature_code` | 126, 134 |
 | Wave read projection + collision inputs — one-call snapshot (`overmind_wave_snapshot` №50: `planning_task_queue` rows verbatim, per-claim identity — alias, vendor, claimState, claimedAt, claimedByHuman —, code locations enriched adapter-side with the feature-code discovery, open blockers rolled up per feature, coordination entries by tag, default `wave-sync,lane-marshalling`, `entryLimit` 1–100 default 20); lane rosters with live holder projection (`planning_set_lanes` full-replace / `planning_list_lanes` №51/52); `lane`, `laneHolder`, `potentialOverlaps`, `openDirectiveCount` projected on queue and board rows; `lane` + `codeSurfaces` globs settable via `planning_update_feature`; claim-time lane check (409 on held lane, `overrideLaneCheck=true` escape hatch echoed back) | `overmind_wave_snapshot`, `planning_set_lanes`, `planning_list_lanes`, `planning_update_feature`, `planning_claim_feature` | 137 |
 | Directive channel — the one write that reaches a live claim holder: any session appends to ANY feature regardless of claim or status (append-only, ≤500 chars, session-attributed, HOLD/SYNC/YIELD-style), holder or any reader acks (idempotent), acked leave the `openDirectives`/`openDirectiveCount` projections; coordination entries confirm back the same way — `ack_entry` (№55) appends one additive `readBy` row [alias, vendor, at] per ack, explicit, idempotent, reads stay pure; mutates no artifacts, no statuses, no versions — the 409 claim lock stays intact | `planning_append_directive`, `planning_ack_directive` (№53/54), `ack_entry` (№55) | 137 |
-| Wake channel — outbound visibility for idle sessions: `overmind_wake_peek` (side-effect-free peek of pending signals — human replies on this session's notifications + wave messages mentioning its alias, cursor-paged, watermarks untouched) over `GET /api/agent/wake`; the adapter's wake watcher escalates 60s idle → 5s in-gate and surfaces signals as an MCP stdio logging notification plus a pending-signal count on the next tool response — visibility, never turn injection; the wake ritual (self-scheduled tick) and the reply auto-act flag `AutoActOnReplies` (per project, default off) are documented in **Wake ritual (190)** below | `overmind_wake_peek` | 190 |
+| Wake channel — outbound visibility for idle sessions: `overmind_wake_peek` (side-effect-free peek of pending signals — human replies on this session's notifications + wave messages mentioning its alias, cursor-paged, watermarks untouched) over `GET /api/agent/wake`; the adapter's wake watcher escalates 60s idle → 5s in-gate and surfaces signals as an MCP stdio logging notification plus a pending-signal count on the next tool response — visibility, never turn injection; the wake ritual (arm/act/re-arm) and the reply auto-act flag `AutoActOnReplies` (per project, default off) are documented in **Wake ritual (190)** below | `overmind_wake_peek` | 190 |
 
 **Does NOT exist yet — never promise, never emulate silently:**
 | Missing | Board ref | Interim rule |
@@ -273,20 +273,44 @@ marshal for the wave lead). The owner sees real aliases in role colors in the wa
 
 Overmind has no host→agent push: MCP adapters are stdio clients that open every connection
 themselves, and a dead process has no channel — the Host cannot wake a sleeping model. What
-the platform ships is a cheap side-effect-free peek plus a visible signal; the tick is the
-session's own job:
+the platform ships is a cheap side-effect-free peek plus a visible signal; waking is the
+session's own job, and the watch CLI (228) is the preferred mechanism:
 
-- **The pattern — live-but-idle sessions keep a self-scheduled check.** While a session idles
-  with work pending (an approval it awaits, a wave it marshals), it schedules a recurring tick
-  that calls `overmind_wake_peek` and acts on what comes back. Claude Code: a session cron via
-  `CronCreate` with the prompt "check overmind_wake_peek, act on signals". Other runtimes:
-  their scheduler equivalent — the MCP tool name is identical everywhere. The adapter helps
-  within its means: its wake watcher polls every 60s idle and escalates to 5s while in the
-  gate, surfacing signals as an MCP logging notification into the stdio stream plus a
-  pending-signal count on the next tool response.
+- **The recipe — arm, act, re-arm with `overmind watch`.** A live-but-idle session (an approval
+  it awaits, a wave it marshals) arms the watch as a background command the moment it goes
+  idle and lets the process do the polling:
+
+  ```
+  overmind watch --alias <self> [--mentions] [--replies] [--timeout 30m] [--interval 10s]
+  ```
+
+  | Flag | Default | Meaning |
+  |---|---|---|
+  | `--alias <a>` | session alias | Signals to watch for; reply attribution is alias-scoped — any session of the alias matches |
+  | `--mentions` | off | Only wave mentions (`wave-mention`) |
+  | `--replies` | off | Only human replies (`notification-reply`); mutually exclusive with `--mentions` |
+  | `--timeout <dur>` | `30m` | Give-up horizon (`90s`, `30m`, `2h`, `1d`, `hh:mm:ss`) |
+  | `--interval <dur>` | `10s` | Poll cadence while blocked |
+
+  The wait is push-style for the agent: the command blocks until a signal NEWER than its
+  invocation instant arrives, prints one compact line per signal and exits 0 — act on the
+  output, then re-arm immediately; the baseline moves with every re-arm, so old signals never
+  re-fire. On timeout it prints `no signals within <timeout>` and still exits 0: Claude Code
+  re-invokes the session on background-command exit either way, so the agent re-checks and
+  re-arms. Ctrl+C exits 130. This replaces the relay/poll-cron dance for live-but-idle
+  sessions wherever the CLI is deployed.
+- **Fallback — the self-scheduled tick.** Without the watch CLI (older deploy, runtime without
+  shell access), keep the cron pattern: while a session idles with work pending, it schedules
+  a recurring tick that calls `overmind_wake_peek` and acts on what comes back. Claude Code: a
+  session cron via `CronCreate` with the prompt "check overmind_wake_peek, act on signals".
+  Other runtimes: their scheduler equivalent — the MCP tool name is identical everywhere. The
+  adapter helps within its means: its wake watcher polls every 60s idle and escalates to 5s
+  while in the gate, surfacing signals as an MCP logging notification into the stdio stream
+  plus a pending-signal count on the next tool response.
 - **Honest limits.** No process, no channel — a dead or exited session is unreachable; after
-  a restart, re-peek. The stdio log line is visibility, not injection: nothing turns the model
-  on. A sleeping session wakes only from its own tick.
+  a restart, re-arm or re-peek. The stdio log line is visibility, not injection: nothing turns
+  the model on. A sleeping session wakes only from its own scheduling — the armed watch or the
+  tick.
 - **`overmind_wake_peek`** — session-scoped, read-only: human replies on this session's
   notifications (kind `notification-reply`) and wave messages mentioning its alias (kind
   `wave-mention`), ordered, cursor-paged, caps at 100 per page. Advances no watermarks and

@@ -46,6 +46,8 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<TelegramValidatorMapping> TelegramValidatorMappings => Set<TelegramValidatorMapping>();
     public DbSet<TelegramNotificationDelivery> TelegramNotificationDeliveries => Set<TelegramNotificationDelivery>();
     public DbSet<AgentRouteRow> AgentRoutes => Set<AgentRouteRow>();
+    public DbSet<FeatureClaimSpan> FeatureClaimSpans => Set<FeatureClaimSpan>();
+    public DbSet<UsageRecord> UsageRecords => Set<UsageRecord>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -115,6 +117,13 @@ public sealed class OvermindDbContext : DbContext
                 .WithOne()
                 .HasForeignKey(a => a.ContextEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(e => e.State)
+                .HasDefaultValue(ContextEntry.ActiveState);
+
+            builder.Property(e => e.Enforces)
+                .HasDefaultValue(false)
+                .HasSentinel(false);
         });
 
         modelBuilder.Entity<Tag>(builder =>
@@ -497,6 +506,39 @@ public sealed class OvermindDbContext : DbContext
 
             builder.HasIndex(r => r.Pattern).IsUnique();
             builder.HasIndex(r => r.HitCount);
+        });
+
+        modelBuilder.Entity<FeatureClaimSpan>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(s => s.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne<PlanningFeature>()
+                .WithMany()
+                .HasForeignKey(s => s.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(s => s.Alias).HasMaxLength(AgentSession.MaxIdentityLength);
+            builder.Property(s => s.Vendor).HasMaxLength(AgentSession.MaxIdentityLength);
+            builder.Property(s => s.ByHuman).HasDefaultValue(false);
+
+            builder.HasIndex(s => new { s.FeatureId, s.ReleasedAt });
+        });
+
+        modelBuilder.Entity<UsageRecord>(builder =>
+        {
+            builder.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(u => u.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Property(u => u.Alias).HasMaxLength(AgentSession.MaxIdentityLength);
+            builder.Property(u => u.Model).HasMaxLength(UsageRecord.MaxModelLength);
+
+            builder.HasIndex(u => u.Ts);
+            builder.HasIndex(u => new { u.Alias, u.SessionId });
         });
     }
 }

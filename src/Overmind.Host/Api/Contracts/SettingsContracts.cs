@@ -94,3 +94,13 @@ public sealed record TestSettingsRequest(
     string? OllamaModel,
     string? OpenAiBaseUrl,
     string? QdrantEndpoint);
+
+public sealed record UsagePricingEntry(
+    decimal Input,
+    decimal Output,
+    decimal CacheRead,
+    decimal CacheWrite);
+
+public sealed record UpdateUsagePricingRequest(IReadOnlyDictionary<string, UsagePricingEntry> Pricing);
+
+public sealed record UsagePricingResponse(IReadOnlyDictionary<string, UsagePricingEntry> Pricing);

@@ -282,6 +282,48 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ListEntries_StateFilter_RidesTheUpstreamQuery()
+    {
+        await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "decision",
+            ["state"] = "all"
+        });
+
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        var query = ParseQuery(request.Query);
+        query["state"].ShouldBe("all");
+        query["type"].ShouldBe("decision");
+    }
+
+    [Fact]
+    public async Task ListEntries_LiftedState_IsPassedThroughVerbatim()
+    {
+        await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["state"] = "lifted"
+        });
+
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        ParseQuery(request.Query)["state"].ShouldBe("lifted");
+    }
+
+    [Fact]
+    public async Task ListEntries_NoState_LeavesTheFilterOffTheQuery()
+    {
+        await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "decision"
+        });
+
+        var request = FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries");
+        ParseQuery(request.Query).ShouldNotContainKey("state");
+    }
+
+    [Fact]
     public async Task ToolsList_ListEntries_DescriptionPinsMetadataDefault()
     {
         var response = await Driver.ListToolsAsync();
@@ -292,7 +334,8 @@ public class ToolContractTests : McpSessionTestBase
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
             "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag and q (fulltext). " +
+            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
+            "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
             "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
             "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
             "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
@@ -300,6 +343,10 @@ public class ToolContractTests : McpSessionTestBase
         var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("tag");
         properties.ShouldContainKey("q");
+        properties.ShouldContainKey("state");
+        properties.ShouldContainKey("since");
+        properties.ShouldContainKey("until");
+        properties.ShouldContainKey("author");
         properties.ShouldContainKey("include_content");
         properties.ShouldContainKey("fields");
     }
@@ -427,6 +474,256 @@ public class ToolContractTests : McpSessionTestBase
         var put = FindRequest("PUT", $"/api/entries/{Canned.DecisionEntryId}");
         put.Body.ShouldContain("Revised: SQLite stays, WAL mode on.");
     }
+
+    [Fact]
+    public async Task WriteEntry_EnforcesFlag_RidesTheCreateBody()
+    {
+        await Driver.CallToolAsync("write_entry", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "decision",
+            ["title"] = "Release freeze",
+            ["content"] = "No releases during the sprint.",
+            ["enforces"] = true
+        });
+
+        var body = JsonNode.Parse(FindRequest("POST", "/api/entries").Body)!;
+        body["enforces"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WriteEntry_EnforcesOnNote_ServerRefusalSurfacesReadable()
+    {
+        Stub.Route("POST", "/api/entries", 400,
+            """{"title":"Validation Error","errors":{"enforces":["Only decision entries can carry the enforces flag."]}}""");
+
+        var response = await Driver.CallToolAsync("write_entry", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "note",
+            ["title"] = "Plain note",
+            ["content"] = "body",
+            ["enforces"] = true
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("Only decision entries can carry the enforces flag");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateEntry_ExplicitEnforces_RidesThePutBody()
+    {
+        await Driver.CallToolAsync("update_entry", new JsonObject
+        {
+            ["entryId"] = Canned.DecisionEntryId.ToString(),
+            ["content"] = "Revised, still standing.",
+            ["enforces"] = true
+        });
+
+        var body = JsonNode.Parse(FindRequest("PUT", $"/api/entries/{Canned.DecisionEntryId}").Body)!;
+        body["enforces"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task LiftEntry_PostsTheLifecycleDoorAndEchoesTheRetiredEntry()
+    {
+        var successor = Guid.Parse("7e7e7e7e-7e7e-7e7e-7e7e-7e7e7e7e7e7e");
+        Stub.Route(
+            "POST",
+            $"/api/entries/{Canned.DecisionEntryId}/lift",
+            200,
+            LifecycleEntryJson(Canned.DecisionEntryId, "decision", "superseded", successor.ToString(), 3));
+
+        var response = await Driver.CallToolAsync("lift_entry", new JsonObject
+        {
+            ["entryId"] = Canned.DecisionEntryId.ToString(),
+            ["reason"] = "Postgres took over the storage story.",
+            ["proof"] = "notification 53ed854c",
+            ["supersededById"] = successor.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var body = JsonNode.Parse(FindRequest("POST", $"/api/entries/{Canned.DecisionEntryId}/lift").Body)!;
+        body["reason"]!.GetValue<string>().ShouldBe("Postgres took over the storage story.");
+        body["proof"]!.GetValue<string>().ShouldBe("notification 53ed854c");
+        body["supersededById"]!.GetValue<Guid>().ShouldBe(successor);
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["id"]!.GetValue<string>().ShouldBe(Canned.DecisionEntryId.ToString());
+        echo["type"]!.GetValue<string>().ShouldBe("decision");
+        echo["state"]!.GetValue<string>().ShouldBe("superseded");
+        echo["supersededById"]!.GetValue<string>().ShouldBe(successor.ToString());
+        echo["version"]!.GetValue<int>().ShouldBe(3);
+        echo.ShouldNotContainKey("content");
+    }
+
+    [Fact]
+    public async Task LiftEntry_MinimalCall_PostsNullOptionals_AndOmitsTheSuccessorFromTheEcho()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/entries/{Canned.DecisionEntryId}/lift",
+            200,
+            LifecycleEntryJson(Canned.DecisionEntryId, "decision", "lifted", null, 2));
+
+        var response = await Driver.CallToolAsync("lift_entry", new JsonObject
+        {
+            ["entryId"] = Canned.DecisionEntryId.ToString(),
+            ["reason"] = "The freeze is over, the release is out."
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var raw = FindRequest("POST", $"/api/entries/{Canned.DecisionEntryId}/lift").Body;
+        raw.ShouldContain("\"proof\":null");
+        raw.ShouldContain("\"supersededById\":null");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["state"]!.GetValue<string>().ShouldBe("lifted");
+        echo.ShouldNotContainKey("supersededById");
+    }
+
+    [Fact]
+    public async Task LiftEntry_ServerRefusal_SurfacesReadable()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/entries/{Canned.DecisionEntryId}/lift",
+            400,
+            """{"title":"Bad Lift","detail":"An entry cannot supersede itself.","status":400}""");
+
+        var response = await Driver.CallToolAsync("lift_entry", new JsonObject
+        {
+            ["entryId"] = Canned.DecisionEntryId.ToString(),
+            ["reason"] = "rotated",
+            ["supersededById"] = Canned.DecisionEntryId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("cannot supersede itself");
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AppendEntry_PostsTheFollowUpAndEchoesTheEntry()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/entries/{Canned.EntryId}/append",
+            200,
+            LifecycleEntryJson(Canned.EntryId, "note", "active", null, 4));
+
+        var response = await Driver.CallToolAsync("append_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["text"] = "Server 502s were observed again after the rollback."
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var body = JsonNode.Parse(FindRequest("POST", $"/api/entries/{Canned.EntryId}/append").Body)!;
+        body["text"]!.GetValue<string>().ShouldBe("Server 502s were observed again after the rollback.");
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        echo["state"]!.GetValue<string>().ShouldBe("active");
+        echo["version"]!.GetValue<int>().ShouldBe(4);
+        echo.ShouldNotContainKey("supersededById");
+    }
+
+    [Fact]
+    public async Task AppendEntry_OverCap_RefusedBeforeAnyPost()
+    {
+        var response = await Driver.CallToolAsync("append_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["text"] = new string('x', 2001)
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("text is 2001 chars; cap is 2000; cut 1");
+
+        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/append"));
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AppendEntry_SkillEntry_RefusedWithoutPosting()
+    {
+        Stub.RouteGet($"/api/entries/{Canned.EntryId}", Canned.SkillEntryJson);
+
+        var response = await Driver.CallToolAsync("append_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["text"] = "Follow-up that must not land in a skill body."
+        });
+
+        var result = response["result"]!;
+        result["isError"]!.GetValue<bool>().ShouldBeTrue();
+        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
+        text.ShouldContain("SkillEntryAppendRefused");
+        text.ShouldContain("Overmind UI");
+
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path.EndsWith("/append"));
+    }
+
+    [Fact]
+    public async Task LiftEntry_Description_PinsTheLifecycleTruth()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["lift_entry"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("'lifted'");
+        description.ShouldContain("'superseded'");
+        description.ShouldContain("supersededById");
+        description.ShouldContain("provenance");
+        description.ShouldContain("refuses skills and tombstones");
+        description.ShouldContain("liftedRecently");
+        description.ShouldContain("last write winning");
+
+        var properties = tools["lift_entry"]!["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("entryId");
+        properties.ShouldContainKey("reason");
+        properties.ShouldContainKey("proof");
+        properties.ShouldContainKey("supersededById");
+    }
+
+    [Fact]
+    public async Task AppendEntry_Description_PinsTheVersionMachineryAndTheCap()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+        var description = tools["append_entry"]!["description"]!.GetValue<string>();
+
+        description.ShouldContain("## Follow-up yyyy-MM-dd");
+        description.ShouldContain("version bumps");
+        description.ShouldContain("versions endpoint");
+        description.ShouldContain("2000 chars");
+
+        var properties = tools["append_entry"]!["inputSchema"]!["properties"]!.AsObject();
+        properties.ShouldContainKey("entryId");
+        properties.ShouldContainKey("text");
+    }
+
+    private static string LifecycleEntryJson(Guid id, string type, string state, string? supersededById, int version) =>
+        $$"""
+        {"id":"{{id}}","projectId":"{{Canned.ProjectId}}","type":"{{type}}","title":"Storage choice","content":"We picked SQLite for storage.","currentVersion":{{version}},"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-11-12T09:00:00Z","tags":[],"skillFiles":[],"state":"{{state}}","stateAt":"2026-11-12T09:00:00Z","stateBy":"Dan (qwen)","stateReason":"Replaced by the Postgres decision.","stateProof":null,"supersededById":{{FormatId(supersededById)}},"enforces":false}
+        """;
+
+    private static string FormatId(string? id) =>
+        id is null ? "null" : $"\"{id}\"";
 
     [Fact]
     public async Task Search_ProxiesFulltextQuery()
@@ -575,6 +872,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["search"]!["description"]!.GetValue<string>().ShouldBe(
             "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
             "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
+            "Optional entry-only filters: since/until bound hits by createdAt (since inclusive, until exclusive) and author matches the exact alias case-insensitively — setting any of them drops feature and artifact hits. " +
             "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
             "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.");
     }

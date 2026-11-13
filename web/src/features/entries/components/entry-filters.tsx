@@ -5,7 +5,14 @@ import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
-import type { EntryListFilters } from "@/features/entries/types";
+import { ENTRY_STATES } from "@/features/entries/types";
+import type { EntryListFilters, EntryState, EntryStateFilter } from "@/features/entries/types";
+
+const ENTRY_STATE_LABELS: Record<EntryState, string> = {
+  active: "Active",
+  lifted: "Lifted",
+  superseded: "Superseded",
+};
 
 interface EntryFiltersProps {
   filters: EntryListFilters;
@@ -13,6 +20,7 @@ interface EntryFiltersProps {
 }
 
 export function EntryFilters({ filters, onChange }: EntryFiltersProps) {
+  const state = filters.state ?? "all";
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Select
@@ -29,6 +37,20 @@ export function EntryFilters({ filters, onChange }: EntryFiltersProps) {
           </option>
         ))}
       </Select>
+      <Select
+        aria-label="Filter by state"
+        value={state}
+        onChange={(event) =>
+          onChange({ ...filters, state: event.target.value as EntryStateFilter })
+        }
+      >
+        <option value="all">All states</option>
+        {ENTRY_STATES.map((entryState) => (
+          <option key={entryState} value={entryState}>
+            {ENTRY_STATE_LABELS[entryState]}
+          </option>
+        ))}
+      </Select>
       <Input
         aria-label="Filter by tag"
         value={filters.tag}
@@ -36,8 +58,46 @@ export function EntryFilters({ filters, onChange }: EntryFiltersProps) {
         placeholder="Filter by tag"
         className="w-44"
       />
-      {(filters.type || filters.tag) && (
-        <Button variant="ghost" onClick={() => onChange({ type: "", tag: "" })}>
+      <Input
+        aria-label="Filter by author"
+        value={filters.author ?? ""}
+        onChange={(event) => onChange({ ...filters, author: event.target.value })}
+        placeholder="Filter by author"
+        className="w-36"
+      />
+      <Input
+        aria-label="Created from"
+        type="date"
+        value={filters.since ?? ""}
+        onChange={(event) => onChange({ ...filters, since: event.target.value || undefined })}
+        className="w-44"
+      />
+      <Input
+        aria-label="Created to"
+        type="date"
+        value={filters.until ?? ""}
+        onChange={(event) => onChange({ ...filters, until: event.target.value || undefined })}
+        className="w-44"
+      />
+      {(filters.type ||
+        filters.tag ||
+        filters.author ||
+        filters.since ||
+        filters.until ||
+        state !== "all") && (
+        <Button
+          variant="ghost"
+          onClick={() =>
+            onChange({
+              type: "",
+              tag: "",
+              state: undefined,
+              author: undefined,
+              since: undefined,
+              until: undefined,
+            })
+          }
+        >
           Clear
         </Button>
       )}
