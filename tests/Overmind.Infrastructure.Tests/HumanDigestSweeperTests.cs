@@ -56,7 +56,7 @@ public sealed class HumanDigestSweeperTests : IDisposable
         await SeedAwaitingHumanAsync("wait-a");
         var now = DateTime.UtcNow;
 
-        var result = await CreateSweeper().SweepAsync(TestLink, now);
+        var result = await CreateSweeper().SweepAsync(TestLink, true, now);
 
         result.ProjectsScanned.ShouldBe(0);
         result.DigestsPosted.ShouldBe(0);
@@ -69,7 +69,7 @@ public sealed class HumanDigestSweeperTests : IDisposable
         EnableDigest();
         var now = DateTime.UtcNow;
 
-        var result = await CreateSweeper().SweepAsync(TestLink, now);
+        var result = await CreateSweeper().SweepAsync(TestLink, true, now);
 
         result.DigestsPosted.ShouldBe(0);
         (await _context.AgentNotifications.CountAsync()).ShouldBe(0);
@@ -82,7 +82,7 @@ public sealed class HumanDigestSweeperTests : IDisposable
         await SeedAwaitingHumanAsync("wait-a");
         var now = DateTime.UtcNow;
 
-        var result = await CreateSweeper().SweepAsync(TestLink, now);
+        var result = await CreateSweeper().SweepAsync(TestLink, true, now);
 
         result.DigestsPosted.ShouldBe(1);
         var notification = await _context.AgentNotifications.SingleAsync();
@@ -102,8 +102,8 @@ public sealed class HumanDigestSweeperTests : IDisposable
         await SeedAwaitingHumanAsync("wait-a");
         var sweeper = CreateSweeper();
 
-        await sweeper.SweepAsync(TestLink, DateTime.UtcNow);
-        var rerun = await sweeper.SweepAsync(TestLink, DateTime.UtcNow.AddHours(1));
+        await sweeper.SweepAsync(TestLink, true, DateTime.UtcNow);
+        var rerun = await sweeper.SweepAsync(TestLink, true, DateTime.UtcNow.AddHours(1));
 
         rerun.DigestsPosted.ShouldBe(0);
         (await _context.AgentNotifications.CountAsync()).ShouldBe(1);
@@ -116,9 +116,9 @@ public sealed class HumanDigestSweeperTests : IDisposable
         await SeedAwaitingHumanAsync("wait-a");
         var sweeper = CreateSweeper();
         var now = DateTime.UtcNow;
-        await sweeper.SweepAsync(TestLink, now);
+        await sweeper.SweepAsync(TestLink, true, now);
 
-        var rerun = await sweeper.SweepAsync(TestLink, now.AddHours(25));
+        var rerun = await sweeper.SweepAsync(TestLink, true, now.AddHours(25));
 
         rerun.DigestsPosted.ShouldBe(1);
         (await _context.AgentNotifications.CountAsync()).ShouldBe(2);
@@ -136,7 +136,7 @@ public sealed class HumanDigestSweeperTests : IDisposable
         _context.PlanningArtifacts.Add(validated);
         await _context.SaveChangesAsync();
 
-        var result = await CreateSweeper().SweepAsync(TestLink, DateTime.UtcNow);
+        var result = await CreateSweeper().SweepAsync(TestLink, true, DateTime.UtcNow);
 
         result.DigestsPosted.ShouldBe(0);
     }
@@ -152,7 +152,7 @@ public sealed class HumanDigestSweeperTests : IDisposable
         await SeedAwaitingHumanAsync("wait-a");
         await SeedAwaitingHumanAsync("wait-b", other.Id);
 
-        var result = await CreateSweeper().SweepAsync(TestLink, DateTime.UtcNow);
+        var result = await CreateSweeper().SweepAsync(TestLink, true, DateTime.UtcNow);
 
         result.ProjectsScanned.ShouldBe(2);
         result.DigestsPosted.ShouldBe(2);
@@ -160,6 +160,31 @@ public sealed class HumanDigestSweeperTests : IDisposable
         notifications.Select(n => n.ProjectId).ShouldBe([_projectId, other.Id], ignoreOrder: true);
         notifications.Count(n => n.Text.Contains("wait-a")).ShouldBe(1);
         notifications.Count(n => n.Text.Contains("wait-b")).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(false, true, true, 0)]
+    [InlineData(true, false, true, 0)]
+    [InlineData(true, true, true, 1)]
+    [InlineData(true, true, false, 0)]
+    public async Task Sweep_GlobalAndProjectFlags_PostsOnlyWhenBothEnabled(
+        bool globalEnabled, bool projectEnabled, bool seedInbox, int expectedPosts)
+    {
+        if (projectEnabled)
+        {
+            EnableDigest();
+        }
+
+        if (seedInbox)
+        {
+            await SeedAwaitingHumanAsync("wait-a");
+        }
+
+        var result = await CreateSweeper().SweepAsync(TestLink, globalEnabled, DateTime.UtcNow);
+
+        result.ProjectsScanned.ShouldBe(globalEnabled && projectEnabled ? 1 : 0);
+        result.DigestsPosted.ShouldBe(expectedPosts);
+        (await _context.AgentNotifications.CountAsync()).ShouldBe(expectedPosts);
     }
 
     [Fact]

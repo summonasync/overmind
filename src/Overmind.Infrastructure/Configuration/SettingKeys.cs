@@ -15,6 +15,7 @@ public static class SettingKeys
     public const string PlanningAgentNamingRulesDefault = "planning.agentNamingRulesDefault";
     public const string NotificationNudgeMode = "notification.nudgeMode";
     public const string NotificationNudgeIntervalMinutes = "notification.nudgeIntervalMinutes";
+    public const string NotificationHumanDigestEnabled = "notification.humanDigestEnabled";
 
     public const string GrimoireOverridePath = "grimoire.overridePath";
     public const string GrimoireBookName = "grimoire.bookName";
