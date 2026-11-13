@@ -90,7 +90,7 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         PromptText(response).ShouldContain(
-            "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.");
+            "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature; a slice of a heavy read (board, queue, entries, snapshot) → fields=<keys> or compact.");
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class PromptContractTests : McpSessionTestBase
         var response = await Driver.GetPromptAsync("session_bootstrap");
 
         PromptText(response).ShouldContain(
-            "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.");
+            "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature; a slice of a heavy read (board, queue, entries, snapshot) → fields=<keys> or compact.");
     }
 
     [Fact]
