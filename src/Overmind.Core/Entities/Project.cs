@@ -39,6 +39,7 @@ public sealed partial class Project
     public string? NumberPrefix { get; private set; }
     public bool IsFavorite { get; private set; }
     public bool AutoActOnReplies { get; private set; }
+    public bool HumanDigestEnabled { get; private set; }
     public DelegateApprovalsOverride DelegateApprovals { get; private set; }
     public List<PlanningLane> Lanes { get; private set; } = [];
 
@@ -59,6 +60,7 @@ public sealed partial class Project
             NumberStyle = ProjectNumberStyle.Hash,
             IsFavorite = false,
             AutoActOnReplies = true,
+            HumanDigestEnabled = false,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -96,6 +98,8 @@ public sealed partial class Project
     public void SetFavorite(bool isFavorite) => IsFavorite = isFavorite;
 
     public void SetAutoActOnReplies(bool enabled) => AutoActOnReplies = enabled;
+
+    public void SetHumanDigest(bool enabled) => HumanDigestEnabled = enabled;
 
     public void SetDelegateApprovals(DelegateApprovalsOverride mode) => DelegateApprovals = mode;
 

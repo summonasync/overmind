@@ -23,11 +23,14 @@ public sealed record ProjectResponse(
     string? NumberPrefix,
     bool IsFavorite,
     bool AutoActOnReplies,
+    bool HumanDigestEnabled,
     int OpenFeatureCount,
     DateTime CreatedAt);
 
 public sealed record FavoriteRequest(bool IsFavorite);
 
 public sealed record AutoActRequest(bool Enabled);
+
+public sealed record HumanDigestRequest(bool Enabled);
 
 public sealed record ProjectManifestImportResponse(string SourceFile, string Manifest);

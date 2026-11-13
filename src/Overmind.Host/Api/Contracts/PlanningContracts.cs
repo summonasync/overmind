@@ -68,6 +68,18 @@ public sealed record PlanningTaskCounts(int Todo, int InProgress, int Review, in
 
 public sealed record PlanningQueueResponse(PlanningQueueItem[] Items);
 
+public sealed record HumanInboxResponse(Guid ProjectId, HumanInboxItemResponse[] Items);
+
+public sealed record HumanInboxItemResponse(
+    string Slug,
+    string Title,
+    string Phase,
+    int QueuePosition,
+    string? ClaimedByAlias,
+    AgentSessionLiveness? ClaimState,
+    DateTime PendingSince,
+    string? Link);
+
 public sealed record PlanningQueueMoveRequest(string? Move, int? Position);
 
 public sealed record PlanningQueueReorderRequest(string Priority, string[] Slugs);

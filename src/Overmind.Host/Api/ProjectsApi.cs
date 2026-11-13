@@ -23,6 +23,7 @@ public static class ProjectsApi
         group.MapDelete("/{id:guid}", Delete);
         group.MapPost("/{id:guid}/favorite", SetFavorite);
         group.MapPost("/{id:guid}/auto-act", SetAutoAct);
+        group.MapPost("/{id:guid}/human-digest", SetHumanDigest);
         group.MapPost("/{id:guid}/manifest/import", ImportManifest);
 
         return group;
@@ -110,6 +111,23 @@ public static class ProjectsApi
         }
 
         project.SetAutoActOnReplies(request.Enabled);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ProjectMapper.ToResponse(project));
+    }
+
+    private static async Task<IResult> SetHumanDigest(
+        Guid id,
+        HumanDigestRequest request,
+        OvermindDbContext db,
+        CancellationToken ct)
+    {
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (project is null)
+        {
+            return HttpErrors.NotFound($"Project '{id}' was not found.");
+        }
+
+        project.SetHumanDigest(request.Enabled);
         await db.SaveChangesAsync(ct);
         return Results.Ok(ProjectMapper.ToResponse(project));
     }

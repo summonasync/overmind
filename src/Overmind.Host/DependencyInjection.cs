@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddSingleton<IGrimoireMemoryClient, GrimoireMemoryClient>();
         services.AddScoped<GrimoireCompactionRunner>();
         services.AddHostedService<GrimoireCompactionSweepService>();
+        services.AddHostedService<HumanInboxDigestSweepService>();
         services.AddScoped<IAgentPromptComposer, AgentPromptComposer>();
         services.AddScoped<IAgentRunSettingsProvider, AgentRunSettingsProvider>();
         services.AddScoped<IAgentBudgetStore, AgentAppSettingsBudgetStore>();
@@ -144,6 +145,8 @@ public static class DependencyInjection
         services.AddScoped<PlanningOperationStore>();
         services.AddScoped<PlanningBatchService>();
         services.AddScoped<NotificationsService>();
+        services.AddScoped<HumanInboxService>();
+        services.AddScoped<HumanDigestSweeper>();
         services.AddScoped<UsagePricingCatalog>();
         services.AddScoped<UsageSummaryService>();
         services.AddScoped<CeremoniesService>();

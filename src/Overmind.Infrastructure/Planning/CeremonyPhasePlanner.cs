@@ -7,6 +7,7 @@ public static class CeremonyPhasePlanner
 {
     public const int ExcerptCap = 500;
     public const string Ellipsis = "…";
+    public const string AwaitingHumanLabel = "awaiting-human";
 
     public static string DeriveLabel(
         PlanningFeatureStatus status,
@@ -35,7 +36,7 @@ public static class CeremonyPhasePlanner
 
         if (awaitingHuman)
         {
-            return "awaiting-human";
+            return AwaitingHumanLabel;
         }
 
         if (specStatus is null)
