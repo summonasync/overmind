@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using Overmind.Mcp.Planning;
 
 namespace Overmind.Mcp;
 
@@ -39,7 +40,12 @@ public sealed class OvermindTools
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
         "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag and q (fulltext). " +
+        "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
+        "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
         "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
+
+    private static readonly string[] EntryMetadataFields =
+        ["id", "type", "title", "tags", "createdAt", "updatedAt", "contentLength"];
 
     private const string SearchDescription =
         "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
@@ -76,8 +82,14 @@ public sealed class OvermindTools
         [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
         [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
         [Description("Set true to include full entry bodies; by default only metadata is returned.")] bool include_content = false,
+        [Description("Optional comma/space-separated metadata keys to project each row down to, e.g. title,updatedAt — " +
+            "id always leads and stays; unknown keys are rejected naming the allowed set; a list naming no keys is a lint error.")] string? fields = null,
         CancellationToken ct = default)
     {
+        var requested = PlanningFieldProjection.ResolveRequested(
+            fields,
+            compact: false,
+            include_content ? [.. EntryMetadataFields, "content"] : EntryMetadataFields);
         var filters = new List<string>();
         if (!string.IsNullOrWhiteSpace(type))
         {
@@ -103,7 +115,9 @@ public sealed class OvermindTools
         var payload = await Guarded(() => _api.GetAsync(path, ct));
         if (include_content)
         {
-            return payload;
+            return requested.Length == 0
+                ? payload
+                : PlanningFieldProjection.ProjectRows(payload, null, requested, "id");
         }
 
         var listing = new JsonArray();
@@ -112,7 +126,9 @@ public sealed class OvermindTools
             listing.Add(EntryMetadata(entry));
         }
 
-        return listing.Deserialize<JsonElement>();
+        return requested.Length == 0
+            ? listing.Deserialize<JsonElement>()
+            : PlanningFieldProjection.ProjectRows(listing.Deserialize<JsonElement>(), null, requested, "id");
     }
 
     [McpServerTool(Name = "read_entry", ReadOnly = true, Idempotent = true)]

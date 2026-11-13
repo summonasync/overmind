@@ -43,7 +43,7 @@ internal static class PlanningFieldProjection
 
     private static readonly string[] CarriedFeatureFields =
     [
-        "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState",
+        "blockedBy", "blocks", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman",
         "pinnedBranch", "pinnedWorktreePath", "lane", "openDirectiveCount", "missingSections"
     ];
 
@@ -70,15 +70,15 @@ internal static class PlanningFieldProjection
         return requested;
     }
 
-    internal static JsonElement ProjectRows(JsonElement payload, string? rowsProperty, string[] requested) =>
-        MapRows(payload, rowsProperty, row => ProjectRow(row, requested));
+    internal static JsonElement ProjectRows(JsonElement payload, string? rowsProperty, string[] requested, string leadKey = IdKey) =>
+        MapRows(payload, rowsProperty, row => ProjectRow(row, requested, leadKey));
 
     internal static JsonElement CompactRows(JsonElement payload, string? rowsProperty) =>
         MapRows(payload, rowsProperty, WaveSnapshotCompactor.CompactQueueRow);
 
     internal static JsonElement ProjectObject(JsonElement payload, string[] requested) =>
         payload.ValueKind == JsonValueKind.Object
-            ? ProjectRow(JsonObjectOf(payload), requested).Deserialize<JsonElement>()
+            ? ProjectRow(JsonObjectOf(payload), requested, IdKey).Deserialize<JsonElement>()
             : payload;
 
     internal static JsonElement CompactFeatureRead(JsonElement feature)
@@ -134,15 +134,15 @@ internal static class PlanningFieldProjection
         return [.. requested];
     }
 
-    private static JsonObject ProjectRow(JsonObject row, string[] requested)
+    private static JsonObject ProjectRow(JsonObject row, string[] requested, string leadKey)
     {
         var projected = new JsonObject();
-        if (row.TryGetPropertyValue(IdKey, out var id))
+        if (row.TryGetPropertyValue(leadKey, out var id))
         {
-            projected[IdKey] = id?.DeepClone();
+            projected[leadKey] = id?.DeepClone();
         }
 
-        foreach (var field in requested.Where(field => field != IdKey))
+        foreach (var field in requested.Where(field => field != leadKey))
         {
             if (row.TryGetPropertyValue(field, out var value))
             {

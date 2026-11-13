@@ -3,12 +3,18 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using Overmind.Mcp.Planning;
 
 namespace Overmind.Mcp;
 
 [McpServerToolType]
 public sealed class WaveSnapshotTools
 {
+    private const string QueueSection = "queue";
+    private const string ClaimsSection = "claims";
+
+    private static readonly string[] SnapshotRowFields = [.. PlanningFieldProjection.QueueFields, "lastActivityAt"];
+
     private readonly OvermindApiClient _api;
     private readonly IGitCli _git;
     private readonly WaveListingCache _listing;
@@ -43,13 +49,19 @@ public sealed class WaveSnapshotTools
         "fields only when claimedByAlias is set and lane fields only when lane is set; claims drop lastActivityAt " +
         "and claimedByHuman=false; entries drop snippets and empty tags; discovery rows drop the per-row workspace " +
         "(the top-level workspace stays); code pins and blockers pass through unchanged, and queue rows keep " +
-        "potentialOverlaps verbatim (withFeature, sharedGlobs, matches). default false keeps the " +
+        "potentialOverlaps verbatim (withFeature, sharedGlobs, matches). fields=<keys> instead projects queue rows " +
+        "and claims to {slug, ...requested} — queue rows speak the planning_task_queue grammar and claims add " +
+        "claimedByHuman and lastActivityAt — while every other section passes through unchanged; the knobs are " +
+        "mutually exclusive and omitting both returns the full payload. default false keeps the " +
         "full payload. projectId is required; project resolution never creates a project row.")]
     public async Task<JsonElement> WaveSnapshot(
         [Description("Id of the project to snapshot.")] Guid? projectId = null,
         [Description("Optional comma-separated tag list for the coordination entries section; " +
             "defaults to wave-sync,lane-marshalling.")] string? tags = null,
         [Description("Optional cap (1-100) on the coordination entries section; default 20.")] int? entryLimit = null,
+        [Description("Optional comma/space-separated row keys to project queue rows and claims down to, " +
+            "e.g. slug,claimedByAlias — slug always leads and stays; unknown keys are rejected naming the allowed set; " +
+            "a list naming no keys is a lint error; mutually exclusive with compact; other sections pass through unchanged.")] string? fields = null,
         [Description("Project each section to coordination-critical fields only to save tokens; " +
             "default false keeps the full payload.")] bool compact = false,
         CancellationToken ct = default)
@@ -59,6 +71,7 @@ public sealed class WaveSnapshotTools
             throw new McpException(PlanningToolText.ProjectIdRequired);
         }
 
+        var requested = PlanningFieldProjection.ResolveRequested(fields, compact, SnapshotRowFields);
         var url = $"/api/agent/projects/{projectId}/planning/wave-snapshot";
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(tags))
@@ -78,7 +91,17 @@ public sealed class WaveSnapshotTools
 
         var snapshot = await ReadAsync(url, ct);
         snapshot = await WithDiscoveryAsync(snapshot, ct);
-        return compact ? WaveSnapshotCompactor.Compact(snapshot) : snapshot;
+        if (compact)
+        {
+            return WaveSnapshotCompactor.Compact(snapshot);
+        }
+
+        return requested.Length == 0
+            ? snapshot
+            : PlanningFieldProjection.ProjectRows(
+                PlanningFieldProjection.ProjectRows(snapshot, QueueSection, requested),
+                ClaimsSection,
+                requested);
     }
 
     private async Task<JsonElement> ReadAsync(string url, CancellationToken ct)

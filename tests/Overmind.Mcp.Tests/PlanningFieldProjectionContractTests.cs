@@ -267,7 +267,29 @@ public class PlanningFieldProjectionContractTests : McpSessionTestBase
         feature["claimedByVendor"]!.GetValue<string>().ShouldBe("qwen");
         feature["claimedAt"]!.GetValue<string>().ShouldBe("2026-10-02T10:00:00Z");
         feature["claimState"]!.GetValue<string>().ShouldBe("alive");
+        feature["claimedByHuman"]!.GetValue<bool>().ShouldBeFalse();
         feature["isBlocked"]!.GetValue<bool>().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ReadFeature_Compact_CarriesAHumanHeldClaimFlag()
+    {
+        Stub.RouteGet(
+            $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}",
+            """{"slug":"demo-feature","title":"Demo feature","body":"<goal>Ship.</goal>","status":"inProgress","priority":"p1","version":4,"createdAt":"2026-09-08T10:00:00Z","updatedAt":"2026-09-10T08:00:00Z","artifacts":[],"isBlocked":false,"claimedByAlias":"Dan","claimedByVendor":"qwen","claimedAt":"2026-10-02T10:00:00Z","claimState":"alive","claimedByHuman":true}""");
+
+        var response = await Driver.CallToolAsync("planning_read_feature", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["slug"] = Canned.PlanningSlug,
+            ["compact"] = true
+        });
+
+        var feature = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        feature.Select(pair => pair.Key).ShouldBe(
+            ["slug", "title", "status", "priority", "version", "createdAt", "updatedAt", "bodyChars", "isBlocked",
+                "artifacts", "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "claimedByHuman"]);
+        feature["claimedByHuman"]!.GetValue<bool>().ShouldBeTrue();
     }
 
     [Fact]
