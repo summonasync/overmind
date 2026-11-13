@@ -3,6 +3,7 @@ import {
   getPlanningFeature,
   getPlanningWorkflow,
   listArtifactVersions,
+  listHumanInbox,
   listPlanningBoard,
   listPlanningDrift,
 } from "@/features/planning/api";
@@ -17,6 +18,7 @@ export const planningKeys = {
   versions: (artifactId: string) => [...planningKeys.all, "artifact", artifactId, "versions"] as const,
   workflow: (projectId: string) => [...planningKeys.all, "workflow", projectId] as const,
   drift: (projectId: string) => [...planningKeys.all, "drift", projectId] as const,
+  inbox: (projectId: string) => [...planningKeys.all, "inbox", projectId] as const,
 };
 
 export const boardQueryOptions = (projectId: string) =>
@@ -60,6 +62,14 @@ export const driftQueryOptions = (projectId: string) =>
   queryOptions({
     queryKey: planningKeys.drift(projectId),
     queryFn: () => listPlanningDrift(projectId),
+    enabled: projectId.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
+  });
+
+export const humanInboxQueryOptions = (projectId: string) =>
+  queryOptions({
+    queryKey: planningKeys.inbox(projectId),
+    queryFn: () => listHumanInbox(projectId),
     enabled: projectId.length > 0,
     refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });

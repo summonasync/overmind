@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Infrastructure.Persistence;
@@ -22,11 +23,17 @@ public sealed class ClaimSpanMigrationTests : IDisposable
         {
             db.Database.Migrate(PreClaimSpansMigration);
 
-            var project = Project.Create("span-backfill", "/tmp/span-backfill");
-            db.Projects.Add(project);
-            var claimed = PlanningFeature.Create(project.Id, "001-held", "Held", "body");
+            var projectId = Guid.NewGuid();
+            using var command = (SqliteCommand)db.Database.GetDbConnection().CreateCommand();
+            command.CommandText =
+                "INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt) "
+                + $"VALUES ('{projectId.ToString().ToUpperInvariant()}', 'span-backfill', '/tmp/span-backfill', '', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}')";
+            db.Database.OpenConnection();
+            command.ExecuteNonQuery();
+
+            var claimed = PlanningFeature.Create(projectId, "001-held", "Held", "body");
             claimed.Claim("Dan", "qwen", Guid.NewGuid(), DateTime.UtcNow.AddHours(-2));
-            var unclaimed = PlanningFeature.Create(project.Id, "002-free", "Free", "body");
+            var unclaimed = PlanningFeature.Create(projectId, "002-free", "Free", "body");
             db.PlanningFeatures.Add(claimed);
             db.PlanningFeatures.Add(unclaimed);
             db.SaveChanges();

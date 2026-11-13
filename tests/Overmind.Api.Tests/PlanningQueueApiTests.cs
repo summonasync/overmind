@@ -208,6 +208,54 @@ public sealed class PlanningQueueApiTests : IDisposable
         recovered!.Items.Single(i => i.Slug == "lag-stale").Stale.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task QueueRead_AllTasksDoneWithValidatedResult_PhaseIsAwaitingHuman()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "wait-tap", "Wait tap");
+        var specId = await CreateArtifactAsync(project.Id, "wait-tap", "spec");
+        await ValidateArtifactAsync(specId);
+        var planId = await CreateArtifactAsync(project.Id, "wait-tap", "plan");
+        await ValidateArtifactAsync(planId);
+        var tasks = await CreateTasksAsync(project.Id, "wait-tap", 2);
+        await CompleteTaskAsync(tasks[0]);
+        await CompleteTaskAsync(tasks[1]);
+
+        (await PhaseOfQueueRow(project.Id, "wait-tap")).ShouldBe("review");
+
+        var resultId = await CreateArtifactAsync(project.Id, "wait-tap", "result");
+        await ValidateArtifactAsync(resultId);
+
+        (await PhaseOfQueueRow(project.Id, "wait-tap")).ShouldBe("awaiting-human");
+        (await PhaseOfBoardRow(project.Id, "wait-tap")).ShouldBe("awaiting-human");
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/planning/features/wait-tap",
+            new { Status = "inProgress" });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await PhaseOfQueueRow(project.Id, "wait-tap")).ShouldBe("awaiting-human");
+    }
+
+    [Fact]
+    public async Task QueueRead_InProgressWithOpenTasks_KeepsInProgressEvenWithValidatedResult()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "still-working", "Still working");
+        var specId = await CreateArtifactAsync(project.Id, "still-working", "spec");
+        await ValidateArtifactAsync(specId);
+        var planId = await CreateArtifactAsync(project.Id, "still-working", "plan");
+        await ValidateArtifactAsync(planId);
+        var tasks = await CreateTasksAsync(project.Id, "still-working", 2);
+        await CompleteTaskAsync(tasks[0]);
+        (await PhaseOfQueueRow(project.Id, "still-working")).ShouldBe("in progress");
+
+        var resultId = await CreateArtifactAsync(project.Id, "still-working", "result");
+        await ValidateArtifactAsync(resultId);
+
+        (await PhaseOfQueueRow(project.Id, "still-working")).ShouldBe("in progress");
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-3)]
@@ -712,6 +760,43 @@ public sealed class PlanningQueueApiTests : IDisposable
     {
         var response = await _client.PostAsync($"/api/planning/artifacts/{artifactId}/validate", null);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task<Guid[]> CreateTasksAsync(Guid projectId, string slug, int count)
+    {
+        var ids = new List<Guid>();
+        for (var i = 0; i < count; i++)
+        {
+            ids.Add(await CreateArtifactAsync(projectId, slug, "task"));
+        }
+
+        return [.. ids];
+    }
+
+    private async Task CompleteTaskAsync(Guid taskId)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/planning/artifacts/{taskId}/status",
+            new { Status = "done", LogNote = "task closed done" });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task<string> PhaseOfQueueRow(Guid projectId, string slug)
+    {
+        using var raw = await _client.GetFromJsonAsync<JsonDocument>(
+            $"/api/agent/projects/{projectId}/planning/task-queue", JsonOptions);
+        return raw!.RootElement.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("slug").GetString() == slug)
+            .GetProperty("phase").GetString()!;
+    }
+
+    private async Task<string> PhaseOfBoardRow(Guid projectId, string slug)
+    {
+        using var raw = await _client.GetFromJsonAsync<JsonDocument>(
+            $"/api/projects/{projectId}/planning/features", JsonOptions);
+        return raw!.RootElement.EnumerateArray()
+            .Single(i => i.GetProperty("slug").GetString() == slug)
+            .GetProperty("phase").GetString()!;
     }
 
     private async Task CreateTaskAsync(Guid projectId, string slug)

@@ -90,6 +90,10 @@ public sealed class OvermindDbContext : DbContext
                 .HasDefaultValue(false)
                 .HasSentinel(false);
 
+            builder.Property(p => p.HumanDigestEnabled)
+                .HasDefaultValue(false)
+                .HasSentinel(false);
+
             builder.HasMany(p => p.Lanes)
                 .WithOne()
                 .HasForeignKey(l => l.ProjectId)

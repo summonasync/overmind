@@ -147,8 +147,8 @@ public sealed class FeatureClaimService
         return claimed.ToDictionary(
             f => f.Id,
             f => sessions.TryGetValue(f.ClaimSessionId!.Value, out var session)
-                ? session.Liveness(now, project.ClaimStaleThresholdMinutes)
-                : AgentSessionLiveness.Ended);
+                ? session.Liveness(now, project.ClaimStaleThresholdMinutes).ToClaimState()
+                : AgentSessionLiveness.Released);
     }
 
     // Read-only warning projection: the lane's live surfaces whose globs overlap the feature's
