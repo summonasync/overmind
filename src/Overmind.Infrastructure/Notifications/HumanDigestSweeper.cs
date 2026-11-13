@@ -17,8 +17,16 @@ public sealed class HumanDigestSweeper(
     internal static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
     public async Task<HumanDigestResult> SweepAsync(
-        Func<Guid, string, string> featureLink, DateTime now, CancellationToken ct = default)
+        Func<Guid, string, string> featureLink,
+        bool globalEnabled,
+        DateTime now,
+        CancellationToken ct = default)
     {
+        if (!globalEnabled)
+        {
+            return new HumanDigestResult(0, 0);
+        }
+
         var projects = await db.Projects
             .AsNoTracking()
             .Where(p => p.HumanDigestEnabled)

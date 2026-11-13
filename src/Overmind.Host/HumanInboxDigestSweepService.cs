@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Notifications;
 
 namespace Overmind.Host;
@@ -54,9 +55,13 @@ public sealed class HumanInboxDigestSweepService(
         }
 
         await using var scope = scopeFactory.CreateAsyncScope();
+        var settings = scope.ServiceProvider.GetRequiredService<AppSettingsService>();
+        var globalEnabledRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.NotificationHumanDigestEnabled, SettingDefaults.NotificationHumanDigestEnabled, ct);
         var result = await scope.ServiceProvider.GetRequiredService<HumanDigestSweeper>()
             .SweepAsync(
                 (projectId, slug) => NotificationLinks.Dashboard(bound, projectId, slug, "result")!,
+                bool.TryParse(globalEnabledRaw, out var globalEnabled) && globalEnabled,
                 DateTime.UtcNow,
                 ct);
 

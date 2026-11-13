@@ -10,6 +10,7 @@ export interface ProjectResponse {
   numberPrefix: string | null;
   isFavorite: boolean;
   autoActOnReplies: boolean;
+  humanDigestEnabled: boolean;
   openFeatureCount: number;
   createdAt: string;
 }
@@ -33,6 +34,10 @@ export interface ProjectManifestImportResponse {
 }
 
 export interface ProjectAutoActResponse {
+  enabled: boolean;
+}
+
+export interface ProjectHumanDigestResponse {
   enabled: boolean;
 }
 

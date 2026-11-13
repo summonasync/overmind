@@ -7,6 +7,7 @@ export { ProjectList } from "./components/project-list";
 export { ProjectManifestSection } from "./components/project-manifest-section";
 export { ProjectNameBadge } from "./components/project-name-badge";
 export { ProjectAutoActToggle } from "./components/project-auto-act-toggle";
+export { ProjectHumanDigestToggle } from "./components/project-human-digest-toggle";
 export { ProjectFavoriteToggle } from "./components/project-favorite-toggle";
 export { ProjectTree } from "./components/project-tree";
 export { FolderPickerModal } from "./components/folder-picker-modal";
@@ -14,6 +15,7 @@ export { ProjectMovedDialog } from "./components/project-moved-dialog";
 export {
   useProjectAutoActToggle,
   useProjectFavoriteToggle,
+  useProjectHumanDigestToggle,
   useProjectList,
   useProjectManifestImport,
   useProjectMutations,
@@ -36,6 +38,7 @@ export type {
   DelegateApprovalsOverride,
   ProjectAutoActResponse,
   ProjectFormValues,
+  ProjectHumanDigestResponse,
   ProjectManifestImportResponse,
   ProjectResponse,
   ProjectUpdateValues,

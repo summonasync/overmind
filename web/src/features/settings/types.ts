@@ -29,6 +29,7 @@ export interface SettingsResponse {
   telegramEnabled: boolean;
   telegramBotTokenConfigured: boolean;
   telegramAllowedChatIds: number[];
+  humanDigestEnabled: boolean;
 }
 
 export interface UpdateSettingsResponse extends SettingsResponse {
@@ -39,6 +40,10 @@ export interface TelegramSettingsValues {
   telegramEnabled: boolean;
   telegramBotToken: string;
   telegramAllowedChatIds: number[];
+}
+
+export interface HumanDigestSettingsValues {
+  humanDigestEnabled: boolean;
 }
 
 export interface SettingsFormValues {

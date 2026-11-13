@@ -733,4 +733,35 @@ public sealed class SettingsApiTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Get_FreshInstance_ReportsHumanDigestDisabled()
+    {
+        using var response = await _client.GetAsync("/api/settings");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("humanDigestEnabled").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Put_HumanDigestEnabled_RoundTrips_AndSurvivesPartialUpdates()
+    {
+        using var put = await _client.PutAsJsonAsync("/api/settings", new { HumanDigestEnabled = true });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var putDocument = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        putDocument.RootElement.GetProperty("humanDigestEnabled").GetBoolean().ShouldBeTrue();
+
+        await _client.PutAsJsonAsync("/api/settings", new { EmbeddingProvider = "ollama" });
+
+        using var get = await _client.GetAsync("/api/settings");
+        var document = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        document.RootElement.GetProperty("humanDigestEnabled").GetBoolean().ShouldBeTrue();
+
+        await _client.PutAsJsonAsync("/api/settings", new { HumanDigestEnabled = false });
+        using var afterDisable = await _client.GetAsync("/api/settings");
+        var disabled = JsonDocument.Parse(await afterDisable.Content.ReadAsStringAsync());
+        disabled.RootElement.GetProperty("humanDigestEnabled").GetBoolean().ShouldBeFalse();
+    }
 }

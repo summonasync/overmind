@@ -6,6 +6,7 @@ import {
   deleteProject,
   importProjectManifest,
   setProjectAutoAct,
+  setProjectHumanDigest,
   toggleProjectFavorite,
   updateProject,
 } from "@/features/projects/api";
@@ -69,6 +70,20 @@ export function useProjectAutoActToggle() {
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       setProjectAutoAct(id, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
+  });
+
+  return toggle;
+}
+
+export function useProjectHumanDigestToggle() {
+  const queryClient = useQueryClient();
+
+  const toggle = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      setProjectHumanDigest(id, enabled),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },

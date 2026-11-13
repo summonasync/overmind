@@ -15,6 +15,7 @@ public static class SettingDefaults
 
     public const string NotificationNudgeMode = "quiet";
     public const int NotificationNudgeIntervalMinutes = 10;
+    public const string NotificationHumanDigestEnabled = "false";
 
     public const string GrimoireOverridePath = "";
     public const string GrimoireBookName = "";
