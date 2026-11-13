@@ -126,6 +126,7 @@ never worked around. The transport changes; the authority does not.
 | Capability | Tools | Board proof |
 |---|---|---|
 | Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions; agent done = result + fresh human tap | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043, 109 |
+| Derived phase `awaiting-human` (all tasks done + result validated + not done — overrides review and the tasks-complete in progress label; the board never reads finished-but-untapped work as active) + the human inbox panel + optional per-project daily digest (default off) | the phase label; `GET /api/human/inbox`; web board | 227 |
 | Claims + session lock (claim/unclaim, `X-Overmind-Session` on 13 feature mutations, EOF auto-release, stale take-over) | `planning_claim_feature`, `planning_unclaim_feature` | 099; live dogfood 6/6 |
 | Artifact deletion (agent: draft-only; human: unrestricted; blockedBy edges refuse first) | `planning_delete_artifact` | 094 |
 | Spec/plan/task/result artifacts with XML sections | `planning_upsert_artifact` | 006 |
@@ -139,6 +140,7 @@ never worked around. The transport changes; the authority does not.
 | Materialization to `BACKLOG/` with clobber guard | automatic after mutations; status in `overmind_onboard` | 033, 054 |
 | Batch planning ops (`planning_upsert_tasks`, atomic all-or-nothing) | `planning_upsert_tasks` | 044; live on 007 (7 task artifacts, one call) |
 | Batch ceremony ops — patch + append_log + set_status + upsert_tasks + notify on ONE feature in one call; transaction all-or-nothing (a failing op rolls back everything, error names `ops[i]`); per-op guards, claim lock and human proof preserved; `validate` deliberately not an op (proof is request-scoped); batch-level `operationId` replay; post-commit hook failures surface as `warnings[]` on the committed response; ops cannot reference artifacts CREATED by earlier ops (server-side Guids are unnameable pre-call) | `planning_batch` | 225 |
+| Read projections — `fields=<keys>` / `compact` on the heavy reads: `planning_list_features`, `planning_task_queue`, `planning_read_feature` (compact: body→bodyChars, artifacts→roster rows, log→last line), `list_entries` (metadata grammar; `content` joins the set under include_content), `overmind_wave_snapshot` (fields on queue rows + claims, other sections pass through). The id always leads, an unknown key is rejected BEFORE the HTTP call naming the allowed set, fields+compact are mutually exclusive; omitting both returns today's payload byte-for-byte | the five read tools | 226 |
 | Structured feature dependencies (blockedBy/blocks) | `planning_add_feature_dependency`, `planning_remove_feature_dependency`, `planning_list_feature_dependencies` | 030; wired on 007 |
 | Agent-side import of materialized feature folders | `planning_import_feature` | 058 (OM-7) |
 | Mirror export into an explicit empty target (commit-alongside snapshot; zero tracking rows) | `planning_export_backlog` | 075 |
@@ -148,7 +150,7 @@ never worked around. The transport changes; the authority does not.
 | Feature code discovery + explicit pin (read-only scan for worktrees and branches carrying the slug or its NNN prefix; a pin `planning_pin_feature_code` overrides the convention — pinned locations list first flagged `pinned`, convention hits follow deduplicated, a pin missing locally is reported stale, never auto-cleared) | `planning_feature_code`, `planning_pin_feature_code` | 126, 134 |
 | Wave read projection + collision inputs — one-call snapshot (`overmind_wave_snapshot` №50: `planning_task_queue` rows verbatim, per-claim identity — alias, vendor, claimState, claimedAt, claimedByHuman —, code locations enriched adapter-side with the feature-code discovery, open blockers rolled up per feature, coordination entries by tag, default `wave-sync,lane-marshalling`, `entryLimit` 1–100 default 20); lane rosters with live holder projection (`planning_set_lanes` full-replace / `planning_list_lanes` №51/52); `lane`, `laneHolder`, `potentialOverlaps`, `openDirectiveCount` projected on queue and board rows; `lane` + `codeSurfaces` globs settable via `planning_update_feature`; claim-time lane check (409 on held lane, `overrideLaneCheck=true` escape hatch echoed back) | `overmind_wave_snapshot`, `planning_set_lanes`, `planning_list_lanes`, `planning_update_feature`, `planning_claim_feature` | 137 |
 | Directive channel — the one write that reaches a live claim holder: any session appends to ANY feature regardless of claim or status (append-only, ≤500 chars, session-attributed, HOLD/SYNC/YIELD-style), holder or any reader acks (idempotent), acked leave the `openDirectives`/`openDirectiveCount` projections; coordination entries confirm back the same way — `ack_entry` (№55) appends one additive `readBy` row [alias, vendor, at] per ack, explicit, idempotent, reads stay pure; mutates no artifacts, no statuses, no versions — the 409 claim lock stays intact | `planning_append_directive`, `planning_ack_directive` (№53/54), `ack_entry` (№55) | 137 |
-| Wake channel — outbound visibility for idle sessions: `overmind_wake_peek` (side-effect-free peek of pending signals — human replies on this session's notifications + wave messages mentioning its alias, cursor-paged, watermarks untouched) over `GET /api/agent/wake`; the adapter's wake watcher escalates 60s idle → 5s in-gate and surfaces signals as an MCP stdio logging notification plus a pending-signal count on the next tool response — visibility, never turn injection; the wake ritual (self-scheduled tick) and the reply auto-act flag `AutoActOnReplies` (per project, default off) are documented in **Wake ritual (190)** below | `overmind_wake_peek` | 190 |
+| Wake channel — outbound visibility for idle sessions: `overmind_wake_peek` (side-effect-free peek of pending signals — human replies on this session's notifications + wave messages mentioning its alias, cursor-paged, watermarks untouched) over `GET /api/agent/wake`; the adapter's wake watcher escalates 60s idle → 5s in-gate and surfaces signals as an MCP stdio logging notification plus a pending-signal count on the next tool response — visibility, never turn injection; the wake ritual (arm/act/re-arm) and the reply auto-act flag `AutoActOnReplies` (per project, default off) are documented in **Wake ritual (190)** below | `overmind_wake_peek` | 190 |
 
 **Does NOT exist yet — never promise, never emulate silently:**
 | Missing | Board ref | Interim rule |
@@ -272,20 +274,44 @@ marshal for the wave lead). The owner sees real aliases in role colors in the wa
 
 Overmind has no host→agent push: MCP adapters are stdio clients that open every connection
 themselves, and a dead process has no channel — the Host cannot wake a sleeping model. What
-the platform ships is a cheap side-effect-free peek plus a visible signal; the tick is the
-session's own job:
+the platform ships is a cheap side-effect-free peek plus a visible signal; waking is the
+session's own job, and the watch CLI (228) is the preferred mechanism:
 
-- **The pattern — live-but-idle sessions keep a self-scheduled check.** While a session idles
-  with work pending (an approval it awaits, a wave it marshals), it schedules a recurring tick
-  that calls `overmind_wake_peek` and acts on what comes back. Claude Code: a session cron via
-  `CronCreate` with the prompt "check overmind_wake_peek, act on signals". Other runtimes:
-  their scheduler equivalent — the MCP tool name is identical everywhere. The adapter helps
-  within its means: its wake watcher polls every 60s idle and escalates to 5s while in the
-  gate, surfacing signals as an MCP logging notification into the stdio stream plus a
-  pending-signal count on the next tool response.
+- **The recipe — arm, act, re-arm with `overmind watch`.** A live-but-idle session (an approval
+  it awaits, a wave it marshals) arms the watch as a background command the moment it goes
+  idle and lets the process do the polling:
+
+  ```
+  overmind watch --alias <self> [--mentions] [--replies] [--timeout 30m] [--interval 10s]
+  ```
+
+  | Flag | Default | Meaning |
+  |---|---|---|
+  | `--alias <a>` | session alias | Signals to watch for; reply attribution is alias-scoped — any session of the alias matches |
+  | `--mentions` | off | Only wave mentions (`wave-mention`) |
+  | `--replies` | off | Only human replies (`notification-reply`); mutually exclusive with `--mentions` |
+  | `--timeout <dur>` | `30m` | Give-up horizon (`90s`, `30m`, `2h`, `1d`, `hh:mm:ss`) |
+  | `--interval <dur>` | `10s` | Poll cadence while blocked |
+
+  The wait is push-style for the agent: the command blocks until a signal NEWER than its
+  invocation instant arrives, prints one compact line per signal and exits 0 — act on the
+  output, then re-arm immediately; the baseline moves with every re-arm, so old signals never
+  re-fire. On timeout it prints `no signals within <timeout>` and still exits 0: Claude Code
+  re-invokes the session on background-command exit either way, so the agent re-checks and
+  re-arms. Ctrl+C exits 130. This replaces the relay/poll-cron dance for live-but-idle
+  sessions wherever the CLI is deployed.
+- **Fallback — the self-scheduled tick.** Without the watch CLI (older deploy, runtime without
+  shell access), keep the cron pattern: while a session idles with work pending, it schedules
+  a recurring tick that calls `overmind_wake_peek` and acts on what comes back. Claude Code: a
+  session cron via `CronCreate` with the prompt "check overmind_wake_peek, act on signals".
+  Other runtimes: their scheduler equivalent — the MCP tool name is identical everywhere. The
+  adapter helps within its means: its wake watcher polls every 60s idle and escalates to 5s
+  while in the gate, surfacing signals as an MCP logging notification into the stdio stream
+  plus a pending-signal count on the next tool response.
 - **Honest limits.** No process, no channel — a dead or exited session is unreachable; after
-  a restart, re-peek. The stdio log line is visibility, not injection: nothing turns the model
-  on. A sleeping session wakes only from its own tick.
+  a restart, re-arm or re-peek. The stdio log line is visibility, not injection: nothing turns
+  the model on. A sleeping session wakes only from its own scheduling — the armed watch or the
+  tick.
 - **`overmind_wake_peek`** — session-scoped, read-only: human replies on this session's
   notifications (kind `notification-reply`) and wave messages mentioning its alias (kind
   `wave-mention`), ordered, cursor-paged, caps at 100 per page. Advances no watermarks and
@@ -333,6 +359,8 @@ notification again — a fresh reply re-stamps `RepliedAt` and re-queues it.
 - **Task close**: one batch = patch (tick the AC) + append_log + set_status(done), addressed by `artifactId` or `alias` (`T<order>`, `S`/`P`/`R`) — was three sequential calls. AC-tick parity with the standalone calls is test-pinned (Infrastructure 225 suite).
 - **Gate present**: one batch = append_log + notify(kind=approval, text=…) — the log line and the approval ask land together, the human gets the deep link (featureSlug defaults to the batch feature). `validate` stays its own call: proof is request-scoped and deliberately not an op.
 - Rules: ops may only reference artifacts that exist BEFORE the batch (new artifacts' Guids are unnameable pre-call); a failing op rolls back the whole batch and names `ops[i]`; pass a fresh `operationId` per logical batch for replay.
+
+**Parking recipe (227)** — stepping away mid-feature: `planning_unclaim(slug)` with the park note AS the logNote ("parked: <where it stands, what is next>"). The feature keeps its phase — an awaiting-human feature stays awaiting-human, nothing reads a parked feature as active work. When the holder's session ENDS (adapter shutdown), the claim projects `released` instead of `stale`; released and stale are equally take-over-able via `planning_claim_feature` — pick up a released claim the same way, no ceremony change.
 
 ## Sub-Agent Briefing Contract (MANDATORY)
 

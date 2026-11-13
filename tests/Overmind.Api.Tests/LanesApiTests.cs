@@ -333,7 +333,7 @@ public sealed class LanesApiTests : IDisposable
         row.LaneHolder.ShouldNotBeNull();
         row.LaneHolder!.Alias.ShouldBe("Van");
         row.LaneHolder.Vendor.ShouldBe("claude");
-        row.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "ended");
+        row.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "released");
     }
 
     [Fact]
@@ -354,7 +354,7 @@ public sealed class LanesApiTests : IDisposable
         unclaimed.ClaimedByAlias.ShouldBeNull();
         unclaimed.LaneHolder.ShouldNotBeNull();
         unclaimed.LaneHolder!.Alias.ShouldBe("Van");
-        unclaimed.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "ended");
+        unclaimed.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "released");
 
         var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
             $"/api/agent/projects/{project.Id}/planning/features", JsonOptions);
@@ -395,7 +395,7 @@ public sealed class LanesApiTests : IDisposable
         var lane = roster!.Lanes.ShouldHaveSingleItem();
         lane.OpenFeatureCount.ShouldBe(2);
         lane.Holder!.Alias.ShouldBe("Van");
-        lane.Holder.ClaimState.ShouldBeOneOf("alive", "stale", "ended");
+        lane.Holder.ClaimState.ShouldBeOneOf("alive", "stale", "released");
         lane.Features.Select(f => f.Slug).ShouldBe(["011-a", "012-b"]);
         lane.Features[0].ClaimedByAlias.ShouldBe("Van");
         lane.Features[1].ClaimedByAlias.ShouldBeNull();

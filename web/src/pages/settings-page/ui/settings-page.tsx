@@ -9,6 +9,7 @@ import { Zerling } from "@/shared/ui/zerling";
 import { healthKeys } from "@/features/health";
 import { GrimoireStatusTile } from "@/features/grimoire";
 import {
+  HumanDigestSettingsSection,
   ReindexButton,
   SettingsForm,
   TelegramSettingsSection,
@@ -118,6 +119,8 @@ export function SettingsPage() {
         </section>
 
         <AttentionSettingsSection />
+
+        <HumanDigestSettingsSection settings={settings} />
 
         <TelegramSettingsSection settings={settings} />
 

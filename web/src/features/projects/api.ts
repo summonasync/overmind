@@ -5,6 +5,7 @@ import type {
   DelegateApprovalsOverride,
   ProjectAutoActResponse,
   ProjectFormValues,
+  ProjectHumanDigestResponse,
   ProjectManifestImportResponse,
   ProjectResponse,
   ProjectUpdateValues,
@@ -52,6 +53,13 @@ export function setProjectAutoAct(
   enabled: boolean,
 ): Promise<ProjectAutoActResponse> {
   return apiPost<ProjectAutoActResponse>(`/projects/${id}/auto-act`, { enabled });
+}
+
+export function setProjectHumanDigest(
+  id: string,
+  enabled: boolean,
+): Promise<ProjectHumanDigestResponse> {
+  return apiPost<ProjectHumanDigestResponse>(`/projects/${id}/human-digest`, { enabled });
 }
 
 export function importProjectManifest(id: string): Promise<ProjectManifestImportResponse> {

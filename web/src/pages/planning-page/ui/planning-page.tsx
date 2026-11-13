@@ -17,6 +17,7 @@ import {
   FeatureBoard,
   FeatureForm,
   FeatureWorkspace,
+  HumanInboxPanel,
   filterBoardItems,
   useBoardFilters,
   useBoardSearch,
@@ -161,6 +162,7 @@ function PlanningPageContent() {
       />
 
       <ErrorText error={activeError} />
+      <HumanInboxPanel projectId={projectId} numbering={numbering} />
 
       {loading ? (
         <LoadingState label="Loading features…" />

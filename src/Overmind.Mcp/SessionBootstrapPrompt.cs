@@ -13,7 +13,7 @@ public sealed class SessionBootstrapPrompt
         "Pick the write by cost: line → planning_append_log; one section / one AC item → planning_patch_artifact; whole body → planning_upsert_artifact; several tasks at once → planning_upsert_tasks; a whole ceremony step (task close, gate present) → planning_batch.";
 
     private const string ReadCostRouting =
-        "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature.";
+        "Pick the read by cost: one section → planning_read_artifact with sections; one artifact → planning_read_artifact; whole feature → planning_read_feature; a slice of a heavy read (board, queue, entries, snapshot) → fields=<keys> or compact.";
 
     private const string DependencyRouting =
         "Feature dependencies: planning_list_feature_dependencies reads the graph, planning_add_feature_dependency / planning_remove_feature_dependency edit it; a feature with unclosed blockers stops current_task naming them — clear or work the blockers, never sneak past. Task level: declare blockedBy sibling orders on the task upsert (declarative replace, empty array clears); current_task skips blocked tasks and stops naming the chain when everything left is blocked.";

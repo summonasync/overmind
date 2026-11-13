@@ -96,6 +96,24 @@ export interface ReorderPlanningQueueValues {
   slugs: string[];
 }
 
+export type PlanningInboxClaimState = PlanningClaimState | "released";
+
+export interface PlanningInboxItem {
+  slug: string;
+  title: string;
+  phase: string;
+  queuePosition: number;
+  claimedByAlias: string | null;
+  claimState: PlanningInboxClaimState | null;
+  pendingSince: string;
+  link: string | null;
+}
+
+export interface PlanningInboxResponse {
+  projectId: string;
+  items: PlanningInboxItem[];
+}
+
 export interface PlanningFeatureDependencyEntry {
   slug: string;
   status: PlanningFeatureStatus;

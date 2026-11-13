@@ -603,6 +603,90 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ClaimLiveness_EndedHolderSession_ProjectsReleased()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+        var feature = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat-a");
+
+        var liveness = await service.ClaimLivenessAsync(_projectId, [feature]);
+
+        liveness.GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Released);
+    }
+
+    [Fact]
+    public async Task ClaimLiveness_MissingHolderSession_ProjectsReleased()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        var holder = await _context.AgentSessions.SingleAsync(s => s.Id == HolderSessionId);
+        _context.AgentSessions.Remove(holder);
+        await _context.SaveChangesAsync();
+        var feature = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat-a");
+
+        var liveness = await service.ClaimLivenessAsync(_projectId, [feature]);
+
+        liveness.GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Released);
+    }
+
+    [Fact]
+    public async Task ClaimLiveness_StaleHolder_ProjectsStale()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+        var feature = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat-a");
+
+        var liveness = await service.ClaimLivenessAsync(_projectId, [feature]);
+
+        liveness.GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Stale);
+    }
+
+    [Fact]
+    public async Task Claim_ReleasedClaim_ForeignTakeOverStillSucceeds()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+        var feature = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat-a");
+        (await service.ClaimLivenessAsync(_projectId, [feature]))
+            .GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Released);
+
+        var taken = await service.ClaimAsync(_projectId, "feat-a", "Bobby", "claude", ForeignSessionId);
+
+        taken.ClaimSessionId.ShouldBe(ForeignSessionId);
+        taken.ClaimedByAlias.ShouldBe("Bobby");
+    }
+
+    [Fact]
+    public async Task Unclaim_AwaitingHumanFeature_KeepsThePhase()
+    {
+        var feature = await CreateFeatureAsync();
+        feature.SetStatus(PlanningFeatureStatus.Review);
+        var result = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Result, "close-out");
+        result.Validate();
+        _context.PlanningArtifacts.Add(result);
+        await _context.SaveChangesAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        var inbox = new HumanInboxService(_context, service);
+        (await inbox.ListAsync(_projectId)).Single().ClaimedByAlias.ShouldBe("Dan");
+
+        var released = await service.UnclaimAsync(_projectId, "feat-a", HolderSessionId);
+
+        released.ClaimSessionId.ShouldBeNull();
+        var entry = (await inbox.ListAsync(_projectId)).Single();
+        entry.Phase.ShouldBe(CeremonyPhasePlanner.AwaitingHumanLabel);
+        entry.ClaimedByAlias.ShouldBeNull();
+        entry.ClaimState.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task SetStatus_CloseDone_ReleasesClaim()
     {
         await CreateFeatureAsync();

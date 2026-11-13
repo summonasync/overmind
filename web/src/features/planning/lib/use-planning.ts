@@ -27,6 +27,7 @@ import {
   boardQueryOptions,
   driftQueryOptions,
   featureQueryOptions,
+  humanInboxQueryOptions,
   planningKeys,
   workflowQueryOptions,
 } from "@/features/planning/queries";
@@ -60,6 +61,7 @@ export function usePlanningMutations(projectId: string) {
 
   const invalidate = (slug?: string) => {
     queryClient.invalidateQueries({ queryKey: planningKeys.lists() });
+    queryClient.invalidateQueries({ queryKey: planningKeys.inbox(projectId) });
     if (slug !== undefined) {
       queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, slug) });
     }
@@ -87,6 +89,7 @@ export function usePlanningMutations(projectId: string) {
       claimPlanningFeature(projectId, input.slug, input.alias, input.vendor),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
+      queryClient.invalidateQueries({ queryKey: planningKeys.inbox(projectId) });
       queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, variables.slug) });
     },
   });
@@ -95,6 +98,7 @@ export function usePlanningMutations(projectId: string) {
     mutationFn: (input: { slug: string }) => unclaimPlanningFeature(projectId, input.slug),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: planningKeys.board(projectId) });
+      queryClient.invalidateQueries({ queryKey: planningKeys.inbox(projectId) });
       queryClient.invalidateQueries({ queryKey: planningKeys.feature(projectId, variables.slug) });
     },
   });
@@ -202,6 +206,16 @@ export function usePlanningDrift(projectId: string) {
   const query = useQuery(driftQueryOptions(projectId));
   return {
     data: query.data ?? [],
+    loading: query.isPending,
+    error: query.error,
+    refetch: query.refetch,
+  };
+}
+
+export function useHumanInbox(projectId: string) {
+  const query = useQuery(humanInboxQueryOptions(projectId));
+  return {
+    items: query.data?.items ?? [],
     loading: query.isPending,
     error: query.error,
     refetch: query.refetch,

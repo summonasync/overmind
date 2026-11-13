@@ -1,9 +1,20 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { reindex, testSettings, updateSettings, updateTelegramSettings } from "@/features/settings/api";
+import {
+  reindex,
+  testSettings,
+  updateHumanDigestSettings,
+  updateSettings,
+  updateTelegramSettings,
+} from "@/features/settings/api";
 import { settingsKeys, settingsQueryOptions } from "@/features/settings/queries";
-import type { SettingsFormValues, TelegramSettingsValues, TestSettingsValues } from "@/features/settings/types";
+import type {
+  HumanDigestSettingsValues,
+  SettingsFormValues,
+  TelegramSettingsValues,
+  TestSettingsValues,
+} from "@/features/settings/types";
 
 export function useSettings() {
   const query = useQuery(settingsQueryOptions());
@@ -23,6 +34,11 @@ export function useSettingsMutations() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.current() }),
   });
 
+  const digestSave = useMutation({
+    mutationFn: (values: HumanDigestSettingsValues) => updateHumanDigestSettings(values),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.current() }),
+  });
+
   const test = useMutation({
     mutationFn: (values: TestSettingsValues) => testSettings(values),
   });
@@ -31,5 +47,5 @@ export function useSettingsMutations() {
     mutationFn: () => reindex(),
   });
 
-  return { save, telegramSave, test, rebuild };
+  return { save, telegramSave, digestSave, test, rebuild };
 }

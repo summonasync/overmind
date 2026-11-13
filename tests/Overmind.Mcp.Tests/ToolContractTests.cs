@@ -170,6 +170,104 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task ListEntries_FieldsSlice_ReturnsIdPlusRequestedKeysInRequestOrder()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "gate",
+            ["fields"] = "title,updatedAt"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var rows = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray();
+        rows.Count.ShouldBe(2);
+        foreach (var row in rows)
+        {
+            row!.AsObject().Select(pair => pair.Key).ShouldBe(["id", "title", "updatedAt"]);
+        }
+
+        var first = rows[0]!.AsObject();
+        first["id"]!.GetValue<string>().ShouldBe("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        first["title"]!.GetValue<string>().ShouldBe("Gate One");
+        first["updatedAt"]!.GetValue<string>().ShouldBe("2026-09-01T10:00:00Z");
+    }
+
+    [Fact]
+    public async Task ListEntries_FieldsComposeWithTypeFilter()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "tombstone",
+            ["fields"] = "type,tags"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        ParseQuery(FindRequest("GET", $"/api/projects/{Canned.ProjectId}/entries").Query)["type"].ShouldBe("tombstone");
+
+        var row = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray().Single()!.AsObject();
+        row.Select(pair => pair.Key).ShouldBe(["id", "type", "tags"]);
+        row["type"]!.GetValue<string>().ShouldBe("tombstone");
+        row["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["buried"]);
+    }
+
+    [Fact]
+    public async Task ListEntries_FieldsWithIncludeContent_SlicesTheRawRows()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["type"] = "gate",
+            ["include_content"] = true,
+            ["fields"] = "title,content"
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+
+        var rows = JsonNode.Parse(Canned.ToolResultText(response))!.AsArray();
+        rows.Count.ShouldBe(2);
+        foreach (var row in rows)
+        {
+            row!.AsObject().Select(pair => pair.Key).ShouldBe(["id", "title", "content"]);
+        }
+
+        rows[0]!["content"]!.GetValue<string>().ShouldBe("Always run the full test suite.");
+    }
+
+    [Fact]
+    public async Task ListEntries_UnknownField_RejectedNamingTheAllowedSet_BeforeAnyHttp()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["fields"] = "title,banana"
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("banana");
+        text.ShouldContain("Allowed fields:");
+
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/entries", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ListEntries_EmptyFieldsList_RejectedAsACallerBug_BeforeAnyHttp()
+    {
+        var response = await Driver.CallToolAsync("list_entries", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["fields"] = ",,,"
+        });
+
+        ToolErrorText(response).ShouldContain("projection of nothing");
+
+        Stub.Requests.ShouldNotContain(r => r.Path.Contains("/entries", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ListEntries_AuditTypeFilter_IsAcceptedAndProxied()
     {
         var response = await Driver.CallToolAsync("list_entries", new JsonObject
@@ -238,6 +336,8 @@ public class ToolContractTests : McpSessionTestBase
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
             "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
             "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
+            "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
+            "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
             "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
 
         var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
@@ -248,6 +348,7 @@ public class ToolContractTests : McpSessionTestBase
         properties.ShouldContainKey("until");
         properties.ShouldContainKey("author");
         properties.ShouldContainKey("include_content");
+        properties.ShouldContainKey("fields");
     }
 
     [Fact]
@@ -1148,5 +1249,13 @@ public class ToolContractTests : McpSessionTestBase
         result["isError"]!.GetValue<bool>().ShouldBeTrue();
         var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
         text.ShouldContain("was not found");
+    }
+
+    private static string ToolErrorText(JsonNode response)
+    {
+        var result = response["result"];
+        result.ShouldNotBeNull("expected a JSON-RPC result, got: " + response.ToJsonString());
+        result!["isError"]!.GetValue<bool>().ShouldBeTrue("expected a tool error, got: " + response.ToJsonString());
+        return result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
     }
 }

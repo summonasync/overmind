@@ -7,26 +7,36 @@ public static class CeremonyPhasePlanner
 {
     public const int ExcerptCap = 500;
     public const string Ellipsis = "…";
+    public const string AwaitingHumanLabel = "awaiting-human";
 
     public static string DeriveLabel(
         PlanningFeatureStatus status,
         PlanningArtifactStatus? specStatus,
         PlanningArtifactStatus? planStatus,
-        int taskTotal)
+        int taskTotal,
+        int taskDone,
+        PlanningArtifactStatus? resultStatus)
     {
         if (status == PlanningFeatureStatus.Done)
         {
             return "done";
         }
 
-        if (status == PlanningFeatureStatus.Review)
+        var awaitingHuman = IsAwaitingHuman(status, taskTotal, taskDone, resultStatus);
+
+        if (status == PlanningFeatureStatus.Review && !awaitingHuman)
         {
             return "review";
         }
 
-        if (status == PlanningFeatureStatus.InProgress && taskTotal > 0)
+        if (status == PlanningFeatureStatus.InProgress && taskTotal > 0 && !awaitingHuman)
         {
             return "in progress";
+        }
+
+        if (awaitingHuman)
+        {
+            return AwaitingHumanLabel;
         }
 
         if (specStatus is null)
@@ -71,6 +81,15 @@ public static class CeremonyPhasePlanner
             ? paragraph
             : info.SubstringByTextElements(0, ExcerptCap) + Ellipsis;
     }
+
+    private static bool IsAwaitingHuman(
+        PlanningFeatureStatus status,
+        int taskTotal,
+        int taskDone,
+        PlanningArtifactStatus? resultStatus) =>
+        resultStatus == PlanningArtifactStatus.Validated &&
+        (status == PlanningFeatureStatus.Review ||
+         (status == PlanningFeatureStatus.InProgress && taskTotal > 0 && taskDone == taskTotal));
 
     private static string FirstParagraph(string goal)
     {

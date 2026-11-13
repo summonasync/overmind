@@ -267,6 +267,13 @@ public static class SettingsApi
                 request.NotificationNudgeIntervalMinutes.Value.ToString(CultureInfo.InvariantCulture), ct);
         }
 
+        if (request.HumanDigestEnabled is not null)
+        {
+            await settings.SetAsync(
+                SettingKeys.NotificationHumanDigestEnabled,
+                request.HumanDigestEnabled.Value ? "true" : "false", ct);
+        }
+
         if (request.AgentBaseUrl is not null)
         {
             await settings.SetAsync(SettingKeys.AgentBaseUrl, request.AgentBaseUrl.Trim(), ct);
@@ -378,6 +385,7 @@ public static class SettingsApi
             updated.PlanningMaterializationSync,
             updated.NotificationNudgeMode,
             updated.NotificationNudgeIntervalMinutes,
+            updated.HumanDigestEnabled,
             updated.AgentBaseUrl,
             updated.AgentModel,
             updated.AgentApiKeyConfigured,
@@ -527,6 +535,8 @@ public static class SettingsApi
             int.TryParse(notificationNudgeIntervalRaw, out var nudgeInterval) && nudgeInterval > 0
                 ? nudgeInterval
                 : SettingDefaults.NotificationNudgeIntervalMinutes;
+        var humanDigestEnabledRaw = await settings.GetOrDefaultAsync(
+            SettingKeys.NotificationHumanDigestEnabled, SettingDefaults.NotificationHumanDigestEnabled, ct);
         var agentBaseUrl = await settings.GetOrDefaultAsync(SettingKeys.AgentBaseUrl, SettingDefaults.AgentBaseUrl, ct);
         var agentModel = await settings.GetOrDefaultAsync(SettingKeys.AgentModel, SettingDefaults.AgentModel, ct);
         var agentApiKeyConfigured = await settings.HasAsync(SettingKeys.AgentApiKey, ct);
@@ -578,6 +588,7 @@ public static class SettingsApi
             provider, ollamaBaseUrl, ollamaModel, openAiBaseUrl, qdrantEndpoint, apiKeyConfigured,
             planningMaterializationDefault, planningRequireHumanValidationDefault, planningAgentNamingRulesDefault,
             planningMaterializationSync, notificationNudgeMode, notificationNudgeIntervalMinutes,
+            bool.TryParse(humanDigestEnabledRaw, out var humanDigestEnabled) && humanDigestEnabled,
             agentBaseUrl, agentModel, agentApiKeyConfigured, agentAlias, agentPerTurnMaxTokens, agentDailyBudget,
             agentRouteMatchThreshold,
             agentGrimoireBaseUrl, agentGrimoireTome, agentGrimoireCompactionHours, agentInstructions,

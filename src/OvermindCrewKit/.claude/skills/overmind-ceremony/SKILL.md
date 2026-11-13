@@ -126,6 +126,7 @@ never worked around. The transport changes; the authority does not.
 | Capability | Tools | Board proof |
 |---|---|---|
 | Feature lifecycle (draft→ready→inProgress→review→done) + auto-transitions; agent done = result + fresh human tap | `planning_create_feature`, `planning_set_feature_status` (agent door: `done`/`inProgress` only) | 006, 019, 023, 043, 109 |
+| Derived phase `awaiting-human` (all tasks done + result validated + not done — overrides review and the tasks-complete in progress label; the board never reads finished-but-untapped work as active) + the human inbox panel + optional per-project daily digest (default off) | the phase label; `GET /api/human/inbox`; web board | 227 |
 | Claims + session lock (claim/unclaim, `X-Overmind-Session` on 13 feature mutations, EOF auto-release, stale take-over) | `planning_claim_feature`, `planning_unclaim_feature` | 099; live dogfood 6/6 |
 | Artifact deletion (agent: draft-only; human: unrestricted; blockedBy edges refuse first) | `planning_delete_artifact` | 094 |
 | Spec/plan/task/result artifacts with XML sections | `planning_upsert_artifact` | 006 |
@@ -139,6 +140,7 @@ never worked around. The transport changes; the authority does not.
 | Materialization to `BACKLOG/` with clobber guard | automatic after mutations; status in `overmind_onboard` | 033, 054 |
 | Batch planning ops (`planning_upsert_tasks`, atomic all-or-nothing) | `planning_upsert_tasks` | 044; live on 007 (7 task artifacts, one call) |
 | Batch ceremony ops — patch + append_log + set_status + upsert_tasks + notify on ONE feature in one call; transaction all-or-nothing (a failing op rolls back everything, error names `ops[i]`); per-op guards, claim lock and human proof preserved; `validate` deliberately not an op (proof is request-scoped); batch-level `operationId` replay; post-commit hook failures surface as `warnings[]` on the committed response; ops cannot reference artifacts CREATED by earlier ops (server-side Guids are unnameable pre-call) | `planning_batch` | 225 |
+| Read projections — `fields=<keys>` / `compact` on the heavy reads: `planning_list_features`, `planning_task_queue`, `planning_read_feature` (compact: body→bodyChars, artifacts→roster rows, log→last line), `list_entries` (metadata grammar; `content` joins the set under include_content), `overmind_wave_snapshot` (fields on queue rows + claims, other sections pass through). The id always leads, an unknown key is rejected BEFORE the HTTP call naming the allowed set, fields+compact are mutually exclusive; omitting both returns today's payload byte-for-byte | the five read tools | 226 |
 | Structured feature dependencies (blockedBy/blocks) | `planning_add_feature_dependency`, `planning_remove_feature_dependency`, `planning_list_feature_dependencies` | 030; wired on 007 |
 | Agent-side import of materialized feature folders | `planning_import_feature` | 058 (OM-7) |
 | Mirror export into an explicit empty target (commit-alongside snapshot; zero tracking rows) | `planning_export_backlog` | 075 |
@@ -357,6 +359,8 @@ notification again — a fresh reply re-stamps `RepliedAt` and re-queues it.
 - **Task close**: one batch = patch (tick the AC) + append_log + set_status(done), addressed by `artifactId` or `alias` (`T<order>`, `S`/`P`/`R`) — was three sequential calls. AC-tick parity with the standalone calls is test-pinned (Infrastructure 225 suite).
 - **Gate present**: one batch = append_log + notify(kind=approval, text=…) — the log line and the approval ask land together, the human gets the deep link (featureSlug defaults to the batch feature). `validate` stays its own call: proof is request-scoped and deliberately not an op.
 - Rules: ops may only reference artifacts that exist BEFORE the batch (new artifacts' Guids are unnameable pre-call); a failing op rolls back the whole batch and names `ops[i]`; pass a fresh `operationId` per logical batch for replay.
+
+**Parking recipe (227)** — stepping away mid-feature: `planning_unclaim(slug)` with the park note AS the logNote ("parked: <where it stands, what is next>"). The feature keeps its phase — an awaiting-human feature stays awaiting-human, nothing reads a parked feature as active work. When the holder's session ENDS (adapter shutdown), the claim projects `released` instead of `stale`; released and stale are equally take-over-able via `planning_claim_feature` — pick up a released claim the same way, no ceremony change.
 
 ## Sub-Agent Briefing Contract (MANDATORY)
 
