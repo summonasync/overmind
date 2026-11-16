@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 using ModelContextProtocol.Server;
 
 namespace Overmind.Mcp.Tests;
@@ -38,6 +39,10 @@ internal static class ToolDescriptionScanner
 {
     public const int ExpectedToolTypeCount = 18;
 
+    private const BindingFlags ToolMethodFlags =
+        BindingFlags.Public | BindingFlags.NonPublic
+        | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
     public static readonly string[] ExpectedToolNames =
     [
         "ack_entry", "append_entry", "delete_entry", "issues_append", "issues_create", "issues_get",
@@ -61,17 +66,34 @@ internal static class ToolDescriptionScanner
 
     public static Snapshot Scan() => Scan(typeof(WaveRoleTools).Assembly);
 
-    public static Snapshot Scan(Assembly adapterAssembly)
-    {
-        var toolTypes = adapterAssembly.GetTypes()
+    public static IReadOnlyList<Type> ToolTypes(Assembly adapterAssembly) =>
+        adapterAssembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
             .OrderBy(t => t.FullName, StringComparer.Ordinal)
             .ToList();
 
+    public static IReadOnlyList<MethodInfo> ToolMethods(Assembly adapterAssembly)
+    {
+        var methods = new List<MethodInfo>();
+        foreach (var type in ToolTypes(adapterAssembly))
+        {
+            methods.AddRange(type.GetMethods(ToolMethodFlags)
+                .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is not null));
+        }
+
+        return methods;
+    }
+
+    public static int Chars(string? description) =>
+        description is null ? 0 : description.EnumerateRunes().Count();
+
+    public static Snapshot Scan(Assembly adapterAssembly)
+    {
+        var toolTypes = ToolTypes(adapterAssembly);
         var tools = new List<ToolMeasurement>();
         foreach (var type in toolTypes)
         {
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            foreach (var method in type.GetMethods(ToolMethodFlags))
             {
                 if (method.GetCustomAttribute<McpServerToolAttribute>() is not { } toolAttribute)
                 {
@@ -81,13 +103,13 @@ internal static class ToolDescriptionScanner
                 var parameters = method.GetParameters()
                     .Select(p => new ParameterMeasurement(
                         p.Name ?? "_",
-                        p.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description?.Length ?? 0))
+                        Chars(p.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description)))
                     .ToList();
 
                 tools.Add(new ToolMeasurement(
                     string.IsNullOrWhiteSpace(toolAttribute.Name) ? method.Name : toolAttribute.Name!,
                     type.Name,
-                    method.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description?.Length ?? 0,
+                    Chars(method.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description),
                     parameters));
             }
         }
