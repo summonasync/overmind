@@ -141,6 +141,28 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RunAsync_DispatchedTextMessage_StampsMessageIdAndUpdateId()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.ReplyTextUpdate(42, "approve", 9, 5, messageId: 71));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Handler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            var message = rig.Handler.Messages.Single();
+            message.MessageId.ShouldBe(71L);
+            message.UpdateId.ShouldBe(9L);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
     [Theory]
     [MemberData(nameof(WaveBranchCases.EveryCommandSpelling), MemberType = typeof(WaveBranchCases))]
     public async Task RunAsync_WaveCommandFromForeignChat_IsIgnoredBeforeAnyDoor(string text)

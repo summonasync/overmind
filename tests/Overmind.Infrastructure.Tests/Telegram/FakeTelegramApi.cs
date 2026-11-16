@@ -115,9 +115,10 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         "{\"ok\":true,\"result\":{\"message_id\":" + messageId +
         ",\"date\":1760000000,\"chat\":{\"id\":42,\"type\":\"private\"}}}";
 
-    public static string ReplyTextUpdate(long chatId, string text, int updateId, int repliedToMessageId) =>
+    public static string ReplyTextUpdate(
+        long chatId, string text, int updateId, int repliedToMessageId, int? messageId = null) =>
         "{\"update_id\":" + updateId +
-        ",\"message\":{\"message_id\":" + updateId +
+        ",\"message\":{\"message_id\":" + (messageId ?? updateId) +
         ",\"from\":{\"id\":" + chatId + ",\"is_bot\":false,\"first_name\":\"Owner\"}" +
         ",\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}" +
         ",\"date\":1760000000" +
