@@ -405,6 +405,19 @@ Guessing fixes is forbidden.
 report "done" on "should work". Prove: build green, tests green, the user's original scenario
 exercised end-to-end. State plainly what could not be verified.
 
+**Two-sided premises** (the claim-before-code rule). A statement that something is missing,
+unmapped, unvalidated or never called is a premise, not a measurement, until BOTH ends have been
+read: the producer and the consumer, the call site and the method it calls, the store and the
+matcher and the test doubles. Before writing "no validation exists", grep for a test that already
+names the behavior; before writing "nothing sets this field", follow the user-facing parameter
+through every door into the query. Label every claim in a spec, plan or review brief as
+*measured* (file:line at both ends), *inferred* (one end read) or *assumed*. A reviewer agreeing
+with your summary is one reading, not a second verification — two agents repeating the same
+unverified premise still count as zero. Cost of skipping it, twice in one day (Grimoire 056/058,
+2026-11-13): "no validation exists" about `--ttl` and "nobody sets this filter field" about
+`Actor` — both false, both already shipped into validated artifacts, board ideas and PR bodies
+before reading the other end corrected them.
+
 **TDD scope** (was AGENTS.md superpowers rule 4). Strict red-green-refactor applies to
 domain/business logic and non-trivial algorithms only — NOT to EF migrations, DI wiring, config,
 DTOs, glue code. When in doubt, ask the user before choosing TDD on/off for a task.
