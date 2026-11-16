@@ -87,7 +87,12 @@ public sealed class WakeDropFanoutTests : IDisposable
         var notification = AgentNotification.Restore(
             Guid.NewGuid(), _projectId, NotificationKind.Question, null, null,
             "gate needs you", alias, DateTime.UtcNow.AddMinutes(-1));
+        var pendingSibling = AgentNotification.Restore(
+            Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
+            "other gate", alias, DateTime.UtcNow.AddMinutes(-2),
+            replyText: "approved elsewhere", repliedAt: DateTime.UtcNow.AddMinutes(-90));
         _context.AgentNotifications.Add(notification);
+        _context.AgentNotifications.Add(pendingSibling);
         await _context.SaveChangesAsync();
         var notifications = new NotificationsService(
             _context,
@@ -104,6 +109,9 @@ public sealed class WakeDropFanoutTests : IDisposable
         drop.ShouldNotBeNull();
         drop.Signals.Single().Kind.ShouldBe(AgentWakeService.ReplyKind);
         drop.Signals.Single().From.ShouldBe("human");
+        drop.Signals.ShouldNotContain(s => s.RefId == notification.Id,
+            "the reply flow stamps ReadAt, and consumed replies leave the default window");
+        drop.Signals.ShouldContain(s => s.RefId == pendingSibling.Id);
     }
 
     [Fact]
