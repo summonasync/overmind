@@ -95,6 +95,14 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         }
     }
 
+    public int CountRequests(string pathPart)
+    {
+        lock (_lock)
+        {
+            return Requests.Count(request => request.Path.Contains(pathPart, StringComparison.Ordinal));
+        }
+    }
+
     public static string TextUpdate(long chatId, string text, int updateId, string? username = null) =>
         "{\"update_id\":" + updateId +
         ",\"message\":{\"message_id\":" + updateId +

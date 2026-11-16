@@ -142,11 +142,109 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
         await _snapshot.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
     }
 
+    [Theory]
+    [InlineData("cancel")]
+    [InlineData("proj")]
+    [InlineData("room")]
+    [InlineData("sproj")]
+    [InlineData("scancel")]
+    [InlineData("garbage")]
+    [InlineData("oversize")]
+    public async Task EveryWaveBranch_AnswersItsCallbackQueryExactlyOnceAndSendsNothingElse(
+        string branch)
+    {
+        await ConfigureTransportAsync();
+        var projectId = Guid.NewGuid();
+        _commands.Cancel(OwnerChatId).Returns(TelegramWaveCommandService.CancelAnswer);
+        _commands.PickProjectAsync(OwnerChatId, projectId, Arg.Any<CancellationToken>())
+            .Returns(TelegramWaveCommandService.RoomPickAnswer);
+        _commands.PickRoomAsync(OwnerChatId, "1f0aa0e0", 0, Arg.Any<CancellationToken>())
+            .Returns(TelegramWaveCommandService.PromptAnswer);
+        _snapshot.PickProjectAsync(OwnerChatId, projectId, Arg.Any<CancellationToken>())
+            .Returns(TelegramWaveSnapshotService.SnapshotAnswer);
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(OwnerChatId, $"cq-{branch}", 5, "@owner", "picker", DataFor(branch, projectId)),
+            CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        var answer = AnswerText(_api.Request(0));
+        answer.ShouldBe(ExpectedAnswer(branch));
+        answer.Length.ShouldNotBe(0);
+        answer.Length.ShouldBeLessThanOrEqualTo(TelegramNotificationCallbackHandler.AnswerTextLimit);
+    }
+
+    [Theory]
+    [InlineData("cancel")]
+    [InlineData("proj")]
+    [InlineData("room")]
+    [InlineData("sproj")]
+    [InlineData("scancel")]
+    [InlineData("garbage")]
+    public async Task NonAllowlistedChat_IsDeniedOnEverySchemeWithoutTouchingAFlow(string branch)
+    {
+        await ConfigureTransportAsync();
+        var projectId = Guid.NewGuid();
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(999, $"cq-{branch}", 5, "@stranger", "picker", DataFor(branch, projectId)),
+            CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        AnswerText(_api.Request(0)).ShouldBe(TelegramNotificationCallbackHandler.NotAllowedAnswer);
+        _commands.DidNotReceiveWithAnyArgs().Cancel(default);
+        await _commands.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
+        await _commands.DidNotReceiveWithAnyArgs().PickRoomAsync(default, default, default, default);
+        await _snapshot.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
+        await _snapshot.DidNotReceiveWithAnyArgs().HandleCommandAsync(default, default);
+    }
+
+    [Fact]
+    public async Task FlowThatThrowsAfterPartialWork_StillAnswersTheFailureNoticeOnce()
+    {
+        await ConfigureTransportAsync();
+        _commands.PickProjectAsync(OwnerChatId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Throws(new InvalidOperationException("the picker broke"));
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(OwnerChatId, "cq-partial", 5, "@owner", "picker", "wave:proj:00000000-0000-0000-0000-000000000000"),
+            CancellationToken.None);
+
+        Answers().ShouldHaveSingleItem()
+            .ShouldBe(TelegramNotificationCallbackHandler.FailureAnswer);
+    }
+
     public void Dispose()
     {
         _cache.Dispose();
         _temp.Dispose();
     }
+
+    private static string DataFor(string branch, Guid projectId) => branch switch
+    {
+        "cancel" => TelegramWaveCallbackData.CancelData,
+        "proj" => $"wave:proj:{projectId:D}",
+        "room" => TelegramWaveCallbackData.RoomData("1f0aa0e0", 0),
+        "sproj" => $"wave:sproj:{projectId:D}",
+        "scancel" => TelegramWaveCallbackData.SnapshotCancelData,
+        "garbage" => "wave:room:ZZZZZZZZ:1",
+        _ => $"wave:cancel:{new string('x', 70)}",
+    };
+
+    private static string ExpectedAnswer(string branch) => branch switch
+    {
+        "cancel" => TelegramWaveCommandService.CancelAnswer,
+        "proj" => TelegramWaveCommandService.RoomPickAnswer,
+        "room" => TelegramWaveCommandService.PromptAnswer,
+        "sproj" => TelegramWaveSnapshotService.SnapshotAnswer,
+        "scancel" => ITelegramWaveSnapshotService.DismissAnswer,
+        _ => TelegramNotificationCallbackHandler.InvalidButtonAnswer,
+    };
+
+    private List<string> Answers() =>
+        [.. _api.Requests
+            .Where(request => request.Path.Contains("answerCallbackQuery", StringComparison.Ordinal))
+            .Select(AnswerText)];
 
     private TelegramWaveCallbackHandler CreateHandler()
     {

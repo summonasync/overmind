@@ -141,12 +141,15 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         }
     }
 
-    [Fact]
-    public async Task RunAsync_WaveCommandFromForeignChat_NeverReachesTheWaveDoor()
+    [Theory]
+    [InlineData("/send_to_wave")]
+    [InlineData("/wave_snapshot")]
+    [InlineData("/SEND_TO_WAVE")]
+    public async Task RunAsync_WaveCommandFromForeignChat_IsIgnoredBeforeAnyDoor(string text)
     {
         var rig = CreateRig();
         await ConfigureAsync(enabled: true, allowlist: "42");
-        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(999, "/send_to_wave", 12));
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(999, text, 12));
 
         var (run, cts) = StartRig(rig);
         try
@@ -155,6 +158,29 @@ public sealed class TelegramPollingRunnerTests : IDisposable
             (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
 
             rig.Handler.Messages.ShouldBeEmpty();
+            rig.Api.CountRequests("/sendMessage").ShouldBe(0);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_WaveDraftReplyFromForeignChat_IsIgnoredBeforeAnyDoor()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.ReplyTextUpdate(999, "a signal from a stranger", 13, 21));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            rig.Handler.Messages.ShouldBeEmpty();
+            rig.Api.CountRequests("/sendMessage").ShouldBe(0);
         }
         finally
         {

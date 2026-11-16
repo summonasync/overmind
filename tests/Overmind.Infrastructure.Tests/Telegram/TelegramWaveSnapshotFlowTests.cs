@@ -49,7 +49,8 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
             _temp.CreateContext(),
             new CollectingLogger<TelegramWaveSnapshotService>(_logs));
         _commands = new TelegramWaveCommandService(
-            sender, _drafts, _chat, _temp.CreateContext(), _snapshots,
+            sender, _drafts, new TelegramWavePromptTombstone(TimeProvider.System), _chat,
+            _temp.CreateContext(), _snapshots,
             new CollectingLogger<TelegramWaveCommandService>(_logs));
         _callbacks = new TelegramWaveCallbackHandler(
             CreateOptionsProvider(), _cache, _commands, _snapshots,

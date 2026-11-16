@@ -31,7 +31,10 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     private readonly WakeDropFanout _wakeFanout;
     private readonly StubWaveChatBroadcaster _broadcaster = new();
     private readonly List<string> _logs = [];
-    private readonly TelegramWaveDraftStore _drafts = new(TimeProvider.System);
+    private readonly TelegramTestClock _clock = new();
+    private readonly TelegramWaveDraftStore _drafts;
+    private readonly TelegramWavePromptTombstone _prompts;
+    private readonly ConversationTurnGate _turns = new();
     private readonly ITelegramWaveSnapshotService _snapshotDoor = Substitute.For<ITelegramWaveSnapshotService>();
     private readonly TelegramWaveCommandService _commands;
     private readonly TelegramWaveCallbackHandler _callbacks;
@@ -41,17 +44,23 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     {
         _cache = new TelegramBotClientCache(new StubTelegramBotClientFactory(_api));
         (_wakeFanout, _wakeServices) = TestWakeFanout.Create(_temp);
-        _commands = new TelegramWaveCommandService(
-            new TelegramReplySender(_cache, CreateOptionsProvider()),
-            _drafts,
-            new WaveChatService(_temp.CreateContext(), _wakeFanout, _broadcaster),
-            _temp.CreateContext(),
-            _snapshotDoor,
-            new CollectingLogger<TelegramWaveCommandService>(_logs));
+        _drafts = new TelegramWaveDraftStore(_clock);
+        _prompts = new TelegramWavePromptTombstone(_clock);
+        _commands = BuildCommandService(_drafts, _prompts);
         _callbacks = new TelegramWaveCallbackHandler(
             CreateOptionsProvider(), _cache, _commands, _snapshotDoor,
             new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
     }
+
+    private TelegramWaveCommandService BuildCommandService(
+        TelegramWaveDraftStore drafts, TelegramWavePromptTombstone prompts) => new(
+            new TelegramReplySender(_cache, CreateOptionsProvider()),
+            drafts,
+            prompts,
+            new WaveChatService(_temp.CreateContext(), _wakeFanout, _broadcaster),
+            _temp.CreateContext(),
+            _snapshotDoor,
+            new CollectingLogger<TelegramWaveCommandService>(_logs));
 
     public async Task InitializeAsync()
     {
@@ -187,7 +196,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PromptReplyAfterCancel_FallsThroughToTheConversationPath()
+    public async Task PromptReplyAfterCancel_AnswersTheClosedDraftNoticeInsteadOfTheModel()
     {
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
@@ -195,11 +204,18 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         var promptMessageId = Prompt().PromptMessageId!.Value;
 
         await PressAsync(PromptMessageId, TelegramWaveCallbackData.CancelData);
-        var consumed = await TryReplyAsync(promptMessageId, "orphaned");
+        var (handler, probe) = CreateAgentHandler();
 
-        consumed.ShouldBeFalse();
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "orphaned", promptMessageId, "Owner"),
+            CancellationToken.None);
+
         (await WaveMessagesAsync()).ShouldBeEmpty();
-        SentRequests().Count.ShouldBe(3);
+        probe.AssertUntouched("a cancelled prompt must not buy an agent turn");
+        await ZeroModelProbe.AssertNoConversationFootprintAsync(_temp);
+        SentTexts().ShouldContain(TelegramWaveCommandService.DraftClosedReply);
+        SentRequests().Count.ShouldBe(4);
+        _logs.ShouldContain(line => line.Contains("was closed; the reply to prompt", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -497,13 +513,14 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
                 .SaveAsync(OwnerChatId, promptMessageId, notification.Id);
         }
 
-        var (handler, stream) = CreateAgentHandler();
+        var (handler, probe) = CreateAgentHandler();
         await handler.HandleAsync(
             new TelegramIncomingMessage(OwnerChatId, "approved via the prompt", promptMessageId, "Owner"),
             CancellationToken.None);
 
         SentTexts().ShouldContain(TelegramAgentChatHandler.ReplyRegisteredAck);
-        stream.Invocations.ShouldBe(0);
+        probe.StreamInvocations.ShouldBe(0);
+        probe.ValidatorInvocations.ShouldBe(1);
         (await WaveMessagesAsync()).ShouldBeEmpty();
         await using var proof = _temp.CreateContext();
         (await proof.AgentNotifications.SingleAsync(n => n.Id == notification.Id)).RepliedAt.ShouldNotBeNull();
@@ -517,12 +534,12 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await PickRoomAsync("telegram-bridge");
         var promptMessageId = Prompt().PromptMessageId!.Value;
 
-        var (handler, stream) = CreateAgentHandler();
+        var (handler, probe) = CreateAgentHandler();
         await handler.HandleAsync(
             new TelegramIncomingMessage(OwnerChatId, Signal, promptMessageId, "Owner"),
             CancellationToken.None);
 
-        stream.Invocations.ShouldBe(0);
+        probe.AssertUntouched("a live wave draft must not buy an agent turn");
         SentTexts().ShouldContain($"Posted to telegram-bridge.");
         (await WaveMessagesAsync()).ShouldHaveSingleItem().Text.ShouldBe(Signal);
         await using var context = _temp.CreateContext();
@@ -538,12 +555,12 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         var promptMessageId = Prompt().PromptMessageId!.Value;
         var capturedToken = Prompt().Token;
 
-        var (handler, stream) = CreateAgentHandler();
+        var (handler, probe) = CreateAgentHandler();
         await handler.HandleAsync(
             new TelegramIncomingMessage(OwnerChatId, "/send_to_wave", promptMessageId, "Owner"),
             CancellationToken.None);
 
-        stream.Invocations.ShouldBe(0);
+        probe.AssertUntouched("a typed wave command must not buy an agent turn");
         (await WaveMessagesAsync()).ShouldBeEmpty();
         Prompt().Token.ShouldNotBe(capturedToken);
         Prompt().PromptMessageId.ShouldBeNull();
@@ -552,26 +569,223 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     [Fact]
     public async Task OrdinaryReplyToAnUnknownMessage_StillRunsTheAgentTurn()
     {
-        var (handler, stream) = CreateAgentHandler(
+        var (handler, probe) = CreateAgentHandler(
             [ConversationStreamEvent.Delta("ordinary answer"), ConversationStreamEvent.Completed(5)]);
 
         await handler.HandleAsync(
             new TelegramIncomingMessage(OwnerChatId, "privet", 9_009, "Owner"),
             CancellationToken.None);
 
-        stream.Invocations.ShouldBe(1);
+        probe.StreamInvocations.ShouldBe(1);
         SentTexts().ShouldBe(["ordinary answer"]);
+        await ZeroModelProbe.AssertFootprintGrowsWhenTheModelRunsAsync(_temp);
     }
 
-    private (TelegramAgentChatHandler Handler, CountingStreamSource Stream) CreateAgentHandler(
-        IReadOnlyList<ConversationStreamEvent>? turn = null)
+    [Fact]
+    public async Task PromptReplyAfterTheDraftExpires_AnswersTheClosedDraftNotice()
     {
-        var stream = new CountingStreamSource(turn);
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+
+        _clock.Advance(TimeSpan.FromMinutes(TelegramWaveDraft.LifetimeMinutes + 1));
+        var consumed = await TryReplyAsync(promptMessageId, "a signal an hour late");
+
+        consumed.ShouldBeTrue();
+        (await WaveMessagesAsync()).ShouldBeEmpty();
+        SentTexts().ShouldContain(TelegramWaveCommandService.DraftClosedReply);
+        _drafts.Current(OwnerChatId).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SecondReplyToAPostedPrompt_IsRefusedInsteadOfPostingTwice()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+        await ReplyAsync(promptMessageId, Signal);
+
+        var consumed = await TryReplyAsync(promptMessageId, Signal);
+
+        consumed.ShouldBeTrue();
+        (await WaveMessagesAsync()).ShouldHaveSingleItem();
+        SentTexts().ShouldContain(TelegramWaveCommandService.DraftClosedReply);
+    }
+
+    [Fact]
+    public async Task RestartedHost_FallsThroughOnAnOldPromptTheNewProcessNeverIssued()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var revived = BuildCommandService(new TelegramWaveDraftStore(_clock), new TelegramWavePromptTombstone(_clock));
+
+        var consumed = await revived.TryHandleDraftReplyAsync(
+            new TelegramIncomingMessage(OwnerChatId, "signal after the restart", promptMessageId, "Owner"),
+            CancellationToken.None);
+
+        consumed.ShouldBeFalse();
+        (await WaveMessagesAsync()).ShouldBeEmpty();
+        SentTexts().ShouldNotContain(TelegramWaveCommandService.DraftClosedReply);
+    }
+
+    [Fact]
+    public async Task DeletedProjectBetweenPickAndPost_NoticesTheSenderWithoutACrash()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+        await using (var context = _temp.CreateContext())
+        {
+            context.Projects.Remove(await context.Projects.SingleAsync(p => p.Id == _projectId));
+            await context.SaveChangesAsync();
+        }
+
+        var consumed = await TryReplyAsync(promptMessageId, "signal into a deleted project");
+
+        consumed.ShouldBeTrue();
+        (await WaveMessagesAsync()).ShouldBeEmpty();
+        SentTexts().ShouldContain(text => text.Contains("refused the post", StringComparison.Ordinal));
+        _drafts.Current(OwnerChatId).ShouldBeNull();
+        _logs.ShouldContain(line => line.Contains("was refused; the draft was dropped", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DraftReplyWhileAnAgentTurnIsRunning_IsCapturedAndNeverEntersTheGate()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var conversation = await new TelegramChatStore(_temp.CreateContext())
+            .GetOrCreateConversationAsync(OwnerChatId, CancellationToken.None);
+        _turns.TryEnter(conversation.Id).ShouldBeTrue();
+        var (handler, probe) = CreateAgentHandler();
+
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, Signal, promptMessageId, "Owner"),
+            CancellationToken.None);
+
+        probe.AssertUntouched("a wave signal must not queue behind a running turn");
+        (await WaveMessagesAsync()).ShouldHaveSingleItem().Text.ShouldBe(Signal);
+        SentTexts().ShouldNotContain(TelegramAgentChatHandler.BusyReplyText);
+        _turns.IsBusy(conversation.Id).ShouldBeTrue();
+        _turns.Exit(conversation.Id);
+    }
+
+    [Fact]
+    public async Task TypedCommandWhileAnAgentTurnIsRunning_OpensThePickerAndKeepsTheGate()
+    {
+        var conversation = await new TelegramChatStore(_temp.CreateContext())
+            .GetOrCreateConversationAsync(OwnerChatId, CancellationToken.None);
+        _turns.TryEnter(conversation.Id).ShouldBeTrue();
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        var (handler, probe) = CreateAgentHandler();
+
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "/send_to_wave", From: "Owner"), CancellationToken.None);
+
+        probe.AssertUntouched("a wave command must not queue behind a running turn");
+        Prompt().ShouldNotBeNull();
+        SentTexts().ShouldNotContain(TelegramAgentChatHandler.BusyReplyText);
+        _turns.IsBusy(conversation.Id).ShouldBeTrue();
+        _turns.Exit(conversation.Id);
+    }
+
+    [Fact]
+    public async Task NotificationReplyDoor_KeepsPriorityOverTheClosedDraftRefusal()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+        await PressAsync(PromptMessageId, TelegramWaveCallbackData.CancelData);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context)
+                .SaveAsync(OwnerChatId, promptMessageId, notification.Id);
+        }
+
+        var (handler, probe) = CreateAgentHandler();
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "approved late", promptMessageId, "Owner"),
+            CancellationToken.None);
+
+        SentTexts().ShouldContain(TelegramAgentChatHandler.ReplyRegisteredAck);
+        SentTexts().ShouldNotContain(TelegramWaveCommandService.DraftClosedReply);
+        probe.StreamInvocations.ShouldBe(0);
+        probe.ValidatorInvocations.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task TypedCommandDoor_KeepsPriorityOverTheClosedDraftRefusal()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+        await PressAsync(PromptMessageId, TelegramWaveCallbackData.CancelData);
+
+        var (handler, probe) = CreateAgentHandler();
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "/send_to_wave", promptMessageId, "Owner"),
+            CancellationToken.None);
+
+        SentTexts().ShouldNotContain(TelegramWaveCommandService.DraftClosedReply);
+        SentTexts().ShouldContain(TelegramWaveCommandService.ProjectPickerText);
+        probe.AssertUntouched("a typed command wins over the closed draft refusal");
+    }
+
+    [Fact]
+    public async Task CommandInvocationsAndTheWavePost_AreLoggedForTheSmokeAudit()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        await ReplyAsync(Prompt().PromptMessageId!.Value, Signal);
+
+        await _commands.HandleAsync(
+            TelegramWaveCommand.WaveSnapshot,
+            new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot", From: "Owner"),
+            CancellationToken.None);
+
+        var lines = _logs.ToArray();
+        lines.ShouldContain(line =>
+            line.Contains(
+                $"Telegram wave command {TelegramWaveCommand.SendToWave} invoked in chat {OwnerChatId} by Owner",
+                StringComparison.Ordinal));
+        lines.ShouldContain(line =>
+            line.Contains(
+                $"Telegram wave command {TelegramWaveCommand.WaveSnapshot} invoked in chat {OwnerChatId}",
+                StringComparison.Ordinal));
+        lines.ShouldContain(line => line.Contains(
+            $"Telegram wave draft opened in chat {OwnerChatId}", StringComparison.Ordinal));
+        lines.ShouldContain(line =>
+            line.Contains(
+                $"posted {Signal.Length} characters into room telegram-bridge of project {_projectId:D}",
+                StringComparison.Ordinal)
+            && line.Contains($"as Owner with role {TelegramWaveCommandService.AuthorRole}", StringComparison.Ordinal));
+        await _snapshotDoor.Received(1).HandleCommandAsync(OwnerChatId, Arg.Any<CancellationToken>());
+    }
+
+    private (TelegramAgentChatHandler Handler, ZeroModelProbe Probe) CreateAgentHandler(
+        IReadOnlyList<ConversationStreamEvent>? turn = null) =>
+        CreateAgentHandler(new ZeroModelProbe(turn));
+
+    private (TelegramAgentChatHandler Handler, ZeroModelProbe Probe) CreateAgentHandler(ZeroModelProbe probe)
+    {
         var handler = new TelegramAgentChatHandler(
             new TelegramChatStore(_temp.CreateContext()),
             new ConversationMessageStore(_temp.CreateContext()),
-            stream,
-            new ConversationTurnGate(),
+            probe,
+            _turns,
             new TelegramReplySender(_cache, CreateOptionsProvider()),
             new TelegramNotificationDeliveryStore(_temp.CreateContext()),
             new NotificationsService(
@@ -580,37 +794,10 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
                     _temp.CreateContext(), new ReplyAutoActQueue(), NullLogger<ReplyAutoActFanout>.Instance),
                 _wakeFanout,
                 []),
-            Substitute.For<INotificationValidatorRunner>(),
+            probe,
             _commands,
             new CollectingLogger<TelegramAgentChatHandler>(_logs));
-        return (handler, stream);
-    }
-
-    private sealed class CountingStreamSource(IReadOnlyList<ConversationStreamEvent>? turn)
-        : IConversationStreamSource
-    {
-        public int Invocations { get; private set; }
-
-        public async IAsyncEnumerable<ConversationStreamEvent> StreamAsync(
-            Conversation conversation,
-            IReadOnlyList<ConversationMessage> history,
-            string userText,
-            [EnumeratorCancellation] CancellationToken ct = default,
-            RoutingMissContext? missContext = null)
-        {
-            Invocations++;
-            if (turn is null)
-            {
-                throw new InvalidOperationException("the wave flow must never start an agent turn");
-            }
-
-            foreach (var streamEvent in turn)
-            {
-                yield return streamEvent;
-            }
-
-            await Task.CompletedTask;
-        }
+        return (handler, probe);
     }
 
     private const int ProjectPickerMessageId = 11;

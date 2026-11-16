@@ -10,6 +10,7 @@ namespace Overmind.Infrastructure.Telegram;
 public sealed class TelegramWaveCommandService(
     TelegramReplySender sender,
     TelegramWaveDraftStore drafts,
+    TelegramWavePromptTombstone prompts,
     WaveChatService chat,
     OvermindDbContext db,
     ITelegramWaveSnapshotService snapshot,
@@ -30,6 +31,8 @@ public sealed class TelegramWaveCommandService(
     public const string PostRefusedReplyFormat =
         "The {0} room refused the post. Run /send_to_wave to start over.";
     public const string NoProjectsReply = "No projects are registered, so there is nothing to post to.";
+    public const string DraftClosedReply =
+        "That wave draft is closed (expired, cancelled, or already posted). Run /send_to_wave again to send a new signal.";
     public const string RoomPickAnswer = "Pick the room.";
     public const string PromptAnswer = "Reply with the signal.";
     public const string CancelAnswer = "Cancelled.";
@@ -41,6 +44,10 @@ public sealed class TelegramWaveCommandService(
 
     public async Task HandleAsync(TelegramWaveCommand command, TelegramIncomingMessage message, CancellationToken ct)
     {
+        logger.LogInformation(
+            "Telegram wave command {Command} invoked in chat {ChatId} by {Sender}",
+            command, message.ChatId, message.From ?? AnonymousAuthor);
+
         if (command == TelegramWaveCommand.WaveSnapshot)
         {
             await snapshot.HandleCommandAsync(message.ChatId, ct);
@@ -68,12 +75,24 @@ public sealed class TelegramWaveCommandService(
 
     public async Task<bool> TryHandleDraftReplyAsync(TelegramIncomingMessage message, CancellationToken ct)
     {
-        if (message.RepliedToMessageId is not { } promptMessageId
-            || drafts.AwaitingText(message.ChatId, promptMessageId) is not { } draft
-            || draft.ProjectId is not { } projectId
-            || draft.Room is not { } room)
+        if (message.RepliedToMessageId is not { } promptMessageId)
         {
             return false;
+        }
+
+        var draft = drafts.AwaitingText(message.ChatId, promptMessageId);
+        if (draft is null || draft.ProjectId is not { } projectId || draft.Room is not { } room)
+        {
+            if (!prompts.IsClosed(message.ChatId, promptMessageId))
+            {
+                return false;
+            }
+
+            logger.LogInformation(
+                "Telegram wave draft in chat {ChatId} was closed; the reply to prompt {PromptMessageId} got the restart notice instead of an agent turn",
+                message.ChatId, promptMessageId);
+            await SendQuietlyAsync(message.ChatId, DraftClosedReply, ct: ct);
+            return true;
         }
 
         var text = message.Text.Trim();
@@ -97,8 +116,9 @@ public sealed class TelegramWaveCommandService(
             var posted = await chat.PostAsync(projectId, room, AuthorAlias(message.From), AuthorRole, text, ct);
             draft.ForgetText();
             logger.LogInformation(
-                "Telegram chat {ChatId} posted {TextLength} characters into room {Room} of project {ProjectId}",
-                message.ChatId, posted.Text.Length, posted.Room, posted.ProjectId);
+                "Telegram chat {ChatId} posted {TextLength} characters into room {Room} of project {ProjectId} as {AuthorAlias} with role {AuthorRole}",
+                message.ChatId, posted.Text.Length, posted.Room, posted.ProjectId, posted.AuthorAlias,
+                posted.AuthorRole);
             await SendQuietlyAsync(message.ChatId, string.Format(PostedTextFormat, posted.Room), ct: ct);
         }
         catch (PlanningException ex)
@@ -106,8 +126,8 @@ public sealed class TelegramWaveCommandService(
             drafts.Cancel(message.ChatId);
             logger.LogWarning(
                 ex,
-                "Telegram wave post from chat {ChatId} into room {Room} was refused; the draft was dropped",
-                message.ChatId, room);
+                "Telegram wave post from chat {ChatId} into room {Room} of project {ProjectId} was refused; the draft was dropped",
+                message.ChatId, room, projectId);
             await SendQuietlyAsync(message.ChatId, string.Format(PostRefusedReplyFormat, room), ct: ct);
         }
 
@@ -165,6 +185,7 @@ public sealed class TelegramWaveCommandService(
         }
 
         draft.AwaitText(room, delivered[^1]);
+        prompts.Announce(chatId, delivered[^1]);
         return PromptAnswer;
     }
 

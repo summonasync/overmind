@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddHostedService<TelegramPollingService>();
         services.AddSingleton<ConversationTurnGate>();
         services.AddSingleton(new TelegramWaveDraftStore(TimeProvider.System));
+        services.AddSingleton(new TelegramWavePromptTombstone(TimeProvider.System));
         services.AddSingleton<WaveSseHub>();
         services.AddSingleton(WaveStreamOptions.Default);
         services.AddSingleton<IWaveChatBroadcaster>(provider => provider.GetRequiredService<WaveSseHub>());
