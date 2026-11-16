@@ -300,6 +300,42 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
         bare.Query.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task SlashRoom_EveryDoorPutsTheRoomSegmentOnTheWireEncoded()
+    {
+        const string room = "C. Edge/Pi";
+        var segment = Uri.EscapeDataString(room);
+
+        await Tool().PostMessage(room, "signal into the slash room", Canned.ProjectId);
+        await Tool().PeekRooms(room, Canned.ProjectId);
+        await Feed(room);
+
+        _stub.Requests.Select(r => r.Path).ShouldBe(
+        [
+            $"{RoomsRoute}/{segment}/messages",
+            $"{RoomsRoute}/{segment}/peek",
+            $"{RoomsRoute}/{segment}/unread"
+        ]);
+    }
+
+    [Theory]
+    [InlineData("C. Edge/Pi")]
+    [InlineData("lane?a=b")]
+    [InlineData("lane&other")]
+    [InlineData("100%")]
+    [InlineData("lane#tail")]
+    [InlineData("lane+plus")]
+    [InlineData("all")]
+    public async Task PostMessage_RoomSegmentIsEscapedOnTheWire(string room)
+    {
+        await Tool().PostMessage(room, "encoded segment probe", Canned.ProjectId);
+
+        var request = _stub.Requests.Single(r => r.Method == "POST");
+        request.Path.ShouldBe($"{RoomsRoute}/{Uri.EscapeDataString(room)}/messages");
+        request.Path.Split("/wave/rooms/")[1].Split('/')[0].ShouldNotContain("/");
+        request.Query.ShouldBeEmpty();
+    }
+
     private async Task<JsonObject> Feed(string? rooms)
     {
         var element = await Tool().FetchUnread(rooms, projectId: Canned.ProjectId);

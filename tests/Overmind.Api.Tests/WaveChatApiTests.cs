@@ -165,6 +165,108 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
+    public async Task AgentDoor_PercentEncodedRoomSegment_RoutesAsOneSegment_AndBindsTheDecodedName()
+    {
+        const string room = "core & docs";
+        var projectId = await CreateProjectAsync();
+        await SeedLegacyLaneAsync(projectId, room);
+        var segment = Uri.EscapeDataString(room);
+
+        var response = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/messages", new { Text = "encoded segment inbound" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await response.Content.ReadFromJsonAsync<MessageJson>(JsonOptions);
+        message!.Room.ShouldBe(room);
+        message.Text.ShouldBe("encoded segment inbound");
+
+        var peek = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/peek", null);
+        peek.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var counts = await peek.Content.ReadFromJsonAsync<PeekJson>(JsonOptions);
+        counts!.Room.ShouldBe(room);
+        counts.Count.ShouldBe(1);
+
+        var slashFeed = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/unread", null);
+        slashFeed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feed = await slashFeed.Content.ReadFromJsonAsync<FeedJson>(JsonOptions);
+        feed!.Items.Select(m => m.Room).ShouldBe([room]);
+
+        var hallFeed = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/unread", null);
+        var hall = await hallFeed.Content.ReadFromJsonAsync<FeedJson>(JsonOptions);
+        hall!.Items.ShouldBeEmpty();
+    }
+
+    // Handler-edge normalization (spec 236 scope 1b): the bound {room} arrives percent-encoded, so
+    // the slash-room only resolves because WaveChatApi unescapes it before the roster lookup.
+    //
+    // Read the harness before borrowing the claim from this file: ApiFactory is
+    // WebApplicationFactory<Program> over the in-memory TestServer, not Kestrel. What this file can
+    // and does measure is what the handler receives and what it answers; the production routing of
+    // %2F is pinned by the recorded live-Host probe (see the task obstacles and audits/), and the
+    // Kestrel-backed factory that would measure it in-suite is feature 239, not this one.
+    [Fact]
+    public async Task AgentDoor_PercentEncodedSlashRoom_UnescapesAtTheHandlerEdge_AndDeliversIntoThatRoom()
+    {
+        const string room = "C. Edge/Pi";
+        var projectId = await CreateProjectAsync();
+        await SeedLegacyLaneAsync(projectId, room);
+        var segment = Uri.EscapeDataString(room);
+
+        var response = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/messages", new { Text = "slash room inbound" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await response.Content.ReadFromJsonAsync<MessageJson>(JsonOptions);
+        message!.Room.ShouldBe(room);
+
+        var peek = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/peek", null);
+        peek.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var counts = await peek.Content.ReadFromJsonAsync<PeekJson>(JsonOptions);
+        counts!.Room.ShouldBe(room);
+        counts.Count.ShouldBe(1);
+
+        var slashFeed = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/unread", null);
+        slashFeed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feed = await slashFeed.Content.ReadFromJsonAsync<FeedJson>(JsonOptions);
+        feed!.Items.Select(m => m.Room).ShouldBe([room]);
+
+        var history = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{segment}/messages", null);
+        history.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await history.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        page!.Items.Select(m => m.Room).ShouldBe([room]);
+
+        var hallFeed = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/unread", null);
+        var hall = await hallFeed.Content.ReadFromJsonAsync<FeedJson>(JsonOptions);
+        hall!.Items.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Post_AgentDoor_RawSlashRoom_NeverReachesTheWaveHandler()
+    {
+        const string room = "C. Edge/Pi";
+        var projectId = await CreateProjectAsync();
+        await SeedLegacyLaneAsync(projectId, room);
+
+        var raw = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/{room}/messages", new { Text = "unencoded wire" });
+
+        // This harness answers 405: with the slash unescaped the shape is no longer
+        // `rooms/{room}/messages`, so the SPA fallback — GET/HEAD only — is what the leftover path
+        // matches. The wave handler is reached by neither, which is the point: a MissingWaveRoom
+        // problem body would mean it was. On production Kestrel the same unencoded wire produces no
+        // match at all (404 without a problem+json body); that half is the probe's claim, not this test's.
+        raw.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
+        (raw.Content.Headers.ContentType?.MediaType != "application/problem+json").ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Post_AgentDoor_WithoutSession_Returns400()
     {
         var projectId = await CreateProjectAsync();
@@ -533,6 +635,12 @@ public sealed class WaveChatApiTests : IDisposable
             VALUES ('{MarshalSessionId.ToString().ToUpperInvariant()}', 'Boss', 'claude', 'marshal', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', NULL)
             """);
     }
+
+    private async Task SeedLegacyLaneAsync(Guid projectId, string name) =>
+        await ExecuteAsync($"""
+            INSERT INTO PlanningLanes (Id, ProjectId, Name, CreatedAt, UpdatedAt)
+            VALUES ('{Guid.NewGuid().ToString().ToUpperInvariant()}', '{projectId.ToString().ToUpperInvariant()}', '{name}', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}', '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}')
+            """);
 
     private async Task SeedMessageAsync(
         Guid projectId, string room, string authorAlias, string authorRole, string text)
