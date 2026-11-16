@@ -115,6 +115,53 @@ public sealed class AgentWakeApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Wake_DefaultWindow_DropsReadReplies_AndSinceReplayReturnsThem()
+    {
+        var pending = await SeedNotificationAsync("Dan", "open gate", "pending reply", MinutesAgo(10));
+        var consumed = await SeedNotificationAsync(
+            "Dan", "closed gate", "consumed reply", MinutesAgo(20), readAt: MinutesAgo(5));
+
+        var wake = await WakeAsync();
+        wake.Signals.Select(s => s.RefId).ShouldBe([pending]);
+
+        var replay = await WakeAsync(Uri.EscapeDataString(MinutesAgo(60).ToString("O")));
+        replay.Signals.Select(s => s.RefId).ShouldBe([consumed, pending]);
+    }
+
+    [Fact]
+    public async Task Wake_AfterMarkRead_TheSignalLeavesTheDefaultWindow()
+    {
+        var pending = await SeedNotificationAsync("Dan", "gate", "approved", MinutesAgo(10));
+
+        var before = await WakeAsync();
+        before.Signals.Select(s => s.RefId).ShouldBe([pending]);
+
+        var read = await _client.PostAsync($"/api/notifications/{pending}/read", null);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var after = await WakeAsync();
+        after.Signals.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Wake_ProjectIdParameter_ScopesReplies_KeepsMachineWideWithoutIt()
+    {
+        var home = await CreateProjectAsync();
+        var foreign = await CreateProjectAsync();
+        var mine = await SeedNotificationAsync(
+            "Dan", "home gate", "home reply", MinutesAgo(10), readAt: null, projectId: home);
+        await SeedNotificationAsync(
+            "Dan", "foreign gate", "foreign reply", MinutesAgo(8), readAt: null, projectId: foreign);
+        await SeedNotificationAsync("Dan", "legacy gate", "legacy reply", MinutesAgo(6));
+
+        var scoped = await WakeAsync(projectId: home);
+        scoped.Signals.Select(s => s.RefId).ShouldBe([mine]);
+
+        var machineWide = await WakeAsync();
+        machineWide.Signals.Length.ShouldBe(3);
+    }
+
+    [Fact]
     public async Task Wake_WithoutSince_DefaultsMentionsToAfterTheSessionLastSeenAt()
     {
         var projectId = await CreateProjectAsync();
@@ -246,9 +293,13 @@ public sealed class AgentWakeApiTests : IDisposable
 
         var description = endpoint.Metadata.OfType<IEndpointDescriptionMetadata>().Single().Description;
 
-        description.ShouldContain("7 days");
-        description.ShouldContain("LastSeenAt");
         description.ShouldContain("side-effect free");
+        description.ShouldContain("readAt (consumed)");
+        description.ShouldContain("the last 7 days");
+        description.ShouldContain("OVERMIND_WAKE_REPLY_LOOKBACK_DAYS");
+        description.ShouldContain("clamp");
+        description.ShouldContain("machine-wide");
+        description.ShouldContain("LastSeenAt");
         description.ShouldContain("echo it verbatim as since");
     }
 
@@ -256,9 +307,20 @@ public sealed class AgentWakeApiTests : IDisposable
 
     private DateTime MinutesAgo(int minutes) => DateTime.UtcNow.AddMinutes(-minutes);
 
-    private async Task<WakeJson> WakeAsync(string? encodedSince = null)
+    private async Task<WakeJson> WakeAsync(string? encodedSince = null, Guid? projectId = null)
     {
-        var suffix = encodedSince is null ? string.Empty : $"?since={encodedSince}";
+        var query = new List<string>();
+        if (encodedSince is not null)
+        {
+            query.Add($"since={encodedSince}");
+        }
+
+        if (projectId is { } scoped)
+        {
+            query.Add($"projectId={scoped}");
+        }
+
+        var suffix = query.Count == 0 ? string.Empty : $"?{string.Join("&", query)}";
         var response = await SendAgentAsync(HttpMethod.Get, $"/api/agent/wake{suffix}", null);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -342,13 +404,16 @@ public sealed class AgentWakeApiTests : IDisposable
     }
 
     private async Task<Guid> SeedNotificationAsync(
-        string agent, string text, string? replyText, DateTime repliedAt)
+        string agent, string text, string? replyText, DateTime repliedAt,
+        DateTime? readAt = null, Guid? projectId = null)
     {
         var id = Guid.NewGuid();
         var replied = replyText is null ? "NULL" : $"'{replyText}'";
+        var read = readAt is null ? "NULL" : $"'{Timestamp(readAt.Value)}'";
+        var project = projectId is null ? "NULL" : $"'{projectId.Value.ToString().ToUpperInvariant()}'";
         await ExecuteAsync($"""
             INSERT INTO AgentNotifications (Id, ProjectId, Kind, FeatureSlug, Tab, Text, Agent, CreatedAt, ReadAt, ReplyText, RepliedAt, HiddenAt)
-            VALUES ('{id.ToString().ToUpperInvariant()}', NULL, 1, NULL, NULL, '{text}', '{agent}', '{Timestamp(repliedAt)}', NULL, {replied}, '{Timestamp(repliedAt)}', NULL)
+            VALUES ('{id.ToString().ToUpperInvariant()}', {project}, 1, NULL, NULL, '{text}', '{agent}', '{Timestamp(repliedAt)}', {read}, {replied}, '{Timestamp(repliedAt)}', NULL)
             """);
         return id;
     }

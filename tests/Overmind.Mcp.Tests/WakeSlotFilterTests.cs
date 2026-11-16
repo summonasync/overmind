@@ -35,6 +35,25 @@ public sealed class WakeSlotFilterTests
         result.Content.Single().ShouldBeOfType<TextContentBlock>().Text.ShouldBe("ok");
     }
 
+    [Fact]
+    public async Task ReplyConsumed_HostWindowGoesSilent_TheWakeNoteStopsCountingIt()
+    {
+        var slot = new WakeSignalSlot();
+        slot.Set(1);
+        var filter = new WakeSlotFilter(slot).Create();
+
+        var first = await InvokeAsync(filter, Result);
+        first.Content[1].ShouldBeOfType<TextContentBlock>()
+            .Text.ShouldBe("overmind wake: 1 pending signal — poll overmind_wake_peek for details");
+
+        slot.Set(1);
+        var peeked = await InvokeAsync(filter, Result);
+        peeked.Content.Count.ShouldBe(2);
+
+        var afterRead = await InvokeAsync(filter, Result);
+        afterRead.Content.Single().ShouldBeOfType<TextContentBlock>().Text.ShouldBe("ok");
+    }
+
     private static CallToolResult Result() => new()
     {
         Content = [new TextContentBlock { Text = "ok" }]
