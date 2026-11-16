@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Notifications;
@@ -62,7 +63,7 @@ public sealed class TelegramCallbackRouterTests : IDisposable
             CancellationToken.None);
 
         _api.RequestCount.ShouldBe(1);
-        AnswerText(_api.Request(0)).ShouldBe(TelegramWaveCallbackHandler.NotWiredYetAnswer);
+        AnswerText(_api.Request(0)).ShouldBe(TelegramWaveCommandService.CancelAnswer);
     }
 
     [Fact]
@@ -156,9 +157,12 @@ public sealed class TelegramCallbackRouterTests : IDisposable
                 TestWakeFanout.Create(_temp).Fanout,
                 []),
             new CollectingLogger<TelegramNotificationCallbackHandler>(_logs));
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        waveCommands.Cancel(Arg.Any<long>()).Returns(TelegramWaveCommandService.CancelAnswer);
         var waves = new TelegramWaveCallbackHandler(
             optionsProvider,
             _cache,
+            waveCommands,
             new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
 
         return new TelegramCallbackRouter(notifications, waves);

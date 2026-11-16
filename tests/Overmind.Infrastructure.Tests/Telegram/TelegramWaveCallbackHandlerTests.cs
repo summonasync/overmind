@@ -1,4 +1,6 @@
 using System.Text.Json;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Telegram;
 using Shouldly;
@@ -14,6 +16,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
     private readonly TempDatabase _temp = new();
     private readonly FakeTelegramApi _api = new();
     private readonly TelegramBotClientCache _cache;
+    private readonly ITelegramWaveCommandService _commands = Substitute.For<ITelegramWaveCommandService>();
     private List<string> _logs = [];
 
     public TelegramWaveCallbackHandlerTests()
@@ -22,25 +25,10 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("wave:cancel")]
-    [InlineData("wave:proj:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111")]
-    [InlineData("wave:room:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111:telegram-bridge")]
-    public async Task Handle_WellFormedData_AnswersNotWiredYetOnce(string data)
-    {
-        await ConfigureTransportAsync();
-
-        await CreateHandler().HandleAsync(
-            new TelegramCallback(OwnerChatId, "cq-1", 5, "@owner", "picker", data), CancellationToken.None);
-
-        _api.RequestCount.ShouldBe(1);
-        _api.Request(0).Path.ShouldContain("answerCallbackQuery");
-        AnswerText(_api.Request(0)).ShouldBe(TelegramWaveCallbackHandler.NotWiredYetAnswer);
-    }
-
-    [Theory]
     [InlineData("wave:")]
     [InlineData("wave:nonsense")]
     [InlineData("wave:proj:123")]
+    [InlineData("wave:room:1f0aa0e0:1:extra")]
     public async Task Handle_GarbageData_AnswersInvalidButton(string data)
     {
         await ConfigureTransportAsync();
@@ -53,7 +41,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Handle_ForeignChat_AnswersNotAllowed()
+    public async Task Handle_ForeignChat_AnswersNotAllowedAndNeverReachesTheFlow()
     {
         await ConfigureTransportAsync();
 
@@ -62,7 +50,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
 
         _api.RequestCount.ShouldBe(1);
         AnswerText(_api.Request(0)).ShouldBe(TelegramNotificationCallbackHandler.NotAllowedAnswer);
-        LogSnapshot().ShouldContain(line => line.Contains("not allowlisted; denied"));
+        _logs.ShouldContain(line => line.Contains("not allowlisted; denied"));
     }
 
     [Fact]
@@ -72,6 +60,20 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
             new TelegramCallback(OwnerChatId, "cq-4", 5, "@owner", "picker", "wave:cancel"), CancellationToken.None);
 
         _api.RequestCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Handle_FlowThrows_AnswersFailureNoticeOnce()
+    {
+        await ConfigureTransportAsync();
+        _commands.Cancel(OwnerChatId).Throws(new InvalidOperationException("boom"));
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(OwnerChatId, "cq-6", 5, "@owner", "picker", "wave:cancel"), CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        AnswerText(_api.Request(0)).ShouldBe(TelegramNotificationCallbackHandler.FailureAnswer);
+        _logs.ShouldContain(line => line.Contains("failed; answering with the failure notice"));
     }
 
     [Fact]
@@ -86,7 +88,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
             new TelegramCallback(OwnerChatId, "cq-5", 5, "@owner", "picker", "wave:cancel"), CancellationToken.None);
 
         _api.RequestCount.ShouldBe(1);
-        LogSnapshot().ShouldContain(line => line.Contains("Answering telegram wave callback cq-5 failed"));
+        _logs.ShouldContain(line => line.Contains("Answering telegram wave callback cq-5 failed"));
     }
 
     public void Dispose()
@@ -101,6 +103,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
         return new TelegramWaveCallbackHandler(
             new TelegramTransportOptionsProvider(new AppSettingsService(_temp.CreateContext())),
             _cache,
+            _commands,
             new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
     }
 
@@ -119,13 +122,5 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
         return document.RootElement.TryGetProperty("text", out var text)
             ? text.GetString() ?? string.Empty
             : string.Empty;
-    }
-
-    private string[] LogSnapshot()
-    {
-        lock (_logs)
-        {
-            return [.. _logs];
-        }
     }
 }

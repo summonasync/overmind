@@ -39,5 +39,30 @@ public sealed class TelegramWaveWiringTests : IDisposable
             .ShouldBeOfType<TelegramWaveCommandService>();
     }
 
+    [Fact]
+    public void WaveDraftStore_IsOneInstanceSharedAcrossScopes()
+    {
+        var root = _factory.Services.GetRequiredService<TelegramWaveDraftStore>();
+
+        using var scopeA = _factory.Services.CreateScope();
+        using var scopeB = _factory.Services.CreateScope();
+
+        scopeA.ServiceProvider.GetRequiredService<TelegramWaveDraftStore>().ShouldBeSameAs(root);
+        scopeB.ServiceProvider.GetRequiredService<TelegramWaveDraftStore>().ShouldBeSameAs(root);
+    }
+
+    [Fact]
+    public void WaveDoors_ShareTheDraftStoreOfTheirOwnScopeGraph()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var provider = scope.ServiceProvider;
+        var store = provider.GetRequiredService<TelegramWaveDraftStore>();
+
+        provider.GetRequiredService<ITelegramWaveCommandService>().ShouldBeOfType<TelegramWaveCommandService>();
+        provider.GetRequiredService<TelegramWaveCallbackHandler>().ShouldNotBeNull();
+        provider.GetRequiredService<ITelegramMessageHandler>().ShouldBeOfType<TelegramAgentChatHandler>();
+        provider.GetRequiredService<TelegramWaveDraftStore>().ShouldBeSameAs(store);
+    }
+
     public void Dispose() => _factory.Dispose();
 }

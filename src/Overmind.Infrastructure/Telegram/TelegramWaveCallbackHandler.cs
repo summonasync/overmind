@@ -6,10 +6,9 @@ namespace Overmind.Infrastructure.Telegram;
 public sealed class TelegramWaveCallbackHandler(
     TelegramTransportOptionsProvider optionsProvider,
     TelegramBotClientCache clientCache,
+    ITelegramWaveCommandService commands,
     ILogger<TelegramWaveCallbackHandler> logger) : ITelegramCallbackHandler
 {
-    public const string NotWiredYetAnswer = "The flow behind this button is not wired yet.";
-
     public async Task HandleAsync(TelegramCallback callback, CancellationToken ct)
     {
         try
@@ -52,10 +51,17 @@ public sealed class TelegramWaveCallbackHandler(
             return;
         }
 
-        logger.LogInformation(
-            "Telegram wave callback {Action} from chat {ChatId} arrived before its flow was wired",
-            data.Action, callback.ChatId);
-        await AnswerAsync(callback, NotWiredYetAnswer, ct);
+        var answer = data.Action switch
+        {
+            WaveCallbackAction.Project when data.ProjectId is { } projectId
+                => await commands.PickProjectAsync(callback.ChatId, projectId, ct),
+            WaveCallbackAction.Room when data.DraftToken is { } token && data.RoomIndex is { } roomIndex
+                => await commands.PickRoomAsync(callback.ChatId, token, roomIndex, ct),
+            WaveCallbackAction.Cancel => commands.Cancel(callback.ChatId),
+            _ => TelegramNotificationCallbackHandler.InvalidButtonAnswer
+        };
+
+        await AnswerAsync(callback, answer, ct);
     }
 
     private async Task AnswerAsync(TelegramCallback callback, string text, CancellationToken ct)

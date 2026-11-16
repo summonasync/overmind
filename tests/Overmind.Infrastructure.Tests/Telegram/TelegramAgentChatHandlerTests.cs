@@ -265,6 +265,72 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task NotificationReplyDoor_KeepsPriorityOverTheWaveDraftCapture()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        waveCommands.TryHandleDraftReplyAsync(Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var rig = await CreateHandlerAsync(
+            new StubStreamSource([[]]), CreateWorkingNotificationsService(), waveCommands: waveCommands);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, 21, notification.Id);
+        }
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "the wave signal I meant", RepliedToMessageId: 21),
+            CancellationToken.None);
+
+        SentTexts().ShouldBe([TelegramAgentChatHandler.ReplyRegisteredAck]);
+        await waveCommands.DidNotReceive().TryHandleDraftReplyAsync(
+            Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WaveDraftCapture_KeepsTheMessageOffTheAgentTurn()
+    {
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        waveCommands.TryHandleDraftReplyAsync(Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var stream = new StubStreamSource([[]]);
+        var rig = await CreateHandlerAsync(stream, waveCommands: waveCommands);
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "posted to the lane", RepliedToMessageId: 21),
+            CancellationToken.None);
+
+        stream.Invocations.ShouldBe(0);
+        _api.RequestCount.ShouldBe(0);
+        await using var context = _temp.CreateContext();
+        context.ConversationMessages.Count(row => row.ConversationId == rig.Conversation.Id).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task ReplyToAnUnclaimedMessage_FallsThroughToTheAgentTurn()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        var rig = await CreateHandlerAsync(
+            new StubStreamSource(
+            [
+                [ConversationStreamEvent.Delta("ordinary reply"), ConversationStreamEvent.Completed(10)]
+            ]),
+            waveCommands: waveCommands);
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "privet", RepliedToMessageId: 4_004),
+            CancellationToken.None);
+
+        await waveCommands.Received(1).TryHandleDraftReplyAsync(
+            Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>());
+        SentTexts().ShouldBe(["ordinary reply"]);
+    }
+
+    [Fact]
     public async Task HandlerFailure_RetriesUpToCapThenDeadLetters()
     {
         _api.QueueResponse(FakeTelegramApi.SentMessageResponse());

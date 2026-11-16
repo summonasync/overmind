@@ -142,6 +142,49 @@ public sealed class TelegramPollingRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_WaveCommandFromForeignChat_NeverReachesTheWaveDoor()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(999, "/send_to_wave", 12));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            rig.Handler.Messages.ShouldBeEmpty();
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_TextMessage_CarriesTheSenderDisplayName()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "privet", 4, username: "owner"));
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "again", 5));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await WaitForAsync(() => rig.Handler.Messages.Count == 2)).ShouldBeTrue();
+
+            rig.Handler.Messages.ToArray()[0].From.ShouldBe("@owner");
+            rig.Handler.Messages.ToArray()[1].From.ShouldBe("Owner");
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_CallbackQueryUpdate_IsDispatchedToCallbackHandler()
     {
         var rig = CreateRig();

@@ -37,9 +37,16 @@ public sealed class TelegramAgentChatHandler(
             }
         }
 
+        // Wave doors run ahead of the agent turn: a typed command wins over a pending draft reply so
+        // "/send_to_wave" can never be posted into a room by accident.
         if (TelegramWaveCommandParser.TryMatch(message.Text, out var command))
         {
             await waveCommands.HandleAsync(command, message, ct);
+            return;
+        }
+
+        if (await waveCommands.TryHandleDraftReplyAsync(message, ct))
+        {
             return;
         }
 
