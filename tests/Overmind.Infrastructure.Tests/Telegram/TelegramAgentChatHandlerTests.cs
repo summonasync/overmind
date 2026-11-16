@@ -157,6 +157,114 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task WaveCommand_TurnAlreadyBusy_StillDispatchesWithoutEnteringTheGate()
+    {
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        var stream = new StubStreamSource([[]]);
+        var rig = await CreateHandlerAsync(stream, waveCommands: waveCommands);
+        _gate.Enter(rig.Conversation.Id);
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot"), CancellationToken.None);
+
+        await waveCommands.Received(1).HandleAsync(
+            TelegramWaveCommand.WaveSnapshot,
+            Arg.Is<TelegramIncomingMessage>(seeded => seeded.ChatId == OwnerChatId),
+            Arg.Any<CancellationToken>());
+        _gate.IsBusy(rig.Conversation.Id).ShouldBeTrue();
+        stream.Invocations.ShouldBe(0);
+        SentTexts().ShouldNotContain(TelegramAgentChatHandler.BusyReplyText);
+
+        await using var context = _temp.CreateContext();
+        context.ConversationMessages.Count(row => row.ConversationId == rig.Conversation.Id).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WaveCommand_UnmappedChat_CreatesNoConversation()
+    {
+        const long unmappedChatId = 77;
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        var stream = new StubStreamSource([[]]);
+        var rig = await CreateHandlerAsync(stream, waveCommands: waveCommands);
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(unmappedChatId, "/send_to_wave"), CancellationToken.None);
+
+        await waveCommands.Received(1).HandleAsync(
+            TelegramWaveCommand.SendToWave,
+            Arg.Is<TelegramIncomingMessage>(seeded => seeded.ChatId == unmappedChatId),
+            Arg.Any<CancellationToken>());
+        stream.Invocations.ShouldBe(0);
+
+        await using var context = _temp.CreateContext();
+        context.TelegramChatMappings.Count(m => m.ChatId == unmappedChatId).ShouldBe(0);
+        context.Conversations.Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WaveCommand_ReplyingToANotification_StaysOnTheReplyDoor()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        var rig = await CreateHandlerAsync(
+            new StubStreamSource([[]]), CreateWorkingNotificationsService(), waveCommands: waveCommands);
+        var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
+        await using (var context = _temp.CreateContext())
+        {
+            context.AgentNotifications.Add(notification);
+            await context.SaveChangesAsync();
+            await new TelegramNotificationDeliveryStore(context).SaveAsync(OwnerChatId, 21, notification.Id);
+        }
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot", RepliedToMessageId: 21),
+            CancellationToken.None);
+
+        await waveCommands.DidNotReceive().HandleAsync(
+            Arg.Any<TelegramWaveCommand>(), Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>());
+        SentTexts().ShouldBe([TelegramAgentChatHandler.ReplyRegisteredAck]);
+    }
+
+    [Fact]
+    public async Task UnrecognizedSlashCommand_FallsThroughToTheAgentTurn()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        var rig = await CreateHandlerAsync(
+            new StubStreamSource(
+            [
+                [ConversationStreamEvent.Delta("that is not a command I know"), ConversationStreamEvent.Completed(10)]
+            ]),
+            waveCommands: waveCommands);
+
+        await rig.Handler.HandleAsync(
+            new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot now"), CancellationToken.None);
+
+        await waveCommands.DidNotReceive().HandleAsync(
+            Arg.Any<TelegramWaveCommand>(), Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>());
+        SentTexts().ShouldBe(["that is not a command I know"]);
+    }
+
+    [Fact]
+    public async Task OrdinaryMessage_StaysOffTheWaveCommandDoor()
+    {
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+        var waveCommands = Substitute.For<ITelegramWaveCommandService>();
+        var rig = await CreateHandlerAsync(
+            new StubStreamSource(
+            [
+                [ConversationStreamEvent.Delta("hello back"), ConversationStreamEvent.Completed(10)]
+            ]),
+            waveCommands: waveCommands);
+
+        await rig.Handler.HandleAsync(new TelegramIncomingMessage(OwnerChatId, "privet"), CancellationToken.None);
+
+        await waveCommands.DidNotReceive().HandleAsync(
+            Arg.Any<TelegramWaveCommand>(), Arg.Any<TelegramIncomingMessage>(), Arg.Any<CancellationToken>());
+        SentTexts().ShouldBe(["hello back"]);
+    }
+
+    [Fact]
     public async Task HandlerFailure_RetriesUpToCapThenDeadLetters()
     {
         _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
@@ -408,7 +516,8 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
     private async Task<HandlerRig> CreateHandlerAsync(
         IConversationStreamSource streamSource,
         NotificationsService? notificationsService = null,
-        INotificationValidatorRunner? validator = null)
+        INotificationValidatorRunner? validator = null,
+        ITelegramWaveCommandService? waveCommands = null)
     {
         await ConfigureTransportAsync();
         var chats = new TelegramChatStore(_temp.CreateContext());
@@ -425,6 +534,7 @@ public sealed class TelegramAgentChatHandlerTests : IDisposable
             new TelegramNotificationDeliveryStore(_temp.CreateContext()),
             notificationsService ?? CreateNotificationsService(),
             validator ?? Substitute.For<INotificationValidatorRunner>(),
+            waveCommands ?? Substitute.For<ITelegramWaveCommandService>(),
             new CollectingLogger<TelegramAgentChatHandler>(logs));
 
         return new HandlerRig(handler, streamSource, conversation, logs);

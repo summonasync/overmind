@@ -104,7 +104,12 @@ public static class DependencyInjection
         services.AddScoped<TelegramReplySender>();
         services.AddScoped<TelegramNotificationDeliveryStore>();
         services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
-        services.AddScoped<ITelegramCallbackHandler, TelegramNotificationCallbackHandler>();
+        services.AddScoped<ITelegramWaveCommandService, TelegramWaveCommandService>();
+        services.AddScoped<TelegramNotificationCallbackHandler>();
+        services.AddScoped<TelegramWaveCallbackHandler>();
+        services.AddScoped<TelegramCallbackRouter>();
+        services.AddScoped<ITelegramCallbackHandler>(
+            provider => provider.GetRequiredService<TelegramCallbackRouter>());
         services.AddSingleton<INotificationDeliveryChannel>(provider => new TelegramNotificationFanout(
             provider.GetRequiredService<IServiceScopeFactory>(),
             () => provider.GetRequiredService<BrowserOrigin>().BoundOrigin,
