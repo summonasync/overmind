@@ -260,8 +260,10 @@ public sealed class WaveChatApiTests : IDisposable
         // This harness answers 405: with the slash unescaped the shape is no longer
         // `rooms/{room}/messages`, so the SPA fallback — GET/HEAD only — is what the leftover path
         // matches. The wave handler is reached by neither, which is the point: a MissingWaveRoom
-        // problem body would mean it was. On production Kestrel the same unencoded wire produces no
-        // match at all (404 without a problem+json body); that half is the probe's claim, not this test's.
+        // problem body would mean it was. Measured against a real Kestrel host as well
+        // (audits/236-t0-kestrel-probe.md): the raw wire answers 405 with an empty body there too,
+        // so this holds on both hosts. The earlier "404, no route matched" wording was prose and
+        // the probe retired it.
         raw.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
         (raw.Content.Headers.ContentType?.MediaType != "application/problem+json").ShouldBeTrue();
     }
