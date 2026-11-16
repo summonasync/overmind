@@ -17,6 +17,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
     private readonly FakeTelegramApi _api = new();
     private readonly TelegramBotClientCache _cache;
     private readonly ITelegramWaveCommandService _commands = Substitute.For<ITelegramWaveCommandService>();
+    private readonly ITelegramWaveSnapshotService _snapshot = Substitute.For<ITelegramWaveSnapshotService>();
     private List<string> _logs = [];
 
     public TelegramWaveCallbackHandlerTests()
@@ -91,6 +92,56 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
         _logs.ShouldContain(line => line.Contains("Answering telegram wave callback cq-5 failed"));
     }
 
+    [Fact]
+    public async Task Handle_SnapshotProjectPress_RoutesToTheSnapshotDoorNotTheSendFlow()
+    {
+        await ConfigureTransportAsync();
+        var projectId = Guid.NewGuid();
+        _snapshot.PickProjectAsync(OwnerChatId, projectId, Arg.Any<CancellationToken>())
+            .Returns(TelegramWaveSnapshotService.SnapshotAnswer);
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(OwnerChatId, "cq-s1", 5, "@owner", "picker",
+                $"wave:sproj:{projectId:D}"),
+            CancellationToken.None);
+
+        await _snapshot.Received(1).PickProjectAsync(OwnerChatId, projectId, Arg.Any<CancellationToken>());
+        await _commands.DidNotReceive().PickProjectAsync(Arg.Any<long>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        AnswerText(_api.Request(0)).ShouldBe(TelegramWaveSnapshotService.SnapshotAnswer);
+    }
+
+    [Fact]
+    public async Task Handle_SnapshotCancelPress_AnswersWithoutTouchingEitherFlow()
+    {
+        await ConfigureTransportAsync();
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(OwnerChatId, "cq-s2", 5, "@owner", "picker",
+                TelegramWaveCallbackData.SnapshotCancelData),
+            CancellationToken.None);
+
+        AnswerText(_api.Request(0)).ShouldBe(ITelegramWaveSnapshotService.DismissAnswer);
+        _commands.DidNotReceiveWithAnyArgs().Cancel(default);
+        await _snapshot.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
+    }
+
+    [Theory]
+    [InlineData("wave:sproj")]
+    [InlineData("wave:sproj:123")]
+    [InlineData("wave:sproj:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111:extra")]
+    [InlineData("wave:SPROJ:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111")]
+    [InlineData("wave:scancel:extra")]
+    public async Task Handle_GarbageSnapshotData_AnswersInvalidButton(string data)
+    {
+        await ConfigureTransportAsync();
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(OwnerChatId, "cq-s3", 5, "@owner", "picker", data), CancellationToken.None);
+
+        AnswerText(_api.Request(0)).ShouldBe(TelegramNotificationCallbackHandler.InvalidButtonAnswer);
+        await _snapshot.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
+    }
+
     public void Dispose()
     {
         _cache.Dispose();
@@ -104,6 +155,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
             new TelegramTransportOptionsProvider(new AppSettingsService(_temp.CreateContext())),
             _cache,
             _commands,
+            _snapshot,
             new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
     }
 

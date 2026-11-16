@@ -163,6 +163,7 @@ public sealed class TelegramCallbackRouterTests : IDisposable
             optionsProvider,
             _cache,
             waveCommands,
+            Substitute.For<ITelegramWaveSnapshotService>(),
             new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
 
         return new TelegramCallbackRouter(notifications, waves);

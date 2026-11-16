@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Overmind.Infrastructure.Telegram;
 using Shouldly;
@@ -37,6 +38,32 @@ public sealed class TelegramWaveWiringTests : IDisposable
 
         scope.ServiceProvider.GetRequiredService<ITelegramWaveCommandService>()
             .ShouldBeOfType<TelegramWaveCommandService>();
+    }
+
+    [Fact]
+    public void SnapshotDoor_IsItsOwnFlowClassAndGrowsNoMembersOnTheSendDoor()
+    {
+        using var scope = _factory.Services.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService<ITelegramWaveSnapshotService>()
+            .ShouldBeOfType<TelegramWaveSnapshotService>();
+
+        var sendDoorMembers = typeof(TelegramWaveCommandService)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Select(method => method.Name)
+            .Concat(typeof(ITelegramWaveCommandService).GetMethods().Select(method => method.Name));
+        sendDoorMembers.ShouldNotContain(name => name.Contains("Snapshot", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SnapshotDoor_CarriesNeitherTheDraftStoreNorTheSendFlowAsADependency()
+    {
+        var constructor = typeof(TelegramWaveSnapshotService).GetConstructors().Single();
+
+        constructor.GetParameters()
+            .ShouldNotContain(parameter => parameter.ParameterType == typeof(TelegramWaveDraftStore));
+        constructor.GetParameters()
+            .ShouldNotContain(parameter => parameter.ParameterType == typeof(ITelegramWaveCommandService));
     }
 
     [Fact]

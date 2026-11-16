@@ -12,10 +12,9 @@ public sealed class TelegramWaveCommandService(
     TelegramWaveDraftStore drafts,
     WaveChatService chat,
     OvermindDbContext db,
+    ITelegramWaveSnapshotService snapshot,
     ILogger<TelegramWaveCommandService> logger) : ITelegramWaveCommandService
 {
-    public const string NotWiredYetReply =
-        "Command recognized, but the wave flow behind it is not wired yet.";
     public const int MaxProjectButtons = 40;
 
     public const string ProjectPickerText = "Which project owns this signal?";
@@ -44,7 +43,7 @@ public sealed class TelegramWaveCommandService(
     {
         if (command == TelegramWaveCommand.WaveSnapshot)
         {
-            await SendQuietlyAsync(message.ChatId, NotWiredYetReply, ct: ct);
+            await snapshot.HandleCommandAsync(message.ChatId, ct);
             return;
         }
 

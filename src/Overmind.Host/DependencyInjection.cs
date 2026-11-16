@@ -106,6 +106,7 @@ public static class DependencyInjection
         services.AddScoped<TelegramNotificationDeliveryStore>();
         services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
         services.AddScoped<ITelegramWaveCommandService, TelegramWaveCommandService>();
+        services.AddScoped<ITelegramWaveSnapshotService, TelegramWaveSnapshotService>();
         services.AddScoped<TelegramNotificationCallbackHandler>();
         services.AddScoped<TelegramWaveCallbackHandler>();
         services.AddScoped<TelegramCallbackRouter>();

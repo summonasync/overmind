@@ -10,16 +10,11 @@ public static class TelegramWaveKeyboardMarkup
 
     private const int MaxButtonsPerRow = 2;
 
-    public static InlineKeyboardMarkup Projects(IReadOnlyList<TelegramWaveProjectChoice> choices)
-    {
-        var rows = Chunked([
-            .. choices.Select(choice => InlineKeyboardButton.WithCallbackData(
-                Label(choice.Name),
-                TelegramWaveCallbackData.ProjectData(choice.Id)))
-        ]);
-        rows.Add([Cancel()]);
-        return new InlineKeyboardMarkup(rows);
-    }
+    public static InlineKeyboardMarkup Projects(IReadOnlyList<TelegramWaveProjectChoice> choices) =>
+        ProjectPicker(choices, TelegramWaveCallbackData.ProjectData, TelegramWaveCallbackData.CancelData);
+
+    public static InlineKeyboardMarkup SnapshotProjects(IReadOnlyList<TelegramWaveProjectChoice> choices) =>
+        ProjectPicker(choices, TelegramWaveCallbackData.SnapshotProjectData, TelegramWaveCallbackData.SnapshotCancelData);
 
     public static InlineKeyboardMarkup Rooms(string draftToken, IReadOnlyList<string> rooms)
     {
@@ -28,15 +23,29 @@ public static class TelegramWaveKeyboardMarkup
                 Label(room),
                 TelegramWaveCallbackData.RoomData(draftToken, index)))
         ]);
-        rows.Add([Cancel()]);
+        rows.Add([Cancel(TelegramWaveCallbackData.CancelData)]);
         return new InlineKeyboardMarkup(rows);
     }
 
     public static ForceReplyMarkup Prompt() =>
         new() { InputFieldPlaceholder = "the signal for the room" };
 
-    private static InlineKeyboardButton Cancel() =>
-        InlineKeyboardButton.WithCallbackData("✖️ Cancel", TelegramWaveCallbackData.CancelData);
+    private static InlineKeyboardMarkup ProjectPicker(
+        IReadOnlyList<TelegramWaveProjectChoice> choices,
+        Func<Guid, string> dataFor,
+        string cancelData)
+    {
+        var rows = Chunked([
+            .. choices.Select(choice => InlineKeyboardButton.WithCallbackData(
+                Label(choice.Name),
+                dataFor(choice.Id)))
+        ]);
+        rows.Add([Cancel(cancelData)]);
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    private static InlineKeyboardButton Cancel(string data) =>
+        InlineKeyboardButton.WithCallbackData("✖️ Cancel", data);
 
     private static List<List<InlineKeyboardButton>> Chunked(IReadOnlyList<InlineKeyboardButton> buttons)
     {

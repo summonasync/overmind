@@ -30,6 +30,25 @@ public sealed class TelegramWaveKeyboardMarkupTests
     }
 
     [Fact]
+    public void SnapshotProjects_RidesItsOwnStatelessSchemeSoOnePressCannotMeanTwoFlows()
+    {
+        var markup = TelegramWaveKeyboardMarkup.SnapshotProjects([
+            new TelegramWaveProjectChoice(Project, "Overmind")
+        ]);
+
+        Labels(markup).ShouldBe(["Overmind", "✖️ Cancel"]);
+        Data(markup).ShouldBe([
+            $"wave:sproj:{Project:D}",
+            TelegramWaveCallbackData.SnapshotCancelData
+        ]);
+        foreach (var entry in Data(markup))
+        {
+            Encoding.UTF8.GetByteCount(entry).ShouldBeLessThanOrEqualTo(
+                TelegramWaveCallbackData.CallbackDataLimit);
+        }
+    }
+
+    [Fact]
     public void Rooms_AddressesEveryRoomByIndexInsideTheByteBudget()
     {
         var rooms = new List<string>

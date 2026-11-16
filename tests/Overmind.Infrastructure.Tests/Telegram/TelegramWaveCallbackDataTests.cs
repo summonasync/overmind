@@ -73,6 +73,12 @@ public sealed class TelegramWaveCallbackDataTests
     [InlineData("wave:room:1f0aa0e0:-1")]
     [InlineData("wave:room:1f0aa0e0:1000")]
     [InlineData("wave:PROJ:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111")]
+    [InlineData("wave:sproj")]
+    [InlineData("wave:sproj:1f0aa0e0")]
+    [InlineData("wave:sproj:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111:extra")]
+    [InlineData("wave:SPROJ:1f0aa0e0-8ba6-4c0d-9d0f-2f8ea8b1c111")]
+    [InlineData("wave:scancel:extra")]
+    [InlineData("wave:SCANCEL")]
     [InlineData("wave:room:1f0aa0e0:lane-name-over-the-data-limit")]
     public void TryParse_GarbageShapes_ReturnsFalse(string? data) =>
         TelegramWaveCallbackData.TryParse(data, out _).ShouldBeFalse();
@@ -108,6 +114,46 @@ public sealed class TelegramWaveCallbackDataTests
         TelegramWaveCallbackData.ByteLength(data).ShouldBe(46);
         TelegramWaveCallbackData.ByteLength(data)
             .ShouldBeLessThanOrEqualTo(TelegramWaveCallbackData.CallbackDataLimit);
+    }
+
+    [Fact]
+    public void SnapshotProjectData_IsOneByteWiderThanTheSendSchemeAndParsesBackAsSnapshot()
+    {
+        var data = TelegramWaveCallbackData.SnapshotProjectData(new Guid(Project));
+
+        data.ShouldBe($"wave:sproj:{Project}");
+        TelegramWaveCallbackData.ByteLength(data).ShouldBe(47);
+        TelegramWaveCallbackData.ByteLength(data)
+            .ShouldBeLessThanOrEqualTo(TelegramWaveCallbackData.CallbackDataLimit);
+
+        TelegramWaveCallbackData.TryParse(data, out var parsed).ShouldBeTrue();
+        parsed.Action.ShouldBe(WaveCallbackAction.SnapshotProject);
+        parsed.ProjectId.ShouldBe(new Guid(Project));
+    }
+
+    [Fact]
+    public void TryParse_SnapshotCancel_CarriesNoPayload()
+    {
+        TelegramWaveCallbackData.TryParse("wave:scancel", out var data).ShouldBeTrue();
+
+        data.Action.ShouldBe(WaveCallbackAction.SnapshotCancel);
+        data.ProjectId.ShouldBeNull();
+        data.DraftToken.ShouldBeNull();
+        data.RoomIndex.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SnapshotAndSendProjectSchemes_NeverConfuseOneFlowForTheOther()
+    {
+        TelegramWaveCallbackData.TryParse($"wave:sproj:{Project}", out var snapshot).ShouldBeTrue();
+        TelegramWaveCallbackData.TryParse($"wave:proj:{Project}", out var send).ShouldBeTrue();
+        TelegramWaveCallbackData.TryParse("wave:scancel", out var snapshotCancel).ShouldBeTrue();
+        TelegramWaveCallbackData.TryParse("wave:cancel", out var sendCancel).ShouldBeTrue();
+
+        snapshot.Action.ShouldBe(WaveCallbackAction.SnapshotProject);
+        send.Action.ShouldBe(WaveCallbackAction.Project);
+        snapshotCancel.Action.ShouldBe(WaveCallbackAction.SnapshotCancel);
+        sendCancel.Action.ShouldBe(WaveCallbackAction.Cancel);
     }
 
     [Theory]

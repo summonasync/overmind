@@ -32,6 +32,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     private readonly StubWaveChatBroadcaster _broadcaster = new();
     private readonly List<string> _logs = [];
     private readonly TelegramWaveDraftStore _drafts = new(TimeProvider.System);
+    private readonly ITelegramWaveSnapshotService _snapshotDoor = Substitute.For<ITelegramWaveSnapshotService>();
     private readonly TelegramWaveCommandService _commands;
     private readonly TelegramWaveCallbackHandler _callbacks;
     private Guid _projectId = Guid.Empty;
@@ -45,9 +46,11 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
             _drafts,
             new WaveChatService(_temp.CreateContext(), _wakeFanout, _broadcaster),
             _temp.CreateContext(),
+            _snapshotDoor,
             new CollectingLogger<TelegramWaveCommandService>(_logs));
         _callbacks = new TelegramWaveCallbackHandler(
-            CreateOptionsProvider(), _cache, _commands, new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
+            CreateOptionsProvider(), _cache, _commands, _snapshotDoor,
+            new CollectingLogger<TelegramWaveCallbackHandler>(_logs));
     }
 
     public async Task InitializeAsync()
@@ -387,14 +390,17 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WaveSnapshot_StillAnswersThePlaceholderUntilItsOwnTask()
+    public async Task WaveSnapshot_HandsTheCommandToTheSnapshotDoor()
     {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+
         await _commands.HandleAsync(
             TelegramWaveCommand.WaveSnapshot,
             new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot", From: "Owner"),
             CancellationToken.None);
 
-        SentTexts().ShouldBe([TelegramWaveCommandService.NotWiredYetReply]);
+        await _snapshotDoor.Received(1).HandleCommandAsync(OwnerChatId, Arg.Any<CancellationToken>());
+        SentRequests().ShouldBeEmpty();
         _drafts.Current(OwnerChatId).ShouldBeNull();
     }
 

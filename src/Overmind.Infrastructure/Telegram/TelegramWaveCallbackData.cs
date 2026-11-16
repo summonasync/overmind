@@ -18,12 +18,21 @@ public sealed record TelegramWaveCallbackData(
     public const string RoomToken = "room";
     public const string CancelToken = "cancel";
     public const string CancelData = Prefix + ":" + CancelToken;
+    public const string SnapshotProjectToken = "sproj";
+    public const string SnapshotCancelToken = "scancel";
+    public const string SnapshotCancelData = Prefix + ":" + SnapshotCancelToken;
     public const int CallbackDataLimit = 64;
     public const int DraftTokenLength = 8;
     public const int MaxRoomIndex = 999;
 
     public static string ProjectData(Guid projectId) =>
         WithinBudget($"{Prefix}:{ProjectToken}:{projectId:D}");
+
+    // wave:proj: is owned by the send flow, so the snapshot picker rides its own stateless
+    // scheme: wave:sproj:<guid> is 47 bytes, inside the 64-byte bound, and one press can
+    // never mean two flows.
+    public static string SnapshotProjectData(Guid projectId) =>
+        WithinBudget($"{Prefix}:{SnapshotProjectToken}:{projectId:D}");
 
     // A lane name is up to 64 characters and the project guid alone eats 46 of the 64 allowed
     // bytes, so a room is addressed by its offset into the draft's own room snapshot instead.
@@ -61,6 +70,20 @@ public sealed record TelegramWaveCallbackData(
 
         if (segments[1] == CancelToken && segments.Length == 2)
         {
+            return true;
+        }
+
+        if (segments[1] == SnapshotCancelToken && segments.Length == 2)
+        {
+            parsed = new TelegramWaveCallbackData(WaveCallbackAction.SnapshotCancel);
+            return true;
+        }
+
+        if (segments[1] == SnapshotProjectToken
+            && segments.Length == 3
+            && TryProjectId(segments[2], out var snapshotProjectId))
+        {
+            parsed = new TelegramWaveCallbackData(WaveCallbackAction.SnapshotProject, snapshotProjectId);
             return true;
         }
 
