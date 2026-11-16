@@ -37,6 +37,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<PlanningLane> PlanningLanes => Set<PlanningLane>();
     public DbSet<PlanningDirective> PlanningDirectives => Set<PlanningDirective>();
     public DbSet<EntryAck> EntryAcks => Set<EntryAck>();
+    public DbSet<EntryLink> EntryLinks => Set<EntryLink>();
     public DbSet<PlanningOperationRecord> PlanningOperationRecords => Set<PlanningOperationRecord>();
     public DbSet<WaveMessage> WaveMessages => Set<WaveMessage>();
     public DbSet<WaveWatermark> WaveWatermarks => Set<WaveWatermark>();
@@ -395,6 +396,14 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(a => a.Vendor).HasMaxLength(EntryAck.MaxIdentityLength);
 
             builder.HasIndex(a => a.ContextEntryId);
+        });
+
+        modelBuilder.Entity<EntryLink>(builder =>
+        {
+            builder.Property(l => l.Id).ValueGeneratedNever();
+
+            builder.HasIndex(l => new { l.FromEntryId, l.ToKind, l.ToId }).IsUnique();
+            builder.HasIndex(l => new { l.ToKind, l.ToId });
         });
 
         modelBuilder.Entity<PlanningOperationRecord>(builder =>
