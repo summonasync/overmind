@@ -9,5 +9,6 @@ public enum EntryType
     Skill = 4,
     Tombstone = 5,
     Idea = 6,
-    Audit = 7
+    Audit = 7,
+    Journal = 8
 }
