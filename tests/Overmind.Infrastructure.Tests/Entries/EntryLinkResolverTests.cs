@@ -122,6 +122,32 @@ public sealed class EntryLinkResolverTests : IDisposable
         links.ShouldBeEmpty();
     }
 
+    [Theory]
+    [InlineData("Journal")]
+    [InlineData("journal")]
+    [InlineData("JOURNAL")]
+    public async Task ResolveProjectMarker_CaseVariantsCoexist_ExactCaseWinsThenEarliestCreatedAt(string marker)
+    {
+        var variantId = Guid.NewGuid();
+        await _context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt)
+            VALUES ({0}, {1}, {2}, {3}, {4})
+            """,
+            variantId.ToString().ToUpperInvariant(),
+            "journal",
+            "/tmp/lowercase-journal",
+            "case-variant seed",
+            "2026-01-01 00:00:00");
+
+        var links = await ResolveAsync($"[[project:{marker}]]");
+
+        var expected = marker == "journal" || marker == "JOURNAL" ? variantId : _journalProjectId;
+        links.ShouldHaveSingleItem();
+        links.Single().Kind.ShouldBe(EntryLinkKind.Project);
+        links.Single().ToId.ShouldBe(expected);
+    }
+
     [Fact]
     public async Task Resolve_SameTitleTwice_TakesTheMostRecentlyUpdated()
     {

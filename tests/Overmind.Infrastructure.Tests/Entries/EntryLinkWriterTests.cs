@@ -102,8 +102,9 @@ public sealed class EntryLinkWriterTests : IDisposable
             (int)EntryLinkOrigin.Manual,
             DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff"));
 
-        await WriteAsync("[[Daily]] [[feature:184]]");
+        var written = await WriteAsync("[[Daily]] [[feature:184]]");
 
+        written.ShouldBe(1);
         var rows = await EdgesAsync();
         rows.Count.ShouldBe(2);
         rows.Single(link => link.Origin == EntryLinkOrigin.Manual).ToId.ShouldBe(dailyId);
@@ -126,8 +127,9 @@ public sealed class EntryLinkWriterTests : IDisposable
             (int)EntryLinkOrigin.Manual,
             DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff"));
 
-        await WriteAsync("[[Daily]]");
+        var written = await WriteAsync("[[Daily]]");
 
+        written.ShouldBe(0);
         var rows = await EdgesAsync();
         rows.ShouldHaveSingleItem();
         rows[0].Origin.ShouldBe(EntryLinkOrigin.Manual);
@@ -244,15 +246,16 @@ public sealed class EntryLinkWriterTests : IDisposable
     private EntryLinkWriter Writer() =>
         new(_context, new EntryLinkResolver(_context, new JournalProjectStore(_context)));
 
-    private async Task WriteAsync(string body)
+    private async Task<int> WriteAsync(string body)
     {
         await using var tx = await _context.Database.BeginTransactionAsync();
 
         var entry = await _context.ContextEntries.SingleAsync(e => e.Id == _sourceId);
         entry.UpdateContent(body);
-        await Writer().ReplaceDerivedAsync(_sourceId, WikiLinkParser.Parse(body), tx);
+        var written = await Writer().ReplaceDerivedAsync(_sourceId, WikiLinkParser.Parse(body), tx);
 
         await tx.CommitAsync();
+        return written;
     }
 
     private Task<List<EntryLink>> EdgesAsync() =>

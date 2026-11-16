@@ -108,18 +108,10 @@ public sealed class EntryLinkResolver
     private async Task<ProjectIndex> LoadProjectsAsync(CancellationToken ct)
     {
         var rows = await _db.Projects
-            .Select(p => new { p.Id, p.Name })
+            .Select(p => new { p.Id, p.Name, p.CreatedAt })
             .ToListAsync(ct);
 
-        var ids = new HashSet<Guid>();
-        var byName = new Dictionary<string, Guid?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in rows)
-        {
-            ids.Add(row.Id);
-            byName[row.Name] = byName.ContainsKey(row.Name) ? null : row.Id;
-        }
-
-        return new ProjectIndex(ids, byName);
+        return new ProjectIndex([.. rows.Select(row => (row.Id, row.Name, row.CreatedAt))]);
     }
 
     private async Task<Dictionary<string, Guid>> LoadJournalTitlesAsync(CancellationToken ct)
@@ -129,6 +121,7 @@ public sealed class EntryLinkResolver
         var rows = await _db.ContextEntries
             .Where(e => e.ProjectId == projectId && e.Type == EntryType.Journal)
             .OrderBy(e => e.UpdatedAt)
+            .ThenBy(e => e.Id)
             .Select(e => new { e.Id, e.Title })
             .ToListAsync(ct);
 
@@ -148,16 +141,16 @@ public sealed class EntryLinkResolver
             ? id
             : null;
 
-    private sealed record ProjectIndex(HashSet<Guid> Ids, Dictionary<string, Guid?> ByName)
+    private sealed record ProjectIndex(IReadOnlyList<(Guid Id, string Name, DateTime CreatedAt)> Rows)
     {
         public Guid? Resolve(WikiLinkTarget target)
         {
             if (target.Form == WikiLinkKeyForm.Guid)
             {
-                return target.Id is { } projectId && Ids.Contains(projectId) ? projectId : null;
+                return target.Id is { } projectId && Rows.Any(row => row.Id == projectId) ? projectId : null;
             }
 
-            return ByName.TryGetValue(target.Key, out var byName) ? byName : null;
+            return ProjectNameMatch.Pick(Rows, target.Key);
         }
     }
 }

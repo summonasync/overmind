@@ -72,6 +72,35 @@ public sealed class JournalProjectStoreTests : IDisposable
         (await new JournalProjectStore(context).FindIdAsync()).ShouldBe(null);
     }
 
+    [Theory]
+    [InlineData("journal", "Journal", true)]
+    [InlineData("journal", "JOURNAL", false)]
+    [InlineData("JOURNAL", "journal", false)]
+    public async Task FindId_CaseVariantSpellingsCoexist_ExactReservedNameWinsOtherwiseEarliestCreatedAt(
+        string olderName, string newerName, bool exactIsTheNewerRow)
+    {
+        using var context = _temp.CreateContext();
+        var olderId = await SeedProjectAsync(context, olderName, "2026-01-01 00:00:00");
+        var newerId = await SeedProjectAsync(context, newerName, "2026-06-01 00:00:00");
+
+        var found = await new JournalProjectStore(context).FindIdAsync();
+
+        found.ShouldBe(exactIsTheNewerRow ? newerId : olderId);
+    }
+
+    [Fact]
+    public async Task EnsureId_CaseVariantSpellingsCoexistingWithoutTheExactOne_AdoptsTheOldestRow()
+    {
+        using var context = _temp.CreateContext();
+        var olderId = await SeedProjectAsync(context, "journal", "2026-01-01 00:00:00");
+        await SeedProjectAsync(context, "JOURNAL", "2026-06-01 00:00:00");
+
+        var store = new JournalProjectStore(context);
+
+        (await store.EnsureIdAsync()).ShouldBe(olderId);
+        (await context.Projects.CountAsync()).ShouldBe(2);
+    }
+
     [Fact]
     public async Task EnsureId_RaceInsideAnExplicitTransaction_DetachesAndRethrowsForTheCallerToRetry()
     {
@@ -125,6 +154,24 @@ public sealed class JournalProjectStoreTests : IDisposable
         (await context.EntryLinks.CountAsync(link => link.FromEntryId == source.Id)).ShouldBe(1);
         (await context.Projects.CountAsync(
             p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(0);
+    }
+
+    private static async Task<Guid> SeedProjectAsync(
+        OvermindDbContext context, string name, string createdAt)
+    {
+        var id = Guid.NewGuid();
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt)
+            VALUES ({0}, {1}, {2}, {3}, {4})
+            """,
+            id.ToString().ToUpperInvariant(),
+            name,
+            $"/tmp/{name}",
+            "case-variant seed",
+            createdAt);
+
+        return id;
     }
 
     private string DatabasePath()

@@ -17,13 +17,13 @@ public sealed class JournalProjectStore
 
     public async Task<Guid?> FindIdAsync(CancellationToken ct = default)
     {
-        var rows = await _db.Projects
-            .Select(p => new { p.Id, p.Name })
+        var projects = await _db.Projects
+            .Select(p => new { p.Id, p.Name, p.CreatedAt })
             .ToListAsync(ct);
 
-        return rows
-            .FirstOrDefault(row => string.Equals(row.Name, ProjectName, StringComparison.OrdinalIgnoreCase))
-            ?.Id;
+        return ProjectNameMatch.Pick(
+            projects.Select(project => (project.Id, project.Name, project.CreatedAt)),
+            ProjectName);
     }
 
     public async Task<Guid> EnsureIdAsync(CancellationToken ct = default)

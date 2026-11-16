@@ -17,6 +17,8 @@ public sealed class EntryLinkNonAsciiTests : IDisposable
     private readonly Guid _journalProjectId;
     private readonly Guid _sourceId;
     private readonly Guid _noteId;
+    private readonly Guid _precomposedYoId;
+    private readonly Guid _decomposedYoId;
 
     public EntryLinkNonAsciiTests()
     {
@@ -26,7 +28,7 @@ public sealed class EntryLinkNonAsciiTests : IDisposable
         var grimoire = Project.Create("Гримоар", "/tmp/nonascii/grimoire");
         _context.Projects.AddRange(journal, grimoire);
 
-        foreach (var title in new[] { "Источник", "Моя Заметка" })
+        foreach (var title in new[] { "Источник", "Моя Заметка", "Моя Ёлка", "Моя Е\u0308лка" })
         {
             _context.ContextEntries.Add(
                 ContextEntry.Create(journal.Id, EntryType.Journal, title, "кириллица"));
@@ -36,6 +38,8 @@ public sealed class EntryLinkNonAsciiTests : IDisposable
 
         _journalProjectId = journal.Id;
         _noteId = _context.ContextEntries.Single(e => e.Title == "Моя Заметка").Id;
+        _precomposedYoId = _context.ContextEntries.Single(e => e.Title == "Моя Ёлка").Id;
+        _decomposedYoId = _context.ContextEntries.Single(e => e.Title == "Моя Е\u0308лка").Id;
         _sourceId = _context.ContextEntries.Single(e => e.Title == "Источник").Id;
     }
 
@@ -68,6 +72,33 @@ public sealed class EntryLinkNonAsciiTests : IDisposable
 
         links.ShouldHaveSingleItem();
         links.Single().Kind.ShouldBe(EntryLinkKind.Project);
+    }
+
+    [Theory]
+    [InlineData("[[Моя Ёлка]]", 1)]
+    [InlineData("[[моя ёлка]]", 1)]
+    [InlineData("[[МОЯ ЁЛКА]]", 1)]
+    [InlineData("[[моя елка]]", 0)]
+    [InlineData("[[Моя Елка]]", 0)]
+    [InlineData("[[моя е\u0308лка]]", 1)]
+    public async Task CyrillicLetterYo_FoldsCaseOnly_NeverTheLetterNorTheCombiningMarks(
+        string marker, int expected)
+    {
+        var links = await ResolveAsync(marker);
+
+        links.Count.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task PrecomposedAndDecomposedTitles_RemainTwoSeparateTargets()
+    {
+        var precomposed = await ResolveAsync("[[Моя Ёлка]]");
+        var decomposed = await ResolveAsync("[[Моя Е\u0308лка]]");
+
+        precomposed.ShouldHaveSingleItem();
+        decomposed.ShouldHaveSingleItem();
+        precomposed.Single().ToId.ShouldBe(_precomposedYoId);
+        decomposed.Single().ToId.ShouldBe(_decomposedYoId);
     }
 
     [Fact]

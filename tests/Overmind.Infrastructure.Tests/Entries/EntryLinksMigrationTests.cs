@@ -94,6 +94,8 @@ public sealed class EntryLinksMigrationTests : IDisposable
             db.EntryLinks.Add(EntryLink.CreateDerived(source.Id, EntryLinkKind.Entry, target.Id));
             await db.SaveChangesAsync();
 
+            (await db.EntryLinks.CountAsync()).ShouldBe(1);
+
             await db.Database.ExecuteSqlRawAsync(
                 $"DELETE FROM ContextEntries WHERE Id = '{source.Id.ToString().ToUpperInvariant()}'");
         }
