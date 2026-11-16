@@ -1,5 +1,6 @@
 using System.Text;
 using Overmind.Core;
+using Overmind.Infrastructure.Wave;
 
 namespace Overmind.Infrastructure.Telegram;
 
@@ -10,6 +11,7 @@ public static class TelegramWaveSnapshotFormatter
     public const int MaxQueueRows = 5;
     public const int MaxBlockerRows = 5;
     public const string IdleLine = "The wave is idle.";
+    public const string MentionWindowLabel = "24h";
 
     public sealed record Digest(
         string ProjectName,
@@ -17,7 +19,8 @@ public static class TelegramWaveSnapshotFormatter
         IReadOnlyList<RoomTraffic> Rooms,
         IReadOnlyList<Holder> Holders,
         IReadOnlyList<QueueRow> QueueHead,
-        IReadOnlyList<Blocker> Blockers);
+        IReadOnlyList<Blocker> Blockers,
+        int WindowMessagesRead);
 
     public sealed record RoomTraffic(string Room, int MentionCount, DateTime? LastActivityAt);
 
@@ -46,7 +49,11 @@ public static class TelegramWaveSnapshotFormatter
         }
 
         var body = new StringBuilder($"Wave · {digest.ProjectName}");
-        AppendSection(body, "Mentions (24h)", rooms);
+        AppendSection(
+            body,
+            $"Mentions ({MentionWindowLabel})",
+            rooms,
+            WindowFloorNote(digest.WindowMessagesRead));
         AppendSection(body, "Holders", holders);
         AppendSection(body, "Queue head", queue);
         AppendSection(body, "Blockers", blockers);
@@ -55,14 +62,26 @@ public static class TelegramWaveSnapshotFormatter
 
     private const string EmptyLine = "  none";
 
-    private static void AppendSection(StringBuilder body, string header, IReadOnlyList<string> lines)
+    private static void AppendSection(
+        StringBuilder body, string header, IReadOnlyList<string> lines, string? footnote = null)
     {
         body.Append('\n').Append('\n').Append(header);
         foreach (var line in lines.Count == 0 ? [EmptyLine] : lines)
         {
             body.Append('\n').Append(line);
         }
+
+        if (footnote is { Length: > 0 })
+        {
+            body.Append('\n').Append(footnote);
+        }
     }
+
+    private static string? WindowFloorNote(int windowMessagesRead) =>
+        windowMessagesRead >= WaveChatService.MaxHistoryLimit
+            ? $"  +mention counts cover the first {WaveChatService.MaxHistoryLimit} messages"
+              + $" of the {MentionWindowLabel} window"
+            : null;
 
     private static List<string> RoomLines(IReadOnlyList<RoomTraffic> rooms, DateTime generatedAt)
     {

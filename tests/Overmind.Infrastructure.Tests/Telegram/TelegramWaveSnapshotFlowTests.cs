@@ -181,6 +181,40 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Digest_WhenTheWindowReadHitsTheCap_TellsThePhoneTheCountsAreFloored()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        var alive = await SeedSessionAsync("tucker", "qwen");
+        await SeedFeatureAsync(
+            "215-wave", FeaturePriority.P1, PlanningFeatureStatus.InProgress, 1, alive, "telegram-bridge");
+        await SeedWindowAsync(WaveChatService.MaxHistoryLimit);
+
+        await RunSnapshotAsync();
+
+        var digest = SentText(SentRequests().ShouldHaveSingleItem());
+        digest.ShouldContain(
+            $"+mention counts cover the first {WaveChatService.MaxHistoryLimit} messages of the 24h window");
+        digest.ShouldContain("all · 1 mentions");
+        digest.ShouldNotContain("telegram-bridge · 1 mentions");
+    }
+
+    [Fact]
+    public async Task Digest_WhenTheWindowReadFitsUnderTheCap_RendersNoFloorNote()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        var alive = await SeedSessionAsync("tucker", "qwen");
+        await SeedFeatureAsync(
+            "215-wave", FeaturePriority.P1, PlanningFeatureStatus.InProgress, 1, alive, "telegram-bridge");
+        await SeedWindowAsync(WaveChatService.MaxHistoryLimit - 3);
+
+        await RunSnapshotAsync();
+
+        var digest = SentText(SentRequests().ShouldHaveSingleItem());
+        digest.ShouldNotContain("mention counts cover");
+        digest.ShouldContain("telegram-bridge · 1 mentions");
+    }
+
+    [Fact]
     public async Task Digest_ReadsNeverAdvanceWatermarksOrOpenConversationState()
     {
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
@@ -390,6 +424,34 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
         var posted = await _chat.PostAsync(
             _projectId, room, "boss", WaveMessage.OwnerRole, text, CancellationToken.None);
         posted.ProjectId.ShouldBe(_projectId);
+    }
+
+    private const string WindowFillerText = "filler note with no mention at all";
+
+    private async Task SeedWindowAsync(int fillerCount)
+    {
+        var now = DateTime.UtcNow;
+        await using var context = _temp.CreateContext();
+        var counted = WaveMessage.Create(
+            _projectId, "all", "boss", WaveMessage.OwnerRole, "@tucker counted in the window");
+        var flooredOut = WaveMessage.Create(
+            _projectId, "telegram-bridge", "boss", WaveMessage.OwnerRole, "@milk-toast floored out of the read");
+        context.WaveMessages.Add(counted);
+        for (var index = 0; index < fillerCount; index++)
+        {
+            context.WaveMessages.Add(WaveMessage.Create(
+                _projectId, "all", "boss", WaveMessage.OwnerRole, WindowFillerText));
+        }
+
+        context.WaveMessages.Add(flooredOut);
+        await context.SaveChangesAsync();
+
+        await context.WaveMessages
+            .Where(m => m.Id == counted.Id)
+            .ExecuteUpdateAsync(setter => setter.SetProperty(m => m.CreatedAt, now - TimeSpan.FromHours(23)));
+        await context.WaveMessages
+            .Where(m => m.Text == WindowFillerText)
+            .ExecuteUpdateAsync(setter => setter.SetProperty(m => m.CreatedAt, now - TimeSpan.FromHours(12)));
     }
 
     private async Task AgeMessageAsync(string text, TimeSpan age)

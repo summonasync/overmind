@@ -1,5 +1,6 @@
 using Overmind.Core;
 using Overmind.Infrastructure.Telegram;
+using Overmind.Infrastructure.Wave;
 using Shouldly;
 using Xunit;
 using Formatter = Overmind.Infrastructure.Telegram.TelegramWaveSnapshotFormatter;
@@ -187,16 +188,79 @@ public sealed class TelegramWaveSnapshotFormatterTests
         text.ShouldContain("Blockers");
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(WaveChatService.MaxHistoryLimit - 1, false)]
+    [InlineData(WaveChatService.MaxHistoryLimit, true)]
+    [InlineData(WaveChatService.MaxHistoryLimit + 1, true)]
+    public void FloorNote_AppearsOnlyWhenTheWindowReadHitsTheCap(int windowRead, bool expected)
+    {
+        var text = Format(
+            rooms: [new Formatter.RoomTraffic("all", 1, Generated)],
+            windowRead: windowRead);
+
+        text.Contains(FloorNote).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void FlooredWindow_NoteSitsUnderTheMentionRowsAndNamesTheCap()
+    {
+        var text = Format(
+            rooms: [new Formatter.RoomTraffic("all", 3, Generated)],
+            holders: [new Formatter.Holder("215-a", "tucker", "qwen", AgentSessionLiveness.Alive, null, null)],
+            windowRead: WaveChatService.MaxHistoryLimit);
+
+        text.ShouldBe($"""
+            Wave · Overmind
+
+            Mentions ({Formatter.MentionWindowLabel})
+              all · 3 mentions · last now
+            {FloorNote}
+
+            Holders
+              215-a · tucker/qwen [alive]
+
+            Queue head
+              none
+
+            Blockers
+              none
+            """);
+    }
+
+    [Fact]
+    public void FlooredWindow_WithoutMentionRows_KeepsTheNoneRowAndAddsTheNote()
+    {
+        var text = Format(
+            holders: [new Formatter.Holder("215-a", "tucker", null, AgentSessionLiveness.Alive, null, null)],
+            windowRead: WaveChatService.MaxHistoryLimit);
+
+        text.ShouldContain($"Mentions ({Formatter.MentionWindowLabel})\n  none\n{FloorNote}\n\nHolders");
+    }
+
+    [Fact]
+    public void EmptyDigest_FlooredWindow_StillRendersExactlyTheIdleSentence()
+    {
+        Format(windowRead: WaveChatService.MaxHistoryLimit)
+            .ShouldBe($"Wave · Overmind\n{Formatter.IdleLine}");
+    }
+
+    private static string FloorNote =>
+        $"  +mention counts cover the first {WaveChatService.MaxHistoryLimit} messages"
+        + $" of the {Formatter.MentionWindowLabel} window";
+
     private static string Format(
         IReadOnlyList<Formatter.RoomTraffic>? rooms = null,
         IReadOnlyList<Formatter.Holder>? holders = null,
         IReadOnlyList<Formatter.QueueRow>? queue = null,
-        IReadOnlyList<Formatter.Blocker>? blockers = null) =>
+        IReadOnlyList<Formatter.Blocker>? blockers = null,
+        int windowRead = 0) =>
         Formatter.Format(new Formatter.Digest(
             "Overmind",
             Generated,
             rooms ?? [],
             holders ?? [],
             queue ?? [],
-            blockers ?? []));
+            blockers ?? [],
+            windowRead));
 }

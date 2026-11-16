@@ -82,7 +82,8 @@ public sealed class TelegramWaveSnapshotService(
             Holders(snapshot),
             [.. snapshot.QueueFeatures.Select(f => new TelegramWaveSnapshotFormatter.QueueRow(
                 f.Slug, f.Priority, f.Status))],
-            Blockers(snapshot));
+            Blockers(snapshot),
+            recent.Count);
     }
 
     private static List<TelegramWaveSnapshotFormatter.RoomTraffic> RoomTraffic(
