@@ -11,7 +11,7 @@ using Overmind.Infrastructure.Persistence;
 namespace Overmind.Infrastructure.Migrations
 {
     [DbContext(typeof(OvermindDbContext))]
-    [Migration("20261116134208_AddEntryLinks")]
+    [Migration("20261116150446_AddEntryLinks")]
     partial class AddEntryLinks
     {
         /// <inheritdoc />
@@ -1375,6 +1375,15 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasOne("Overmind.Core.ContextEntry", null)
                         .WithMany("Acks")
                         .HasForeignKey("ContextEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.EntryLink", b =>
+                {
+                    b.HasOne("Overmind.Core.ContextEntry", null)
+                        .WithMany()
+                        .HasForeignKey("FromEntryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

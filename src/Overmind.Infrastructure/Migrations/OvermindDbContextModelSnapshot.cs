@@ -1376,6 +1376,15 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Overmind.Core.EntryLink", b =>
+                {
+                    b.HasOne("Overmind.Core.ContextEntry", null)
+                        .WithMany()
+                        .HasForeignKey("FromEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Overmind.Core.EntryTag", b =>
                 {
                     b.HasOne("Overmind.Core.ContextEntry", "Entry")

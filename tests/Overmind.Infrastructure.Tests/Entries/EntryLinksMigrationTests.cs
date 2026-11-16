@@ -8,7 +8,7 @@ namespace Overmind.Infrastructure.Tests.Entries;
 
 public sealed class EntryLinksMigrationTests : IDisposable
 {
-    private const string AddEntryLinksMigration = "20261116134208_AddEntryLinks";
+    private const string AddEntryLinksMigration = "20261116150446_AddEntryLinks";
     private const string PreviousMigration = "20261113111428_AddProjectHumanDigest";
 
     private const string EdgeIndex = "IX_EntryLinks_FromEntryId_ToKind_ToId";
@@ -18,7 +18,7 @@ public sealed class EntryLinksMigrationTests : IDisposable
         Path.Combine(Path.GetTempPath(), $"overmind-entry-links-{Guid.NewGuid():N}.db");
 
     [Fact]
-    public async Task Migrate_FreshDatabase_CreatesTheTableWithBothIndexes()
+    public async Task Migrate_FreshDatabase_CreatesTheTableWithBothIndexesAndTheOwnerForeignKey()
     {
         using var db = CreateContext();
         db.Database.Migrate();
@@ -32,6 +32,11 @@ public sealed class EntryLinksMigrationTests : IDisposable
         var backlink = await ReadAsync(db, "sql", "index", BacklinkIndex);
         backlink.ShouldHaveSingleItem();
         backlink[0].ShouldNotContain("UNIQUE");
+
+        var foreignKey = await ReadScalarsAsync(
+            db, "SELECT \"table\" || '/' || \"from\" || '/' || \"on_update\" || '/' || \"on_delete\" FROM pragma_foreign_key_list('EntryLinks')");
+        foreignKey.ShouldHaveSingleItem();
+        foreignKey[0].ShouldBe("ContextEntries/FromEntryId/NO ACTION/CASCADE");
     }
 
     [Fact]
@@ -72,6 +77,32 @@ public sealed class EntryLinksMigrationTests : IDisposable
         (await ReadAsync(db, "name", "table", "EntryLinks")).ShouldContain("EntryLinks");
     }
 
+    [Fact]
+    public async Task EntryDeletion_CascadesToDerivedEdges_WithoutApplicationCode()
+    {
+        using (var db = CreateContext())
+        {
+            db.Database.Migrate();
+
+            var project = Project.Create("cascade-probe", "/tmp/cascade-probe");
+            db.Projects.Add(project);
+            var source = ContextEntry.Create(project.Id, EntryType.Journal, "cascade source", "one");
+            var target = ContextEntry.Create(project.Id, EntryType.Journal, "cascade target", "two");
+            db.ContextEntries.AddRange(source, target);
+            await db.SaveChangesAsync();
+
+            db.EntryLinks.Add(EntryLink.CreateDerived(source.Id, EntryLinkKind.Entry, target.Id));
+            await db.SaveChangesAsync();
+
+            await db.Database.ExecuteSqlRawAsync(
+                $"DELETE FROM ContextEntries WHERE Id = '{source.Id.ToString().ToUpperInvariant()}'");
+        }
+
+        using var verify = CreateContext();
+        (await verify.EntryLinks.CountAsync()).ShouldBe(0);
+        (await verify.ContextEntries.CountAsync()).ShouldBe(1);
+    }
+
     private static async Task<List<string>> ReadAsync(
         OvermindDbContext db, string column, string kind, string name)
     {
@@ -89,6 +120,23 @@ public sealed class EntryLinksMigrationTests : IDisposable
             {
                 values.Add(reader.GetString(0));
             }
+        }
+
+        return values;
+    }
+
+    private static async Task<List<string>> ReadScalarsAsync(OvermindDbContext db, string sql)
+    {
+        var values = new List<string>();
+        var connection = db.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            values.Add(reader.GetString(0));
         }
 
         return values;

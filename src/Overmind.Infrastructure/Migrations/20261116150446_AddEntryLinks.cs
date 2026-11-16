@@ -25,6 +25,12 @@ namespace Overmind.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_EntryLinks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EntryLinks_ContextEntries_FromEntryId",
+                        column: x => x.FromEntryId,
+                        principalTable: "ContextEntries",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(

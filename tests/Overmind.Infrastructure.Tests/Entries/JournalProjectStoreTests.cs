@@ -1,4 +1,7 @@
+using System.Data.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Overmind.Core;
 using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Persistence;
@@ -70,64 +73,106 @@ public sealed class JournalProjectStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task ReplaceDerived_TwoJournalWrites_OnAStoreWithoutJournal_BirthTheProjectOnce()
+    public async Task EnsureId_RaceInsideAnExplicitTransaction_DetachesAndRethrowsForTheCallerToRetry()
     {
-        using var context = _temp.CreateContext();
-        var home = Project.Create("Writer Home", "/tmp/writer-home");
-        context.Projects.Add(home);
-        var source = ContextEntry.Create(home.Id, EntryType.Journal, "Desk note", "seed");
-        context.ContextEntries.Add(source);
-        await context.SaveChangesAsync();
+        using var connection = new SqliteConnection($"Data Source={DatabasePath()};Pooling=false");
+        await connection.OpenAsync();
 
-        for (var attempt = 0; attempt < 2; attempt++)
-        {
-            await using var tx = await context.Database.BeginTransactionAsync();
-            var entry = await context.ContextEntries.SingleAsync(e => e.Id == source.Id);
-            var body = "[[Shopping list]] [[feature:404]]";
-            entry.UpdateContent(body);
+        var winnerId = Guid.NewGuid();
+        var options = new DbContextOptionsBuilder<OvermindDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(new WinnerLandsFirstInterceptor(connection, winnerId))
+            .Options;
 
-            await new EntryLinkWriter(
-                context,
-                new EntryLinkResolver(context, new JournalProjectStore(context)))
-                .ReplaceDerivedAsync(source.Id, WikiLinkParser.Parse(body), tx);
+        using var loser = new OvermindDbContext(options);
+        await using var tx = await loser.Database.BeginTransactionAsync();
 
-            await tx.CommitAsync();
-        }
+        // A row that lands mid-write inside an open transaction is not adoptable: the re-find reads
+        // the same snapshot. The guard's job here is to leave nothing behind and let the caller retry.
+        var surfaced = await Should.ThrowAsync<DbUpdateException>(
+            () => new JournalProjectStore(loser).EnsureIdAsync());
+        surfaced.InnerException!.Message.ShouldContain("UNIQUE constraint failed: Projects.Name");
+        loser.ChangeTracker.Entries<Project>().ShouldBeEmpty();
 
-        (await context.Projects.CountAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(1);
-        var born = await context.Projects.SingleAsync(p => p.Name == JournalProjectStore.ProjectName);
-        born.DiskPath.ShouldNotBeNullOrWhiteSpace();
+        await tx.RollbackAsync();
+
+        var recovered = await new JournalProjectStore(loser).EnsureIdAsync();
+        recovered.ShouldNotBe(Guid.Empty);
+        (await loser.Projects.CountAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(1);
     }
 
     [Fact]
-    public async Task ReplaceDerived_TwoWritesToBareTitles_ReuseTheOneBornProject()
+    public async Task ReplaceDerived_FeatureOnlyBody_LeavesTheReservedProjectUnborn()
     {
         using var context = _temp.CreateContext();
-        var home = Project.Create("Second Home", "/tmp/second-home");
+        var home = Project.Create("Feature Only Home", "/tmp/feature-only");
         context.Projects.Add(home);
         var source = ContextEntry.Create(home.Id, EntryType.Journal, "Desk note", "seed");
         context.ContextEntries.Add(source);
+        context.PlanningFeatures.Add(PlanningFeature.Create(home.Id, "184-f", "F", "body"));
         await context.SaveChangesAsync();
 
-        var writer = new EntryLinkWriter(
-            context,
-            new EntryLinkResolver(context, new JournalProjectStore(context)));
-
-        for (var attempt = 0; attempt < 2; attempt++)
+        await using (var tx = await context.Database.BeginTransactionAsync())
         {
-            await using var tx = await context.Database.BeginTransactionAsync();
             var entry = await context.ContextEntries.SingleAsync(e => e.Id == source.Id);
-            var body = "[[Shopping list]]";
-            entry.UpdateContent(body);
-            await writer.ReplaceDerivedAsync(source.Id, WikiLinkParser.Parse(body), tx);
+            entry.UpdateContent("[[feature:184]]");
+            await new EntryLinkWriter(
+                context, new EntryLinkResolver(context, new JournalProjectStore(context)))
+                .ReplaceDerivedAsync(source.Id, WikiLinkParser.Parse(entry.Content), tx);
             await tx.CommitAsync();
         }
 
-        var born = await context.Projects
-            .Where(p => p.Name == JournalProjectStore.ProjectName)
-            .ToListAsync();
+        (await context.EntryLinks.CountAsync(link => link.FromEntryId == source.Id)).ShouldBe(1);
+        (await context.Projects.CountAsync(
+            p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(0);
+    }
 
-        born.ShouldHaveSingleItem();
-        (await context.ContextEntries.CountAsync(e => e.ProjectId == born[0].Id)).ShouldBe(0);
+    private string DatabasePath()
+    {
+        using var probe = _temp.CreateContext();
+        return probe.Database.GetDbConnection().DataSource;
+    }
+
+    private sealed class WinnerLandsFirstInterceptor(
+        SqliteConnection connection,
+        Guid winnerId) : DbCommandInterceptor
+    {
+        private bool _fired;
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            LandWinner(command);
+            return base.ReaderExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            LandWinner(command);
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        private void LandWinner(DbCommand command)
+        {
+            if (_fired || !command.CommandText.Contains("INSERT INTO \"Projects\""))
+            {
+                return;
+            }
+
+            _fired = true;
+            using var steal = new SqliteCommand(
+                """
+                INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt)
+                VALUES (@id, 'Journal', '/tmp/stolen', 'winner lands mid-write', @createdAt)
+                """,
+                connection,
+                (SqliteTransaction?)command.Transaction);
+            steal.Parameters.AddWithValue("@id", winnerId.ToString().ToUpperInvariant());
+            steal.Parameters.AddWithValue(
+                "@createdAt", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff"));
+            steal.ExecuteNonQuery();
+        }
     }
 }

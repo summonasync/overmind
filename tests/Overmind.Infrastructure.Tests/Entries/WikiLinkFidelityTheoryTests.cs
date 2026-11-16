@@ -32,7 +32,7 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
         _journalProjectId = _context.Projects.Single(p => p.Name == "Journal").Id;
         _featureId = _context.PlanningFeatures.Single().Id;
 
-        foreach (var title in new[] { "Source", "Daily" })
+        foreach (var title in new[] { "Source", "Daily", "МОЯ ЗАМЕТКА" })
         {
             _context.ContextEntries.Add(
                 ContextEntry.Create(_journalProjectId, EntryType.Journal, title, "fidelity seed"));
@@ -61,6 +61,8 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [InlineData("[[FEATURE:184]] [[feature:184]]", 1)]
     [InlineData("[[feature:0184]]", 1)]
     [InlineData("[[feature:184-JOURNAL-JOURNAL]]", 0)]
+    [InlineData("[[feature:184]] [[feature:184-journal-journal]]", 1)]
+    [InlineData("[[Моя заметка]] [[моя заметка]] [[МОЯ ЗАМЕТКА]]", 1)]
     public async Task ResolverCountsEdgesFromWhatTheParserHandedIt(string body, int expected)
     {
         var links = await Resolver().ResolveAsync(_sourceId, WikiLinkParser.Parse(body));
@@ -71,6 +73,8 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [Theory]
     [InlineData("[[Daily]]", EntryLinkKind.Entry)]
     [InlineData("[[daily]]", EntryLinkKind.Entry)]
+    [InlineData("[[Моя Заметка]]", EntryLinkKind.Entry)]
+    [InlineData("[[моя заметка]]", EntryLinkKind.Entry)]
     [InlineData("[[PROJECT:Overmind]]", EntryLinkKind.Project)]
     [InlineData("[[project:overmind]]", EntryLinkKind.Project)]
     [InlineData("[[Feature:184]]", EntryLinkKind.Feature)]

@@ -24,16 +24,28 @@ public sealed class EntryLinkResolver
     {
         var resolved = new List<ResolvedLink>();
         var seen = new HashSet<(EntryLinkKind, Guid)>();
-        Guid? journalProjectId = null;
+        ProjectIndex? projects = null;
+        Dictionary<string, Guid>? journalTitles = null;
 
         foreach (var target in targets)
         {
-            if (target.Form == WikiLinkKeyForm.Title && journalProjectId is null)
+            if (target.Kind == EntryLinkKind.Project && projects is null)
             {
-                journalProjectId = await _journalProjects.EnsureIdAsync(ct);
+                projects = await LoadProjectsAsync(ct);
             }
 
-            var targetId = await ResolveTargetIdAsync(target, journalProjectId, ct);
+            if (target.Form == WikiLinkKeyForm.Title && journalTitles is null)
+            {
+                journalTitles = await LoadJournalTitlesAsync(ct);
+            }
+
+            Guid? targetId = target.Kind switch
+            {
+                EntryLinkKind.Feature => await ResolveFeatureAsync(target, ct),
+                EntryLinkKind.Project => projects!.Resolve(target),
+                _ => ResolveTitleId(target, journalTitles)
+            };
+
             if (targetId is not { } resolvedId || resolvedId == sourceEntryId)
             {
                 continue;
@@ -48,26 +60,25 @@ public sealed class EntryLinkResolver
         return resolved;
     }
 
-    private async Task<Guid?> ResolveTargetIdAsync(
-        WikiLinkTarget target, Guid? journalProjectId, CancellationToken ct) =>
-        (target.Kind, target.Form) switch
-        {
-            (EntryLinkKind.Feature, WikiLinkKeyForm.Number) => await ResolveFeatureNumberAsync(target.Key, ct),
-            (EntryLinkKind.Feature, WikiLinkKeyForm.Slug) => await ResolveFeatureSlugAsync(target.Key, ct),
-            (EntryLinkKind.Project, WikiLinkKeyForm.Guid) => await ResolveProjectIdAsync(target.Id, ct),
-            (EntryLinkKind.Project, WikiLinkKeyForm.Name) => await ResolveProjectNameAsync(target.Key, ct),
-            (EntryLinkKind.Entry, WikiLinkKeyForm.Title) =>
-                await ResolveJournalTitleAsync(target.Key, journalProjectId, ct),
-            _ => null
-        };
-
-    private async Task<Guid?> ResolveFeatureNumberAsync(string key, CancellationToken ct)
+    private async Task<Guid?> ResolveFeatureAsync(WikiLinkTarget target, CancellationToken ct)
     {
-        if (!int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
+        if (target.Form == WikiLinkKeyForm.Number
+            && int.TryParse(target.Key, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
         {
-            return null;
+            return await ResolveFeatureNumberAsync(number, target.Key, ct);
         }
 
+        var slug = target.Key;
+        var slugIds = await _db.PlanningFeatures
+            .Where(f => f.Slug == slug)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+
+        return slugIds.Count == 1 ? slugIds[0] : null;
+    }
+
+    private async Task<Guid?> ResolveFeatureNumberAsync(int number, string key, CancellationToken ct)
+    {
         var padded = number.ToString("000", CultureInfo.InvariantCulture) + "-";
         var raw = key + "-";
         var candidates = await _db.PlanningFeatures
@@ -94,50 +105,59 @@ public sealed class EntryLinkResolver
         return match;
     }
 
-    private async Task<Guid?> ResolveFeatureSlugAsync(string key, CancellationToken ct)
+    private async Task<ProjectIndex> LoadProjectsAsync(CancellationToken ct)
     {
-        var slug = key;
-        var matches = await _db.PlanningFeatures
-            .Where(f => f.Slug == slug)
-            .Select(f => f.Id)
+        var rows = await _db.Projects
+            .Select(p => new { p.Id, p.Name })
             .ToListAsync(ct);
 
-        return matches.Count == 1 ? matches[0] : null;
-    }
-
-    private async Task<Guid?> ResolveProjectIdAsync(Guid? id, CancellationToken ct)
-    {
-        if (id is not { } projectId)
+        var ids = new HashSet<Guid>();
+        var byName = new Dictionary<string, Guid?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
         {
-            return null;
+            ids.Add(row.Id);
+            byName[row.Name] = byName.ContainsKey(row.Name) ? null : row.Id;
         }
 
-        return await _db.Projects.AnyAsync(p => p.Id == projectId, ct) ? projectId : null;
+        return new ProjectIndex(ids, byName);
     }
 
-    private async Task<Guid?> ResolveProjectNameAsync(string key, CancellationToken ct)
+    private async Task<Dictionary<string, Guid>> LoadJournalTitlesAsync(CancellationToken ct)
     {
-        var lowered = key.ToLowerInvariant();
-        var matches = await _db.Projects
-            .Where(p => p.Name.ToLower() == lowered)
-            .Select(p => p.Id)
+        var projectId = await _journalProjects.EnsureIdAsync(ct);
+
+        var rows = await _db.ContextEntries
+            .Where(e => e.ProjectId == projectId && e.Type == EntryType.Journal)
+            .OrderBy(e => e.UpdatedAt)
+            .Select(e => new { e.Id, e.Title })
             .ToListAsync(ct);
 
-        return matches.Count == 1 ? matches[0] : null;
-    }
-
-    private async Task<Guid?> ResolveJournalTitleAsync(string key, Guid? journalProjectId, CancellationToken ct)
-    {
-        if (journalProjectId is not { } projectId)
+        var byTitle = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
         {
-            return null;
+            byTitle[row.Title] = row.Id;
         }
 
-        var lowered = key.ToLowerInvariant();
-        return await _db.ContextEntries
-            .Where(e => e.ProjectId == projectId && e.Type == EntryType.Journal && e.Title.ToLower() == lowered)
-            .OrderByDescending(e => e.UpdatedAt)
-            .Select(e => (Guid?)e.Id)
-            .FirstOrDefaultAsync(ct);
+        return byTitle;
+    }
+
+    private static Guid? ResolveTitleId(WikiLinkTarget target, Dictionary<string, Guid>? journalTitles) =>
+        target.Form == WikiLinkKeyForm.Title
+        && journalTitles is not null
+        && journalTitles.TryGetValue(target.Key, out var id)
+            ? id
+            : null;
+
+    private sealed record ProjectIndex(HashSet<Guid> Ids, Dictionary<string, Guid?> ByName)
+    {
+        public Guid? Resolve(WikiLinkTarget target)
+        {
+            if (target.Form == WikiLinkKeyForm.Guid)
+            {
+                return target.Id is { } projectId && Ids.Contains(projectId) ? projectId : null;
+            }
+
+            return ByName.TryGetValue(target.Key, out var byName) ? byName : null;
+        }
     }
 }

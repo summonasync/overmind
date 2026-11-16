@@ -402,6 +402,11 @@ public sealed class OvermindDbContext : DbContext
         {
             builder.Property(l => l.Id).ValueGeneratedNever();
 
+            builder.HasOne<ContextEntry>()
+                .WithMany()
+                .HasForeignKey(l => l.FromEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             builder.HasIndex(l => new { l.FromEntryId, l.ToKind, l.ToId }).IsUnique();
             builder.HasIndex(l => new { l.ToKind, l.ToId });
         });

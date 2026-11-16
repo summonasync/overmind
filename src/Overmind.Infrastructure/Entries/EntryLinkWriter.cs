@@ -33,14 +33,23 @@ public sealed class EntryLinkWriter
             .Where(link => link.FromEntryId == entryId && link.Origin == EntryLinkOrigin.Derived)
             .ExecuteDeleteAsync(ct);
 
-        var resolved = await _resolver.ResolveAsync(entryId, parsedLinks, ct);
-        if (resolved.Count > 0)
+        var manualKeys = await _db.EntryLinks
+            .Where(link => link.FromEntryId == entryId && link.Origin == EntryLinkOrigin.Manual)
+            .Select(link => new { link.ToKind, link.ToId })
+            .ToListAsync(ct);
+
+        var insertable = (await _resolver.ResolveAsync(entryId, parsedLinks, ct))
+            .Where(link => !manualKeys.Any(manual =>
+                manual.ToKind == link.Kind && manual.ToId == link.ToId))
+            .ToList();
+
+        if (insertable.Count > 0)
         {
-            _db.EntryLinks.AddRange(resolved.Select(link =>
+            _db.EntryLinks.AddRange(insertable.Select(link =>
                 EntryLink.CreateDerived(entryId, link.Kind, link.ToId)));
         }
 
         await _db.SaveChangesAsync(ct);
-        return resolved.Count;
+        return insertable.Count;
     }
 }

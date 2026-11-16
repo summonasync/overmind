@@ -87,6 +87,66 @@ public sealed class EntryLinkWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task ReplaceDerived_ManualEdgeOnTheSameTarget_SkipsTheDerivedRow_AndSavesCleanly()
+    {
+        var dailyId = _context.ContextEntries.Single(e => e.Title == "Daily").Id;
+        await _context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO EntryLinks (Id, FromEntryId, ToKind, ToId, Origin, CreatedAt)
+            VALUES ({0}, {1}, {2}, {3}, {4}, {5})
+            """,
+            Guid.NewGuid().ToString().ToUpperInvariant(),
+            _sourceId.ToString().ToUpperInvariant(),
+            (int)EntryLinkKind.Entry,
+            dailyId.ToString().ToUpperInvariant(),
+            (int)EntryLinkOrigin.Manual,
+            DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff"));
+
+        await WriteAsync("[[Daily]] [[feature:184]]");
+
+        var rows = await EdgesAsync();
+        rows.Count.ShouldBe(2);
+        rows.Single(link => link.Origin == EntryLinkOrigin.Manual).ToId.ShouldBe(dailyId);
+        rows.Single(link => link.Origin == EntryLinkOrigin.Derived).ToKind.ShouldBe(EntryLinkKind.Feature);
+    }
+
+    [Fact]
+    public async Task ReplaceDerived_EveryTargetAlreadyManual_WritesNoDerivedRow()
+    {
+        var dailyId = _context.ContextEntries.Single(e => e.Title == "Daily").Id;
+        await _context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO EntryLinks (Id, FromEntryId, ToKind, ToId, Origin, CreatedAt)
+            VALUES ({0}, {1}, {2}, {3}, {4}, {5})
+            """,
+            Guid.NewGuid().ToString().ToUpperInvariant(),
+            _sourceId.ToString().ToUpperInvariant(),
+            (int)EntryLinkKind.Entry,
+            dailyId.ToString().ToUpperInvariant(),
+            (int)EntryLinkOrigin.Manual,
+            DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff"));
+
+        await WriteAsync("[[Daily]]");
+
+        var rows = await EdgesAsync();
+        rows.ShouldHaveSingleItem();
+        rows[0].Origin.ShouldBe(EntryLinkOrigin.Manual);
+    }
+
+    [Fact]
+    public async Task DeletingTheSourceEntry_DropsItsDerivedEdges_ByConstraint()
+    {
+        await WriteAsync("[[feature:184]] [[Some Note]]");
+        (await EdgesAsync()).Count.ShouldBe(2);
+
+        await _context.Database.ExecuteSqlRawAsync(
+            $"DELETE FROM ContextEntries WHERE Id = '{_sourceId.ToString().ToUpperInvariant()}'");
+
+        (await _context.EntryLinks.AsNoTracking()
+            .CountAsync(link => link.FromEntryId == _sourceId)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task ReplaceDerived_TwoCaseVariantMarkers_CollapseIntoOneRow()
     {
         await WriteAsync("[[Daily]] [[daily]]");
