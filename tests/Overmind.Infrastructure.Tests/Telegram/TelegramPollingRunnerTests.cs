@@ -142,9 +142,7 @@ public sealed class TelegramPollingRunnerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("/send_to_wave")]
-    [InlineData("/wave_snapshot")]
-    [InlineData("/SEND_TO_WAVE")]
+    [MemberData(nameof(WaveBranchCases.EveryCommandSpelling), MemberType = typeof(WaveBranchCases))]
     public async Task RunAsync_WaveCommandFromForeignChat_IsIgnoredBeforeAnyDoor(string text)
     {
         var rig = CreateRig();
@@ -159,6 +157,9 @@ public sealed class TelegramPollingRunnerTests : IDisposable
 
             rig.Handler.Messages.ShouldBeEmpty();
             rig.Api.CountRequests("/sendMessage").ShouldBe(0);
+            rig.LogSnapshot().ShouldContain(line =>
+                line.StartsWith("Information:", StringComparison.Ordinal)
+                && line.Contains("is not allowlisted; ignored", StringComparison.Ordinal));
         }
         finally
         {

@@ -57,7 +57,7 @@ public sealed class TelegramWavePromptTombstoneTests
     }
 
     [Fact]
-    public void Announce_RenewsTheRetentionOfARepeatingPrompt()
+    public void Announce_AgainOverAPromptAlreadyRegistered_KeepsTheOriginalExpiry()
     {
         var clock = new TelegramTestClock();
         var tombstone = new TelegramWavePromptTombstone(clock);
@@ -66,13 +66,37 @@ public sealed class TelegramWavePromptTombstoneTests
         tombstone.Announce(ChatId, 21);
         clock.Advance(TimeSpan.FromMinutes(2));
 
-        tombstone.Announce(77, 30);
-
-        tombstone.IsClosed(ChatId, 21).ShouldBeTrue();
+        tombstone.IsClosed(ChatId, 21).ShouldBeFalse();
     }
 
     [Fact]
-    public void AnyAnnounce_DropsTheLedgersOlderThanTheRetention()
+    public void OldPromptId_ExpiresWhileTheNewerPromptOfTheSameChatSurvives()
+    {
+        var clock = new TelegramTestClock();
+        var tombstone = new TelegramWavePromptTombstone(clock);
+        tombstone.Announce(ChatId, 21);
+        clock.Advance(TelegramWavePromptTombstone.Retention - TimeSpan.FromMinutes(1));
+        tombstone.Announce(ChatId, 22);
+        clock.Advance(TimeSpan.FromMinutes(2));
+
+        tombstone.IsClosed(ChatId, 21).ShouldBeFalse();
+        tombstone.IsClosed(ChatId, 22).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsClosed_ExpiresThePromptIdWithoutWaitingForAnotherAnnounce()
+    {
+        var clock = new TelegramTestClock();
+        var tombstone = new TelegramWavePromptTombstone(clock);
+        tombstone.Announce(ChatId, 21);
+
+        clock.Advance(TelegramWavePromptTombstone.Retention + TimeSpan.FromMinutes(1));
+
+        tombstone.IsClosed(ChatId, 21).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AnyAnnounce_DropsThePromptIdsOlderThanTheRetention()
     {
         var clock = new TelegramTestClock();
         var tombstone = new TelegramWavePromptTombstone(clock);

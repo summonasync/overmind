@@ -4,4 +4,6 @@ public sealed record TelegramIncomingMessage(
     long ChatId,
     string Text,
     long? RepliedToMessageId = null,
-    string? From = null);
+    string? From = null,
+    long? MessageId = null,
+    long? UpdateId = null);

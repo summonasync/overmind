@@ -13,7 +13,7 @@ public sealed class TelegramWavePromptTombstone(TimeProvider clock)
         lock (_gate)
         {
             var now = clock.GetUtcNow();
-            Prune(now);
+            DropExpiredPromptIds(now);
             if (!_byChat.TryGetValue(chatId, out var ledger))
             {
                 ledger = new Ledger(MaxPromptIdsPerChat);
@@ -28,16 +28,28 @@ public sealed class TelegramWavePromptTombstone(TimeProvider clock)
     {
         lock (_gate)
         {
-            return _byChat.TryGetValue(chatId, out var ledger) && ledger.Contains(promptMessageId);
+            if (!_byChat.TryGetValue(chatId, out var ledger))
+            {
+                return false;
+            }
+
+            var closed = ledger.Contains(promptMessageId, clock.GetUtcNow());
+            if (ledger.IsEmpty)
+            {
+                _byChat.Remove(chatId);
+            }
+
+            return closed;
         }
     }
 
-    private void Prune(DateTimeOffset now)
+    private void DropExpiredPromptIds(DateTimeOffset now)
     {
         List<long>? dead = null;
         foreach (var (chatId, ledger) in _byChat)
         {
-            if (now - ledger.LastTouchedAt > Retention)
+            ledger.Expire(now);
+            if (ledger.IsEmpty)
             {
                 (dead ??= []).Add(chatId);
             }
@@ -57,25 +69,36 @@ public sealed class TelegramWavePromptTombstone(TimeProvider clock)
     private sealed class Ledger(int capacity)
     {
         private readonly HashSet<long> _promptIds = [];
-        private readonly Queue<long> _order = new();
+        private readonly Queue<(long Id, DateTimeOffset At)> _order = new();
 
-        public DateTimeOffset LastTouchedAt { get; private set; }
+        public bool IsEmpty => _order.Count == 0;
 
         public void Add(long promptMessageId, DateTimeOffset at)
         {
-            LastTouchedAt = at;
             if (!_promptIds.Add(promptMessageId))
             {
                 return;
             }
 
-            _order.Enqueue(promptMessageId);
+            _order.Enqueue((promptMessageId, at));
             while (_order.Count > capacity)
             {
-                _promptIds.Remove(_order.Dequeue());
+                _promptIds.Remove(_order.Dequeue().Id);
             }
         }
 
-        public bool Contains(long promptMessageId) => _promptIds.Contains(promptMessageId);
+        public bool Contains(long promptMessageId, DateTimeOffset now)
+        {
+            Expire(now);
+            return _promptIds.Contains(promptMessageId);
+        }
+
+        public void Expire(DateTimeOffset now)
+        {
+            while (_order.Count > 0 && now - _order.Peek().At > Retention)
+            {
+                _promptIds.Remove(_order.Dequeue().Id);
+            }
+        }
     }
 }

@@ -30,6 +30,7 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
     [InlineData("wave:nonsense")]
     [InlineData("wave:proj:123")]
     [InlineData("wave:room:1f0aa0e0:1:extra")]
+    [MemberData(nameof(WaveBranchCases.UnparsableCallbackShapes), MemberType = typeof(WaveBranchCases))]
     public async Task Handle_GarbageData_AnswersInvalidButton(string data)
     {
         await ConfigureTransportAsync();
@@ -51,7 +52,9 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
 
         _api.RequestCount.ShouldBe(1);
         AnswerText(_api.Request(0)).ShouldBe(TelegramNotificationCallbackHandler.NotAllowedAnswer);
-        _logs.ShouldContain(line => line.Contains("not allowlisted; denied"));
+        _logs.ShouldContain(line =>
+            line.StartsWith("Information:", StringComparison.Ordinal)
+            && line.Contains("not allowlisted; denied", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -143,58 +146,75 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("cancel")]
-    [InlineData("proj")]
-    [InlineData("room")]
-    [InlineData("sproj")]
-    [InlineData("scancel")]
-    [InlineData("garbage")]
-    [InlineData("oversize")]
+    [MemberData(nameof(WaveBranchCases.WaveActions), MemberType = typeof(WaveBranchCases))]
     public async Task EveryWaveBranch_AnswersItsCallbackQueryExactlyOnceAndSendsNothingElse(
-        string branch)
+        WaveCallbackAction action)
     {
         await ConfigureTransportAsync();
-        var projectId = Guid.NewGuid();
-        _commands.Cancel(OwnerChatId).Returns(TelegramWaveCommandService.CancelAnswer);
-        _commands.PickProjectAsync(OwnerChatId, projectId, Arg.Any<CancellationToken>())
-            .Returns(TelegramWaveCommandService.RoomPickAnswer);
-        _commands.PickRoomAsync(OwnerChatId, "1f0aa0e0", 0, Arg.Any<CancellationToken>())
-            .Returns(TelegramWaveCommandService.PromptAnswer);
-        _snapshot.PickProjectAsync(OwnerChatId, projectId, Arg.Any<CancellationToken>())
-            .Returns(TelegramWaveSnapshotService.SnapshotAnswer);
+        ArrangeFlowAnswer(action);
 
         await CreateHandler().HandleAsync(
-            new TelegramCallback(OwnerChatId, $"cq-{branch}", 5, "@owner", "picker", DataFor(branch, projectId)),
+            new TelegramCallback(OwnerChatId, $"cq-{action}", 5, "@owner", "picker",
+                WaveBranchCases.CallbackData[action]),
             CancellationToken.None);
 
         _api.RequestCount.ShouldBe(1);
         var answer = AnswerText(_api.Request(0));
-        answer.ShouldBe(ExpectedAnswer(branch));
+        answer.ShouldBe(WaveBranchCases.FlowAnswer[action]);
         answer.Length.ShouldNotBe(0);
         answer.Length.ShouldBeLessThanOrEqualTo(TelegramNotificationCallbackHandler.AnswerTextLimit);
     }
 
-    [Theory]
-    [InlineData("cancel")]
-    [InlineData("proj")]
-    [InlineData("room")]
-    [InlineData("sproj")]
-    [InlineData("scancel")]
-    [InlineData("garbage")]
-    public async Task NonAllowlistedChat_IsDeniedOnEverySchemeWithoutTouchingAFlow(string branch)
+    [Fact]
+    public async Task FlowAnswerOverTheCallbackBudget_IsTruncatedOnTheWire()
     {
         await ConfigureTransportAsync();
-        var projectId = Guid.NewGuid();
+        _commands.Cancel(OwnerChatId)
+            .Returns(new string('x', TelegramNotificationCallbackHandler.AnswerTextLimit + 40));
 
         await CreateHandler().HandleAsync(
-            new TelegramCallback(999, $"cq-{branch}", 5, "@stranger", "picker", DataFor(branch, projectId)),
+            new TelegramCallback(OwnerChatId, "cq-long", 5, "@owner", "picker",
+                WaveBranchCases.CallbackData[WaveCallbackAction.Cancel]),
+            CancellationToken.None);
+
+        _api.RequestCount.ShouldBe(1);
+        var answer = AnswerText(_api.Request(0));
+        answer.Length.ShouldBe(TelegramNotificationCallbackHandler.AnswerTextLimit);
+        answer.ShouldEndWith("…");
+    }
+
+    [Fact]
+    public void WaveBranchMaps_CoverEveryWaveCallbackAction()
+    {
+        var actions = Enum.GetValues<WaveCallbackAction>();
+
+        WaveBranchCases.CallbackData.Count.ShouldBe(actions.Length);
+        WaveBranchCases.FlowAnswer.Count.ShouldBe(actions.Length);
+        foreach (var action in actions)
+        {
+            WaveBranchCases.CallbackData.ContainsKey(action)
+                .ShouldBeTrue($"{action} has no callback data to drive the door");
+            WaveBranchCases.FlowAnswer.ContainsKey(action)
+                .ShouldBeTrue($"{action} has no expected answer to pin the door");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(WaveBranchCases.EveryCallbackShape), MemberType = typeof(WaveBranchCases))]
+    public async Task NonAllowlistedChat_IsDeniedOnEverySchemeWithoutTouchingAFlow(string data)
+    {
+        await ConfigureTransportAsync();
+
+        await CreateHandler().HandleAsync(
+            new TelegramCallback(999, $"cq-{data}", 5, "@stranger", "picker", data),
             CancellationToken.None);
 
         _api.RequestCount.ShouldBe(1);
         AnswerText(_api.Request(0)).ShouldBe(TelegramNotificationCallbackHandler.NotAllowedAnswer);
         _commands.DidNotReceiveWithAnyArgs().Cancel(default);
         await _commands.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
-        await _commands.DidNotReceiveWithAnyArgs().PickRoomAsync(default, default, default, default);
+        await _commands.DidNotReceiveWithAnyArgs().PickRoomAsync(
+            default, Arg.Any<string>(), default, default);
         await _snapshot.DidNotReceiveWithAnyArgs().PickProjectAsync(default, default, default);
         await _snapshot.DidNotReceiveWithAnyArgs().HandleCommandAsync(default, default);
     }
@@ -220,26 +240,32 @@ public sealed class TelegramWaveCallbackHandlerTests : IDisposable
         _temp.Dispose();
     }
 
-    private static string DataFor(string branch, Guid projectId) => branch switch
+    private void ArrangeFlowAnswer(WaveCallbackAction action)
     {
-        "cancel" => TelegramWaveCallbackData.CancelData,
-        "proj" => $"wave:proj:{projectId:D}",
-        "room" => TelegramWaveCallbackData.RoomData("1f0aa0e0", 0),
-        "sproj" => $"wave:sproj:{projectId:D}",
-        "scancel" => TelegramWaveCallbackData.SnapshotCancelData,
-        "garbage" => "wave:room:ZZZZZZZZ:1",
-        _ => $"wave:cancel:{new string('x', 70)}",
-    };
-
-    private static string ExpectedAnswer(string branch) => branch switch
-    {
-        "cancel" => TelegramWaveCommandService.CancelAnswer,
-        "proj" => TelegramWaveCommandService.RoomPickAnswer,
-        "room" => TelegramWaveCommandService.PromptAnswer,
-        "sproj" => TelegramWaveSnapshotService.SnapshotAnswer,
-        "scancel" => ITelegramWaveSnapshotService.DismissAnswer,
-        _ => TelegramNotificationCallbackHandler.InvalidButtonAnswer,
-    };
+        var answer = WaveBranchCases.FlowAnswer[action];
+        switch (action)
+        {
+            case WaveCallbackAction.Cancel:
+                _commands.Cancel(OwnerChatId).Returns(answer);
+                break;
+            case WaveCallbackAction.Project:
+                _commands.PickProjectAsync(OwnerChatId, WaveBranchCases.PickerProjectId, Arg.Any<CancellationToken>())
+                    .Returns(answer);
+                break;
+            case WaveCallbackAction.Room:
+                _commands.PickRoomAsync(
+                        OwnerChatId, WaveBranchCases.PickerDraftToken, 0, Arg.Any<CancellationToken>())
+                    .Returns(answer);
+                break;
+            case WaveCallbackAction.SnapshotProject:
+                _snapshot.PickProjectAsync(
+                        OwnerChatId, WaveBranchCases.PickerProjectId, Arg.Any<CancellationToken>())
+                    .Returns(answer);
+                break;
+            case WaveCallbackAction.SnapshotCancel:
+                break;
+        }
+    }
 
     private List<string> Answers() =>
         [.. _api.Requests

@@ -45,8 +45,8 @@ public sealed class TelegramWaveCommandService(
     public async Task HandleAsync(TelegramWaveCommand command, TelegramIncomingMessage message, CancellationToken ct)
     {
         logger.LogInformation(
-            "Telegram wave command {Command} invoked in chat {ChatId} by {Sender}",
-            command, message.ChatId, message.From ?? AnonymousAuthor);
+            "Telegram wave command {Command} invoked in chat {ChatId} by {Sender} over message {MessageId} of update {UpdateId}",
+            command, message.ChatId, message.From ?? AnonymousAuthor, message.MessageId, message.UpdateId);
 
         if (command == TelegramWaveCommand.WaveSnapshot)
         {
@@ -89,8 +89,8 @@ public sealed class TelegramWaveCommandService(
             }
 
             logger.LogInformation(
-                "Telegram wave draft in chat {ChatId} was closed; the reply to prompt {PromptMessageId} got the restart notice instead of an agent turn",
-                message.ChatId, promptMessageId);
+                "Telegram wave draft in chat {ChatId} was closed; reply message {MessageId} of update {UpdateId} to prompt {PromptMessageId} got the restart notice instead of an agent turn",
+                message.ChatId, message.MessageId, message.UpdateId, promptMessageId);
             await SendQuietlyAsync(message.ChatId, DraftClosedReply, ct: ct);
             return true;
         }

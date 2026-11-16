@@ -141,7 +141,8 @@ public sealed class TelegramPollingRunner(
 
         if (!options.AllowedChatIds.Contains(message.Chat.Id))
         {
-            logger.LogDebug("Telegram message from chat {ChatId} is not allowlisted; ignored", message.Chat.Id);
+            logger.LogInformation(
+                "Telegram message from chat {ChatId} is not allowlisted; ignored", message.Chat.Id);
             return;
         }
 
@@ -152,7 +153,9 @@ public sealed class TelegramPollingRunner(
                     message.Chat.Id,
                     message.Text,
                     message.ReplyToMessage?.MessageId,
-                    message.From is { } from ? DisplayName(from) : null), ct);
+                    message.From is { } from ? DisplayName(from) : null,
+                    message.Id,
+                    update.Id), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

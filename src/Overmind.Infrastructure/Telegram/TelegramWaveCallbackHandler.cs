@@ -40,7 +40,7 @@ public sealed class TelegramWaveCallbackHandler(
 
         if (!options.AllowedChatIds.Contains(callback.ChatId))
         {
-            logger.LogDebug(
+            logger.LogInformation(
                 "Telegram wave callback from chat {ChatId} is not allowlisted; denied", callback.ChatId);
             await AnswerAsync(callback, TelegramNotificationCallbackHandler.NotAllowedAnswer, ct);
             return;
@@ -79,7 +79,8 @@ public sealed class TelegramWaveCallbackHandler(
             }
 
             await clientCache.GetOrCreate(options)
-                .Client.AnswerCallbackQuery(callback.CallbackQueryId, text, cancellationToken: ct);
+                .Client.AnswerCallbackQuery(
+                    callback.CallbackQueryId, WithinAnswerBudget(text), cancellationToken: ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -90,4 +91,10 @@ public sealed class TelegramWaveCallbackHandler(
             logger.LogWarning(ex, "Answering telegram wave callback {CallbackQueryId} failed", callback.CallbackQueryId);
         }
     }
+
+    private static string WithinAnswerBudget(string text) =>
+        text.Length <= TelegramNotificationCallbackHandler.AnswerTextLimit
+            ? text
+            : string.Concat(
+                text.AsSpan(0, TelegramNotificationCallbackHandler.AnswerTextLimit - 1), "…");
 }

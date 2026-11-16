@@ -207,7 +207,8 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         var (handler, probe) = CreateAgentHandler();
 
         await handler.HandleAsync(
-            new TelegramIncomingMessage(OwnerChatId, "orphaned", promptMessageId, "Owner"),
+            new TelegramIncomingMessage(
+                OwnerChatId, "orphaned", promptMessageId, "Owner", ReplyMessageId, ReplyUpdateId),
             CancellationToken.None);
 
         (await WaveMessagesAsync()).ShouldBeEmpty();
@@ -215,7 +216,11 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await ZeroModelProbe.AssertNoConversationFootprintAsync(_temp);
         SentTexts().ShouldContain(TelegramWaveCommandService.DraftClosedReply);
         SentRequests().Count.ShouldBe(4);
-        _logs.ShouldContain(line => line.Contains("was closed; the reply to prompt", StringComparison.Ordinal));
+        _logs.ShouldContain(line =>
+            line.StartsWith("Information:", StringComparison.Ordinal)
+            && line.Contains(
+                $"was closed; reply message {ReplyMessageId} of update {ReplyUpdateId} to prompt {promptMessageId}",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -405,19 +410,32 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         _drafts.Current(OwnerChatId).ShouldBeNull();
     }
 
-    [Fact]
-    public async Task WaveSnapshot_HandsTheCommandToTheSnapshotDoor()
+    [Theory]
+    [MemberData(nameof(WaveBranchCases.WaveCommands), MemberType = typeof(WaveBranchCases))]
+    public async Task EveryWaveCommand_LandsOnTheDoorItsBranchMapPromises(TelegramWaveCommand command)
     {
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
 
         await _commands.HandleAsync(
-            TelegramWaveCommand.WaveSnapshot,
-            new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot", From: "Owner"),
+            command,
+            new TelegramIncomingMessage(
+                OwnerChatId, WaveBranchCases.CommandText[command], From: "Owner",
+                MessageId: CommandMessageId, UpdateId: CommandUpdateId),
             CancellationToken.None);
 
-        await _snapshotDoor.Received(1).HandleCommandAsync(OwnerChatId, Arg.Any<CancellationToken>());
-        SentRequests().ShouldBeEmpty();
-        _drafts.Current(OwnerChatId).ShouldBeNull();
+        switch (WaveBranchCases.CommandDoor[command])
+        {
+            case WaveBranchCases.WaveDoor.SnapshotDoor:
+                await _snapshotDoor.Received(1).HandleCommandAsync(OwnerChatId, Arg.Any<CancellationToken>());
+                SentRequests().ShouldBeEmpty();
+                _drafts.Current(OwnerChatId).ShouldBeNull();
+                break;
+            case WaveBranchCases.WaveDoor.SendFlow:
+                await _snapshotDoor.DidNotReceiveWithAnyArgs().HandleCommandAsync(default, default);
+                SentRequests().ShouldHaveSingleItem();
+                _drafts.Current(OwnerChatId).ShouldNotBeNull();
+                break;
+        }
     }
 
     [Fact]
@@ -599,6 +617,33 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PromptReplyAfterTheDraftExpiresThroughTheMessageDoor_AnswersTheClosedDraftNoticeWithNoAgentTurn()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        await PickRoomAsync("telegram-bridge");
+        var promptMessageId = Prompt().PromptMessageId!.Value;
+
+        _clock.Advance(TimeSpan.FromMinutes(TelegramWaveDraft.LifetimeMinutes + 1));
+        var (handler, probe) = CreateAgentHandler();
+
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(
+                OwnerChatId, "a signal an hour late", promptMessageId, "Owner", ReplyMessageId, ReplyUpdateId),
+            CancellationToken.None);
+
+        probe.AssertUntouched("an expired prompt must not buy an agent turn");
+        await ZeroModelProbe.AssertNoConversationFootprintAsync(_temp);
+        (await WaveMessagesAsync()).ShouldBeEmpty();
+        SentTexts().ShouldContain(TelegramWaveCommandService.DraftClosedReply);
+        _logs.ShouldContain(line =>
+            line.StartsWith("Information:", StringComparison.Ordinal)
+            && line.Contains(
+                $"was closed; reply message {ReplyMessageId} of update {ReplyUpdateId} to prompt {promptMessageId}",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task SecondReplyToAPostedPrompt_IsRefusedInsteadOfPostingTwice()
     {
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
@@ -753,17 +798,22 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
 
         await _commands.HandleAsync(
             TelegramWaveCommand.WaveSnapshot,
-            new TelegramIncomingMessage(OwnerChatId, "/wave_snapshot", From: "Owner"),
+            new TelegramIncomingMessage(
+                OwnerChatId, "/wave_snapshot", From: "Owner",
+                MessageId: CommandMessageId, UpdateId: CommandUpdateId),
             CancellationToken.None);
 
         var lines = _logs.ToArray();
         lines.ShouldContain(line =>
-            line.Contains(
-                $"Telegram wave command {TelegramWaveCommand.SendToWave} invoked in chat {OwnerChatId} by Owner",
+            line.StartsWith("Information:", StringComparison.Ordinal)
+            && line.Contains(
+                $"Telegram wave command {TelegramWaveCommand.SendToWave} invoked in chat {OwnerChatId} by Owner"
+                + $" over message {CommandMessageId} of update {CommandUpdateId}",
                 StringComparison.Ordinal));
         lines.ShouldContain(line =>
             line.Contains(
-                $"Telegram wave command {TelegramWaveCommand.WaveSnapshot} invoked in chat {OwnerChatId}",
+                $"Telegram wave command {TelegramWaveCommand.WaveSnapshot} invoked in chat {OwnerChatId} by Owner"
+                + $" over message {CommandMessageId} of update {CommandUpdateId}",
                 StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains(
             $"Telegram wave draft opened in chat {OwnerChatId}", StringComparison.Ordinal));
@@ -804,6 +854,10 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     private const int RoomPickerMessageId = 12;
     private const int PromptMessageId = 21;
     private const long OrphanPromptMessageId = 9_999;
+    private const long CommandMessageId = 10;
+    private const long CommandUpdateId = 100;
+    private const long ReplyMessageId = 55;
+    private const long ReplyUpdateId = 550;
 
     private TelegramTransportOptionsProvider CreateOptionsProvider() =>
         new(new AppSettingsService(_temp.CreateContext()));
@@ -819,7 +873,8 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     private Task RunSendToWaveAsync() =>
         _commands.HandleAsync(
             TelegramWaveCommand.SendToWave,
-            new TelegramIncomingMessage(OwnerChatId, "/send_to_wave", From: "Owner"),
+            new TelegramIncomingMessage(
+                OwnerChatId, "/send_to_wave", From: "Owner", MessageId: CommandMessageId, UpdateId: CommandUpdateId),
             CancellationToken.None);
 
     private async Task PickRoomAsync(string room)
@@ -843,7 +898,8 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
 
     private Task<bool> TryReplyAsync(long promptMessageId, string text, string? from = "Owner") =>
         _commands.TryHandleDraftReplyAsync(
-            new TelegramIncomingMessage(OwnerChatId, text, promptMessageId, from), CancellationToken.None);
+            new TelegramIncomingMessage(
+                OwnerChatId, text, promptMessageId, from, ReplyMessageId, ReplyUpdateId), CancellationToken.None);
 
     private async Task<Guid> SeedProjectAsync(string name, IReadOnlyList<string> lanes)
     {

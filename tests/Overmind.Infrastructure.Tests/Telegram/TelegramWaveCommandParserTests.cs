@@ -20,6 +20,32 @@ public sealed class TelegramWaveCommandParserTests
     }
 
     [Theory]
+    [MemberData(nameof(WaveBranchCases.WaveCommands), MemberType = typeof(WaveBranchCases))]
+    public void TryMatch_CanonicalSpellingOfEveryCommand_RoutesToThatCommand(TelegramWaveCommand command)
+    {
+        var text = WaveBranchCases.CommandText[command];
+
+        TelegramWaveCommandParser.TryMatch(text, out var matched).ShouldBeTrue();
+        matched.ShouldBe(command);
+    }
+
+    [Fact]
+    public void CommandBranchMaps_CoverEveryWaveCommand()
+    {
+        var commands = Enum.GetValues<TelegramWaveCommand>();
+
+        WaveBranchCases.CommandText.Count.ShouldBe(commands.Length);
+        WaveBranchCases.CommandDoor.Count.ShouldBe(commands.Length);
+        foreach (var command in commands)
+        {
+            WaveBranchCases.CommandText.ContainsKey(command)
+                .ShouldBeTrue($"{command} has no canonical spelling to drive the message door");
+            WaveBranchCases.CommandDoor.ContainsKey(command)
+                .ShouldBeTrue($"{command} has no promised door to be checked against");
+        }
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("wave_snapshot")]
