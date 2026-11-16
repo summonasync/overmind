@@ -94,6 +94,8 @@ def collect_string_chain(text, pos, consts=None):
         if pos >= len(text):
             return total, pos
         ch = text[pos]
+        if ch in "$@":
+            return None, pos
         if ch == '"':
             decoded, pos = read_string_literal(text, pos)
             total += len(decoded)

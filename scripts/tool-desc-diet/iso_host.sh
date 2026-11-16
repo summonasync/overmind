@@ -54,10 +54,14 @@ PY
 }
 
 stop() {
-  if [[ -f "$SCRATCH/host.pid" ]] && kill -0 "$(cat "$SCRATCH/host.pid")" 2>/dev/null; then
-    kill "$(cat "$SCRATCH/host.pid")"
-    sleep 1
-    kill -9 "$(cat "$SCRATCH/host.pid")" 2>/dev/null || true
+  if [[ -f "$SCRATCH/host.pid" ]]; then
+    pid="$(cat "$SCRATCH/host.pid")"
+    # Never signal a recycled pid: only kill if it still runs Overmind.Host.
+    if [[ -n "$pid" ]] && grep -qa "Overmind.Host" "/proc/$pid/cmdline" 2>/dev/null; then
+      kill "$pid"
+      sleep 1
+      kill -9 "$pid" 2>/dev/null || true
+    fi
   fi
   rm -f "$SCRATCH/host.pid"
   echo "HOST_STOPPED"

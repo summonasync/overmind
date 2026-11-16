@@ -34,18 +34,49 @@ trap 'echo "MATRIX_SIGNALED $RUNTIME — killing process group"; kill 0' INT TER
 OUT_DIR="$OUT_DIR" API_URL="$API_URL" bash "$HERE/make_mcp_configs.sh" >>"$SCRATCH/matrix-$RUNTIME-setup.log" 2>&1
 
 if [[ "$RUNTIME" == qwen ]]; then
+  # The qwen lane runs under a SCRATCH QWEN_HOME (exported above) — that generated,
+  # server-stripped home IS the frozen baseline surface; T6 reuses the surviving
+  # directory verbatim and must not re-copy from the real home or wipe it. Provision it
+  # only when absent (fresh repro): copy settings.json with everything EXCEPT the
+  # overmind entry stripped out of mcpServers, so grimoire/squeezr/mindlash/trello never
+  # spawn under a probe (blast-radius fix, see baseline doc disclosure).
+  mkdir -p "$QWEN_HOME"
+  if [[ ! -f "$QWEN_HOME/settings.json" ]]; then
+    python3 - "$HOME/.qwen/settings.json" "$QWEN_HOME/settings.json" <<'PY'
+import json, sys
+src, dst = sys.argv[1:3]
+d = json.load(open(src))
+d["mcpServers"] = {k: v for k, v in (d.get("mcpServers") or {}).items() if k == "overmind"}
+json.dump(d, open(dst, "w"), indent=1)
+print(f"provisioned {dst} with overmind-only mcpServers", file=sys.stderr)
+PY
+  fi
   # Probe memory hygiene: headless qwen sessions get a project memory slug per cwd and
-  # can write matrix-aware notes that contaminate every later intent (incident (e) in the
-  # baseline doc). Wipe the probe-cwd slug before and after the lane.
+  # can write matrix-aware notes that contaminate later intents (baseline doc incident
+  # (c)). Wipe the probe-cwd slug before and after the lane.
   PROBE_SLUG="$HOME/.qwen/projects/-mnt-Ubuntu-Dev-scratch-overmind-234-probe-cwd"
   rm -rf "$PROBE_SLUG"
 fi
 
-if curl -fsS -m 5 -o /dev/null "${API_URL}/api/health" 2>/dev/null; then
-  echo "HOST_REUSED ${API_URL}" >>"$SCRATCH/matrix-$RUNTIME-setup.log"
+# Never adopt a stranger on the lane port (it may be another lane's live host — measured
+# 2026-11-16: 4799 held by lane 236's host). Reuse ONLY our own recorded, alive host
+# whose port file matches this lane port; otherwise kill our stale host and boot ours.
+if [[ -f "$SCRATCH_DIR/host.pid" ]] && kill -0 "$(cat "$SCRATCH_DIR/host.pid")" 2>/dev/null \
+   && grep -q "$PORT" "$SCRATCH_DIR/host.port" 2>/dev/null \
+   && curl -fsS -m 5 -o /dev/null "${API_URL}/api/health" 2>/dev/null; then
+  echo "HOST_REUSED ${API_URL} (own pid $(cat "$SCRATCH_DIR/host.pid"))" >>"$SCRATCH/matrix-$RUNTIME-setup.log"
 else
+  # Kill OUR stale host only — verify the pid still runs this lane's host binary before
+  # signalling (a recycled pid must never be hit).
+  if [[ -f "$SCRATCH_DIR/host.pid" ]]; then
+    pid="$(cat "$SCRATCH_DIR/host.pid")"
+    if [[ -n "$pid" ]] && grep -qa "Overmind.Host" "/proc/$pid/cmdline" 2>/dev/null; then
+      kill "$pid" 2>/dev/null
+      sleep 1
+    fi
+  fi
   SCRATCH="$SCRATCH_DIR" API_URL="$API_URL" bash "$HERE/iso_host.sh" start "$PORT" >>"$SCRATCH/matrix-$RUNTIME-setup.log" 2>&1 \
-    || { echo "ISO HOST FAILED — see $SCRATCH_DIR/host.log" | tee -a "$SCRATCH/matrix-$RUNTIME-setup.log"; exit 1; }
+    || { echo "ISO HOST FAILED — another host may own ${PORT}; free the lane port or pass a different one. See $SCRATCH_DIR/host.log" | tee -a "$SCRATCH/matrix-$RUNTIME-setup.log"; exit 1; }
 fi
 
 RESULTS="$SCRATCH/results-$RUNTIME.tsv"

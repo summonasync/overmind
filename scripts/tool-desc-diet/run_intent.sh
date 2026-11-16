@@ -64,7 +64,9 @@ case "$runtime" in
     #   stdio harness and reported results as if it had used the board.
     # - NO --exclude-tools: it silently drops every declared mcp__* tool.
     # - --mcp-config top-tier merge replaces the live settings "overmind" server
-    #   by name; the real HOME is kept (a scratch QWEN_HOME flips the whole surface).
+    #   by name; the lane runs under the SCRATCH QWEN_HOME exported by run_matrix.sh —
+    #   that generated home IS the frozen qwen baseline surface (T6 reuses it verbatim,
+    #   never the real home: surface change + real-project-memory contamination).
     # - headless qwen defers the call: tool_search -> tool_call{name:mcp__overmind__X};
     #   extract_picks.py unwraps it and counts the search step on stderr.
     capture_rc env -C "$WORK" timeout "$TIMEOUT" qwen "$prompt" \
