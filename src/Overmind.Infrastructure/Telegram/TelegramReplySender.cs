@@ -11,7 +11,7 @@ public sealed class TelegramReplySender(
     public async Task<IReadOnlyList<long>> SendAsync(
         long chatId,
         IReadOnlyList<string> chunks,
-        InlineKeyboardMarkup? replyMarkup = null,
+        ReplyMarkup? replyMarkup = null,
         IReadOnlyList<MessageEntity>? entities = null,
         CancellationToken ct = default)
     {
