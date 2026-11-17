@@ -150,6 +150,12 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       },
       onRoute: appendRouteTrace,
     })
+      .then((outcome) => {
+        if (outcome === "idle") {
+          queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+          invalidateConversations();
+        }
+      })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
