@@ -29,7 +29,10 @@ public static class IssueAgentTools
                 .Set("body", AgentToolArgs.RequiredString(args, "body"))
                 .Set("kind", AgentToolArgs.OptionalString(args, "kind"))
                 .Build(),
-            ct));
+            ct),
+            // The only CrossProject spec in the registry: filing on another team's board is the protocol,
+            // speaking for another project is not — AgentToolRegistry.ProvenanceRefusalFor enforces the author.
+            Scope: AgentToolScope.CrossProject);
 
     private static AgentToolSpec ListSpec(AgentLoopbackClient api) => new(
         "issues_list",

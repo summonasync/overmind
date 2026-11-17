@@ -16,7 +16,12 @@ internal static class AgentToolScopeDeclarationAudit
         "get_board_context", "list_projects",
     ];
 
-    internal static readonly IReadOnlyList<string> CrossProject = Array.Empty<string>();
+    // Marked by task 2: the cross-project filing door. Its authorProjectId obligation is enforced in
+    // AgentToolRegistry.ProvenanceRefusalFor, and the rule below keeps any future marking honest about it.
+    internal static readonly IReadOnlyList<string> CrossProject =
+    [
+        "issues_create",
+    ];
 
     // Object-determined doors: the schema can name a stored object without naming the project that
     // owns it. Enforcing this half is feature 246, not 241 — 241 ships argument-level enforcement plus
@@ -41,7 +46,7 @@ internal static class AgentToolScopeDeclarationAudit
 
     internal static readonly IReadOnlyList<string> ArgumentEnforced =
     [
-        "issues_create", "issues_list", "list_entries", "notify_human",
+        "issues_list", "list_entries", "notify_human",
         "planning_ack_directive", "planning_add_feature_dependency", "planning_append_directive", "planning_claim_feature",
         "planning_create_feature", "planning_current_task", "planning_export_backlog", "planning_import_feature",
         "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features", "planning_list_lanes",
@@ -148,6 +153,10 @@ internal static class AgentToolScopeDeclarationAudit
                 break;
             case "ScopedHandleException" when !(requiredProject && guidHandle):
                 yield return $"{spec.Name} is declared a scoped-handle exception but no longer carries a required projectId with a handle";
+                break;
+            case "CrossProject" when !schema.Properties.Contains("authorProjectId"):
+                yield return $"{spec.Name} is marked CrossProject but takes no authorProjectId — " +
+                             "the provenance check would have nothing to verify and would refuse every call";
                 break;
             case "ArgumentEnforced" when ObjectDetermined(spec):
                 yield return $"{spec.Name} addresses an object by handle and belongs in ObjectDeterminedGap or ScopedHandleException";

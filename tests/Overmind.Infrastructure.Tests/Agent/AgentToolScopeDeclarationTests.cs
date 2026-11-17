@@ -51,6 +51,7 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
             $"{AgentToolScopeDeclarationAudit.ScopedHandleExceptions.Count} scoped-handle exceptions");
         registered.ShouldBeGreaterThanOrEqualTo(70);
         AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count.ShouldBe(19);
+        AgentToolScopeDeclarationAudit.CrossProject.Count.ShouldBe(1);
         AgentToolScopeDeclarationAudit.SessionScoped.Count.ShouldBe(7);
         AgentToolScopeDeclarationAudit.Discovery.Count.ShouldBe(2);
     }
@@ -93,11 +94,22 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
     }
 
     [Fact]
-    public void CrossProject_IsStillUndeclared_AndTheIssuesDoorsStayEnforcedUntilTask2()
+    public void CrossProject_IsDeclaredOnTheFilingDoorAlone_WhileTheFourIssueIdDoorsStayInTheGap()
     {
-        _registry.Specs.ShouldNotContain(spec => spec.Scope == AgentToolScope.CrossProject);
-        Spec("issues_create").Scope.ShouldBe(AgentToolScope.Enforce);
+        var marked = _registry.Specs
+            .Where(spec => spec.Scope == AgentToolScope.CrossProject)
+            .Select(spec => spec.Name)
+            .ToList();
+
+        marked.ShouldBe(AgentToolScopeDeclarationAudit.CrossProject, ignoreOrder: true);
+        marked.ShouldHaveSingleItem();
         Spec("issues_append").Scope.ShouldBe(AgentToolScope.Enforce);
+        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.ShouldContain("issues_append",
+            "issues_append addresses an issue by id — marking it CrossProject would delete a tracked hole");
+        foreach (var door in new[] { "issues_get", "issues_set_status", "issues_promote", "issues_append" })
+        {
+            AgentToolScopeDeclarationAudit.ObjectDeterminedGap.ShouldContain(door);
+        }
     }
 
     [Fact]
@@ -120,8 +132,9 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
     [Fact]
     public void Gap_TheObjectDeterminedSetIsWhatTheRuleDerives()
     {
+        // Deliberately policy-blind: a door addressed by object id is a hole whatever scope someone declares
+        // for it, so marking it CrossProject cannot shrink the tracked set — only closing it in 246 can.
         var derived = _registry.Specs
-            .Where(spec => spec.Scope == AgentToolScope.Enforce)
             .Where(AgentToolScopeDeclarationAudit.ObjectDetermined)
             .Select(spec => spec.Name)
             .ToList();
@@ -129,6 +142,8 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
         derived
             .Where(name => !AgentToolScopeDeclarationAudit.ScopedHandleExceptions.Contains(name))
             .ShouldBe(AgentToolScopeDeclarationAudit.ObjectDeterminedGap, ignoreOrder: true);
+        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count.ShouldBe(19,
+            "the declared gap stays at 19 doors while 241 ships argument-level enforcement only");
         derived.ShouldContain("ack_entry",
             "ack_entry carries a required projectId with the handle and is exempt only because the service scopes it");
     }

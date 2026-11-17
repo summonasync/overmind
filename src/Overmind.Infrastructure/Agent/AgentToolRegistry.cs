@@ -37,6 +37,20 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
         "cannot be read as a project id, so the host cannot tell which board the call meant and refused it. Nothing " +
         "was read or written. Call '{0}' with projectId={1}, or omit projectId when the tool says it is optional.";
 
+    public const string ProjectProvenanceMissingCode = "projectProvenanceMissing";
+
+    public const string ProjectProvenanceMissingMessage =
+        "'{0}' works across project boards and must say which project it is called from in authorProjectId, but this " +
+        "call carries no readable authorProjectId. The conversation belongs to project '{1}'. Nothing was filed. " +
+        "Call '{0}' with authorProjectId={1}.";
+
+    public const string ProjectProvenanceMismatchCode = "projectProvenanceMismatch";
+
+    public const string ProjectProvenanceMismatchMessage =
+        "'{0}' works across project boards and must present its own project: this conversation belongs to project " +
+        "'{1}', but the authorProjectId this call carries names project '{2}'. Filing on another board is allowed, " +
+        "speaking for another project is not, so nothing was filed. Call '{0}' with authorProjectId={1}.";
+
     private readonly Dictionary<string, AgentToolSpec> _specs;
     private readonly IReadOnlyList<AITool> _tools;
     private readonly IReadOnlyList<AITool> _toolsWithHumanGated;
@@ -97,6 +111,11 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             return scopeRefusal;
         }
 
+        if (ProvenanceRefusalFor(spec, arguments, invocation) is { } provenanceRefusal)
+        {
+            return provenanceRefusal;
+        }
+
         try
         {
             if (invocation.DelegationArmed &&
@@ -143,9 +162,10 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
         };
 
     // The scope comparison lives here, once, for all seven families — no handler sees it.
-    // Specs marked AgentToolScope.CrossProject are exempt from this projectId check; task 2 of 241
-    // owes them the authorProjectId == invocation.ProjectId check. issues_create and issues_append are
-    // deliberately unmarked until then, so a foreign target board is refused by this comparison today.
+    // AgentToolScope.Enforce specs are compared on the projectId argument; AgentToolScope.CrossProject
+    // specs skip that comparison and are checked for provenance instead (ProvenanceRefusalFor): they may
+    // address any board but must present the conversation's own project as the author. Discovery and
+    // SessionScoped specs are exempt from both, by declaration.
     private static JsonElement? ScopeRefusalFor(
         AgentToolSpec spec, JsonElement arguments, AgentToolInvocation invocation)
     {
@@ -170,6 +190,31 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             ? null
             : ScopedError(
                 string.Format(ProjectScopeMismatchMessage, spec.Name, own, sent), ProjectScopeMismatchCode);
+    }
+
+    private static JsonElement? ProvenanceRefusalFor(
+        AgentToolSpec spec, JsonElement arguments, AgentToolInvocation invocation)
+    {
+        if (spec.Scope != AgentToolScope.CrossProject || invocation.ProjectId is not { } own ||
+            arguments.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var authored = arguments.TryGetProperty("authorProjectId", out var value) &&
+                       value.ValueKind != JsonValueKind.Null
+            ? AddressedProject(value)
+            : null;
+
+        return authored switch
+        {
+            null => ScopedError(string.Format(ProjectProvenanceMissingMessage, spec.Name, own),
+                ProjectProvenanceMissingCode),
+            Guid author when author != own => ScopedError(
+                string.Format(ProjectProvenanceMismatchMessage, spec.Name, own, author),
+                ProjectProvenanceMismatchCode),
+            _ => null
+        };
     }
 
     private static Guid? AddressedProject(JsonElement addressed) =>

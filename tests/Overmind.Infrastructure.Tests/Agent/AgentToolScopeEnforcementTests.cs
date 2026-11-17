@@ -306,27 +306,171 @@ public sealed class AgentToolScopeEnforcementTests : IDisposable
     }
 
     [Fact]
-    public async Task InvokeAsync_IssuesCreateStaysEnforced_UntilTask2MarksItCrossProject()
+    public async Task InvokeAsync_CrossProjectFilingOnForeignBoardWithOwnAuthorId_FilesOnTheForeignBoard()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "issues_create", IssueCreate(ForeignProject, ConversationProject), ScopedTurn, CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());
+        var request = handler.Requests.ShouldHaveSingleItem();
+        request.RequestUri!.ToString().ShouldContain(ForeignProject.ToString());
+        request.RequestUri!.ToString().ShouldNotContain(ConversationProject.ToString());
+        handler.Bodies[0].ShouldContain(ConversationProject.ToString(), Case.Sensitive);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_CrossProjectFilingWithOwnAuthorIdUppercase_StillFiles()
     {
         var handler = new RecordingHandler();
         var registry = CreateRegistry(handler);
 
         var result = await registry.InvokeAsync(
             "issues_create",
-            Parse($$"""
-                    {"projectId":"{{ForeignProject}}","authorProjectId":"{{ConversationProject}}",
-                     "title":"foreign board","body":"## Repro\nnone"}
-                    """),
+            IssueCreate(ForeignProject, Guid.Parse(ConversationProject.ToString().ToUpperInvariant())),
             ScopedTurn,
             CancellationToken.None);
 
-        ScopeRefusal(result, "issues_create is enforced in task 0; task 2 opens the cross-project door");
+        result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());
+    }
+
+    [Fact]
+    public async Task InvokeAsync_CrossProjectFilingSpeakingForAnotherProject_RefusedWithoutRequest()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "issues_create", IssueCreate(ForeignProject, UnnamedProjectA), ScopedTurn, CancellationToken.None);
+
+        var error = ProvenanceRefusal(result, AgentToolRegistry.ProjectProvenanceMismatchCode,
+            "authorProjectId naming a project the conversation does not belong to");
+        error.ShouldContain("issues_create");
+        error.ShouldContain(ConversationProject.ToString());
+        error.ShouldContain(UnnamedProjectA.ToString());
+        error.ShouldNotContain(ForeignProject.ToString(), Case.Sensitive,
+            "the target board is not named back — the refusal may only carry the conversation's own id and the author id sent");
+        GuidToken.Matches(error)
+            .Select(match => Guid.Parse(match.Value))
+            .Distinct()
+            .ShouldBe([ConversationProject, UnnamedProjectA], ignoreOrder: true);
         handler.Requests.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("""{"authorProjectId":"not-a-guid"}""")]
+    [InlineData("""{"authorProjectId":"\u00a0\u00a0"}""")]
+    [InlineData("""{"authorProjectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f02-99"}""")]
+    [InlineData("""{"authorProjectId":"<|mask_privacy|>"}""")]
+    [InlineData("""{"authorProjectId":42}""")]
+    [InlineData("""{"authorProjectId":null}""")]
+    [InlineData("{}")]
+    public async Task InvokeAsync_CrossProjectFilingWithoutReadableAuthorId_RefusedWithoutEchoing(string authorPart)
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+        var body = authorPart == "{}"
+            ? $$"""{"projectId":"{{ForeignProject}}","title":"t","body":"b"}"""
+            : $$"""{"projectId":"{{ForeignProject}}","title":"t","body":"b",""" + authorPart[1..];
+
+        var result = await registry.InvokeAsync(
+            "issues_create", Parse(body), ScopedTurn, CancellationToken.None);
+
+        var error = ProvenanceRefusal(result, AgentToolRegistry.ProjectProvenanceMissingCode,
+            $"no readable authorProjectId ({authorPart})");
+        error.ShouldNotContain("evil-echo-canary");
+        error.ShouldNotContain("019712af-8ea4-7aa1-9f5b-2f3c4d5e6f02-99");
+        GuidToken.Matches(error)
+            .Select(match => Guid.Parse(match.Value))
+            .Distinct()
+            .ShouldBe([ConversationProject], ignoreOrder: true);
+        handler.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_IssuesListTakesNoAuthorObligation_TheProvenanceRuleIsCrossProjectOnly()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "issues_list", ProjectArgs(ConversationProject), ScopedTurn, CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(
+            $"a read of the conversation's own board must not need authorProjectId: {result.GetRawText()}");
+        handler.Requests.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_IssuesAppendIsNotMarkedCrossProject_ItsAuthorIdStaysUnverified()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "issues_append",
+            Parse($$"""{"issueId":"{{Guid.NewGuid()}}","authorProjectId":"{{UnnamedProjectA}}","text":"follow-up"}"""),
+            ScopedTurn,
+            CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(
+            "issues_append is one of the 19 declared doors (feature 246); pinning that it is NOT yet enforced " +
+            $"keeps the gap visible instead of pretending task 2 closed it: {result.GetRawText()}");
+        handler.Requests.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ProjectLessConversationFilingCrossProject_PassesThroughForTask3()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+        var globalTurn = new AgentToolInvocation(false, null, Guid.NewGuid(), null);
+
+        var result = await registry.InvokeAsync(
+            "issues_create", IssueCreate(ForeignProject, UnnamedProjectA), globalTurn, CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());
+        handler.Requests.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_EnforceReadFilteringOnAnotherProjectsAuthorId_IsNotSubjectedToTheProvenanceCheck()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "issues_list",
+            Parse($$"""{"projectId":"{{ConversationProject}}","authorProjectId":"{{UnnamedProjectA}}"}"""),
+            ScopedTurn,
+            CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(
+            "authorProjectId on a read of the conversation's own board is a filter, not a claim of authorship — " +
+            $"provenance must not reach Enforce specs: {result.GetRawText()}");
+        handler.Requests.ShouldHaveSingleItem();
+        handler.Requests[0].RequestUri!.ToString().ShouldContain("authorProjectId=");
+    }
+
+    private static JsonElement IssueCreate(Guid board, Guid author) =>
+        Parse($$"""{"projectId":"{{board}}","authorProjectId":"{{author}}","title":"t","body":"## Repro\nnone"}""");
+
+    private static string ProvenanceRefusal(JsonElement result, string code, string because)
+    {
+        result.TryGetProperty("error", out var error).ShouldBeTrue($"{because}: got {result.GetRawText()}");
+        result.GetProperty("code").GetString().ShouldBe(code, because);
+        var text = error.GetString()!;
+        text.ShouldNotBeNullOrWhiteSpace();
+        return text;
     }
 
     [Theory]
     [InlineData(AgentToolRegistry.ProjectScopeMismatchMessage)]
     [InlineData(AgentToolRegistry.ProjectScopeUnverifiableMessage)]
+    [InlineData(AgentToolRegistry.ProjectProvenanceMismatchMessage)]
+    [InlineData(AgentToolRegistry.ProjectProvenanceMissingMessage)]
     public void ScopeRefusalTemplate_ClaimsOnlyTheArgumentItCompared(string template)
     {
         var phrased = string.Format(template, "some_tool", ConversationProject, ForeignProject);
@@ -412,17 +556,23 @@ public sealed class AgentToolScopeEnforcementTests : IDisposable
     private sealed class RecordingHandler : HttpMessageHandler
     {
         private readonly List<HttpRequestMessage> _requests = [];
+        private readonly List<string> _bodies = [];
 
         public IReadOnlyList<HttpRequestMessage> Requests => _requests;
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        public IReadOnlyList<string> Bodies => _bodies;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             _requests.Add(request);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            _bodies.Add(request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken));
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json")
-            });
+            };
         }
     }
 }
