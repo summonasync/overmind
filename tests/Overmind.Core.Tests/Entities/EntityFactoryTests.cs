@@ -149,7 +149,7 @@ public class ProjectTests
         var project = Project.Create("Overmind", "/disk/path");
 
         Should.Throw<ArgumentOutOfRangeException>(() =>
-            project.SetClaimSettings(15, null, new string('x', Project.MaxRescuePolicyLength + 1)));
+            project.SetClaimSettings(30, "new rules", new string('x', Project.MaxRescuePolicyLength + 1)));
 
         project.RescuePolicy.ShouldBe(Project.DefaultRescuePolicy);
         project.ClaimStaleThresholdMinutes.ShouldBe(Project.DefaultClaimStaleThresholdMinutes);
