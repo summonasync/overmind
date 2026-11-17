@@ -150,7 +150,7 @@ public sealed class EntryLinkResolver
                 return target.Id is { } projectId && Rows.Any(row => row.Id == projectId) ? projectId : null;
             }
 
-            return ProjectNameMatch.Pick(Rows, target.Key);
+            return ProjectNameMatch.PickStrict(Rows, target.Key);
         }
     }
 }

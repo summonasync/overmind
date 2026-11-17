@@ -102,6 +102,26 @@ public sealed class JournalProjectStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task SameCollisionWithoutTheExactCasing_ContainerAdoptsTheOldestRow_MarkerStaysUnresolved()
+    {
+        using var context = _temp.CreateContext();
+        var oldestId = await SeedProjectAsync(context, "journal", "2026-01-01 00:00:00");
+        await SeedProjectAsync(context, "JOURNAL", "2026-06-01 00:00:00");
+        var home = Project.Create("Collision Home", "/tmp/collision-home");
+        context.Projects.Add(home);
+        var source = ContextEntry.Create(home.Id, EntryType.Note, "collision probe", "seed");
+        context.ContextEntries.Add(source);
+        await context.SaveChangesAsync();
+
+        var container = await new JournalProjectStore(context).FindIdAsync();
+        var marker = await new EntryLinkResolver(context, new JournalProjectStore(context))
+            .ResolveAsync(source.Id, WikiLinkParser.Parse("[[project:Journal]]"));
+
+        container.ShouldBe(oldestId);
+        marker.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task EnsureId_RaceInsideAnExplicitTransaction_DetachesAndRethrowsForTheCallerToRetry()
     {
         using var connection = new SqliteConnection($"Data Source={DatabasePath()};Pooling=false");

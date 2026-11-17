@@ -21,7 +21,7 @@ public sealed class JournalProjectStore
             .Select(p => new { p.Id, p.Name, p.CreatedAt })
             .ToListAsync(ct);
 
-        return ProjectNameMatch.Pick(
+        return ProjectNameMatch.PickDeterministic(
             projects.Select(project => (project.Id, project.Name, project.CreatedAt)),
             ProjectName);
     }

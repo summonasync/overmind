@@ -123,10 +123,12 @@ public sealed class EntryLinkResolverTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Journal")]
-    [InlineData("journal")]
-    [InlineData("JOURNAL")]
-    public async Task ResolveProjectMarker_CaseVariantsCoexist_ExactCaseWinsThenEarliestCreatedAt(string marker)
+    [InlineData("Journal", "journal-project")]
+    [InlineData("journal", "lowercase-variant")]
+    [InlineData("JOURNAL", "none")]
+    [InlineData("jouRnal", "none")]
+    public async Task ResolveProjectMarker_CaseVariantsCoexist_OnlyAnExactCasingResolves(
+        string marker, string expectedTarget)
     {
         var variantId = Guid.NewGuid();
         await _context.Database.ExecuteSqlRawAsync(
@@ -142,7 +144,13 @@ public sealed class EntryLinkResolverTests : IDisposable
 
         var links = await ResolveAsync($"[[project:{marker}]]");
 
-        var expected = marker == "journal" || marker == "JOURNAL" ? variantId : _journalProjectId;
+        if (expectedTarget == "none")
+        {
+            links.ShouldBeEmpty();
+            return;
+        }
+
+        var expected = expectedTarget == "journal-project" ? _journalProjectId : variantId;
         links.ShouldHaveSingleItem();
         links.Single().Kind.ShouldBe(EntryLinkKind.Project);
         links.Single().ToId.ShouldBe(expected);
