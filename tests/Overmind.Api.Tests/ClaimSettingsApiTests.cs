@@ -208,6 +208,29 @@ public sealed class ClaimSettingsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Put_LegacyBodyWithNullNamingRules_ClearsRulesKeepsRescuePolicy()
+    {
+        var project = await CreateProjectAsync();
+        await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 45,
+            AgentNamingRules = "aliases are crew names",
+            RescuePolicy = "kept across legacy saves",
+        });
+
+        var put = await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 20,
+            AgentNamingRules = (string?)null,
+        });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var fetched = await _client.GetFromJsonAsync<ClaimSettingsJson>(Url(project.Id), JsonOptions);
+        fetched!.AgentNamingRules.ShouldBeNull();
+        fetched.RescuePolicy.ShouldBe("kept across legacy saves");
+    }
+
+    [Fact]
     public async Task Put_WhitespaceOnlyRescuePolicy_PersistsNull()
     {
         var project = await CreateProjectAsync();

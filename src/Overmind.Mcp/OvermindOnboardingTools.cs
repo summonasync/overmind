@@ -154,6 +154,7 @@ public sealed class OvermindOnboardingTools
         AppendIdentity(payload, output);
         AppendSemantic(payload, output);
         AppendAdapter(payload, output);
+        AppendRescue(payload, output);
 
         output.AppendLine();
         output.Append(payload.GetProperty("quickstart").GetString());
@@ -182,6 +183,20 @@ public sealed class OvermindOnboardingTools
             : null;
 
         output.AppendLine($"Adapter: {adapterVersion ?? "unknown"} vs host {hostVersion ?? "unknown"}: {warningText}");
+    }
+
+    private static void AppendRescue(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("rescue", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("policyText", out var policy) ||
+            policy.ValueKind != JsonValueKind.String ||
+            policy.GetString() is not { Length: > 0 } policyText)
+        {
+            return;
+        }
+
+        output.AppendLine($"Rescue policy: {policyText}");
     }
 
     private static void AppendMaterialization(JsonElement payload, StringBuilder output)

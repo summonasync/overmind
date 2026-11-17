@@ -448,6 +448,16 @@ public static class Canned
         {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
+    public const string OnboardRescueJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"rescue":{"policyText":"everything unpushed may be pushed, everything unmerged I allow merging"},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
+    public const string OnboardRescueNullPolicyJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":null,"lastAttempt":null},"validation":{"humanGate":false},"semantic":{"available":true,"reason":null},"rescue":{"policyText":null},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
     public static string EntryMarkdown(string title, string content) => $"# {title}\n\n{content}\n";
 
     public static int StoredLength(string json, string field) =>

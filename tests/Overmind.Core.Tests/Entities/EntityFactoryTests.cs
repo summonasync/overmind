@@ -157,6 +157,19 @@ public class ProjectTests
     }
 
     [Fact]
+    public void SetClaimSettings_NullNamingRulesClears_NullRescuePolicyKeeps()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        project.SetClaimSettings(20, "aliases are crew names", "push anything, merge only through review");
+
+        project.SetClaimSettings(30, null, null);
+
+        project.AgentNamingRules.ShouldBeNull();
+        project.RescuePolicy.ShouldBe("push anything, merge only through review");
+        project.ClaimStaleThresholdMinutes.ShouldBe(30);
+    }
+
+    [Fact]
     public void SetManifest_TrimsAndStores()
     {
         var project = Project.Create("Overmind", "/disk/path");
