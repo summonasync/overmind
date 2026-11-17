@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 
 namespace Overmind.Infrastructure.Tests.Telegram;
 
@@ -7,7 +8,12 @@ public sealed class FakeTelegramApi : HttpMessageHandler
 {
     private const string EmptyResult = """{"ok":true,"result":[]}""";
 
-    public sealed record Captured(string Method, string Path, string Query, string Body);
+    public sealed record Captured(
+        string Method,
+        string Path,
+        string Query,
+        string Body,
+        long? ResultMessageId);
 
     private readonly object _lock = new();
     private readonly Queue<string> _pendingResponses = new();
@@ -43,15 +49,6 @@ public sealed class FakeTelegramApi : HttpMessageHandler
             ? string.Empty
             : await request.Content.ReadAsStringAsync(cancellationToken);
 
-        lock (_lock)
-        {
-            Requests.Add(new Captured(
-                request.Method.Method, request.RequestUri!.AbsolutePath, request.RequestUri.Query, body));
-        }
-
-        RequestArrived.Release();
-        await Task.Delay(20, cancellationToken);
-
         string json;
         lock (_lock)
         {
@@ -61,12 +58,35 @@ public sealed class FakeTelegramApi : HttpMessageHandler
                 ?? (_pendingResponses.Count > 0
                     ? _pendingResponses.Dequeue()
                     : Fallback(request.RequestUri!.AbsolutePath));
+            Requests.Add(new Captured(
+                request.Method.Method, request.RequestUri!.AbsolutePath, request.RequestUri.Query, body,
+                MessageIdOf(json)));
         }
+
+        RequestArrived.Release();
+        await Task.Delay(20, cancellationToken);
 
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
+    }
+
+    private static long? MessageIdOf(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty("result", out var result)
+                && result.ValueKind == JsonValueKind.Object
+                && result.TryGetProperty("message_id", out var messageId)
+                    ? messageId.GetInt64()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     // A queued response is consumed by whatever request comes next, so tests queue one only where the

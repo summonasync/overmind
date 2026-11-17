@@ -660,6 +660,88 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RoomPick_APromptThatSplits_RegistersEveryChunkInDraftAndTombstone()
+    {
+        var chunks = await OpenSplitPromptAsync();
+
+        chunks.Count.ShouldBeGreaterThanOrEqualTo(3);
+        string.Concat(chunks.Select(SentText))
+            .ShouldBe(string.Format(
+                TelegramWaveCommandService.PromptTextFormat,
+                $"{SplitPromptProjectName} · telegram-bridge"));
+        foreach (var chunk in chunks)
+        {
+            Markup(chunk).GetProperty("force_reply").GetBoolean().ShouldBeTrue();
+        }
+
+        List<long> delivered = [.. chunks.Select(chunk => chunk.ResultMessageId!.Value)];
+        Prompt().PromptMessageIds.ShouldBe(delivered);
+        foreach (var id in delivered)
+        {
+            _prompts.IsClosed(OwnerChatId, id).ShouldBeTrue();
+        }
+
+        _prompts.IsClosed(OwnerChatId, delivered[^1] + 1).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public async Task PromptReplyToAnyChunkOfASplitPrompt_IsCapturedByTheWaveDoorWithNoAgentTurn(int chunkSelector)
+    {
+        var chunks = await OpenSplitPromptAsync();
+
+        var (handler, probe) = CreateAgentHandler();
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(
+                OwnerChatId, Signal, ChunkIdAt(chunks, chunkSelector), "Owner", ReplyMessageId, ReplyUpdateId),
+            CancellationToken.None);
+
+        probe.AssertUntouched("a reply aimed at any chunk of a split prompt is the wave door's");
+        (await WaveMessagesAsync()).ShouldHaveSingleItem().Text.ShouldBe(Signal);
+        SentTexts().ShouldContain("Posted to telegram-bridge.");
+        await ZeroModelProbe.AssertNoConversationFootprintAsync(_temp);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public async Task ReplyToAnyChunkOfAPostedSplitPrompt_GetsTheRestartNoticeNotAnAgentTurn(int chunkSelector)
+    {
+        var chunks = await OpenSplitPromptAsync();
+        var promptMessageId = ChunkIdAt(chunks, chunkSelector);
+        await ReplyAsync(ChunkIdAt(chunks, -1), Signal);
+
+        var (handler, probe) = CreateAgentHandler();
+        await handler.HandleAsync(
+            new TelegramIncomingMessage(
+                OwnerChatId, "a second signal", promptMessageId, "Owner", ReplyMessageId, ReplyUpdateId),
+            CancellationToken.None);
+
+        probe.AssertUntouched("a closed split prompt must not buy an agent turn on any of its chunks");
+        (await WaveMessagesAsync()).ShouldHaveSingleItem().Text.ShouldBe(Signal);
+        SentTexts().ShouldContain(TelegramWaveCommandService.DraftClosedReply);
+        _logs.ShouldContain(line =>
+            line.StartsWith("Information:", StringComparison.Ordinal)
+            && line.Contains(
+                $"was closed; reply message {ReplyMessageId} of update {ReplyUpdateId} to prompt {promptMessageId}",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void WavePromptText_AtTheWidestLegalTarget_StaysASingleChunk()
+    {
+        var widest = string.Format(
+            TelegramWaveCommandService.PromptTextFormat,
+            $"{new string('p', WidestProjectNameLength)} · {new string('r', PlanningLane.MaxNameLength)}");
+
+        widest.Length.ShouldBeLessThan(TelegramReplySplitter.MaxMessageLength);
+        TelegramReplySplitter.Split(widest).ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task RestartedHost_FallsThroughOnAnOldPromptTheNewProcessNeverIssued()
     {
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
@@ -858,11 +940,28 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
     private const long CommandUpdateId = 100;
     private const long ReplyMessageId = 55;
     private const long ReplyUpdateId = 550;
+    private const int SplitPromptProjectNameLength = 9_000;
+    private const int WidestProjectNameLength = 255;
+    private static readonly string SplitPromptProjectName = new('p', SplitPromptProjectNameLength);
 
     private TelegramTransportOptionsProvider CreateOptionsProvider() =>
         new(new AppSettingsService(_temp.CreateContext()));
 
     private TelegramWaveDraft Prompt() => _drafts.Current(OwnerChatId)!;
+
+    private async Task<List<FakeTelegramApi.Captured>> OpenSplitPromptAsync()
+    {
+        await SeedProjectAsync(SplitPromptProjectName, ["telegram-bridge"]);
+        await OpenRoomPickerAsync();
+        var delivered = SentRequests().Count;
+
+        await PickRoomAsync("telegram-bridge");
+
+        return [.. SentRequests().Skip(delivered)];
+    }
+
+    private static long ChunkIdAt(IReadOnlyList<FakeTelegramApi.Captured> chunks, int chunkSelector) =>
+        (chunkSelector < 0 ? chunks[^1] : chunks[chunkSelector]).ResultMessageId!.Value;
 
     private async Task OpenRoomPickerAsync()
     {

@@ -28,7 +28,7 @@ public sealed class TelegramWaveDraftStoreTests
         var drafts = CreateStore();
         var first = drafts.Open(ChatId);
         first.MarkProject(Project, "Overmind", ["all"]);
-        first.AwaitText("all", 21);
+        first.AwaitText("all", [21]);
 
         var second = drafts.Open(ChatId);
 
@@ -44,7 +44,7 @@ public sealed class TelegramWaveDraftStoreTests
         var drafts = new TelegramWaveDraftStore(clock);
         var draft = drafts.Open(ChatId);
         draft.MarkProject(Project, "Overmind", ["all"]);
-        draft.AwaitText("all", 21);
+        draft.AwaitText("all", [21]);
 
         clock.Advance(TimeSpan.FromMinutes(TelegramWaveDraft.LifetimeMinutes));
 
@@ -97,9 +97,40 @@ public sealed class TelegramWaveDraftStoreTests
 
         drafts.AwaitingText(ChatId, 21).ShouldBeNull();
 
-        draft.AwaitText("all", 21);
+        draft.AwaitText("all", [21]);
         drafts.AwaitingText(ChatId, 21).ShouldBe(draft);
         drafts.AwaitingText(ChatId, 22).ShouldBeNull();
+    }
+
+    [Fact]
+    public void AwaitingText_AnswersEveryChunkOfASplitPrompt()
+    {
+        var drafts = CreateStore();
+        var draft = drafts.Open(ChatId);
+        draft.MarkProject(Project, "Overmind", ["all"]);
+
+        draft.AwaitText("all", [21, 22, 23]);
+
+        drafts.AwaitingText(ChatId, 21).ShouldBe(draft);
+        drafts.AwaitingText(ChatId, 22).ShouldBe(draft);
+        drafts.AwaitingText(ChatId, 23).ShouldBe(draft);
+        drafts.AwaitingText(ChatId, 24).ShouldBeNull();
+        draft.PromptMessageId.ShouldBe(23);
+    }
+
+    [Fact]
+    public void ForgetText_ClearsEveryChunkOfTheSplitPrompt()
+    {
+        var draft = CreateStore().Open(ChatId);
+        draft.MarkProject(Project, "Overmind", ["all"]);
+        draft.AwaitText("all", [21, 22]);
+
+        draft.ForgetText();
+
+        draft.PromptMessageIds.ShouldBeEmpty();
+        draft.PromptMessageId.ShouldBeNull();
+        draft.AwaitsText(21).ShouldBeFalse();
+        draft.AwaitsText(22).ShouldBeFalse();
     }
 
     [Fact]
@@ -107,7 +138,7 @@ public sealed class TelegramWaveDraftStoreTests
     {
         var draft = CreateStore().Open(ChatId);
         draft.MarkProject(Project, "Overmind", ["all", "old-lane"]);
-        draft.AwaitText("old-lane", 21);
+        draft.AwaitText("old-lane", [21]);
 
         draft.MarkProject(Project, "Overmind", ["all", "new-lane"]);
 

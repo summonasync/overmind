@@ -184,8 +184,12 @@ public sealed class TelegramWaveCommandService(
             return TelegramNotificationCallbackHandler.FailureAnswer;
         }
 
-        draft.AwaitText(room, delivered[^1]);
-        prompts.Announce(chatId, delivered[^1]);
+        draft.AwaitText(room, delivered);
+        foreach (var promptMessageId in delivered)
+        {
+            prompts.Announce(chatId, promptMessageId);
+        }
+
         return PromptAnswer;
     }
 

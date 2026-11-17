@@ -5,6 +5,7 @@ public sealed class TelegramWaveDraft
     public const int LifetimeMinutes = 15;
 
     private readonly List<string> _rooms = [];
+    private long[] _promptMessageIds = [];
 
     public TelegramWaveDraft(long chatId, string token, DateTimeOffset openedAt)
     {
@@ -20,12 +21,15 @@ public sealed class TelegramWaveDraft
     public string? ProjectName { get; private set; }
     public IReadOnlyList<string> Rooms => _rooms;
     public string? Room { get; private set; }
-    public long? PromptMessageId { get; private set; }
+    public IReadOnlyList<long> PromptMessageIds => _promptMessageIds;
+    public long? PromptMessageId => _promptMessageIds.Length > 0 ? _promptMessageIds[^1] : null;
 
     public bool IsLive(DateTimeOffset now) => now < ExpiresAt;
 
     public bool AwaitsText(long promptMessageId) =>
-        PromptMessageId == promptMessageId && ProjectId is not null && Room is not null;
+        ProjectId is not null
+        && Room is not null
+        && Array.IndexOf(_promptMessageIds, promptMessageId) >= 0;
 
     public void MarkProject(Guid projectId, string projectName, IReadOnlyList<string> rooms)
     {
@@ -48,15 +52,15 @@ public sealed class TelegramWaveDraft
         return true;
     }
 
-    public void AwaitText(string room, long promptMessageId)
+    public void AwaitText(string room, IReadOnlyList<long> promptMessageIds)
     {
         Room = room;
-        PromptMessageId = promptMessageId;
+        _promptMessageIds = [.. promptMessageIds];
     }
 
     public void ForgetText()
     {
         Room = null;
-        PromptMessageId = null;
+        _promptMessageIds = [];
     }
 }
