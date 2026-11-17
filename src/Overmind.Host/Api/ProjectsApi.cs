@@ -169,7 +169,7 @@ public static class ProjectsApi
             if (hasActiveKits)
             {
                 return HttpErrors.Conflict(
-                    $"DiskPath of project '{id}' cannot be changed while kits are active or files are materialized; deactivate kits first.");
+                    $"DiskPath of project '{id}' cannot be changed while kits are active; deactivate kits first.");
             }
 
             var strategy = await policy.ResolveMaterializationAsync(id, ct);
@@ -181,7 +181,16 @@ public static class ProjectsApi
                     return HttpErrors.BadRequest("Candidate path does not exist or is not a directory.");
                 }
 
-                var verification = await MirrorVerifier.VerifyAsync(candidateDiskPath, mirrorRows, ct);
+                MirrorVerificationResult verification;
+                try
+                {
+                    verification = await MirrorVerifier.VerifyAsync(candidateDiskPath, mirrorRows, ct);
+                }
+                catch (MaterializationException ex)
+                {
+                    return MaterializationErrors.Map(ex);
+                }
+
                 if (!verification.Passed)
                 {
                     return HttpErrors.Conflict(verification.Describe());
