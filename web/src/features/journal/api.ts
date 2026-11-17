@@ -36,7 +36,10 @@ export function createJournalNote(
   values: JournalNoteFormValues,
 ): Promise<JournalNote> {
   return apiPost<JournalNote>("/entries", {
-    projectId,
+    // An empty id is not a missing argument, it is the "no forced destination"
+    // signal: the Host resolves the reserved container and creates it when the
+    // very first thought is what brings it into existence.
+    projectId: projectId.length > 0 ? projectId : null,
     type: "journal",
     title: values.title,
     content: values.content,

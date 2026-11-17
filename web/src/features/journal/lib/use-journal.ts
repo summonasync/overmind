@@ -13,7 +13,7 @@ import {
   pickJournalContainerId,
 } from "@/features/journal/queries";
 import type { JournalNoteFormValues, JournalStreamFilters } from "@/features/journal/types";
-import { projectListQueryOptions } from "@/features/projects";
+import { projectKeys, projectListQueryOptions } from "@/features/projects";
 
 // Journal rows live in the reserved "Journal" project (spec R2); there is no
 // dedicated endpoint for its id, so the container is resolved from the shared
@@ -44,7 +44,16 @@ export function useJournalMutations(projectId: string) {
 
   const create = useMutation({
     mutationFn: (values: JournalNoteFormValues) => createJournalNote(projectId, values),
-    onSuccess: invalidateStream,
+    onSuccess: () => {
+      invalidateStream();
+      // A capture is what births the reserved container on the Host side, so the
+      // projects list is stale the moment the first note lands: without this the
+      // note saves while every container consumer (the rail, the pickers, and the
+      // useJournalContainer lookup above) keeps reporting that there is no journal.
+      // Lists only — a project that did not exist a second ago has no detail or
+      // settings entry to stale out, and the tree caches folder browsing.
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
   });
 
   // The note view reads its rails (outgoing/incoming/unresolved) off detail(id),
