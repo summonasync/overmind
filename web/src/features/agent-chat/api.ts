@@ -3,13 +3,14 @@ import type {
   AgentConversation,
   AgentConversationsPayload,
   AgentHistoryPayload,
-  AgentMessageRole,
+  AgentMessage,
   AgentReadState,
   AgentRouteTrace,
   AgentUsage,
 } from "@/features/agent-chat/types";
-import { readSseEvents } from "@/shared/lib/sse";
+import { readSseEvents, type SseEvent } from "@/shared/lib/sse";
 import { parseAgentStreamFrame } from "@/features/agent-chat/lib/stream-frame";
+import { toAgentMessageRole } from "@/features/agent-chat/lib/message-role";
 
 interface ConversationResponse {
   id: string;
@@ -43,6 +44,7 @@ export interface AgentStreamHandlers {
   onAborted?: () => void;
   onAttached?: () => void;
   onRoute?: (trace: AgentRouteTrace) => void;
+  onTool?: (toolName: string) => void;
   signal?: AbortSignal;
 }
 
@@ -56,9 +58,13 @@ function toConversation(response: ConversationResponse): AgentConversation {
   };
 }
 
-function toMessage(response: MessageResponse) {
-  const role: AgentMessageRole = response.role === "assistant" ? "assistant" : "user";
-  return { id: response.id, role, content: response.content, createdAt: response.createdAt };
+function toMessage(response: MessageResponse): AgentMessage {
+  return {
+    id: response.id,
+    role: toAgentMessageRole(response.role),
+    content: response.content,
+    createdAt: response.createdAt,
+  };
 }
 
 export function listAgentConversations(projectId: string | null): Promise<AgentConversationsPayload> {
@@ -115,6 +121,26 @@ export async function listAgentHistory(
   return { items: payload.items.map(toMessage) };
 }
 
+function dispatchAgentStreamEvent(event: SseEvent, handlers: AgentStreamHandlers): void {
+  const frame = parseAgentStreamFrame(event.name, event.data);
+  if (frame === null) {
+    return;
+  }
+  if (frame.kind === "delta") {
+    handlers.onDelta(frame.text);
+  } else if (frame.kind === "completed") {
+    handlers.onCompleted(frame.messageId);
+  } else if (frame.kind === "aborted") {
+    handlers.onAborted?.();
+  } else if (frame.kind === "route") {
+    handlers.onRoute?.({ target: frame.target, source: frame.source });
+  } else if (frame.kind === "tool") {
+    handlers.onTool?.(frame.toolName);
+  } else {
+    handlers.onFailed(frame.error);
+  }
+}
+
 export async function attachAgentTurn(
   conversationId: string,
   handlers: AgentStreamHandlers,
@@ -135,23 +161,7 @@ export async function attachAgentTurn(
 
   handlers.onAttached?.();
 
-  await readSseEvents(response.body, (event) => {
-    const frame = parseAgentStreamFrame(event.name, event.data);
-    if (frame === null) {
-      return;
-    }
-    if (frame.kind === "delta") {
-      handlers.onDelta(frame.text);
-    } else if (frame.kind === "completed") {
-      handlers.onCompleted(frame.messageId);
-    } else if (frame.kind === "aborted") {
-      handlers.onAborted?.();
-    } else if (frame.kind === "route") {
-      handlers.onRoute?.({ target: frame.target, source: frame.source });
-    } else {
-      handlers.onFailed(frame.error);
-    }
-  });
+  await readSseEvents(response.body, (event) => dispatchAgentStreamEvent(event, handlers));
   return "attached";
 }
 
@@ -176,21 +186,5 @@ export async function streamAgentReply(
     throw new Error("The chat stream returned no body.");
   }
 
-  await readSseEvents(response.body, (event) => {
-    const frame = parseAgentStreamFrame(event.name, event.data);
-    if (frame === null) {
-      return;
-    }
-    if (frame.kind === "delta") {
-      handlers.onDelta(frame.text);
-    } else if (frame.kind === "completed") {
-      handlers.onCompleted(frame.messageId);
-    } else if (frame.kind === "aborted") {
-      handlers.onAborted?.();
-    } else if (frame.kind === "route") {
-      handlers.onRoute?.({ target: frame.target, source: frame.source });
-    } else {
-      handlers.onFailed(frame.error);
-    }
-  });
+  await readSseEvents(response.body, (event) => dispatchAgentStreamEvent(event, handlers));
 }
