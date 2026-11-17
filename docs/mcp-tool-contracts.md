@@ -51,3 +51,13 @@ unknown session fails with a named error (`POST /api/agent/sessions` registers).
 `|<refId>` — malformed values return 400 naming the expected shape) and optional `projectId`
 (adapter-internal; not a tool parameter). The response JSON above is the agent-facing contract
 and is unchanged by the lookback, consumption and scoping work; only the row set moved.
+
+<!-- append-regions: the two diet batches fill disjoint zones of this file so parallel lanes
+     never collide on the same lines. Insert a tool's section INSIDE its own region, above its
+     end marker; never move or rename a marker, never add a heading outside a region.
+     region:planning  -> planning_* tools (diet batch A)
+     region:others    -> every non-planning, non-wake tool (diet batch B) -->
+<!-- region:planning:start -->
+<!-- region:planning:end -->
+<!-- region:others:start -->
+<!-- region:others:end -->
