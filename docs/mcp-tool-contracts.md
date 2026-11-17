@@ -25,8 +25,9 @@ Advances no watermarks, marks nothing read — safe to poll any time.
 
 - Replies: notifications carrying `ReplyText` whose `readAt` is null — a consumed reply leaves
   the default window immediately. The window looks back 7 days; override with
-  `OVERMIND_WAKE_REPLY_LOOKBACK_DAYS` on the host (values below 1 clamp to 1). The mention arm
-  never reads that variable.
+  `OVERMIND_WAKE_REPLY_LOOKBACK_DAYS` on the host (values below 1 clamp to 1, values above 365
+  clamp to 365 so one env typo cannot reach a `TimeSpan` overflow). The mention arm never reads
+  that variable.
 - Mentions: messages created after the session's `LastSeenAt` as it stood before this request.
 
 **Explicit `since` is the replay override.** When `since` is present (a bare timestamp or a
