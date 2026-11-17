@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class ProjectResolverPinTests : IDisposable
 {
     private static readonly Guid PinnedProjectId = Guid.Parse("33333333-3333-3333-3333-333333333333");

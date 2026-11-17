@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class HeartbeatPeriodTests : IDisposable
 {
     public void Dispose() =>

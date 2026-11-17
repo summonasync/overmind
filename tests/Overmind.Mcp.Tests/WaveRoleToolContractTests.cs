@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class WaveRoleToolContractTests : IAsyncLifetime
 {
     private static readonly Guid SessionId = Guid.Parse("55555555-5555-5555-5555-555555555555");

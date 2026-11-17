@@ -71,15 +71,18 @@ public class ProjectManifestToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["read_project_manifest"]!["description"]!.GetValue<string>();
 
+        var description = tools["read_project_manifest"]!["description"]!.GetValue<string>();
+        description.ShouldContain("the deep read behind");
         description.ShouldContain("list_projects");
-        description.ShouldContain("verbatim");
-        description.ShouldContain("says so instead of failing");
-        description.ShouldContain("AGENTS.md/CLAUDE.md/QWEN.md");
-        description.ShouldContain("OVERMIND_PROJECT_ID");
-        description.ShouldContain("never creates a project row");
-        description.ShouldContain("guidance");
+        description.ShouldContain("Says so instead of failing when unset");
+
+        var section = ContractsDoc.Section("read_project_manifest");
+        section.ShouldContain("Returns the manifest markdown verbatim");
+        section.ShouldContain("import it from AGENTS.md/CLAUDE.md/QWEN.md");
+        // Resolution is create:false and an unregistered cwd answers with host guidance; both are
+        // pinned as behavior above (ReadProjectManifest_NoExplicitProject_ResolvesThroughTheOnboardCwd,
+        // ReadProjectManifest_UnregisteredCwd_IsErrorWithHostGuidanceAndNoRetry).
 
         var properties = tools["read_project_manifest"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("projectId");

@@ -19,10 +19,12 @@ public sealed class OvermindOnboardingTools
     }
 
     [McpServerTool(Name = "overmind_onboard", Destructive = false, Idempotent = false)]
-    [Description("Resolves the project from the adapter's working directory (creating it if needed) and returns the project id, board summary and onboarding quickstart. The natural first call for an agent that does not know its projectId yet; agents working with an explicit projectId may skip it. The payload also carries a materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt — the failure reason rides along when the attempt did not succeed — and the skipped-file count with the head of skipped paths from the last successful pass), a validation block (humanGate plus the state-truthful gate sentence — off: agent validate requires a live approval proof, overmind_notify(kind=approval) with a human reply newer than the artifact's last update, 409 ValidationProofRequired without it; on: agents STOP until a human validates the artifact in the UI), an agentIdentity block (effective alias/vendor resolved env > placeholder with its source, the project's naming rules for choosing your own stable alias, and the session_identity_set next step when the alias is still the shared placeholder), a semantic search block (availability, with the verbatim probe reason when down) and an adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting). Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching — use this for symlinked or worktree layouts where the resolved cwd differs from the registered project path. brief=true returns only the project id, board counts per status, humanGate and the adapter version — the cheap repeat call for agents already onboarded and working a lane; the default stays the full payload.")]
+    [Description("Resolves the project from the adapter's working directory (creating it if needed) and " +
+        "returns project id, board summary, guardrail blocks (materialization, validation gate, agent " +
+        "identity, semantic search, adapter version) and the quickstart. The natural first call without a " +
+        "projectId; brief=true answers id, counts, humanGate and version only.")]
     public async Task<string> Onboard(
-        [Description("True to return only the project id, board counts per status, humanGate and adapter version — for repeat callers already onboarded and working a lane.")]
-        bool brief = false,
+        [Description("True for the cheap repeat answer: project id, board counts, humanGate, adapter version.")] bool brief = false,
         CancellationToken ct = default)
     {
         var payload = await Guarded(() => _api.PostAsync("/api/onboard", BuildRequest(), ct));

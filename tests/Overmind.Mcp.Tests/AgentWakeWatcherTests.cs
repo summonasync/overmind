@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class AgentWakeWatcherTests : IDisposable
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(10);

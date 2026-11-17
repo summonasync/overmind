@@ -54,41 +54,32 @@ public sealed class OvermindTools
         "and referencing it here with 'pointer: grimoire://memory/<id>'.";
 
     private const string ListEntriesDescription =
-        "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
-        "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-        $"Optional filters: type ({ReadableTypeList}), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
-        "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
-        "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
-        "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
-        "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.";
+        "Lists a project's entries as metadata rows — the exploration door (bodies via include_content, one " +
+        "full entry via read_entry, the start-of-work snapshot via overmind_briefing). Newest-updated first; " +
+        "no pagination; q caps at 100 hits.";
 
     private static readonly string[] EntryMetadataFields =
         ["id", "type", "title", "tags", "createdAt", "updatedAt", "contentLength"];
 
     private const string SinceDescription =
-        "Optional lower bound on createdAt, inclusive: an ISO-8601 instant (2026-11-12T09:30:00Z) or a yyyy-MM-dd date (2026-11-12 means local midnight).";
+        "Inclusive createdAt floor (ISO-8601 or yyyy-MM-dd, local midnight).";
 
     private const string UntilDescription =
-        "Optional upper bound on createdAt, exclusive: an ISO-8601 instant or a yyyy-MM-dd date; 2026-11-13 excludes entries created at or after that midnight.";
+        "Exclusive createdAt ceiling (ISO-8601 or yyyy-MM-dd, local midnight).";
 
     private const string AuthorDescription =
-        "Optional author filter: exact alias match, case-insensitive. Entries created by agents carry the agent alias; entries created in the human UI have no author and never match a named author filter.";
+        "Author alias filter, case-insensitive; UI entries never match.";
 
     private const int FollowUpTextCap = 2000;
 
     private const string SearchDescription =
-        "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
-        "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
-        "Optional entry-only filters: since/until bound hits by createdAt (since inclusive, until exclusive) and author matches the exact alias case-insensitively — setting any of them drops feature and artifact hits. " +
-        "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
-        "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.";
+        "Fulltext search over entries plus planning features and artifact bodies — the cross-surface door " +
+        "(list_entries explores entries only). Hits carry ids and a snippet, never full bodies. " +
+        "since/until/author narrow to entries; semantic mode covers entries only.";
 
     private const string ReadProjectManifestDescription =
-        "Reads the project's manifest — the full markdown describing what the project is, its stack, build/test commands and conventions; the deep read that complements the one-line description in list_projects. " +
-        "Returns the manifest markdown verbatim. When no manifest is set the tool says so instead of failing — " +
-        "set one on the project config page in the Overmind UI or import it from AGENTS.md/CLAUDE.md/QWEN.md. " +
-        "projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; " +
-        "the resolution never creates a project row; an unregistered directory returns guidance instead.";
+        "Reads the project's manifest markdown — stack, build/test commands, conventions — the deep read " +
+        "behind list_projects' one-liner. Says so instead of failing when unset.";
 
     private readonly OvermindApiClient _api;
     private readonly ProjectResolver _projects;
@@ -108,16 +99,15 @@ public sealed class OvermindTools
     [Description(ListEntriesDescription)]
     public async Task<JsonElement> ListEntries(
         Guid projectId,
-        [Description("Optional entry type filter: note, decision, gate, guard, skill, idea, audit, tombstone or journal.")] string? type = null,
-        [Description("Lifecycle filter: all | active | lifted | superseded. Omit it and the server applies its default — active for the decision/gate/guard trio, all for every other type and when no type is given.")] string? state = null,
-        [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
-        [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
+        [Description("Type filter: note, decision, gate, guard, skill, idea, audit, tombstone, journal.")] string? type = null,
+        [Description("Lifecycle filter: all | active | lifted | superseded.")] string? state = null,
+        [Description("Optional tag filter.")] string? tag = null,
+        [Description("Optional fulltext query.")] string? q = null,
         [Description(SinceDescription)] string? since = null,
         [Description(UntilDescription)] string? until = null,
         [Description(AuthorDescription)] string? author = null,
-        [Description("Set true to include full entry bodies; by default only metadata is returned.")] bool include_content = false,
-        [Description("Optional comma/space-separated metadata keys to project each row down to, e.g. title,updatedAt — " +
-            "id always leads and stays; unknown keys are rejected naming the allowed set; a list naming no keys is a lint error.")] string? fields = null,
+        [Description("True to return full bodies instead of metadata rows.")] bool include_content = false,
+        [Description("Row projection keys, e.g. title,updatedAt; id leads.")] string? fields = null,
         CancellationToken ct = default)
     {
         var requested = PlanningFieldProjection.ResolveRequested(
@@ -177,19 +167,22 @@ public sealed class OvermindTools
     [McpServerTool(Name = "read_entry", ReadOnly = true, Idempotent = true)]
     [Description("Reads a single entry by id, including content, tags and version.")]
     public Task<JsonElement> ReadEntry(
-        [Description("Id of the entry to read.")] Guid entryId,
+        [Description("Entry id.")] Guid entryId,
         CancellationToken ct) =>
         Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
 
     [McpServerTool(Name = "write_entry", Destructive = false, Idempotent = false)]
-    [Description("Creates a new entry through the agent door (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. Journal entries are the human surface: the agent door refuses type=journal with JournalEntryWriteRefused. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act. The optional enforces flag is decision-only — it marks the decision as a standing rule agents must obey, and the server refuses enforces=true on any other type. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead and never auto-creates a project row.")]
+    [Description("Creates a note, decision, gate, guard, idea, audit or tombstone entry — the durable board " +
+        "write; casual notes belong to grimoire. A hand-made tombstone buries an approach; idea is the " +
+        "informal lane. Skills are UI-managed. Journal entries are the human surface: the agent door " +
+        "refuses type=journal with JournalEntryWriteRefused.")]
     public async Task<JsonElement> WriteEntry(
-        [Description("Entry type: note, decision, gate, guard, idea, audit or tombstone.")] string type,
+        [Description("Entry type: note, decision, gate, guard, idea, audit, tombstone.")] string type,
         [Description("Entry title.")] string title,
         [Description("Markdown body of the entry.")] string content,
         [Description("Optional tags attached to the entry.")] string[]? tags = null,
-        [Description("Decision-only flag marking the decision as a standing rule agents must obey; the server refuses enforces=true on any other type.")] bool? enforces = null,
-        [Description("Id of the project to write into; resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead.")] Guid? projectId = null,
+        [Description("Decision-only standing-rule flag; refused true on other types.")] bool? enforces = null,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolvedProjectId = await _projects.ResolveAsync(projectId, create: false, "for the entry", ct);
@@ -209,11 +202,13 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "update_entry", Destructive = false, Idempotent = false)]
-    [Description("Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone through the agent door, keeping its title and tags. Skills are managed via the Overmind UI. Journal entries belong to the human surface and the server refuses them with JournalEntryWriteRefused. An explicit enforces sets the decision-only standing-rule flag (the server refuses enforces=true on other types); omitting it keeps the current value. To add new information without rewriting the body, append_entry is the cheaper door.")]
+    [Description("Replaces an existing entry's content, keeping its title, tags and type; skills are " +
+        "UI-managed. For new information without a rewrite, append_entry is the cheaper door. Journal " +
+        "rows are the human surface — the agent door refuses them with JournalEntryWriteRefused.")]
     public async Task<JsonElement> UpdateEntry(
-        [Description("Id of the entry to update.")] Guid entryId,
-        [Description("New markdown body of the entry.")] string content,
-        [Description("Decision-only flag; an explicit value sets it, omitting it keeps the current value. The server refuses enforces=true on non-decisions.")] bool? enforces = null,
+        [Description("Entry id.")] Guid entryId,
+        [Description("New markdown body.")] string content,
+        [Description("Decision-only standing-rule flag; explicit sets it, omit keeps.")] bool? enforces = null,
         CancellationToken ct = default)
     {
         var existing = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
@@ -233,12 +228,15 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "delete_entry", Destructive = true, Idempotent = true)]
-    [Description("Deletes one entry through the agent door — notes, decisions, gates, guards, ideas, audits and tombstones. " +
-        "Deletion is permanent: the row and its version history are gone, and a tombstone entry is born in its place carrying the original title with ' (deleted)' appended, the original type, the deletion date, door+actor provenance, the optional reason from this call, and the final content preserved in a fenced block. Deleting a tombstone is a plain delete — no second tombstone. Tombstones stay discoverable: list them via list_entries with type=tombstone; they ride search like every other entry. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. Journal entries are the human surface: the agent door refuses them with JournalEntryWriteRefused. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
+    [Description("Hard-deletes an entry — row and version history gone — and births a tombstone in its " +
+        "place carrying title, type, date, provenance and final content. Destructive; tombstones stay " +
+        "listed and searchable. Kit- and skill-owned entries are refused; to retire a standing rule use " +
+        "lift_entry. Journal rows are refused the same way: the agent door stops them with " +
+        "JournalEntryWriteRefused.")]
     public async Task<JsonElement> DeleteEntry(
-        [Description("Id of the entry to delete.")] Guid entryId,
-        [Description("Optional reason recorded on the tombstone — why the entry died. Ignored when the entry is itself a tombstone (plain delete).")] string? reason = null,
-        [Description("Id of the project the entry belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Entry id.")] Guid entryId,
+        [Description("Optional reason for the tombstone; ignored for tombstones.")] string? reason = null,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolvedProjectId = await _projects.ResolveAsync(projectId, create: true, "for the entry", ct);
@@ -291,22 +289,15 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "lift_entry", Destructive = false, Idempotent = true)]
-    [Description("Lifts one standing rule — a guard, gate or decision that no longer applies — without deleting it: " +
-        "the state moves to 'lifted', or to 'superseded' when supersededById points at the replacement entry, and the " +
-        "reason, optional proof, actor and date are stamped on the entry as provenance. The body, title and tags stay " +
-        "untouched; re-lift is allowed with last write winning. A lifted entry leaves the active default listings " +
-        "(list_entries trio default, briefing trio sections) and surfaces in the briefing's liftedRecently tail. " +
-        "Lift refuses skills and tombstones (the UI owns the skill lifecycle; a tombstone is already the ceiling) and " +
-        "validates the supersede target — unknown, cross-project, tombstone or self-reference targets come back as " +
-        "readable errors. Journal entries are the human surface: the tool reads the target type first and refuses " +
-        "with JournalEntryWriteRefused before any write leaves the adapter, and the agent door refuses one it is " +
-        "handed anyway. " +
-        "For replacement content prefer write_entry + supersededById over a body rewrite.")]
+    [Description("Retires one standing rule — guard, gate or decision that no longer applies — without " +
+        "deleting: state moves to lifted, or superseded when supersededById names the replacement; body and " +
+        "title stay untouched. Skills and tombstones refuse. The target type is read first, and a journal " +
+        "row refuses at the agent door with JournalEntryWriteRefused.")]
     public async Task<JsonElement> LiftEntry(
-        [Description("Id of the entry to lift — take it from list_entries or read_entry.")] Guid entryId,
-        [Description("Why the rule no longer applies; stored as the entry's stateReason.")] string reason,
-        [Description("Optional opaque proof of the decision — a notification id or human reply id.")] string? proof = null,
-        [Description("Optional id of the replacement entry; setting it marks the lift as 'superseded' instead of 'lifted'. Must belong to the same project and must not be a tombstone.")] Guid? supersededById = null,
+        [Description("Entry id.")] Guid entryId,
+        [Description("Why the rule no longer applies.")] string reason,
+        [Description("Optional opaque proof — notification or reply id.")] string? proof = null,
+        [Description("Optional replacement id — marks the lift superseded.")] Guid? supersededById = null,
         CancellationToken ct = default)
     {
         var existing = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
@@ -321,15 +312,13 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "append_entry", Destructive = false, Idempotent = false)]
-    [Description("Appends a follow-up to an entry — one dated '## Follow-up yyyy-MM-dd' block at the content tail, " +
-        "through the version machinery: the previous content is snapshotted (the version bumps) and stays readable " +
-        "via the versions endpoint, and the search index refreshes. The cheap door for adding new information to a " +
-        "note, decision, gate or guard without a full update_entry rewrite. text is capped at 2000 chars, enforced " +
-        "here before the call; blank text is refused. Skills are managed via the Overmind UI, and journal entries are " +
-        "the human surface: the agent door refuses them with JournalEntryWriteRefused.")]
+    [Description("Appends a dated '## Follow-up' block to an entry's tail through the version machinery — " +
+        "the cheap door for new information on a note, decision, gate or guard without an update_entry " +
+        "rewrite; the previous version stays readable. text is capped at 2000 chars here. Journal rows " +
+        "refuse: the agent door stops them with JournalEntryWriteRefused.")]
     public async Task<JsonElement> AppendEntry(
-        [Description("Id of the entry to append to — take it from list_entries or read_entry.")] Guid entryId,
-        [Description("Follow-up text; the server stamps it under a dated '## Follow-up' heading, max 2000 chars.")] string text,
+        [Description("Entry id.")] Guid entryId,
+        [Description("Follow-up text, max 2000 chars.")] string text,
         CancellationToken ct = default)
     {
         TextCapLint.Cap(text, FollowUpTextCap);
@@ -353,8 +342,8 @@ public sealed class OvermindTools
     [McpServerTool(Name = "search", ReadOnly = true)]
     [Description(SearchDescription)]
     public async Task<JsonElement> Search(
-        [Description("Search query text.")] string query,
-        [Description("Optional project id to restrict the search to.")] Guid? projectId = null,
+        [Description("Search text.")] string query,
+        [Description("Optional project id to restrict hits.")] Guid? projectId = null,
         [Description("Search mode: fulltext (default) or semantic.")] string? mode = null,
         [Description(SinceDescription)] string? since = null,
         [Description(UntilDescription)] string? until = null,
@@ -392,7 +381,7 @@ public sealed class OvermindTools
     [McpServerTool(Name = "read_project_manifest", ReadOnly = true, Idempotent = true)]
     [Description(ReadProjectManifestDescription)]
     public async Task<string> ReadProjectManifest(
-        [Description("Id of the project whose manifest to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolvedProjectId = await _projects.ResolveAsync(projectId, create: false, "for the entry", ct);

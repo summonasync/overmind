@@ -23,13 +23,15 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_create", Destructive = false, Idempotent = false)]
-    [Description("Files an issue on the board of project projectId — the cross-project protocol: working in project A and need a fix in project B (this board)? File an issue here and do not touch their repo; follow-ups = issues_append; the owner team triages/promotes. Optional kind: 'issue' (default) or 'request' — a bug report vs a feature request; both carry authorProjectId as provenance (validated against existing projects, not permission) and both promote into tasks the same way; anything besides those two values fails with a named validation error. Body recommendation: '## Repro' / '## Expected' / '## Actual' sections; free-form accepted. A foreign create (authorProjectId differs from the board) posts a notification-center entry on the owner project with a deep link — the owner team hears about it without polling.")]
+    [Description("Files an issue (or kind='request' card) on another project's board — the cross-project " +
+        "protocol: need a fix in project B? File here, do not touch their repo. Follow-ups go to " +
+        "issues_append, never a duplicate card; a foreign create notifies the owner board.")]
     public async Task<CallToolResult> Create(
-        [Description("Id of the project whose board receives the issue.")] Guid projectId,
-        [Description("Id of the project filing the issue (provenance; must exist).")] Guid authorProjectId,
+        [Description("Project id of the receiving board.")] Guid projectId,
+        [Description("Filing project id (provenance; must exist).")] Guid authorProjectId,
         [Description("Short issue title.")] string title,
-        [Description("Issue body markdown; recommended sections '## Repro', '## Expected', '## Actual'.")] string body,
-        [Description("Kind of card to file: 'issue' (default) or 'request'. Both promote into tasks the same way.")] string? kind = null,
+        [Description("Issue markdown; '## Repro'/'## Expected'/'## Actual' recommended.")] string body,
+        [Description("'issue' (default) or 'request'.")] string? kind = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -71,12 +73,13 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_list", ReadOnly = true, Idempotent = true)]
-    [Description("Lists issues on the board of project projectId — metadata rows only (no body, no append texts): id, title, status (open/triaged/promoted/closed), authorProjectId, createdAt, closedAt, promotedToArtifactId, appendCount, kind. Optional filters: status, authorProjectId and kind (issue | request). Reads are open to any project — provenance, not permission.")]
+    [Description("Lists issue metadata rows on a board — no bodies, no append texts; issues_get reads one " +
+        "in full. Reads are open to any project — provenance, not permission.")]
     public async Task<CallToolResult> List(
-        [Description("Id of the project whose board to read.")] Guid projectId,
-        [Description("Filter by status: open, triaged, promoted or closed. Omit for all.")] string? status = null,
-        [Description("Filter by filing project id. Omit for all.")] Guid? authorProjectId = null,
-        [Description("Filter by kind: 'issue' or 'request'. Omit for all.")] string? kind = null,
+        [Description("Project board to read.")] Guid projectId,
+        [Description("Status filter: open, triaged, promoted, closed.")] string? status = null,
+        [Description("Filing project filter.")] Guid? authorProjectId = null,
+        [Description("Kind filter: 'issue' or 'request'.")] string? kind = null,
         CancellationToken ct = default)
     {
         var query = new List<string>();
@@ -108,9 +111,9 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_get", ReadOnly = true, Idempotent = true)]
-    [Description("Reads one issue in full: card (title, body, status, author provenance, lifecycle timestamps) plus the chronological append trail. Reads are open to any project.")]
+    [Description("Reads one issue in full — card plus the chronological append trail; open to any project.")]
     public async Task<CallToolResult> Get(
-        [Description("Id of the issue to read.")] Guid issueId,
+        [Description("Issue id.")] Guid issueId,
         CancellationToken ct = default)
     {
         var card = await Guarded(() => _api.GetAsync(
@@ -119,10 +122,12 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_append", Destructive = false, Idempotent = false)]
-    [Description("Appends a follow-up to an issue — the cross-project protocol for new information: entries land in the append-only trail with authorProjectId + text + createdAt and are never edited or deleted; no duplicate issues for follow-ups. Works from any project; the trail moves into the task's <obstacles> when the issue is promoted.")]
+    [Description("Appends a follow-up to an issue — the trail is append-only (author, text, createdAt; " +
+        "never edited or deleted), so never file a duplicate issue for new information. Works from any " +
+        "project; the trail moves into the task's <obstacles> on promote.")]
     public async Task<CallToolResult> Append(
-        [Description("Id of the issue to append to.")] Guid issueId,
-        [Description("Id of the project appending the follow-up (provenance; must exist).")] Guid authorProjectId,
+        [Description("Issue id.")] Guid issueId,
+        [Description("Filing project id (provenance; must exist).")] Guid authorProjectId,
         [Description("Follow-up text.")] string text,
         CancellationToken ct = default)
     {
@@ -147,12 +152,14 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_set_status", Destructive = false, Idempotent = true)]
-    [Description("Moves an issue through its lifecycle: open → triaged → promoted → closed. Closed is reachable from any non-closed state (not-a-bug close — put the reason in issues_append text); there is no reopen, a re-found bug is a new issue. Promoted is reached only through issues_promote and is refused here. Every move records the source marker (agent/ui) as its provenance — issues have no log, the marker is the provenance.")]
+    [Description("Moves an issue through open → triaged → promoted → closed. Settable here: triaged and " +
+        "closed; promoted comes from issues_promote only. Closed is reachable from any non-closed state as " +
+        "the not-a-bug close — put the reason in issues_append. No reopen: a re-found bug is a new issue.")]
     public async Task<CallToolResult> SetStatus(
-        [Description("Id of the issue to move.")] Guid issueId,
-        [Description("New status: triaged or closed. ('promoted' is refused — use issues_promote.)")] string status,
+        [Description("Issue id.")] Guid issueId,
+        [Description("triaged or closed ('promoted' needs issues_promote).")] string status,
         [Description("Who moves it: Agent or Ui.")] string source,
-        [Description("Accepted for protocol symmetry; issues have no log — the source marker is the provenance. Unused.")] string? logNote = null,
+        [Description("Unused — issues have no log.")] string? logNote = null,
         CancellationToken ct = default)
     {
         var normalizedStatus = NormalizeStatus(status);
@@ -174,10 +181,12 @@ public sealed class IssuesTools
     }
 
     [McpServerTool(Name = "issues_promote", Destructive = false, Idempotent = false)]
-    [Description("Machine promotion, one call — per crew rule 10 an issue or a request is a ready-made execution contract: composes a task artifact on featureSlug (goal from title+body, scope from the Repro/Expected/Actual sections, the append trail into <obstacles>, <refs> pointing at the issue) and sets the issue to promoted with a link to the artifact — traceable both ways. Only from open/triaged; promotion belongs to the board's team. A claimed target feature blocks promotion from any session that does not hold the claim — in any liveness state (promote is not take-over): resolve the claim with the holder or wait for the owner team. The append trail moves into <obstacles> verbatim.")]
+    [Description("Promotes an issue or request into a task artifact on the target feature, linking card " +
+        "and artifact both ways. Only from open/triaged, for the board's own team — a claimed target " +
+        "feature blocks promotion from sessions without the claim.")]
     public async Task<CallToolResult> Promote(
-        [Description("Id of the issue to promote.")] Guid issueId,
-        [Description("Slug of the feature on this board that receives the composed task.")] string featureSlug,
+        [Description("Issue id.")] Guid issueId,
+        [Description("Feature slug receiving the composed task.")] string featureSlug,
         [Description("Who promotes it: Agent or Ui.")] string source,
         CancellationToken ct = default)
     {

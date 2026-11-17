@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class SessionLifecycleTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

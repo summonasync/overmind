@@ -130,17 +130,27 @@ public class EntryFilterToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         var listDescription = tools["list_entries"]!["description"]!.GetValue<string>();
-        listDescription.ShouldContain("since/until (createdAt bounds) and author");
+        listDescription.ShouldContain("Lists a project's entries as metadata rows");
+
+        const string SinceProse = "Inclusive createdAt floor (ISO-8601 or yyyy-MM-dd, local midnight).";
+        const string UntilProse = "Exclusive createdAt ceiling (ISO-8601 or yyyy-MM-dd, local midnight).";
+        const string AuthorProse = "Author alias filter, case-insensitive; UI entries never match.";
 
         var listProperties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
         listProperties.ShouldContainKey("since");
         listProperties.ShouldContainKey("until");
         listProperties.ShouldContainKey("author");
+        listProperties["since"]!["description"]!.GetValue<string>().ShouldBe(SinceProse);
+        listProperties["until"]!["description"]!.GetValue<string>().ShouldBe(UntilProse);
+        listProperties["author"]!["description"]!.GetValue<string>().ShouldBe(AuthorProse);
 
         var searchProperties = tools["search"]!["inputSchema"]!["properties"]!.AsObject();
         searchProperties.ShouldContainKey("since");
         searchProperties.ShouldContainKey("until");
         searchProperties.ShouldContainKey("author");
+        searchProperties["since"]!["description"]!.GetValue<string>().ShouldBe(SinceProse);
+        searchProperties["until"]!["description"]!.GetValue<string>().ShouldBe(UntilProse);
+        searchProperties["author"]!["description"]!.GetValue<string>().ShouldBe(AuthorProse);
 
         var writeDescription = tools["write_entry"]!["description"]!.GetValue<string>();
         writeDescription.ShouldNotContain("mirror");

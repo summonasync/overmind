@@ -271,20 +271,25 @@ public class BriefingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
         var tool = tools["overmind_briefing"]!;
 
         tool["description"]!.GetValue<string>().ShouldBe(
-            "ONE call returns the start-of-work snapshot of a project — the guardrail picture an agent absorbs before any work: " +
-            "guards and gates with full bodies, decisions and the latest notes as ~200-character snippets (read_entry for depth), " +
-            "and the tombstone list of buried entries. Guards, gates and decisions render active entries only — a lifted rule is a rule that no longer applies; " +
-            "decisions carrying enforces=true additionally appear in the guards section marked decision·enforces, and the liftedRecently tail lists entries " +
-            "lifted or superseded within the last 14 days (max 5 rows, newest first: title, state, date, reason snippet, successor title for superseded). " +
-            "One consolidated tool by design: four specialized getguards/getgates/getnotes/gettombstones lookups would multiply " +
-            "the discovery surface for a single moment-in-time need; list_entries stays the exploration tool, this one is the start ritual. " +
-            "When the project's lane roster carries liveSurfaces (globs + owners of running stands watched by a lane), a liveSurfaces section lists them so the start-of-work picture warns before any watched path is touched; the section is absent when no lane watches anything. " +
-            "notesLimit defaults to 10; includeTombstones=false trims the graves section; categories without entries come back as " +
-            "empty arrays, never omitted keys; entries arrive most-recently-updated first. " +
-            "Read-only: projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.");
+            "ONE call returns the start-of-work snapshot of a project — guards and gates with full bodies, " +
+            "decisions and the latest notes as snippets, tombstones, and the lifted-recently tail. " +
+            "The read ritual before any work; list_entries stays the exploration tool, briefing the snapshot. Read-only.");
+
+        var section = ContractsDoc.Section("overmind_briefing");
+        section.ShouldContain("guards and gates with full bodies; decisions and the latest notes as ~200-char snippets");
+        section.ShouldContain("Guards, gates and decisions render active entries only");
+        section.ShouldContain("decisions carrying enforces=true additionally appear in the guards section marked decision·enforces");
+        section.ShouldContain("entries lifted or superseded within the last 14 days, max 5 rows, newest first");
+        section.ShouldContain("four specialized getguards/getgates/ getnotes/gettombstones lookups would multiply the discovery surface");
+        section.ShouldContain("list_entries stays the exploration tool, this is the start ritual");
+        section.ShouldContain("notesLimit defaults to 10; includeTombstones=false trims the graves section");
+        section.ShouldContain("categories without entries come back as empty arrays, never omitted keys");
+        section.ShouldContain("entries arrive most-recently-updated first");
+        section.ShouldContain("a liveSurfaces section lists them so the start-of-work picture warns before any watched path is touched");
 
         var properties = tool["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("projectId");

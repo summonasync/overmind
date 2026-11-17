@@ -61,9 +61,7 @@ internal static class PlanningToolResponses
         "logNote is required with asMigrated: the migration marker must record where the pre-approval came from.";
 
     internal const string OperationIdDescription =
-        "Optional idempotency key: the same GUID with an identical payload replays the stored response with replayed=true — " +
-        "the safe recovery after a transport failure; the same GUID with a different payload is a 409 OperationIdConflict; " +
-        "omit to send no header (old Hosts ignore it harmlessly).";
+        "Optional idempotency GUID for a replay-safe retry.";
 
     internal const string TaskItemsAcceptedForm =
         "tasks must be a JSON array of task items, each an object with a required body string — " +
