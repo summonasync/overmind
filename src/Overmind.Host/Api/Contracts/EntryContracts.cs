@@ -5,7 +5,7 @@ namespace Overmind.Host.Api.Contracts;
 public sealed record SkillFileDto(AgentPlatform? Platform, string RelativePath, string Content);
 
 public sealed record CreateEntryRequest(
-    Guid ProjectId,
+    Guid? ProjectId,
     EntryType Type,
     string Title,
     string Content,

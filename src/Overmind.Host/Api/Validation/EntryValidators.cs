@@ -10,7 +10,9 @@ public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryR
 
     public CreateEntryRequestValidator()
     {
-        RuleFor(x => x.ProjectId).NotEmpty();
+        RuleFor(x => x.ProjectId)
+            .NotEmpty()
+            .Unless(x => x.Type == EntryType.Journal);
         RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Content).NotEmpty();

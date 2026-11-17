@@ -33,8 +33,9 @@ public static class EntriesApi
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
 
-        // Spec R6 as an invariant rather than a list: every agent-reachable entry mutation registers on this
-        // subgroup, and the journal refusal hangs on the subgroup, so a new verb inherits it by placement.
+        // Spec R6 as an invariant rather than a list: every entry mutation registered under the /api/agent prefix
+        // lands on this subgroup, and the journal refusal hangs on the subgroup, so a new verb inherits it by
+        // placement.
         // The route-table test derives its cases from the registered endpoints, so a mutation verb registered
         // anywhere else under this prefix turns that test red without anyone updating a verb list.
         var agentEntryWrites = routes.MapGroup("/api/agent").AddEndpointFilter(JournalWriteLockFilter.Instance);
@@ -56,8 +57,11 @@ public static class EntriesApi
         DateTime? until,
         string? author,
         string? q,
+        string? link,
+        string? project,
         OvermindDbContext db,
         FtsSearchService search,
+        EntryLinkTriage triage,
         CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
@@ -72,17 +76,31 @@ public static class EntriesApi
             return stateFailure;
         }
 
+        var linkFailure = EntryStreamFilter.ValidateLink(link, out var linked);
+        if (linkFailure is not null)
+        {
+            return linkFailure;
+        }
+
+        var (projectFilter, projectFailure) = await EntryStreamFilter.ResolveProjectAsync(db, project, ct);
+        if (projectFailure is not null)
+        {
+            return projectFailure;
+        }
+
         if (!string.IsNullOrWhiteSpace(q))
         {
             var hits = await search.SearchAsync(projectId, q, 100, ct);
             var hitIds = hits.Select(h => h.EntryId).ToArray();
 
-            var entries = await db.ContextEntries
+            var searched = db.ContextEntries
                 .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
                 .Include(e => e.SkillFiles)
                 .Include(e => e.Acks)
                 .AsSplitQuery()
-                .Where(e => hitIds.Contains(e.Id))
+                .Where(e => hitIds.Contains(e.Id));
+
+            var entries = await EntryStreamFilter.Apply(searched, triage, linked, projectFilter)
                 .ToListAsync(ct);
 
             var responses = entries
@@ -121,6 +139,7 @@ public static class EntriesApi
         }
 
         query = EntryQueryFilters.Apply(query, since, until, author);
+        query = EntryStreamFilter.Apply(query, triage, linked, projectFilter);
 
         var listed = await query
             .OrderByDescending(e => e.UpdatedAt)
@@ -136,6 +155,7 @@ public static class EntriesApi
         OvermindDbContext db,
         EntryIndexingService indexing,
         EntryLinkWriter writer,
+        JournalProjectStore journals,
         ILoggerFactory writes,
         CancellationToken ct)
     {
@@ -145,10 +165,14 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var projectExists = await db.Projects.AnyAsync(p => p.Id == request.ProjectId, ct);
-        if (!projectExists)
+        var explicitProject = request.ProjectId is { } named && named != Guid.Empty ? named : (Guid?)null;
+        if (explicitProject is { } target)
         {
-            return HttpErrors.NotFound($"Project '{request.ProjectId}' was not found.");
+            var projectExists = await db.Projects.AnyAsync(p => p.Id == target, ct);
+            if (!projectExists)
+            {
+                return HttpErrors.NotFound($"Project '{target}' was not found.");
+            }
         }
 
         ContextEntry? committed = null;
@@ -158,17 +182,21 @@ public static class EntriesApi
             writes,
             async attemptCt =>
             {
+                // Spec R2: the reserved container is born inside this same transaction, so the human door never
+                // needs an id the browser cannot know. A named project still wins over it.
+                var containerId = explicitProject ?? await journals.EnsureIdAsync(attemptCt);
+
                 var tags = await ResolveTagsAsync(db, request.Tags, attemptCt);
 
                 ContextEntry entry;
                 if (request.Type == EntryType.Skill)
                 {
                     var files = request.SkillFiles!.Select(EntryMapper.ToEntity);
-                    entry = ContextEntry.CreateSkill(request.ProjectId, request.Title, request.Content, files);
+                    entry = ContextEntry.CreateSkill(containerId, request.Title, request.Content, files);
                 }
                 else
                 {
-                    entry = ContextEntry.Create(request.ProjectId, request.Type, request.Title, request.Content);
+                    entry = ContextEntry.Create(containerId, request.Type, request.Title, request.Content);
                 }
 
                 foreach (var tag in tags)
