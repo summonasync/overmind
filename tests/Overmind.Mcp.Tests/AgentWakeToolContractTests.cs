@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class AgentWakeToolContractTests : IAsyncLifetime
 {
     private static readonly Guid SessionId = Guid.Parse("18181818-1818-1818-1818-181818181818");
@@ -21,18 +21,22 @@ public sealed class AgentWakeToolContractTests : IAsyncLifetime
 
     private StubOvermindApi _stub = null!;
     private OvermindApiClient _api = null!;
+    private string? _originalProjectOverride;
 
     public Task InitializeAsync()
     {
         _stub = StubOvermindApi.Start();
         _api = new OvermindApiClient(OvermindApiClient.CreateHttpClient(_stub.BaseUrl));
         AdapterSession.Id = SessionId;
+        _originalProjectOverride = Environment.GetEnvironmentVariable("OVERMIND_PROJECT_ID");
+        Environment.SetEnvironmentVariable("OVERMIND_PROJECT_ID", null);
 
         return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
     {
+        Environment.SetEnvironmentVariable("OVERMIND_PROJECT_ID", _originalProjectOverride);
         AdapterSession.Id = null;
         await _stub.DisposeAsync();
     }
@@ -44,7 +48,7 @@ public sealed class AgentWakeToolContractTests : IAsyncLifetime
 
         var wake = await Peek(null);
 
-        var request = _stub.Requests.Single();
+        var request = WakeRequests().Single();
         request.Path.ShouldBe("/api/agent/wake");
         request.Query.ShouldBeEmpty();
         request.Headers[AdapterSession.HeaderName].ShouldBe(SessionId.ToString());
@@ -66,7 +70,7 @@ public sealed class AgentWakeToolContractTests : IAsyncLifetime
 
         var wake = await Peek(cursor);
 
-        var request = _stub.Requests.Single();
+        var request = WakeRequests().Single();
         request.Query.ShouldBe($"since={Uri.EscapeDataString(cursor)}");
         wake.ToJsonString().ShouldBe(JsonNode.Parse(SecondPageJson)!.ToJsonString());
     }
@@ -81,7 +85,44 @@ public sealed class AgentWakeToolContractTests : IAsyncLifetime
 
         await Peek(since);
 
-        _stub.Requests.Single().Query.ShouldBeEmpty();
+        WakeRequests().Single().Query.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Peek_AppendsTheResolvedProjectId_WhenTheResolverYieldsOne()
+    {
+        _stub.Route("GET", "/api/agent/wake", 200, FirstPageJson);
+        _stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
+
+        await Peek(null);
+
+        var wake = WakeRequests().Single();
+        wake.Query.ShouldBe($"projectId={Canned.ProjectId}");
+    }
+
+    [Fact]
+    public async Task Peek_ProjectIdFollowsTheCursor_WhenTheProjectResolves()
+    {
+        var cursor = $"2026-10-29T09:05:00.0000000Z|{MentionId}";
+        _stub.Route("GET", "/api/agent/wake", 200, SecondPageJson);
+        _stub.Route("POST", "/api/onboard", 200, Canned.OnboardJson);
+
+        await Peek(cursor);
+
+        WakeRequests().Single().Query.ShouldBe(
+            $"since={Uri.EscapeDataString(cursor)}&projectId={Canned.ProjectId}");
+    }
+
+    [Fact]
+    public async Task Peek_WhenResolutionReturnsGuidance_TheWindowStaysMachineWide()
+    {
+        _stub.Route("GET", "/api/agent/wake", 200, FirstPageJson);
+        _stub.Route("POST", "/api/onboard", 404,
+            """{"title":"Not Found","detail":"unregistered directory guidance","status":404}""");
+
+        await Peek(null);
+
+        WakeRequests().Single().Query.ShouldBeEmpty();
     }
 
     [Fact]
@@ -134,5 +175,8 @@ public sealed class AgentWakeToolContractTests : IAsyncLifetime
         return JsonNode.Parse(element.GetRawText())!.AsObject();
     }
 
-    private AgentWakeTools Tool() => new(_api);
+    private StubOvermindApi.Request[] WakeRequests() =>
+        [.. _stub.Requests.Where(r => r.Method == "GET" && r.Path == "/api/agent/wake")];
+
+    private AgentWakeTools Tool() => new(_api, new ProjectResolver(_api));
 }

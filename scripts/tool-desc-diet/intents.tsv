@@ -1,0 +1,16 @@
+id	expected_tool	prompt
+01-onboarding	overmind_onboard	Connect me to the Overmind board for this workspace: which project am I on, what is the board summary and is human gate validation on?
+02-board-slice	planning_list_features	List the Overmind feature board for this project with a status filter of review. I need the slugs, statuses and claim holders of features that are in review.
+03-wake-peek	overmind_wake_peek	Check my Overmind wake inbox once: are there pending human replies to my notifications or wave chat mentions for me right now? Do not consume anything.
+04-lane-read	planning_list_lanes	Read the Overmind lane roster for this project: lane names, bound aliases, holders and how many open features each lane has.
+05-artifact-section-read	planning_read_artifact	Read only the obstacles section of task 1 of Overmind feature 234-mcp-tool-description-diet-wake-peek-ttl-fix. Use the slug-based artifact alias.
+06-ac-tick	planning_patch_artifact	On the Overmind task artifact for 234-mcp-tool-description-diet-wake-peek-ttl-fix task 1, tick exactly one acceptance-criteria item — the last one about git diff over src being empty — using the acText selector. Change nothing else.
+07-batch-task-close	planning_batch	Close Overmind task 1 of feature 234-mcp-tool-description-diet-wake-peek-ttl-fix in a single atomic call for this feature: append a log note saying 'baseline probe close' and set the task status to done. Batch both ops, do not use separate calls.
+08-claim	planning_claim_feature	Claim the Overmind feature 234-mcp-tool-description-diet-wake-peek-ttl-fix for my session under alias diet-probe with vendor probe so I can work on it.
+09-directive-ack	planning_ack_directive	Acknowledge an open coordination directive on Overmind feature 234-mcp-tool-description-diet-wake-peek-ttl-fix so it leaves the openDirectives list. If you do not know a directive id, list the feature first to find one.
+10-directive-append	planning_append_directive	Append a coordination directive to Overmind feature 234-mcp-tool-description-diet-wake-peek-ttl-fix with the text: HOLD scratch probe window until 18:00.
+11-approval-flow	overmind_notify	Ask the human for an approval decision on the Overmind notification center: post an approval notification for feature 234-mcp-tool-description-diet-wake-peek-ttl-fix asking whether to close the baseline probe.
+12-wave-mention-check	wave_chat_unread	Show me my unread Overmind wave chat messages, including mentions, across all rooms — deliver them and advance the watermark.
+13-entry-write	write_entry	Write an Overmind entry of type note titled 'Diet baseline probe' with body 'baseline smoke matrix probe note — ignore' into this project.
+14-issue-file	issues_create	File an issue on the Overmind board of this project titled 'Diet probe issue' with a one-line body 'repro: baseline probe; expected: nothing; actual: probe only'. Use the project id as both board and author.
+15-materialize-status	planning_materialize_status	Report the Overmind materialization state of this project without triggering anything: last success vs last attempt, pending mutations and any stale paths.

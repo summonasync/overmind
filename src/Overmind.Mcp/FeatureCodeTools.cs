@@ -27,21 +27,13 @@ public sealed class FeatureCodeTools
     }
 
     [McpServerTool(Name = "planning_feature_code", ReadOnly = true, Idempotent = true)]
-    [Description("One call answers where this feature's code is. Discovery runs adapter-side in the working directory " +
-        "(git worktree list --porcelain + a branch listing, read-only): branches and worktrees whose names carry the " +
-        "feature's slug or its NNN prefix (the feat/NNN-slug convention) are reported with kind (worktree/branch), name, " +
-        "path and last commit short hash + date; a worktree whose path no longer exists is reported stale, not dropped. " +
-        "Multiple matches are all listed; no match returns an honest empty result with the naming-convention hint. " +
-        "An explicit code pin (planning_pin_feature_code) overrides the convention: " +
-        "pinned locations are matched against the local listing first and flagged pinned, convention hits follow " +
-        "deduplicated against the pin, and a pinned location missing locally is reported stale — never silently dropped, " +
-        "never auto-cleared; with no pin set the output is unchanged. " +
-        "The answer rides along with the host's feature read (status/priority context) into one payload — the host half " +
-        "may fail independently, and then the discovery half is still answered with featureError set. " +
-        "Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
+    [Description("One call answers where this feature's code is: adapter-side discovery of branches and " +
+        "worktrees carrying the slug or its NNN prefix, pins flagged, stale paths reported, host feature " +
+        "context riding along — the host half may fail and discovery still answers. Pick it per feature; " +
+        "overmind_wave_snapshot folds discovery into the whole-wave picture.")]
     public async Task<JsonElement> FeatureCode(
-        [Description("Slug of the feature, as shown on the board.")] string slug,
-        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Feature slug.")] string slug,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var trimmed = slug.Trim();

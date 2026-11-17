@@ -7,6 +7,14 @@
 On every signal that concerns an agent (a human reply on its session's notification, a wave
 message mentioning its alias), the Overmind Host rewrites that agent's wake drop file:
 
+> `<stale 2026-11-17 — the human-reply half of this sentence no longer fires on live data>` A
+> reply is stamped read at the moment it is written (the 084 reply⇒read invariant,
+> `AgentNotification.Reply()`), and feature 234/T5 dropped read replies from the default wake
+> window — the same window this drop file is fed from. So on a current database only
+> `wave-mention` signals land here; replies remain reachable through `overmind_replies` and the
+> notification center, and per-agent reply delivery becomes feature 244 (delivery cursor). Until
+> 244 lands, do not plan a wake ritual around a reply appearing in this file.
+
 ```
 ~/.overmind/wake/<alias>.json        # override the directory with OVERMIND_WAKE_DIR
 ```

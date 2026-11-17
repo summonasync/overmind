@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(ProcessCurrentDirectory))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class EntryAckToolContractTests : IAsyncLifetime
 {
     private static readonly string AckRoute =

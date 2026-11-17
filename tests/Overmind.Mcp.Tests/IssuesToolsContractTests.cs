@@ -64,12 +64,16 @@ public sealed class IssuesToolsContractTests : McpSessionTestBase
         var description = tools["issues_create"]!["description"]!.GetValue<string>();
         description.ShouldContain("do not touch their repo");
         description.ShouldContain("issues_append");
-        description.ShouldContain("triages/promotes");
-        description.ShouldContain("## Repro");
-        description.ShouldContain("notification-center");
-        description.ShouldContain("'issue' (default)");
-        description.ShouldContain("'request'");
-        description.ShouldContain("both promote into tasks the same way");
+        description.ShouldContain("kind='request'");
+        description.ShouldContain("a foreign create notifies the owner board");
+
+        var section = ContractsDoc.Section("issues_create");
+        section.ShouldContain("The owner team triages and promotes");
+        section.ShouldContain("Body is free-form markdown; recommended sections '## Repro', '## Expected', '## Actual'");
+        section.ShouldContain("posts a notification-center entry on the owner project with a deep link");
+        section.ShouldContain("kind accepts exactly 'issue' (default) or 'request'");
+        section.ShouldContain("both promote into tasks the same way");
+        section.ShouldContain("never file a duplicate issue for new information");
     }
 
     [Fact]
@@ -81,8 +85,14 @@ public sealed class IssuesToolsContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         var description = tools["issues_promote"]!["description"]!.GetValue<string>();
-        description.ShouldContain("an issue or a request");
+        description.ShouldContain("Promotes an issue or request into a task artifact");
+        description.ShouldContain("linking card and artifact both ways");
+
+        var section = ContractsDoc.Section("issues_promote");
+        section.ShouldContain("the append trail into <obstacles> verbatim, a <refs> entry pointing at the issue");
+
         description.ShouldNotContain("a bug report");
+        section.ShouldNotContain("a bug report");
     }
 
     [Fact]

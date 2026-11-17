@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Overmind.Api.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class TransientPathClassifierTests
 {
     [Theory]

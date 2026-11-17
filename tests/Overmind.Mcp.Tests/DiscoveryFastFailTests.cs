@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(ProcessCurrentDirectory))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class DiscoveryFastFailTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

@@ -25,8 +25,6 @@ public sealed class AgentWakeService(OvermindDbContext db)
     public const int PageSize = 100;
     public const int ExcerptLength = 200;
 
-    private static readonly TimeSpan ReplyLookback = TimeSpan.FromDays(7);
-
     public async Task<AgentWakePage?> SnapshotAsync(string alias, CancellationToken ct = default)
     {
         var normalized = WaveWatermark.NormalizeAlias(alias);
@@ -39,7 +37,7 @@ public sealed class AgentWakeService(OvermindDbContext db)
 
         return session is null
             ? null
-            : await PendingAsync(session.Alias, session.LastSeenAt, null, null, ct);
+            : await PendingAsync(session.Alias, session.LastSeenAt, null, null, null, ct);
     }
 
     public async Task<AgentWakePage> PendingAsync(
@@ -47,15 +45,18 @@ public sealed class AgentWakeService(OvermindDbContext db)
         DateTime lastSeenAt,
         DateTime? since,
         Guid? sinceRefId,
+        Guid? projectId,
         CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
-        var replySince = since ?? now - ReplyLookback;
+        var replySince = since ?? now - WakeReplyLookback.Resolve();
         var mentionSince = since ?? lastSeenAt;
 
         var replies = await db.AgentNotifications
             .AsNoTracking()
             .Where(n => n.Agent == alias && n.ReplyText != null
+                && (since != null || n.ReadAt == null)
+                && (projectId == null || n.ProjectId == projectId)
                 && (n.RepliedAt > replySince || sinceRefId != null && n.RepliedAt == replySince))
             .OrderBy(n => n.RepliedAt)
             .Select(n => new { n.Id, n.ReplyText, n.RepliedAt })

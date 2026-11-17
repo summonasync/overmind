@@ -18,17 +18,26 @@ public class NotificationToolContractTests : McpSessionTestBase
 
         var notify = tools["overmind_notify"]!["description"]!.GetValue<string>();
         notify.ShouldContain("human");
-        notify.ShouldContain("info");
         notify.ShouldContain("question");
         notify.ShouldContain("approval");
         notify.ShouldContain("overmind_replies");
-        notify.ShouldContain("quote the url in chat when asking for an approval");
+        notify.ShouldContain("featureSlug and tab make it a deep link");
+
+        var notifySection = ContractsDoc.Section("overmind_notify");
+        notifySection.ShouldContain("kind is info, question or approval (anything else is a named validation error)");
+        notifySection.ShouldContain("quote the url in chat when asking for an approval");
+        notifySection.ShouldContain("Project resolution here creates the project row when missing");
 
         var replies = tools["overmind_replies"]!["description"]!.GetValue<string>();
-        replies.ShouldContain("answers");
-        replies.ShouldContain("never creates a project row");
-        replies.ShouldContain("guidance");
-        replies.ShouldContain("offset-less values are read as UTC");
+        replies.ShouldContain("Polls the human's replies");
+        replies.ShouldContain("replyText is the human's decision");
+        replies.ShouldContain("an over-narrow filter returns an empty array, not an error");
+
+        var repliesSection = ContractsDoc.Section("overmind_replies");
+        repliesSection.ShouldContain("offset-less values read as UTC");
+        repliesSection.ShouldContain("Poll it after asking a question or requesting approval");
+        // The create:false half of the old "never creates a project row" prose is a behavior contract
+        // and stays pinned as behavior in Replies_NoProject_ResolvesThroughOnboard.
     }
 
     [Fact]
