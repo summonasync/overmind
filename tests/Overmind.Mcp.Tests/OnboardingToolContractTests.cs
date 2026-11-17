@@ -19,12 +19,14 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
         description.ShouldNotContain("Call this first");
-        description.ShouldContain("may skip it");
-        description.ShouldContain("OVERMIND_PROJECT_ID");
-        description.ShouldContain("worktree");
+        description.ShouldContain("The natural first call without a projectId");
+
+        var section = ContractsDoc.Section("overmind_onboard");
+        section.ShouldContain("Set OVERMIND_PROJECT_ID to a valid project guid to skip cwd matching");
+        section.ShouldContain("symlinked or worktree layouts where the resolved cwd differs from the registered project path");
     }
 
     [Fact]
@@ -34,15 +36,18 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("materialization block (strategy, targetDir, trigger, lastSuccess vs lastAttempt");
-        description.ShouldContain("skipped-file count");
-        description.ShouldContain("a validation block (humanGate plus the state-truthful gate sentence");
-        description.ShouldContain(
-            "off: agent validate requires a live approval proof, overmind_notify(kind=approval) with a human reply " +
-            "newer than the artifact's last update, 409 ValidationProofRequired without it");
-        description.ShouldContain("on: agents STOP until a human validates the artifact in the UI");
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+        description.ShouldContain("guardrail blocks (materialization, validation gate, agent identity, semantic search, adapter version)");
+
+        var section = ContractsDoc.Section("overmind_onboard");
+        section.ShouldContain("strategy, targetDir, trigger, lastSuccess vs lastAttempt");
+        section.ShouldContain("the skipped-file count with the head of skipped paths from the last successful pass");
+        section.ShouldContain("humanGate plus the state-truthful gate sentence");
+        section.ShouldContain("off = agent validate requires a live approval proof");
+        section.ShouldContain("with a human reply newer than the artifact's last update");
+        section.ShouldContain("409 ValidationProofRequired without it");
+        section.ShouldContain("on = agents STOP until a human validates the artifact in the UI");
     }
 
     [Fact]
@@ -52,11 +57,16 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain(
-            "brief=true returns only the project id, board counts per status, humanGate and the adapter version");
-        description.ShouldContain("already onboarded and working a lane");
+        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
+        description.ShouldContain("brief=true answers id, counts, humanGate and version only");
+
+        var brief = tools["overmind_onboard"]!["inputSchema"]!["properties"]!["brief"]!["description"]!.GetValue<string>();
+        brief.ShouldBe("True for the cheap repeat answer: project id, board counts, humanGate, adapter version.");
+
+        var section = ContractsDoc.Section("overmind_onboard");
+        section.ShouldContain("brief=true returns only the project id, board counts per status, humanGate and the adapter version");
+        section.ShouldContain("the cheap repeat call for agents already onboarded and working a lane");
     }
 
     [Fact]
@@ -197,9 +207,10 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("semantic search block (availability, with the verbatim probe reason when down)");
+        ContractsDoc.Section("overmind_onboard")
+            .ShouldContain("search availability, with the verbatim probe reason when down");
+        tools["overmind_onboard"]!["description"]!.GetValue<string>().ShouldContain("semantic search");
     }
 
     [Fact]
@@ -209,10 +220,10 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain(
-            "adapter block (adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting)");
+        ContractsDoc.Section("overmind_onboard")
+            .ShouldContain("adapterVersion vs hostVersion, with a restart warning when they diverge or the adapter predates version reporting");
+        tools["overmind_onboard"]!["description"]!.GetValue<string>().ShouldContain("adapter version");
     }
 
     [Fact]
@@ -222,10 +233,11 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        var description = tools["overmind_onboard"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain(
-            "agentIdentity block (effective alias/vendor resolved env > placeholder with its source, the project's naming rules for choosing your own stable alias, and the session_identity_set next step when the alias is still the shared placeholder)");
+        ContractsDoc.Section("overmind_onboard").ShouldContain(
+            "effective alias/vendor (env > placeholder, with its source), the project's naming rules for choosing your own stable alias, " +
+            "and the session_identity_set next step when the alias is still the shared placeholder");
+        tools["overmind_onboard"]!["description"]!.GetValue<string>().ShouldContain("agent identity");
     }
 
     [Fact]

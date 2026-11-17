@@ -33,11 +33,11 @@ public sealed class PlanningBatchTools
     }
 
     [McpServerTool(Name = "planning_batch", Destructive = false, Idempotent = false)]
-    [Description("Applies several ceremony ops to ONE feature atomically in a single call — one turn per ceremony step instead of one turn per write: tick an acceptance-criteria item, append the closing log and move the status in one batch. Ops apply in request order under one transaction; any failing op rolls the whole batch back (nothing persists) and its 400 names the index ('ops[1]: …'). Vocabulary (snake_case op names): patch — patch payload of its standalone tool ({op: tick_ac|untick_ac|replace_section|set_brief|amend_result|remove_section} plus that op's fields, same shapes as planning_patch_artifact); append_log — note; set_status — status + logNote; upsert_tasks — tasks[] with the same item shape as planning_upsert_tasks; notify — kind + text plus optional tab/featureSlug/from (featureSlug defaults to the batch feature). patch/append_log/set_status address the artifact by artifactId or alias ('<slug>/T<order>', or the bare 'T<order>'/S/P/R forms — the batch is bound to one feature by the route) and cannot name artifacts created by earlier ops of the same batch (v1). The adapter lints the envelope before any HTTP call: unknown op or missing required params fail locally with no round-trip. Door-level op errors keep the batch atomic; post-commit notification/materialization failures do NOT roll anything back — they ride the response as warnings[]. The result carries featureSlug plus one compact row per op in request order — echo fields only, never artifact bodies.")]
+    [Description("Applies several ceremony ops to one feature atomically in a single call — any failing op rolls the whole batch back.")]
     public async Task<JsonElement> Batch(
-        [Description("Slug of the feature every op runs on.")] string featureSlug,
-        [Description("Array of ops applied in order, each an object: patch, append_log, set_status, upsert_tasks or notify with that op's required fields.")] JsonElement ops,
-        [Description("Id of the project the feature belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Feature slug.")] string featureSlug,
+        [Description("Array of op objects, each with op plus its fields.")] JsonElement ops,
+        [Description("Optional project id.")] Guid? projectId = null,
         [Description(OperationIdDescription)] Guid? operationId = null,
         CancellationToken ct = default)
     {

@@ -122,9 +122,12 @@ public sealed class TelegramPollingRunner(
 
     private static TelegramCallback ToCallback(CallbackQuery query, Message message)
     {
-        var from = query.From.Username is { } username ? $"@{username}" : query.From.FirstName;
+        var from = DisplayName(query.From);
         return new TelegramCallback(message.Chat.Id, query.Id, message.Id, from, message.Text, query.Data);
     }
+
+    private static string DisplayName(User from) =>
+        from.Username is { } username ? $"@{username}" : from.FirstName;
 
     internal async Task ProcessUpdateAsync(
         ITelegramMessageHandler handler, Update update, TelegramTransportOptions options, CancellationToken ct)
@@ -138,14 +141,21 @@ public sealed class TelegramPollingRunner(
 
         if (!options.AllowedChatIds.Contains(message.Chat.Id))
         {
-            logger.LogDebug("Telegram message from chat {ChatId} is not allowlisted; ignored", message.Chat.Id);
+            logger.LogInformation(
+                "Telegram message from chat {ChatId} is not allowlisted; ignored", message.Chat.Id);
             return;
         }
 
         try
         {
             await handler.HandleAsync(
-                new TelegramIncomingMessage(message.Chat.Id, message.Text, message.ReplyToMessage?.MessageId), ct);
+                new TelegramIncomingMessage(
+                    message.Chat.Id,
+                    message.Text,
+                    message.ReplyToMessage?.MessageId,
+                    message.From is { } from ? DisplayName(from) : null,
+                    message.Id,
+                    update.Id), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

@@ -332,13 +332,22 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
-            "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
-            "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
-            "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
-            "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
-            "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
-            "All matching entries are returned in one array, most recently updated first; there is no pagination, and a q search is capped at 100 hits.");
+            "Lists a project's entries as metadata rows — the exploration door (bodies via include_content, " +
+            "one full entry via read_entry, the start-of-work snapshot via overmind_briefing). " +
+            "Newest-updated first; no pagination; q caps at 100 hits.");
+
+        var section = ContractsDoc.Section("list_entries");
+        tools["list_entries"]!["description"]!.GetValue<string>().ShouldContain("q caps at 100 hits");
+        tools["list_entries"]!["inputSchema"]!["properties"]!["state"]!["description"]!.GetValue<string>()
+            .ShouldContain("all | active | lifted | superseded");
+        section.ShouldContain("id, type, title, tags, createdAt, updatedAt, contentLength");
+        section.ShouldContain("Bodies arrive only with include_content=true or per-entry via read_entry");
+        section.ShouldContain("the server applies its own default — active for the decision/gate/guard trio");
+        section.ShouldContain("each row collapses to {id, ...requested} in request order");
+        section.ShouldContain("unknown keys are rejected before the call naming the allowed set");
+        section.ShouldContain("most recently updated first — there is no pagination");
+        section.ShouldContain("An unknown type value fails naming the expected set");
+        section.ShouldContain("note, decision, gate, guard, skill, idea, audit, tombstone");
 
         var properties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("tag");
@@ -360,8 +369,11 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         var description = tools["planning_append_directive"]!["description"]!.GetValue<string>();
-        description.ShouldContain("capped at 2000 chars");
+        description.ShouldContain("the one write that crosses the claim lock");
         description.ShouldNotContain("capped at 500 chars");
+
+        ContractsDoc.Section("planning_append_directive")
+            .ShouldContain("text is trimmed, capped at 2000 chars enforced adapter-side");
 
         var textProperty = tools["planning_append_directive"]!["inputSchema"]!["properties"]!["text"]!;
         var parameterDescription = textProperty["description"]!.GetValue<string>();
@@ -683,13 +695,15 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["lift_entry"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("'lifted'");
-        description.ShouldContain("'superseded'");
-        description.ShouldContain("supersededById");
-        description.ShouldContain("provenance");
-        description.ShouldContain("refuses skills and tombstones");
-        description.ShouldContain("liftedRecently");
-        description.ShouldContain("last write winning");
+        description.ShouldContain("state moves to lifted");
+        description.ShouldContain("or superseded when supersededById names the replacement");
+        description.ShouldContain("body and title stay untouched");
+        description.ShouldContain("Skills and tombstones refuse");
+
+        var section = ContractsDoc.Section("lift_entry");
+        section.ShouldContain("the reason, optional proof, actor and date are stamped on the entry as provenance");
+        section.ShouldContain("surfaces in the briefing's liftedRecently tail");
+        section.ShouldContain("re-lift is allowed, last write wins");
 
         var properties = tools["lift_entry"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("entryId");
@@ -707,10 +721,14 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["append_entry"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("## Follow-up yyyy-MM-dd");
-        description.ShouldContain("version bumps");
-        description.ShouldContain("versions endpoint");
-        description.ShouldContain("2000 chars");
+        description.ShouldContain("Appends a dated '## Follow-up' block");
+        description.ShouldContain("through the version machinery");
+        description.ShouldContain("capped at 2000 chars");
+
+        var section = ContractsDoc.Section("append_entry");
+        section.ShouldContain("One dated ## Follow-up yyyy-MM-dd block lands at the content tail");
+        section.ShouldContain("the version bumps");
+        section.ShouldContain("stays readable via the versions endpoint");
 
         var properties = tools["append_entry"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("entryId");
@@ -870,11 +888,18 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         tools["search"]!["description"]!.GetValue<string>().ShouldBe(
-            "Searches entries and planning artifacts by fulltext; semantic mode searches entries only and fails with 'vector search unavailable' when the vector store is down. " +
-            "Fulltext covers entries plus planning features and their spec/plan/task/result bodies. " +
-            "Optional entry-only filters: since/until bound hits by createdAt (since inclusive, until exclusive) and author matches the exact alias case-insensitively — setting any of them drops feature and artifact hits. " +
-            "Each hit carries its source (entry, feature or artifact) with only its id fields, a title or label, and a snippet — a short window of lines around the first query-term match; " +
-            "full bodies are not returned, read a full entry with read_entry or an artifact with planning_read_artifact.");
+            "Fulltext search over entries plus planning features and artifact bodies — the cross-surface door " +
+            "(list_entries explores entries only). Hits carry ids and a snippet, never full bodies. " +
+            "since/until/author narrow to entries; semantic mode covers entries only.");
+
+        var section = ContractsDoc.Section("search");
+        section.ShouldContain("Semantic mode searches entries only and fails with vector search unavailable");
+        section.ShouldContain("since inclusive, until exclusive");
+        section.ShouldContain("author matches the exact alias case-insensitively");
+        section.ShouldContain("setting any of them drops feature and artifact hits");
+        section.ShouldContain("Each hit carries its source (entry, feature or artifact) with only its id fields");
+        section.ShouldContain("a short window of lines around the first query-term match");
+        section.ShouldContain("read_entry or planning_read_artifact for depth");
     }
 
     [Fact]
@@ -1195,19 +1220,29 @@ public class ToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["delete_entry"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("permanent");
-        description.ShouldContain("version history are gone");
-        description.ShouldContain("' (deleted)'");
-        description.ShouldContain("provenance");
-        description.ShouldContain("reason");
-        description.ShouldContain("fenced block");
-        description.ShouldContain("no second tombstone");
-        description.ShouldContain("type=tombstone");
-        description.ShouldNotContain("no tombstones");
-        description.ShouldNotContain("no undo");
-        description.ShouldContain("KitOwnedEntry");
-        description.ShouldContain("the kit reimport or the UI owns it");
-        description.ShouldContain("OVERMIND_PROJECT_ID");
+        description.ShouldContain("Hard-deletes an entry — row and version history gone");
+        description.ShouldContain("births a tombstone in its place carrying title, type, date, provenance and final content");
+        description.ShouldContain("Kit- and skill-owned entries are refused");
+        description.ShouldContain("to retire a standing rule use lift_entry");
+
+        var section = ContractsDoc.Section("delete_entry");
+        section.ShouldContain("Deletion is permanent");
+        section.ShouldContain("the row and its version history are gone");
+        section.ShouldContain("' (deleted)' appended");
+        section.ShouldContain("the optional reason, and the final content preserved in a fenced block");
+        section.ShouldContain("no second tombstone");
+        section.ShouldContain("list_entries with type=tombstone");
+        section.ShouldContain("KitOwnedEntry");
+        section.ShouldContain("the kit reimport or the UI owns it");
+        // 234: delete_entry is the entry door whose resolution DOES create a missing project row;
+        // the boilerplate "resolved from OVERMIND_PROJECT_ID, never auto-creates" it used to carry is gone.
+        section.ShouldContain("project resolution here creates the project row when missing");
+
+        foreach (var wording in new[] { "no tombstones", "no undo" })
+        {
+            description.ShouldNotContain(wording);
+            section.ShouldNotContain(wording);
+        }
 
         var properties = tools["delete_entry"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("reason");
@@ -1223,12 +1258,16 @@ public class ToolContractTests : McpSessionTestBase
         var description = tools["ack_entry"]!["description"]!.GetValue<string>();
 
         description.ShouldContain("readBy row");
-        description.ShouldContain("The entry body, its version and UpdatedAt are never touched");
+        description.ShouldContain("the body, version and UpdatedAt are never touched");
         description.ShouldContain("reads stay pure");
-        description.ShouldContain("owner-only body writes are unchanged");
         description.ShouldContain("idempotent no-op");
-        description.ShouldContain("OVERMIND_PROJECT_ID");
-        description.ShouldContain("never auto-creates a project row");
+
+        var section = ContractsDoc.Section("ack_entry");
+        section.ShouldContain("The entry body, its version and UpdatedAt are never touched");
+        section.ShouldContain("owner-only body writes are unchanged");
+        section.ShouldContain("Acking again with the same identity is an idempotent no-op");
+        // The "never auto-creates a project row" half of the old prose is a behavior contract and stays
+        // pinned as behavior: EntryAckToolContractTests.MissingProjectId_ResolvesThroughTheOnboardCwd.
 
         var properties = tools["ack_entry"]!["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("entryId");

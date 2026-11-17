@@ -19,16 +19,12 @@ public sealed class EntryAckTools
     }
 
     [McpServerTool(Name = "ack_entry", Destructive = false, Idempotent = true)]
-    [Description("Marks an entry as consumed by the calling session — the explicit ack of the read workflow: " +
-        "appends one additive readBy row (alias, vendor, at) attributed to the agent session. The entry body, " +
-        "its version and UpdatedAt are never touched, reads stay pure (list_entries/read_entry record nothing) " +
-        "and owner-only body writes are unchanged — consumption becomes visible without editing the owner's " +
-        "document. Acking again with the same identity is an idempotent no-op that keeps the first at stamp. " +
-        "projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered " +
-        "directory returns guidance instead and never auto-creates a project row.")]
+    [Description("Marks an entry as consumed by the calling session — appends one additive readBy row " +
+        "(alias, vendor, at); the body, version and UpdatedAt are never touched, so reads stay pure and " +
+        "consumption is visible without editing the owner's document. Re-ack is an idempotent no-op.")]
     public async Task<CallToolResult> AckEntry(
-        [Description("Id of the entry to acknowledge — take it from list_entries or read_entry.")] Guid entryId,
-        [Description("Id of the project the entry belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead.")] Guid? projectId = null,
+        [Description("Entry id.")] Guid entryId,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the entry", ct);

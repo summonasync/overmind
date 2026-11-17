@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class AdapterVersionHeaderTests : IDisposable
 {
     private readonly List<(string? SessionHeader, string? VersionHeader)> Requests = [];

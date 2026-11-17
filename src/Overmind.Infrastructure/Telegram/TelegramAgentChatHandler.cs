@@ -15,6 +15,7 @@ public sealed class TelegramAgentChatHandler(
     TelegramNotificationDeliveryStore deliveries,
     NotificationsService notifications,
     INotificationValidatorRunner validator,
+    ITelegramWaveCommandService waveCommands,
     ILogger<TelegramAgentChatHandler> logger) : ITelegramMessageHandler
 {
     public const int MaxAttempts = 3;
@@ -34,6 +35,19 @@ public sealed class TelegramAgentChatHandler(
                 await RegisterNotificationReplyAsync(id, message, ct);
                 return;
             }
+        }
+
+        // Wave doors run ahead of the agent turn: a typed command wins over a pending draft reply so
+        // "/send_to_wave" can never be posted into a room by accident.
+        if (TelegramWaveCommandParser.TryMatch(message.Text, out var command))
+        {
+            await waveCommands.HandleAsync(command, message, ct);
+            return;
+        }
+
+        if (await waveCommands.TryHandleDraftReplyAsync(message, ct))
+        {
+            return;
         }
 
         var conversation = await chats.GetOrCreateConversationAsync(message.ChatId, ct);
