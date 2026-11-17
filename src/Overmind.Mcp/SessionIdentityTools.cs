@@ -14,15 +14,12 @@ public sealed class SessionIdentityTools(OvermindApiClient api, SessionIdentityF
     public const int MaxIdentityLength = 32;
 
     [McpServerTool(Name = "session_identity_set", Destructive = false, Idempotent = true)]
-    [Description("Sets the calling session's own identity (alias + vendor) on the host — self-serve like " +
-        "wave_role_set, session-scoped, calling-session-only. Orchestrator-only convention: sub-agents of a " +
-        "live session never call it — one shared session row, last-write-wins; set identity BEFORE claiming " +
-        "a feature. The alias is invented client-side per the project's naming rules (see overmind_onboard's " +
-        "agentIdentity block). A 409 means another alive session holds the alias — the error names the holder, " +
-        "invent another name and retry. A success echoes the stored pair plus warnings and pins the pair as the " +
-        "adapter's reconnect identity: handshakes re-register under it instead of OVERMIND_ALIAS/OVERMIND_VENDOR.")]
+    [Description("Sets the calling session's own identity (alias + vendor) on the host — session-scoped; " +
+        "set it BEFORE claiming a feature, never from a sub-agent of a live session. A 409 means another " +
+        "alive session holds the alias — invent another and retry. Success pins the pair as the adapter's " +
+        "reconnect identity.")]
     public async Task<CallToolResult> SetIdentity(
-        [Description("New alias, 1-32 chars after trim; invented client-side per project naming rules.")] string alias,
+        [Description("Alias, 1-32 chars, per the project naming rules.")] string alias,
         [Description("New vendor, 1-32 chars after trim (e.g. 'claude', 'qwen').")] string vendor,
         CancellationToken ct = default)
     {

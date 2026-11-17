@@ -26,14 +26,12 @@ public sealed class WaveChatTools
 
     [McpServerTool(Name = "wave_chat_post", Destructive = false, Idempotent = false)]
     [Description("Posts one signal to a wave chat room — a lane room by roster name or the shared 'all' room. " +
-        "Signal-only by etiquette: blocker, critical spot, handoff or broadcast; an @alias mention means the " +
-        "addressee must read this; no chatter. Text is trimmed, capped at 500 characters, and the author is the " +
-        "calling session's registered alias. An unknown room fails with the named MissingWaveRoom error, " +
-        "overlong text with WaveTextTooLong.")]
+        "Signal-only by etiquette: blocker, critical spot, handoff or broadcast; no chatter. An @alias mention " +
+        "means the addressee must read this; the author is the calling session's alias.")]
     public async Task<CallToolResult> PostMessage(
-        [Description("Room to post into: a lane name from the project roster or the shared 'all' room.")] string room,
-        [Description("Signal text, max 500 characters; @alias tokens inside it become mentions.")] string text,
-        [Description("Id of the project the room belongs to; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Lane room name or the shared 'all' room.")] string room,
+        [Description("Signal text, max 500 chars; @alias tokens become mentions.")] string text,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         TextCapLint.Cap(text, SignalTextCap);
@@ -64,24 +62,16 @@ public sealed class WaveChatTools
     }
 
     [McpServerTool(Name = "wave_chat_unread", Destructive = false, Idempotent = false)]
-    [Description("Fetches the calling alias's unread wave chat feed and advances its watermarks: each room read " +
-        "delivers messages newer than the alias's watermark, and a message that mentions the alias is delivered " +
-        "once by that same read — the mention clause is scoped by the watermark, so nothing re-delivers on later " +
-        "reads. Without rooms the tool reads every room that has activity, oldest last-activity first, so one " +
-        "room's watermark cannot blind a quieter room; rooms is a comma-separated filter (lane names and/or 'all'). " +
-        "The merged feed is deduplicated by message id and ordered by createdAt. since (ISO datetime) narrows the " +
-        "effective lower bound to max(watermark, since) and never widens delivery; limit caps the page to the " +
-        "NEWEST window — replayMentions=true re-delivers the mention slice (every message that ever mentioned the " +
-        "alias) without the watermark bound, not older traffic in general; compact projects each message to " +
-        "{id, room, authorAlias, createdAt, text} " +
-        "with text truncated to ~200 characters. An unknown filtered room fails with the named MissingWaveRoom error.")]
+    [Description("Fetches the calling alias's unread wave chat feed and advances its watermarks — the " +
+        "consuming door; for counts without advancing use wave_chat_peek, for mentions plus notification " +
+        "replies use overmind_wake_peek. Delivered once, merged oldest first.")]
     public async Task<JsonElement> FetchUnread(
-        [Description("Optional comma-separated room filter; omitted reads every room with activity, oldest activity first.")] string? rooms = null,
-        [Description("Optional ISO datetime; the effective lower bound becomes max(watermark, since), so delivery only narrows.")] DateTime? since = null,
-        [Description("Optional page cap delivering the NEWEST window; the mention slice outside it needs replayMentions=true.")] int? limit = null,
-        [Description("Project each message to {id, room, authorAlias, createdAt, text<=200 chars} to save tokens; default false keeps the full payload.")] bool compact = false,
-        [Description("Opt out of mention scoping: re-deliver every message that ever mentioned the alias, legacy behavior; default false.")] bool replayMentions = false,
-        [Description("Id of the project whose rooms to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Comma-separated room filter; omitted reads every active room.")] string? rooms = null,
+        [Description("ISO datetime; only narrows the watermark lower bound.")] DateTime? since = null,
+        [Description("Optional page cap on the newest window.")] int? limit = null,
+        [Description("Project each message to id, room, authorAlias, createdAt, text≤200.")] bool compact = false,
+        [Description("Re-deliver every message that ever mentioned the alias.")] bool replayMentions = false,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
@@ -125,17 +115,11 @@ public sealed class WaveChatTools
     }
 
     [McpServerTool(Name = "wave_chat_peek", Destructive = false, ReadOnly = true, Idempotent = true)]
-    [Description("Counts the calling alias's undelivered wave chat traffic per room without advancing any watermark: " +
-        "one {room, count, ids} entry per room, where count is the number of undelivered messages and ids lists " +
-        "their message ids — read the full messages with wave_chat_unread only when count > 0. Same selection as " +
-        "an unread read: room traffic above the watermark plus watermark-scoped mentions. Mentions (@alias) surface " +
-        "in the {room, count, ids} entry of every room they were posted to: ids can repeat across rooms, and summing " +
-        "the counts overstates what a single wave_chat_unread read delivers. rooms is a comma-separated " +
-        "filter (lane names and/or 'all'); omitted reads every room with activity, oldest last-activity first. " +
-        "An unknown filtered room fails with the named MissingWaveRoom error.")]
+    [Description("Counts the calling alias's undelivered wave chat traffic per room without advancing any " +
+        "watermark — {room, count, ids} rows; read the bodies with wave_chat_unread when count > 0.")]
     public async Task<JsonElement> PeekRooms(
-        [Description("Optional comma-separated room filter; omitted reads every room with activity, oldest activity first.")] string? rooms = null,
-        [Description("Id of the project whose rooms to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
+        [Description("Comma-separated room filter; omitted reads every active room.")] string? rooms = null,
+        [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
