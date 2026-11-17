@@ -482,7 +482,7 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_pin_feature_code", Destructive = false, Idempotent = true)]
-    [Description("Pins a feature's explicit branch and/or worktree path, overriding the naming-convention discovery planning_feature_code does.")]
+    [Description("The cheap write tier: pins a feature's explicit branch and/or worktree path, overriding the naming-convention discovery planning_feature_code does.")]
     public async Task<CallToolResult> PinFeatureCode(
         [Description("Feature slug.")] string slug,
         [Description("Branch to pin; null clears it.")] string? branch = null,

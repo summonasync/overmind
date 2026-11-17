@@ -40,7 +40,7 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_read_artifact", ReadOnly = true, Idempotent = true)]
-    [Description("One artifact by id or alias — the full body, or only the named sections, which is cheaper. Task payloads carry review and blockedBy.")]
+    [Description("One artifact by id or alias — the full body, or only the named sections, which is cheaper. Task payloads carry review and blockedBy. The named-sections read is the cheapest read on the board.")]
     public async Task<JsonElement> ReadArtifact(
         [Description("Artifact id; omit it when using alias.")] Guid? artifactId = null,
         [Description("Comma-separated section names to narrow the body.")] string? sections = null,
@@ -373,7 +373,7 @@ public sealed class PlanningArtifactTools
     }
 
     [McpServerTool(Name = "planning_edit_log", Destructive = false, Idempotent = false)]
-    [Description("Rewrites the text of the newest log line on an artifact, and only your own; older or foreign lines 409.")]
+    [Description("The cheap correction tier: rewrites the text of the newest log line on an artifact, and only your own; older or foreign lines 409.")]
     public async Task<JsonElement> EditLog(
         [Description("New single-line text of that log line.")] string text,
         [Description("Artifact id; omit it when using alias.")] Guid? artifactId = null,

@@ -4,7 +4,7 @@ namespace Overmind.Mcp.Tests;
 
 internal static class ContractsDoc
 {
-    private const string DocSource = "docs/mcp-tool-contracts.md";
+    internal const string DocSource = "docs/mcp-tool-contracts.md";
     private static string? _text;
 
     public static string Section(string toolName)
@@ -27,6 +27,19 @@ internal static class ContractsDoc
     {
         var text = _text ??= File.ReadAllText(DocPath());
         return ReFlow(text[..text.IndexOf("\n## ", StringComparison.Ordinal)]);
+    }
+
+    // Section() reads the first heading it finds; the anchor guard needs the whole heading list
+    // to tell "exactly one" from "at least one".
+    public static IReadOnlyList<string> Headings()
+    {
+        var text = _text ??= File.ReadAllText(DocPath());
+        return text
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("## ", StringComparison.Ordinal))
+            .Select(line => line[3..])
+            .ToArray();
     }
 
     // Markdown wraps paragraphs at column boundaries and leans on `emphasis`; assertions quote

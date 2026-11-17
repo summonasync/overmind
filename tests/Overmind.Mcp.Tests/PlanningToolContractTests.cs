@@ -75,7 +75,7 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task PricedLadder_CarriesTierPhrases_NineRungs()
+    public async Task PricedLadder_CarriesTierPhrases_PerSurface_WireAndContractsDoc()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -85,11 +85,15 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(pair => pair.Name, pair => pair.Text);
 
         descriptions["planning_append_log"].ShouldContain("cheapest write");
+        descriptions["planning_edit_log"].ShouldContain("cheap correction tier");
+        descriptions["planning_pin_feature_code"].ShouldContain("cheap write tier");
         descriptions["planning_patch_artifact"].ShouldContain("The middle-tier write");
         descriptions["planning_upsert_artifact"].ShouldContain("most expensive write");
         descriptions["planning_read_artifact"].ShouldContain("which is cheaper");
+        descriptions["planning_read_artifact"].ShouldContain("the cheapest read on the board");
         descriptions["planning_read_feature"].ShouldContain("most expensive read");
 
+        ContractsDoc.Section("planning_append_log").ShouldContain("the cheapest write: one dated line, no body resent");
         ContractsDoc.Section("planning_edit_log").ShouldContain("one line changes, the body is not resent");
         ContractsDoc.Section("planning_pin_feature_code").ShouldContain("The body is a full replace, last write wins");
         ContractsDoc.Section("planning_read_artifact").ShouldContain("the cheapest read on the board");
@@ -510,6 +514,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         section.ShouldContain("A sort key within the feature, lowest first");
         section.ShouldContain("Gaps in order numbering are legal and meaningful");
         section.ShouldContain("never renumber existing tasks to close a hole");
+        section.ShouldNotContain("with its XML sections");
     }
 
     [Fact]
@@ -4498,6 +4503,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         ("planning_upsert_artifact", "free-form markdown with <log> as the only machine-parsed section"),
         ("planning_upsert_artifact", "A sort key within the feature, lowest first"),
         ("planning_upsert_artifact", "omitted order appends after the current max"),
+        ("planning_upsert_artifact", "first append lands on 0; materialized backlog files are numbered 1-based"),
         ("planning_upsert_artifact", "empty array clears"),
         ("planning_upsert_tasks", "empty array clears"),
         ("planning_upsert_artifact", "Features cannot be deleted or archived via MCP"),
@@ -4561,6 +4567,8 @@ public class PlanningToolContractTests : McpSessionTestBase
         ("planning_delete_artifact", "soft delete"),
         ("planning_materialize_status", "stalePaths"),
         ("planning_upsert_tasks", "any failing item rolls back the whole batch, so a retry starts clean"),
+        ("planning_upsert_tasks", "Items are staged and committed together"),
+        ("planning_upsert_tasks", "A failing item is reported with its index"),
         ("planning_upsert_tasks", "one feature auto-transition evaluation"),
         ("planning_export_backlog", "commit the planning alongside the code"),
         ("planning_export_backlog", "plain greppable files"),

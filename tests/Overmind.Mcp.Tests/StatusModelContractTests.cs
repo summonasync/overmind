@@ -169,7 +169,7 @@ public class StatusModelContractTests : McpSessionTestBase
         var section = ContractsDoc.Section("planning_set_status");
 
         section.ShouldContain("carries the same proof requirement as");
-        section.ShouldContain("notification newer than the artifact's last");
+        section.ShouldContain("newer than the artifact's last content update");
         section.ShouldContain("ValidationProofRequired");
         section.ShouldContain("Task and result moves never require proof");
     }
@@ -180,7 +180,7 @@ public class StatusModelContractTests : McpSessionTestBase
         var section = ContractsDoc.Section("planning_set_status");
 
         section.ShouldContain("re-evaluates the review invariant");
-        section.ShouldContain("[auto] promotion line");
+        section.ShouldContain("exactly one [auto] promotion line");
     }
 
     [Fact]
