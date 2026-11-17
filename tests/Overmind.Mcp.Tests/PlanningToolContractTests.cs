@@ -66,12 +66,16 @@ public class PlanningToolContractTests : McpSessionTestBase
             tools[tool]!["description"]!.GetValue<string>().ShouldContain(clause);
         }
 
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(39);
+    }
+
+    [Fact]
+    public void ContractsDoc_CarriesEveryMovedMechanic()
+    {
         foreach (var (tool, mechanic) in MovedContractMechanics)
         {
             ContractsDoc.Section(tool).ShouldContain(mechanic);
         }
-
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(39);
     }
 
     [Fact]
@@ -4573,5 +4577,7 @@ public class PlanningToolContractTests : McpSessionTestBase
         ("planning_export_backlog", "commit the planning alongside the code"),
         ("planning_export_backlog", "plain greppable files"),
         ("planning_export_backlog", "no body echo"),
+        ("planning_batch", "failing op rolls the whole batch back"),
+        ("planning_batch", "its 400 names the index"),
     ];
 }
