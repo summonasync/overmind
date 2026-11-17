@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Overmind.Core;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Planning;
 using Shouldly;
@@ -96,6 +97,28 @@ public sealed class MirrorVerifierTests : IDisposable
         var result = await MirrorVerifier.VerifyAsync(root, rows, CancellationToken.None);
 
         result.Passed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("../escape.md")]
+    [InlineData("BACKLOG/../../escape.md")]
+    [InlineData("/etc/passwd")]
+    public async Task Verify_RowPathEscapesRoot_ThrowsInsteadOfReportingVerdict(string relativePath)
+    {
+        var root = CreateDirectory("candidate");
+        await File.WriteAllTextAsync(Path.Combine(root, "kept.md"), "unchanged\n");
+        var rows = new[]
+        {
+            new MirrorFileRow("kept.md", Sha256Of("unchanged\n")),
+            new MirrorFileRow(relativePath, Sha256Of("whatever")),
+        };
+
+        var failure = await Should.ThrowAsync<MaterializationException>(
+            () => MirrorVerifier.VerifyAsync(root, rows, CancellationToken.None));
+
+        failure.Kind.ShouldBe(MaterializationFailureKind.PathTraversal);
+        failure.OffendingPath.ShouldBe(relativePath);
+        failure.Message.ShouldContain("escapes the project directory");
     }
 
     [Fact]

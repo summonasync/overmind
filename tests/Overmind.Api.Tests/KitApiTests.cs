@@ -232,6 +232,7 @@ public sealed class KitApiTests : IDisposable
         var problem = await blocked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
         problem!.Detail!.ShouldContain("deactivate kits first");
+        problem.Detail.ShouldNotContain("files are materialized");
 
         var deactivate = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/deactivate", null);
         deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -298,6 +299,49 @@ public sealed class KitApiTests : IDisposable
         allowed.StatusCode.ShouldBe(HttpStatusCode.OK);
         var updated = await allowed.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
         updated!.DiskPath.ShouldBe(candidate);
+    }
+
+    [Theory]
+    [InlineData("../escape.md")]
+    [InlineData("docs/../../escape.md")]
+    [InlineData("/etc/passwd")]
+    public async Task Update_MirrorRowPathEscapesCandidate_Returns400AndKeepsProject(string relativePath)
+    {
+        var project = await CreateProjectAsync();
+        var kit = await CreateKitAsync("escaped-rows", 1);
+
+        var candidate = Path.Combine(_sandboxDir, "relocated");
+        Directory.CreateDirectory(candidate);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            db.MaterializedFiles.Add(MaterializedFile.Create(
+                project.Id,
+                kit.Id,
+                AgentPlatform.Claude,
+                relativePath,
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("stale bytes")))));
+            db.SaveChanges();
+        }
+
+        var blocked = await _client.PutAsJsonAsync($"/api/projects/{project.Id}", new
+        {
+            Name = project.Name,
+            DiskPath = candidate,
+            Description = project.Description,
+        });
+
+        blocked.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await blocked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Status.ShouldBe(400);
+        problem.Title.ShouldBe("Invalid materialization target");
+        problem.Detail!.ShouldContain(relativePath);
+        problem.Detail.ShouldContain("escapes the project directory");
+
+        var untouched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{project.Id}", JsonOptions);
+        untouched!.DiskPath.ShouldBe(project.DiskPath);
     }
 
     [Fact]
