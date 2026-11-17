@@ -31,6 +31,8 @@ interface UseAgentChatArgs {
   onConversationCreated: (conversation: AgentConversation) => void;
 }
 
+let liveToolSequence = 0;
+
 export function useAgentChat({ conversationId, projectId, onConversationCreated }: UseAgentChatArgs) {
   const queryClient = useQueryClient();
   const pendingAssistantId = `pending-assistant${useId()}`;
@@ -88,6 +90,19 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
         ? items
         : [...items, { id: pendingAssistantId, role: "assistant", content: "", createdAt: new Date().toISOString() }],
     );
+  };
+
+  const appendLiveTool = (targetId: string, toolName: string) => {
+    liveToolSequence += 1;
+    mutateHistory(targetId, (items) => [
+      ...items,
+      {
+        id: `pending-tool-${liveToolSequence}`,
+        role: "tool",
+        content: JSON.stringify({ tool: toolName }),
+        createdAt: new Date().toISOString(),
+      },
+    ]);
   };
 
   const attachRef = useRef<AbortController | null>(null);
@@ -149,7 +164,14 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
         queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
       },
       onRoute: appendRouteTrace,
+      onTool: (toolName) => appendLiveTool(conversationId, toolName),
     })
+      .then((outcome) => {
+        if (outcome === "idle") {
+          queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+          invalidateConversations();
+        }
+      })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -195,7 +217,6 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       mutateHistory(activeId, (items) => [
         ...items,
         { id: `pending-user-${now}`, role: "user", content: trimmed, createdAt: now },
-        { id: pendingAssistantId, role: "assistant", content: "", createdAt: now },
       ]);
       setStreaming(true);
       reportTurnStarted();
@@ -203,14 +224,17 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
       await streamAgentReply(activeId, trimmed, {
         signal: controller.signal,
         onRoute: appendRouteTrace,
-        onDelta: (delta) =>
+        onTool: (toolName) => appendLiveTool(activeId, toolName),
+        onDelta: (delta) => {
+          ensurePendingAssistant(activeId);
           mutateHistory(activeId, (items) =>
             items.map((message) =>
               message.id === pendingAssistantId
                 ? { ...message, content: message.content + delta }
                 : message,
             ),
-          ),
+          );
+        },
         onCompleted: (messageId) => {
           mutateHistory(activeId, (items) =>
             messageId === null

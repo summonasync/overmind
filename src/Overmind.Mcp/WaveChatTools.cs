@@ -39,7 +39,7 @@ public sealed class WaveChatTools
         TextCapLint.Cap(text, SignalTextCap);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var message = await _mutations.SendAsync(() => _api.PostAsync(
-            $"/api/agent/projects/{resolved}/wave/rooms/{room}/messages",
+            $"/api/agent/projects/{resolved}/wave/rooms/{Uri.EscapeDataString(room)}/messages",
             new { text },
             ct), readback: null, ct);
 
@@ -92,7 +92,7 @@ public sealed class WaveChatTools
         foreach (var room in selected)
         {
             var page = await ReadAsync(
-                $"/api/agent/projects/{resolved}/wave/rooms/{room}/unread{UnreadQuery(since, limit, replayMentions)}", ct);
+                $"/api/agent/projects/{resolved}/wave/rooms/{Uri.EscapeDataString(room)}/unread{UnreadQuery(since, limit, replayMentions)}", ct);
             foreach (var item in page.GetProperty("items").EnumerateArray())
             {
                 var node = JsonNode.Parse(item.GetRawText())!.AsObject();
@@ -144,7 +144,7 @@ public sealed class WaveChatTools
         var peeks = new JsonArray();
         foreach (var room in selected)
         {
-            var peek = await ReadAsync($"/api/agent/projects/{resolved}/wave/rooms/{room}/peek", ct);
+            var peek = await ReadAsync($"/api/agent/projects/{resolved}/wave/rooms/{Uri.EscapeDataString(room)}/peek", ct);
             peeks.Add(JsonNode.Parse(peek.GetRawText())!.AsObject());
         }
 

@@ -34,6 +34,9 @@ export function parseAgentStreamFrame(name: string, data: string): AgentStreamFr
       source: parseRoutingSource(record.source),
     };
   }
+  if (name === "tool" && typeof record.tool === "string") {
+    return { kind: "tool", toolName: record.tool };
+  }
   return null;
 }
 

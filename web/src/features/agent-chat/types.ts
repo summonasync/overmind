@@ -1,4 +1,4 @@
-export type AgentMessageRole = "user" | "assistant";
+export type AgentMessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface AgentConversation {
   id: string;
@@ -35,7 +35,8 @@ export type AgentStreamFrame =
   | { kind: "completed"; messageId: string | null }
   | { kind: "failed"; error: string }
   | { kind: "aborted" }
-  | { kind: "route"; target: string; source: AgentRoutingSource | null };
+  | { kind: "route"; target: string; source: AgentRoutingSource | null }
+  | { kind: "tool"; toolName: string };
 
 export interface AgentReadState {
   conversationId: string;

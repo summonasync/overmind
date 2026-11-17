@@ -9,6 +9,12 @@ import { formatRelativeTime } from "@/shared/lib/relative-time";
 import { AGENT_SCROLL_BOTTOM_THRESHOLD } from "@/features/agent-chat/lib/limits";
 import { useSeenMessageTracking } from "@/features/agent-chat/lib/use-seen-tracking";
 import { AgentRouteTraceRow } from "@/features/agent-chat/components/agent-route-trace";
+import {
+  messageRoleBodyClass,
+  messageRoleLabel,
+  messageRoleRowClass,
+  messageRoleTextClass,
+} from "@/features/agent-chat/lib/message-role";
 import type { AgentMessage, AgentRouteTrace } from "@/features/agent-chat/types";
 
 interface AgentMessageListProps {
@@ -131,29 +137,33 @@ interface MessageRowProps {
 }
 
 function MessageRow({ message }: MessageRowProps) {
-  const author = message.role === "user" ? "You" : "Agent";
   return (
     <li
       data-agent-message-id={message.id}
-      className={cn(
-        "rounded-md px-2.5 py-2",
-        message.role === "user" ? "bg-primary/5" : "bg-surface-raised/50",
-      )}
+      data-agent-message-role={message.role}
+      className={cn("rounded-md px-2.5 py-2", messageRoleRowClass(message.role))}
     >
       <div className="flex items-baseline justify-between gap-2">
         <span
           className={cn(
             "font-mono text-xs font-semibold",
-            message.role === "user" ? "text-primary" : "text-agent",
+            messageRoleTextClass(message.role),
           )}
         >
-          {author}
+          {messageRoleLabel(message.role)}
         </span>
         <time dateTime={message.createdAt} className="shrink-0 text-xs text-muted">
           {formatRelativeTime(message.createdAt)}
         </time>
       </div>
-      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{message.content}</p>
+      <p
+        className={cn(
+          "mt-1 whitespace-pre-wrap break-words",
+          messageRoleBodyClass(message.role),
+        )}
+      >
+        {message.content}
+      </p>
     </li>
   );
 }

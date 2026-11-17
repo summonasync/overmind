@@ -319,7 +319,7 @@ public static class WaveChatApi
     {
         try
         {
-            var message = await chat.PostAsync(projectId, room, authorAlias, authorRole, text, ct);
+            var message = await chat.PostAsync(projectId, DecodedRoom(room), authorAlias, authorRole, text, ct);
             return Results.Ok(ToResponse(message));
         }
         catch (PlanningException ex)
@@ -344,7 +344,7 @@ public static class WaveChatApi
     {
         try
         {
-            var page = await chat.ListUnreadAsync(projectId, alias, room, since, limit, replayMentions, ct);
+            var page = await chat.ListUnreadAsync(projectId, alias, DecodedRoom(room), since, limit, replayMentions, ct);
             return Results.Ok(new WaveUnreadResponse(
             [
                 .. page.Messages.Select(ToResponse)
@@ -365,7 +365,7 @@ public static class WaveChatApi
     {
         try
         {
-            var peek = await chat.PeekAsync(projectId, alias, room, ct);
+            var peek = await chat.PeekAsync(projectId, alias, DecodedRoom(room), ct);
             return Results.Ok(new WavePeekResponse(peek.Room, peek.Count, [.. peek.Ids]));
         }
         catch (PlanningException ex)
@@ -388,7 +388,7 @@ public static class WaveChatApi
     {
         try
         {
-            var messages = await chat.ListHistoryAsync(projectId, room, limit, before, ct);
+            var messages = await chat.ListHistoryAsync(projectId, DecodedRoom(room), limit, before, ct);
             return Results.Ok(new WaveHistoryResponse(
             [
                 .. messages.Select(ToResponse)
@@ -399,6 +399,13 @@ public static class WaveChatApi
             return PlanningErrors.Map(ex);
         }
     }
+
+    // Routing hands the single-segment {room} value over still percent-encoded: %2F is not
+    // turned into a separator and is not decoded on the way in — measured on the deployed
+    // v1.9.1 Host (real Kestrel, 2026-11-16), where `rooms/zz.Test%2FSweep/messages` reached
+    // the handler as `zz.Test%2FSweep` and the roster row `zz.Test/Sweep` never matched.
+    // Legacy slash lanes are stored with the real slash, so the wire name comes back to it here.
+    private static string DecodedRoom(string room) => Uri.UnescapeDataString(room);
 
     private static WaveMessageResponse ToResponse(WaveMessage message) =>
         new(message.Id,

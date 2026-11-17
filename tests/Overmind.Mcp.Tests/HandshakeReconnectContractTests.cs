@@ -48,7 +48,19 @@ public sealed class HandshakeReconnectContractTests : McpSessionTestBase
         }
 
         registrations().ShouldBeGreaterThanOrEqualTo(2);
-        Stub.Requests.Count(r => r.Method == "POST" && r.Path.EndsWith("/end", StringComparison.Ordinal))
-            .ShouldBeGreaterThanOrEqualTo(1);
+
+        // The adapter posts /end for the superseded session off the handshake path, so the call lands
+        // whenever the retire task gets scheduled — under full-assembly load that is after a bare
+        // assert reads the log. Bounded wait, same bar as before.
+        var ended = () => Stub.Requests.Count(
+            r => r.Method == "POST" && r.Path.EndsWith("/end", StringComparison.Ordinal));
+
+        var endDeadline = DateTime.UtcNow.AddSeconds(5);
+        while (ended() < 1 && DateTime.UtcNow < endDeadline)
+        {
+            await Task.Delay(50);
+        }
+
+        ended().ShouldBeGreaterThanOrEqualTo(1);
     }
 }
