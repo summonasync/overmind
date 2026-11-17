@@ -10,23 +10,30 @@ namespace Overmind.Mcp;
 [McpServerToolType]
 public sealed class OvermindTools
 {
-    private static readonly HashSet<string> ReadableEntryTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "note", "decision", "gate", "guard", "idea", "audit", "skill", "tombstone", "journal"
-    };
-
-    private static readonly HashSet<string> WritableEntryTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "note", "decision", "gate", "guard", "idea", "audit", "tombstone"
-    };
-
+    // The two type strings below are the only declarations of entry-type membership in this assembly — the sets the
+    // validators consult are computed from them — and EntryTypeSurfaceContractTests pins both against
+    // Overmind.Core's EntryType. The adapter references nothing by design, so a shared constant is impossible and
+    // the assertion is what keeps a fifth prose copy from drifting.
     private const string AgentWritableTypeList = "note, decision, gate, guard, idea, audit, tombstone";
 
-    private const string JournalWriteRefused =
+    private const string ReadableTypeList = "note, decision, gate, guard, skill, idea, audit, tombstone, journal";
+
+    internal static IReadOnlyList<string> AgentWritableTypes => Split(AgentWritableTypeList);
+
+    internal static IReadOnlyList<string> ReadableTypes => Split(ReadableTypeList);
+
+    private static readonly HashSet<string> ReadableEntryTypes = new(ReadableTypes, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> WritableEntryTypes = new(AgentWritableTypes, StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<string> Split(string list) =>
+        [.. list.Split(", ", StringSplitOptions.RemoveEmptyEntries)];
+
+    private static readonly string JournalWriteRefused =
         "JournalEntryWriteRefused: journal entries are the human surface — the agent door refuses them; " +
         $"supported types: {AgentWritableTypeList}.";
 
-    private const string SkillManagedElsewhere =
+    private static readonly string SkillManagedElsewhere =
         "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. " +
         $"Supported types: {AgentWritableTypeList}.";
 
@@ -45,8 +52,6 @@ public sealed class OvermindTools
     private const string DecisionMemoryHint =
         "Durable decision — consider mirroring it into the crew memory (grimoire memory_remember) " +
         "and referencing it here with 'pointer: grimoire://memory/<id>'.";
-
-    private const string ReadableTypeList = "note, decision, gate, guard, skill, idea, audit, tombstone, journal";
 
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
@@ -219,10 +224,7 @@ public sealed class OvermindTools
             throw new McpException(SkillManagedElsewhere);
         }
 
-        if (string.Equals(entryType, "journal", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new McpException(JournalWriteRefused);
-        }
+        RefuseIfJournal(existing);
 
         var title = existing.GetProperty("title").GetString() ?? string.Empty;
 
@@ -231,7 +233,8 @@ public sealed class OvermindTools
     }
 
     [McpServerTool(Name = "delete_entry", Destructive = true, Idempotent = true)]
-    [Description("Deletes one entry — notes, decisions, gates, guards, ideas, audits and tombstones. Deletion is permanent: the row and its version history are gone, and a tombstone entry is born in its place carrying the original title with ' (deleted)' appended, the original type, the deletion date, door+actor provenance, the optional reason from this call, and the final content preserved in a fenced block. Deleting a tombstone is a plain delete — no second tombstone. Tombstones stay discoverable: list them via list_entries with type=tombstone; they ride search like every other entry. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
+    [Description("Deletes one entry through the agent door — notes, decisions, gates, guards, ideas, audits and tombstones. " +
+        "Deletion is permanent: the row and its version history are gone, and a tombstone entry is born in its place carrying the original title with ' (deleted)' appended, the original type, the deletion date, door+actor provenance, the optional reason from this call, and the final content preserved in a fenced block. Deleting a tombstone is a plain delete — no second tombstone. Tombstones stay discoverable: list them via list_entries with type=tombstone; they ride search like every other entry. Kit-linked entries are refused with KitOwnedEntry: 'managed by a skill kit — the kit reimport or the UI owns it'. Skill entries are refused too — the UI owns their lifecycle. Journal entries are the human surface: the agent door refuses them with JournalEntryWriteRefused. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")]
     public async Task<JsonElement> DeleteEntry(
         [Description("Id of the entry to delete.")] Guid entryId,
         [Description("Optional reason recorded on the tombstone — why the entry died. Ignored when the entry is itself a tombstone (plain delete).")] string? reason = null,
@@ -253,6 +256,8 @@ public sealed class OvermindTools
             throw new McpException(SkillDeleteRefused);
         }
 
+        RefuseIfJournal(entry);
+
         var kits = await Guarded(() => _api.GetAsync("/api/kits", ct));
         foreach (var kit in kits.EnumerateArray())
         {
@@ -268,7 +273,7 @@ public sealed class OvermindTools
             }
         }
 
-        var path = $"/api/entries/{entryId}";
+        var path = $"/api/agent/entries/{entryId}";
         if (!string.IsNullOrWhiteSpace(reason))
         {
             path += $"?reason={Uri.EscapeDataString(reason.Trim())}";
@@ -293,7 +298,10 @@ public sealed class OvermindTools
         "(list_entries trio default, briefing trio sections) and surfaces in the briefing's liftedRecently tail. " +
         "Lift refuses skills and tombstones (the UI owns the skill lifecycle; a tombstone is already the ceiling) and " +
         "validates the supersede target — unknown, cross-project, tombstone or self-reference targets come back as " +
-        "readable errors. For replacement content prefer write_entry + supersededById over a body rewrite.")]
+        "readable errors. Journal entries are the human surface: the tool reads the target type first and refuses " +
+        "with JournalEntryWriteRefused before any write leaves the adapter, and the agent door refuses one it is " +
+        "handed anyway. " +
+        "For replacement content prefer write_entry + supersededById over a body rewrite.")]
     public async Task<JsonElement> LiftEntry(
         [Description("Id of the entry to lift — take it from list_entries or read_entry.")] Guid entryId,
         [Description("Why the rule no longer applies; stored as the entry's stateReason.")] string reason,
@@ -301,8 +309,11 @@ public sealed class OvermindTools
         [Description("Optional id of the replacement entry; setting it marks the lift as 'superseded' instead of 'lifted'. Must belong to the same project and must not be a tombstone.")] Guid? supersededById = null,
         CancellationToken ct = default)
     {
+        var existing = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
+        RefuseIfJournal(existing);
+
         var lifted = await Guarded(() => _api.PostAsync(
-            $"/api/entries/{entryId}/lift",
+            $"/api/agent/entries/{entryId}/lift",
             new { reason, proof, supersededById },
             ct));
 
@@ -314,7 +325,8 @@ public sealed class OvermindTools
         "through the version machinery: the previous content is snapshotted (the version bumps) and stays readable " +
         "via the versions endpoint, and the search index refreshes. The cheap door for adding new information to a " +
         "note, decision, gate or guard without a full update_entry rewrite. text is capped at 2000 chars, enforced " +
-        "here before the call; blank text is refused. Skills are managed via the Overmind UI.")]
+        "here before the call; blank text is refused. Skills are managed via the Overmind UI, and journal entries are " +
+        "the human surface: the agent door refuses them with JournalEntryWriteRefused.")]
     public async Task<JsonElement> AppendEntry(
         [Description("Id of the entry to append to — take it from list_entries or read_entry.")] Guid entryId,
         [Description("Follow-up text; the server stamps it under a dated '## Follow-up' heading, max 2000 chars.")] string text,
@@ -328,8 +340,10 @@ public sealed class OvermindTools
             throw new McpException(SkillAppendRefused);
         }
 
+        RefuseIfJournal(existing);
+
         var appended = await Guarded(() => _api.PostAsync(
-            $"/api/entries/{entryId}/append",
+            $"/api/agent/entries/{entryId}/append",
             new { text },
             ct));
 
@@ -518,6 +532,17 @@ public sealed class OvermindTools
         if (!string.IsNullOrWhiteSpace(value))
         {
             parameters.Add($"{name}={Uri.EscapeDataString(value.Trim())}");
+        }
+    }
+
+    // The id-addressed write tools cannot guess a target's type, so each of them reads the entry first — a read the
+    // agent door answers for journal rows too — and refuses from that type before constructing the mutation.
+    // The server gate behind it is the authority; this only saves the round trip and the operator's confusion.
+    private static void RefuseIfJournal(JsonElement entry)
+    {
+        if (string.Equals(entry.GetProperty("type").GetString(), "journal", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new McpException(JournalWriteRefused);
         }
     }
 

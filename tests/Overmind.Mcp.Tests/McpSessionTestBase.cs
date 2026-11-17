@@ -69,7 +69,7 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             return new StubOvermindApi.Response(201, body.ToJsonString());
         });
         stub.Route("PUT", $"/api/agent/entries/{Canned.EntryId}", 200, Canned.EntryJson);
-        stub.Route("DELETE", "/api/entries/[^/]+", 204, "");
+        stub.Route("DELETE", "/api/agent/entries/[^/]+", 204, "");
         stub.RouteGet($"/api/agent/projects/{Canned.ProjectId}/planning/lanes", """{"lanes":[]}""");
         stub.RouteGet("/api/kits", Canned.KitsWithoutEntryJson);
         stub.RouteGet("/api/search", Canned.SearchJson);

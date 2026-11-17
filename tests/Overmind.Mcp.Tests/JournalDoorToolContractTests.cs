@@ -27,6 +27,13 @@ public sealed class JournalDoorToolContractTests : McpSessionTestBase
                 ? new StubOvermindApi.Response(200, JournalListingJson)
                 : new StubOvermindApi.Response(200, "[]"));
         stub.Route("PUT", $"/api/agent/entries/{JournalEntryId}", 200, JournalEntryJson);
+
+        // Doors a non-journal entry still walks through: the agent twins added for append and lift.
+        stub.Route("POST", $"/api/agent/entries/{Canned.EntryId}/append", 200, Canned.EntryJson);
+        stub.Route("POST", $"/api/agent/entries/{Canned.EntryId}/lift", 200, Canned.EntryJson);
+        stub.Route("POST", $"/api/agent/entries/{JournalEntryId}/append", 200, JournalEntryJson);
+        stub.Route("POST", $"/api/agent/entries/{JournalEntryId}/lift", 200, JournalEntryJson);
+        stub.Route("DELETE", $"/api/agent/entries/{JournalEntryId}", 200, JournalEntryJson);
     }
 
     [Fact]
@@ -127,6 +134,86 @@ public sealed class JournalDoorToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task AppendEntry_JournalEntry_RefusesBeforeAnyMutationRequest()
+    {
+        var response = await Driver.CallToolAsync("append_entry", new JsonObject
+        {
+            ["entryId"] = JournalEntryId.ToString(),
+            ["text"] = "agent slipped a line into the owner's note"
+        });
+
+        ToolErrorText(response).ShouldContain("JournalEntryWriteRefused");
+
+        // The type is learned from a read — reads stay open on journal — so the bar is that no entry mutation is
+        // sent. The handshake's own POSTs (session registration, onboard) are not mutations and stay out of scope.
+        Stub.Requests.ShouldNotContain(r => IsEntryMutation(r));
+        Stub.Requests.ShouldContain(r => r.Method == "GET" && r.Path == $"/api/entries/{JournalEntryId}");
+    }
+
+    [Fact]
+    public async Task LiftEntry_JournalEntry_RefusesBeforeAnyMutationRequest()
+    {
+        var response = await Driver.CallToolAsync("lift_entry", new JsonObject
+        {
+            ["entryId"] = JournalEntryId.ToString(),
+            ["reason"] = "agent retired the owner's note"
+        });
+
+        ToolErrorText(response).ShouldContain("JournalEntryWriteRefused");
+        Stub.Requests.ShouldNotContain(r => IsEntryMutation(r));
+    }
+
+    [Fact]
+    public async Task DeleteEntry_JournalEntry_RefusesBeforeAnyMutationRequest()
+    {
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = JournalEntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["reason"] = "agent buried the owner's note"
+        });
+
+        ToolErrorText(response).ShouldContain("JournalEntryWriteRefused");
+
+        // delete_entry also walks /api/kits for the kit-owner guard; the refusal lands before that second read.
+        Stub.Requests.ShouldNotContain(r => IsEntryMutation(r));
+        Stub.Requests.ShouldNotContain(r => r.Path == "/api/kits");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_NoteGoesThroughTheAgentDoor()
+    {
+        var response = await Driver.CallToolAsync("delete_entry", new JsonObject
+        {
+            ["entryId"] = Canned.EntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        FindRequest("DELETE", $"/api/agent/entries/{Canned.EntryId}");
+    }
+
+    [Fact]
+    public async Task AckEntry_JournalEntry_StillWorksFromAnAgentSession()
+    {
+        Stub.Route(
+            "POST",
+            $"/api/agent/projects/{Canned.ProjectId}/entries/{JournalEntryId}/ack",
+            200,
+            $$"""{"entryId":"{{JournalEntryId}}","ack":true,"alias":"scribe","vendor":"qwen","at":"2026-11-17T10:00:00Z"}""");
+
+        var response = await Driver.CallToolAsync("ack_entry", new JsonObject
+        {
+            ["entryId"] = JournalEntryId.ToString(),
+            ["projectId"] = Canned.ProjectId.ToString()
+        });
+
+        var result = response["result"]!;
+        result["isError"].ShouldBeNull($"ack on a journal entry must not be gated: {result.ToJsonString()}");
+        Stub.Requests.ShouldNotContain(r => r.Method == "DELETE");
+    }
+
+    [Fact]
     public async Task ToolSurface_JournalIsReadableButNeverWritable()
     {
         var tools = (await Driver.ListToolsAsync())["result"]!["tools"]!.AsArray()
@@ -135,7 +222,7 @@ public sealed class JournalDoorToolContractTests : McpSessionTestBase
         var listProperties = tools["list_entries"]!["inputSchema"]!["properties"]!.AsObject();
         listProperties["type"]!["description"]!.GetValue<string>().ShouldContain("journal");
 
-        foreach (var tool in new[] { "write_entry", "update_entry" })
+        foreach (var tool in new[] { "write_entry", "update_entry", "append_entry", "lift_entry", "delete_entry" })
         {
             var description = tools[tool]!["description"]!.GetValue<string>();
             description.Contains("agent door").ShouldBeTrue($"{tool} must name the door it calls");
@@ -147,6 +234,13 @@ public sealed class JournalDoorToolContractTests : McpSessionTestBase
             .AsObject()["type"]!["description"]!.GetValue<string>();
         writeTypeDescription.ShouldNotContain("journal");
     }
+
+    // A request that would change an entry: the verbs the gate guards, on an entry path, minus the ack, which
+    // writes an additive readBy row and must stay open.
+    private static bool IsEntryMutation(StubOvermindApi.Request request) =>
+        !request.Path.EndsWith("/ack") &&
+        (request.Method == "POST" || request.Method == "PUT" || request.Method == "DELETE") &&
+        (request.Path.Contains("/entries") || request.Path.Contains("/entries/"));
 
     private static string ToolErrorText(JsonNode response)
     {

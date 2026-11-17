@@ -16,9 +16,6 @@ namespace Overmind.Host.Api;
 
 public static class EntriesApi
 {
-    private static readonly string[] AgentWritableEntryTypes =
-        ["note", "decision", "gate", "guard", "idea", "audit", "tombstone"];
-
     public static RouteGroupBuilder MapEntriesApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api");
@@ -35,8 +32,17 @@ public static class EntriesApi
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
-        agent.MapPost("/entries", CreateForAgent);
-        agent.MapPut("/entries/{id:guid}", UpdateForAgent);
+
+        // Spec R6 as an invariant rather than a list: every agent-reachable entry mutation registers on this
+        // subgroup, and the journal refusal hangs on the subgroup, so a new verb inherits it by placement.
+        // The route-table test derives its cases from the registered endpoints, so a mutation verb registered
+        // anywhere else under this prefix turns that test red without anyone updating a verb list.
+        var agentEntryWrites = routes.MapGroup("/api/agent").AddEndpointFilter(JournalWriteLockFilter.Instance);
+        agentEntryWrites.MapPost("/entries", Create);
+        agentEntryWrites.MapPut("/entries/{id:guid}", Update);
+        agentEntryWrites.MapDelete("/entries/{id:guid}", Delete);
+        agentEntryWrites.MapPost("/entries/{id:guid}/lift", Lift);
+        agentEntryWrites.MapPost("/entries/{id:guid}/append", Append);
 
         return group;
     }
@@ -123,45 +129,20 @@ public static class EntriesApi
         return Results.Ok(listed.Select(EntryMapper.ToResponse).ToArray());
     }
 
-    private static Task<IResult> Create(
+    private static async Task<IResult> Create(
         CreateEntryRequest request,
         IValidator<CreateEntryRequest> validator,
         HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
         EntryLinkWriter writer,
-        CancellationToken ct) =>
-        CreateAsync(request, validator, http, db, indexing, writer, agentDoor: false, ct);
-
-    private static Task<IResult> CreateForAgent(
-        CreateEntryRequest request,
-        IValidator<CreateEntryRequest> validator,
-        HttpRequest http,
-        OvermindDbContext db,
-        EntryIndexingService indexing,
-        EntryLinkWriter writer,
-        CancellationToken ct) =>
-        CreateAsync(request, validator, http, db, indexing, writer, agentDoor: true, ct);
-
-    private static async Task<IResult> CreateAsync(
-        CreateEntryRequest request,
-        IValidator<CreateEntryRequest> validator,
-        HttpRequest http,
-        OvermindDbContext db,
-        EntryIndexingService indexing,
-        EntryLinkWriter writer,
-        bool agentDoor,
+        ILoggerFactory writes,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
         if (!validation.IsValid)
         {
             return Results.ValidationProblem(validation.ToDictionary());
-        }
-
-        if (agentDoor && request.Type == EntryType.Journal)
-        {
-            return JournalEntryWriteRefused();
         }
 
         var projectExists = await db.Projects.AnyAsync(p => p.Id == request.ProjectId, ct);
@@ -174,6 +155,7 @@ public static class EntriesApi
         var outcome = await EntryWriteCommit.RunAsync(
             db,
             writer,
+            writes,
             async attemptCt =>
             {
                 var tags = await ResolveTagsAsync(db, request.Tags, attemptCt);
@@ -243,7 +225,7 @@ public static class EntriesApi
         return Results.Ok(EntryMapper.ToDetailResponse(entry, view));
     }
 
-    private static Task<IResult> Update(
+    private static async Task<IResult> Update(
         Guid id,
         UpdateEntryRequest request,
         IValidator<UpdateEntryRequest> validator,
@@ -251,29 +233,7 @@ public static class EntriesApi
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
         EntryLinkWriter writer,
-        CancellationToken ct) =>
-        UpdateAsync(id, request, validator, db, indexing, kitFork, writer, agentDoor: false, ct);
-
-    private static Task<IResult> UpdateForAgent(
-        Guid id,
-        UpdateEntryRequest request,
-        IValidator<UpdateEntryRequest> validator,
-        OvermindDbContext db,
-        EntryIndexingService indexing,
-        BundledKitForkService kitFork,
-        EntryLinkWriter writer,
-        CancellationToken ct) =>
-        UpdateAsync(id, request, validator, db, indexing, kitFork, writer, agentDoor: true, ct);
-
-    private static async Task<IResult> UpdateAsync(
-        Guid id,
-        UpdateEntryRequest request,
-        IValidator<UpdateEntryRequest> validator,
-        OvermindDbContext db,
-        EntryIndexingService indexing,
-        BundledKitForkService kitFork,
-        EntryLinkWriter writer,
-        bool agentDoor,
+        ILoggerFactory writes,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -286,6 +246,7 @@ public static class EntriesApi
         var outcome = await EntryWriteCommit.RunAsync(
             db,
             writer,
+            writes,
             async attemptCt =>
             {
                 var entry = await db.ContextEntries
@@ -297,11 +258,6 @@ public static class EntriesApi
                 if (entry is null)
                 {
                     return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
-                }
-
-                if (agentDoor && entry.Type == EntryType.Journal)
-                {
-                    return EntryWriteCommit.Work.Rejected(JournalEntryWriteRefused());
                 }
 
                 if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
@@ -501,6 +457,7 @@ public static class EntriesApi
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
         EntryLinkWriter writer,
+        ILoggerFactory writes,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -513,6 +470,7 @@ public static class EntriesApi
         var outcome = await EntryWriteCommit.RunAsync(
             db,
             writer,
+            writes,
             async attemptCt =>
             {
                 var entry = await LoadEntryAsync(db, id, attemptCt);
@@ -543,12 +501,6 @@ public static class EntriesApi
 
         return outcome;
     }
-
-    private static IResult JournalEntryWriteRefused() =>
-        HttpErrors.BadRequest(
-            $"Journal entries are the human surface; the agent door accepts " +
-            $"{string.Join(", ", AgentWritableEntryTypes)}.",
-            "JournalEntryWriteRefused");
 
     private static async Task<string?> ResolveAuthorAliasAsync(OvermindDbContext db, HttpRequest http, CancellationToken ct)
     {

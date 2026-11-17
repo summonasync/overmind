@@ -533,7 +533,7 @@ public class ToolContractTests : McpSessionTestBase
         var successor = Guid.Parse("7e7e7e7e-7e7e-7e7e-7e7e-7e7e7e7e7e7e");
         Stub.Route(
             "POST",
-            $"/api/entries/{Canned.DecisionEntryId}/lift",
+            $"/api/agent/entries/{Canned.DecisionEntryId}/lift",
             200,
             LifecycleEntryJson(Canned.DecisionEntryId, "decision", "superseded", successor.ToString(), 3));
 
@@ -547,7 +547,7 @@ public class ToolContractTests : McpSessionTestBase
 
         response["result"]!["isError"].ShouldBeNull();
 
-        var body = JsonNode.Parse(FindRequest("POST", $"/api/entries/{Canned.DecisionEntryId}/lift").Body)!;
+        var body = JsonNode.Parse(FindRequest("POST", $"/api/agent/entries/{Canned.DecisionEntryId}/lift").Body)!;
         body["reason"]!.GetValue<string>().ShouldBe("Postgres took over the storage story.");
         body["proof"]!.GetValue<string>().ShouldBe("notification 53ed854c");
         body["supersededById"]!.GetValue<Guid>().ShouldBe(successor);
@@ -566,7 +566,7 @@ public class ToolContractTests : McpSessionTestBase
     {
         Stub.Route(
             "POST",
-            $"/api/entries/{Canned.DecisionEntryId}/lift",
+            $"/api/agent/entries/{Canned.DecisionEntryId}/lift",
             200,
             LifecycleEntryJson(Canned.DecisionEntryId, "decision", "lifted", null, 2));
 
@@ -578,7 +578,7 @@ public class ToolContractTests : McpSessionTestBase
 
         response["result"]!["isError"].ShouldBeNull();
 
-        var raw = FindRequest("POST", $"/api/entries/{Canned.DecisionEntryId}/lift").Body;
+        var raw = FindRequest("POST", $"/api/agent/entries/{Canned.DecisionEntryId}/lift").Body;
         raw.ShouldContain("\"proof\":null");
         raw.ShouldContain("\"supersededById\":null");
 
@@ -592,7 +592,7 @@ public class ToolContractTests : McpSessionTestBase
     {
         Stub.Route(
             "POST",
-            $"/api/entries/{Canned.DecisionEntryId}/lift",
+            $"/api/agent/entries/{Canned.DecisionEntryId}/lift",
             400,
             """{"title":"Bad Lift","detail":"An entry cannot supersede itself.","status":400}""");
 
@@ -615,7 +615,7 @@ public class ToolContractTests : McpSessionTestBase
     {
         Stub.Route(
             "POST",
-            $"/api/entries/{Canned.EntryId}/append",
+            $"/api/agent/entries/{Canned.EntryId}/append",
             200,
             LifecycleEntryJson(Canned.EntryId, "note", "active", null, 4));
 
@@ -627,7 +627,7 @@ public class ToolContractTests : McpSessionTestBase
 
         response["result"]!["isError"].ShouldBeNull();
 
-        var body = JsonNode.Parse(FindRequest("POST", $"/api/entries/{Canned.EntryId}/append").Body)!;
+        var body = JsonNode.Parse(FindRequest("POST", $"/api/agent/entries/{Canned.EntryId}/append").Body)!;
         body["text"]!.GetValue<string>().ShouldBe("Server 502s were observed again after the rollback.");
 
         var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
@@ -995,7 +995,7 @@ public class ToolContractTests : McpSessionTestBase
                 : new StubOvermindApi.Response(200, Canned.NotesJson));
         Stub.Route(
             "DELETE",
-            "/api/entries/[^/]+",
+            "/api/agent/entries/[^/]+",
             _ =>
             {
                 deleted = true;
@@ -1033,7 +1033,7 @@ public class ToolContractTests : McpSessionTestBase
 
         response["result"]!["isError"].ShouldBeNull();
 
-        var request = FindRequest("DELETE", $"/api/entries/{Canned.EntryId}");
+        var request = FindRequest("DELETE", $"/api/agent/entries/{Canned.EntryId}");
         ParseQuery(request.Query)["reason"].ShouldBe("dead & buried — 100% superseded #graves");
     }
 
@@ -1047,7 +1047,7 @@ public class ToolContractTests : McpSessionTestBase
             ["reason"] = "   "
         });
 
-        FindRequest("DELETE", $"/api/entries/{Canned.EntryId}").Query.ShouldBe("");
+        FindRequest("DELETE", $"/api/agent/entries/{Canned.EntryId}").Query.ShouldBe("");
     }
 
     [Fact]
@@ -1120,7 +1120,7 @@ public class ToolContractTests : McpSessionTestBase
         var onboardBody = JsonNode.Parse(onboard.Body)!;
         onboardBody["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
         onboardBody["create"].ShouldBeNull();
-        FindRequest("DELETE", $"/api/entries/{Canned.EntryId}");
+        FindRequest("DELETE", $"/api/agent/entries/{Canned.EntryId}");
     }
 
     [Fact]
@@ -1183,7 +1183,7 @@ public class ToolContractTests : McpSessionTestBase
         });
 
         Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/onboard");
-        Stub.Requests.ShouldContain(r => r.Method == "DELETE" && r.Path == $"/api/entries/{Canned.EntryId}");
+        Stub.Requests.ShouldContain(r => r.Method == "DELETE" && r.Path == $"/api/agent/entries/{Canned.EntryId}");
     }
 
     [Fact]
