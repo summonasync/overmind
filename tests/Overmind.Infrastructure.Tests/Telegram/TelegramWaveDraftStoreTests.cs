@@ -115,7 +115,7 @@ public sealed class TelegramWaveDraftStoreTests
         drafts.AwaitingText(ChatId, 22).ShouldBe(draft);
         drafts.AwaitingText(ChatId, 23).ShouldBe(draft);
         drafts.AwaitingText(ChatId, 24).ShouldBeNull();
-        draft.PromptMessageId.ShouldBe(23);
+        PromptId(draft).ShouldBe(23);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public sealed class TelegramWaveDraftStoreTests
         draft.ForgetText();
 
         draft.PromptMessageIds.ShouldBeEmpty();
-        draft.PromptMessageId.ShouldBeNull();
+        PromptId(draft).ShouldBeNull();
         draft.AwaitsText(21).ShouldBeFalse();
         draft.AwaitsText(22).ShouldBeFalse();
     }
@@ -144,7 +144,7 @@ public sealed class TelegramWaveDraftStoreTests
 
         draft.Rooms.ShouldBe(["all", "new-lane"]);
         draft.Room.ShouldBeNull();
-        draft.PromptMessageId.ShouldBeNull();
+        PromptId(draft).ShouldBeNull();
     }
 
     [Fact]
@@ -172,6 +172,9 @@ public sealed class TelegramWaveDraftStoreTests
     }
 
     private static TelegramWaveDraftStore CreateStore() => new(new OffsetClock(TimeSpan.Zero));
+
+    private static long? PromptId(TelegramWaveDraft draft) =>
+        draft.PromptMessageIds.Count > 0 ? draft.PromptMessageIds[^1] : null;
 
     private sealed class OffsetClock(TimeSpan offset) : TimeProvider
     {

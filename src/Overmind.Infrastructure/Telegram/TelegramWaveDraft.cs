@@ -22,7 +22,6 @@ public sealed class TelegramWaveDraft
     public IReadOnlyList<string> Rooms => _rooms;
     public string? Room { get; private set; }
     public IReadOnlyList<long> PromptMessageIds => _promptMessageIds;
-    public long? PromptMessageId => _promptMessageIds.Length > 0 ? _promptMessageIds[^1] : null;
 
     public bool IsLive(DateTimeOffset now) => now < ExpiresAt;
 

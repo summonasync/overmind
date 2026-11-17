@@ -93,7 +93,7 @@ public sealed class TelegramWaveZeroModelContractTests : IAsyncLifetime
         await SayAsync("/send_to_wave");
         await PressAsync(11, $"wave:proj:{_projectId:D}");
         await PressAsync(12, TelegramWaveCallbackData.RoomData(_drafts.Current(OwnerChatId)!.Token, 0));
-        var promptMessageId = _drafts.Current(OwnerChatId)!.PromptMessageId!.Value;
+        var promptMessageId = PromptId(_drafts.Current(OwnerChatId)!)!.Value;
         await SayAsync(Signal, promptMessageId);
 
         _probe.AssertUntouched("/send_to_wave is a free channel");
@@ -123,7 +123,7 @@ public sealed class TelegramWaveZeroModelContractTests : IAsyncLifetime
         await SayAsync("/send_to_wave");
         await PressAsync(11, $"wave:proj:{_projectId:D}");
         await PressAsync(12, TelegramWaveCallbackData.RoomData(_drafts.Current(OwnerChatId)!.Token, 0));
-        var promptMessageId = _drafts.Current(OwnerChatId)!.PromptMessageId!.Value;
+        var promptMessageId = PromptId(_drafts.Current(OwnerChatId)!)!.Value;
         await PressAsync(promptMessageId, TelegramWaveCallbackData.CancelData);
 
         await SayAsync("a signal the owner thought was still live", promptMessageId);
@@ -154,6 +154,9 @@ public sealed class TelegramWaveZeroModelContractTests : IAsyncLifetime
         _temp.Dispose();
         return Task.CompletedTask;
     }
+
+    private static long? PromptId(TelegramWaveDraft draft) =>
+        draft.PromptMessageIds.Count > 0 ? draft.PromptMessageIds[^1] : null;
 
     private Task SayAsync(string text, long? repliedTo = null) =>
         _handler.HandleAsync(

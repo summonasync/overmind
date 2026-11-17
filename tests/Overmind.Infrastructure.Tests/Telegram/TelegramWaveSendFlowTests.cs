@@ -129,7 +129,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         Markup(prompt).GetProperty("force_reply").GetBoolean().ShouldBeTrue();
         Markup(prompt).TryGetProperty("inline_keyboard", out _).ShouldBeFalse();
         Answers().ShouldContain(TelegramWaveCommandService.PromptAnswer);
-        Prompt().PromptMessageId.ShouldNotBeNull();
+        PromptId().ShouldNotBeNull();
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         await ReplyAsync(promptMessageId, Signal);
 
@@ -150,7 +150,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         posted.Text.ShouldBe(Signal);
         SentTexts().ShouldContain($"Posted to {posted.Room}.");
         _broadcaster.Published.ShouldHaveSingleItem().Room.ShouldBe("telegram-bridge");
-        Prompt().PromptMessageId.ShouldBeNull();
+        PromptId().ShouldBeNull();
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        await ReplyAsync(Prompt().PromptMessageId!.Value, Signal);
+        await ReplyAsync(PromptId()!.Value, Signal);
 
         await using var context = _temp.CreateContext();
         context.Conversations.Count().ShouldBe(0);
@@ -174,7 +174,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
 
-        await ReplyAsync(Prompt().PromptMessageId!.Value, $"  {Signal}\n\nsecond paragraph  ");
+        await ReplyAsync(PromptId()!.Value, $"  {Signal}\n\nsecond paragraph  ");
 
         (await WaveMessagesAsync()).ShouldHaveSingleItem().Text.ShouldBe($"{Signal}\n\nsecond paragraph");
     }
@@ -201,7 +201,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         await PressAsync(PromptMessageId, TelegramWaveCallbackData.CancelData);
         var (handler, probe) = CreateAgentHandler();
@@ -229,7 +229,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         var consumed = await TryReplyAsync(promptMessageId, new string('x', WaveMessage.MaxTextLength + 1));
 
@@ -238,7 +238,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         SentTexts().ShouldContain(text =>
             text.StartsWith("That is 501 characters", StringComparison.Ordinal)
             && text.Contains("capped at 500", StringComparison.Ordinal));
-        Prompt().PromptMessageId.ShouldBe(promptMessageId);
+        PromptId().ShouldBe(promptMessageId);
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
 
-        var consumed = await TryReplyAsync(Prompt().PromptMessageId!.Value + 1, "wrong parent");
+        var consumed = await TryReplyAsync(PromptId()!.Value + 1, "wrong parent");
 
         consumed.ShouldBeFalse();
         (await WaveMessagesAsync()).ShouldBeEmpty();
@@ -278,7 +278,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
 
         Answers().ShouldContain(TelegramNotificationCallbackHandler.InvalidButtonAnswer);
         SentRequests().Count.ShouldBe(3);
-        Prompt().PromptMessageId.ShouldBeNull();
+        PromptId().ShouldBeNull();
     }
 
     [Fact]
@@ -383,7 +383,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
                 TelegramWaveCallbackData.CallbackDataLimit
                 - Encoding.UTF8.GetByteCount($"wave:room:{_projectId:D}:"));
         await PickRoomAsync(cyrillic);
-        await ReplyAsync(Prompt().PromptMessageId!.Value, "cyrillic signal");
+        await ReplyAsync(PromptId()!.Value, "cyrillic signal");
 
         (await WaveMessagesAsync()).ShouldHaveSingleItem().Room.ShouldBe(cyrillic);
     }
@@ -394,7 +394,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         await using (var context = _temp.CreateContext())
         {
@@ -471,7 +471,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
 
         await _commands.TryHandleDraftReplyAsync(
             new TelegramIncomingMessage(
-                OwnerChatId, "anonymous signal", Prompt().PromptMessageId, null),
+                OwnerChatId, "anonymous signal", PromptId(), null),
             CancellationToken.None);
 
         (await WaveMessagesAsync()).ShouldHaveSingleItem()
@@ -486,7 +486,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await PickRoomAsync("telegram-bridge");
 
         await ReplyAsync(
-            Prompt().PromptMessageId!.Value,
+            PromptId()!.Value,
             "clamped author",
             from: new string('ы', WaveMessage.MaxIdentityLength + 10));
 
@@ -520,7 +520,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
         await using (var context = _temp.CreateContext())
@@ -550,7 +550,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         var (handler, probe) = CreateAgentHandler();
         await handler.HandleAsync(
@@ -570,7 +570,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         var capturedToken = Prompt().Token;
 
         var (handler, probe) = CreateAgentHandler();
@@ -581,7 +581,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         probe.AssertUntouched("a typed wave command must not buy an agent turn");
         (await WaveMessagesAsync()).ShouldBeEmpty();
         Prompt().Token.ShouldNotBe(capturedToken);
-        Prompt().PromptMessageId.ShouldBeNull();
+        PromptId().ShouldBeNull();
     }
 
     [Fact]
@@ -605,7 +605,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         _clock.Advance(TimeSpan.FromMinutes(TelegramWaveDraft.LifetimeMinutes + 1));
         var consumed = await TryReplyAsync(promptMessageId, "a signal an hour late");
@@ -622,7 +622,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
 
         _clock.Advance(TimeSpan.FromMinutes(TelegramWaveDraft.LifetimeMinutes + 1));
         var (handler, probe) = CreateAgentHandler();
@@ -649,7 +649,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         await ReplyAsync(promptMessageId, Signal);
 
         var consumed = await TryReplyAsync(promptMessageId, Signal);
@@ -747,7 +747,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         var revived = BuildCommandService(new TelegramWaveDraftStore(_clock), new TelegramWavePromptTombstone(_clock));
 
         var consumed = await revived.TryHandleDraftReplyAsync(
@@ -765,7 +765,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         await using (var context = _temp.CreateContext())
         {
             context.Projects.Remove(await context.Projects.SingleAsync(p => p.Id == _projectId));
@@ -787,7 +787,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         var conversation = await new TelegramChatStore(_temp.CreateContext())
             .GetOrCreateConversationAsync(OwnerChatId, CancellationToken.None);
         _turns.TryEnter(conversation.Id).ShouldBeTrue();
@@ -829,7 +829,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         await PressAsync(PromptMessageId, TelegramWaveCallbackData.CancelData);
         var notification = AgentNotification.Create(NotificationKind.Approval, "approve me", null, null, null);
         await using (var context = _temp.CreateContext())
@@ -857,7 +857,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        var promptMessageId = Prompt().PromptMessageId!.Value;
+        var promptMessageId = PromptId()!.Value;
         await PressAsync(PromptMessageId, TelegramWaveCallbackData.CancelData);
 
         var (handler, probe) = CreateAgentHandler();
@@ -876,7 +876,7 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
         await OpenRoomPickerAsync();
         await PickRoomAsync("telegram-bridge");
-        await ReplyAsync(Prompt().PromptMessageId!.Value, Signal);
+        await ReplyAsync(PromptId()!.Value, Signal);
 
         await _commands.HandleAsync(
             TelegramWaveCommand.WaveSnapshot,
@@ -948,6 +948,9 @@ public sealed class TelegramWaveSendFlowTests : IAsyncLifetime
         new(new AppSettingsService(_temp.CreateContext()));
 
     private TelegramWaveDraft Prompt() => _drafts.Current(OwnerChatId)!;
+
+    private long? PromptId() =>
+        Prompt().PromptMessageIds.Count > 0 ? Prompt().PromptMessageIds[^1] : null;
 
     private async Task<List<FakeTelegramApi.Captured>> OpenSplitPromptAsync()
     {
