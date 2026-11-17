@@ -121,6 +121,28 @@ public sealed class MirrorVerifierTests : IDisposable
         failure.Message.ShouldContain("escapes the project directory");
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(".")]
+    public async Task Verify_RowPathResolvesOntoTheRoot_ThrowsOutsideRootInsteadOfReportingVerdict(
+        string relativePath)
+    {
+        var root = CreateDirectory("candidate");
+        await File.WriteAllTextAsync(Path.Combine(root, "kept.md"), "unchanged\n");
+        var rows = new[]
+        {
+            new MirrorFileRow("kept.md", Sha256Of("unchanged\n")),
+            new MirrorFileRow(relativePath, Sha256Of("whatever")),
+        };
+
+        var failure = await Should.ThrowAsync<MaterializationException>(
+            () => MirrorVerifier.VerifyAsync(root, rows, CancellationToken.None));
+
+        failure.Kind.ShouldBe(MaterializationFailureKind.PathTraversal);
+        failure.OffendingPath.ShouldBe(Path.GetFullPath(root));
+        failure.Message.ShouldContain("resolves outside the project directory");
+    }
+
     [Fact]
     public void Describe_UnderLimitPaths_ListsEveryFailure()
     {

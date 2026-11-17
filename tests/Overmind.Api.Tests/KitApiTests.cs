@@ -231,7 +231,8 @@ public sealed class KitApiTests : IDisposable
         blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await blocked.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
-        problem!.Detail!.ShouldContain("deactivate kits first");
+        problem!.Detail!.ShouldContain("while kits are active");
+        problem.Detail.ShouldContain("deactivate kits first");
         problem.Detail.ShouldNotContain("files are materialized");
 
         var deactivate = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/deactivate", null);
