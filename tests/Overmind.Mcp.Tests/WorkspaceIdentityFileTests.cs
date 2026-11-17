@@ -55,7 +55,11 @@ public sealed class WorkspaceIdentityFileTests : IDisposable
     public void TryRead_PlaceholderAlias_ReturnsNull()
     {
         var identity = IdentityFile(Repo("alpha"));
-        identity.Write(new SessionIdentitySnapshot("agent", "claude", SessionId, DateTime.UtcNow));
+        identity.Write(new SessionIdentitySnapshot("mark-wolff", "claude", SessionId, DateTime.UtcNow));
+        File.WriteAllText(
+            IdentityFilePath(),
+            """{"alias":"agent","vendor":"claude","sessionId":"5c1e0000-0000-0000-0000-000000000005"}""");
+        JsonNode.Parse(File.ReadAllText(IdentityFilePath()))!["alias"]!.GetValue<string>().ShouldBe("agent");
 
         identity.TryRead().ShouldBeNull();
     }
