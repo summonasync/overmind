@@ -28,8 +28,14 @@ src_s.backup(dst_s)
 dst_s.execute("CREATE TABLE IF NOT EXISTS AppSettings (Key TEXT NOT NULL PRIMARY KEY, Value TEXT NOT NULL)")
 dst_s.execute("INSERT INTO AppSettings (Key, Value) VALUES ('planning.materializationDefault', 'off') "
               "ON CONFLICT(Key) DO UPDATE SET Value='off'")
+# The copy carries the live bot token, so a scratch host would start a second
+# getUpdates long-poller on the owner's bot. Delete the row, not just the switch:
+# a switch the human re-enables mid-pass re-arms the contention, a missing token cannot.
+dst_s.execute("DELETE FROM AppSettings WHERE Key IN ('telegram.botToken', 'telegram.allowedChatIds')")
+dst_s.execute("INSERT INTO AppSettings (Key, Value) VALUES ('telegram.enabled', 'false') "
+              "ON CONFLICT(Key) DO UPDATE SET Value='false'")
 dst_s.commit()
-print("db copied, materialization forced off on the copy", file=sys.stderr)
+print("db copied; materialization off and telegram token removed on the copy", file=sys.stderr)
 PY
   env \
     Overmind__DatabasePath="$SCRATCH/overmind.db" \
