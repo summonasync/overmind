@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
+using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.Planning;
@@ -9,13 +10,16 @@ public sealed class FeatureClaimService
 {
     private readonly OvermindDbContext _db;
     private readonly PlanningMaterializationDispatcher _materialization;
+    private readonly NotificationsService? _notifications;
 
     public FeatureClaimService(
         OvermindDbContext db,
-        PlanningMaterializationDispatcher materialization)
+        PlanningMaterializationDispatcher materialization,
+        NotificationsService? notifications = null)
     {
         _db = db;
         _materialization = materialization;
+        _notifications = notifications;
     }
 
     // sessionId null = the web human door: no session restrictions, the claim is bound to a fresh
@@ -68,14 +72,24 @@ public sealed class FeatureClaimService
 
             var adopted = !isHuman && liveness == AgentSessionLiveness.Ended && sameAlias
                           && string.Equals(feature.ClaimedByVendor, vendor, StringComparison.Ordinal);
+            var formerAlias = feature.ClaimedByAlias ?? "unknown";
+            var formerVendor = feature.ClaimedByVendor ?? "unknown";
+            var foreign = !string.Equals(formerAlias, alias, StringComparison.Ordinal)
+                          || !string.Equals(formerVendor, vendor, StringComparison.Ordinal);
             var note = adopted
                 ? $"session restarted, claim adopted by {alias} by {vendor}"
                 : $"{alias} by {vendor} took over {liveness.ToString().ToLowerInvariant()} claim " +
-                  $"of {feature.ClaimedByAlias} by {feature.ClaimedByVendor}";
+                  $"of {formerAlias} by {formerVendor}";
 
             feature.Claim(alias, vendor, effectiveSessionId, now, byHuman: isHuman);
             feature.AppendLog(note, source);
             await PersistAsync(feature, alias, vendor, effectiveSessionId, now, ct);
+
+            if (foreign)
+            {
+                await NotifyTakeoverAsync(projectId, slug, alias, vendor, formerAlias, formerVendor, liveness, ct);
+            }
+
             return feature;
         }
 
@@ -314,6 +328,20 @@ public sealed class FeatureClaimService
                        ?? AgentSessionLiveness.Ended;
         return PlanningException.FeatureClaimHeld(
             feature.Slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
+    }
+
+    private async Task NotifyTakeoverAsync(
+        Guid projectId, string slug, string alias, string vendor,
+        string formerAlias, string formerVendor, AgentSessionLiveness liveness, CancellationToken ct)
+    {
+        if (_notifications is null)
+        {
+            return;
+        }
+
+        var text = $"{alias} by {vendor} took over the {liveness.ToString().ToLowerInvariant()} claim " +
+                   $"of '{slug}' from {formerAlias} by {formerVendor}";
+        await _notifications.CreateAsync(NotificationKind.Info, text, projectId, slug, tab: null, agent: null, ct);
     }
 
     private async Task PersistAsync(

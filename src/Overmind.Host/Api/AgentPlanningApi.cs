@@ -82,6 +82,7 @@ public static class AgentPlanningApi
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}", PlanningFeaturesApi.GetFeature);
         group.MapGet("/projects/{projectId:guid}/planning/task-queue", PlanningQueueApi.QueueRead);
         group.MapGet("/projects/{projectId:guid}/planning/wave-snapshot", WaveSnapshotApi.Snapshot);
+        group.MapGet("/projects/{projectId:guid}/planning/rescue-candidates", RescueCandidatesApi.Candidates);
         group.MapGet("/projects/{projectId:guid}/planning/features/{slug}/current", Current);
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/status", SetFeatureStatus).LockToClaim();
         group.MapPost("/projects/{projectId:guid}/planning/features/{slug}/update", UpdateFeature).LockToClaim();
