@@ -193,7 +193,7 @@ public sealed class EntryLinkResolverTests : IDisposable
     }
 
     private async Task<IReadOnlyList<ResolvedLink>> ResolveAsync(string body) =>
-        await Resolver().ResolveAsync(_sourceId, WikiLinkParser.Parse(body));
+        await Resolver().ResolveForWriteAsync(_sourceId, WikiLinkParser.Parse(body));
 
     private EntryLinkResolver Resolver() =>
         new(_context, new JournalProjectStore(_context));

@@ -12,7 +12,7 @@ public sealed class OvermindTools
 {
     private static readonly HashSet<string> ReadableEntryTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "note", "decision", "gate", "guard", "idea", "audit", "skill", "tombstone"
+        "note", "decision", "gate", "guard", "idea", "audit", "skill", "tombstone", "journal"
     };
 
     private static readonly HashSet<string> WritableEntryTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -20,8 +20,15 @@ public sealed class OvermindTools
         "note", "decision", "gate", "guard", "idea", "audit", "tombstone"
     };
 
+    private const string AgentWritableTypeList = "note, decision, gate, guard, idea, audit, tombstone";
+
+    private const string JournalWriteRefused =
+        "JournalEntryWriteRefused: journal entries are the human surface — the agent door refuses them; " +
+        $"supported types: {AgentWritableTypeList}.";
+
     private const string SkillManagedElsewhere =
-        "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. Supported types: note, decision, gate, guard, idea, audit, tombstone.";
+        "Skill entries are managed via the Overmind UI / future MCP delivery and cannot be written through this tool. " +
+        $"Supported types: {AgentWritableTypeList}.";
 
     private const string SkillDeleteRefused =
         "SkillEntryDeleteRefused: skill entries are managed via the Overmind UI — they carry skill files and a kit lifecycle, so delete_entry refuses them.";
@@ -39,10 +46,12 @@ public sealed class OvermindTools
         "Durable decision — consider mirroring it into the crew memory (grimoire memory_remember) " +
         "and referencing it here with 'pointer: grimoire://memory/<id>'.";
 
+    private const string ReadableTypeList = "note, decision, gate, guard, skill, idea, audit, tombstone, journal";
+
     private const string ListEntriesDescription =
         "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
         "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-        "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
+        $"Optional filters: type ({ReadableTypeList}), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
         "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
         "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
         "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
@@ -94,7 +103,7 @@ public sealed class OvermindTools
     [Description(ListEntriesDescription)]
     public async Task<JsonElement> ListEntries(
         Guid projectId,
-        [Description("Optional entry type filter: note, decision, gate, guard, skill, idea, audit or tombstone.")] string? type = null,
+        [Description("Optional entry type filter: note, decision, gate, guard, skill, idea, audit, tombstone or journal.")] string? type = null,
         [Description("Lifecycle filter: all | active | lifted | superseded. Omit it and the server applies its default — active for the decision/gate/guard trio, all for every other type and when no type is given.")] string? state = null,
         [Description("Optional tag filter; only entries carrying this tag are returned.")] string? tag = null,
         [Description("Optional fulltext query narrowing the listing to matching entries.")] string? q = null,
@@ -168,7 +177,7 @@ public sealed class OvermindTools
         Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
 
     [McpServerTool(Name = "write_entry", Destructive = false, Idempotent = false)]
-    [Description("Creates a new entry (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act. The optional enforces flag is decision-only — it marks the decision as a standing rule agents must obey, and the server refuses enforces=true on any other type. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead and never auto-creates a project row.")]
+    [Description("Creates a new entry through the agent door (note, decision, gate, guard, idea, audit or tombstone) in a project. A hand-made tombstone buries an approach without deleting anything. Skills are managed via the Overmind UI. Journal entries are the human surface: the agent door refuses type=journal with JournalEntryWriteRefused. idea is the informal lane for unformed product thinking — no statuses, no lifecycle; promotion to a board feature stays a ceremony act. The optional enforces flag is decision-only — it marks the decision as a standing rule agents must obey, and the server refuses enforces=true on any other type. projectId is resolved from OVERMIND_PROJECT_ID or the working directory when omitted; an unregistered directory returns guidance instead and never auto-creates a project row.")]
     public async Task<JsonElement> WriteEntry(
         [Description("Entry type: note, decision, gate, guard, idea, audit or tombstone.")] string type,
         [Description("Entry title.")] string title,
@@ -190,12 +199,12 @@ public sealed class OvermindTools
             enforces
         };
 
-        var entry = await Guarded(() => _api.PostAsync("/api/entries", body, ct));
+        var entry = await Guarded(() => _api.PostAsync("/api/agent/entries", body, ct));
         return CompactEntry(entry);
     }
 
     [McpServerTool(Name = "update_entry", Destructive = false, Idempotent = false)]
-    [Description("Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone, keeping its title and tags. Skills are managed via the Overmind UI. An explicit enforces sets the decision-only standing-rule flag (the server refuses enforces=true on other types); omitting it keeps the current value. To add new information without rewriting the body, append_entry is the cheaper door.")]
+    [Description("Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone through the agent door, keeping its title and tags. Skills are managed via the Overmind UI. Journal entries belong to the human surface and the server refuses them with JournalEntryWriteRefused. An explicit enforces sets the decision-only standing-rule flag (the server refuses enforces=true on other types); omitting it keeps the current value. To add new information without rewriting the body, append_entry is the cheaper door.")]
     public async Task<JsonElement> UpdateEntry(
         [Description("Id of the entry to update.")] Guid entryId,
         [Description("New markdown body of the entry.")] string content,
@@ -210,9 +219,14 @@ public sealed class OvermindTools
             throw new McpException(SkillManagedElsewhere);
         }
 
+        if (string.Equals(entryType, "journal", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new McpException(JournalWriteRefused);
+        }
+
         var title = existing.GetProperty("title").GetString() ?? string.Empty;
 
-        var entry = await Guarded(() => _api.PutAsync($"/api/entries/{entryId}", new { title, content, enforces }, ct));
+        var entry = await Guarded(() => _api.PutAsync($"/api/agent/entries/{entryId}", new { title, content, enforces }, ct));
         return CompactEntry(entry);
     }
 
@@ -513,7 +527,7 @@ public sealed class OvermindTools
         if (!ReadableEntryTypes.Contains(normalized))
         {
             throw new McpException(
-                $"Invalid entry type '{type}'. Expected one of: note, decision, gate, guard, skill, idea, audit, tombstone.");
+                $"Invalid entry type '{type}'. Expected one of: {ReadableTypeList}.");
         }
 
         return normalized;
@@ -527,10 +541,15 @@ public sealed class OvermindTools
             throw new McpException(SkillManagedElsewhere);
         }
 
+        if (normalized.Equals("journal", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new McpException(JournalWriteRefused);
+        }
+
         if (!WritableEntryTypes.Contains(normalized))
         {
             throw new McpException(
-                $"Invalid entry type '{type}'. Expected one of: note, decision, gate, guard, idea, audit, tombstone.");
+                $"Invalid entry type '{type}'. Expected one of: {AgentWritableTypeList}.");
         }
 
         return normalized;

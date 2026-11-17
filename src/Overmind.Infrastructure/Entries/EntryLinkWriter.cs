@@ -34,11 +34,12 @@ public sealed class EntryLinkWriter
             .ExecuteDeleteAsync(ct);
 
         var manualKeys = await _db.EntryLinks
+            .AsNoTracking()
             .Where(link => link.FromEntryId == entryId && link.Origin == EntryLinkOrigin.Manual)
             .Select(link => new { link.ToKind, link.ToId })
             .ToListAsync(ct);
 
-        var insertable = (await _resolver.ResolveAsync(entryId, parsedLinks, ct))
+        var insertable = (await _resolver.ResolveForWriteAsync(entryId, parsedLinks, ct))
             .Where(link => !manualKeys.Any(manual =>
                 manual.ToKind == link.Kind && manual.ToId == link.ToId))
             .ToList();

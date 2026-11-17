@@ -59,7 +59,7 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             return new StubOvermindApi.Response(200, body);
         });
         stub.RouteGet($"/api/entries/{Canned.EntryId}", Canned.EntryJson);
-        stub.Route("POST", "/api/entries", req =>
+        stub.Route("POST", "/api/agent/entries", req =>
         {
             var body = JsonNode.Parse(req.Body)!;
             body["id"] = Canned.EntryId.ToString();
@@ -68,7 +68,7 @@ public abstract class McpSessionTestBase : IAsyncLifetime
             body["updatedAt"] = "2026-09-20T10:00:00Z";
             return new StubOvermindApi.Response(201, body.ToJsonString());
         });
-        stub.Route("PUT", $"/api/entries/{Canned.EntryId}", 200, Canned.EntryJson);
+        stub.Route("PUT", $"/api/agent/entries/{Canned.EntryId}", 200, Canned.EntryJson);
         stub.Route("DELETE", "/api/entries/[^/]+", 204, "");
         stub.RouteGet($"/api/agent/projects/{Canned.ProjectId}/planning/lanes", """{"lanes":[]}""");
         stub.RouteGet("/api/kits", Canned.KitsWithoutEntryJson);

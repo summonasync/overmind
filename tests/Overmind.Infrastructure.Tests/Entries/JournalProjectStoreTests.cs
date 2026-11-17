@@ -115,7 +115,7 @@ public sealed class JournalProjectStoreTests : IDisposable
 
         var container = await new JournalProjectStore(context).FindIdAsync();
         var marker = await new EntryLinkResolver(context, new JournalProjectStore(context))
-            .ResolveAsync(source.Id, WikiLinkParser.Parse("[[project:Journal]]"));
+            .ResolveForWriteAsync(source.Id, WikiLinkParser.Parse("[[project:Journal]]"));
 
         container.ShouldBe(oldestId);
         marker.ShouldBeEmpty();

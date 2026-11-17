@@ -127,7 +127,7 @@ public sealed class EntryLinkReaderTests : IDisposable
 
         _capture.Statements.Clear();
         var outcomes = await new EntryLinkResolver(context, new JournalProjectStore(context))
-            .ResolveOutcomesAsync(Guid.NewGuid(), WikiLinkParser.Parse("links [[Anchor Note]]"), false);
+            .ResolveOutcomesForReadAsync(Guid.NewGuid(), WikiLinkParser.Parse("links [[Anchor Note]]"));
         var readStatements = _capture.Statements.ToArray();
 
         outcomes.ShouldHaveSingleItem();
@@ -145,7 +145,7 @@ public sealed class EntryLinkReaderTests : IDisposable
         using var context = fresh.CreateContext();
 
         await new EntryLinkResolver(context, new JournalProjectStore(context))
-            .ResolveAsync(Guid.NewGuid(), WikiLinkParser.Parse("links [[Anchor Note]]"));
+            .ResolveForWriteAsync(Guid.NewGuid(), WikiLinkParser.Parse("links [[Anchor Note]]"));
 
         (await context.Projects.AnyAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBeTrue();
     }
@@ -154,7 +154,7 @@ public sealed class EntryLinkReaderTests : IDisposable
     public async Task ResolveOutcomes_SelfTarget_ComesBackResolvedNotUnresolved()
     {
         var outcomes = await new EntryLinkResolver(_context, new JournalProjectStore(_context))
-            .ResolveOutcomesAsync(_targetId, WikiLinkParser.Parse("self [[Anchor Note]]"), true);
+            .ResolveOutcomesForReadAsync(_targetId, WikiLinkParser.Parse("self [[Anchor Note]]"));
 
         outcomes.ShouldHaveSingleItem();
         outcomes[0].ToId.ShouldBe(_targetId);

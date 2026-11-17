@@ -243,6 +243,25 @@ public sealed class EntryLinkWriterTests : IDisposable
             writer.ReplaceDerivedAsync(_sourceId, WikiLinkParser.Parse("[[Daily]]"), opened));
     }
 
+    [Fact]
+    public async Task ReplaceDerived_AfterATrackedEdgeRead_LeavesNoResurrectedRows()
+    {
+        await WriteAsync("[[feature:184]] [[Some Note]]");
+
+        (await _context.EntryLinks.Where(link => link.FromEntryId == _sourceId).ToListAsync())
+            .Count.ShouldBe(2);
+
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        var entry = await _context.ContextEntries.SingleAsync(e => e.Id == _sourceId);
+        entry.UpdateContent("[[feature:184]]");
+        await Writer().ReplaceDerivedAsync(_sourceId, WikiLinkParser.Parse(entry.Content), tx);
+        await tx.CommitAsync();
+
+        var rows = await EdgesAsync();
+        rows.ShouldHaveSingleItem();
+        rows.Single().ToKind.ShouldBe(EntryLinkKind.Feature);
+    }
+
     private EntryLinkWriter Writer() =>
         new(_context, new EntryLinkResolver(_context, new JournalProjectStore(_context)));
 

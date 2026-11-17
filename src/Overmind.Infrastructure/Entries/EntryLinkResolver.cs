@@ -17,19 +17,23 @@ public sealed class EntryLinkResolver
         _journalProjects = journalProjects;
     }
 
-    public Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
+    public Task<IReadOnlyList<ResolvedLink>> ResolveForWriteAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
-        CancellationToken ct = default)
-    {
-        return ResolveAsync(sourceEntryId, targets, ensureJournalProject: true, ct);
-    }
+        CancellationToken ct = default) =>
+        ResolveAsync(sourceEntryId, targets, ensureJournalProject: true, ct);
 
-    public async Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
+    public Task<IReadOnlyList<WikiLinkOutcome>> ResolveOutcomesForReadAsync(
+        Guid sourceEntryId,
+        IReadOnlyList<WikiLinkTarget> targets,
+        CancellationToken ct = default) =>
+        ResolveOutcomesAsync(sourceEntryId, targets, ensureJournalProject: false, ct);
+
+    private async Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
         bool ensureJournalProject,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
         var resolved = new List<ResolvedLink>();
         var seen = new HashSet<(EntryLinkKind, Guid)>();
@@ -50,11 +54,11 @@ public sealed class EntryLinkResolver
         return resolved;
     }
 
-    public async Task<IReadOnlyList<WikiLinkOutcome>> ResolveOutcomesAsync(
+    private async Task<IReadOnlyList<WikiLinkOutcome>> ResolveOutcomesAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
         bool ensureJournalProject,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
         var outcomes = new List<WikiLinkOutcome>(targets.Count);
         ProjectIndex? projects = null;

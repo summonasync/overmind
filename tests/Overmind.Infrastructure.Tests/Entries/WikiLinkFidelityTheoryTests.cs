@@ -65,7 +65,7 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [InlineData("[[Моя заметка]] [[моя заметка]] [[МОЯ ЗАМЕТКА]]", 1)]
     public async Task ResolverCountsEdgesFromWhatTheParserHandedIt(string body, int expected)
     {
-        var links = await Resolver().ResolveAsync(_sourceId, WikiLinkParser.Parse(body));
+        var links = await Resolver().ResolveForWriteAsync(_sourceId, WikiLinkParser.Parse(body));
 
         links.Count.ShouldBe(expected);
     }
@@ -80,7 +80,7 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [InlineData("[[Feature:184]]", EntryLinkKind.Feature)]
     public async Task PrefixFormsFoldCase_KeysDoNot(string body, EntryLinkKind kind)
     {
-        var links = await Resolver().ResolveAsync(_sourceId, WikiLinkParser.Parse(body));
+        var links = await Resolver().ResolveForWriteAsync(_sourceId, WikiLinkParser.Parse(body));
 
         links.ShouldHaveSingleItem();
         links.Single().Kind.ShouldBe(kind);
@@ -89,7 +89,7 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [Fact]
     public async Task CaseVariantMarkers_ShareTheReservedProjectRow()
     {
-        var links = await Resolver().ResolveAsync(
+        var links = await Resolver().ResolveForWriteAsync(
             _sourceId, WikiLinkParser.Parse("[[Daily]] [[daily]]"));
 
         links.ShouldHaveSingleItem();
@@ -99,7 +99,7 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [Fact]
     public async Task BracedGuid_ReachesTheResolverAsNormalizedId()
     {
-        var links = await Resolver().ResolveAsync(
+        var links = await Resolver().ResolveForWriteAsync(
             _sourceId, WikiLinkParser.Parse($"[[project:{{{_projectId}}}]]"));
 
         links.ShouldHaveSingleItem();
@@ -109,7 +109,7 @@ public sealed class WikiLinkFidelityTheoryTests : IDisposable
     [Fact]
     public async Task OverflowedDigits_FollowTheSlugPath_AndNeverThrow()
     {
-        var links = await Resolver().ResolveAsync(
+        var links = await Resolver().ResolveForWriteAsync(
             _sourceId, WikiLinkParser.Parse("[[feature:99999999999999999999]]"));
 
         links.ShouldBeEmpty();

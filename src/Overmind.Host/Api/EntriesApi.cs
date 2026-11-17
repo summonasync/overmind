@@ -16,6 +16,9 @@ namespace Overmind.Host.Api;
 
 public static class EntriesApi
 {
+    private static readonly string[] AgentWritableEntryTypes =
+        ["note", "decision", "gate", "guard", "idea", "audit", "tombstone"];
+
     public static RouteGroupBuilder MapEntriesApi(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api");
@@ -32,6 +35,8 @@ public static class EntriesApi
 
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
+        agent.MapPost("/entries", CreateForAgent);
+        agent.MapPut("/entries/{id:guid}", UpdateForAgent);
 
         return group;
     }
@@ -118,12 +123,34 @@ public static class EntriesApi
         return Results.Ok(listed.Select(EntryMapper.ToResponse).ToArray());
     }
 
-    private static async Task<IResult> Create(
+    private static Task<IResult> Create(
         CreateEntryRequest request,
         IValidator<CreateEntryRequest> validator,
         HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
+        EntryLinkWriter writer,
+        CancellationToken ct) =>
+        CreateAsync(request, validator, http, db, indexing, writer, agentDoor: false, ct);
+
+    private static Task<IResult> CreateForAgent(
+        CreateEntryRequest request,
+        IValidator<CreateEntryRequest> validator,
+        HttpRequest http,
+        OvermindDbContext db,
+        EntryIndexingService indexing,
+        EntryLinkWriter writer,
+        CancellationToken ct) =>
+        CreateAsync(request, validator, http, db, indexing, writer, agentDoor: true, ct);
+
+    private static async Task<IResult> CreateAsync(
+        CreateEntryRequest request,
+        IValidator<CreateEntryRequest> validator,
+        HttpRequest http,
+        OvermindDbContext db,
+        EntryIndexingService indexing,
+        EntryLinkWriter writer,
+        bool agentDoor,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -132,47 +159,71 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        if (agentDoor && request.Type == EntryType.Journal)
+        {
+            return JournalEntryWriteRefused();
+        }
+
         var projectExists = await db.Projects.AnyAsync(p => p.Id == request.ProjectId, ct);
         if (!projectExists)
         {
             return HttpErrors.NotFound($"Project '{request.ProjectId}' was not found.");
         }
 
-        var tags = await ResolveTagsAsync(db, request.Tags, ct);
+        ContextEntry? committed = null;
+        var outcome = await EntryWriteCommit.RunAsync(
+            db,
+            writer,
+            async attemptCt =>
+            {
+                var tags = await ResolveTagsAsync(db, request.Tags, attemptCt);
 
-        ContextEntry entry;
-        if (request.Type == EntryType.Skill)
+                ContextEntry entry;
+                if (request.Type == EntryType.Skill)
+                {
+                    var files = request.SkillFiles!.Select(EntryMapper.ToEntity);
+                    entry = ContextEntry.CreateSkill(request.ProjectId, request.Title, request.Content, files);
+                }
+                else
+                {
+                    entry = ContextEntry.Create(request.ProjectId, request.Type, request.Title, request.Content);
+                }
+
+                foreach (var tag in tags)
+                {
+                    entry.AddTag(tag);
+                }
+
+                db.ContextEntries.Add(entry);
+                if (request.Enforces.HasValue)
+                {
+                    db.Entry(entry).Property(e => e.Enforces).CurrentValue = request.Enforces.Value;
+                }
+
+                var authorAlias = await ResolveAuthorAliasAsync(db, http, attemptCt);
+                if (authorAlias is not null)
+                {
+                    db.Entry(entry).Property(e => e.AuthorAlias).CurrentValue = authorAlias;
+                }
+
+                committed = entry;
+                return new EntryWriteCommit.Work(
+                    entry.Id,
+                    entry.Content,
+                    async saveCt =>
+                    {
+                        await db.SaveChangesAsync(saveCt);
+                        return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
+                    });
+            },
+            ct);
+
+        if (committed is not null)
         {
-            var files = request.SkillFiles!.Select(EntryMapper.ToEntity);
-            entry = ContextEntry.CreateSkill(request.ProjectId, request.Title, request.Content, files);
-        }
-        else
-        {
-            entry = ContextEntry.Create(request.ProjectId, request.Type, request.Title, request.Content);
+            await indexing.IndexAsync(committed, ct);
         }
 
-        foreach (var tag in tags)
-        {
-            entry.AddTag(tag);
-        }
-
-        db.ContextEntries.Add(entry);
-        if (request.Enforces.HasValue)
-        {
-            db.Entry(entry).Property(e => e.Enforces).CurrentValue = request.Enforces.Value;
-        }
-
-        var authorAlias = await ResolveAuthorAliasAsync(db, http, ct);
-        if (authorAlias is not null)
-        {
-            db.Entry(entry).Property(e => e.AuthorAlias).CurrentValue = authorAlias;
-        }
-
-        await db.SaveChangesAsync(ct);
-
-        await indexing.IndexAsync(entry, ct);
-
-        return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
+        return outcome;
     }
 
     private static async Task<IResult> GetById(
@@ -192,13 +243,37 @@ public static class EntriesApi
         return Results.Ok(EntryMapper.ToDetailResponse(entry, view));
     }
 
-    private static async Task<IResult> Update(
+    private static Task<IResult> Update(
         Guid id,
         UpdateEntryRequest request,
         IValidator<UpdateEntryRequest> validator,
         OvermindDbContext db,
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
+        EntryLinkWriter writer,
+        CancellationToken ct) =>
+        UpdateAsync(id, request, validator, db, indexing, kitFork, writer, agentDoor: false, ct);
+
+    private static Task<IResult> UpdateForAgent(
+        Guid id,
+        UpdateEntryRequest request,
+        IValidator<UpdateEntryRequest> validator,
+        OvermindDbContext db,
+        EntryIndexingService indexing,
+        BundledKitForkService kitFork,
+        EntryLinkWriter writer,
+        CancellationToken ct) =>
+        UpdateAsync(id, request, validator, db, indexing, kitFork, writer, agentDoor: true, ct);
+
+    private static async Task<IResult> UpdateAsync(
+        Guid id,
+        UpdateEntryRequest request,
+        IValidator<UpdateEntryRequest> validator,
+        OvermindDbContext db,
+        EntryIndexingService indexing,
+        BundledKitForkService kitFork,
+        EntryLinkWriter writer,
+        bool agentDoor,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -207,74 +282,98 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var entry = await db.ContextEntries
-            .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
-            .Include(e => e.SkillFiles)
-            .Include(e => e.Acks)
-            .FirstOrDefaultAsync(e => e.Id == id, ct);
-
-        if (entry is null)
-        {
-            return HttpErrors.NotFound($"Entry '{id}' was not found.");
-        }
-
-        if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
-        {
-            return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Invalid skill files",
-                detail: "Only entries of type 'Skill' can carry skill files.");
-        }
-
-        if (request.Enforces is { } enforces)
-        {
-            if (enforces && entry.Type != EntryType.Decision)
+        ContextEntry? committed = null;
+        var outcome = await EntryWriteCommit.RunAsync(
+            db,
+            writer,
+            async attemptCt =>
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status400BadRequest,
-                    title: "Invalid enforces flag",
-                    detail: CreateEntryRequestValidator.EnforcesDecisionOnly);
-            }
+                var entry = await db.ContextEntries
+                    .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
+                    .Include(e => e.SkillFiles)
+                    .Include(e => e.Acks)
+                    .FirstOrDefaultAsync(e => e.Id == id, attemptCt);
 
-            db.Entry(entry).Property(e => e.Enforces).CurrentValue = enforces;
-        }
+                if (entry is null)
+                {
+                    return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
+                }
 
-        var contentChanged = !string.Equals(entry.Content, request.Content, StringComparison.Ordinal);
+                if (agentDoor && entry.Type == EntryType.Journal)
+                {
+                    return EntryWriteCommit.Work.Rejected(JournalEntryWriteRefused());
+                }
 
-        entry.UpdateContent(request.Content);
-        db.Entry(entry).Property(e => e.Title).CurrentValue = request.Title.Trim();
+                if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
+                {
+                    return EntryWriteCommit.Work.Rejected(Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: "Invalid skill files",
+                        detail: "Only entries of type 'Skill' can carry skill files."));
+                }
 
-        if (request.Tags is not null)
+                if (request.Enforces is { } enforces)
+                {
+                    if (enforces && entry.Type != EntryType.Decision)
+                    {
+                        return EntryWriteCommit.Work.Rejected(Results.Problem(
+                            statusCode: StatusCodes.Status400BadRequest,
+                            title: "Invalid enforces flag",
+                            detail: CreateEntryRequestValidator.EnforcesDecisionOnly));
+                    }
+
+                    db.Entry(entry).Property(e => e.Enforces).CurrentValue = enforces;
+                }
+
+                var contentChanged = !string.Equals(entry.Content, request.Content, StringComparison.Ordinal);
+
+                entry.UpdateContent(request.Content);
+                db.Entry(entry).Property(e => e.Title).CurrentValue = request.Title.Trim();
+
+                if (request.Tags is not null)
+                {
+                    entry.EntryTags.Clear();
+                    foreach (var tag in await ResolveTagsAsync(db, request.Tags, attemptCt))
+                    {
+                        entry.AddTag(tag);
+                    }
+                }
+
+                if (request.SkillFiles is { Length: > 0 })
+                {
+                    db.SkillFiles.RemoveRange(entry.SkillFiles);
+                    entry.SkillFiles.Clear();
+
+                    foreach (var file in request.SkillFiles.Select(EntryMapper.ToEntity))
+                    {
+                        db.Entry(file).Property(f => f.EntryId).CurrentValue = entry.Id;
+                        db.SkillFiles.Add(file);
+                    }
+                }
+
+                if (contentChanged)
+                {
+                    await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, attemptCt);
+                }
+
+                committed = entry;
+                return new EntryWriteCommit.Work(
+                    entry.Id,
+                    entry.Content,
+                    async saveCt =>
+                    {
+                        await db.SaveChangesAsync(saveCt);
+                        return Results.Ok(EntryMapper.ToResponse(entry));
+                    });
+            },
+            ct);
+
+        if (committed is not null)
         {
-            entry.EntryTags.Clear();
-            foreach (var tag in await ResolveTagsAsync(db, request.Tags, ct))
-            {
-                entry.AddTag(tag);
-            }
+            await indexing.IndexAsync(committed, ct);
         }
 
-        if (request.SkillFiles is { Length: > 0 })
-        {
-            db.SkillFiles.RemoveRange(entry.SkillFiles);
-            entry.SkillFiles.Clear();
-
-            foreach (var file in request.SkillFiles.Select(EntryMapper.ToEntity))
-            {
-                db.Entry(file).Property(f => f.EntryId).CurrentValue = entry.Id;
-                db.SkillFiles.Add(file);
-            }
-        }
-
-        if (contentChanged)
-        {
-            await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, ct);
-        }
-
-        await db.SaveChangesAsync(ct);
-
-        await indexing.IndexAsync(entry, ct);
-
-        return Results.Ok(EntryMapper.ToResponse(entry));
+        return outcome;
     }
 
     private static async Task<IResult> Delete(
@@ -401,6 +500,7 @@ public static class EntriesApi
         OvermindDbContext db,
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
+        EntryLinkWriter writer,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -409,20 +509,46 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var entry = await LoadEntryAsync(db, id, ct);
-        if (entry is null)
+        ContextEntry? committed = null;
+        var outcome = await EntryWriteCommit.RunAsync(
+            db,
+            writer,
+            async attemptCt =>
+            {
+                var entry = await LoadEntryAsync(db, id, attemptCt);
+                if (entry is null)
+                {
+                    return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
+                }
+
+                entry.AppendFollowUp(request.Text);
+                await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, attemptCt);
+
+                committed = entry;
+                return new EntryWriteCommit.Work(
+                    entry.Id,
+                    entry.Content,
+                    async saveCt =>
+                    {
+                        await db.SaveChangesAsync(saveCt);
+                        return Results.Ok(EntryMapper.ToResponse(entry));
+                    });
+            },
+            ct);
+
+        if (committed is not null)
         {
-            return HttpErrors.NotFound($"Entry '{id}' was not found.");
+            await indexing.IndexAsync(committed, ct);
         }
 
-        entry.AppendFollowUp(request.Text);
-        await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, ct);
-        await db.SaveChangesAsync(ct);
-
-        await indexing.IndexAsync(entry, ct);
-
-        return Results.Ok(EntryMapper.ToResponse(entry));
+        return outcome;
     }
+
+    private static IResult JournalEntryWriteRefused() =>
+        HttpErrors.BadRequest(
+            $"Journal entries are the human surface; the agent door accepts " +
+            $"{string.Join(", ", AgentWritableEntryTypes)}.",
+            "JournalEntryWriteRefused");
 
     private static async Task<string?> ResolveAuthorAliasAsync(OvermindDbContext db, HttpRequest http, CancellationToken ct)
     {

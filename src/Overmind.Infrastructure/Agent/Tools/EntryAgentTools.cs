@@ -21,7 +21,7 @@ public static class EntryAgentTools
 
     private static AgentToolSpec ListEntriesSpec(AgentLoopbackClient api) => new(
         "list_entries",
-        "Lists entries of a project: notes, decisions, gates, guards, ideas, audits, tombstones. Optional type, tag and q (fulltext, capped at 100 hits) filters; most recently updated first.",
+        "Lists entries of a project: notes, decisions, gates, guards, ideas, audits, tombstones and journal notes. Optional type, tag and q (fulltext, capped at 100 hits) filters; most recently updated first.",
         """
         {"type":"object","properties":{"projectId":{"type":"string"},"type":{"type":"string"},"tag":{"type":"string"},"q":{"type":"string"}},"required":["projectId"]}
         """,
@@ -38,12 +38,12 @@ public static class EntryAgentTools
 
     private static AgentToolSpec WriteEntrySpec(AgentLoopbackClient api) => new(
         "write_entry",
-        "Creates an entry in a project: type note, decision, gate, guard, idea, audit or tombstone; markdown body; optional tags. A hand-made tombstone buries an approach without deleting anything.",
+        "Creates an entry through the agent door: type note, decision, gate, guard, idea, audit or tombstone; markdown body; optional tags. A hand-made tombstone buries an approach without deleting anything. Journal entries belong to the human surface and this door refuses them.",
         """
         {"type":"object","properties":{"projectId":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},"content":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["projectId","type","title","content"]}
         """,
         async (args, ct) => await api.PostAsync(
-            "/api/entries",
+            "/api/agent/entries",
             new AgentToolPayload()
                 .Set("projectId", AgentToolArgs.RequiredProjectId(args))
                 .Set("type", AgentToolArgs.RequiredString(args, "type"))
@@ -55,12 +55,12 @@ public static class EntryAgentTools
 
     private static AgentToolSpec UpdateEntrySpec(AgentLoopbackClient api) => new(
         "update_entry",
-        "Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone, keeping its title and tags.",
+        "Replaces the content of an existing note, decision, gate, guard, idea, audit or tombstone through the agent door, keeping its title and tags.",
         """
         {"type":"object","properties":{"entryId":{"type":"string"},"content":{"type":"string"}},"required":["entryId","content"]}
         """,
         async (args, ct) => await api.PutAsync(
-            $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}",
+            $"/api/agent/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}",
             new AgentToolPayload()
                 .Set("title", AgentToolArgs.OptionalString(args, "title"))
                 .Set("content", AgentToolArgs.RequiredString(args, "content"))

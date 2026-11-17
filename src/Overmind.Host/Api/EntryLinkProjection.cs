@@ -12,8 +12,8 @@ internal static class EntryLinkProjection
         ContextEntry entry,
         CancellationToken ct)
     {
-        var outcomes = await resolver.ResolveOutcomesAsync(
-            entry.Id, WikiLinkParser.Parse(entry.Content), ensureJournalProject: false, ct);
+        var outcomes = await resolver.ResolveOutcomesForReadAsync(
+            entry.Id, WikiLinkParser.Parse(entry.Content), ct);
 
         var drafts = new List<(ResolvedLink Link, string Written)>();
         var unresolved = new List<string>();

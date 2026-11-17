@@ -10,7 +10,7 @@ public class ToolContractTests : McpSessionTestBase
     {
         RegisterDefaultRoutes(stub);
         stub.RouteGet($"/api/entries/{Canned.DecisionEntryId}", Canned.DecisionEntryJson);
-        stub.Route("PUT", $"/api/entries/{Canned.DecisionEntryId}", 200, Canned.DecisionEntryJson);
+        stub.Route("PUT", $"/api/agent/entries/{Canned.DecisionEntryId}", 200, Canned.DecisionEntryJson);
     }
 
     [Fact]
@@ -334,7 +334,7 @@ public class ToolContractTests : McpSessionTestBase
         tools["list_entries"]!["description"]!.GetValue<string>().ShouldBe(
             "Lists entries of a project. Returns metadata only by default: id, type, title, tags, createdAt, updatedAt and contentLength in characters — no content. " +
             "Read a single body with read_entry, or pass include_content=true to receive entries with full content. " +
-            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
+            "Optional filters: type (note, decision, gate, guard, skill, idea, audit, tombstone, journal), tag, q (fulltext), state (all | active | lifted | superseded), since/until (createdAt bounds) and author. " +
             "state is the lifecycle filter: when omitted, the server applies its own default — active for the decision/gate/guard trio, all for every other type and when no type is given. " +
             "Optional projection: fields (comma/space-separated keys — each row collapses to {id, ...requested} in request order, " +
             "unknown keys rejected before the call naming the allowed set; include_content=true adds content to the allowed set). " +
@@ -394,7 +394,7 @@ public class ToolContractTests : McpSessionTestBase
             ["tags"] = new JsonArray("review", "ci")
         });
 
-        var request = FindRequest("POST", "/api/entries");
+        var request = FindRequest("POST", "/api/agent/entries");
         var body = JsonNode.Parse(request.Body)!;
         body["projectId"]!.GetValue<Guid>().ShouldBe(Canned.ProjectId);
         body["type"]!.GetValue<string>().ShouldBe("gate");
@@ -440,7 +440,7 @@ public class ToolContractTests : McpSessionTestBase
             ["content"] = "Updated content body."
         });
 
-        var put = FindRequest("PUT", $"/api/entries/{Canned.EntryId}");
+        var put = FindRequest("PUT", $"/api/agent/entries/{Canned.EntryId}");
         var body = JsonNode.Parse(put.Body)!;
         body["title"]!.GetValue<string>().ShouldBe("Entry One");
         body["content"]!.GetValue<string>().ShouldBe("Updated content body.");
@@ -471,7 +471,7 @@ public class ToolContractTests : McpSessionTestBase
         hint.ShouldContain("grimoire memory_remember");
         hint.ShouldContain("'pointer: grimoire://memory/<id>'");
 
-        var put = FindRequest("PUT", $"/api/entries/{Canned.DecisionEntryId}");
+        var put = FindRequest("PUT", $"/api/agent/entries/{Canned.DecisionEntryId}");
         put.Body.ShouldContain("Revised: SQLite stays, WAL mode on.");
     }
 
@@ -487,14 +487,14 @@ public class ToolContractTests : McpSessionTestBase
             ["enforces"] = true
         });
 
-        var body = JsonNode.Parse(FindRequest("POST", "/api/entries").Body)!;
+        var body = JsonNode.Parse(FindRequest("POST", "/api/agent/entries").Body)!;
         body["enforces"]!.GetValue<bool>().ShouldBeTrue();
     }
 
     [Fact]
     public async Task WriteEntry_EnforcesOnNote_ServerRefusalSurfacesReadable()
     {
-        Stub.Route("POST", "/api/entries", 400,
+        Stub.Route("POST", "/api/agent/entries", 400,
             """{"title":"Validation Error","errors":{"enforces":["Only decision entries can carry the enforces flag."]}}""");
 
         var response = await Driver.CallToolAsync("write_entry", new JsonObject
@@ -523,7 +523,7 @@ public class ToolContractTests : McpSessionTestBase
             ["enforces"] = true
         });
 
-        var body = JsonNode.Parse(FindRequest("PUT", $"/api/entries/{Canned.DecisionEntryId}").Body)!;
+        var body = JsonNode.Parse(FindRequest("PUT", $"/api/agent/entries/{Canned.DecisionEntryId}").Body)!;
         body["enforces"]!.GetValue<bool>().ShouldBeTrue();
     }
 
@@ -911,7 +911,7 @@ public class ToolContractTests : McpSessionTestBase
         text.ShouldContain("Overmind UI");
         text.ShouldContain("note, decision, gate, guard");
 
-        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/entries");
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/agent/entries");
         Driver.HasExited.ShouldBeFalse();
     }
 
@@ -934,7 +934,7 @@ public class ToolContractTests : McpSessionTestBase
         });
 
         response["result"]!["isError"].ShouldBeNull();
-        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/entries");
+        var request = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/agent/entries");
         JsonNode.Parse(request.Body)!["type"]!.GetValue<string>().ShouldBe(type);
     }
 
@@ -958,7 +958,7 @@ public class ToolContractTests : McpSessionTestBase
         text.ShouldContain("note, decision, gate, guard");
 
         Driver.HasExited.ShouldBeFalse();
-        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/entries");
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/agent/entries");
     }
 
     [Fact]
@@ -980,7 +980,7 @@ public class ToolContractTests : McpSessionTestBase
         var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
         text.ShouldContain("Overmind UI");
 
-        Stub.Requests.ShouldNotContain(r => r.Method == "PUT" && r.Path == $"/api/entries/{skillEntryId}");
+        Stub.Requests.ShouldNotContain(r => r.Method == "PUT" && r.Path == $"/api/agent/entries/{skillEntryId}");
     }
 
     [Fact]
@@ -1140,7 +1140,7 @@ public class ToolContractTests : McpSessionTestBase
         onboardBody["cwd"]!.GetValue<string>().ShouldBe(Environment.CurrentDirectory);
         onboardBody["create"]!.GetValue<bool>().ShouldBeFalse();
 
-        var entry = FindRequest("POST", "/api/entries");
+        var entry = FindRequest("POST", "/api/agent/entries");
         JsonNode.Parse(entry.Body)!["projectId"]!.GetValue<Guid>().ShouldBe(Canned.ProjectId);
     }
 
@@ -1162,7 +1162,7 @@ public class ToolContractTests : McpSessionTestBase
         text.ShouldContain("Could not resolve the project for the entry");
         text.ShouldContain("Pass projectId explicitly");
 
-        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/entries");
+        Stub.Requests.ShouldNotContain(r => r.Method == "POST" && r.Path == "/api/agent/entries");
         var onboard = Stub.Requests.Single(r => r.Method == "POST" && r.Path == "/api/onboard");
         JsonNode.Parse(onboard.Body)!["create"]!.GetValue<bool>().ShouldBeFalse();
         Driver.HasExited.ShouldBeFalse();

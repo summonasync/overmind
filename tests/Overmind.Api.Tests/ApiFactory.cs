@@ -1,13 +1,17 @@
+using System.Data.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Overmind.Core;
 using Overmind.Host.Loopback;
 using Overmind.Infrastructure.Agent;
+using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Api.Tests;
 
@@ -34,6 +38,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databasePath;
     private readonly bool _preserveDatabase;
+    private readonly IInterceptor? _interceptor;
 
     private static readonly object ModelSeedLock = new();
 
@@ -51,10 +56,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("OVERMIND_MODELS_DIR", modelsRoot);
     }
 
-    public ApiFactory(string? databasePath = null, bool preserveDatabase = false)
+    public ApiFactory(string? databasePath = null, bool preserveDatabase = false, IInterceptor? interceptor = null)
     {
         _databasePath = databasePath ?? Path.Combine(Path.GetTempPath(), $"overmind-api-{Guid.NewGuid():N}.db");
         _preserveDatabase = preserveDatabase;
+        _interceptor = interceptor;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -77,6 +83,21 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                     ? testServer.CreateHandler()
                     : new SocketsHttpHandler { UseProxy = false },
                 sp.GetRequiredService<EmbeddedAgentSessionState>()));
+
+            if (_interceptor is null)
+            {
+                return;
+            }
+
+            services.RemoveAll<DbContextOptions<OvermindDbContext>>();
+            services.RemoveAll<OvermindDbContext>();
+            services.AddDbContext<OvermindDbContext>((provider, options) =>
+            {
+                var databasePath = provider.GetRequiredService<IConfiguration>()["Overmind:DatabasePath"]
+                    ?? Path.Combine(Path.GetTempPath(), "overmind-api-intercepted.db");
+                options.UseSqlite($"Data Source={databasePath};Pooling=false");
+                options.AddInterceptors(_interceptor);
+            });
         });
     }
 

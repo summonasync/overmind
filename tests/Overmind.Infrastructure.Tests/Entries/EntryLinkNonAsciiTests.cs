@@ -149,7 +149,7 @@ public sealed class EntryLinkNonAsciiTests : IDisposable
 
     private Task<IReadOnlyList<ResolvedLink>> ResolveAsync(string body) =>
         new EntryLinkResolver(_context, new JournalProjectStore(_context))
-            .ResolveAsync(_sourceId, WikiLinkParser.Parse(body));
+            .ResolveForWriteAsync(_sourceId, WikiLinkParser.Parse(body));
 
     private sealed class CapturingInterceptor : DbCommandInterceptor
     {

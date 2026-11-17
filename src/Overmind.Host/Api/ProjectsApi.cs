@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Planning;
@@ -264,12 +265,23 @@ public static class ProjectsApi
     private static IResult InvalidValue(string field, string message) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [message] });
 
-    private static async Task<IResult> Delete(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> Delete(
+        Guid id,
+        OvermindDbContext db,
+        JournalProjectStore journals,
+        CancellationToken ct)
     {
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (project is null)
         {
             return HttpErrors.NotFound($"Project '{id}' was not found.");
+        }
+
+        if (await journals.FindIdAsync(ct) == id)
+        {
+            return HttpErrors.Conflict(
+                $"Project '{project.Name}' is the reserved journal container; its entries are the owner's journal.",
+                "ReservedProjectProtected");
         }
 
         var kitLinkedEntries = await db.SkillKitEntries
