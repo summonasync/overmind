@@ -250,6 +250,7 @@ public static class DependencyInjection
         services.AddScoped<PlanningFeatureService>();
         services.AddScoped<PlanningStatusBackfill>();
         services.AddScoped<FeatureClaimService>();
+        services.AddScoped<RescueCandidateService>();
         services.AddScoped<LaneService>();
         services.AddScoped<DirectiveService>();
         services.AddScoped<EntryAckService>();
