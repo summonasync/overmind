@@ -22,7 +22,7 @@ public static class TelegramWaveSnapshotFormatter
         IReadOnlyList<Blocker> Blockers,
         int WindowMessagesRead);
 
-    public sealed record RoomTraffic(string Room, int MentionCount, DateTime? LastActivityAt);
+    public sealed record RoomTraffic(string Room, int MentionCount, DateTime? LastMentionAt);
 
     public sealed record Holder(
         string Slug,
@@ -42,18 +42,17 @@ public static class TelegramWaveSnapshotFormatter
         var holders = HolderLines(digest.Holders);
         var queue = QueueLines(digest.QueueHead);
         var blockers = BlockerLines(digest.Blockers);
+        var floorNote = WindowFloorNote(digest.WindowMessagesRead);
 
         if (rooms.Count + holders.Count + queue.Count + blockers.Count == 0)
         {
-            return $"Wave · {digest.ProjectName}\n{IdleLine}";
+            return floorNote is null
+                ? $"Wave · {digest.ProjectName}\n{IdleLine}"
+                : $"Wave · {digest.ProjectName}\n{IdleLine}\n{floorNote}";
         }
 
         var body = new StringBuilder($"Wave · {digest.ProjectName}");
-        AppendSection(
-            body,
-            $"Mentions ({MentionWindowLabel})",
-            rooms,
-            WindowFloorNote(digest.WindowMessagesRead));
+        AppendSection(body, $"Mentions ({MentionWindowLabel})", rooms, floorNote);
         AppendSection(body, "Holders", holders);
         AppendSection(body, "Queue head", queue);
         AppendSection(body, "Blockers", blockers);
@@ -87,7 +86,7 @@ public static class TelegramWaveSnapshotFormatter
     {
         var shown = rooms.Take(MaxRoomRows)
             .Select(room => $"  {room.Room} · {room.MentionCount} mentions · last " +
-                            RelativeAge(room.LastActivityAt, generatedAt))
+                            RelativeAge(room.LastMentionAt, generatedAt))
             .ToList();
         AddHiddenTail(shown, rooms.Count, "rooms still have mention traffic");
         return shown;

@@ -89,13 +89,15 @@ public sealed class TelegramWaveSnapshotService(
     private static List<TelegramWaveSnapshotFormatter.RoomTraffic> RoomTraffic(
         IReadOnlyList<WaveRoomSummary> rooms, IReadOnlyList<WaveMessage> recent)
     {
+        var mentioned = recent
+            .Where(message => message.MentionList.Count > 0)
+            .ToLookup(message => message.Room, StringComparer.OrdinalIgnoreCase);
+
         return [.. rooms
-            .Select(room => new TelegramWaveSnapshotFormatter.RoomTraffic(
-                room.Room,
-                recent.Count(m => m.Room.Equals(room.Room, StringComparison.OrdinalIgnoreCase)
-                                  && m.MentionList.Count > 0),
-                room.LastActivityAt))
-            .Where(entry => entry.MentionCount > 0)];
+            .Select(room => (room.Room, Hits: mentioned[room.Room]))
+            .Where(entry => entry.Hits.Any())
+            .Select(entry => new TelegramWaveSnapshotFormatter.RoomTraffic(
+                entry.Room, entry.Hits.Count(), entry.Hits.Max(message => message.CreatedAt)))];
     }
 
     private static List<TelegramWaveSnapshotFormatter.Holder> Holders(WaveSnapshotData snapshot)

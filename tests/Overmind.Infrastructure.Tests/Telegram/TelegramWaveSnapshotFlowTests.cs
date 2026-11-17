@@ -181,6 +181,22 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Digest_RoomAgeCoversTheMentionsNotLaterTrafficInTheSameRoom()
+    {
+        await SeedProjectAsync("Overmind", []);
+        await PostSignalAsync("all", "@tucker the old ask");
+        await AgeMessageAsync("@tucker the old ask", TimeSpan.FromHours(20));
+        await PostSignalAsync("all", "chatter mentioning nobody");
+
+        await RunSnapshotAsync();
+
+        var digest = SentText(SentRequests().ShouldHaveSingleItem());
+        digest.ShouldContain("all · 1 mentions · last 20h");
+        digest.ShouldNotContain("last now");
+        digest.ShouldNotContain("mention counts cover");
+    }
+
+    [Fact]
     public async Task Digest_WhenTheWindowReadHitsTheCap_TellsThePhoneTheCountsAreFloored()
     {
         await SeedProjectAsync("Overmind", ["telegram-bridge"]);
@@ -212,6 +228,19 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
         var digest = SentText(SentRequests().ShouldHaveSingleItem());
         digest.ShouldNotContain("mention counts cover");
         digest.ShouldContain("telegram-bridge · 1 mentions");
+    }
+
+    [Fact]
+    public async Task Digest_FlooredWindowOnAnEmptyBoard_QualifiesTheIdleLine()
+    {
+        await SeedProjectAsync("Overmind", ["telegram-bridge"]);
+        await SeedSilentWindowAsync(WaveChatService.MaxHistoryLimit + 2);
+
+        await RunSnapshotAsync();
+
+        SentText(SentRequests().ShouldHaveSingleItem()).ShouldBe(
+            $"Wave · Overmind\n{TelegramWaveSnapshotFormatter.IdleLine}\n"
+            + $"  +mention counts cover the first {WaveChatService.MaxHistoryLimit} messages of the 24h window");
     }
 
     [Fact]
@@ -452,6 +481,18 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
         await context.WaveMessages
             .Where(m => m.Text == WindowFillerText)
             .ExecuteUpdateAsync(setter => setter.SetProperty(m => m.CreatedAt, now - TimeSpan.FromHours(12)));
+    }
+
+    private async Task SeedSilentWindowAsync(int messageCount)
+    {
+        await using var context = _temp.CreateContext();
+        for (var index = 0; index < messageCount; index++)
+        {
+            context.WaveMessages.Add(WaveMessage.Create(
+                _projectId, "all", "boss", WaveMessage.OwnerRole, $"standup chatter {index} mentioning nobody"));
+        }
+
+        await context.SaveChangesAsync();
     }
 
     private async Task AgeMessageAsync(string text, TimeSpan age)

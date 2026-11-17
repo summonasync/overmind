@@ -239,10 +239,10 @@ public sealed class TelegramWaveSnapshotFormatterTests
     }
 
     [Fact]
-    public void EmptyDigest_FlooredWindow_StillRendersExactlyTheIdleSentence()
+    public void EmptyDigest_FlooredWindow_QualifiesTheIdleLineWithTheFloorNote()
     {
         Format(windowRead: WaveChatService.MaxHistoryLimit)
-            .ShouldBe($"Wave · Overmind\n{Formatter.IdleLine}");
+            .ShouldBe($"Wave · Overmind\n{Formatter.IdleLine}\n{FloorNote}");
     }
 
     private static string FloorNote =>
