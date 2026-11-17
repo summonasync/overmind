@@ -25,14 +25,16 @@ public sealed class OvermindNotificationTools
     }
 
     [McpServerTool(Name = "overmind_notify", Destructive = false, Idempotent = false)]
-    [Description("Tell the human something: posts a notification to the center the human watches in the Overmind web UI. Kind is info, question or approval; featureSlug and tab turn it into a deep link onto the feature page. Use question or approval when a gate needs the human's call, then pick the answer up with overmind_replies. The response may carry url (set when featureSlug is) — quote the url in chat when asking for an approval or reporting a question so the human can click through.")]
+    [Description("Tell the human something: posts a notification to the center watched in the Overmind " +
+        "web UI. Use kind question or approval when a gate needs the human's call, then pick the answer up " +
+        "with overmind_replies; featureSlug and tab make it a deep link.")]
     public async Task<JsonElement> Notify(
         [Description("Notification kind: info, question or approval.")] string kind,
         [Description("Message body shown to the human, max 2000 chars.")] string text,
-        [Description("Id of the project the notification targets; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
-        [Description("Slug of the feature the deep link opens, as shown on the planning board.")] string? featureSlug = null,
-        [Description("Feature page tab the deep link opens: spec, plan, tasks or result.")] string? tab = null,
-        [Description("Sender name shown next to the notification in the center; defaults to 'agent'.")] string? from = null,
+        [Description("Optional project id.")] Guid? projectId = null,
+        [Description("Feature slug for the deep link.")] string? featureSlug = null,
+        [Description("Deep-link tab: spec, plan, tasks or result.")] string? tab = null,
+        [Description("Sender name in the center; default 'agent'.")] string? from = null,
         CancellationToken ct = default)
     {
         var payload = new JsonObject
@@ -61,13 +63,15 @@ public sealed class OvermindNotificationTools
     }
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]
-    [Description("Poll for the human's answers: notifications you sent via overmind_notify that carry a reply, newest first. Poll it after asking a question or requesting approval — each item's replyText is the human's decision. Optional combinable filters cut the backlog: since (ISO-8601 timestamp — only replies newer than it, e.g. the artifact's last update when hunting a validation proof; the zone offset is optional, offset-less values are read as UTC the way artifact timestamps are emitted), kind (info/question/approval), featureSlug. An over-narrow filter returns an empty array, not an error. Project resolution never creates a project row; an unregistered directory returns guidance instead.")]
+    [Description("Polls the human's replies to your overmind_notify messages, newest first — each item's " +
+        "replyText is the human's decision. Filters combine; an over-narrow filter returns an empty array, " +
+        "not an error.")]
     public async Task<JsonElement> Replies(
-        [Description("Id of the project whose replies to read; resolved from OVERMIND_PROJECT_ID or the working directory when omitted.")] Guid? projectId = null,
-        [Description("A reply marks its notification read, so false matches nothing — poll with the default true.")] bool? includeRead = null,
-        [Description("ISO-8601 timestamp; only notifications the human replied to after it, e.g. the artifact's last update before you requested a proof. The zone offset is optional: an offset-less value is read as UTC, matching how artifact timestamps are emitted.")] string? since = null,
+        [Description("Optional project id.")] Guid? projectId = null,
+        [Description("False matches nothing — replies are consumed on read; keep the default.")] bool? includeRead = null,
+        [Description("Only replies after this ISO-8601 instant (offset-less reads as UTC).")] string? since = null,
         [Description("Notification kind: info, question or approval.")] string? kind = null,
-        [Description("Feature slug to narrow to, as shown on the planning board.")] string? featureSlug = null,
+        [Description("Feature slug to narrow to.")] string? featureSlug = null,
         CancellationToken ct = default)
     {
         var kindFilter = kind is null ? null : NormalizeKind(kind);

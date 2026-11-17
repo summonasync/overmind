@@ -27,43 +27,17 @@ public sealed class WaveSnapshotTools
     }
 
     [McpServerTool(Name = "overmind_wave_snapshot", ReadOnly = true, Idempotent = true)]
-    [Description("One-call read projection for wave coordination — the whole marshal picture without the 10-call fan-out. " +
-        "The host half returns the task queue (planning_task_queue rows verbatim), per-claim identity (alias, vendor, " +
-        "claimState, claimedAt, claimedByHuman, last board activity), per in-flight feature code pins (claimed or " +
-        "inProgress/review features), open feature blockers rolled up per feature, and the latest coordination entries " +
-        "by tag (defaults: wave-sync, lane-marshalling — overridable). The adapter half enriches in-flight features with " +
-        "repo code discovery (the planning_feature_code projection: worktrees/branches carrying the slug or NNN prefix, " +
-        "pins matched first and flagged, stale pins reported): the git listing is cached briefly, so repeated snapshots " +
-        "in one marshal pass do not spawn git processes per request; a cwd outside any git repository is an expected " +
-        "condition reported as the short discoverySkipped marker, while a genuine discovery failure degrades to " +
-        "discoveryError — the rest of the payload is unaffected either way. Each queue row's potentialOverlaps is " +
-        "an advisory projection, never a block: overlap rows report glob collisions between in-flight features so " +
-        "a marshal or a human can judge them. Each matches entry pairs one side's glob with the partner's " +
-        "(pattern, partnerPattern) and labels the kind: exact means the two globs are literally equal strings " +
-        "(both features declare the same file or directory), sharedDirectory means the patterns only share a " +
-        "boundary directory prefix and may be completely disjoint — a disjoint-file-set verdict stays the " +
-        "marshal's or the human's call. compact=true projects every section to " +
-        "coordination-critical fields only and stays sparse: null values, empty arrays and default scalars " +
-        "(readiness 0, stale false, isBlocked false, openDirectiveCount 0) disappear; queue rows drop briefExcerpt, " +
-        "taskCounts, spec/plan statuses and materializer stamps, keep task progress only when taskTotal > 0, claim " +
-        "fields only when claimedByAlias is set and lane fields only when lane is set; claims drop lastActivityAt " +
-        "and claimedByHuman=false; entries drop snippets and empty tags; discovery rows drop the per-row workspace " +
-        "(the top-level workspace stays); code pins and blockers pass through unchanged, and queue rows keep " +
-        "potentialOverlaps verbatim (withFeature, sharedGlobs, matches). fields=<keys> instead projects queue rows " +
-        "and claims to {slug, ...requested} — queue rows speak the planning_task_queue grammar and claims add " +
-        "claimedByHuman and lastActivityAt — while every other section passes through unchanged; the knobs are " +
-        "mutually exclusive and omitting both returns the full payload. default false keeps the " +
-        "full payload. projectId is required; project resolution never creates a project row.")]
+    [Description("One-call wave picture — task queue, per-claim identity, code locations via adapter-side git " +
+        "discovery, open feature blockers and coordination entries. Pick it over planning_task_queue + " +
+        "planning_list_lanes + planning_feature_code when coordinating a wave; read-only. compact=true projects " +
+        "every section to coordination-critical fields.")]
     public async Task<JsonElement> WaveSnapshot(
-        [Description("Id of the project to snapshot.")] Guid? projectId = null,
-        [Description("Optional comma-separated tag list for the coordination entries section; " +
-            "defaults to wave-sync,lane-marshalling.")] string? tags = null,
-        [Description("Optional cap (1-100) on the coordination entries section; default 20.")] int? entryLimit = null,
-        [Description("Optional comma/space-separated row keys to project queue rows and claims down to, " +
-            "e.g. slug,claimedByAlias — slug always leads and stays; unknown keys are rejected naming the allowed set; " +
-            "a list naming no keys is a lint error; mutually exclusive with compact; other sections pass through unchanged.")] string? fields = null,
-        [Description("Project each section to coordination-critical fields only to save tokens; " +
-            "default false keeps the full payload.")] bool compact = false,
+        [Description("Project id to snapshot; required.")] Guid? projectId = null,
+        [Description("Comma-separated tags for the entries section; default wave-sync,lane-marshalling.")] string? tags = null,
+        [Description("Cap (1-100) on the entries section; default 20.")] int? entryLimit = null,
+        [Description("Row keys to project queue rows and claims to, e.g. slug,claimedByAlias; " +
+            "exclusive with compact.")] string? fields = null,
+        [Description("Project each section to coordination-critical fields only.")] bool compact = false,
         CancellationToken ct = default)
     {
         if (projectId is null)
