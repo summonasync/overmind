@@ -21,9 +21,12 @@ public static class ContextAgentTools
         "get_board_context",
         "Pulls the current board context on demand: projects with open feature counts, the planning task queue, " +
         "the human's recent notification replies and top memory facts. Call it at the start of a turn when board " +
-        "state matters and resolve project ids from its result instead of guessing. Optional projectId scopes the " +
-        "queue rows to one project. A failed board read marks the result degraded; memory facts silently drop " +
-        "when grimoire is unavailable.",
+        "state matters; it is a read of the board, not a way to collect project ids. When the conversation " +
+        "belongs to a project the host compares the projectId a call carries with it and rejects a foreign one; " +
+        "when it belongs to no project nothing is compared and the call is recorded as global in the trail. " +
+        "Either way a call that addresses an object by id sits outside that comparison (feature 246 owns them). " +
+        "Optional projectId scopes the queue rows to one project. A failed board read marks the result degraded; " +
+        "memory facts silently drop when grimoire is unavailable.",
         """
         {"type":"object","properties":{"projectId":{"type":"string"}},"required":[]}
         """,

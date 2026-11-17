@@ -47,7 +47,10 @@ public static class BoardAgentTools
                 .Set("tab", AgentToolArgs.OptionalString(args, "tab"))
                 .Set("from", AgentToolArgs.OptionalString(args, "from"))
                 .Build(),
-            ct));
+            ct),
+            // D5, owner ruling 2026-11-17: this projectId is a deep-link field on a message for the human, not a
+            // board the agent acts on - refusing it would claim a protection with nothing behind it.
+            Scope: AgentToolScope.Discovery);
 
     private static AgentToolSpec RepliesSpec(AgentLoopbackClient api) => new(
         "poll_replies",

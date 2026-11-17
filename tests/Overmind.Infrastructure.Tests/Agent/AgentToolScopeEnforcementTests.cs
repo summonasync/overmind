@@ -100,7 +100,6 @@ public sealed class AgentToolScopeEnforcementTests : IDisposable
 
     [Theory]
     [InlineData("Entry", "search", """{"query":"scope","projectId":"{0}"}""")]
-    [InlineData("Board", "notify_human", """{"kind":"info","text":"heads up","projectId":"{0}"}""")]
     public async Task InvokeAsync_OptionalForeignProject_Refused(string family, string tool, string template)
     {
         var handler = new RecordingHandler();
@@ -111,6 +110,26 @@ public sealed class AgentToolScopeEnforcementTests : IDisposable
 
         ScopeRefusal(result, $"{family} optional projectId ({tool})");
         handler.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_NotifyHumanIsDiscovery_ItsForeignProjectIdReachesTheHandlerAsADeepLink()
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "notify_human",
+            Parse($$"""{"kind":"info","text":"heads up","projectId":"{{ForeignProject}}"}"""),
+            ScopedTurn,
+            CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(
+            customMessage: "D5 was ruled Discovery for notify_human: its projectId only anchors the human's deep " +
+                           $"link, so refusing it claimed a protection with nothing behind it: {result.GetRawText()}");
+        var request = handler.Requests.ShouldHaveSingleItem();
+        request.RequestUri!.ToString().ShouldNotContain(ForeignProject.ToString(), Case.Sensitive);
+        handler.Bodies[0].ShouldContain(ForeignProject.ToString(), Case.Sensitive);
     }
 
     [Theory]
@@ -487,10 +506,40 @@ public sealed class AgentToolScopeEnforcementTests : IDisposable
         }
     }
 
-    [Fact]
-    public void UnverifiableTemplate_HasNoSlotForTheValueItRejected()
+    [Theory]
+    [InlineData(AgentToolRegistry.ProjectScopeUnverifiableMessage)]
+    [InlineData(AgentToolRegistry.ProjectProvenanceMissingMessage)]
+    public void UnverifiableTemplate_HasNoSlotForTheValueItRejected(string template)
     {
-        AgentToolRegistry.ProjectScopeUnverifiableMessage.ShouldNotContain("{2}");
+        template.ShouldNotContain("{2}", customMessage: template);
+    }
+
+    [Theory]
+    [InlineData("""{"projectId":"not-a-guid"}""")]
+    [InlineData("""{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f02-99"}""")]
+    [InlineData("""{"projectId":42}""")]
+    [InlineData("""{"projectId":{"nested":"object"}}""")]
+    public async Task InvokeAsync_CrossProjectDoorWithUnreadableTargetBoard_FailsClosedButStaysUntyped(string boardPart)
+    {
+        var handler = new RecordingHandler();
+        var registry = CreateRegistry(handler);
+
+        var result = await registry.InvokeAsync(
+            "issues_create",
+            Parse($$"""{"authorProjectId":"{{ConversationProject}}","title":"t","body":"b",""" + boardPart[1..]),
+            ScopedTurn,
+            CancellationToken.None);
+
+        result.TryGetProperty("error", out var error).ShouldBeTrue(result.GetRawText());
+        handler.Requests.ShouldBeEmpty("nothing dispatches: the board id is parsed before any URI exists");
+
+        // Pinned deliberately: a CrossProject door skips the projectId comparison, so an unreadable target board
+        // is refused by the handler's argument parse rather than by the scope guard. Fail-closed in outcome,
+        // untyped in name; naming it (projectScopeUnverifiable) needs a guard change this task does not own.
+        result.TryGetProperty("code", out _).ShouldBeFalse(
+            customMessage: $"named-scope refusal is not what happens here, and that is the documented gap: {error.GetString()}");
+        error.GetString()!.ShouldContain("'projectId'",
+            customMessage: "the handler's own argument error is the only thing that speaks here, and it names the field");
     }
 
     [Fact]

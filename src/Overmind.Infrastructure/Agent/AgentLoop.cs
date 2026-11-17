@@ -167,7 +167,7 @@ public sealed class AgentLoop(
             if (roundResult.Calls.FirstOrDefault(IsBounceCall) is { } bounceCall)
             {
                 yield return ConversationStreamEvent.ToolCall(bounceCall.Name);
-                await AppendAuditAsync(conversation.Id, ToolLabel(bounceCall.Name), ct);
+                await AppendAuditAsync(conversation.Id, ToolLabel(bounceCall.Name, conversation.ProjectId), ct);
                 var reason = BounceReason(bounceCall);
                 logger.LogInformation(
                     "Agent turn for conversation {ConversationId} ended with a {Role} bounce, reason {BounceReason}",
@@ -212,8 +212,16 @@ public sealed class AgentLoop(
 
     private static bool IsBounceCall(FunctionCallContent call) => call.Name == RouteAgentTools.BounceToolName;
 
-    private static string ToolLabel(string toolName) =>
-        JsonSerializer.Serialize(new { tool = toolName }, AgentLoopbackClient.JsonOptions);
+    private static string ToolLabel(string toolName, Guid? projectId)
+    {
+        var label = new Dictionary<string, object> { ["tool"] = toolName };
+        if (projectId is null)
+        {
+            label["globalScope"] = true;
+        }
+
+        return JsonSerializer.Serialize(label, AgentLoopbackClient.JsonOptions);
+    }
 
     private static string BounceReason(FunctionCallContent call)
     {
@@ -322,7 +330,7 @@ public sealed class AgentLoop(
                 ? JsonSerializer.SerializeToElement(raw, AgentLoopbackClient.JsonOptions)
                 : JsonSerializer.SerializeToElement(new { }, AgentLoopbackClient.JsonOptions);
 
-            var label = ToolLabel(call.Name);
+            var label = ToolLabel(call.Name, conversation.ProjectId);
             await AppendAuditAsync(conversation.Id, label, ct);
 
             var result = await tools.InvokeAsync(call.Name, arguments, invocation, ct);

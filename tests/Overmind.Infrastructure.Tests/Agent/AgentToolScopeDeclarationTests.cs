@@ -53,7 +53,7 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
         AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count.ShouldBe(19);
         AgentToolScopeDeclarationAudit.CrossProject.Count.ShouldBe(1);
         AgentToolScopeDeclarationAudit.SessionScoped.Count.ShouldBe(7);
-        AgentToolScopeDeclarationAudit.Discovery.Count.ShouldBe(2);
+        AgentToolScopeDeclarationAudit.Discovery.Count.ShouldBe(3);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
     }
 
     [Fact]
-    public void Discovery_ExactlyTheTwoBoardReadsCarryThePolicy()
+    public void Discovery_ExactlyTheDeclaredReadsCarryThePolicy()
     {
         var marked = _registry.Specs
             .Where(spec => spec.Scope == AgentToolScope.Discovery)
@@ -91,6 +91,11 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
             .ToList();
 
         marked.ShouldBe(AgentToolScopeDeclarationAudit.Discovery, ignoreOrder: true);
+        marked.ShouldNotBeEmpty();
+        marked.ShouldContain("notify_human",
+            "D5 (owner ruling 2026-11-17): notify_human's projectId is a deep-link field, not a board to act on");
+        marked.ShouldContain("get_board_context");
+        marked.ShouldContain("list_projects");
     }
 
     [Fact]

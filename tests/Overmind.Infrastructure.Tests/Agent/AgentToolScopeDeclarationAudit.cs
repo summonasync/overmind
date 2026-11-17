@@ -13,7 +13,7 @@ internal static class AgentToolScopeDeclarationAudit
 
     internal static readonly IReadOnlyList<string> Discovery =
     [
-        "get_board_context", "list_projects",
+        "get_board_context", "list_projects", "notify_human",
     ];
 
     // Marked by task 2: the cross-project filing door. Its authorProjectId obligation is enforced in
@@ -46,7 +46,7 @@ internal static class AgentToolScopeDeclarationAudit
 
     internal static readonly IReadOnlyList<string> ArgumentEnforced =
     [
-        "issues_list", "list_entries", "notify_human",
+        "issues_list", "list_entries",
         "planning_ack_directive", "planning_add_feature_dependency", "planning_append_directive", "planning_claim_feature",
         "planning_create_feature", "planning_current_task", "planning_export_backlog", "planning_import_feature",
         "planning_list_artifacts", "planning_list_feature_dependencies", "planning_list_features", "planning_list_lanes",
