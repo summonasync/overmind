@@ -61,131 +61,15 @@ public class PlanningToolContractTests : McpSessionTestBase
             tools[name]!["description"]!.GetValue<string>().ShouldNotBeNullOrWhiteSpace();
         }
 
-        tools["planning_claim_feature"]!["description"]!.GetValue<string>().ShouldContain("names the holder");
-        tools["planning_claim_feature"]!["description"]!.GetValue<string>().ShouldContain("auto-adopt");
-        tools["planning_claim_feature"]!["description"]!.GetValue<string>().ShouldContain("human door");
-        tools["planning_unclaim_feature"]!["description"]!.GetValue<string>().ShouldContain("holder session only");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("claimState");
-        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("claimedByAlias");
-        tools["planning_list_features"]!["description"]!.GetValue<string>().ShouldContain("board");
-        tools["planning_list_features"]!["description"]!.GetValue<string>()
-            .ShouldContain("taskCounts: todo/inProgress/review/done/blocked, sums to taskTotal");
-        tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("STOP");
-        tools["planning_current_task"]!["description"]!.GetValue<string>().ShouldContain("unclosed blockers");
-        tools["planning_set_status"]!["description"]!.GetValue<string>().ShouldContain("logNote");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("brief");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("free-form markdown with <log> as the only machine-parsed section");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("empty array clears");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("empty array clears");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
-        tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("priority");
-        tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("the UI owns feature deletion");
-        tools["planning_create_feature"]!["description"]!.GetValue<string>().ShouldContain("then validate via planning_validate — send overmind_notify(kind=approval, featureSlug) and wait for the human's reply first");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("lowest order first");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("first append lands on 0; materialized backlog files are numbered 1-based");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("omitted order appends after the current max");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "Gaps in order numbering are legal and meaningful");
-        tools["planning_upsert_artifact"]!["description"]!.GetValue<string>()
-            .ShouldContain("never renumber existing tasks to close a hole");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain(
-            "Gaps in order numbering are legal and meaningful");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
-            .ShouldContain("never renumber existing tasks to close a hole");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
-            .ShouldContain("every response item echoes the resulting edge set as blockedBy");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>()
-            .ShouldContain("[] when the item ends with no edges");
-        tools["planning_read_artifact"]!["description"]!.GetValue<string>()
-            .ShouldContain("Task payloads also carry blockedBy");
-        tools["planning_read_artifact"]!["description"]!.GetValue<string>()
-            .ShouldContain("non-task kinds omit the field");
-        tools["planning_validate"]!["description"]!.GetValue<string>().ShouldContain("human validation");
-        tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("user's explicit request");
-        tools["planning_set_feature_status"]!["description"]!.GetValue<string>().ShouldContain("human door");
-        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("logNote is mandatory");
-        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("tail of its priority band");
-        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldContain("planning_set_feature_status");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("priority asc");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("dragging");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("readiness 0-3");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>()
-            .ShouldContain("taskCounts (todo/inProgress/review/done/blocked, sums to taskTotal)");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("briefExcerpt");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("createdAt");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("updatedAt");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("pendingMutations");
-        tools["planning_task_queue"]!["description"]!.GetValue<string>().ShouldContain("plan validated");
-        tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("band-scoped");
-        tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("toPosition");
-        tools["planning_move_feature"]!["description"]!.GetValue<string>().ShouldContain("planning_set_feature_priority");
-        tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("explicit approval");
-        tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("tail");
-        tools["planning_set_feature_priority"]!["description"]!.GetValue<string>().ShouldContain("planning_move_feature");
-        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("naming convention");
-        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("planning_feature_code");
-        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("full replace");
-        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("no-op success");
-        tools["planning_pin_feature_code"]!["description"]!.GetValue<string>().ShouldContain("one feature log line");
-        tools["planning_list_feature_dependencies"]!["description"]!.GetValue<string>().ShouldContain("done or review");
-        tools["planning_add_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("cycle");
-        tools["planning_remove_feature_dependency"]!["description"]!.GetValue<string>().ShouldContain("no-op");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("acceptance");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "a tag-parseable name (the XML vocabulary — goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log) " +
-            "always routes to the XML section path byte-identically");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "a bare word like 'scope' on a spec creates/reaches the XML section, NOT the heading block: " +
-            "heading addresses need the '## ' prefix");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "remove=true together with reason replaces the resolved heading block — heading line included — " +
-            "with a single '<removed YYYY-MM-DD — reason>' line");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "a duplicate heading name is a 400 listing the matching headings");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "heading mode on a task is a 400 naming the XML vocabulary");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "removing an XML section is refused in v1 (RemoveNotAllowedForXmlSection");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "a heading patch on a validated artifact demotes it + needs logNote");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "a heading block carrying the <log> pair is refused the same way");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "acIndex is 1-based; numbering matches the materialized mirror; acText is the recommended selector");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "acText '&lt;key&gt;' matches a stored '<key>' and the reverse");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "an out-of-range acIndex or an unmatched acText is a 400 listing the visible items");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("untick=true");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("already unticked — no change");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("tickedIndex + tickedText");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("amendment door");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("'## <amendment> yyyy-MM-dd'");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("NO demotion");
-        tools["planning_patch_artifact"]!["description"]!.GetValue<string>().ShouldContain("kind=result");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("newest <log> line");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("own actor marker");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("[agent] on this door, [ui] on the human door");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("single line");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("version-traced");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("Feature-level logs are out of scope");
-        tools["planning_edit_log"]!["description"]!.GetValue<string>().ShouldContain("planning_append_log");
-        tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain(
-            "agents can delete draft artifacts only; validated/done deletion is the human's door in the UI");
-        tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain("clean up dependencies first");
-        tools["planning_delete_artifact"]!["description"]!.GetValue<string>().ShouldContain("soft delete");
-        tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldContain("board mutation");
-        tools["planning_materialize_status"]!["description"]!.GetValue<string>().ShouldContain("stalePaths");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("all-or-nothing");
-        tools["planning_upsert_tasks"]!["description"]!.GetValue<string>().ShouldContain("one feature auto-transition evaluation");
-        tools["planning_import_feature"]!["description"]!.GetValue<string>().ShouldContain("never pass through the model");
-        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("commit the planning alongside the code");
-        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("plain greppable files");
-        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldContain("no body echo");
+        foreach (var (tool, clause) in Tier1SelectionClauses)
+        {
+            tools[tool]!["description"]!.GetValue<string>().ShouldContain(clause);
+        }
+
+        foreach (var (tool, mechanic) in MovedContractMechanics)
+        {
+            ContractsDoc.Section(tool).ShouldContain(mechanic);
+        }
 
         tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(39);
     }
@@ -201,13 +85,15 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(pair => pair.Name, pair => pair.Text);
 
         descriptions["planning_append_log"].ShouldContain("cheapest write");
-        descriptions["planning_pin_feature_code"].ShouldContain("full replace");
-        descriptions["planning_edit_log"].ShouldContain("cheap write tier");
-        descriptions["planning_patch_artifact"].ShouldContain("middle tier");
+        descriptions["planning_patch_artifact"].ShouldContain("The middle-tier write");
         descriptions["planning_upsert_artifact"].ShouldContain("most expensive write");
-        descriptions["planning_read_artifact"].ShouldContain("cheapest read");
-        descriptions["planning_read_artifact_diff"].ShouldContain("no full bodies, only the change hunks");
+        descriptions["planning_read_artifact"].ShouldContain("which is cheaper");
         descriptions["planning_read_feature"].ShouldContain("most expensive read");
+
+        ContractsDoc.Section("planning_edit_log").ShouldContain("one line changes, the body is not resent");
+        ContractsDoc.Section("planning_pin_feature_code").ShouldContain("The body is a full replace, last write wins");
+        ContractsDoc.Section("planning_read_artifact").ShouldContain("the cheapest read on the board");
+        ContractsDoc.Section("planning_read_artifact_diff").ShouldContain("change hunks only, never full bodies");
 
         descriptions.Count(pair => pair.Value.Contains("most expensive", StringComparison.Ordinal)).ShouldBe(2);
     }
@@ -594,9 +480,15 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_list_artifacts"]!["description"]!.GetValue<string>().ShouldBe(
-            "Metadata-only roster of one feature's artifacts — the cheapest way to see what a feature contains; planning_read_artifact for one body, planning_read_feature for the whole feature. " +
-            "Every row carries additive pointers: [{path, anchor}] parsed from pointer lines in the body — an artifact can point at a repo file instead of copying it; the server never reads the targets (empty array when none).");
+        var description = tools["planning_list_artifacts"]!["description"]!.GetValue<string>();
+        description.ShouldContain("Metadata-only roster of one feature's artifacts");
+        description.ShouldContain("the cheapest look at what it contains");
+        description.ShouldContain("planning_read_artifact");
+
+        var roster = ContractsDoc.Section("planning_list_artifacts");
+        roster.ShouldContain("Every row carries additive pointers: [{path, anchor}]");
+        roster.ShouldContain("an artifact can point at a repo file instead of copying it");
+        roster.ShouldContain("The server never reads the targets; the array is empty when none");
     }
 
     [Fact]
@@ -608,14 +500,16 @@ public class PlanningToolContractTests : McpSessionTestBase
             .Single(t => t!["name"]!.GetValue<string>() == "planning_upsert_artifact")!;
         var properties = tool["inputSchema"]!["properties"]!.AsObject();
 
-        var body = properties["body"]!["description"]!.GetValue<string>();
-        body.ShouldContain("Expected XML sections per kind are listed in this tool's description");
-        body.ShouldContain("plain markdown is accepted");
-        body.ShouldNotContain("with its XML sections");
+        properties["body"]!["description"]!.GetValue<string>().ShouldBe("Full markdown body of the artifact.");
+        properties["order"]!["description"]!.GetValue<string>()
+            .ShouldBe("Task order within the feature; omit to append.");
 
-        var order = properties["order"]!["description"]!.GetValue<string>();
-        order.ShouldContain("Sort key and stable handle");
-        order.ShouldContain("gaps are legal — do not renumber to close them");
+        var section = ContractsDoc.Section("planning_upsert_artifact");
+        section.ShouldContain("Expected XML sections for a task");
+        section.ShouldContain("free-form markdown with <log> as the only machine-parsed section");
+        section.ShouldContain("A sort key within the feature, lowest first");
+        section.ShouldContain("Gaps in order numbering are legal and meaningful");
+        section.ShouldContain("never renumber existing tasks to close a hole");
     }
 
     [Fact]
@@ -626,20 +520,27 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        foreach (var name in new[] { "planning_upsert_artifact", "planning_upsert_tasks" })
+        foreach (var (name, dryRunProse) in new[]
+                 {
+                     ("planning_upsert_artifact", "Validate without persisting anything."),
+                     ("planning_upsert_tasks", "Validate the batch without persisting."),
+                 })
         {
             var properties = tools[name]!["inputSchema"]!["properties"]!.AsObject();
             properties.ShouldContainKey("dryRun");
-            properties["dryRun"]!["description"]!.GetValue<string>().ShouldContain("persist nothing");
+            properties["dryRun"]!["description"]!.GetValue<string>().ShouldBe(dryRunProse);
 
             var required = tools[name]!["inputSchema"]!["required"]?.AsArray();
             if (required is not null)
             {
                 required.ShouldNotContain(node => node!.GetValue<string>() == "dryRun");
             }
-
-            tools[name]!["description"]!.GetValue<string>().ShouldContain("dryRun=true");
         }
+
+        ContractsDoc.Section("planning_upsert_artifact")
+            .ShouldContain("persists NOTHING: no row, no version snapshot, no feature transition, no materialization dispatch");
+        ContractsDoc.Section("planning_upsert_tasks")
+            .ShouldContain("validates the whole batch and persists nothing");
     }
 
     [Fact]
@@ -1111,9 +1012,9 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         foreach (var name in new[] { "planning_upsert_artifact", "planning_current_task" })
         {
-            var description = tools[name]!["description"]!.GetValue<string>();
-            description.ShouldContain("Without a validated plan the feature never auto-promotes to review");
-            description.ShouldContain("flip it manually via planning_set_feature_status");
+            ContractsDoc.Section(name)
+                .ShouldContain("the feature never auto-promotes to review — flip it with planning_set_feature_status");
+            tools[name]!["description"]!.GetValue<string>().ShouldNotBeNullOrWhiteSpace();
         }
     }
 
@@ -1125,14 +1026,25 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_read_artifact"]!["description"]!.GetValue<string>().ShouldBe(
-            "Reads one artifact by id — without sections, one artifact, full body; with sections, the cheapest read: only the named sections. " +
-            "Sections reads are deterministic: located on the canonicalized form (the same one writes produce), found sections return in body order regardless of request order, and a name the body carries never lands in missingSections; the full read stays byte-faithful to storage. " +
-            "missingSections names requested-but-absent sections; a read never fails on a missing one. " +
-            "The review field appears on task payloads only. " +
-            "Task payloads also carry blockedBy — the sibling task orders this task waits on, [] when it has no edges; non-task kinds omit the field. " +
-            "Bodies may carry pointer markers — case-sensitive 'pointer:' as the first non-whitespace token naming either a repo-relative path with an optional #anchor or a grimoire crew-memory id ('grimoire://memory/<id>'); the server never reads the targets. " +
-            "Parsed pointers ride the artifact projections (planning_current_task payload, planning_list_artifacts roster rows), not this read.");
+        var description = tools["planning_read_artifact"]!["description"]!.GetValue<string>();
+        description.ShouldContain("One artifact by id or alias");
+        description.ShouldContain("only the named sections, which is cheaper");
+        description.ShouldContain("Task payloads carry review and blockedBy");
+
+        var section = ContractsDoc.Section("planning_read_artifact");
+        section.ShouldContain("the cheapest read on the board");
+        section.ShouldContain("Section reads are deterministic");
+        section.ShouldContain("found sections return in body order regardless of request order");
+        section.ShouldContain("a name the body carries never lands in missingSections");
+        section.ShouldContain("The full read stays byte-faithful to storage");
+        section.ShouldContain("missingSections names requested-but-absent sections; a read never fails on a missing one");
+        section.ShouldContain("review appears on task payloads only");
+        section.ShouldContain("Task payloads also carry blockedBy");
+        section.ShouldContain("non-task kinds omit the field");
+        section.ShouldContain("a case-sensitive pointer: as the first non-whitespace token of a line");
+        section.ShouldContain("grimoire://memory/<id>");
+        section.ShouldContain("the server never reads the targets");
+        section.ShouldContain("Parsed pointers ride the projections");
     }
 
     [Fact]
@@ -1143,8 +1055,11 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("claimedByAlias");
         tools["planning_read_feature"]!["description"]!.GetValue<string>().ShouldContain("most expensive read");
+        tools["planning_read_feature"]!["description"]!.GetValue<string>()
+            .ShouldContain("Shrink it with includeArtifacts=false or sections");
+
+        ContractsDoc.Section("planning_read_feature").ShouldContain("claimedByAlias");
     }
 
     [Fact]
@@ -1157,12 +1072,20 @@ public class PlanningToolContractTests : McpSessionTestBase
 
         var tool = tools["planning_read_feature"]!;
         var description = tool["description"]!.GetValue<string>();
-        description.ShouldContain("missingSections");
-        description.ShouldContain("byte-faithful to storage");
+        description.ShouldContain("sections");
+
+        var featureSection = ContractsDoc.Section("planning_read_feature");
+        featureSection.ShouldContain("sections limits the feature body to the named sections, returned in body order");
+        featureSection.ShouldContain("Omitting both returns the full read, byte-faithful to storage");
+
+        var sectionsMechanics = ContractsDoc.Section("planning_read_artifact");
+        sectionsMechanics.ShouldContain("missingSections names requested-but-absent sections");
+        sectionsMechanics.ShouldContain("a read never fails on a missing one");
 
         var properties = tool["inputSchema"]!["properties"]!.AsObject();
         properties.ShouldContainKey("sections");
-        properties["sections"]!["description"]!.GetValue<string>().ShouldContain("returned in body order");
+        properties["sections"]!["description"]!.GetValue<string>()
+            .ShouldBe("Comma-separated section names to narrow the body.");
 
         var required = tool["inputSchema"]!["required"]?.AsArray();
         if (required is not null)
@@ -1179,13 +1102,21 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_read_artifact_diff"]!["description"]!.GetValue<string>().ShouldBe(
-            "Diffs two versions of one artifact as a unified diff — the read between planning_read_artifact and " +
-            "nothing: no full bodies, only the change hunks. fromVersion/toVersion optional: omitting both diffs " +
-            "the two most recent versions. Adjacent versions may carry log-only bumps, so an empty diff between " +
-            "neighbors is a valid answer, not an error. Trailing-newline semantics: a trailing newline is ignored, " +
-            "so 'x' vs 'x\\n' diffs as empty (unlike git there is no \\ No newline marker). An unknown from/to " +
-            "version fails with ArtifactVersionNotFound 404; from == to or from > to fails with InvalidVersionRange 400.");
+        var description = tools["planning_read_artifact_diff"]!["description"]!.GetValue<string>();
+        description.ShouldContain("Unified diff between two artifact versions");
+        description.ShouldContain("hunks only, never bodies");
+        description.ShouldContain("Omit both versions for the two most recent");
+
+        var section = ContractsDoc.Section("planning_read_artifact_diff");
+        // 234: the ladder-position clause "the read between planning_read_artifact and nothing" left
+        // the description; its price semantics stay pinned as "change hunks only, never full bodies".
+        section.ShouldContain("change hunks only, never full bodies");
+        section.ShouldContain("Adjacent versions may carry log-only bumps");
+        section.ShouldContain("an empty diff between neighbors is a valid answer, not an error");
+        section.ShouldContain("A trailing newline is ignored");
+        section.ShouldContain("unlike git there is no \\ No newline marker");
+        section.ShouldContain("ArtifactVersionNotFound");
+        section.ShouldContain("InvalidVersionRange");
     }
 
     [Fact]
@@ -1200,9 +1131,14 @@ public class PlanningToolContractTests : McpSessionTestBase
         properties.ShouldContainKey("artifactId");
         properties.ShouldContainKey("projectId");
         properties.ShouldContainKey("alias");
-        properties["fromVersion"]!["description"]!.GetValue<string>().ShouldContain("defaults to toVersion - 1");
-        properties["toVersion"]!["description"]!.GetValue<string>().ShouldContain("defaults to the artifact's current version");
-        properties["alias"]!["description"]!.GetValue<string>().ShouldContain("'<slug>/T<order>'");
+        properties["fromVersion"]!["description"]!.GetValue<string>().ShouldBe("Older version; defaults to toVersion - 1.");
+        properties["toVersion"]!["description"]!.GetValue<string>().ShouldBe("Newer version; defaults to the current one.");
+        properties["alias"]!["description"]!.GetValue<string>()
+            .ShouldBe("Optional alias instead of artifactId: <slug>/T<order>.");
+
+        var section = ContractsDoc.Section("planning_read_artifact_diff");
+        section.ShouldContain("toVersion to the artifact's current version");
+        section.ShouldContain("<slug>/T<order>");
     }
 
     [Fact]
@@ -1602,10 +1538,12 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_create_feature"]!["description"]!.GetValue<string>();
+        description.ShouldContain("omit slug and the Host generates");
 
-        description.ShouldContain("slug is optional");
-        description.ShouldContain("{next free NNN}-{title-derived slug}");
-        description.ShouldContain("an explicit slug always wins");
+        var section = ContractsDoc.Section("planning_create_feature");
+        section.ShouldContain("Omit slug (or pass a blank one) and the Host generates");
+        section.ShouldContain("{next free NNN}-{title-derived slug}");
+        section.ShouldContain("An explicit slug always wins");
     }
 
     [Theory]
@@ -1660,9 +1598,11 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_create_feature"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("409 NumberCollision");
-        description.ShouldContain("7 = 007");
-        description.ShouldContain("next free number");
+        var section = ContractsDoc.Section("planning_create_feature");
+        section.ShouldContain("The NNN prefix must be free");
+        section.ShouldContain("earns a 409 NumberCollision");
+        section.ShouldContain("so 7 and 007 are the same number");
+        section.ShouldContain("suggests the next free number");
     }
 
     [Fact]
@@ -1674,8 +1614,12 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_import_feature"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("never enforces the create-path number-collision guard");
-        description.ShouldContain("restores verbatim");
+        description.ShouldContain("bodies never pass through the model");
+
+        var section = ContractsDoc.Section("planning_import_feature");
+        section.ShouldContain("Import never enforces the create-path number-collision guard");
+        section.ShouldContain("a mirror with colliding NNN numbers restores verbatim");
+        section.ShouldContain("statuses are restored verbatim with [import] markers");
     }
 
     [Fact]
@@ -2421,18 +2365,23 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_update_feature"]!["description"]!.GetValue<string>().ShouldBe(
-            "Partial edit of a feature's title, body, priority, lane, or codeSurfaces — durable what/why stays correctable by agents. " +
-            "logNote is mandatory and lands as a dated line in the feature log. " +
-            "A priority change moves the feature to the tail of its priority band. " +
-            "lane assigns the feature to a lane roster entry by name — an unknown name auto-creates the lane row " +
-            "(empty contour, no priority): the assigning act is the birth, planning_set_lanes cannot create lanes; " +
-            "empty string clears the lane, omit to keep. " +
-            "A lane whose last open feature leaves or closes retires itself. " +
-            "codeSurfaces declares the repo-relative glob patterns this feature touches (e.g. src/web/**) — advisory only: " +
-            "the queue, board and wave-snapshot rows project potentialOverlaps between in-flight features so coordinators " +
-            "see cross-lane collisions; an empty array clears the surfaces, omit to keep. " +
-            "Status is not editable here — use planning_set_feature_status.");
+        var description = tools["planning_update_feature"]!["description"]!.GetValue<string>();
+        description.ShouldBe(
+            "Edits a feature's title, body, priority, lane or codeSurfaces; logNote is mandatory. " +
+            "Status: planning_set_feature_status; one section: planning_patch_feature.");
+
+        var section = ContractsDoc.Section("planning_update_feature");
+        section.ShouldContain("Status is not editable here — planning_set_feature_status");
+        section.ShouldContain("logNote is mandatory and lands as a dated [agent] line in the feature log");
+        section.ShouldContain("A priority change moves the feature to the tail of its new band");
+        section.ShouldContain("lane assigns the feature to a lane roster entry by name");
+        section.ShouldContain("the assigning act is the birth, and planning_set_lanes cannot create lanes");
+        section.ShouldContain("Empty string clears the lane, omit keeps it");
+        section.ShouldContain("A lane whose last open feature leaves or closes retires itself");
+        section.ShouldContain("codeSurfaces declares repo-relative glob patterns this feature touches");
+        section.ShouldContain("the queue, board and wave-snapshot rows project potentialOverlaps between in-flight features " +
+                              "so coordinators see cross-lane collisions");
+        section.ShouldContain("Empty array clears, omit keeps");
     }
 
     [Fact]
@@ -2445,15 +2394,21 @@ public class PlanningToolContractTests : McpSessionTestBase
         var description = tools["planning_set_lanes"]!["description"]!.GetValue<string>();
 
         description.ShouldContain("UPSERT of known lanes");
-        description.ShouldContain("lanes absent from the payload are never touched");
-        description.ShouldContain("An empty array is an explicit no-op");
-        description.ShouldContain("the birth doors are planning_create_lane and assignment via planning_update_feature's lane field");
+        description.ShouldContain("an empty array is a no-op");
+        description.ShouldContain("planning_create_lane");
         description.ShouldContain("planning_remove_lane");
-        description.ShouldNotContain("only birth path");
-        description.ShouldNotContain("full replace");
-        description.ShouldNotContain("deleted");
-        description.ShouldNotContain("wholesale");
-        description.ShouldNotContain("clears the roster");
+
+        var section = ContractsDoc.Section("planning_set_lanes");
+        section.ShouldContain("lanes absent from the payload are never touched, so a payload missing a lane deletes nothing");
+        section.ShouldContain("An empty array is an explicit no-op echoing the unchanged roster");
+        section.ShouldContain("the birth doors are planning_create_lane and assignment via planning_update_feature's lane field");
+        section.ShouldContain("this tool never creates lanes");
+
+        foreach (var wording in new[] { "only birth path", "full replace", "wholesale", "clears the roster" })
+        {
+            description.ShouldNotContain(wording);
+            section.ShouldNotContain(wording);
+        }
     }
 
     [Fact]
@@ -2465,9 +2420,16 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_claim_feature"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("ALIVE claim by a different alias+vendor pair");
-        description.ShouldContain("unclaimed open features in the lane and the caller's own claims never block");
+        description.ShouldContain("A live foreign holder 409s by name");
+        description.ShouldContain("stale or released claims are take-over-able");
+
+        var section = ContractsDoc.Section("planning_claim_feature");
+        section.ShouldContain("a feature whose lane already holds an ALIVE claim by a different alias+vendor pair is refused with 409 naming the holder");
+        section.ShouldContain("Unclaimed open features in the lane and the caller's own claims never block");
+        section.ShouldContain("reads stay open and the human door in the Overmind UI is never locked");
+
         description.ShouldNotContain("serial");
+        section.ShouldNotContain("serial lock");
     }
 
     [Fact]
@@ -2480,8 +2442,10 @@ public class PlanningToolContractTests : McpSessionTestBase
         var description = tools["planning_remove_lane"]!["description"]!.GetValue<string>();
 
         description.ShouldContain("the only manual removal path");
-        description.ShouldContain("409 LaneStillOccupied");
+        description.ShouldContain("Refuses LaneStillOccupied while open features remain");
         description.ShouldContain("idempotent no-op");
+
+        ContractsDoc.Section("planning_remove_lane").ShouldContain("Refuses with 409 LaneStillOccupied");
     }
 
     [Fact]
@@ -2493,12 +2457,14 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_create_lane"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("planning_set_lanes refuses");
+        description.ShouldContain("the create door planning_set_lanes refuses");
         description.ShouldContain("idempotent by echo");
-        description.ShouldContain("case-insensitive");
-        description.ShouldContain("409 LaneNameDuplicate");
-        description.ShouldContain("LaneRosterTooLarge");
-        description.ShouldContain("No claim lock is involved");
+
+        var section = ContractsDoc.Section("planning_create_lane");
+        section.ShouldContain("a name already on the roster (case-insensitive) is not an error");
+        section.ShouldContain("surfaces as 409 LaneNameDuplicate");
+        section.ShouldContain("over the cap fails with LaneRosterTooLarge");
+        section.ShouldContain("No claim lock is involved");
     }
 
     [Fact]
@@ -2698,13 +2664,16 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_patch_feature"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("without resending the body");
-        description.ShouldContain("INSERTED — with the content, or declared-empty ('(none)') when content is omitted");
-        description.ShouldContain("no heading mode");
-        description.ShouldContain("planning_patch_artifact");
-        description.ShouldContain("'<removed YYYY-MM-DD — reason>'");
-        description.ShouldContain("logNote is mandatory");
-        description.ShouldContain("claim-locked");
+        description.ShouldContain("one XML <section> of a feature body without resending it");
+        description.ShouldContain("no heading or AC modes");
+
+        var section = ContractsDoc.Section("planning_patch_feature");
+        section.ShouldContain("The door is claim-locked like every mutating feature door");
+        section.ShouldContain("declared-empty ('(none)') when content is omitted");
+        section.ShouldContain("There is no heading mode");
+        section.ShouldContain("those belong to planning_patch_artifact");
+        section.ShouldContain("with a single <removed YYYY-MM-DD — reason> line");
+        section.ShouldContain("logNote lands as a dated [agent] feature-log line");
     }
 
     [Fact]
@@ -3915,11 +3884,14 @@ public class PlanningToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
         var description = tools["planning_validate"]!["description"]!.GetValue<string>();
 
-        description.ShouldContain("overmind_notify(kind=approval");
-        description.ShouldContain("notify → reply → validate");
-        description.ShouldContain("ValidationProofRequired");
-        description.ShouldContain("human door");
-        description.ShouldContain("every edit voids it");
+        description.ShouldContain("Spec and plan need a human approval reply newer than the artifact's last edit");
+
+        var section = ContractsDoc.Section("planning_validate");
+        section.ShouldContain("Send overmind_notify(kind=approval, featureSlug=<slug>)");
+        section.ShouldContain("notify → reply → validate");
+        section.ShouldContain("the call fails with a 409 ValidationProofRequired");
+        section.ShouldContain("The UI needs no proof, and neither does asMigrated");
+        section.ShouldContain("every body edit voids it");
     }
 
     [Fact]
@@ -4286,14 +4258,19 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_export_backlog"]!["description"]!.GetValue<string>().ShouldBe(
-            "Renders the full materialized mirror (planning tree + entries projection) into an explicit " +
-            "target directory as plain greppable files — the \"commit the planning alongside the code\" path. " +
-            "Uses the same document renderers as the materializer pass, so the snapshot is byte-identical to " +
-            "what a materialize run would write; zero tracking rows and zero drift machinery are created. " +
-            "The target must be an empty directory — non-empty refuses with 409 (a snapshot, not a sync) — " +
-            "and it must not sit inside BACKLOG/ or ENTRIES/. targetPath is always explicit; there is no default. " +
-            "Compact echo: written file count + target, no body echo.");
+        var description = tools["planning_export_backlog"]!["description"]!.GetValue<string>();
+        description.ShouldBe(
+            "Renders the materialized mirror into an explicit empty directory as greppable files. A snapshot, not a sync.");
+
+        var section = ContractsDoc.Section("planning_export_backlog");
+        section.ShouldContain("planning tree plus the entries projection");
+        section.ShouldContain("the \"commit the planning alongside the code\" path");
+        section.ShouldContain("byte-identical to what a materialize run would write");
+        section.ShouldContain("zero tracking rows and zero drift machinery are created");
+        section.ShouldContain("a non-empty target refuses with 409");
+        section.ShouldContain("the path must not sit inside BACKLOG/ or ENTRIES/");
+        section.ShouldContain("targetPath is always explicit — there is no default");
+        section.ShouldContain("no body echo");
     }
 
     [Fact]
@@ -4304,15 +4281,18 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_materialize"]!["description"]!.GetValue<string>().ShouldBe(
-            "Triggers a materialization pass: the full plan is computed first, then written atomically — " +
-            "any guarded file (untracked at a planned path, or tracked with local edits not on the board) " +
-            "aborts the whole run with a 409 listing every refusal, and nothing is written that run. " +
-            "Skips in the report are byte-identical no-ops (content already matches the board), not guarded files. " +
-            "A normal board mutation already enqueues a pass that runs shortly after in the background; " +
-            "this tool runs the pass inline and waits for the report — call it after an import, " +
-            "a strategy switch, or when onboard reports a failed attempt or stale mirror state. " +
-            "force adopts guarded files with per-file warnings instead of refusing; transcribe hand edits to the board before forcing.");
+        var description = tools["planning_materialize"]!["description"]!.GetValue<string>();
+        description.ShouldContain("Runs a materialization pass inline and returns the report");
+        description.ShouldContain("board mutations already enqueue one");
+        description.ShouldContain("force adopts guarded files instead of refusing");
+
+        var section = ContractsDoc.Section("planning_materialize");
+        section.ShouldContain("the full plan is computed first, then written atomically");
+        section.ShouldContain("aborts the whole run with a 409 listing every refusal, and nothing is written that run");
+        section.ShouldContain("Any guarded file — untracked at a planned path, or tracked with local edits not on the board");
+        section.ShouldContain("Skips in the report are byte-identical no-ops (content already matches the board)");
+        section.ShouldContain("Call this after an import, a strategy switch, or when overmind_onboard reports a failed attempt");
+        section.ShouldContain("Transcribe hand edits to the board before forcing");
     }
 
     [Fact]
@@ -4373,14 +4353,17 @@ public class PlanningToolContractTests : McpSessionTestBase
         var tools = response["result"]!["tools"]!.AsArray()
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
-        tools["planning_materialize_status"]!["description"]!.GetValue<string>().ShouldBe(
-            "Mirror diagnostics without filesystem access: returns the project's materialization state as one " +
-            "structured payload — lastSuccess vs lastAttempt (lastAttemptReason carries the failure when the " +
-            "attempt did not succeed), the persisted last-run report per file (startedAt, finishedAt, atomic, " +
-            "written paths, skipped and refused with reasons), trackedFiles, stalePaths (tracked files the last " +
-            "run neither wrote nor skipped, plus tracked files whose disk bytes drifted), strategy and targetDir. " +
-            "lastRun is null when the failed attempt persisted no report — read it as no report for this attempt. " +
-            "Read-only: never triggers a pass; use planning_materialize for that.");
+        var description = tools["planning_materialize_status"]!["description"]!.GetValue<string>();
+        description.ShouldContain("Mirror diagnostics without touching disk");
+        description.ShouldContain("Never triggers a pass");
+
+        var section = ContractsDoc.Section("planning_materialize_status");
+        section.ShouldContain("lastSuccess versus lastAttempt");
+        section.ShouldContain("lastAttemptReason carries the failure when the attempt did not succeed");
+        section.ShouldContain("written paths, skipped and refused with reasons");
+        section.ShouldContain("tracked files the last run neither wrote nor skipped, plus tracked files whose disk bytes drifted");
+        section.ShouldContain("lastRun is null when the failed attempt persisted no report");
+        section.ShouldContain("planning_materialize does");
     }
 
     [Theory]
@@ -4478,4 +4461,109 @@ public class PlanningToolContractTests : McpSessionTestBase
         result!["isError"]!.GetValue<bool>().ShouldBeTrue("expected a tool error, got: " + response.ToJsonString());
         return result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
     }
+
+    // Tier 1 survives on the wire: identity, pick-vs-sibling, the cost class.
+    private static readonly (string Tool, string Clause)[] Tier1SelectionClauses =
+    [
+        ("planning_list_features", "board"),
+        ("planning_current_task", "STOP"),
+        ("planning_set_status", "logNote"),
+        ("planning_update_feature", "logNote is mandatory"),
+        ("planning_update_feature", "planning_set_feature_status"),
+        ("planning_move_feature", "toPosition"),
+        ("planning_move_feature", "planning_set_feature_priority"),
+        ("planning_set_feature_priority", "tail"),
+        ("planning_set_feature_priority", "planning_move_feature"),
+        ("planning_pin_feature_code", "naming-convention"),
+        ("planning_pin_feature_code", "planning_feature_code"),
+        ("planning_add_feature_dependency", "cycle"),
+        ("planning_remove_feature_dependency", "no-op"),
+        ("planning_materialize", "board mutation"),
+        ("planning_import_feature", "never pass through the model"),
+    ];
+
+    // What the diet moved out; the tool's section of docs/mcp-tool-contracts.md is its home.
+    private static readonly (string Tool, string Mechanic)[] MovedContractMechanics =
+    [
+        ("planning_claim_feature", "409 naming the holder"),
+        ("planning_claim_feature", "auto-adopt"),
+        ("planning_claim_feature", "human door"),
+        ("planning_unclaim_feature", "holder session only"),
+        ("planning_task_queue", "claimState"),
+        ("planning_read_feature", "claimedByAlias"),
+        ("planning_list_features", "taskCounts: todo/inProgress/review/done/blocked — the parts sum to taskTotal"),
+        ("planning_current_task", "unclosed blockers"),
+        ("planning_upsert_artifact", "brief"),
+        ("planning_upsert_artifact", "goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log"),
+        ("planning_upsert_artifact", "free-form markdown with <log> as the only machine-parsed section"),
+        ("planning_upsert_artifact", "A sort key within the feature, lowest first"),
+        ("planning_upsert_artifact", "omitted order appends after the current max"),
+        ("planning_upsert_artifact", "empty array clears"),
+        ("planning_upsert_tasks", "empty array clears"),
+        ("planning_upsert_artifact", "Features cannot be deleted or archived via MCP"),
+        ("planning_create_feature", "p0 critical, p1 high, p2 normal (the default when omitted), p3 low"),
+        ("planning_create_feature", "the UI owns feature deletion"),
+        ("planning_create_feature", "then overmind_notify(kind=approval, featureSlug) and the human's reply, then planning_validate"),
+        ("planning_upsert_tasks", "and logNote under the same rules as planning_upsert_artifact"),
+        ("planning_upsert_tasks", "An item whose order hits an existing task updates that task in place"),
+        ("planning_upsert_artifact", "Gaps in order numbering are legal and meaningful"),
+        ("planning_upsert_artifact", "never renumber existing tasks to close a hole"),
+        ("planning_upsert_tasks", "body (required, non-blank), order, review (light | hard)"),
+        ("planning_upsert_tasks", "blockedBy (sibling task orders this task waits on — empty array clears, omitted preserves the current edges)"),
+        ("planning_upsert_tasks", "every response item echoes the resulting edge set as blockedBy"),
+        ("planning_upsert_tasks", "[] when the item ends with no edges"),
+        ("planning_read_artifact", "Task payloads also carry blockedBy"),
+        ("planning_read_artifact", "non-task kinds omit the field"),
+        ("planning_validate", "human validation"),
+        ("planning_set_feature_status", "user's explicit request"),
+        ("planning_set_feature_status", "human door"),
+        ("planning_update_feature", "moves the feature to the tail of its new band"),
+        ("planning_task_queue", "priority asc"),
+        ("planning_task_queue", "dragging"),
+        ("planning_task_queue", "readiness 0-3"),
+        ("planning_task_queue", "taskCounts (sums to taskTotal)"),
+        ("planning_task_queue", "briefExcerpt"),
+        ("planning_task_queue", "createdAt"),
+        ("planning_task_queue", "updatedAt"),
+        ("planning_task_queue", "pendingMutations"),
+        ("planning_task_queue", "plan validated"),
+        ("planning_move_feature", "band-scoped"),
+        ("planning_set_feature_priority", "explicit approval"),
+        ("planning_pin_feature_code", "full replace"),
+        ("planning_pin_feature_code", "no-op success"),
+        ("planning_pin_feature_code", "one feature log line"),
+        ("planning_list_feature_dependencies", "done or review"),
+        ("planning_patch_artifact", "acceptance"),
+        ("planning_patch_artifact", "A tag-parseable name — the XML vocabulary goal, scope, anti-scope, constraints, acceptance-criteria, refs, obstacles, log — always routes to the XML section path byte-identically"),
+        ("planning_patch_artifact", "a bare word like scope on a spec creates or reaches the XML section, NOT the heading block — heading addresses need the '## ' prefix"),
+        ("planning_patch_artifact", "remove=true with reason replaces the resolved heading block — heading line"),
+        ("planning_patch_artifact", "a duplicate heading name is a 400 listing the matching headings"),
+        ("planning_patch_artifact", "heading mode on a task is a 400 naming the XML vocabulary"),
+        ("planning_patch_artifact", "removing an XML section is refused in v1 (RemoveNotAllowedForXmlSection"),
+        ("planning_patch_artifact", "A heading patch on a validated artifact demotes it and needs logNote"),
+        ("planning_patch_artifact", "a heading block carrying the <log> pair is refused the same way"),
+        ("planning_patch_artifact", "an out-of-range acIndex or an unmatched acText is a 400 listing the visible items"),
+        ("planning_patch_artifact", "untick=true"),
+        ("planning_patch_artifact", "already unticked — no change"),
+        ("planning_patch_artifact", "A tick echoes the resolved item as tickedIndex"),
+        ("planning_patch_artifact", "amendment door"),
+        ("planning_patch_artifact", "appended to the body tail as a dated ## <amendment> yyyy-MM-dd block"),
+        ("planning_patch_artifact", "NO demotion"),
+        ("planning_patch_artifact", "kind=result"),
+        ("planning_edit_log", "newest <log> line"),
+        ("planning_edit_log", "own actor marker"),
+        ("planning_edit_log", "[agent] on this door, [ui] on the human door"),
+        ("planning_edit_log", "single line"),
+        ("planning_edit_log", "version-traced"),
+        ("planning_edit_log", "Feature-level logs are out of scope"),
+        ("planning_edit_log", "planning_append_log"),
+        ("planning_delete_artifact", "clean up dependencies first"),
+        ("planning_delete_artifact", "soft delete"),
+        ("planning_materialize_status", "stalePaths"),
+        ("planning_upsert_tasks", "any failing item rolls back the whole batch, so a retry starts clean"),
+        ("planning_upsert_tasks", "one feature auto-transition evaluation"),
+        ("planning_export_backlog", "commit the planning alongside the code"),
+        ("planning_export_backlog", "plain greppable files"),
+        ("planning_export_backlog", "no body echo"),
+    ];
 }

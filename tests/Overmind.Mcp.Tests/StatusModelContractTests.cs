@@ -140,7 +140,8 @@ public class StatusModelContractTests : McpSessionTestBase
     {
         var description = await ToolDescription("planning_set_status");
 
-        description.ShouldContain("logNote is mandatory on every move");
+        description.ShouldContain("logNote is mandatory");
+        ContractsDoc.Section("planning_set_status").ShouldContain("logNote is mandatory on every move");
     }
 
     [Fact]
@@ -148,8 +149,9 @@ public class StatusModelContractTests : McpSessionTestBase
     {
         var description = await ToolDescription("planning_set_status");
 
-        description.ShouldContain("Transitions are free-form");
-        description.ShouldContain("no enforced sequence");
+        description.ShouldContain("Moves an artifact status");
+        ContractsDoc.Section("planning_set_status").ShouldContain("Transitions are free-form");
+        ContractsDoc.Section("planning_set_status").ShouldContain("no enforced sequence");
     }
 
     [Fact]
@@ -157,44 +159,51 @@ public class StatusModelContractTests : McpSessionTestBase
     {
         var description = await ToolDescription("planning_set_status");
 
-        description.ShouldContain("non-blocking warning");
+        description.ShouldContain("tasks todo, inProgress, review, done or blocked");
+        ContractsDoc.Section("planning_set_status").ShouldContain("non-blocking warning counting them");
     }
 
     [Fact]
-    public async Task PlanningSetStatusDescription_DocumentsTheValidationProofGate()
+    public void PlanningSetStatusDescription_DocumentsTheValidationProofGate()
     {
-        var description = await ToolDescription("planning_set_status");
+        var section = ContractsDoc.Section("planning_set_status");
 
-        description.ShouldContain("same human-proof rule as planning_validate");
-        description.ShouldContain("newer than the artifact's last content update");
-        description.ShouldContain("ValidationProofRequired 409");
-        description.ShouldContain("Task and result moves never require proof");
+        section.ShouldContain("carries the same proof requirement as");
+        section.ShouldContain("notification newer than the artifact's last");
+        section.ShouldContain("ValidationProofRequired");
+        section.ShouldContain("Task and result moves never require proof");
     }
 
     [Fact]
-    public async Task PlanningSetStatusDescription_StatesTheReviewReEvaluationOnValidated()
+    public void PlanningSetStatusDescription_StatesTheReviewReEvaluationOnValidated()
     {
-        var description = await ToolDescription("planning_set_status");
+        var section = ContractsDoc.Section("planning_set_status");
 
-        description.ShouldContain("re-evaluates the review invariant");
-        description.ShouldContain("exactly one [auto] promotion line");
+        section.ShouldContain("re-evaluates the review invariant");
+        section.ShouldContain("[auto] promotion line");
     }
 
     [Fact]
-    public async Task PlanningSetStatusDescription_DocumentsTheAppendedLogLineShape()
+    public void PlanningSetStatusDescription_DocumentsTheAppendedLogLineShape()
     {
-        var description = await ToolDescription("planning_set_status");
+        var section = ContractsDoc.Section("planning_set_status");
 
-        description.ShouldContain("- YYYY-MM-DD [agent] — <logNote>");
-        description.ShouldContain("<log>");
+        section.ShouldContain("appends one line to the artifact's <log> section");
+        section.ShouldContain("- YYYY-MM-DD [agent] — <logNote>");
     }
 
     [Fact]
     public async Task PlanningUpsertArtifactDescription_SaysLogNoteIsNotNeededOnCreate()
     {
-        var description = await ToolDescription("planning_upsert_artifact");
+        var response = await Driver.ListToolsAsync();
 
-        description.ShouldContain("Editing a validated artifact requires a logNote — not needed on create.");
+        var tool = response["result"]!["tools"]!.AsArray()
+            .Single(t => t!["name"]!.GetValue<string>() == "planning_upsert_artifact");
+        tool!["inputSchema"]!["properties"]!["logNote"]!["description"]!.GetValue<string>()
+            .ShouldBe("Required when editing a validated artifact.");
+
+        ContractsDoc.Section("planning_upsert_artifact")
+            .ShouldContain("Editing a validated artifact requires logNote — creating one does not");
     }
 
     [Fact]
@@ -202,15 +211,15 @@ public class StatusModelContractTests : McpSessionTestBase
     {
         var description = await ToolDescription("planning_upsert_artifact");
 
-        description.ShouldContain("created draft", Case.Insensitive);
-        description.ShouldContain("validation goes through planning_validate", Case.Insensitive);
+        description.ShouldContain("Creates an artifact or replaces its whole body");
+        ContractsDoc.Section("planning_upsert_artifact").ShouldContain("created draft");
+        ContractsDoc.Section("planning_upsert_artifact").ShouldContain("validation goes through planning_validate");
     }
 
     [Theory]
-    [InlineData("planning_append_log", "cheapest write: one dated line, body is not resent")]
-    [InlineData("planning_edit_log", "cheap write tier: one line changes, body is not resent")]
-    [InlineData("planning_patch_artifact", "middle tier: replaces one XML section or one markdown heading block, flips one acceptance item, sets the task brief, or appends a result amendment; rest of the body untouched")]
-    [InlineData("planning_upsert_artifact", "most expensive write: resends the full body")]
+    [InlineData("planning_append_log", "the cheapest write")]
+    [InlineData("planning_patch_artifact", "The middle-tier write")]
+    [InlineData("planning_upsert_artifact", "the most expensive write")]
     public async Task WriteToolDescriptions_StateTheirCostTierVerbatim(string toolName, string tierPhrase)
     {
         var description = await ToolDescription(toolName);
@@ -219,21 +228,30 @@ public class StatusModelContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task PlanningPatchArtifactDescription_DocumentsTheIdempotentTick()
+    public async Task PlanningEditLogDescription_StatesItsPriceInTheContractsDoc()
     {
-        var description = await ToolDescription("planning_patch_artifact");
+        var description = await ToolDescription("planning_edit_log");
 
-        description.ShouldContain("no-op");
-        description.ShouldContain("already ticked — no change");
+        description.ShouldContain("newest log line");
+        ContractsDoc.Section("planning_edit_log").ShouldContain("one line changes, the body is not resent");
     }
 
     [Fact]
-    public async Task PlanningPatchArtifactDescription_DocumentsTheAppendOnlyLog()
+    public void PlanningPatchArtifactDescription_DocumentsTheIdempotentTick()
     {
-        var description = await ToolDescription("planning_patch_artifact");
+        var section = ContractsDoc.Section("planning_patch_artifact");
 
-        description.ShouldContain("append-only");
-        description.ShouldContain("planning_append_log");
+        section.ShouldContain("already in the requested state is a successful no-op");
+        section.ShouldContain("already ticked — no change");
+    }
+
+    [Fact]
+    public void PlanningPatchArtifactDescription_DocumentsTheAppendOnlyLog()
+    {
+        var section = ContractsDoc.Section("planning_patch_artifact");
+
+        section.ShouldContain("The log section is append-only");
+        section.ShouldContain("a 400 pointing at planning_append_log");
     }
 
     private static string[] AllowedStatusNames(PlanningArtifactKind kind) =>
@@ -243,18 +261,28 @@ public class StatusModelContractTests : McpSessionTestBase
 
     private static string[] ListedStatusNames(string text, PlanningArtifactKind kind)
     {
-        var marker = kind == PlanningArtifactKind.Task ? "task:" : "spec/plan/result:";
-        var start = text.IndexOf(marker, StringComparison.Ordinal);
+        var markers = kind == PlanningArtifactKind.Task
+            ? new[] { "task:", "tasks " }
+            : new[] { "spec/plan/result:", "spec/plan/result take " };
+        var marker = markers.FirstOrDefault(candidate => text.Contains(candidate, StringComparison.Ordinal));
+        var start = marker is null ? -1 : text.IndexOf(marker, StringComparison.Ordinal);
         start.ShouldBeGreaterThanOrEqualTo(0, $"status listing for kind '{kind}' is missing from: {text}");
 
-        var listing = text[(start + marker.Length)..];
-        var end = listing.IndexOfAny([';', '.']);
+        var listing = text[(start + marker!.Length)..];
+        var ends = new[]
+        {
+            listing.IndexOf(';'),
+            listing.IndexOf('.'),
+            listing.IndexOf(", tasks", StringComparison.Ordinal),
+        };
+        var end = ends.Where(offset => offset >= 0).DefaultIfEmpty(-1).Min();
         if (end >= 0)
         {
             listing = listing[..end];
         }
 
         return listing
+            .Replace(" or ", ", ")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Select(status => status.ToLowerInvariant())
             .ToArray();

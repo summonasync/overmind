@@ -10,6 +10,7 @@ using Xunit;
 
 namespace Overmind.Api.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 {
     private readonly ApiFactory _factory = new();

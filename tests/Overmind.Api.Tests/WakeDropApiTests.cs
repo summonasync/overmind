@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Overmind.Api.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class WakeDropApiTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
