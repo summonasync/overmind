@@ -3,7 +3,10 @@ using ModelContextProtocol.Server;
 
 namespace Overmind.Mcp;
 
-public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle, SessionIdentityFileWriter identityFile)
+public sealed class SessionIdentityRefresher(
+    AgentSessionLifecycle lifecycle,
+    SessionIdentityFileWriter identityFile,
+    WorkspaceIdentityFile workspaceIdentity)
 {
     public static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);
 
@@ -34,8 +37,9 @@ public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle, Se
         {
             // The slot outranks env: a reconnect must not clobber the identity set at runtime.
             var slot = AdapterIdentityState.TryGet();
-            var alias = slot?.Alias ?? AgentIdentity.ResolveAlias();
-            var vendor = slot?.Vendor ?? AgentIdentity.ResolveVendor();
+            var (alias, vendor) = slot is not null
+                ? (slot.Alias, slot.Vendor)
+                : (AgentIdentity.ResolveAlias(), AgentIdentity.ResolveVendor());
             var session = await lifecycle.RegisterAsync(alias, vendor, timeout.Token);
             Guid? superseded;
             lock (_swap)
@@ -43,6 +47,8 @@ public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle, Se
                 superseded = AdapterSession.Id;
                 AdapterSession.Id = session;
             }
+
+            (alias, vendor) = await RestoreWorkspaceIdentityAsync(session, alias, vendor, ct);
 
             identityFile.Write(alias, vendor, session);
 
@@ -68,5 +74,44 @@ public sealed class SessionIdentityRefresher(AgentSessionLifecycle lifecycle, Se
             Console.Error.WriteLine(
                 $"[overmind-mcp] WARN: handshake registration failed, keeping session {AdapterSession.Id}: {ex.Message}");
         }
+    }
+
+    public async Task<(string Alias, string Vendor)> RestoreWorkspaceIdentityAsync(
+        Guid sessionId, string alias, string vendor, CancellationToken ct)
+    {
+        if (AdapterIdentityState.TryGet() is not null || !AgentIdentity.IsPlaceholderAlias(alias))
+        {
+            return (alias, vendor);
+        }
+
+        var saved = workspaceIdentity.TryRead();
+        if (saved is null)
+        {
+            return (alias, vendor);
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(Budget);
+        try
+        {
+            if (await lifecycle.TrySetIdentityAsync(sessionId, saved.Alias, saved.Vendor, timeout.Token))
+            {
+                Console.Error.WriteLine(
+                    $"[overmind-mcp] workspace identity restored: {saved.Alias} by {saved.Vendor}");
+                return (saved.Alias, saved.Vendor);
+            }
+
+            Console.Error.WriteLine(
+                $"[overmind-mcp] WARN: workspace identity '{saved.Alias}' by '{saved.Vendor}' is held by an " +
+                $"alive session, registering as '{alias}' by '{vendor}' instead");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine(
+                $"[overmind-mcp] WARN: workspace identity '{saved.Alias}' by '{saved.Vendor}' not restored, " +
+                $"registering as '{alias}' by '{vendor}': {ex.Message}");
+        }
+
+        return (alias, vendor);
     }
 }

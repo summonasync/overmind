@@ -15,6 +15,13 @@ public sealed class SessionIdentityRefresherTests : IDisposable
     private readonly List<(string Method, string Uri, string Body)> Requests = [];
     private readonly string IdentityRoot = Path.Combine(
         Path.GetTempPath(), "overmind-identity-refresher", Guid.NewGuid().ToString("N"));
+    private readonly string _repo;
+
+    public SessionIdentityRefresherTests()
+    {
+        _repo = Path.Combine(IdentityRoot, "repo");
+        Directory.CreateDirectory(Path.Combine(_repo, ".git"));
+    }
 
     public void Dispose()
     {
@@ -31,18 +38,23 @@ public sealed class SessionIdentityRefresherTests : IDisposable
 
     private SessionIdentityRefresher Refresher(
         Func<HttpRequestMessage, HttpResponseMessage> respond,
-        SessionIdentityFileWriter? identityFile = null)
+        SessionIdentityFileWriter? identityFile = null,
+        WorkspaceIdentityFile? workspaceIdentity = null)
     {
         var http = new HttpClient(new RecordingHandler(Requests, respond))
         {
             BaseAddress = new Uri("http://127.0.0.1:4761"),
         };
         return new SessionIdentityRefresher(
-            new AgentSessionLifecycle(http), identityFile ?? IdentityFileWriter(null));
+            new AgentSessionLifecycle(http),
+            identityFile ?? IdentityFileWriter(null),
+            workspaceIdentity ?? Workspace());
     }
 
     private SessionIdentityFileWriter IdentityFileWriter(int? parentPid) =>
-        new(new FixedParentPid(parentPid), IdentityRoot);
+        new(new FixedParentPid(parentPid), IdentityRoot, Workspace());
+
+    private WorkspaceIdentityFile Workspace() => new(IdentityRoot, _repo);
 
     private static HttpResponseMessage JsonBody(object payload) =>
         new(HttpStatusCode.OK)
@@ -52,6 +64,16 @@ public sealed class SessionIdentityRefresherTests : IDisposable
         };
 
     private static HttpResponseMessage SessionBody() => JsonBody(new { id = Guid.NewGuid() });
+
+    private static HttpResponseMessage IdentityEcho(Guid sessionId, string alias, string vendor) =>
+        JsonBody(new
+        {
+            session = new { id = sessionId, alias, vendor },
+            warnings = Array.Empty<string>(),
+        });
+
+    private static bool IsIdentityCall(HttpRequestMessage request) =>
+        request.RequestUri!.AbsolutePath.EndsWith("/identity", StringComparison.Ordinal);
 
     [Fact]
     public async Task FirstHandshake_LiveSession_SkipsRegistration()
@@ -197,7 +219,8 @@ public sealed class SessionIdentityRefresherTests : IDisposable
         {
             BaseAddress = new Uri("http://127.0.0.1:4761"),
         };
-        var refresher = new SessionIdentityRefresher(new AgentSessionLifecycle(http), IdentityFileWriter(null));
+        var refresher = new SessionIdentityRefresher(
+            new AgentSessionLifecycle(http), IdentityFileWriter(null), Workspace());
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         await refresher.RefreshAsync(CancellationToken.None);
@@ -226,6 +249,111 @@ public sealed class SessionIdentityRefresherTests : IDisposable
             .ShouldBe(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
     }
 
+    [Fact]
+    public async Task Handshake_PlaceholderEnvWithWorkspaceIdentity_SetsIdentityToTheSavedPair()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? IdentityEcho(sessionId, "mark-wolff", "claude")
+                : JsonBody(new { id = sessionId }));
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        var registration = Requests.Single(r => r.Uri == "http://127.0.0.1:4761/api/agent/sessions");
+        JsonNode.Parse(registration.Body)!["alias"]!.GetValue<string>().ShouldBe("agent");
+
+        var identity = Requests.Single(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal));
+        identity.Uri.ShouldBe($"http://127.0.0.1:4761/api/agent/sessions/{sessionId}/identity");
+        var payload = JsonNode.Parse(identity.Body)!;
+        payload["alias"]!.GetValue<string>().ShouldBe("mark-wolff");
+        payload["vendor"]!.GetValue<string>().ShouldBe("claude");
+
+        var saved = Workspace().TryRead();
+        saved!.Alias.ShouldBe("mark-wolff");
+        saved.SessionId.ShouldBe(sessionId);
+    }
+
+    [Fact]
+    public async Task Handshake_ExplicitEnvAlias_WinsOverTheWorkspaceFile()
+    {
+        AdapterSession.Id = null;
+        Environment.SetEnvironmentVariable("OVERMIND_ALIAS", "env-alias");
+        Environment.SetEnvironmentVariable("OVERMIND_VENDOR", "qwen");
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(_ => SessionBody());
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        Requests.ShouldNotContain(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal));
+        var registration = Requests.Single(r => r.Uri == "http://127.0.0.1:4761/api/agent/sessions");
+        JsonNode.Parse(registration.Body)!["alias"]!.GetValue<string>().ShouldBe("env-alias");
+        Workspace().TryRead()!.Alias.ShouldBe("env-alias");
+    }
+
+    [Fact]
+    public async Task Handshake_SlotIdentity_OutranksTheWorkspaceFile()
+    {
+        AdapterSession.Id = null;
+        AdapterIdentityState.Set("runtime", "qwen");
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(_ => SessionBody());
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        Requests.ShouldNotContain(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal));
+        Workspace().TryRead()!.Alias.ShouldBe("runtime");
+    }
+
+    [Fact]
+    public async Task Handshake_LiveForeignHolderOnTheSavedAlias_FallsBackToEnvIdentity()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", sessionId, DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? new HttpResponseMessage(HttpStatusCode.Conflict)
+                {
+                    Content = new StringContent(
+                        """{"title":"AliasHeld","detail":"Alias 'mark-wolff' is held by an alive session."}""",
+                        Encoding.UTF8,
+                        "application/json"),
+                }
+                : JsonBody(new { id = sessionId }));
+
+        await Should.NotThrowAsync(() => refresher.RefreshAsync(CancellationToken.None));
+
+        AdapterSession.Id.ShouldBe(sessionId);
+        var registration = Requests.Single(r => r.Uri == "http://127.0.0.1:4761/api/agent/sessions");
+        JsonNode.Parse(registration.Body)!["alias"]!.GetValue<string>().ShouldBe("agent");
+        Workspace().TryRead()!.Alias.ShouldBe("mark-wolff");
+    }
+
+    [Fact]
+    public async Task Handshake_HangingIdentityCall_FallsBackToEnvIdentityWithinBudget()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var http = new HttpClient(new HangingIdentityHandler(Requests, sessionId))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:4761"),
+        };
+        var refresher = new SessionIdentityRefresher(
+            new AgentSessionLifecycle(http), IdentityFileWriter(null), Workspace());
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await refresher.RefreshAsync(CancellationToken.None);
+        watch.Stop();
+
+        watch.Elapsed.ShouldBeLessThan(SessionIdentityRefresher.Budget * 2 + TimeSpan.FromSeconds(3));
+        AdapterSession.Id.ShouldBe(sessionId);
+        Workspace().TryRead()!.Alias.ShouldBe("mark-wolff");
+    }
+
     private sealed class FixedParentPid(int? pid) : IParentProcessIdSource
     {
         public int? Resolve() => pid;
@@ -243,6 +371,27 @@ public sealed class SessionIdentityRefresherTests : IDisposable
                 : await request.Content.ReadAsStringAsync(cancellationToken);
             requests.Add((request.Method.ToString(), request.RequestUri!.ToString(), body));
             return respond(request);
+        }
+    }
+
+    private sealed class HangingIdentityHandler(
+        List<(string Method, string Uri, string Body)> requests,
+        Guid registeredSession) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            requests.Add((request.Method.ToString(), request.RequestUri!.ToString(), body));
+
+            if (IsIdentityCall(request))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+
+            return JsonBody(new { id = registeredSession });
         }
     }
 

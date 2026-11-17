@@ -50,15 +50,25 @@ if (!await new HostReadinessGate(http, Console.Error)
     return 2;
 }
 
-var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource());
+var workspaceIdentity = new WorkspaceIdentityFile();
+var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource(), workspaceIdentity: workspaceIdentity);
 var lifecycle = new AgentSessionLifecycle(http);
+
+// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
+// session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
+// and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
+// The same refresher restores the identity this workspace last worked under, so a claim made before
+// the process died reads as an own-alias claim and is adopted on the first mutation (feature 235 D1).
+var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile, workspaceIdentity);
 Guid adapterSessionId = Guid.Empty;
+var alias = AgentIdentity.ResolveAlias();
+var vendor = AgentIdentity.ResolveVendor();
 try
 {
-    var alias = AgentIdentity.ResolveAlias();
-    var vendor = AgentIdentity.ResolveVendor();
     adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
+    (alias, vendor) = await identityRefresher.RestoreWorkspaceIdentityAsync(
+        adapterSessionId, alias, vendor, CancellationToken.None);
     identityFile.Write(alias, vendor, adapterSessionId);
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
@@ -76,10 +86,6 @@ if (adapterSessionId != Guid.Empty)
     Console.Error.WriteLine($"[overmind-mcp] heartbeat every {period.TotalMinutes:0.#} min");
 }
 
-// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
-// session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
-// and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
-var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile);
 var wakeSlot = new WakeSignalSlot();
 
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the

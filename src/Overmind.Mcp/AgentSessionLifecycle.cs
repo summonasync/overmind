@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -15,6 +16,22 @@ public sealed class AgentSessionLifecycle(HttpClient http)
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
         return body.GetProperty("id").GetGuid();
+    }
+
+    // The host refuses an alias an alive session already holds with 409; the caller keeps its
+    // registered identity in that case, so a restore attempt can never wedge startup.
+    public async Task<bool> TrySetIdentityAsync(Guid sessionId, string alias, string vendor, CancellationToken ct)
+    {
+        var response = await http.PostAsJsonAsync(
+            $"{SessionsPath}/{sessionId}/identity", new { alias, vendor }, ct);
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            return false;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return true;
     }
 
     // ApplicationStopping callbacks are synchronous, so the bounded call is sync-over-async on

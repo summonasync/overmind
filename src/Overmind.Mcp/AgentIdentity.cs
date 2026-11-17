@@ -9,6 +9,10 @@ public static class AgentIdentity
 
     public static string ResolveVendor() => Resolve("OVERMIND_VENDOR", DefaultVendor);
 
+    public static bool IsPlaceholderAlias(string? alias) =>
+        string.IsNullOrWhiteSpace(alias) ||
+        alias.Trim().Equals(PlaceholderAlias, StringComparison.Ordinal);
+
     private static string Resolve(string environmentVariable, string fallback)
     {
         var value = Environment.GetEnvironmentVariable(environmentVariable);
