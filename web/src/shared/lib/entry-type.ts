@@ -3,6 +3,7 @@ import {
   GitBranch,
   Lightbulb,
   Lock,
+  NotebookPen,
   ShieldCheck,
   ShieldHalf,
   Skull,
@@ -36,4 +37,6 @@ export const ENTRY_TYPE_META: Record<EntryType, EntryTypeMeta> = {
   tombstone: { tone: "muted", icon: Skull, label: "Tombstone" },
   idea: { tone: "idea", icon: Lightbulb, label: "Idea" },
   audit: { tone: "audit", icon: ShieldHalf, label: "Audit" },
+  // research-184-01 §8: the journal identity rides the note token, no new hue in v1
+  journal: { tone: "info", icon: NotebookPen, label: "Journal" },
 };
