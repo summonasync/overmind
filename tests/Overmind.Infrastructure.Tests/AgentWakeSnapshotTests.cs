@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class AgentWakeSnapshotTests : IDisposable
 {
     private readonly TempDatabase _db = new();
@@ -158,6 +159,8 @@ public sealed class AgentWakeSnapshotTests : IDisposable
     [InlineData(" 4 ", 4)]
     [InlineData("0", 1)]
     [InlineData("-9", 1)]
+    [InlineData("366", 365)]
+    [InlineData("2147483647", 365)]
     public void ResolveDays_EnvironmentValue_DefaultsAndClamps(string? raw, int expectedDays)
     {
         Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, raw);

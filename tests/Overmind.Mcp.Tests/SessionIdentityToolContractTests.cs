@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class SessionIdentityToolContractTests : IAsyncLifetime
 {
     private static readonly Guid SessionId = Guid.Parse("18181818-1818-1818-1818-181818181818");

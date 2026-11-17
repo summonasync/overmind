@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Overmind.Core;
 using Overmind.Infrastructure.Wake;
 using Shouldly;
 using Xunit;
@@ -93,9 +94,11 @@ public sealed class WakeDropApiTests : IDisposable
         await using var connection = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
+        // schema-coupled on purpose: the API cannot birth an unread reply (084), so this seed
+        // writes the table directly; the kind is a named enum, not a bare literal
         command.CommandText = $"""
             INSERT INTO AgentNotifications (Id, ProjectId, Kind, FeatureSlug, Tab, Text, Agent, CreatedAt, ReadAt, ReplyText, RepliedAt, HiddenAt)
-            VALUES ('{id.ToString().ToUpperInvariant()}', NULL, 1, NULL, NULL, 'earlier gate', '{agent}', '{Timestamp(repliedAt)}', NULL, 'approved earlier', '{Timestamp(repliedAt)}', NULL)
+            VALUES ('{id.ToString().ToUpperInvariant()}', NULL, {(int)NotificationKind.Question}, NULL, NULL, 'earlier gate', '{agent}', '{Timestamp(repliedAt)}', NULL, 'approved earlier', '{Timestamp(repliedAt)}', NULL)
             """;
         await command.ExecuteNonQueryAsync();
         return id;

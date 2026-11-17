@@ -11,6 +11,7 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
+[Collection(nameof(ProcessEnvironment))]
 public sealed class WakeDropFanoutTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

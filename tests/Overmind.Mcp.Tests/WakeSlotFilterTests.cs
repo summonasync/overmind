@@ -36,7 +36,7 @@ public sealed class WakeSlotFilterTests
     }
 
     [Fact]
-    public async Task ReplyConsumed_HostWindowGoesSilent_TheWakeNoteStopsCountingIt()
+    public async Task WakeNoteFollowsTheSlot_RefillBringsItBack_DrainRemovesIt()
     {
         var slot = new WakeSignalSlot();
         slot.Set(1);

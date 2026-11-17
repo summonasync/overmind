@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class WakePeriodsTests : IDisposable
 {
     public void Dispose()

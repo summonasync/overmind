@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class SessionHeartbeatTests : IDisposable
 {
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(50);

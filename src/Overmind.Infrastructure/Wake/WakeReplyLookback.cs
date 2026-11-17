@@ -5,6 +5,7 @@ public static class WakeReplyLookback
     public const string EnvironmentVariable = "OVERMIND_WAKE_REPLY_LOOKBACK_DAYS";
     public const int DefaultDays = 7;
     public const int MinDays = 1;
+    public const int MaxDays = 365;
 
     public static TimeSpan Resolve() => TimeSpan.FromDays(ResolveDays());
 
@@ -16,6 +17,6 @@ public static class WakeReplyLookback
             return DefaultDays;
         }
 
-        return Math.Max(days, MinDays);
+        return Math.Clamp(days, MinDays, MaxDays);
     }
 }

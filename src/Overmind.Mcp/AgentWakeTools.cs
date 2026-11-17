@@ -13,7 +13,7 @@ public sealed class AgentWakeTools(OvermindApiClient api, ProjectResolver projec
         "to this session's notifications (kind 'notification-reply') and wave chat mentions of its " +
         "alias (kind 'wave-mention'). Advances nothing; consume with overmind_replies and " +
         "wave_chat_unread. Consumed replies leave the default window; an explicit since " +
-        "replays them. Contract: docs/mcp-tool-contracts.md#overmind-wake-peek.")]
+        "replays them. Contract: docs/mcp-tool-contracts.md#overmind_wake_peek.")]
     public async Task<JsonElement> Peek(
         [Description("Optional ISO-8601 timestamp or the cursor echoed by the previous call, verbatim; " +
             "omit for the endpoint defaults.")] string? since = null,

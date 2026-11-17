@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Overmind.Mcp.Tests;
 
-[Collection(nameof(AdapterSessionState))]
+[Collection(nameof(ProcessEnvironment))]
 public sealed class SessionTouchHandlerTests : IDisposable
 {
     private static readonly TimeSpan SignalTimeout = TimeSpan.FromSeconds(5);
