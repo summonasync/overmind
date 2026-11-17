@@ -598,6 +598,49 @@ public sealed class AgentLoopTests : IDisposable
         roles.All(value => (string?)value == "router").ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task ScopedConversationTurn_HandsTheProjectIdToTheToolInvoker()
+    {
+        var project = Project.Create($"scope-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
+        using (var context = _temp.CreateContext())
+        {
+            context.Projects.Add(project);
+            context.SaveChanges();
+        }
+
+        var projectId = project.Id;
+        var scoped = Conversation.Create(projectId, "scoped loop test");
+        using (var context = _temp.CreateContext())
+        {
+            context.Conversations.Add(scoped);
+            context.SaveChanges();
+        }
+
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the board. "),
+            FakeAgentChatClient.ToolCallUpdate(
+                "c1", "planning_task_queue", $$"""{"projectId":"{{projectId}}"}"""),
+            FakeAgentChatClient.UsageUpdate(60)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The queue is clear."),
+            FakeAgentChatClient.UsageUpdate(20)
+        ]);
+        var loop = CreateLoop(client);
+
+        await foreach (var _ in loop.RunAsync(scoped, [], "check the board", CancellationToken.None))
+        {
+        }
+
+        await _tools.Received(1).InvokeAsync(
+            "planning_task_queue",
+            Arg.Any<JsonElement>(),
+            Arg.Is<AgentToolInvocation>(invocation =>
+                invocation.ProjectId == projectId && invocation.ConversationId == scoped.Id),
+            Arg.Any<CancellationToken>());
+    }
+
     private AgentLoop CreateLoop(
         IChatClient? client = null,
         int perTurnMaxTokens = 8_192,

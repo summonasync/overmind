@@ -20,7 +20,8 @@ public static class BoardAgentTools
         """
         {"type":"object","properties":{}}
         """,
-        async (_, ct) => await api.GetAsync("/api/projects", ct));
+        async (_, ct) => await api.GetAsync("/api/projects", ct),
+        Scope: AgentToolScope.Discovery);
 
     private static AgentToolSpec GetProjectSpec(AgentLoopbackClient api) => new(
         "read_project",
@@ -55,7 +56,8 @@ public static class BoardAgentTools
         {"type":"object","properties":{"since":{"type":"string"},"kind":{"type":"string"},"featureSlug":{"type":"string"}},"required":[]}
         """,
         async (args, ct) => await api.GetAsync(
-            AgentToolArgs.BuildQuery("/api/agent/notifications/replies", args, "since", "kind", "featureSlug"), ct));
+            AgentToolArgs.BuildQuery("/api/agent/notifications/replies", args, "since", "kind", "featureSlug"), ct),
+        Scope: AgentToolScope.SessionScoped);
 
     private static AgentToolSpec WakeSpec(AgentLoopbackClient api) => new(
         "wake_peek",
@@ -64,5 +66,6 @@ public static class BoardAgentTools
         {"type":"object","properties":{"since":{"type":"string"}},"required":[]}
         """,
         async (args, ct) => await api.GetAsync(
-            AgentToolArgs.BuildQuery("/api/agent/wake", args, "since"), ct));
+            AgentToolArgs.BuildQuery("/api/agent/wake", args, "since"), ct),
+        Scope: AgentToolScope.SessionScoped);
 }

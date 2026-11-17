@@ -55,7 +55,7 @@ public sealed class AgentToolRegistryTests : IDisposable
         var result = await registry.InvokeAsync(
             "planning_validate",
             JsonSerializer.SerializeToElement(new { artifactId = Guid.NewGuid() }),
-            new AgentToolInvocation(true, null, Guid.NewGuid()),
+            new AgentToolInvocation(true, null, Guid.NewGuid(), null),
             CancellationToken.None);
 
         result.GetProperty("error").GetString()!.ShouldContain("no owner instruction");
@@ -71,7 +71,7 @@ public sealed class AgentToolRegistryTests : IDisposable
         var result = await registry.InvokeAsync(
             "planning_validate",
             JsonSerializer.SerializeToElement(new { artifactId = Guid.NewGuid() }),
-            new AgentToolInvocation(true, instructionId, Guid.NewGuid()),
+            new AgentToolInvocation(true, instructionId, Guid.NewGuid(), null),
             CancellationToken.None);
 
         result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());
@@ -102,11 +102,12 @@ public sealed class AgentToolRegistryTests : IDisposable
         var handler = new RecordingHandler();
         var registry = CreateRegistry(handler);
         var instructionId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
 
         var result = await registry.InvokeAsync(
             "planning_set_feature_status",
-            JsonSerializer.SerializeToElement(new { projectId = Guid.NewGuid(), slug = "feat", status = "done", logNote = "owner said close it" }),
-            new AgentToolInvocation(true, instructionId, Guid.NewGuid()),
+            JsonSerializer.SerializeToElement(new { projectId, slug = "feat", status = "done", logNote = "owner said close it" }),
+            new AgentToolInvocation(true, instructionId, Guid.NewGuid(), projectId),
             CancellationToken.None);
 
         result.TryGetProperty("error", out _).ShouldBeFalse(result.GetRawText());

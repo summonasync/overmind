@@ -44,7 +44,8 @@ public static class ConversationHistoryAgentTools
                     createdAt = message.CreatedAt,
                 }),
             });
-        });
+        },
+        Scope: AgentToolScope.SessionScoped);
 
     private static async Task<DateTime?> CursorOf(
         ConversationMessageStore messages, JsonElement args, Guid conversationId, CancellationToken ct)

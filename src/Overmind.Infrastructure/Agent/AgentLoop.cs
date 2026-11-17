@@ -65,7 +65,8 @@ public sealed class AgentLoop(
             HistoryChars(messages),
             ToolSchemaChars(options.Tools),
             RoleTag(role));
-        var invocation = new AgentToolInvocation(delegationArmed, instructionMessageId, conversation.Id);
+        var invocation = new AgentToolInvocation(
+            delegationArmed, instructionMessageId, conversation.Id, conversation.ProjectId);
         var usage = new AgentTurnUsage();
         var day = AgentBudgetDay.Current();
         var dailyUsed = await budget.GetUsedAsync(day, ct);

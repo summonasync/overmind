@@ -160,7 +160,8 @@ public static class ContextAgentTools
             }
 
             return JsonSerializer.SerializeToElement(snapshot, AgentLoopbackClient.JsonOptions);
-        });
+        },
+        Scope: AgentToolScope.Discovery);
 
     private static IEnumerable<JsonElement> EnumerateJson(JsonElement payload)
     {

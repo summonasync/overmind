@@ -454,6 +454,8 @@ public static class PlanningAgentTools
             new { targetPath = AgentToolArgs.RequiredString(args, "targetPath") },
             ct));
 
+    // Human-gating answers who may call this; which project the artifact lives in is a different question,
+    // and validate names that project only by artifactId — so it stays Enforce and is declared a door.
     private static AgentToolSpec ValidateSpec(AgentLoopbackClient api)
     {
         string ValidatePath(JsonElement args) =>
@@ -472,7 +474,8 @@ public static class PlanningAgentTools
             async (args, ct) => await api.PostAsync(ValidatePath(args), Payload(args), ct),
             AgentToolCategory.HumanGated,
             (args, instructionMessageId, ct) => api.PostAsync(
-                ValidatePath(args), Payload(args), DelegatedHeaders(instructionMessageId), ct));
+                ValidatePath(args), Payload(args), DelegatedHeaders(instructionMessageId), ct),
+            Scope: AgentToolScope.Enforce);
     }
 
     private static IReadOnlyDictionary<string, string> DelegatedHeaders(Guid instructionMessageId) =>
