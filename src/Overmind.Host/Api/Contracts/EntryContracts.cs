@@ -44,7 +44,19 @@ public sealed record EntryResponse(
     string? StateProof,
     Guid? SupersededById,
     bool Enforces,
-    string? AuthorAlias);
+    string? AuthorAlias,
+    IReadOnlyList<EntryOutgoingLink> Outgoing,
+    IReadOnlyList<EntryBacklink> Incoming,
+    IReadOnlyList<string> Unresolved);
+
+public sealed record EntryOutgoingLink(EntryLinkKind Kind, Guid Id, string Label);
+
+public sealed record EntryBacklink(Guid EntryId, string Title, string Snippet);
+
+public sealed record EntryLinkView(
+    IReadOnlyList<EntryOutgoingLink> Outgoing,
+    IReadOnlyList<EntryBacklink> Incoming,
+    IReadOnlyList<string> Unresolved);
 
 public sealed record EntryReadAck(string? Alias, string? Vendor, DateTime At);
 

@@ -8,6 +8,7 @@ using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Grimoire;
 using Overmind.Infrastructure.Kits;
@@ -115,6 +116,10 @@ public static class DependencyInjection
         services.AddScoped<VectorSearchTester>();
         services.AddScoped<EntryIndexingService>();
         services.AddScoped<ReindexService>();
+        services.AddScoped<JournalProjectStore>();
+        services.AddScoped<EntryLinkResolver>();
+        services.AddScoped<EntryLinkWriter>();
+        services.AddScoped<EntryLinkReader>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddScoped<IMaterializer, SkillMaterializer>();

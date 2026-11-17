@@ -5,6 +5,7 @@ using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Host.Api.Validation;
+using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
@@ -174,12 +175,21 @@ public static class EntriesApi
         return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
     }
 
-    private static async Task<IResult> GetById(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetById(
+        Guid id,
+        OvermindDbContext db,
+        EntryLinkResolver resolver,
+        EntryLinkReader links,
+        CancellationToken ct)
     {
         var entry = await LoadEntryAsync(db, id, ct);
-        return entry is null
-            ? HttpErrors.NotFound($"Entry '{id}' was not found.")
-            : Results.Ok(EntryMapper.ToResponse(entry));
+        if (entry is null)
+        {
+            return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        var view = await EntryLinkProjection.LoadAsync(resolver, links, entry, ct);
+        return Results.Ok(EntryMapper.ToDetailResponse(entry, view));
     }
 
     private static async Task<IResult> Update(

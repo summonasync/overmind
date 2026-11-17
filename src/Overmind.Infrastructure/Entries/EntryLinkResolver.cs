@@ -17,13 +17,46 @@ public sealed class EntryLinkResolver
         _journalProjects = journalProjects;
     }
 
-    public async Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
+    public Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
         CancellationToken ct = default)
     {
+        return ResolveAsync(sourceEntryId, targets, ensureJournalProject: true, ct);
+    }
+
+    public async Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
+        Guid sourceEntryId,
+        IReadOnlyList<WikiLinkTarget> targets,
+        bool ensureJournalProject,
+        CancellationToken ct = default)
+    {
         var resolved = new List<ResolvedLink>();
         var seen = new HashSet<(EntryLinkKind, Guid)>();
+
+        foreach (var outcome in await ResolveOutcomesAsync(sourceEntryId, targets, ensureJournalProject, ct))
+        {
+            if (outcome.ToId is not { } resolvedId || resolvedId == sourceEntryId)
+            {
+                continue;
+            }
+
+            if (seen.Add((outcome.Target.Kind, resolvedId)))
+            {
+                resolved.Add(new ResolvedLink(outcome.Target.Kind, resolvedId));
+            }
+        }
+
+        return resolved;
+    }
+
+    public async Task<IReadOnlyList<WikiLinkOutcome>> ResolveOutcomesAsync(
+        Guid sourceEntryId,
+        IReadOnlyList<WikiLinkTarget> targets,
+        bool ensureJournalProject,
+        CancellationToken ct = default)
+    {
+        var outcomes = new List<WikiLinkOutcome>(targets.Count);
         ProjectIndex? projects = null;
         Dictionary<string, Guid>? journalTitles = null;
 
@@ -36,7 +69,7 @@ public sealed class EntryLinkResolver
 
             if (target.Form == WikiLinkKeyForm.Title && journalTitles is null)
             {
-                journalTitles = await LoadJournalTitlesAsync(ct);
+                journalTitles = await LoadJournalTitlesAsync(ensureJournalProject, ct);
             }
 
             Guid? targetId = target.Kind switch
@@ -46,18 +79,10 @@ public sealed class EntryLinkResolver
                 _ => ResolveTitleId(target, journalTitles)
             };
 
-            if (targetId is not { } resolvedId || resolvedId == sourceEntryId)
-            {
-                continue;
-            }
-
-            if (seen.Add((target.Kind, resolvedId)))
-            {
-                resolved.Add(new ResolvedLink(target.Kind, resolvedId));
-            }
+            outcomes.Add(new WikiLinkOutcome(target, targetId));
         }
 
-        return resolved;
+        return outcomes;
     }
 
     private async Task<Guid?> ResolveFeatureAsync(WikiLinkTarget target, CancellationToken ct)
@@ -114,18 +139,27 @@ public sealed class EntryLinkResolver
         return new ProjectIndex([.. rows.Select(row => (row.Id, row.Name, row.CreatedAt))]);
     }
 
-    private async Task<Dictionary<string, Guid>> LoadJournalTitlesAsync(CancellationToken ct)
+    private async Task<Dictionary<string, Guid>> LoadJournalTitlesAsync(
+        bool ensureProject,
+        CancellationToken ct)
     {
-        var projectId = await _journalProjects.EnsureIdAsync(ct);
+        var byTitle = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+
+        var projectId = ensureProject
+            ? await _journalProjects.EnsureIdAsync(ct)
+            : await _journalProjects.FindIdAsync(ct);
+        if (projectId is not { } containerId)
+        {
+            return byTitle;
+        }
 
         var rows = await _db.ContextEntries
-            .Where(e => e.ProjectId == projectId && e.Type == EntryType.Journal)
+            .Where(e => e.ProjectId == containerId && e.Type == EntryType.Journal)
             .OrderBy(e => e.UpdatedAt)
             .ThenBy(e => e.Id)
             .Select(e => new { e.Id, e.Title })
             .ToListAsync(ct);
 
-        var byTitle = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
         {
             byTitle[row.Title] = row.Id;
