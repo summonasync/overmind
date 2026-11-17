@@ -142,6 +142,98 @@ public sealed class TelegramPollingRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_DispatchedTextMessage_StampsMessageIdAndUpdateId()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.ReplyTextUpdate(42, "approve", 9, 5, messageId: 71));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Handler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            var message = rig.Handler.Messages.Single();
+            message.MessageId.ShouldBe(71L);
+            message.UpdateId.ShouldBe(9L);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(WaveBranchCases.EveryCommandSpelling), MemberType = typeof(WaveBranchCases))]
+    public async Task RunAsync_WaveCommandFromForeignChat_IsIgnoredBeforeAnyDoor(string text)
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(999, text, 12));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            rig.Handler.Messages.ShouldBeEmpty();
+            rig.Api.CountRequests("/sendMessage").ShouldBe(0);
+            rig.LogSnapshot().ShouldContain(line =>
+                line.StartsWith("Information:", StringComparison.Ordinal)
+                && line.Contains("is not allowlisted; ignored", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_WaveDraftReplyFromForeignChat_IsIgnoredBeforeAnyDoor()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.ReplyTextUpdate(999, "a signal from a stranger", 13, 21));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            (await rig.Api.RequestArrived.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+
+            rig.Handler.Messages.ShouldBeEmpty();
+            rig.Api.CountRequests("/sendMessage").ShouldBe(0);
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_TextMessage_CarriesTheSenderDisplayName()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "privet", 4, username: "owner"));
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "again", 5));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await WaitForAsync(() => rig.Handler.Messages.Count == 2)).ShouldBeTrue();
+
+            rig.Handler.Messages.ToArray()[0].From.ShouldBe("@owner");
+            rig.Handler.Messages.ToArray()[1].From.ShouldBe("Owner");
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_CallbackQueryUpdate_IsDispatchedToCallbackHandler()
     {
         var rig = CreateRig();
