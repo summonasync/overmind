@@ -153,6 +153,100 @@ public sealed class ClaimSettingsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_FreshProject_RescuePolicyIsOwnerDirectiveVerbatim()
+    {
+        var project = await CreateProjectAsync();
+
+        var settings = await _client.GetFromJsonAsync<ClaimSettingsJson>(Url(project.Id), JsonOptions);
+
+        settings!.RescuePolicy.ShouldBe(
+            "everything unpushed may be pushed, everything unmerged I allow merging");
+    }
+
+    [Fact]
+    public async Task Put_ThenGet_RoundTripsTrimmedRescuePolicy()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 45,
+            AgentNamingRules = (string?)null,
+            RescuePolicy = "  push anything, merge only through review  ",
+        });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stored = await put.Content.ReadFromJsonAsync<ClaimSettingsJson>(JsonOptions);
+        stored!.RescuePolicy.ShouldBe("push anything, merge only through review");
+
+        var fetched = await _client.GetFromJsonAsync<ClaimSettingsJson>(Url(project.Id), JsonOptions);
+        fetched!.RescuePolicy.ShouldBe("push anything, merge only through review");
+    }
+
+    [Fact]
+    public async Task Put_LegacyBodyWithoutRescuePolicy_KeepsStoredText()
+    {
+        var project = await CreateProjectAsync();
+        await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 45,
+            AgentNamingRules = (string?)null,
+            RescuePolicy = "kept across legacy saves",
+        });
+
+        var put = await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 10,
+            AgentNamingRules = "new rules",
+        });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var fetched = await _client.GetFromJsonAsync<ClaimSettingsJson>(Url(project.Id), JsonOptions);
+        fetched!.RescuePolicy.ShouldBe("kept across legacy saves");
+        fetched.ClaimStaleThresholdMinutes.ShouldBe(10);
+        fetched.AgentNamingRules.ShouldBe("new rules");
+    }
+
+    [Fact]
+    public async Task Put_WhitespaceOnlyRescuePolicy_PersistsNull()
+    {
+        var project = await CreateProjectAsync();
+
+        var put = await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 20,
+            AgentNamingRules = (string?)null,
+            RescuePolicy = "   ",
+        });
+
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var fetched = await _client.GetFromJsonAsync<ClaimSettingsJson>(Url(project.Id), JsonOptions);
+        fetched!.RescuePolicy.ShouldBeNull();
+        fetched.ClaimStaleThresholdMinutes.ShouldBe(20);
+    }
+
+    [Fact]
+    public async Task Put_RescuePolicyOverLimit_Returns400WithoutStoring()
+    {
+        var project = await CreateProjectAsync();
+
+        var response = await _client.PutAsJsonAsync(Url(project.Id), new
+        {
+            ClaimStaleThresholdMinutes = 15,
+            AgentNamingRules = (string?)null,
+            RescuePolicy = new string('x', Project.MaxRescuePolicyLength + 1),
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
+        problem!.Errors.ShouldContainKey("RescuePolicy");
+        problem.Errors["RescuePolicy"][0].ShouldContain("2000");
+
+        var untouched = await _client.GetFromJsonAsync<ClaimSettingsJson>(Url(project.Id), JsonOptions);
+        untouched!.RescuePolicy.ShouldBe(Project.DefaultRescuePolicy);
+    }
+
+    [Fact]
     public async Task Put_UnknownProject_Returns404()
     {
         var response = await _client.PutAsJsonAsync(Url(Guid.NewGuid()), new
@@ -185,7 +279,8 @@ public sealed class ClaimSettingsApiTests : IDisposable
 
     public sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
 
-    public sealed record ClaimSettingsJson(int ClaimStaleThresholdMinutes, string? AgentNamingRules);
+    public sealed record ClaimSettingsJson(
+        int ClaimStaleThresholdMinutes, string? AgentNamingRules, string? RescuePolicy);
 
     public sealed record ValidationProblemJson(Dictionary<string, string[]> Errors);
 }

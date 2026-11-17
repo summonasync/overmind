@@ -125,6 +125,7 @@ public static class OnboardApi
                 AgentIdentityDefaults.Vendor,
                 await policy.ResolveAgentNamingRulesAsync(project, ct) ?? AgentIdentityDefaults.GenericNamingHint),
             BuildAdapterBlock(http),
+            new OnboardRescueBlock(project.RescuePolicy),
             OnboardQuickstart.Text));
     }
 

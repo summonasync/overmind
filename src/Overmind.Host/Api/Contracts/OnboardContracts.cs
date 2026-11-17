@@ -26,6 +26,8 @@ public sealed record OnboardAgentIdentityBlock(string Alias, string Vendor, stri
 
 public sealed record OnboardAdapterBlock(string? AdapterVersion, string HostVersion, string? Warning);
 
+public sealed record OnboardRescueBlock(string? PolicyText);
+
 public sealed record OnboardResponse(
     Guid ProjectId,
     string ProjectName,
@@ -36,4 +38,5 @@ public sealed record OnboardResponse(
     OnboardSemanticBlock Semantic,
     OnboardAgentIdentityBlock AgentIdentity,
     OnboardAdapterBlock Adapter,
+    OnboardRescueBlock Rescue,
     string Quickstart);

@@ -9,7 +9,10 @@ public sealed partial class Project
     public const int DefaultClaimStaleThresholdMinutes = 15;
     public const int MaxManifestLength = 200_000;
     public const int MaxNamingRulesLength = 2000;
+    public const int MaxRescuePolicyLength = 2000;
     public const int NumberPrefixMaxLength = 16;
+    public const string DefaultRescuePolicy =
+        "everything unpushed may be pushed, everything unmerged I allow merging";
 
     [GeneratedRegex("^[A-Z][A-Z0-9_]{1,15}$")]
     public static partial Regex NumberPrefixRegex { get; }
@@ -34,6 +37,7 @@ public sealed partial class Project
     public string? LastMaterializationSkipHead { get; private set; }
     public int ClaimStaleThresholdMinutes { get; private set; } = DefaultClaimStaleThresholdMinutes;
     public string? AgentNamingRules { get; private set; }
+    public string? RescuePolicy { get; private set; }
     public string? Manifest { get; private set; }
     public ProjectNumberStyle NumberStyle { get; private set; } = ProjectNumberStyle.Hash;
     public string? NumberPrefix { get; private set; }
@@ -61,6 +65,7 @@ public sealed partial class Project
             IsFavorite = false,
             AutoActOnReplies = true,
             HumanDigestEnabled = false,
+            RescuePolicy = DefaultRescuePolicy,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -71,7 +76,7 @@ public sealed partial class Project
         RequireHumanValidation = validation;
     }
 
-    public void SetClaimSettings(int staleThresholdMinutes, string? namingRules)
+    public void SetClaimSettings(int staleThresholdMinutes, string? namingRules, string? rescuePolicy = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(staleThresholdMinutes);
         if (namingRules is not null)
@@ -79,8 +84,17 @@ public sealed partial class Project
             ArgumentOutOfRangeException.ThrowIfGreaterThan(namingRules.Length, MaxNamingRulesLength);
         }
 
+        if (rescuePolicy is not null)
+        {
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(rescuePolicy.Length, MaxRescuePolicyLength);
+        }
+
         ClaimStaleThresholdMinutes = staleThresholdMinutes;
         AgentNamingRules = string.IsNullOrWhiteSpace(namingRules) ? null : namingRules.Trim();
+        if (rescuePolicy is not null)
+        {
+            RescuePolicy = string.IsNullOrWhiteSpace(rescuePolicy) ? null : rescuePolicy.Trim();
+        }
     }
 
     public void SetManifest(string? manifest)
