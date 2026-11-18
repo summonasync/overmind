@@ -36,4 +36,17 @@ In the projects tree, folders containing zero Overmind projects render muted; fo
 
 Run: `node --test tests/back-link-convention.test.mts tests/action-buttons-tree-convention.test.mts` from `web/`.
 
+### 4.1 Navigation set (184)
+
+`tests/journal-nav-convention.test.mts` pins the nav surfaces the same way:
+
+- the topbar and the mobile nav carry the **same ordered item set** (Journal sits after Attention, icon `NotebookPen`);
+- **no href carries a `.html` suffix.** This is load-bearing, not cosmetic: the journal's bare-`N` quick key is scoped by `pathname === "/journal"`, so one suffixed href silently kills the shortcut even though the static export serves `/journal.html`;
+- every href is backed by a real `src/app/<segment>/page.page.tsx`;
+- neither app-shell file declares its own `NAV_ITEMS` — the two surfaces are checked against one independent expected list, so a third hand-kept copy fails the test.
+
+Two more pins live beside them: `tests/journal-stream.test.mts` fails when a feature imports a sibling feature's internals (the barrel rule in `STRUCTURE.md`), and `tests/primary-cta-contrast.test.mts` fails when the primary CTA's label/fill pair drops below 4.5:1 in **either** state — rest and hover are measured separately, because no single static label colour passes both fills.
+
+Run all of them: `node --test "tests/**/*.test.mts"` from `web/`.
+
 Header-shape consolidation (`PageHeader`/`TabHeader`/hand-rolled workspace header → one primitive) and other follow-up candidates are catalogued in the research doc, not covered here.
