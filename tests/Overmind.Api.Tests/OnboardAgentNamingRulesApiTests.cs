@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Overmind.Host.Api;
 using Shouldly;
 using Xunit;
 
@@ -111,6 +112,71 @@ public sealed class OnboardAgentNamingRulesApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         return body;
+    }
+
+    [Theory]
+    [InlineData(true, "mark-wolff")]
+    [InlineData(true, "agent")]
+    [InlineData(false, "mark-wolff")]
+    [InlineData(false, "agent")]
+    public async Task Onboard_CallerSessionHeader_RulesStillWinOverThePairOrThePairWinsOverTheHint(
+        bool rulesSet, string alias)
+    {
+        var project = await CreateProjectAsync();
+        if (rulesSet)
+        {
+            await ExecuteAsync(
+                "UPDATE Projects SET AgentNamingRules = 'project: aliases follow the team roster' " +
+                $"WHERE Id = '{project.Id.ToString().ToUpperInvariant()}'");
+        }
+
+        var sessionId = await SeedSessionAsync(alias, "qwen");
+        var rules = NamingRulesOf(await OnboardAsync(project.DiskPath, sessionId));
+
+        if (rulesSet)
+        {
+            rules.ShouldBe("project: aliases follow the team roster");
+            return;
+        }
+
+        if (alias == "agent")
+        {
+            rules.ShouldBe(AgentIdentityDefaults.GenericNamingHint);
+            rules.ShouldContain("invent an alias");
+            return;
+        }
+
+        rules.ShouldBe(AgentIdentityDefaults.EffectivePairNamingHint);
+        rules.ShouldNotContain("invent");
+        rules.ShouldContain("already in force on your session row");
+    }
+
+    private async Task<Guid> SeedSessionAsync(string alias, string vendor)
+    {
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await ExecuteAsync($"""
+            INSERT INTO AgentSessions (Id, Alias, Vendor, StartedAt, LastSeenAt, EndedAt)
+            VALUES ('{sessionId.ToString().ToUpperInvariant()}', '{alias}', '{vendor}',
+                    '{now}', '{now}', NULL)
+            """);
+        return sessionId;
+    }
+
+    private static string NamingRulesOf(JsonElement payload) =>
+        payload.GetProperty("agentIdentity").GetProperty("namingRules").GetString()!;
+
+    private async Task<JsonElement> OnboardAsync(string cwd, Guid sessionId)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/onboard")
+        {
+            Content = JsonContent.Create(new { Cwd = cwd }, options: JsonOptions),
+        };
+        message.Headers.Add(SessionHeader.Name, sessionId.ToString());
+
+        var response = await _client.SendAsync(message);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
     }
 
     private async Task ExecuteAsync(string sql)

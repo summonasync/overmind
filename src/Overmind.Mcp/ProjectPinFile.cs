@@ -80,7 +80,7 @@ public static class ProjectPinFile
         }
     }
 
-    private static string? GitRoot(string startDirectory)
+    internal static string? GitRoot(string startDirectory)
     {
         var current = startDirectory;
         while (true)

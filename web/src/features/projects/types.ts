@@ -13,6 +13,14 @@ export interface ProjectResponse {
   humanDigestEnabled: boolean;
   openFeatureCount: number;
   createdAt: string;
+  relocation?: ProjectRelocationResponse;
+}
+
+export interface ProjectRelocationResponse {
+  previousDiskPath: string;
+  pinsRemapped: number;
+  remappedFeatureSlugs: string[];
+  companionSteps: string[];
 }
 
 export interface ProjectFormValues {

@@ -50,5 +50,8 @@ public sealed class UpdateClaimSettingsRequestValidator : AbstractValidator<Upda
         RuleFor(x => x.AgentNamingRules)
             .MaximumLength(Project.MaxNamingRulesLength)
             .WithMessage($"AgentNamingRules must be at most {Project.MaxNamingRulesLength} characters.");
+        RuleFor(x => x.RescuePolicy)
+            .MaximumLength(Project.MaxRescuePolicyLength)
+            .WithMessage($"RescuePolicy must be at most {Project.MaxRescuePolicyLength} characters.");
     }
 }

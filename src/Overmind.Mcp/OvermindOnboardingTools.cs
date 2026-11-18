@@ -152,8 +152,10 @@ public sealed class OvermindOnboardingTools
         AppendMaterialization(payload, output);
         AppendValidation(payload, output);
         AppendIdentity(payload, output);
+        AppendChurn(payload, output);
         AppendSemantic(payload, output);
         AppendAdapter(payload, output);
+        AppendRescue(payload, output);
 
         output.AppendLine();
         output.Append(payload.GetProperty("quickstart").GetString());
@@ -182,6 +184,20 @@ public sealed class OvermindOnboardingTools
             : null;
 
         output.AppendLine($"Adapter: {adapterVersion ?? "unknown"} vs host {hostVersion ?? "unknown"}: {warningText}");
+    }
+
+    private static void AppendRescue(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("rescue", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("policyText", out var policy) ||
+            policy.ValueKind != JsonValueKind.String ||
+            policy.GetString() is not { Length: > 0 } policyText)
+        {
+            return;
+        }
+
+        output.AppendLine($"Rescue policy: {policyText}");
     }
 
     private static void AppendMaterialization(JsonElement payload, StringBuilder output)
@@ -287,16 +303,21 @@ public sealed class OvermindOnboardingTools
             return;
         }
 
-        var alias = AgentIdentity.ResolveAlias();
-        var vendor = AgentIdentity.ResolveVendor();
-        var source = alias == AgentIdentity.PlaceholderAlias ? "placeholder" : "env";
+        var (alias, vendor, source) = EffectiveIdentity(block);
 
         output.AppendLine(
             $"Agent identity: alias '{alias}', vendor '{vendor}' (source: {source}) — " +
             "pass this pair to planning_claim_feature when claiming a feature; the project's naming rules:");
         output.AppendLine(rulesText);
 
-        if (source != "placeholder")
+        if (source == "session")
+        {
+            output.AppendLine(
+                "This pair is already in force on your session row, not on the adapter's environment: claim under " +
+                "it as shown. session_identity_set only renames the session — held claims re-attribute with the rename.");
+        }
+
+        if (!AgentIdentity.IsPlaceholderAlias(alias))
         {
             return;
         }
@@ -307,6 +328,159 @@ public sealed class OvermindOnboardingTools
             "planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set before the claim " +
             "(flow: onboard → identity → lane → claim → work).");
     }
+
+    // The session row outranks the adapter's own environment: a restart restore writes the pair there,
+    // and a runtime rename fills the in-memory slot. The source word names whichever of the three
+    // actually carries the pair the board will read.
+    private static (string Alias, string Vendor, string Source) EffectiveIdentity(JsonElement block)
+    {
+        var slot = AdapterIdentityState.TryGet();
+        var envAlias = AgentIdentity.ResolveAlias();
+        var envVendor = AgentIdentity.ResolveVendor();
+
+        if (ReadPair(block) is { } session && !AgentIdentity.IsPlaceholderAlias(session.Alias))
+        {
+            if (slot is not null && Matches(session, slot.Alias, slot.Vendor))
+            {
+                return (session.Alias, session.Vendor, "slot");
+            }
+
+            if (!AgentIdentity.IsPlaceholderAlias(envAlias) && Matches(session, envAlias, envVendor))
+            {
+                return (session.Alias, session.Vendor, "env");
+            }
+
+            return (session.Alias, session.Vendor, "session");
+        }
+
+        if (slot is not null)
+        {
+            return AgentIdentity.IsPlaceholderAlias(slot.Alias)
+                ? (slot.Alias, slot.Vendor, "placeholder")
+                : (slot.Alias, slot.Vendor, "slot");
+        }
+
+        return AgentIdentity.IsPlaceholderAlias(envAlias)
+            ? (envAlias, envVendor, "placeholder")
+            : (envAlias, envVendor, "env");
+    }
+
+    private static (string Alias, string Vendor)? ReadPair(JsonElement block)
+    {
+        if (block.TryGetProperty("alias", out var alias) &&
+            alias.ValueKind == JsonValueKind.String &&
+            alias.GetString() is { Length: > 0 } aliasText)
+        {
+            var vendor = block.TryGetProperty("vendor", out var vendorValue) &&
+                         vendorValue.ValueKind == JsonValueKind.String
+                ? vendorValue.GetString()
+                : null;
+
+            return (aliasText, vendor ?? AgentIdentity.ResolveVendor());
+        }
+
+        return null;
+    }
+
+    private static bool Matches((string Alias, string Vendor) pair, string alias, string vendor) =>
+        string.Equals(pair.Alias, alias, StringComparison.Ordinal) &&
+        string.Equals(pair.Vendor, vendor, StringComparison.Ordinal);
+
+    private static void AppendChurn(JsonElement payload, StringBuilder output)
+    {
+        if (!payload.TryGetProperty("claimChurn", out var block) ||
+            block.ValueKind != JsonValueKind.Object ||
+            !block.TryGetProperty("sessions", out var sessions) ||
+            sessions.ValueKind != JsonValueKind.Array ||
+            sessions.GetArrayLength() == 0)
+        {
+            return;
+        }
+
+        output.AppendLine("Claim churn: holders that stopped answering while still holding claims:");
+        var shown = 0;
+        foreach (var row in sessions.EnumerateArray())
+        {
+            if (row.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            shown++;
+            output.AppendLine(
+                $"- '{Word(row, "alias")}' by '{Word(row, "vendor")}' " +
+                $"({Word(row, "liveness")}, {Silence(row)}): holds {SlugList(row)}");
+        }
+
+        var dropped = Math.Max(
+            block.TryGetProperty("sessionsTotal", out var total) &&
+            total.ValueKind == JsonValueKind.Number
+                ? total.GetInt32()
+                : sessions.GetArrayLength(),
+            shown) - shown;
+
+        if (dropped > 0)
+        {
+            output.AppendLine(
+                $"(+{dropped} more holders not listed, {shown + dropped} churned in total)");
+        }
+
+        output.AppendLine(
+            "If that pair is yours, your next write adopts these claims; if it is not, " +
+            "planning_claim_feature is the only take-over door.");
+    }
+
+    private static string Silence(JsonElement row)
+    {
+        if (!row.TryGetProperty("deathAgeMinutes", out var age) ||
+            age.ValueKind != JsonValueKind.Number)
+        {
+            return "age unknown";
+        }
+
+        var minutes = age.GetInt32();
+        if (minutes < 60)
+        {
+            return $"silent {minutes}m";
+        }
+
+        if (minutes < 24 * 60)
+        {
+            return $"silent {minutes / 60}h {minutes % 60:00}m";
+        }
+
+        return $"silent {minutes / (60 * 24)}d {(minutes % (60 * 24)) / 60}h";
+    }
+
+    private static string SlugList(JsonElement row)
+    {
+        if (!row.TryGetProperty("slugs", out var slugs) || slugs.ValueKind != JsonValueKind.Array)
+        {
+            return "(none)";
+        }
+
+        List<string> listed = [.. slugs.EnumerateArray()
+            .Where(value => value.ValueKind == JsonValueKind.String)
+            .Select(value => value.GetString()!)];
+
+        if (listed.Count == 0)
+        {
+            return "(none)";
+        }
+
+        var total = row.TryGetProperty("slugsTotal", out var count) &&
+                    count.ValueKind == JsonValueKind.Number
+            ? count.GetInt32()
+            : listed.Count;
+
+        return string.Join(", ", listed) +
+               (total > listed.Count ? $" +{total - listed.Count} more" : string.Empty);
+    }
+
+    private static string Word(JsonElement row, string property) =>
+        row.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? "?"
+            : "?";
 
     private static void AppendSemantic(JsonElement payload, StringBuilder output)
     {

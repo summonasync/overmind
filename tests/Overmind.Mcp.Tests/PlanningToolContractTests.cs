@@ -47,6 +47,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             "planning_set_feature_priority",
             "planning_feature_code",
             "planning_pin_feature_code",
+            "planning_rescue_scan",
             "planning_list_feature_dependencies",
             "planning_add_feature_dependency",
             "planning_remove_feature_dependency",
@@ -66,7 +67,7 @@ public class PlanningToolContractTests : McpSessionTestBase
             tools[tool]!["description"]!.GetValue<string>().ShouldContain(clause);
         }
 
-        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(39);
+        tools.Keys.Count(name => name.StartsWith("planning_", StringComparison.Ordinal)).ShouldBe(40);
     }
 
     [Fact]

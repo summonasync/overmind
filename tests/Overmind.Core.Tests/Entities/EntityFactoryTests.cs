@@ -105,6 +105,71 @@ public class ProjectTests
     }
 
     [Fact]
+    public void Create_RescuePolicy_DefaultsToOwnerDirectiveVerbatim()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.RescuePolicy.ShouldBe(
+            "everything unpushed may be pushed, everything unmerged I allow merging");
+    }
+
+    [Fact]
+    public void SetClaimSettings_OmittedRescuePolicy_KeepsStoredText()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetClaimSettings(30, "aliases are crew names");
+
+        project.RescuePolicy.ShouldBe(Project.DefaultRescuePolicy);
+    }
+
+    [Fact]
+    public void SetClaimSettings_RescuePolicyIsTrimmed()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetClaimSettings(15, null, "  push it, merge it  ");
+
+        project.RescuePolicy.ShouldBe("push it, merge it");
+    }
+
+    [Fact]
+    public void SetClaimSettings_BlankRescuePolicy_StoredAsNull()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        project.SetClaimSettings(15, null, "   ");
+
+        project.RescuePolicy.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetClaimSettings_RescuePolicyOverLimit_ThrowsAndKeepsEverything()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            project.SetClaimSettings(30, "new rules", new string('x', Project.MaxRescuePolicyLength + 1)));
+
+        project.RescuePolicy.ShouldBe(Project.DefaultRescuePolicy);
+        project.ClaimStaleThresholdMinutes.ShouldBe(Project.DefaultClaimStaleThresholdMinutes);
+        project.AgentNamingRules.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SetClaimSettings_NullNamingRulesClears_NullRescuePolicyKeeps()
+    {
+        var project = Project.Create("Overmind", "/disk/path");
+        project.SetClaimSettings(20, "aliases are crew names", "push anything, merge only through review");
+
+        project.SetClaimSettings(30, null, null);
+
+        project.AgentNamingRules.ShouldBeNull();
+        project.RescuePolicy.ShouldBe("push anything, merge only through review");
+        project.ClaimStaleThresholdMinutes.ShouldBe(30);
+    }
+
+    [Fact]
     public void SetManifest_TrimsAndStores()
     {
         var project = Project.Create("Overmind", "/disk/path");

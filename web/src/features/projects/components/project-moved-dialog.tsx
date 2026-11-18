@@ -27,6 +27,7 @@ export function ProjectMovedDialog({ project, onClose }: ProjectMovedDialogProps
   const drift = move.error !== null ? parseMirrorDrift(move.error.message) : null;
 
   if (move.isSuccess) {
+    const companionSteps = move.data.relocation?.companionSteps ?? [];
     return (
       <Modal title="Project moved to…" open onClose={onClose}>
         <div className="space-y-4">
@@ -34,6 +35,7 @@ export function ProjectMovedDialog({ project, onClose }: ProjectMovedDialogProps
             Project path updated to <span className="font-mono">{move.data.diskPath}</span>. The
             planning mirror was verified at the new location — all files match.
           </p>
+          {companionSteps.length > 0 ? <CompanionSteps steps={companionSteps} /> : null}
           <div className="flex justify-end">
             <Button onClick={onClose}>Done</Button>
           </div>
@@ -91,6 +93,24 @@ export function ProjectMovedDialog({ project, onClose }: ProjectMovedDialogProps
         </div>
       </div>
     </Modal>
+  );
+}
+
+function CompanionSteps({ steps }: { steps: string[] }) {
+  return (
+    <section className="rounded-md border border-warning/40 bg-warning/10 p-3">
+      <p className="text-sm text-warning">
+        {steps.length === 1 ? "One step is still on you" : `${steps.length} steps are still on you`}{" "}
+        outside this database:
+      </p>
+      <ol className="mt-2 space-y-1" aria-label="Manual companion steps">
+        {steps.map((step) => (
+          <li key={step} className="break-words text-xs text-muted">
+            {step}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

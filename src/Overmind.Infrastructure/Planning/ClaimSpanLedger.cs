@@ -35,4 +35,28 @@ internal static class ClaimSpanLedger
             .FirstOrDefaultAsync(s => s.FeatureId == featureId && s.ReleasedAt == null, ct);
         open?.Close(now);
     }
+
+    // The ledger is append-only, so a mid-hold rename closes the window that carried the old pair
+    // and opens the current one under the new pair. The hold start rides along untouched: the
+    // rescue digest reads the open span's ClaimedAt as "held since", and a rename is not a new hold.
+    public static async Task ReattributeOpenAsync(
+        OvermindDbContext db,
+        PlanningFeature feature,
+        string alias,
+        string vendor,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var open = await db.FeatureClaimSpans
+            .FirstOrDefaultAsync(s => s.FeatureId == feature.Id && s.ReleasedAt == null, ct);
+
+        if (open is null || open.SessionId != feature.ClaimSessionId)
+        {
+            return;
+        }
+
+        open.Close(now);
+        db.FeatureClaimSpans.Add(FeatureClaimSpan.Open(
+            feature.ProjectId, feature.Id, alias, vendor, open.SessionId, open.ClaimedAt, open.ByHuman));
+    }
 }

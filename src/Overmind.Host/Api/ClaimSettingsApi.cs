@@ -45,12 +45,15 @@ public static class ClaimSettingsApi
             return HttpErrors.NotFound($"Project '{projectId}' was not found.");
         }
 
-        project.SetClaimSettings(request.ClaimStaleThresholdMinutes, request.AgentNamingRules);
+        project.SetClaimSettings(
+            request.ClaimStaleThresholdMinutes,
+            request.AgentNamingRules,
+            request.RescuePolicy);
         await db.SaveChangesAsync(ct);
 
         return Results.Ok(BuildResponse(project));
     }
 
     private static ClaimSettingsResponse BuildResponse(Project project) =>
-        new(project.ClaimStaleThresholdMinutes, project.AgentNamingRules);
+        new(project.ClaimStaleThresholdMinutes, project.AgentNamingRules, project.RescuePolicy);
 }

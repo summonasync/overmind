@@ -23,6 +23,8 @@ const picker = () =>
     "utf8",
   );
 
+const types = () => readFileSync(new URL("../src/features/projects/types.ts", import.meta.url), "utf8");
+
 test("the drift parser keys on the host 409 detail prefix with counts and bounded paths", () => {
   const source = parser();
   assert.ok(
@@ -84,6 +86,18 @@ test("success states that the mirror was verified at the new location", () => {
   const source = dialog();
   assert.ok(source.includes('role="status"'));
   assert.ok(source.includes("planning mirror was verified at the new location"));
+});
+
+test("the success branch lists the companion steps from the payload and copies none of them", () => {
+  const source = dialog();
+  assert.ok(source.includes("move.data.relocation?.companionSteps ?? []"));
+  assert.ok(source.includes("<CompanionSteps steps={companionSteps} />"));
+  assert.ok(source.includes("{steps.map((step) => ("));
+  assert.ok(source.includes('aria-label="Manual companion steps"'));
+  assert.ok(types().includes("companionSteps: string[]"));
+  assert.ok(types().includes("relocation?: ProjectRelocationResponse"));
+  assert.ok(!source.includes("grimoire projects registry"));
+  assert.ok(!source.includes("squeezr workspace"));
 });
 
 test("the project detail hosts the moved-to trigger next to the disk path badge", () => {

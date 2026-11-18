@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
@@ -25,7 +26,15 @@ public sealed record ProjectResponse(
     bool AutoActOnReplies,
     bool HumanDigestEnabled,
     int OpenFeatureCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    ProjectRelocation? Relocation = null);
+
+public sealed record ProjectRelocation(
+    string PreviousDiskPath,
+    int PinsRemapped,
+    List<string> RemappedFeatureSlugs,
+    List<string> CompanionSteps);
 
 public sealed record FavoriteRequest(bool IsFavorite);
 
