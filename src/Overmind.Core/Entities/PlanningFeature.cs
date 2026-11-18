@@ -226,6 +226,30 @@ public sealed class PlanningFeature
         UpdatedAt = DateTime.UtcNow;
     }
 
+    // The display pair follows the session that holds the claim; the claim time and the session
+    // binding stay where they were, so the hold itself is not re-dated by a rename.
+    public bool Reattribute(string alias, string vendor)
+    {
+        if (ClaimSessionId is null)
+        {
+            return false;
+        }
+
+        var nextAlias = NormalizeIdentity(alias);
+        var nextVendor = NormalizeIdentity(vendor);
+
+        if (string.Equals(ClaimedByAlias, nextAlias, StringComparison.Ordinal) &&
+            string.Equals(ClaimedByVendor, nextVendor, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        ClaimedByAlias = nextAlias;
+        ClaimedByVendor = nextVendor;
+        UpdatedAt = DateTime.UtcNow;
+        return true;
+    }
+
     public void AppendLog(string note, PlanningLogSource source)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(note);

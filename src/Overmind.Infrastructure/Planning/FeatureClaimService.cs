@@ -142,6 +142,54 @@ public sealed class FeatureClaimService
         return feature;
     }
 
+    // A renamed session takes its held claims with it: every snapshot bound to the session id moves
+    // to the new pair, one feature log line records the move, and the open span is re-opened under
+    // it. Claim time and session binding are untouched — the hold does not restart because the alias
+    // did. Returns the slugs that moved, so the caller can echo them.
+    public async Task<IReadOnlyList<string>> ReattributeSessionClaimsAsync(
+        Guid sessionId, string alias, string vendor, CancellationToken ct = default)
+    {
+        var held = await _db.PlanningFeatures
+            .Where(f => f.ClaimSessionId == sessionId)
+            .OrderBy(f => f.Slug)
+            .ToListAsync(ct);
+
+        List<string> moved = [];
+        List<Guid> movedProjects = [];
+        var now = DateTime.UtcNow;
+
+        foreach (var feature in held)
+        {
+            var formerAlias = feature.ClaimedByAlias ?? "unknown";
+            var formerVendor = feature.ClaimedByVendor ?? "unknown";
+
+            if (!feature.Reattribute(alias, vendor))
+            {
+                continue;
+            }
+
+            feature.AppendLog(
+                $"claim re-attributed: {formerAlias} by {formerVendor} → {alias} by {vendor}",
+                PlanningLogSource.Agent);
+            await ClaimSpanLedger.ReattributeOpenAsync(_db, feature, alias, vendor, now, ct);
+            moved.Add(feature.Slug);
+            movedProjects.Add(feature.ProjectId);
+        }
+
+        if (moved.Count == 0)
+        {
+            return moved;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        foreach (var projectId in movedProjects.Distinct())
+        {
+            await _materialization.DispatchAsync(projectId, ct);
+        }
+
+        return moved;
+    }
+
     public async Task<IReadOnlyDictionary<Guid, AgentSessionLiveness>> ClaimLivenessAsync(
         Guid projectId, IReadOnlyCollection<PlanningFeature> features, CancellationToken ct = default)
     {

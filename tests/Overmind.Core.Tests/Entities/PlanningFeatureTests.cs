@@ -280,6 +280,69 @@ public class PlanningFeatureTests
     }
 
     [Fact]
+    public void Reattribute_HeldClaim_MovesOnlyThePair()
+    {
+        var sessionId = Guid.NewGuid();
+        var claimedAt = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", sessionId, claimedAt);
+
+        var moved = feature.Reattribute("mark-wolff", "claude");
+
+        moved.ShouldBeTrue();
+        feature.ClaimedByAlias.ShouldBe("mark-wolff");
+        feature.ClaimedByVendor.ShouldBe("claude");
+        feature.ClaimSessionId.ShouldBe(sessionId);
+        feature.ClaimedAt.ShouldBe(claimedAt);
+    }
+
+    [Theory]
+    [InlineData("agent", "unknown", false)]
+    [InlineData("agent", "claude", true)]
+    [InlineData("mark-wolff", "unknown", true)]
+    public void Reattribute_PairAlreadyInForce_IsNoOp(string alias, string vendor, bool expected)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", Guid.NewGuid(), DateTime.UtcNow);
+
+        feature.Reattribute(alias, vendor).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void Reattribute_UnclaimedFeature_IsNoOp()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        feature.Reattribute("mark-wolff", "claude").ShouldBeFalse();
+        feature.ClaimedByAlias.ShouldBeNull();
+        feature.ClaimedByVendor.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("", "claude")]
+    [InlineData("mark-wolff", " ")]
+    [InlineData("mark-wolff", null)]
+    public void Reattribute_EmptyIdentity_Throws(string? alias, string? vendor)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", Guid.NewGuid(), DateTime.UtcNow);
+
+        Should.Throw<ArgumentException>(() => feature.Reattribute(alias!, vendor!));
+    }
+
+    [Fact]
+    public void Reattribute_IdentityOverCap_Throws()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", Guid.NewGuid(), DateTime.UtcNow);
+
+        Should.Throw<ArgumentException>(() =>
+            feature.Reattribute(new string('a', 33), "claude"));
+
+        feature.ClaimedByAlias.ShouldBe("agent");
+    }
+
+    [Fact]
     public void AppendLog_AppendsLineWithoutBumpingVersion()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");

@@ -1033,14 +1033,24 @@ No additional prose — the tool description lost nothing.
     requires a live approval proof (`overmind_notify(kind=approval)` with a human reply newer
     than the artifact's last update; `409 ValidationProofRequired` without it); on = agents
     STOP until a human validates the artifact in the UI.
-  - **agentIdentity** — effective alias/vendor (env > placeholder, with its source), the
-    project's naming rules for choosing your own stable alias, and the `session_identity_set`
-    next step when the alias is still the shared placeholder.
+  - **agentIdentity** — the effective pair and where it was read from: the Host answers with your
+    live session row (`X-Overmind-Session`), the adapter names the source that actually produced it
+    — `slot` (set this session via `session_identity_set`), `env` (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`
+    agree with the row), `session` (the row carries a real pair the adapter's own environment does
+    not — the restart restore wrote it, or the host renamed the session), `placeholder` (nothing
+    anywhere). Plus the project's naming rules, the `session_identity_set` next step when the alias
+    is still the shared placeholder, and the "already in force, do not rename" line when it is not.
+  - **claimChurn** — absent when nothing is orphaned; otherwise the holders that stopped answering
+    while still holding claims in this project: pair, `ended` or `stale`, death age, and the slugs
+    (capped at 10 per holder with the total alongside, 5 holders, freshest death first). A pair that
+    is yours adopts on your next write; a foreign one takes `planning_claim_feature`.
   - **semantic** — search availability, with the verbatim probe reason when down.
   - **adapter** — adapterVersion vs hostVersion, with a restart warning when they diverge or
     the adapter predates version reporting.
 - `brief=true` returns only the project id, board counts per status, humanGate and the
-  adapter version — the cheap repeat call for agents already onboarded and working a lane.
+  adapter version — the cheap repeat call for agents already onboarded and working a lane. It
+  deliberately carries neither agentIdentity nor claimChurn: the identity read is a start-of-work
+  act, and the churn list is a take-over guard, both priced above a repeat poll.
 
 ## planning_append_directive
 
@@ -1127,6 +1137,17 @@ No additional prose — the tool description lost nothing.
   reconnect identity: handshakes re-register under it instead of `OVERMIND_ALIAS`/
   `OVERMIND_VENDOR`. Without a registered session (adapter started with no host) the tool
   tells you to restart the adapter with the host running.
+- A rename takes the held claims with it. Every feature whose claim is bound to this session id
+  re-attributes to the new pair — `ClaimedByAlias`/`ClaimedByVendor` only: `ClaimedAt` and
+  `ClaimSessionId` stay put, so the hold does not restart because the alias did — and each feature
+  logs one line, `claim re-attributed: <old alias> by <old vendor> → <new alias> by <new vendor>`.
+  The response echoes the slugs that moved; an identical pair moves nothing and logs nothing.
+- The span ledger is append-only, so the rename closes the window that carried the old pair and
+  opens the current one under the new pair with the *original* hold start: the rescue digest reads
+  the open span's claim time as "held since", and a rename is not a new hold. No open span for a
+  feature (claim written outside the claim door) leaves the ledger untouched.
+- A foreign holder's claims are never moved by your rename: they keep their claim-time attribution
+  until that holder ages out — see the `claimChurn` block of `overmind_onboard` to see them first.
 
 ## wave_role_set
 

@@ -72,8 +72,10 @@ public class WorkflowTeachingContractTests : McpSessionTestBase
     {
         var text = OnboardQuickstart.Text;
 
-        text.ShouldContain("source (env | placeholder)");
+        text.ShouldContain("source (env | slot | session | placeholder)");
         text.ShouldContain("invent your own per the naming rules (or restore your stable one) via session_identity_set");
+        text.ShouldContain("a rename only re-attributes the claims you hold");
+        text.ShouldContain("read it before claiming or taking anything over");
         text.ShouldContain("planning_list_lanes first and adopt/bind the lane's boundAlias via session_identity_set BEFORE the claim");
         text.ShouldContain("Flow: onboard → identity → lane → claim → work.");
         text.IndexOf("session_identity_set", StringComparison.Ordinal)

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 
 namespace Overmind.Host.Api;
 
@@ -68,7 +69,8 @@ public static class AgentSessionsApi
     }
 
     private static async Task<IResult> SetIdentity(
-        Guid id, SetAgentSessionIdentityRequest request, OvermindDbContext db, CancellationToken ct)
+        Guid id, SetAgentSessionIdentityRequest request, OvermindDbContext db,
+        FeatureClaimService claims, CancellationToken ct)
     {
         var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (session is null)
@@ -99,9 +101,13 @@ public static class AgentSessionsApi
             return HttpErrors.BadRequest(ex.Message);
         }
 
-        var warnings = await BuildWarningsAsync(db, id, identityChanged, alias!, vendor!, ct);
+        IReadOnlyList<string> moved = identityChanged
+            ? await claims.ReattributeSessionClaimsAsync(id, alias!, vendor!, ct)
+            : [];
+
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new AgentSessionIdentityResponse(ToResponse(session), warnings));
+        return Results.Ok(new AgentSessionIdentityResponse(
+            ToResponse(session), BuildIdentityWarnings(alias!, vendor!, moved)));
     }
 
     private static async Task<AgentSession?> FindAliveAliasHolderAsync(
@@ -126,8 +132,8 @@ public static class AgentSessionsApi
             s.Liveness(DateTime.UtcNow, threshold) == AgentSessionLiveness.Alive);
     }
 
-    private static async Task<IReadOnlyList<string>> BuildWarningsAsync(
-        OvermindDbContext db, Guid sessionId, bool identityChanged, string alias, string vendor, CancellationToken ct)
+    private static IReadOnlyList<string> BuildIdentityWarnings(
+        string alias, string vendor, IReadOnlyList<string> movedSlugs)
     {
         List<string> warnings = [];
 
@@ -139,22 +145,11 @@ public static class AgentSessionsApi
                 "invent a project alias and set it again before claiming a feature or posting to wave chat.");
         }
 
-        if (!identityChanged)
-        {
-            return warnings;
-        }
-
-        var heldSlugs = await db.PlanningFeatures
-            .Where(f => f.ClaimSessionId == sessionId)
-            .OrderBy(f => f.Slug)
-            .Select(f => f.Slug)
-            .ToListAsync(ct);
-
-        if (heldSlugs.Count > 0)
+        if (movedSlugs.Count > 0)
         {
             warnings.Add(
-                $"Identity changed while holding claims: {string.Join(", ", heldSlugs)}; " +
-                "the claims keep their claim-time attribution.");
+                $"Identity changed while holding claims: {string.Join(", ", movedSlugs)}; " +
+                $"the claim snapshots now read '{alias}' by '{vendor}' and each feature logged the move.");
         }
 
         return warnings;

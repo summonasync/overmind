@@ -245,8 +245,10 @@ public class OnboardingToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         ContractsDoc.Section("overmind_onboard").ShouldContain(
-            "effective alias/vendor (env > placeholder, with its source), the project's naming rules for choosing your own stable alias, " +
-            "and the session_identity_set next step when the alias is still the shared placeholder");
+            "the Host answers with your live session row (X-Overmind-Session), the adapter names the source that actually produced it");
+        ContractsDoc.Section("overmind_onboard").ShouldContain(
+            "the session_identity_set next step when the alias is still the shared placeholder, and the \"already in force, do not rename\" line when it is not");
+        ContractsDoc.Section("overmind_onboard").ShouldContain("death age, and the slugs");
         tools["overmind_onboard"]!["description"]!.GetValue<string>().ShouldContain("agent identity");
     }
 

@@ -94,6 +94,7 @@ public static class OnboardApi
         }
 
         var board = await BuildBoardSummaryAsync(db, project.Id, ct);
+        var callerSession = await ResolveCallerSessionAsync(db, http, ct);
         var strategy = await policy.ResolveMaterializationAsync(project.Id, ct);
         var humanGate = await policy.ResolveValidationGateAsync(project.Id, ct);
         var vectorHealth = await semanticSearch.HealthReportAsync(ct);
@@ -121,12 +122,86 @@ public static class OnboardApi
             new OnboardValidationBlock(humanGate, ValidationGateGuidance(humanGate)),
             new OnboardSemanticBlock(vectorHealth.Up, SemanticUnavailableReason(vectorHealth)),
             new OnboardAgentIdentityBlock(
-                AgentIdentityDefaults.Alias,
-                AgentIdentityDefaults.Vendor,
+                callerSession?.Alias ?? AgentIdentityDefaults.Alias,
+                callerSession?.Vendor ?? AgentIdentityDefaults.Vendor,
                 await policy.ResolveAgentNamingRulesAsync(project, ct) ?? AgentIdentityDefaults.GenericNamingHint),
+            await BuildChurnBlockAsync(db, project, ct),
             BuildAdapterBlock(http),
             new OnboardRescueBlock(project.RescuePolicy),
             OnboardQuickstart.Text));
+    }
+
+    private static async Task<AgentSession?> ResolveCallerSessionAsync(
+        OvermindDbContext db, HttpRequest http, CancellationToken ct)
+    {
+        return SessionHeader.TryRead(http, out var sessionId)
+            ? await db.AgentSessions.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sessionId, ct)
+            : null;
+    }
+
+    public const int ChurnSessionCap = 5;
+    public const int ChurnSlugCap = 10;
+
+    // A claim whose holder stopped answering is what an agent must see before it reaches for
+    // anything: the slug, the pair the board still reads, and how long that holder has been gone.
+    // An ended holder reports its end stamp, a stale one its last heartbeat. Liveness is the whole
+    // rule: SessionTouchMiddleware refreshes the caller that asks, so its own claims are alive and
+    // never churn — no identity filter, and no second copy of the same decision to rot.
+    private static async Task<OnboardClaimChurnBlock?> BuildChurnBlockAsync(
+        OvermindDbContext db, Project project, CancellationToken ct)
+    {
+        var held = await db.PlanningFeatures
+            .AsNoTracking()
+            .Where(f => f.ProjectId == project.Id &&
+                        f.ClaimSessionId != null &&
+                        f.Status != PlanningFeatureStatus.Done)
+            .Select(f => new { f.Slug, f.ClaimSessionId })
+            .ToListAsync(ct);
+
+        if (held.Count == 0)
+        {
+            return null;
+        }
+
+        var holderIds = held
+            .Select(f => f.ClaimSessionId!.Value)
+            .Distinct()
+            .ToArray();
+
+        var slugsByHolder = held
+            .GroupBy(f => f.ClaimSessionId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<string>)[.. g.Select(f => f.Slug)
+                    .OrderBy(s => s, StringComparer.Ordinal)]);
+
+        var now = DateTime.UtcNow;
+        var holders = await db.AgentSessions
+            .AsNoTracking()
+            .Where(s => holderIds.Contains(s.Id))
+            .ToListAsync(ct);
+
+        var churned = holders
+            .Select(s => (Session: s, Liveness: s.Liveness(now, project.ClaimStaleThresholdMinutes)))
+            .Where(pair => pair.Liveness is AgentSessionLiveness.Stale or AgentSessionLiveness.Ended)
+            .Select(pair =>
+            {
+                var unseenSince = pair.Session.EndedAt ?? pair.Session.LastSeenAt;
+                var slugs = slugsByHolder[pair.Session.Id];
+                return new OnboardChurnedSession(
+                    pair.Session.Alias,
+                    pair.Session.Vendor,
+                    pair.Liveness.ToString().ToLowerInvariant(),
+                    unseenSince,
+                    Math.Max(0, (int)(now - unseenSince).TotalMinutes),
+                    [.. slugs.Take(ChurnSlugCap)],
+                    slugs.Count);
+            })
+            .OrderByDescending(row => row.UnseenSince)
+            .Take(ChurnSessionCap)
+            .ToList();
+
+        return churned.Count > 0 ? new OnboardClaimChurnBlock(churned) : null;
     }
 
     private static async Task<IResult?> WorktreeRefusalAsync(string normalizedCwd, OvermindDbContext db, CancellationToken ct)
