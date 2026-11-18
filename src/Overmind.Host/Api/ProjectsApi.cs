@@ -5,6 +5,7 @@ using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Materialization;
+using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Persistence;
 
@@ -137,6 +138,8 @@ public static class ProjectsApi
         UpdateProjectRequest request,
         IValidator<UpdateProjectRequest> validator,
         PlanningPolicy policy,
+        PlanningMaterializationDispatcher materialization,
+        NotificationsService notifications,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -160,10 +163,12 @@ public static class ProjectsApi
         }
 
         var candidateDiskPath = request.DiskPath.Trim();
+        var previousDiskPath = project.DiskPath;
         var diskPathComparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        if (!string.Equals(project.DiskPath, candidateDiskPath, diskPathComparison))
+        var relocated = !string.Equals(previousDiskPath, candidateDiskPath, diskPathComparison);
+        if (relocated)
         {
             var hasActiveKits = await db.ProjectKits.AnyAsync(pk => pk.ProjectId == id && pk.IsActive, ct);
             if (hasActiveKits)
@@ -235,7 +240,36 @@ public static class ProjectsApi
         }
 
         await db.SaveChangesAsync(ct);
-        return Results.Ok(ProjectMapper.ToResponse(project));
+
+        if (!relocated)
+        {
+            return Results.Ok(ProjectMapper.ToResponse(project));
+        }
+
+        var relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(db, project, previousDiskPath, ct);
+        if (relocations.Count > 0)
+        {
+            await materialization.DispatchAsync(project.Id, ct);
+        }
+
+        await notifications.CreateAsync(
+            NotificationKind.Info,
+            RelocationCompanionSteps.DescribeNotification(
+                project.Name, previousDiskPath, project.DiskPath, relocations.Count),
+            project.Id,
+            featureSlug: null,
+            tab: null,
+            agent: null,
+            ct);
+
+        return Results.Ok(ProjectMapper.ToResponse(project) with
+        {
+            Relocation = new ProjectRelocation(
+                previousDiskPath,
+                relocations.Count,
+                [.. relocations.Select(relocation => relocation.Slug)],
+                [.. RelocationCompanionSteps.All]),
+        });
     }
 
     private static async Task<MirrorFileRow[]> LoadMirrorRowsAsync(
