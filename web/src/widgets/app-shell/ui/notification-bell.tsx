@@ -59,6 +59,14 @@ export function NotificationBell() {
       </button>
       <Modal title="Notifications" open={open} onClose={() => setOpen(false)}>
         <div className="flex flex-col gap-3">
+          <a
+            href="/attention"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center justify-center gap-1.5 self-start rounded-md border border-primary/40 bg-transparent px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Bell size={14} aria-hidden />
+            Open Attention
+          </a>
           {unread.length === 0 ? (
             <EmptyState
               title="No unread notifications"
@@ -77,14 +85,6 @@ export function NotificationBell() {
             </ul>
           )}
           <ErrorText error={markRead.error} />
-          <a
-            href="/attention"
-            onClick={() => setOpen(false)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-transparent px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <Bell size={14} aria-hidden />
-            Open Attention
-          </a>
         </div>
       </Modal>
     </>
