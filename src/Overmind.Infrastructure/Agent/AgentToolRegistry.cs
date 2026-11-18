@@ -22,6 +22,35 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
     public const string ConversationScopeMissingMessage =
         "'{0}' works on the current conversation, but this turn carries no conversation scope.";
 
+    public const string ProjectScopeMismatchCode = "projectScopeMismatch";
+
+    public const string ProjectScopeMismatchMessage =
+        "'{0}' is project-scoped: this conversation belongs to project '{1}', but the projectId this call carries " +
+        "names project '{2}'. The host compared that argument with the conversation and refused this call instead of " +
+        "redirecting it, so nothing was read or written. Call '{0}' with projectId={1}. If this conversation really " +
+        "belongs to another project, say so to the owner.";
+
+    public const string ProjectScopeUnverifiableCode = "projectScopeUnverifiable";
+
+    public const string ProjectScopeUnverifiableMessage =
+        "'{0}' is project-scoped and this conversation belongs to project '{1}', but the projectId this call carries " +
+        "cannot be read as a project id, so the host cannot tell which board the call meant and refused it. Nothing " +
+        "was read or written. Call '{0}' with projectId={1}, or omit projectId when the tool says it is optional.";
+
+    public const string ProjectProvenanceMissingCode = "projectProvenanceMissing";
+
+    public const string ProjectProvenanceMissingMessage =
+        "'{0}' works across project boards and must say which project it is called from in authorProjectId, but this " +
+        "call carries no readable authorProjectId. The conversation belongs to project '{1}'. Nothing was filed. " +
+        "Call '{0}' with authorProjectId={1}.";
+
+    public const string ProjectProvenanceMismatchCode = "projectProvenanceMismatch";
+
+    public const string ProjectProvenanceMismatchMessage =
+        "'{0}' works across project boards and must present its own project: this conversation belongs to project " +
+        "'{1}', but the authorProjectId this call carries names project '{2}'. Filing on another board is allowed, " +
+        "speaking for another project is not, so nothing was filed. Call '{0}' with authorProjectId={1}.";
+
     private readonly Dictionary<string, AgentToolSpec> _specs;
     private readonly IReadOnlyList<AITool> _tools;
     private readonly IReadOnlyList<AITool> _toolsWithHumanGated;
@@ -53,9 +82,12 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             .Where(spec => spec.Category == AgentToolCategory.Standard)
             .Select(spec => new AgentToolFunction(spec))];
         _toolsWithHumanGated = [.. _specs.Values.Select(spec => new AgentToolFunction(spec))];
+        Specs = [.. _specs.Values.OrderBy(spec => spec.Name, StringComparer.Ordinal)];
     }
 
     public int Count => _specs.Count;
+
+    public IReadOnlyList<AgentToolSpec> Specs { get; }
 
     public IReadOnlyList<AITool> CreateTools(bool includeHumanGated) =>
         includeHumanGated ? _toolsWithHumanGated : _tools;
@@ -72,6 +104,16 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
         if (RefusalFor(spec, invocation) is { } refusal)
         {
             return Error(refusal);
+        }
+
+        if (ScopeRefusalFor(spec, arguments, invocation) is { } scopeRefusal)
+        {
+            return scopeRefusal;
+        }
+
+        if (ProvenanceRefusalFor(spec, arguments, invocation) is { } provenanceRefusal)
+        {
+            return provenanceRefusal;
         }
 
         try
@@ -119,8 +161,72 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
             _ => null
         };
 
+    // The scope comparison lives here, once, for all seven families — no handler sees it.
+    // AgentToolScope.Enforce specs are compared on the projectId argument; AgentToolScope.CrossProject
+    // specs skip that comparison and are checked for provenance instead (ProvenanceRefusalFor): they may
+    // address any board but must present the conversation's own project as the author. Discovery and
+    // SessionScoped specs are exempt from both, by declaration.
+    private static JsonElement? ScopeRefusalFor(
+        AgentToolSpec spec, JsonElement arguments, AgentToolInvocation invocation)
+    {
+        if (spec.Scope != AgentToolScope.Enforce || invocation.ProjectId is not { } own ||
+            arguments.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!arguments.TryGetProperty("projectId", out var addressed) || addressed.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (AddressedProject(addressed) is not { } sent)
+        {
+            return ScopedError(
+                string.Format(ProjectScopeUnverifiableMessage, spec.Name, own), ProjectScopeUnverifiableCode);
+        }
+
+        return sent == own
+            ? null
+            : ScopedError(
+                string.Format(ProjectScopeMismatchMessage, spec.Name, own, sent), ProjectScopeMismatchCode);
+    }
+
+    private static JsonElement? ProvenanceRefusalFor(
+        AgentToolSpec spec, JsonElement arguments, AgentToolInvocation invocation)
+    {
+        if (spec.Scope != AgentToolScope.CrossProject || invocation.ProjectId is not { } own ||
+            arguments.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var authored = arguments.TryGetProperty("authorProjectId", out var value) &&
+                       value.ValueKind != JsonValueKind.Null
+            ? AddressedProject(value)
+            : null;
+
+        return authored switch
+        {
+            null => ScopedError(string.Format(ProjectProvenanceMissingMessage, spec.Name, own),
+                ProjectProvenanceMissingCode),
+            Guid author when author != own => ScopedError(
+                string.Format(ProjectProvenanceMismatchMessage, spec.Name, own, author),
+                ProjectProvenanceMismatchCode),
+            _ => null
+        };
+    }
+
+    private static Guid? AddressedProject(JsonElement addressed) =>
+        addressed.ValueKind == JsonValueKind.String && Guid.TryParse(addressed.GetString(), out var parsed)
+            ? parsed
+            : null;
+
     private IEnumerable<string> OrderedNames() => _specs.Keys.OrderBy(name => name, StringComparer.Ordinal);
 
     private static JsonElement Error(string message) =>
         JsonDocument.Parse(JsonSerializer.Serialize(new { error = message })).RootElement.Clone();
+
+    private static JsonElement ScopedError(string message, string code) =>
+        JsonDocument.Parse(JsonSerializer.Serialize(new { error = message, code })).RootElement.Clone();
 }

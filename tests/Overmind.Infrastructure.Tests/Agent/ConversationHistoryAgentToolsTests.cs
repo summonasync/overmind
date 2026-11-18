@@ -135,7 +135,7 @@ public sealed class ConversationHistoryAgentToolsTests : IDisposable
         return await registry.InvokeAsync(
             "conversation_history",
             JsonSerializer.SerializeToElement(args),
-            new AgentToolInvocation(false, null, _conversation.Id),
+            new AgentToolInvocation(false, null, _conversation.Id, null),
             CancellationToken.None);
     }
 

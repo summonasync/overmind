@@ -40,7 +40,8 @@ public static class MemoryAgentTools
                     AgentToolArgs.OptionalGuid(args, "supersedes")),
                 ct);
             return WriteResult(write, endpoint);
-        });
+        },
+        Scope: AgentToolScope.SessionScoped);
 
     private static AgentToolSpec NoteSpec(IGrimoireMemoryClient memory) => new(
         "memory_note",
@@ -60,7 +61,8 @@ public static class MemoryAgentTools
                     content, "global", "journal", ReadTags(args), 0.5, null),
                 ct);
             return WriteResult(write, endpoint);
-        });
+        },
+        Scope: AgentToolScope.SessionScoped);
 
     private static AgentToolSpec RecallSpec(IGrimoireMemoryClient memory) => new(
         "memory_recall",
@@ -111,7 +113,8 @@ public static class MemoryAgentTools
             }
 
             return JsonSerializer.SerializeToElement(hits.Take(limit));
-        });
+        },
+        Scope: AgentToolScope.SessionScoped);
 
     private static GrimoireTomeTarget TargetOf(JsonElement args)
     {

@@ -3,4 +3,5 @@ namespace Overmind.Infrastructure.Agent;
 public readonly record struct AgentToolInvocation(
     bool DelegationArmed,
     Guid? InstructionMessageId,
-    Guid? ConversationId);
+    Guid? ConversationId,
+    Guid? ProjectId);
