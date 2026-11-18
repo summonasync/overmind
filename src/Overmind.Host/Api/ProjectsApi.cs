@@ -244,6 +244,24 @@ public static class ProjectsApi
         {
             relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
                 db, project, previousDiskPath, candidateDiskPath, PlanningLogSource.Ui, ct);
+
+            // One transaction, and the direction matters: CreateAsync saves on the same scoped
+            // context, so ITS flush carries the move, the remapped pins and the provenance lines
+            // together with the notification row — the relocation rides the reminder's save, not
+            // the other way round. A fault that would have lost the reminder therefore rolls the
+            // move back too, and the retry still reads relocated and fires the whole thing again.
+            // The dispatch stays behind the commit: its guard swallows and records a materializer
+            // fault, so the worst it can leave is a stale mirror — a derived projection that
+            // planning_materialize_status reports and the next board mutation re-passes.
+            await notifications.CreateAsync(
+                NotificationKind.Info,
+                RelocationCompanionSteps.DescribeNotification(
+                    project.Name, previousDiskPath, project.DiskPath, relocations.Count),
+                project.Id,
+                featureSlug: null,
+                tab: null,
+                agent: null,
+                ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -257,16 +275,6 @@ public static class ProjectsApi
         {
             await materialization.DispatchAsync(project.Id, ct);
         }
-
-        await notifications.CreateAsync(
-            NotificationKind.Info,
-            RelocationCompanionSteps.DescribeNotification(
-                project.Name, previousDiskPath, project.DiskPath, relocations.Count),
-            project.Id,
-            featureSlug: null,
-            tab: null,
-            agent: null,
-            ct);
 
         return Results.Ok(ProjectMapper.ToResponse(project) with
         {

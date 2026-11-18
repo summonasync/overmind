@@ -82,6 +82,29 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
     }
 
     [Fact]
+    public async Task SetIdentity_ClaimGuardWritesNoRowsWithNoVisibleHolder_ReturnsTheRetryConflict()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        await ExecuteAsync($$"""
+            CREATE TRIGGER identity_claim_silent_noop
+            BEFORE UPDATE OF Alias ON AgentSessions
+            FOR EACH ROW WHEN OLD.Id = '{{sessionId.ToString().ToUpperInvariant()}}'
+            BEGIN SELECT RAISE(IGNORE); END
+            """);
+
+        var response = await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var detail = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["detail"]!
+            .GetValue<string>();
+        detail.ShouldContain("was claimed while this request was running");
+        detail.ShouldNotContain("is held by");
+        var (storedAlias, storedVendor) = await ReadIdentityAsync(sessionId);
+        storedAlias.ShouldBe("Dan");
+        storedVendor.ShouldBe("claude");
+    }
+
+    [Fact]
     public async Task SetIdentity_AliasHeldByStaleSession_Succeeds()
     {
         await SeedSessionAsync("Van", "qwen", lastSeenAgo: TimeSpan.FromMinutes(20));

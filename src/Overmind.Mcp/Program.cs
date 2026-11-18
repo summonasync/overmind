@@ -54,10 +54,10 @@ var workspaceIdentity = new WorkspaceIdentityFile();
 var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource(), workspaceIdentity: workspaceIdentity);
 var lifecycle = new AgentSessionLifecycle(http);
 
-var prunedStamps = SessionIdentityFiles.PruneStaleParentSnapshots();
-if (prunedStamps > 0)
+var prunedIdentityFiles = SessionIdentityFiles.PruneStaleIdentityFiles();
+if (prunedIdentityFiles > 0)
 {
-    Console.Error.WriteLine($"[overmind-mcp] pruned {prunedStamps} parent identity file(s) of dead parents");
+    Console.Error.WriteLine($"[overmind-mcp] pruned {prunedIdentityFiles} stale identity file(s)");
 }
 
 // A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
