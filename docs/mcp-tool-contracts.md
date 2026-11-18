@@ -678,6 +678,82 @@ required param fails locally with no round-trip.
 
 **Echo.** `featureSlug` plus one compact row per op in request order — echo fields only, never
 artifact bodies. **Idempotency.** `operationId` as in `planning_upsert_artifact`.
+
+## planning_rescue_scan
+
+Which dead sessions left work nobody pushed. Read-only and idempotent: the board half comes from
+the host, the git half is measured adapter-side — the host never runs git.
+
+**Inputs.** `slug` optional (scan that candidate only), `projectId` optional and resolved from the
+working directory as everywhere else.
+
+**Board half.** `GET /api/agent/projects/{projectId}/planning/rescue-candidates`. Every host row is
+echoed verbatim — `slug`, `title`, `status`, `claimState`, `claimedByAlias`, `claimedByVendor`,
+`claimedAt`, `claimedByHuman`, `pinnedBranch`, `pinnedWorktreePath`, `updatedAt` — this tool only
+adds fields and renames none. `generatedAt` is the host stamp, copied to the top level.
+
+**Vocabulary.** `claimState` is RAW liveness and only ever `stale` | `ended`. The board projection
+and `overmind_wave_snapshot` report the same ended holder as `released`; the rescue door and this
+scan do not, on purpose — the rescue question is whether anybody still holds the work, and an
+ended holder answers it differently from a claim released on purpose. A consumer must not
+normalize one side into the other.
+
+**Policy block.** `policy.text` is the stored `RescuePolicy`, `policy.autonomy` is `owner-set`
+while the text is non-blank, `not-set` after the owner cleared it, `unreadable` when claim-settings
+did not answer; `policy.guidance` says what a rescuer may do. Blank means NO autonomy: a cleared
+policy is an owner directive, not a missing default, and neither this tool nor the migration
+re-seeds the default text over a deliberate clearing — the migration that seeded the default touched
+only rows that were already null before it ran. With `not-set` or `unreadable`, report the facts and
+ask the owner before pushing or merging.
+
+**`rescueAllowed` is a policy answer, not an evidence answer.** The per-row flag reports what the
+owner's standing directive permits, so under an `owner-set` policy it stays `true` even on a row whose
+`verdict` is `unknown` — a hung git or unmeasurable signals remove the proof, not the permission. The
+one exception is a listing failure: with no evidence anywhere every row is forced `false`. Consumers
+must read `verdict` and `reasons` before acting on the flag; an allowed-but-unknown row is permission
+without proof, and the gaps are named in `reasons` precisely so the rescuer can decide instead of
+guessing.
+
+**Scan root.** Git runs in the project's `diskPath` when that directory exists and sits inside a
+repository, otherwise in the adapter's working directory; `scanRoot.source` names the choice
+(`project-disk-path` | `adapter-workspace`) and `scanRoot.adapterWorkspace` carries the cwd either
+way.
+
+**Where the code is** (`code`): `pinnedWorktreePath` and `pinnedBranch` win (`source: "pin"`); with
+no pins the adapter falls back to the `feat/NNN-slug` convention over `git worktree list
+--porcelain` plus `for-each-ref refs/heads` — the same rule `planning_feature_code` answers with
+(`source: "discovery"`); nothing matched → `source: "none"`. `worktreeExists` and `branchExists`
+are measured, never inferred from the pin; `stale` marks a worktree path that the pin or the
+convention named and the disk no longer has.
+
+**Git facts** (`git`; each field is null when it could not be measured):
+
+| Field | Command | Reading |
+| --- | --- | --- |
+| `dirtyFiles`, `untrackedFiles` | `git status --porcelain` | counted in the worktree, so a gone worktree carries no dirt signal at all |
+| `unpushedCommits`, `unpushedBase` | `git rev-list --count <base>..HEAD` | `<base>` is the branch's upstream; a branch with no upstream falls back to `origin/main` |
+| `unmerged`, `mergedInto` | `git merge-base --is-ancestor HEAD <mainline>` | exit 0 merged, exit 1 not merged, any other exit unknown; `<mainline>` is the first of `origin/main`, `main`, `master` that exists locally |
+| `lastCommit` | `git log -1 --format=%h%x09%cI` | `{hash, date}` |
+
+**Verdict per row.** `rescue-worthy` when anything is uncommitted, ahead of its base or unmerged —
+`reasons` names exactly which fact. `clean` needs at least one *measured* signal among
+`dirtyFiles`, `unpushedCommits`, `unmerged` to have said so, and it lists the halves that stayed
+unmeasurable; the "branch is merged and pushed" line is spoken only when both halves were measured
+clean — absence of data never claims safety. `stale` when the worktree is gone and no branch
+survived to hold the work; `unknown` when git could not answer, including a row where only
+`lastCommit` came back, and a row whose per-row git call threw (the scan survives, the other rows
+keep their facts). `counts` groups verdicts across the rows.
+
+**Degraded answers.** A top-level `discoveryError` means git answered nothing — the scan root is not
+inside a repository, or a listing command failed — and the rows still carry the board answer with
+`verdict: "unknown"`: the `planning_feature_code` `discoveryError` contract repeated here, not a new
+one. A missing worktree is a `stale`-marked row, not an error. Per-row `git.error` carries what the
+commands reported, including a ref name too unsafe to query.
+
+**What it never does.** Nothing is claimed, pushed, merged or written: the rescue stays the PR flow
+plus the review invariant, and the take-over itself is `planning_claim_feature`. Companions:
+`overmind_wave_snapshot` for the live wave picture, `planning_feature_code` for where one feature's
+code is.
 <!-- region:planning:end -->
 <!-- region:others:start -->
 
