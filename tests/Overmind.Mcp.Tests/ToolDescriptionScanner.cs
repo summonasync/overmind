@@ -37,7 +37,7 @@ internal sealed record ToolMeasurement(
 
 internal static class ToolDescriptionScanner
 {
-    public const int ExpectedToolTypeCount = 18;
+    public const int ExpectedToolTypeCount = 19;
 
     private const BindingFlags ToolMethodFlags =
         BindingFlags.Public | BindingFlags.NonPublic
@@ -56,7 +56,8 @@ internal static class ToolDescriptionScanner
         "planning_list_lanes", "planning_materialize", "planning_materialize_status", "planning_move_feature",
         "planning_patch_artifact", "planning_patch_feature", "planning_pin_feature_code",
         "planning_read_artifact", "planning_read_artifact_diff", "planning_read_feature",
-        "planning_remove_feature_dependency", "planning_remove_lane", "planning_set_feature_priority",
+        "planning_remove_feature_dependency", "planning_remove_lane", "planning_rescue_scan",
+        "planning_set_feature_priority",
         "planning_set_feature_status", "planning_set_lanes", "planning_set_status", "planning_task_queue",
         "planning_unclaim_feature", "planning_update_feature", "planning_upsert_artifact",
         "planning_upsert_tasks", "planning_validate", "read_entry", "read_project_manifest", "search",
