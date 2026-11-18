@@ -698,6 +698,31 @@ scan do not, on purpose — the rescue question is whether anybody still holds t
 ended holder answers it differently from a claim released on purpose. A consumer must not
 normalize one side into the other.
 
+**Deleted holders — where churn and this door differ, on purpose.** A claim whose holder's
+`AgentSessions` row no longer exists reads as `ended` here: the rescue door treats a missing row
+exactly like an ended one, and `planning_claim_feature` does the same, so the work stays listed and
+taking it over stays allowed. The `claimChurn` block of `overmind_onboard` does not list such a
+holder, and that is the difference to know: every churn column is heartbeat-derived — `unseenSince`
+is the end stamp or the last seen, and `deathAgeMinutes` is computed from it — and a deleted row has
+no heartbeat left to report. Substituting `feature.updatedAt` would print an unmeasured age as
+measured silence under a "silent 3d 4h" label, so churn stays a join over the sessions it can
+actually date and hands the orphaned pair to this door instead. Nothing in the product deletes
+session rows today; this state arrives from direct database surgery or a future janitor, which is
+another reason the join stays strict. An agent that finds a holder here and not in churn has seen
+the whole answer, not a gap in it.
+
+**Deleted holders, and why the two surfaces differ.** A claim whose holder's `AgentSessions` row is
+gone from the registry reads as `ended` here — the rescue door treats a missing row exactly like an
+ended one, and `planning_claim_feature` does the same, so the work stays visible and taking it over
+stays allowed. The `claimChurn` block of `overmind_onboard` deliberately does not list such a holder:
+every churn column is heartbeat-derived (`unseenSince` is the end stamp or the last seen, and
+`deathAgeMinutes` is computed from it), and a deleted row has no heartbeat left to report. Inventing
+one from `feature.updatedAt` would print an unmeasured number as measured silence, so churn stays a
+join over the session rows it can actually date. Nothing in the product deletes session rows — this
+state arrives from direct database surgery or a future janitor — which is why the rescue door is the
+surface that owns it. An agent that finds an orphan here and not in churn has seen the whole answer,
+not a gap.
+
 **Policy block.** `policy.text` is the stored `RescuePolicy`, `policy.autonomy` is `owner-set`
 while the text is non-blank, `not-set` after the owner cleared it, `unreadable` when claim-settings
 did not answer; `policy.guidance` says what a rescuer may do. Blank means NO autonomy: a cleared

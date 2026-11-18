@@ -220,6 +220,37 @@ public sealed class OnboardClaimChurnApiTests : IDisposable
             $"WHERE ProjectId = '{Text(projectId)}' AND Slug = '{slug}'")).ShouldBe("mister-po");
     }
 
+    [Fact]
+    public async Task Onboard_HolderRowDeletedFromTheRegistry_IsAbsentHereAndSurfacesOnTheRescueDoor()
+    {
+        var projectId = await CreateProjectAsync();
+        var pruned = await SeedSessionAsync("gone-registry", "claude", endedMinutesAgo: 15);
+        await SeedClaimAsync(projectId, "023-pruned-holder", pruned, "gone-registry", "claude");
+        await BringToInProgressAsync(projectId, "023-pruned-holder");
+        await ExecuteAsync($"DELETE FROM AgentSessions WHERE Id = '{Text(pruned)}'");
+
+        ChurnOf(await OnboardAsync(Guid.NewGuid())).ShouldBeNull();
+
+        var response = await _client.GetAsync(
+            $"/api/agent/projects/{projectId}/planning/rescue-candidates");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        List<JsonElement> candidates = [.. body.GetProperty("candidates").EnumerateArray()];
+
+        var row = candidates.ShouldHaveSingleItem();
+        row.GetProperty("slug").GetString().ShouldBe("023-pruned-holder");
+        row.GetProperty("claimState").GetString().ShouldBe("ended");
+        row.GetProperty("claimedByAlias").GetString().ShouldBe("gone-registry");
+    }
+
+    private async Task BringToInProgressAsync(Guid projectId, string slug)
+    {
+        var response = await _client.PutAsJsonAsync(
+            $"/api/projects/{projectId}/planning/features/{slug}", new { Status = "inProgress" }, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     private async Task<JsonElement> OnboardAsync(Guid sessionId)
     {
         using var message = new HttpRequestMessage(HttpMethod.Post, "/api/onboard")
