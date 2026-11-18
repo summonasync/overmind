@@ -20,7 +20,7 @@ export function ProjectNameBadge({ projectId, className, plain }: ProjectNameBad
 
   if (plain) {
     return (
-      <span title={`Project ${projectId}`} className="inline-flex">
+      <span title={name} className="inline-flex">
         {badge}
       </span>
     );
