@@ -98,6 +98,8 @@ public static class DependencyInjection
         services.AddSingleton<TelegramPollingRunner>();
         services.AddHostedService<TelegramPollingService>();
         services.AddSingleton<ConversationTurnGate>();
+        services.AddSingleton(new TelegramWaveDraftStore(TimeProvider.System));
+        services.AddSingleton(new TelegramWavePromptTombstone(TimeProvider.System));
         services.AddSingleton<WaveSseHub>();
         services.AddSingleton(WaveStreamOptions.Default);
         services.AddSingleton<IWaveChatBroadcaster>(provider => provider.GetRequiredService<WaveSseHub>());
@@ -105,7 +107,13 @@ public static class DependencyInjection
         services.AddScoped<TelegramReplySender>();
         services.AddScoped<TelegramNotificationDeliveryStore>();
         services.AddScoped<ITelegramMessageHandler, TelegramAgentChatHandler>();
-        services.AddScoped<ITelegramCallbackHandler, TelegramNotificationCallbackHandler>();
+        services.AddScoped<ITelegramWaveCommandService, TelegramWaveCommandService>();
+        services.AddScoped<ITelegramWaveSnapshotService, TelegramWaveSnapshotService>();
+        services.AddScoped<TelegramNotificationCallbackHandler>();
+        services.AddScoped<TelegramWaveCallbackHandler>();
+        services.AddScoped<TelegramCallbackRouter>();
+        services.AddScoped<ITelegramCallbackHandler>(
+            provider => provider.GetRequiredService<TelegramCallbackRouter>());
         services.AddSingleton<INotificationDeliveryChannel>(provider => new TelegramNotificationFanout(
             provider.GetRequiredService<IServiceScopeFactory>(),
             () => provider.GetRequiredService<BrowserOrigin>().BoundOrigin,

@@ -47,10 +47,21 @@ public sealed class NotificationValidatorPromptComposer : IAgentPromptComposer
             A telegram message from the human owner carries one instruction about a gate notification. Resolve the context and act or answer - your turn ends at the act or the report.
 
             Rules:
-            - Call get_board_context first when the notification's project or artifact is not fully named in the instruction; never guess ids.
+            - Call get_board_context first when the notification's project or artifact is not fully named in the instruction.
+            """);
+        builder.AppendLine(projectId is null
+            ? """
+            - This validator conversation belongs to no project, so no scope comparison happens on this turn and nothing is rejected on scope grounds: the projectId in a call's argument is the only scope it has, and every tool call of this turn is recorded as global in the tool trail.
+            """
+            : """
+            - A projectId this turn sends is compared with the conversation's project, and a foreign or unreadable one comes back as a refusal instead of being redirected.
+            """);
+        builder.AppendLine(
+            """
             - When the owner's reply approves the pending gate and delegated approvals are effectively on for the project, call planning_validate (or planning_set_feature_status for done flips) - the loop attaches the delegated instruction reference to your tool call automatically.
             - When delegated approvals are off, do not call planning_validate or planning_set_feature_status: say the human door in the Overmind UI stays open and stop.
             - When the reply is a question or a context request, answer it concisely from the tool results.
+            - planning_validate and planning_set_feature_status name an artifact by id, which no argument comparison reaches - feature 246 owns those doors.
             - Every planning mutation needs a logNote: state the owner's intent.
             - You are not a chat buddy: no small talk, no promises of follow-ups; end the turn after the act or the answer.
             """);

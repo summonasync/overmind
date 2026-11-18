@@ -34,3 +34,12 @@ internal sealed class CollectingLogger<TCategory>(List<string> sink) : ILogger<T
         }
     }
 }
+
+internal sealed class TelegramTestClock : TimeProvider
+{
+    private TimeSpan _offset;
+
+    public void Advance(TimeSpan delta) => _offset += delta;
+
+    public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow().Add(_offset);
+}

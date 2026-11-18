@@ -43,7 +43,7 @@ public sealed class RouteAgentToolsTests : IDisposable
                 missReason = "keywords too specific",
                 suggestedPattern = "sort board, backlog order"
             }),
-            new AgentToolInvocation(false, null, _conversation.Id),
+            new AgentToolInvocation(false, null, _conversation.Id, null),
             CancellationToken.None);
 
         result.GetProperty("recorded").GetBoolean().ShouldBeTrue();
@@ -68,7 +68,7 @@ public sealed class RouteAgentToolsTests : IDisposable
         var result = await registry.InvokeAsync(
             "record_route",
             JsonSerializer.SerializeToElement(new { domain = "planning", missReason = "no wave rows in hot head" }),
-            new AgentToolInvocation(false, null, _conversation.Id),
+            new AgentToolInvocation(false, null, _conversation.Id, null),
             CancellationToken.None);
 
         result.GetProperty("pattern").GetString().ShouldBe("sort my board by priority please");
@@ -100,7 +100,7 @@ public sealed class RouteAgentToolsTests : IDisposable
         var result = await registry.InvokeAsync(
             "record_route",
             JsonSerializer.SerializeToElement(new { domain = "planning", missReason = "miss" }),
-            new AgentToolInvocation(false, null, _conversation.Id),
+            new AgentToolInvocation(false, null, _conversation.Id, null),
             CancellationToken.None);
 
         result.GetProperty("error").GetString()!.ShouldContain("suggested pattern");
@@ -115,7 +115,7 @@ public sealed class RouteAgentToolsTests : IDisposable
         var result = await registry.InvokeAsync(
             "bounce_turn",
             JsonSerializer.SerializeToElement(new { reason = "belongs to the planning specialist" }),
-            new AgentToolInvocation(false, null, _conversation.Id),
+            new AgentToolInvocation(false, null, _conversation.Id, null),
             CancellationToken.None);
 
         result.GetProperty("bounced").GetBoolean().ShouldBeTrue();

@@ -17,4 +17,5 @@ public sealed record AgentToolSpec(
     AgentToolHandler Invoke,
     AgentToolCategory Category = AgentToolCategory.Standard,
     AgentDelegatedToolHandler? DelegatedInvoke = null,
-    AgentConversationToolHandler? ConversationInvoke = null);
+    AgentConversationToolHandler? ConversationInvoke = null,
+    AgentToolScope Scope = AgentToolScope.Enforce);

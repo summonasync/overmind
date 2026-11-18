@@ -51,7 +51,8 @@ public sealed class AgentPromptComposerTests
         system.ShouldNotContain("\"memoryFacts\"");
         system.ShouldNotContain("snapshot");
         system.ShouldContain("get_board_context");
-        system.ShouldContain("resolve it from get_board_context or list_projects");
+        system.ShouldNotContain("resolve it from get_board_context or list_projects",
+            customMessage: "the prompt must stop sending the model to collect project ids (spec R4, reworded in T3)");
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public sealed class AgentPromptComposerTests
         var system = messages[0].Text;
 
         system.ShouldNotContain(AgentPromptComposer.InstructionsHeader);
-        system.TrimEnd().ShouldEndWith("resolve them from the tool result.");
+        system.TrimEnd().ShouldEndWith("Call get_board_context at the start of a turn when board state matters.");
         system.ShouldEndWith(Environment.NewLine);
     }
 

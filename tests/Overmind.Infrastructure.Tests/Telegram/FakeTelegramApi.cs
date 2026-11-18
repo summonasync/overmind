@@ -1,15 +1,24 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 
 namespace Overmind.Infrastructure.Tests.Telegram;
 
 public sealed class FakeTelegramApi : HttpMessageHandler
 {
-    public sealed record Captured(string Method, string Path, string Query, string Body);
+    private const string EmptyResult = """{"ok":true,"result":[]}""";
+
+    public sealed record Captured(
+        string Method,
+        string Path,
+        string Query,
+        string Body,
+        long? ResultMessageId);
 
     private readonly object _lock = new();
     private readonly Queue<string> _pendingResponses = new();
-    private readonly Dictionary<string, string> _pathFailures = new();
+    private readonly Dictionary<string, string> _pathFailures = [];
+    private int _autoMessageId = 100;
 
     public List<Captured> Requests { get; } = [];
     public SemaphoreSlim RequestArrived { get; } = new(0);
@@ -40,15 +49,6 @@ public sealed class FakeTelegramApi : HttpMessageHandler
             ? string.Empty
             : await request.Content.ReadAsStringAsync(cancellationToken);
 
-        lock (_lock)
-        {
-            Requests.Add(new Captured(
-                request.Method.Method, request.RequestUri!.AbsolutePath, request.RequestUri.Query, body));
-        }
-
-        RequestArrived.Release();
-        await Task.Delay(20, cancellationToken);
-
         string json;
         lock (_lock)
         {
@@ -57,14 +57,44 @@ public sealed class FakeTelegramApi : HttpMessageHandler
             json = failure.Value
                 ?? (_pendingResponses.Count > 0
                     ? _pendingResponses.Dequeue()
-                    : """{"ok":true,"result":[]}""");
+                    : Fallback(request.RequestUri!.AbsolutePath));
+            Requests.Add(new Captured(
+                request.Method.Method, request.RequestUri!.AbsolutePath, request.RequestUri.Query, body,
+                MessageIdOf(json)));
         }
+
+        RequestArrived.Release();
+        await Task.Delay(20, cancellationToken);
 
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
     }
+
+    private static long? MessageIdOf(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty("result", out var result)
+                && result.ValueKind == JsonValueKind.Object
+                && result.TryGetProperty("message_id", out var messageId)
+                    ? messageId.GetInt64()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    // A queued response is consumed by whatever request comes next, so tests queue one only where the
+    // returned id matters; everything else falls back to a well-formed answer for its own method.
+    private string Fallback(string path) =>
+        path.Contains("/sendMessage", StringComparison.Ordinal)
+            ? SentMessageResponse(Interlocked.Increment(ref _autoMessageId))
+            : EmptyResult;
 
     public Captured Request(int index)
     {
@@ -85,19 +115,30 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         }
     }
 
-    public static string TextUpdate(long chatId, string text, int updateId) =>
-        $$$"""
-        {"update_id":{{{updateId}}},"message":{"message_id":{{{updateId}}},"from":{"id":{{{chatId}}},"is_bot":false,"first_name":"Owner"},"chat":{"id":{{{chatId}}},"type":"private"},"date":1760000000,"text":"{{{text}}}"}}
-        """
-        .Trim();
+    public int CountRequests(string pathPart)
+    {
+        lock (_lock)
+        {
+            return Requests.Count(request => request.Path.Contains(pathPart, StringComparison.Ordinal));
+        }
+    }
+
+    public static string TextUpdate(long chatId, string text, int updateId, string? username = null) =>
+        "{\"update_id\":" + updateId +
+        ",\"message\":{\"message_id\":" + updateId +
+        ",\"from\":{\"id\":" + chatId + ",\"is_bot\":false,\"first_name\":\"Owner\"" +
+        (username is null ? string.Empty : ",\"username\":\"" + username + "\"") +
+        "},\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}" +
+        ",\"date\":1760000000,\"text\":\"" + text + "\"}}";
 
     public static string SentMessageResponse(long messageId = 5) =>
         "{\"ok\":true,\"result\":{\"message_id\":" + messageId +
         ",\"date\":1760000000,\"chat\":{\"id\":42,\"type\":\"private\"}}}";
 
-    public static string ReplyTextUpdate(long chatId, string text, int updateId, int repliedToMessageId) =>
+    public static string ReplyTextUpdate(
+        long chatId, string text, int updateId, int repliedToMessageId, int? messageId = null) =>
         "{\"update_id\":" + updateId +
-        ",\"message\":{\"message_id\":" + updateId +
+        ",\"message\":{\"message_id\":" + (messageId ?? updateId) +
         ",\"from\":{\"id\":" + chatId + ",\"is_bot\":false,\"first_name\":\"Owner\"}" +
         ",\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}" +
         ",\"date\":1760000000" +
