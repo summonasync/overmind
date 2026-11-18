@@ -166,6 +166,18 @@ public static class EntriesApi
         }
 
         var explicitProject = request.ProjectId is { } named && named != Guid.Empty ? named : (Guid?)null;
+        if (request.Type != EntryType.Journal && explicitProject is null)
+        {
+            // Defence in depth for the line that mints the human's container: "no destination" means the reserved
+            // container only for a journal create (spec R2). The validator refuses the same shape, so reaching
+            // here needs validator/DTO drift — which is exactly the drift task 14 shipped by widening ProjectId
+            // to Guid? and turning NotEmpty into a null-only check.
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(CreateEntryRequest.ProjectId)] = ["ProjectId is required for every type but journal."],
+            });
+        }
+
         if (explicitProject is { } target)
         {
             var projectExists = await db.Projects.AnyAsync(p => p.Id == target, ct);
@@ -183,7 +195,8 @@ public static class EntriesApi
             async attemptCt =>
             {
                 // Spec R2: the reserved container is born inside this same transaction, so the human door never
-                // needs an id the browser cannot know. A named project still wins over it.
+                // needs an id the browser cannot know. A named project still wins over it, and nothing but a
+                // journal create can arrive here without one.
                 var containerId = explicitProject ?? await journals.EnsureIdAsync(attemptCt);
 
                 var tags = await ResolveTagsAsync(db, request.Tags, attemptCt);
