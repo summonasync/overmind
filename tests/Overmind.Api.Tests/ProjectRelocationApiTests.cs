@@ -17,6 +17,7 @@ public sealed class ProjectRelocationApiTests : IDisposable
 {
     private const string PinMarker = "code pin moved with project root";
     private const string CommitFaultMarker = "overmind-test-relocation-commit-fault";
+    private const string ReminderFaultMarker = "overmind-test-relocation-reminder-fault";
 
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
@@ -125,6 +126,47 @@ public sealed class ProjectRelocationApiTests : IDisposable
         movedNested.PinnedWorktreePath.ShouldBe(Path.Combine(newRoot, "worktrees", "026"));
         CountMarkerLines(movedNested.Body).ShouldBe(1);
         MarkerLineSource(movedNested.Body).ShouldBe(PlanningLogSource.Ui);
+    }
+
+    [Fact]
+    public async Task Relocate_NotificationInsertFaults_RollsBackPathPinsAndProvenance()
+    {
+        var (oldRoot, newRoot) = CreateRoots("reminder-fault");
+        var project = await CreateProjectAsync("reminder-fault", oldRoot);
+        await DisableMaterializationAsync(project.Id);
+        var slug = await CreateFeatureAsync(project.Id, "028-pinned");
+        var pinnedPath = Path.Combine(oldRoot, ".lanes", "028");
+        await PinAsync(project.Id, slug, null, pinnedPath);
+
+        await ArmNotificationFaultAsync();
+
+        var (moved, evidence) = await TryRelocateAsync(project.Id, project.Name, oldRoot, newRoot);
+        moved.ShouldBeFalse();
+        evidence.ShouldContain(ReminderFaultMarker);
+
+        var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{project.Id}", JsonOptions);
+        fetched!.DiskPath.ShouldBe(oldRoot);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        var persisted = await db.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == slug);
+        persisted.PinnedWorktreePath.ShouldBe(pinnedPath);
+        CountMarkerLines(persisted.Body).ShouldBe(0);
+
+        await DisarmNotificationFaultAsync();
+        await SeedControlNotificationAsync();
+        var blocked = await ListNotificationsAsync();
+        blocked.Any(n => n.Text.Contains("relocated", StringComparison.Ordinal)).ShouldBeFalse();
+
+        var retry = await RelocateAsync(project.Id, project.Name, oldRoot, newRoot);
+        var retryPayload = await retry.Content.ReadAsStringAsync();
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK, retryPayload);
+
+        var healed = await ReadFeatureAsync(project.Id, slug);
+        healed.PinnedWorktreePath.ShouldBe(Path.Combine(newRoot, ".lanes", "028"));
+        CountMarkerLines(healed.Body).ShouldBe(1);
+        var notifications = await ListNotificationsAsync();
+        notifications.ShouldContain(n => n.Text.Contains("relocated", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -361,6 +403,25 @@ public sealed class ProjectRelocationApiTests : IDisposable
             BEFORE UPDATE OF PinnedWorktreePath ON PlanningFeatures
             BEGIN SELECT RAISE(ABORT, '{CommitFaultMarker}'); END
             """);
+    }
+
+    private async Task ArmNotificationFaultAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        await db.Database.ExecuteSqlRawAsync(
+            $"""
+            CREATE TRIGGER relocation_reminder_fault
+            BEFORE INSERT ON AgentNotifications
+            BEGIN SELECT RAISE(ABORT, '{ReminderFaultMarker}'); END
+            """);
+    }
+
+    private async Task DisarmNotificationFaultAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        await db.Database.ExecuteSqlRawAsync("DROP TRIGGER IF EXISTS relocation_reminder_fault");
     }
 
     private async Task<(bool Moved, string Evidence)> TryRelocateAsync(
