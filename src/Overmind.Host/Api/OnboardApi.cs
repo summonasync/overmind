@@ -145,8 +145,10 @@ public static class OnboardApi
     // A claim whose holder stopped answering is what an agent must see before it reaches for
     // anything: the slug, the pair the board still reads, and how long that holder has been gone.
     // An ended holder reports its end stamp, a stale one its last heartbeat. Liveness is the whole
-    // rule: SessionTouchMiddleware refreshes the caller that asks, so its own claims are alive and
-    // never churn — no identity filter, and no second copy of the same decision to rot.
+    // rule: SessionTouchMiddleware refreshes the caller that asks, so a live or stale caller's own
+    // claims stay out of churn. Touch does not revive an ENDED row, so an ended caller's own pair
+    // does surface — correct, it is a genuine orphan, and the renderer says the next write adopts it.
+    // No identity filter, and no second copy of the same decision to rot.
     private static async Task<OnboardClaimChurnBlock?> BuildChurnBlockAsync(
         OvermindDbContext db, Project project, CancellationToken ct)
     {

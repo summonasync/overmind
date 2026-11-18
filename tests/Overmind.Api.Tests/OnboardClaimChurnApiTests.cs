@@ -147,7 +147,8 @@ public sealed class OnboardClaimChurnApiTests : IDisposable
 
         churn.Sessions.Count.ShouldBe(OnboardApi.ChurnSessionCap);
         churn.Sessions.ShouldContain(row => row.Alias == "gone-01");
-        churn.Sessions.ShouldNotContain(row => row.Alias == "gone-08");
+        churn.Sessions.ShouldNotContain(row => row.Alias == "gone-06");
+        churn.Sessions.ShouldNotContain(row => row.Alias == "gone-07");
     }
 
     [Fact]
