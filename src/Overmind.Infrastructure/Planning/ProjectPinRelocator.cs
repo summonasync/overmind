@@ -12,7 +12,12 @@ public static class ProjectPinRelocator
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     public static async Task<IReadOnlyList<PinRelocation>> RelocateWorktreePinsAsync(
-        OvermindDbContext db, Project project, string previousDiskPath, CancellationToken ct)
+        OvermindDbContext db,
+        Project project,
+        string previousDiskPath,
+        string newDiskPath,
+        PlanningLogSource source,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(project);
@@ -25,7 +30,7 @@ public static class ProjectPinRelocator
         foreach (var feature in features)
         {
             var previousPin = feature.PinnedWorktreePath!;
-            if (!TryRemap(previousPin, previousDiskPath, project.DiskPath, out var relocatedPin))
+            if (!TryRemap(previousPin, previousDiskPath, newDiskPath, out var relocatedPin))
             {
                 continue;
             }
@@ -33,14 +38,9 @@ public static class ProjectPinRelocator
             db.Entry(feature).Property(f => f.PinnedWorktreePath).CurrentValue = relocatedPin;
             feature.AppendLog(
                 $"code pin moved with project root: '{previousPin}' → '{relocatedPin}'",
-                PlanningLogSource.Agent);
+                source);
 
             relocations.Add(new PinRelocation(feature.Slug, previousPin, relocatedPin));
-        }
-
-        if (relocations.Count > 0)
-        {
-            await db.SaveChangesAsync(ct);
         }
 
         return relocations;

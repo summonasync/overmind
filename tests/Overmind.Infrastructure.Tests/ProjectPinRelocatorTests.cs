@@ -74,21 +74,24 @@ public sealed class ProjectPinRelocatorTests : IDisposable
             .ShouldBe(_oldRoot + "X");
     }
 
-    [Fact]
-    public async Task Relocate_FeatureWithExistingLog_AppendsExactlyOneProvenanceLine()
+    [Theory]
+    [InlineData(PlanningLogSource.Ui)]
+    [InlineData(PlanningLogSource.Agent)]
+    public async Task Relocate_FeatureWithExistingLog_AppendsExactlyOneProvenanceLineOfTheAskedSource(
+        PlanningLogSource source)
     {
         var feature = AddFeature("006-logged", "feat/006", $"{_oldRoot}/wt");
         var before = PlanningLog.Parse(FeatureBody(feature.Slug)).Count;
         before.ShouldBeGreaterThan(0);
 
-        await RelocateAsync();
+        await RelocateAsync(source);
 
         var lines = PlanningLog.Parse(FeatureBody(feature.Slug));
         lines.Count.ShouldBe(before + 1);
         lines.Count(line => line.Text.Contains(Marker, StringComparison.Ordinal)).ShouldBe(1);
         lines[^1].Text.ShouldContain($"'{_oldRoot}/wt'");
         lines[^1].Text.ShouldContain($"'{_newRoot}/wt'");
-        lines[^1].Source.ShouldBe(PlanningLogSource.Agent);
+        lines[^1].Source.ShouldBe(source);
     }
 
     [Fact]
@@ -119,7 +122,7 @@ public sealed class ProjectPinRelocatorTests : IDisposable
         var feature = AddFeature("008-foreign-style", null, pin);
 
         var relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
-            _context, WithDiskPath(_project, newRoot), oldRoot, CancellationToken.None);
+            _context, _project, oldRoot, newRoot, PlanningLogSource.Ui, CancellationToken.None);
 
         var relocated = relocations.ShouldHaveSingleItem();
         relocated.Slug.ShouldBe(feature.Slug);
@@ -133,12 +136,40 @@ public sealed class ProjectPinRelocatorTests : IDisposable
         var feature = AddFeature("009-same-root", null, $"{_oldRoot}/wt");
 
         var relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
-            _context, _project, _oldRoot, CancellationToken.None);
+            _context, _project, _oldRoot, _oldRoot, PlanningLogSource.Ui, CancellationToken.None);
 
         relocations.ShouldBeEmpty();
         Feature(feature.Slug).PinnedWorktreePath.ShouldBe($"{_oldRoot}/wt");
         PlanningLog.Parse(FeatureBody(feature.Slug)).Any(line => line.Text.Contains(Marker, StringComparison.Ordinal))
             .ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Relocate_MutatesTrackedRowsOnly_LeavesTheCommitToTheCaller()
+    {
+        var feature = AddFeature("012-uncommitted", "feat/012", $"{_oldRoot}/wt");
+        var pinnedPath = $"{_oldRoot}/wt";
+
+        var relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
+            _context, WithDiskPath(_project, _newRoot), _oldRoot, _newRoot, PlanningLogSource.Ui,
+            CancellationToken.None);
+
+        relocations.ShouldHaveSingleItem().Slug.ShouldBe(feature.Slug);
+
+        using var beforeCommit = _db.CreateContext();
+        (await beforeCommit.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == feature.Slug))
+            .PinnedWorktreePath.ShouldBe(pinnedPath);
+        (await beforeCommit.Projects.AsNoTracking().SingleAsync(p => p.Id == _project.Id))
+            .DiskPath.ShouldBe(_oldRoot);
+
+        await _context.SaveChangesAsync(CancellationToken.None);
+
+        using var afterCommit = _db.CreateContext();
+        var persisted = await afterCommit.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == feature.Slug);
+        persisted.PinnedWorktreePath.ShouldBe($"{_newRoot}/wt");
+        CountMarkers(persisted.Body).ShouldBe(1);
+        (await afterCommit.Projects.AsNoTracking().SingleAsync(p => p.Id == _project.Id))
+            .DiskPath.ShouldBe(_newRoot);
     }
 
     [Fact]
@@ -156,15 +187,19 @@ public sealed class ProjectPinRelocatorTests : IDisposable
         Feature(theirs.Slug).PinnedWorktreePath.ShouldBe($"{_oldRoot}/wt");
     }
 
-    private async Task<IReadOnlyList<PinRelocation>> RelocateAsync()
-    {
-        var previousDiskPath = _project.DiskPath;
-        WithDiskPath(_project, _newRoot);
-        await _context.SaveChangesAsync();
+    private Task<IReadOnlyList<PinRelocation>> RelocateAsync() => RelocateAsync(PlanningLogSource.Ui);
 
-        return await ProjectPinRelocator.RelocateWorktreePinsAsync(
-            _context, _project, previousDiskPath, CancellationToken.None);
+    private async Task<IReadOnlyList<PinRelocation>> RelocateAsync(PlanningLogSource source)
+    {
+        var relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
+            _context, WithDiskPath(_project, _newRoot), _oldRoot, _newRoot, source, CancellationToken.None);
+
+        await _context.SaveChangesAsync(CancellationToken.None);
+        return relocations;
     }
+
+    private static int CountMarkers(string body) =>
+        PlanningLog.Parse(body).Count(line => line.Text.Contains(Marker, StringComparison.Ordinal));
 
     private Project WithDiskPath(Project project, string diskPath)
     {

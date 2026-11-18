@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Overmind.Core;
 using Overmind.Infrastructure.Materialization;
@@ -15,6 +16,7 @@ namespace Overmind.Api.Tests;
 public sealed class ProjectRelocationApiTests : IDisposable
 {
     private const string PinMarker = "code pin moved with project root";
+    private const string CommitFaultMarker = "overmind-test-relocation-commit-fault";
 
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
@@ -75,6 +77,7 @@ public sealed class ProjectRelocationApiTests : IDisposable
         door.PinnedWorktreePath.ShouldBe(Path.Combine(newRoot, ".lanes", "020"));
         door.PinnedBranch.ShouldBe("feat/020");
         CountMarkerLines(door.Body).ShouldBe(1);
+        MarkerLineSource(door.Body).ShouldBe(PlanningLogSource.Ui);
 
         var untouched = await ReadFeatureAsync(project.Id, foreign);
         untouched.PinnedWorktreePath.ShouldBe("/var/other-product/wt");
@@ -89,6 +92,71 @@ public sealed class ProjectRelocationApiTests : IDisposable
         notification.Text.ShouldContain(newRoot);
         notification.Text.ShouldContain("1 worktree pin(s) remapped");
         notification.ProjectId.ShouldBe(project.Id);
+    }
+
+    [Fact]
+    public async Task Relocate_MultiplePins_RemapsEachAndCountsOneProvenanceLinePerPin()
+    {
+        var (oldRoot, newRoot) = CreateRoots("multi");
+        var project = await CreateProjectAsync("multi", oldRoot);
+        await DisableMaterializationAsync(project.Id);
+
+        var lane = await CreateFeatureAsync(project.Id, "025-lane");
+        await PinAsync(project.Id, lane, "feat/025", Path.Combine(oldRoot, ".lanes", "025"));
+        var nested = await CreateFeatureAsync(project.Id, "026-nested");
+        await PinAsync(project.Id, nested, null, Path.Combine(oldRoot, "worktrees", "026"));
+
+        var response = await RelocateAsync(project.Id, project.Name, oldRoot, newRoot);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        payload.ShouldNotBeNull();
+        payload!.DiskPath.ShouldBe(newRoot);
+        var relocation = payload.Relocation.ShouldNotBeNull();
+        relocation.PinsRemapped.ShouldBe(2);
+        relocation.RemappedFeatureSlugs.Length.ShouldBe(2);
+
+        var movedLane = await ReadFeatureAsync(project.Id, lane);
+        movedLane.PinnedWorktreePath.ShouldBe(Path.Combine(newRoot, ".lanes", "025"));
+        CountMarkerLines(movedLane.Body).ShouldBe(1);
+        MarkerLineSource(movedLane.Body).ShouldBe(PlanningLogSource.Ui);
+
+        var movedNested = await ReadFeatureAsync(project.Id, nested);
+        movedNested.PinnedWorktreePath.ShouldBe(Path.Combine(newRoot, "worktrees", "026"));
+        CountMarkerLines(movedNested.Body).ShouldBe(1);
+        MarkerLineSource(movedNested.Body).ShouldBe(PlanningLogSource.Ui);
+    }
+
+    [Fact]
+    public async Task Relocate_CommitFaultsOnThePinWrite_LeavesNeitherPathNorPinsMoved()
+    {
+        var (oldRoot, newRoot) = CreateRoots("commit-fault");
+        var project = await CreateProjectAsync("commit-fault", oldRoot);
+        await DisableMaterializationAsync(project.Id);
+        var slug = await CreateFeatureAsync(project.Id, "027-pinned");
+        var pinnedPath = Path.Combine(oldRoot, ".lanes", "027");
+        await PinAsync(project.Id, slug, null, pinnedPath);
+
+        await ArmCommitFaultAsync();
+
+        var (moved, evidence) = await TryRelocateAsync(project.Id, project.Name, oldRoot, newRoot);
+        moved.ShouldBeFalse();
+        evidence.ShouldContain(CommitFaultMarker);
+
+        var fetched = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{project.Id}", JsonOptions);
+        fetched!.DiskPath.ShouldBe(oldRoot);
+        fetched.Relocation.ShouldBeNull();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        var persisted = await db.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == slug);
+        persisted.PinnedWorktreePath.ShouldBe(pinnedPath);
+        CountMarkerLines(persisted.Body).ShouldBe(0);
+
+        await SeedControlNotificationAsync();
+        var notifications = await ListNotificationsAsync();
+        notifications.ShouldContain(n => n.Text == "control-baseline");
+        notifications.Any(n => n.Text.Contains("relocated", StringComparison.Ordinal)).ShouldBeFalse();
     }
 
     [Fact]
@@ -146,9 +214,10 @@ public sealed class ProjectRelocationApiTests : IDisposable
     [Fact]
     public async Task Update_SameDiskPath_CarriesNoRelocationSection()
     {
-        var (oldRoot, _) = CreateRoots("unchanged");
+        var (oldRoot, controlRoot) = CreateRoots("unchanged");
         var project = await CreateProjectAsync("unchanged", oldRoot);
         await CreateFeatureAsync(project.Id, "023-plain");
+        await CreateProjectAsync("unchanged-control", controlRoot);
 
         var put = await RelocateAsync(project.Id, project.Name, oldRoot, oldRoot);
         put.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -162,7 +231,9 @@ public sealed class ProjectRelocationApiTests : IDisposable
         fetchedFields.ShouldNotContain("relocation");
 
         using var listDocument = JsonDocument.Parse(await _client.GetStringAsync("/api/projects"));
-        FieldNames(listDocument.RootElement[0]).ShouldNotContain("relocation");
+        var listRows = listDocument.RootElement.EnumerateArray().ToArray();
+        listRows.Length.ShouldBe(2);
+        listRows.SelectMany(FieldNames).ShouldNotContain("relocation");
 
         await SeedControlNotificationAsync();
         var notifications = await ListNotificationsAsync();
@@ -257,6 +328,37 @@ public sealed class ProjectRelocationApiTests : IDisposable
 
     private static int CountMarkerLines(string body) =>
         PlanningLog.Parse(body).Count(line => line.Text.Contains(PinMarker, StringComparison.Ordinal));
+
+    private static PlanningLogSource? MarkerLineSource(string body) =>
+        PlanningLog.Parse(body)
+            .Single(line => line.Text.Contains(PinMarker, StringComparison.Ordinal))
+            .Source;
+
+    private async Task ArmCommitFaultAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        await db.Database.ExecuteSqlRawAsync(
+            $"""
+            CREATE TRIGGER relocation_commit_fault
+            BEFORE UPDATE OF PinnedWorktreePath ON PlanningFeatures
+            BEGIN SELECT RAISE(ABORT, '{CommitFaultMarker}'); END
+            """);
+    }
+
+    private async Task<(bool Moved, string Evidence)> TryRelocateAsync(
+        Guid projectId, string name, string oldRoot, string newRoot)
+    {
+        try
+        {
+            var response = await RelocateAsync(projectId, name, oldRoot, newRoot);
+            return (response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.ToString());
+        }
+    }
 
     private async Task<string> SeedKitRowAsync(Guid projectId, string root, string relativePath, string content)
     {

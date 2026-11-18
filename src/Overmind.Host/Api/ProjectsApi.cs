@@ -239,6 +239,13 @@ public static class ProjectsApi
             project.SetNumbering(targetStyle, targetPrefix);
         }
 
+        IReadOnlyList<PinRelocation> relocations = [];
+        if (relocated)
+        {
+            relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
+                db, project, previousDiskPath, candidateDiskPath, PlanningLogSource.Ui, ct);
+        }
+
         await db.SaveChangesAsync(ct);
 
         if (!relocated)
@@ -246,7 +253,6 @@ public static class ProjectsApi
             return Results.Ok(ProjectMapper.ToResponse(project));
         }
 
-        var relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(db, project, previousDiskPath, ct);
         if (relocations.Count > 0)
         {
             await materialization.DispatchAsync(project.Id, ct);
