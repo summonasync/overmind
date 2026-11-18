@@ -126,6 +126,55 @@ public sealed class NotificationValidatorRunnerTests : IDisposable
         FakeAgentChatClient.UsageUpdate(20)
     ]);
 
+    [Fact]
+    public async Task ValidatorTurnOnProjectlessNotification_MarksItsToolTrailGlobalScope()
+    {
+        var notification = await SeedNotificationAsync(null);
+        ConfigureTransport();
+        var messages = new ConversationMessageStore(_temp.CreateContext());
+        var conversations = new TelegramValidatorConversationStore(_temp.CreateContext());
+        var runner = CreateRunner(
+            messages, conversations, delegationOn: false,
+            ScriptedValidationClient("Delegated approvals are off for this project; use the Overmind UI door."));
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+
+        await runner.RunAsync(OwnerChatId, notification, "approve this", CancellationToken.None);
+
+        notification.ProjectId.ShouldBeNull(
+            "the validator conversation is created from notification.ProjectId, which is Guid?");
+        var conversation = await conversations.GetOrCreateConversationAsync(OwnerChatId, null, CancellationToken.None);
+        var rows = await messages.ListPageAsync(conversation.Id, ct: CancellationToken.None);
+        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+
+        using var document = JsonDocument.Parse(toolRow.Content);
+        document.RootElement.GetProperty("tool").GetString().ShouldBe("planning_validate");
+        document.RootElement.GetProperty("globalScope").GetBoolean().ShouldBeTrue(
+            customMessage: $"the most privileged embedded turn carries no scope and the trail must say so: {toolRow.Content}");
+    }
+
+    [Fact]
+    public async Task ValidatorTurnOnProjectNotification_LeavesItsToolTrailUnmarked()
+    {
+        var project = await SeedProjectAsync(delegationOn: false);
+        var notification = await SeedNotificationAsync(project.Id);
+        ConfigureTransport();
+        var messages = new ConversationMessageStore(_temp.CreateContext());
+        var conversations = new TelegramValidatorConversationStore(_temp.CreateContext());
+        var runner = CreateRunner(
+            messages, conversations, delegationOn: false,
+            ScriptedValidationClient("Delegated approvals are off for this project; use the Overmind UI door."));
+        _api.QueueResponse(FakeTelegramApi.SentMessageResponse());
+
+        await runner.RunAsync(OwnerChatId, notification, "approve this", CancellationToken.None);
+
+        var conversation = await conversations.GetOrCreateConversationAsync(
+            OwnerChatId, project.Id, CancellationToken.None);
+        var rows = await messages.ListPageAsync(conversation.Id, ct: CancellationToken.None);
+        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+
+        toolRow.Content.ShouldNotContain("globalScope");
+    }
+
     private NotificationValidatorRunner CreateRunner(
         ConversationMessageStore messages,
         TelegramValidatorConversationStore conversations,

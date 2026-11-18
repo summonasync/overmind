@@ -88,5 +88,6 @@ public static class WaveAgentTools
                 $"/api/agent/sessions/{state.SessionId}/role",
                 new { role = AgentToolArgs.RequiredString(args, "role") },
                 ct);
-        });
+        },
+        Scope: AgentToolScope.SessionScoped);
 }

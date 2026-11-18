@@ -598,6 +598,120 @@ public sealed class AgentLoopTests : IDisposable
         roles.All(value => (string?)value == "router").ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task ScopedConversationTurn_HandsTheProjectIdToTheToolInvoker()
+    {
+        var project = Project.Create($"scope-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
+        using (var context = _temp.CreateContext())
+        {
+            context.Projects.Add(project);
+            context.SaveChanges();
+        }
+
+        var projectId = project.Id;
+        var scoped = Conversation.Create(projectId, "scoped loop test");
+        using (var context = _temp.CreateContext())
+        {
+            context.Conversations.Add(scoped);
+            context.SaveChanges();
+        }
+
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the board. "),
+            FakeAgentChatClient.ToolCallUpdate(
+                "c1", "planning_task_queue", $$"""{"projectId":"{{projectId}}"}"""),
+            FakeAgentChatClient.UsageUpdate(60)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The queue is clear."),
+            FakeAgentChatClient.UsageUpdate(20)
+        ]);
+        var loop = CreateLoop(client);
+
+        await foreach (var _ in loop.RunAsync(scoped, [], "check the board", CancellationToken.None))
+        {
+        }
+
+        await _tools.Received(1).InvokeAsync(
+            "planning_task_queue",
+            Arg.Any<JsonElement>(),
+            Arg.Is<AgentToolInvocation>(invocation =>
+                invocation.ProjectId == projectId && invocation.ConversationId == scoped.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AuditTrail_GlobalConversation_ToolRowCarriesTheGlobalScopeMarker()
+    {
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the board. "),
+            FakeAgentChatClient.ToolCallUpdate(
+                "c1", "planning_task_queue", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f70"}"""),
+            FakeAgentChatClient.UsageUpdate(60)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The queue is clear."),
+            FakeAgentChatClient.UsageUpdate(20)
+        ]);
+        var loop = CreateLoop(client);
+
+        await CollectAsync(loop);
+
+        var rows = await _messages.ListPageAsync(_conversation.Id, ct: CancellationToken.None);
+        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+        using var document = JsonDocument.Parse(toolRow.Content);
+        document.RootElement.GetProperty("tool").GetString().ShouldBe("planning_task_queue");
+        document.RootElement.GetProperty("globalScope").GetBoolean().ShouldBeTrue(
+            customMessage: $"a project-less conversation ran on a model-supplied scope and the trail must say so: {toolRow.Content}");
+        document.RootElement.TryGetProperty("addressedProjectId", out _).ShouldBeFalse(
+            customMessage: "the marker records that scope was model-supplied; it does not echo the attacker-shaped value");
+    }
+
+    [Fact]
+    public async Task AuditTrail_ScopedConversation_ToolRowNamesItsProjectAndStaysUnmarked()
+    {
+        var project = Project.Create($"audit-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);
+        using (var context = _temp.CreateContext())
+        {
+            context.Projects.Add(project);
+            context.SaveChanges();
+        }
+
+        var scoped = Conversation.Create(project.Id, "scoped audit test");
+        using (var context = _temp.CreateContext())
+        {
+            context.Conversations.Add(scoped);
+            context.SaveChanges();
+        }
+
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Checking the board. "),
+            FakeAgentChatClient.ToolCallUpdate(
+                "c1", "planning_task_queue", $$"""{"projectId":"{{project.Id}}"}"""),
+            FakeAgentChatClient.UsageUpdate(60)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The queue is clear."),
+            FakeAgentChatClient.UsageUpdate(20)
+        ]);
+        var loop = CreateLoop(client);
+
+        await foreach (var _ in loop.RunAsync(scoped, [], "check the board", CancellationToken.None))
+        {
+        }
+
+        var rows = await _messages.ListPageAsync(scoped.Id, ct: CancellationToken.None);
+        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+        using var document = JsonDocument.Parse(toolRow.Content);
+        document.RootElement.TryGetProperty("globalScope", out _).ShouldBeFalse(
+            customMessage: $"a scoped conversation's trail must not be marked global: {toolRow.Content}");
+        toolRow.Content.ShouldBe("""{"tool":"planning_task_queue"}""",
+            customMessage: "scoped rows keep their existing shape — the marker is only for the no-project case");
+    }
+
     private AgentLoop CreateLoop(
         IChatClient? client = null,
         int perTurnMaxTokens = 8_192,
