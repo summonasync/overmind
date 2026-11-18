@@ -733,11 +733,14 @@ ask the owner before pushing or merging.
 
 **`rescueAllowed` is a policy answer, not an evidence answer.** The per-row flag reports what the
 owner's standing directive permits, so under an `owner-set` policy it stays `true` even on a row whose
-`verdict` is `unknown` — a hung git or unmeasurable signals remove the proof, not the permission. The
-one exception is a listing failure: with no evidence anywhere every row is forced `false`. Consumers
-must read `verdict` and `reasons` before acting on the flag; an allowed-but-unknown row is permission
-without proof, and the gaps are named in `reasons` precisely so the rescuer can decide instead of
-guessing.
+`verdict` is `unknown` — a hung git or unmeasurable signals remove the proof, not the permission.
+Forcing `false` there would fuse the two axes and could block a rescue the owner explicitly allowed
+("everything unpushed may be pushed") just because git hung on one row. The one exception is a
+listing failure: with no evidence anywhere every row is forced `false`, and that is a capability
+statement, not an evidence one — such a row carries `code: null`, so there is no location a rescue
+could act on whatever the policy says. Consumers must read `verdict` and `reasons` before acting on
+the flag; an allowed-but-unknown row is permission without proof, and the gaps are named in `reasons`
+precisely so the rescuer can decide instead of guessing.
 
 **Scan root.** Git runs in the project's `diskPath` when that directory exists and sits inside a
 repository, otherwise in the adapter's working directory; `scanRoot.source` names the choice
@@ -768,6 +771,16 @@ clean — absence of data never claims safety. `stale` when the worktree is gone
 survived to hold the work; `unknown` when git could not answer, including a row where only
 `lastCommit` came back, and a row whose per-row git call threw (the scan survives, the other rows
 keep their facts). `counts` groups verdicts across the rows.
+
+**Reasons mirror the fields.** The `worktree path … is gone, only the branch is left` line is spoken
+by every verdict that still knows where the work is — `rescue-worthy`, `clean` with an unmeasured
+push half, and `unknown` — so the prose cannot disagree with `code.stale` and
+`code.worktreeExists`. The stronger "gone, but the branch is merged and pushed" replaces it only when
+both halves were measured clean, and a row where nothing survived on disk says only
+`no branch or worktree` — never "the branch is left", because it isn't. Cancellation is not a
+degraded answer either: a cancelled caller token propagates out of the tool rather than being
+recorded as a per-row git failure, so a scan the caller pulled mid-flight never reports the work as
+merely unknown.
 
 **Degraded answers.** A top-level `discoveryError` means git answered nothing — the scan root is not
 inside a repository, or a listing command failed — and the rows still carry the board answer with

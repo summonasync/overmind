@@ -142,12 +142,29 @@ public sealed class RescueScanToolContractTests : IDisposable
         var row = Only(await ScanAsync(tools));
 
         row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Stale);
+        row["rescueAllowed"]!.GetValue<bool>().ShouldBe(true);
         row["git"]!["dirtyFiles"].ShouldBeNull();
         row["git"]!["unpushedCommits"].ShouldBeNull();
         row["git"]!["error"]!.GetValue<string>().ShouldContain("no branch or worktree");
         Reasons(row).Single().ShouldContain("no branch or worktree");
         NoGitCall("rev-list");
         NoGitCall("status");
+    }
+
+    [Fact]
+    public async Task Scan_SweptWorktreeWithTheBranchLeftAndEveryFactFailed_NamesTheLostWorktreeBesideTheFailure()
+    {
+        const string swept = "/repo/.lanes/235-swept-unknown";
+        var tools = Tools(Git(), [Candidate("235-swept-unknown", "ended", swept, DeadBranch)]);
+
+        var row = Only(await ScanAsync(tools));
+
+        row["code"]!["stale"]!.GetValue<bool>().ShouldBe(true);
+        row["code"]!["branchExists"]!.GetValue<bool>().ShouldBe(true);
+        row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Unknown);
+        Reasons(row).ShouldContain($"worktree path {swept} is gone, only the branch is left");
+        Reasons(row).ShouldContain(reason => reason.Contains("failed (exit 128", StringComparison.Ordinal));
+        Reasons(row).Count.ShouldBe(2);
     }
 
     [Fact]
@@ -286,6 +303,7 @@ public sealed class RescueScanToolContractTests : IDisposable
         row["git"]!["unmerged"]!.GetValue<bool>().ShouldBe(false);
         row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Clean);
         Reasons(row).ShouldContain("already merged into main");
+        Reasons(row).ShouldContain($"worktree path {swept} is gone, only the branch is left");
         Reasons(row).ShouldNotContain(reason => reason.Contains("merged and pushed", StringComparison.Ordinal));
     }
 
@@ -328,13 +346,16 @@ public sealed class RescueScanToolContractTests : IDisposable
 
             payload["discoveryError"]!.GetValue<string>().ShouldContain("listing failed");
             payload["counts"]!["unknown"]!.GetValue<int>().ShouldBe(1);
+            payload["policy"]!["autonomy"]!.GetValue<string>().ShouldBe(RescueScanSource.OwnerSet);
             var row = Only(payload);
             row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Unknown);
             row["rescueAllowed"]!.GetValue<bool>().ShouldBe(false);
             row["code"].ShouldBeNull();
             row["git"].ShouldBeNull();
-            NoGitCall("status");
-            NoGitCall("rev-list");
+            _gitCalls.Select(call => call.Arguments).ToList().ShouldBe([
+                "worktree list --porcelain",
+                "for-each-ref --format=%(refname:short) refs/heads",
+            ]);
         }
     }
 
@@ -365,6 +386,7 @@ public sealed class RescueScanToolContractTests : IDisposable
 
         var hung = rows[0]!.AsObject();
         hung["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Unknown);
+        hung["rescueAllowed"]!.GetValue<bool>().ShouldBe(true);
         hung["git"]!["dirtyFiles"].ShouldBeNull();
         hung["git"]!["error"]!.GetValue<string>().ShouldContain("git scan failed for 235-hung");
         Reasons(hung).ShouldContain(reason => reason.Contains("timed out", StringComparison.Ordinal));
@@ -409,6 +431,69 @@ public sealed class RescueScanToolContractTests : IDisposable
     }
 
     [Fact]
+    public async Task Scan_CallerCancelsAtTheListing_PropagatesBeforeAnyRowIsWritten()
+    {
+        using var cancelled = new CancellationTokenSource();
+        var tools = Tools(CancellingGit(_scanRoot, cancelled), [DeadClaim()]);
+
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            tools.RescueScan(projectId: Canned.ProjectId, ct: cancelled.Token));
+
+        _gitCalls.ShouldHaveSingleItem().Directory.ShouldBe(_scanRoot);
+        _gitCalls.ShouldNotContain(call => call.Directory == _worktree);
+        cancelled.IsCancellationRequested.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Scan_CallerCancelsMidRowScan_PropagatesInsteadOfDegradingThatRowToUnknown()
+    {
+        using var cancelled = new CancellationTokenSource();
+        var tools = Tools(CancellingGit(_worktree, cancelled), [DeadClaim()]);
+
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            tools.RescueScan(projectId: Canned.ProjectId, ct: cancelled.Token));
+
+        _gitCalls.ShouldContain(call =>
+            call.Directory == _scanRoot && call.Arguments.StartsWith("worktree list", StringComparison.Ordinal));
+        _gitCalls.ShouldContain(call =>
+            call.Directory == _worktree && call.Arguments.StartsWith("status", StringComparison.Ordinal));
+    }
+
+    private IGitCli CancellingGit(string cancelIn, CancellationTokenSource source)
+    {
+        (string Prefix, int Exit, string Output)[] listing =
+        [
+            ("worktree list --porcelain", 0, $"worktree {_root}\nHEAD {MainSha}\nbranch refs/heads/main\n\n"),
+            ("for-each-ref", 0, $"main\n{DeadBranch}\n"),
+        ];
+
+        var git = Substitute.For<IGitCli>();
+        git.RunAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var directory = call.ArgAt<string>(0);
+                var arguments = call.ArgAt<string>(1);
+                var token = call.ArgAt<CancellationToken>(2);
+                _gitCalls.Add((directory, arguments));
+
+                if (directory != cancelIn)
+                {
+                    var match = listing.FirstOrDefault(row =>
+                        arguments.StartsWith(row.Prefix, StringComparison.Ordinal));
+
+                    return match.Prefix is null
+                        ? new GitCommandResult(128, "", $"unstubbed git call: {arguments}")
+                        : new GitCommandResult(match.Exit, match.Output, "");
+                }
+
+                source.Cancel();
+                throw new OperationCanceledException(token);
+            });
+
+        return git;
+    }
+
+    [Fact]
     public async Task Scan_ClearedPolicy_GrantsNoAutonomyInsteadOfReSeedingTheDefault()
     {
         var tools = Tools(Git(), [DeadClaim()], ClaimSettings(null));
@@ -419,6 +504,22 @@ public sealed class RescueScanToolContractTests : IDisposable
         payload["policy"]!["autonomy"]!.GetValue<string>().ShouldBe(RescueScanSource.NotSet);
         payload["policy"]!["guidance"]!.GetValue<string>().ShouldContain("deliberate clearing");
         Only(payload)["rescueAllowed"]!.GetValue<bool>().ShouldBe(false);
+    }
+
+    [Fact]
+    public async Task Scan_RescueWorthyRowUnderClearedPolicy_ReportsTheFactsAndStillGrantsNothing()
+    {
+        var tools = Tools(Git(
+            ("status --porcelain", 0, " M src/a.cs\n"),
+            ("rev-parse --abbrev-ref", 0, $"origin/{DeadBranch}\n"),
+            ("rev-list --count", 0, "2\n"),
+            ("merge-base --is-ancestor", 1, ""),
+            ("log -1", 0, "cceb4fe\t2026-11-16T18:40:00Z\n")), [DeadClaim()], ClaimSettings(null));
+
+        var row = Only(await ScanAsync(tools));
+
+        row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.RescueWorthy);
+        row["rescueAllowed"]!.GetValue<bool>().ShouldBe(false);
     }
 
     [Fact]

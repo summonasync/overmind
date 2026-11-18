@@ -15,14 +15,12 @@ public static class RescueVerdict
         {
             var reason = facts.Error ?? "no git fact could be measured for this candidate";
 
-            return new RescueVerdictResult(location.Measurable ? Unknown : Stale, [reason]);
+            return new RescueVerdictResult(
+                location.Measurable ? Unknown : Stale,
+                [.. LostWorktree(location), reason]);
         }
 
-        var notes = new List<string>();
-        if (location.Stale)
-        {
-            notes.Add($"worktree path {location.WorktreePath} is gone, only the branch is left");
-        }
+        var notes = new List<string>(LostWorktree(location));
 
         var signals = new List<string>();
         if (facts.DirtyFiles > 0)
@@ -71,9 +69,11 @@ public static class RescueVerdict
     private static IReadOnlyList<string> CleanReasons(RescueCodeLocation location, RescueGitFacts facts)
     {
         var reasons = new List<string>();
-        if (location.Stale && facts.UnpushedCommits == 0 && facts.Unmerged == false)
+        if (WorktreeLost(location))
         {
-            reasons.Add($"worktree path {location.WorktreePath} is gone, but the branch is merged and pushed");
+            reasons.Add(facts.UnpushedCommits == 0 && facts.Unmerged == false
+                ? $"worktree path {location.WorktreePath} is gone, but the branch is merged and pushed"
+                : LostWorktreeNote(location));
         }
 
         if (facts.DirtyFiles == 0)
@@ -100,6 +100,15 @@ public static class RescueVerdict
 
         return reasons;
     }
+
+    private static IEnumerable<string> LostWorktree(RescueCodeLocation location) =>
+        WorktreeLost(location) ? [LostWorktreeNote(location)] : [];
+
+    private static bool WorktreeLost(RescueCodeLocation location) =>
+        location is { Stale: true, BranchExists: true };
+
+    private static string LostWorktreeNote(RescueCodeLocation location) =>
+        $"worktree path {location.WorktreePath} is gone, only the branch is left";
 
     private static List<string> Unmeasured(RescueGitFacts facts)
     {
