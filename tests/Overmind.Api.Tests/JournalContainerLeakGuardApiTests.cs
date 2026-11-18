@@ -302,12 +302,12 @@ public sealed class JournalContainerLeakGuardApiTests : IDisposable
         },
         EntryType.Note or EntryType.Decision or EntryType.Gate or EntryType.Guard
             or EntryType.Idea or EntryType.Audit or EntryType.Tombstone => new
-        {
-            ProjectId = projectId,
-            Type = EntryTypeSurface.Normalize(type),
-            Title = title,
-            Content = "probe body",
-        },
+            {
+                ProjectId = projectId,
+                Type = EntryTypeSurface.Normalize(type),
+                Title = title,
+                Content = "probe body",
+            },
         _ => throw new InvalidOperationException(
             $"EntryType.{type} has no case in this guard's payload shape — classify it here on purpose rather " +
             "than letting the theory post a body that proves nothing about it."),
