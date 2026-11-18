@@ -17,28 +17,33 @@ public sealed class EntryLinkResolver
         _journalProjects = journalProjects;
     }
 
+    // Writing an entry never mints the reserved container (spec R2: the container is born by the owner's first
+    // thought, and the create handler is what stamps it). A journal row can only live inside that container, so
+    // by the time its own edges are recomputed the container already exists — resolving against an existing one
+    // loses nothing an agent or a note write could have used. Ensuring here used to create an empty Journal
+    // project as a side effect of any write whose body carried a bare [[Title]]; that is a mutation of the human
+    // surface, and the link it "resolved" was an empty title map either way.
     public Task<IReadOnlyList<ResolvedLink>> ResolveForWriteAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
         CancellationToken ct = default) =>
-        ResolveAsync(sourceEntryId, targets, ensureJournalProject: true, ct);
+        ResolveAsync(sourceEntryId, targets, ct);
 
     public Task<IReadOnlyList<WikiLinkOutcome>> ResolveOutcomesForReadAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
         CancellationToken ct = default) =>
-        ResolveOutcomesAsync(sourceEntryId, targets, ensureJournalProject: false, ct);
+        ResolveOutcomesAsync(sourceEntryId, targets, ct);
 
     private async Task<IReadOnlyList<ResolvedLink>> ResolveAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
-        bool ensureJournalProject,
         CancellationToken ct)
     {
         var resolved = new List<ResolvedLink>();
         var seen = new HashSet<(EntryLinkKind, Guid)>();
 
-        foreach (var outcome in await ResolveOutcomesAsync(sourceEntryId, targets, ensureJournalProject, ct))
+        foreach (var outcome in await ResolveOutcomesAsync(sourceEntryId, targets, ct))
         {
             if (outcome.ToId is not { } resolvedId || resolvedId == sourceEntryId)
             {
@@ -57,7 +62,6 @@ public sealed class EntryLinkResolver
     private async Task<IReadOnlyList<WikiLinkOutcome>> ResolveOutcomesAsync(
         Guid sourceEntryId,
         IReadOnlyList<WikiLinkTarget> targets,
-        bool ensureJournalProject,
         CancellationToken ct)
     {
         var outcomes = new List<WikiLinkOutcome>(targets.Count);
@@ -73,7 +77,7 @@ public sealed class EntryLinkResolver
 
             if (target.Form == WikiLinkKeyForm.Title && journalTitles is null)
             {
-                journalTitles = await LoadJournalTitlesAsync(ensureJournalProject, ct);
+                journalTitles = await LoadJournalTitlesAsync(ct);
             }
 
             Guid? targetId = target.Kind switch
@@ -143,15 +147,11 @@ public sealed class EntryLinkResolver
         return new ProjectIndex([.. rows.Select(row => (row.Id, row.Name, row.CreatedAt))]);
     }
 
-    private async Task<Dictionary<string, Guid>> LoadJournalTitlesAsync(
-        bool ensureProject,
-        CancellationToken ct)
+    private async Task<Dictionary<string, Guid>> LoadJournalTitlesAsync(CancellationToken ct)
     {
         var byTitle = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
-        var projectId = ensureProject
-            ? await _journalProjects.EnsureIdAsync(ct)
-            : await _journalProjects.FindIdAsync(ct);
+        var projectId = await _journalProjects.FindIdAsync(ct);
         if (projectId is not { } containerId)
         {
             return byTitle;

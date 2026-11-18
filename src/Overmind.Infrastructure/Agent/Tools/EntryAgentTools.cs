@@ -71,6 +71,10 @@ public static class EntryAgentTools
     // types the door will not take, and delete_entry does not pre-read — it trusts the route gate and surfaces the
     // server's typed refusal, so the loop pays no extra read per delete. The gate is the authority either way;
     // EntryAgentToolRouteTests pins this spec to the agent route.
+    //
+    // The reason rides the query string because that is where the delete route reads it — a DELETE body is bound
+    // by nobody. The spec used to serialise it into a body, so every embedded tombstone was born reasonless while
+    // the MCP twin (which sends ?reason=) worked; EmbeddedEntryToolDeleteApiTests is the seam that measures it.
     private static AgentToolSpec DeleteEntrySpec(AgentLoopbackClient api) => new(
         "delete_entry",
         "Deletes one entry through the agent door — a tombstone entry is born in its place carrying the title, the deletion date and the original content. Deleting a tombstone is a plain delete. Skills are refused — the UI owns them. Journal entries are the human surface: the door refuses them with JournalEntryWriteRefused.",
@@ -78,10 +82,8 @@ public static class EntryAgentTools
         {"type":"object","properties":{"entryId":{"type":"string"},"reason":{"type":"string"}},"required":["entryId"]}
         """,
         async (args, ct) => await api.DeleteAsync(
-            $"/api/agent/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}",
-            new AgentToolPayload()
-                .Set("reason", AgentToolArgs.OptionalString(args, "reason"))
-                .Build(),
+            AgentToolArgs.BuildQuery(
+                $"/api/agent/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}", args, "reason"),
             ct));
 
     private static AgentToolSpec AckEntrySpec(AgentLoopbackClient api) => new(

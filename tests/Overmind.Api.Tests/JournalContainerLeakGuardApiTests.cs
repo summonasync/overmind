@@ -44,6 +44,48 @@ public sealed class JournalContainerLeakGuardApiTests : IDisposable
     public static IEnumerable<object[]> AgentWritableTypes() =>
         EntryTypeSurface.AgentWritable.Select(type => new object[] { type });
 
+    // m1: the seal is a rule about types, so its coverage is measured off the enum and not off a list somebody
+    // keeps. A member added tomorrow arrives here without anyone editing a case — BodyFor refuses to guess what an
+    // unclassified member's request should look like and says which member is unhandled.
+    public static IEnumerable<object[]> EveryNonJournalEntryType() =>
+        Enum.GetValues<EntryType>()
+            .Where(type => type != EntryType.Journal)
+            .Select(type => new object[] { type });
+
+    [Fact]
+    public static void TheEnumScanIsTheWholeEnumMinusJournal_NotASubsetOfIt()
+    {
+        // The denominator: a member source narrowed by a hand-edit would leave the theory green on fewer cases.
+        var all = Enum.GetValues<EntryType>();
+        var scanned = all.Where(type => type != EntryType.Journal).ToArray();
+
+        scanned.Length.ShouldBe(all.Length - 1,
+            $"journal is the only type the empty guid is allowed to mean, got {scanned.Length} of {all.Length}");
+        scanned.ShouldNotContain(EntryType.Journal);
+        scanned.ShouldContain(EntryType.Skill,
+            "the type the agent gate has opinions about must be measured at this door too");
+        scanned.ShouldContain(EntryType.Tombstone);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryNonJournalEntryType))]
+    public async Task HumanDoor_EveryNonJournalTypeWithEmptyGuidProjectId_IsRefusedLikeBeforeTask14(EntryType type)
+    {
+        var containerId = await SeedTheReservedContainerAsync();
+        var probe = $"Human zero-guid {type}";
+        var before = await CountRowsAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/entries", BodyFor(type, Guid.Empty, probe), JsonOptions);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, Landing(response.StatusCode, body, containerId));
+        body.Contains("ProjectId cannot be the empty guid").ShouldBeTrue(
+            $"the refusal has to come from the destination rule and not from {type}'s own shape: {body}");
+        (await TitlesInContainerAsync(containerId)).ShouldNotContain(probe);
+        (await CountRowsAsync()).ShouldBe(before);
+    }
+
     [Theory]
     [MemberData(nameof(AgentWritableTypes))]
     public async Task AgentDoor_NonJournalWithEmptyGuidProjectId_IsRefusedAndTheContainerStaysClean(EntryType type)
@@ -60,23 +102,6 @@ public sealed class JournalContainerLeakGuardApiTests : IDisposable
         (await TitlesAnywhereAsync()).ShouldNotContain(probe, $"the refused {type} must not exist at all: {body}");
         (await TitlesInContainerAsync(containerId)).ShouldNotContain(probe);
         (await CountRowsAsync()).ShouldBe(before, "a refusal writes nothing");
-    }
-
-    [Theory]
-    [MemberData(nameof(AgentWritableTypes))]
-    public async Task HumanDoor_NonJournalWithEmptyGuidProjectId_IsRefusedLikeBeforeTask14(EntryType type)
-    {
-        var containerId = await SeedTheReservedContainerAsync();
-        var probe = $"Human zero-guid {type}";
-        var before = await CountRowsAsync();
-
-        var response = await PostJsonAsync("/api/entries", type, ZeroGuid(), probe);
-        var body = await response.Content.ReadAsStringAsync();
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, Landing(response.StatusCode, body, containerId));
-        body.ShouldContain("ProjectId cannot be the empty guid");
-        (await TitlesInContainerAsync(containerId)).ShouldNotContain(probe);
-        (await CountRowsAsync()).ShouldBe(before);
     }
 
     [Theory]
@@ -254,13 +279,39 @@ public sealed class JournalContainerLeakGuardApiTests : IDisposable
         EntryType type,
         Guid? projectId,
         string title) =>
-        _client.PostAsJsonAsync(path, new
+        _client.PostAsJsonAsync(path, BodyFor(type, projectId, title), JsonOptions);
+
+    // One body per declared type, shaped so that the empty guid is the only thing wrong with it. An unclassified
+    // member says so by name instead of being posted in a default shape that might pass for the wrong reason.
+    private static object BodyFor(EntryType type, Guid? projectId, string title) => type switch
+    {
+        EntryType.Skill => new
         {
             ProjectId = projectId,
             Type = EntryTypeSurface.Normalize(type),
             Title = title,
             Content = "probe body",
-        }, JsonOptions);
+            SkillFiles = new[] { new { Platform = (string?)null, RelativePath = "SKILL.md", Content = "body" } },
+        },
+        EntryType.Journal => new
+        {
+            ProjectId = projectId,
+            Type = EntryTypeSurface.Normalize(type),
+            Title = title,
+            Content = "probe body",
+        },
+        EntryType.Note or EntryType.Decision or EntryType.Gate or EntryType.Guard
+            or EntryType.Idea or EntryType.Audit or EntryType.Tombstone => new
+        {
+            ProjectId = projectId,
+            Type = EntryTypeSurface.Normalize(type),
+            Title = title,
+            Content = "probe body",
+        },
+        _ => throw new InvalidOperationException(
+            $"EntryType.{type} has no case in this guard's payload shape — classify it here on purpose rather " +
+            "than letting the theory post a body that proves nothing about it."),
+    };
 
     // Spec R2 through the human door: the container exists before any probe, so every refusal below is judged
     // against a real inbox that could have received a stray row.

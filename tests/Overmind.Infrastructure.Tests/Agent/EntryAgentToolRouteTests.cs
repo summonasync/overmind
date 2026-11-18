@@ -24,9 +24,28 @@ public sealed class EntryAgentToolRouteTests
 
         await spec.Invoke(Args($$"""{"entryId":"{{EntryId}}","reason":"retired"}"""), CancellationToken.None);
 
-        recorder.Requests.Single().Method.ShouldBe(HttpMethod.Delete);
-        recorder.Requests.Single().Path.ShouldBe($"/api/agent/entries/{EntryId}");
-        recorder.Requests.ShouldNotContain(r => r.Path == $"/api/entries/{EntryId}");
+        recorder.Requests.ShouldHaveSingleItem();
+        var call = recorder.Requests[0];
+        call.Method.ShouldBe(HttpMethod.Delete);
+        call.Location.ShouldBe($"/api/agent/entries/{EntryId}?reason=retired");
+        recorder.Requests.ShouldNotContain(r => r.Location == $"/api/agent/entries/{EntryId}");
+
+        // The reason travels as a query parameter because that is where the route binds it. It used to ride a
+        // JSON body nobody read, so every embedded tombstone was born without the line the caller supplied —
+        // EmbeddedEntryToolDeleteApiTests measures the same seam against the real Host.
+        call.HasBody.ShouldBeFalse("DELETE carries no payload");
+    }
+
+    [Fact]
+    public async Task DeleteEntrySpec_WithoutAReason_SendsACleanPath()
+    {
+        var recorder = new RecordingHandler(() => JsonResponse(HttpStatusCode.OK, """{"id":"x"}"""));
+
+        await Spec(recorder, "delete_entry").Invoke(
+            Args($$"""{"entryId":"{{EntryId}}"}"""), CancellationToken.None);
+
+        recorder.Requests.ShouldHaveSingleItem();
+        recorder.Requests[0].Location.ShouldBe($"/api/agent/entries/{EntryId}");
     }
 
     [Fact]
@@ -45,7 +64,8 @@ public sealed class EntryAgentToolRouteTests
         thrown.StatusCode.ShouldBe(400);
         thrown.Message.ShouldContain("human surface");
         thrown.Message.ShouldContain($"/api/agent/entries/{EntryId}");
-        recorder.Requests.Single().Path.ShouldBe($"/api/agent/entries/{EntryId}");
+        recorder.Requests.ShouldHaveSingleItem();
+        recorder.Requests[0].Location.ShouldBe($"/api/agent/entries/{EntryId}");
     }
 
     [Fact]
@@ -60,7 +80,7 @@ public sealed class EntryAgentToolRouteTests
             Args($$"""{"entryId":"{{EntryId}}","content":"c"}"""),
             CancellationToken.None);
 
-        recorder.Requests.Select(r => r.Path).ShouldBe(["/api/agent/entries", $"/api/agent/entries/{EntryId}"]);
+        recorder.Requests.Select(r => r.Location).ShouldBe(["/api/agent/entries", $"/api/agent/entries/{EntryId}"]);
     }
 
     [Fact]
@@ -79,10 +99,15 @@ public sealed class EntryAgentToolRouteTests
             write.Description.ShouldContain(EntryTypeSurface.Normalize(type));
         }
 
-        // The prose clause that enumerates what the door writes must list every writable type and nothing gated.
-        // "journal" appears elsewhere in the sentence (naming what is refused), so the check is scoped to the list.
+        // The prose clause that enumerates what the door writes must list every writable type and nothing the door
+        // refuses. Journal and skill both appear elsewhere in the sentence (naming what is refused), so the check is
+        // scoped to the enumeration — skill is in it because the server used to accept it while this sentence said
+        // the UI owns it, which is the drift task 12 closed by gating it.
         var typeClause = write.Description.Split(';', StringSplitOptions.RemoveEmptyEntries)[0];
         typeClause.ShouldNotContain("journal");
+        typeClause.ShouldNotContain("skill");
+
+        delete.Description.ShouldContain("Skills are refused");
     }
 
     private static AgentToolSpec Spec(RecordingHandler handler, string name) =>
@@ -101,12 +126,14 @@ public sealed class EntryAgentToolRouteTests
 
     private sealed class RecordingHandler(Func<HttpResponseMessage> respond) : DelegatingHandler
     {
-        public List<(HttpMethod Method, string Path)> Requests { get; } = [];
+        public List<(HttpMethod Method, string Location, bool HasBody)> Requests { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Requests.Add((request.Method, request.RequestUri!.AbsolutePath));
+            // PathAndQuery, not AbsolutePath: the reason the route binds is the thing under test here, and a
+            // path-only recording cannot see it move from a body nobody read into a query somebody does.
+            Requests.Add((request.Method, request.RequestUri!.PathAndQuery, request.Content is not null));
             return Task.FromResult(respond());
         }
     }

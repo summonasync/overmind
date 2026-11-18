@@ -723,11 +723,16 @@ No additional prose — the tool description lost nothing.
   promotion to a board feature stays a ceremony act.
 - `enforces` is decision-only: it marks the decision as a standing rule agents must obey;
   the server refuses `enforces=true` on any other type.
-- Skill entries are refused (`SkillManagedElsewhere`) — managed via the Overmind UI.
+- Skill entries are refused (`SkillManagedElsewhere`) — managed via the Overmind UI. The agent door
+  answers the same refusal on its own with `SkillEntryWriteRefused`, so the rule holds for a caller
+  that reaches the route directly instead of through this adapter.
 - `journal` is refused with `JournalEntryWriteRefused`: journal rows are the human surface, and
   the type enumeration the schema advertises for this tool omits it on purpose.
-- Entry writes go through the agent door (`/api/agent/entries…`), the surface that enforces that
-  refusal; reads (`list_entries`, `read_entry`, `search`) stay on the plain entry routes.
+- Entry writes go through the agent door (`/api/agent/entries…`), the surface that enforces both
+  refusals; reads (`list_entries`, `read_entry`, `search`) stay on the plain entry routes. The gate
+  classifies a write from the entry its route names plus the request contract it declares, and
+  refuses a body it has not vetted (`AgentEntryWriteShapeUndetermined`) rather than guess what the
+  verb mutates — a verb that addresses more entries than that has to be taught to the gate first.
 - Returns a compact echo: `id`, `type`, `version`, `updatedAt`, `bodyChars`; decisions also
   carry a `hint` line suggesting the grimoire mirror plus
   `pointer: grimoire://memory/<id>` linkage.
@@ -735,7 +740,8 @@ No additional prose — the tool description lost nothing.
 ## update_entry
 
 - Replaces content only — title, tags and type are kept; the entry type is read back first
-  and skill entries are refused.
+  and skill entries are refused. The door reads the target's type itself, so a skill row handed to
+  the route directly comes back as `SkillEntryWriteRefused` too.
 - A `journal` row is refused the same way, with `JournalEntryWriteRefused`, before the mutation
   is constructed; the door behind it refuses one it is handed anyway.
 - `enforces`: an explicit value sets the decision-only standing-rule flag (the server refuses
@@ -751,7 +757,11 @@ No additional prose — the tool description lost nothing.
 - Tombstones stay discoverable: `list_entries` with `type=tombstone`; `search` rides them
   like every other entry.
 - Kit-linked entries are refused (`KitOwnedEntry`: managed by a skill kit — the kit reimport
-  or the UI owns it); skill entries are refused too.
+  or the UI owns it); skill entries are refused too, by this tool and by the door behind it
+  (`SkillEntryWriteRefused`).
+- `reason` travels as a query parameter (`?reason=`) because that is where the route binds it; a
+  DELETE body is read by nobody. An embedded-agent delete that put the reason in a body used to
+  produce a reasonless tombstone.
 - `journal` rows are refused with `JournalEntryWriteRefused` — deleting a journal entry is a
   human act, not a door the agent walks through.
 - Unlike other entry doors, project resolution here creates the project row when missing.
@@ -766,7 +776,9 @@ No additional prose — the tool description lost nothing.
 - The body, title and tags stay untouched; re-lift is allowed, last write wins.
 - A lifted entry leaves the active default listings (`list_entries` trio default, briefing
   trio sections) and surfaces in the briefing's `liftedRecently` tail.
-- Lift refuses skills (the UI owns the skill lifecycle) and tombstones (already the ceiling).
+- Lift refuses skills (the UI owns the skill lifecycle) and tombstones (already the ceiling);
+  the door refuses a skill target on its own, and `supersededById` names a read-only reference —
+  lifting writes the addressed entry and never the target.
 - A `journal` row is refused too: the tool reads the target type first and stops with
   `JournalEntryWriteRefused` before any write leaves the adapter, and the agent door refuses one
   it is handed anyway.

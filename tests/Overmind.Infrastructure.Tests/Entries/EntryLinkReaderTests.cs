@@ -139,15 +139,38 @@ public sealed class EntryLinkReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task WriteMode_StillReservesTheJournalProject()
+    public async Task WriteMode_NeitherResolvesNorReserves_TheContainerIsTheOwnersToBirth()
     {
+        // The inverse of the pin this slot held since task 4. Ensuring the reserved project on the write path
+        // bought resolution nothing — no container means no journal rows, so the title map was empty either way —
+        // and it let any entry write with a bare [[Title]] mint the human's project. Spec R2: one birth, the owner's
+        // first thought, and the journal create is where it happens.
         using var fresh = new TempDatabase();
         using var context = fresh.CreateContext();
 
         await new EntryLinkResolver(context, new JournalProjectStore(context))
             .ResolveForWriteAsync(Guid.NewGuid(), WikiLinkParser.Parse("links [[Anchor Note]]"));
 
-        (await context.Projects.AnyAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBeTrue();
+        (await context.Projects.AnyAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WriteMode_ResolvesAgainstAnExistingContainer_WithoutWritingOne()
+    {
+        using var fresh = new TempDatabase();
+        using var context = fresh.CreateContext();
+        var journal = Project.Create(JournalProjectStore.ProjectName, "/tmp/anchor-journal");
+        context.Projects.Add(journal);
+        var anchor = ContextEntry.Create(journal.Id, EntryType.Journal, "Anchor Note", "the owner's line");
+        context.ContextEntries.Add(anchor);
+        await context.SaveChangesAsync();
+
+        var links = await new EntryLinkResolver(context, new JournalProjectStore(context))
+            .ResolveForWriteAsync(Guid.NewGuid(), WikiLinkParser.Parse("links [[Anchor Note]]"));
+
+        links.ShouldHaveSingleItem();
+        links[0].ToId.ShouldBe(anchor.Id);
+        (await context.Projects.CountAsync()).ShouldBe(1, "reading the container must not add anything beside it");
     }
 
     [Fact]

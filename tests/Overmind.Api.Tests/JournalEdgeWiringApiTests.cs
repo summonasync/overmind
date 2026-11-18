@@ -133,15 +133,17 @@ public sealed class JournalEdgeWiringApiTests : IDisposable
         _probe.LandWinnerOnNextProjectInsert = true;
         _probe.Statements.Clear();
 
-        var created = await CreateEntryAsync(_projectId, "note", "Container Birth",
-            "mentions [[Some Note]] and [[feature:777]]");
+        // Task 12 (m2) moved the only legitimate birth of the reserved container onto the journal door: a write-path
+        // resolver that ensures it mints the human's project out of an agent note. The race this fact proves lives
+        // in that one insert, so the write that drives it is the owner's first thought now, not a note.
+        var created = await CreateOwnerlessJournalAsync("Container Birth", "mentions [[Some Note]] and [[feature:777]]");
 
         _probe.WinnerLandings.ShouldBe(1, string.Join(" || ", _probe.Statements));
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
-        (await db.Projects.CountAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(1);
-        (await db.ContextEntries.CountAsync(e => e.ProjectId == _projectId)).ShouldBe(1);
+        var container = await db.Projects.SingleAsync(p => p.Name == JournalProjectStore.ProjectName);
+        (await db.ContextEntries.CountAsync(e => e.ProjectId == container.Id)).ShouldBe(1);
 
         var rows = await DerivedRowsAsync(created);
         rows.ShouldHaveSingleItem();
@@ -153,33 +155,18 @@ public sealed class JournalEdgeWiringApiTests : IDisposable
     {
         await DeleteJournalContainerAsync();
 
-        var first = _client.PostAsJsonAsync("/api/entries", new
-        {
-            ProjectId = _projectId,
-            Type = "note",
-            Title = "Concurrent One",
-            Content = "mentions [[Shared Title]]",
-        });
-        var second = _client.PostAsJsonAsync("/api/entries", new
-        {
-            ProjectId = _projectId,
-            Type = "note",
-            Title = "Concurrent Two",
-            Content = "mentions [[Shared Title]]",
-        });
+        // Same retarget as the race fact above: two ownerless journal thoughts racing for the container the human
+        // door mints, which is the only place a birth happens since task 12 closed the write-path ensure.
+        var first = CreateOwnerlessJournalAsync("Concurrent One", "mentions [[Shared Title]]");
+        var second = CreateOwnerlessJournalAsync("Concurrent Two", "mentions [[Shared Title]]");
 
-        var pair = await Task.WhenAll(first, second);
-
-        foreach (var response in pair)
-        {
-            var body = await response.Content.ReadAsStringAsync();
-            response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
-        }
+        await Task.WhenAll(first, second);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
         (await db.Projects.CountAsync(p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(1);
-        (await db.ContextEntries.CountAsync(e => e.ProjectId == _projectId)).ShouldBe(2);
+        var container = await db.Projects.SingleAsync(p => p.Name == JournalProjectStore.ProjectName);
+        (await db.ContextEntries.CountAsync(e => e.ProjectId == container.Id)).ShouldBe(2);
     }
 
     [Fact]
@@ -256,6 +243,24 @@ public sealed class JournalEdgeWiringApiTests : IDisposable
 
     private async Task<Guid> CreateJournalNoteAsync(string title, string content) =>
         await CreateEntryAsync(_journalId, "journal", title, content);
+
+    // The owner's first thought: no destination named, so the human door mints the reserved container around it.
+    // This is the only write that births the container since task 12 closed the write-path resolver's ensure.
+    private async Task<Guid> CreateOwnerlessJournalAsync(string title, string content)
+    {
+        var response = await _client.PostAsJsonAsync("/api/entries", new
+        {
+            Type = "journal",
+            Title = title,
+            Content = content,
+        });
+
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+
+        var created = await response.Content.ReadFromJsonAsync<EntryJson>(JsonOptions);
+        return created?.Id ?? throw new InvalidOperationException($"empty create response for '{title}': {body}");
+    }
 
     private async Task<Guid> CreateEntryAsync(Guid projectId, string type, string title, string content)
     {
