@@ -72,7 +72,7 @@ public static class AgentSessionsApi
         Guid id, SetAgentSessionIdentityRequest request, OvermindDbContext db,
         FeatureClaimService claims, CancellationToken ct)
     {
-        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
+        var session = await db.AgentSessions.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
         if (session is null)
         {
             return HttpErrors.NotFound($"Session '{id}' was not found.");
@@ -80,13 +80,12 @@ public static class AgentSessionsApi
 
         var alias = request.Alias?.Trim();
         var vendor = request.Vendor?.Trim();
+        var aliveSince = await AliveSinceAsync(db, ct);
 
-        var holder = await FindAliveAliasHolderAsync(db, id, alias, ct);
+        var holder = await FindAliveAliasHolderAsync(db, id, alias, aliveSince, ct);
         if (holder is not null)
         {
-            return HttpErrors.Conflict(
-                $"Alias '{alias}' is held by the alive session '{holder.Alias}' by '{holder.Vendor}'; " +
-                "a stale or ended holder frees the alias.");
+            return HttpErrors.Conflict(AliasHeldDetail(alias, holder));
         }
 
         var identityChanged = !string.Equals(alias, session.Alias, StringComparison.Ordinal) ||
@@ -101,36 +100,69 @@ public static class AgentSessionsApi
             return HttpErrors.BadRequest(ex.Message);
         }
 
+        // The pre-check above is only the friendly answer; between it and this write another adapter can
+        // land the same alias, so the claim itself carries the guard — SQLite runs the statement as one
+        // atomic write, and the loser sees the winner's row and gets 0 rows back.
+        if (!await TryClaimAliasAsync(db, id, session.Alias, session.Vendor, aliveSince, ct))
+        {
+            var rival = await FindAliveAliasHolderAsync(db, id, session.Alias, aliveSince, ct);
+            return HttpErrors.Conflict(rival is not null
+                ? AliasHeldDetail(session.Alias, rival)
+                : $"Alias '{session.Alias}' was claimed while this request was running; set the identity again.");
+        }
+
         IReadOnlyList<string> moved = identityChanged
-            ? await claims.ReattributeSessionClaimsAsync(id, alias!, vendor!, ct)
+            ? await claims.ReattributeSessionClaimsAsync(id, session.Alias, session.Vendor, ct)
             : [];
 
-        await db.SaveChangesAsync(ct);
         return Results.Ok(new AgentSessionIdentityResponse(
-            ToResponse(session), BuildIdentityWarnings(alias!, vendor!, moved)));
+            ToResponse(session), BuildIdentityWarnings(session.Alias, session.Vendor, moved)));
+    }
+
+    // The union of project alive windows: a holder counts as alive while any project would still count it.
+    private static async Task<DateTime> AliveSinceAsync(OvermindDbContext db, CancellationToken ct)
+    {
+        var threshold = await db.Projects
+            .Select(p => (int?)p.ClaimStaleThresholdMinutes)
+            .MaxAsync(ct) ?? Project.DefaultClaimStaleThresholdMinutes;
+
+        return threshold > 0 ? DateTime.UtcNow.AddMinutes(-threshold) : DateTime.MinValue;
     }
 
     private static async Task<AgentSession?> FindAliveAliasHolderAsync(
-        OvermindDbContext db, Guid sessionId, string? alias, CancellationToken ct)
+        OvermindDbContext db, Guid sessionId, string? alias, DateTime aliveSince, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(alias))
         {
             return null;
         }
 
-        // The union of project alive windows: a holder counts as alive while any project would still count it.
-        var threshold = await db.Projects
-            .Select(p => (int?)p.ClaimStaleThresholdMinutes)
-            .MaxAsync(ct) ?? Project.DefaultClaimStaleThresholdMinutes;
-
-        var candidates = await db.AgentSessions
-            .Where(s => s.Id != sessionId && s.Alias == alias)
-            .ToListAsync(ct);
-
-        return candidates.FirstOrDefault(s =>
-            string.Equals(s.Alias, alias, StringComparison.Ordinal) &&
-            s.Liveness(DateTime.UtcNow, threshold) == AgentSessionLiveness.Alive);
+        return await db.AgentSessions
+            .Where(s => s.Id != sessionId &&
+                        s.Alias == alias &&
+                        s.EndedAt == null &&
+                        s.LastSeenAt >= aliveSince)
+            .FirstOrDefaultAsync(ct);
     }
+
+    private static async Task<bool> TryClaimAliasAsync(
+        OvermindDbContext db, Guid sessionId, string alias, string vendor,
+        DateTime aliveSince, CancellationToken ct)
+    {
+        var claimed = await db.AgentSessions
+            .Where(s => s.Id == sessionId &&
+                        !db.AgentSessions.Any(h =>
+                            h.Id != sessionId && h.Alias == alias && h.EndedAt == null && h.LastSeenAt >= aliveSince))
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(s => s.Alias, alias)
+                .SetProperty(s => s.Vendor, vendor), ct);
+
+        return claimed == 1;
+    }
+
+    private static string AliasHeldDetail(string? alias, AgentSession holder) =>
+        $"Alias '{alias}' is held by the alive session '{holder.Alias}' by '{holder.Vendor}'; " +
+        "a stale or ended holder frees the alias.";
 
     private static IReadOnlyList<string> BuildIdentityWarnings(
         string alias, string vendor, IReadOnlyList<string> movedSlugs)

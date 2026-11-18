@@ -54,6 +54,12 @@ var workspaceIdentity = new WorkspaceIdentityFile();
 var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource(), workspaceIdentity: workspaceIdentity);
 var lifecycle = new AgentSessionLifecycle(http);
 
+var prunedStamps = SessionIdentityFiles.PruneStaleParentSnapshots();
+if (prunedStamps > 0)
+{
+    Console.Error.WriteLine($"[overmind-mcp] pruned {prunedStamps} parent identity file(s) of dead parents");
+}
+
 // A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
 // session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
 // and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
@@ -67,14 +73,16 @@ try
 {
     adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
-    (alias, vendor) = await identityRefresher.RestoreWorkspaceIdentityAsync(
-        adapterSessionId, alias, vendor, CancellationToken.None);
-    identityFile.Write(alias, vendor, adapterSessionId);
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
 catch (Exception ex)
 {
     Console.Error.WriteLine($"[overmind-mcp] WARN: session registration failed, claims will be refused: {ex.Message}");
+}
+
+if (adapterSessionId != Guid.Empty)
+{
+    await identityRefresher.RestoreAndStampAsync(adapterSessionId, alias, vendor, CancellationToken.None);
 }
 
 SessionHeartbeat? heartbeat = null;

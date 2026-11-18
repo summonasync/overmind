@@ -108,6 +108,39 @@ public sealed class WorkspaceIdentityRestartContractTests : IDisposable
         ReadWorkspaceIdentity()["alias"]!.GetValue<string>().ShouldBe("crew-otter");
     }
 
+    [Fact]
+    public async Task Restart_RestoredIdentity_LandsInRememberedStateAndOnboardRendersItAsTheSlot()
+    {
+        await SetWorkspaceIdentity("mark-wolff", "claude");
+
+        _stub.Route("POST", "/api/onboard", 200, OnboardPayload("mark-wolff", "claude"));
+        var second = await StartAdapter();
+
+        var text = Canned.ToolResultText(await second.CallToolAsync("overmind_onboard", new JsonObject()));
+
+        text.ShouldContain("Agent identity: alias 'mark-wolff', vendor 'claude' (source: slot)");
+    }
+
+    [Fact]
+    public async Task Restart_PrunesTheParentStampOfADeadParent()
+    {
+        var identityDirectory = Path.Combine(_home, ".overmind", "identity");
+        Directory.CreateDirectory(identityDirectory);
+        File.WriteAllText(Path.Combine(identityDirectory, "parent-2147483000.json"), "{}");
+        await SetWorkspaceIdentity("mark-wolff", "claude");
+
+        var second = await StartAdapter();
+        await second.ListToolsAsync();
+
+        File.Exists(Path.Combine(identityDirectory, "parent-2147483000.json")).ShouldBeFalse();
+        Directory.GetFiles(identityDirectory, "workspace-*.json").Length.ShouldBe(1);
+    }
+
+    private static string OnboardPayload(string alias, string vendor) =>
+        Canned.OnboardAgentIdentityJson
+            .Replace("\"alias\":\"agent\"", $"\"alias\":\"{alias}\"")
+            .Replace("\"vendor\":\"unknown\"", $"\"vendor\":\"{vendor}\"");
+
     private async Task SetWorkspaceIdentity(string alias, string vendor)
     {
         var first = await StartAdapter();

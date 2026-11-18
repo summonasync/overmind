@@ -354,6 +354,232 @@ public sealed class SessionIdentityRefresherTests : IDisposable
         Workspace().TryRead()!.Alias.ShouldBe("mark-wolff");
     }
 
+    [Fact]
+    public async Task Handshake_ExplicitEnvVendor_KeepsTheSavedPairAndSaysItWasDiscarded()
+    {
+        AdapterSession.Id = null;
+        Environment.SetEnvironmentVariable("OVERMIND_VENDOR", "qwen");
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? IdentityEcho(sessionId, "mark-wolff", "claude")
+                : JsonBody(new { id = sessionId }));
+
+        var stderr = await WithCapturedStderrAsync(() => refresher.RefreshAsync(CancellationToken.None));
+
+        stderr.ShouldContain("explicit OVERMIND_VENDOR 'qwen' discarded");
+        var identity = JsonNode.Parse(
+            Requests.Single(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal)).Body)!;
+        identity["alias"]!.GetValue<string>().ShouldBe("mark-wolff");
+        identity["vendor"]!.GetValue<string>().ShouldBe("claude");
+        Workspace().TryRead()!.Vendor.ShouldBe("claude");
+    }
+
+    [Fact]
+    public async Task Handshake_DefaultVendor_TalksAboutTheVendorOnlyWhenItIsOverridden()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? IdentityEcho(sessionId, "mark-wolff", "claude")
+                : JsonBody(new { id = sessionId }));
+
+        var stderr = await WithCapturedStderrAsync(() => refresher.RefreshAsync(CancellationToken.None));
+
+        stderr.ShouldNotContain("discarded");
+        stderr.ShouldContain("workspace identity restored: mark-wolff by claude");
+    }
+
+    [Fact]
+    public async Task Handshake_RefusedRestore_PrintsTheHostsHolderDetail()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? Conflict("""Alias 'mark-wolff' is held by the alive session 'boss-of-the-gym' by 'qwen'; """
+                          + """a stale or ended holder frees the alias.""")
+                : JsonBody(new { id = sessionId }));
+
+        var stderr = await WithCapturedStderrAsync(() => refresher.RefreshAsync(CancellationToken.None));
+
+        stderr.ShouldContain(
+            "workspace identity 'mark-wolff' by 'claude' is held by an alive session, " +
+            "registering as 'agent' by 'unknown' instead; " +
+            "host: Alias 'mark-wolff' is held by the alive session 'boss-of-the-gym' by 'qwen'");
+    }
+
+    [Fact]
+    public async Task Handshake_RefusalWithoutADetail_StillSaysTheAliasIsHeld()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? new HttpResponseMessage(HttpStatusCode.Conflict)
+                : JsonBody(new { id = sessionId }));
+
+        var stderr = await WithCapturedStderrAsync(() => refresher.RefreshAsync(CancellationToken.None));
+
+        stderr.ShouldContain(
+            "workspace identity 'mark-wolff' by 'claude' is held by an alive session, " +
+            "registering as 'agent' by 'unknown' instead.");
+    }
+
+    [Fact]
+    public async Task Handshake_RefusedRestore_IsNotRetried_AndTheSlotStaysEmpty()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? Conflict("held")
+                : JsonBody(new { id = sessionId }));
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        Requests.Count(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal))
+            .ShouldBe(1, "a refusal is an answer, not a blip to retry");
+        AdapterIdentityState.TryGet().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Handshake_TransientIdentityFailure_RetriesWithinTheBudgetAndRestores()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var identityCalls = 0;
+        var refresher = Refresher(request =>
+        {
+            if (!IsIdentityCall(request))
+            {
+                return JsonBody(new { id = sessionId });
+            }
+
+            return Interlocked.Increment(ref identityCalls) == 1
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : IdentityEcho(sessionId, "mark-wolff", "claude");
+        });
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        identityCalls.ShouldBe(2, "the stated bound is two tries inside one Budget window");
+        var slot = AdapterIdentityState.TryGet();
+        slot!.Alias.ShouldBe("mark-wolff");
+        slot.Vendor.ShouldBe("claude");
+        Workspace().TryRead()!.Alias.ShouldBe("mark-wolff");
+    }
+
+    [Fact]
+    public async Task Handshake_IdentityCallFailsEveryTime_SaysSoAndKeepsTheRegisteredIdentity()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : JsonBody(new { id = sessionId }));
+
+        var stderr = await WithCapturedStderrAsync(() => refresher.RefreshAsync(CancellationToken.None));
+
+        stderr.ShouldContain(
+            $"'mark-wolff' by 'claude' not restored after {SessionIdentityRefresher.RestoreAttempts} attempt(s)");
+        AdapterIdentityState.TryGet().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Reconnect_AfterARestore_RegistersUnderTheRememberedPairWithoutTheIdentityCall()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? IdentityEcho(sessionId, "mark-wolff", "claude")
+                : JsonBody(new { id = sessionId }));
+
+        await refresher.RefreshAsync(CancellationToken.None);
+        Requests.Clear();
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        var registrations = Requests
+            .Where(r => r.Uri == "http://127.0.0.1:4761/api/agent/sessions")
+            .Select(r => JsonNode.Parse(r.Body)!)
+            .ToArray();
+        registrations.Length.ShouldBe(1);
+        registrations[0]["alias"]!.GetValue<string>().ShouldBe("mark-wolff");
+        registrations[0]["vendor"]!.GetValue<string>().ShouldBe("claude");
+        Requests.ShouldNotContain(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RestoreAndStamp_StampFailure_BlamesTheStampNotTheRegistration()
+    {
+        AdapterSession.Id = null;
+        var sessionId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", Guid.NewGuid(), DateTime.UtcNow));
+        var refresher = Refresher(
+            request => IsIdentityCall(request)
+                ? IdentityEcho(sessionId, "mark-wolff", "claude")
+                : JsonBody(new { id = sessionId }),
+            new SessionIdentityFileWriter(new ThrowingParentPid(), IdentityRoot, Workspace()));
+
+        var (restored, stderr) = await WithCapturedStderrAsync(() => refresher.RestoreAndStampAsync(
+            sessionId, "agent", "unknown", CancellationToken.None));
+
+        (restored.Alias, restored.Vendor).ShouldBe(("mark-wolff", "claude"));
+        stderr.ShouldContain("is registered; its identity stamp failed");
+        stderr.ShouldNotContain("registration failed");
+    }
+
+    private static HttpResponseMessage Conflict(string detail) =>
+        new(HttpStatusCode.Conflict)
+        {
+            Content = new StringContent(
+                $$"""{"title":"Conflict","detail":"{{detail}}","status":409}""",
+                Encoding.UTF8,
+                "application/json"),
+        };
+
+    private static async Task<(T Value, string Stderr)> WithCapturedStderrAsync<T>(Func<Task<T>> action)
+    {
+        var pipe = new StringWriter();
+        var original = Console.Error;
+        Console.SetError(pipe);
+        try
+        {
+            return (await action(), pipe.ToString());
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+    }
+
+    private static async Task<string> WithCapturedStderrAsync(Func<Task> action)
+    {
+        var (_, stderr) = await WithCapturedStderrAsync(async () =>
+        {
+            await action();
+            return true;
+        });
+        return stderr;
+    }
+
+    private sealed class ThrowingParentPid : IParentProcessIdSource
+    {
+        public int? Resolve() => throw new IOException("parent pid unreadable");
+    }
+
     private sealed class FixedParentPid(int? pid) : IParentProcessIdSource
     {
         public int? Resolve() => pid;
