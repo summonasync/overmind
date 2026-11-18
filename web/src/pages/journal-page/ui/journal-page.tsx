@@ -1,60 +1,28 @@
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import {
-  journalDayWindow,
+  JournalFilters,
+  JournalStream,
+  journalServerFilters,
+  selectJournalDay,
   useJournalContainer,
+  useJournalFilters,
+  useJournalLinkAccents,
+  useJournalMutations,
   useJournalNote,
   useJournalStream,
+  useTagColorMap,
 } from "@/features/journal";
-import type { JournalStreamFilters } from "@/features/journal";
+import type { JournalNote } from "@/features/journal";
 
-// Route shell only: it proves the data layer end to end (URL → filters → cache
-// → server) and will be replaced component by component in T6-T8.
-function StreamPlaceholder({ projectId, filters }: { projectId: string; filters: JournalStreamFilters }) {
-  const { data, loading, error } = useJournalStream(projectId, filters);
-
-  if (projectId.length === 0) {
-    return (
-      <p className="text-sm text-muted">
-        No journal yet — the reserved Journal project is created with the first note.
-      </p>
-    );
-  }
-  if (loading) {
-    return <LoadingState label="Loading journal…" />;
-  }
-  if (error) {
-    return <ErrorText error={error} />;
-  }
-  if (data.length === 0) {
-    return <p className="text-sm text-muted">No journal notes match this window.</p>;
-  }
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted font-mono">
-        {filters.from ? `${filters.from} → ${filters.to} · ` : ""}
-        {filters.tag ? `tag=${filters.tag} · ` : ""}
-        {filters.link ? `link=${filters.link} · ` : ""}
-        {filters.project ? `project=${filters.project} · ` : ""}
-        {data.length} notes
-      </p>
-      <ul className="space-y-1">
-        {data.map((note) => (
-          <li key={note.id} className="text-sm text-foreground">
-            {note.title || "(untitled)"}
-            <span className="ml-2 text-xs text-muted font-mono">{note.updatedAt}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// The stream branch is T7's; the note branch is still T5's placeholder and is replaced
+// whole by T8.
 
 function NotePlaceholder({ noteId }: { noteId: string }) {
   const { data, isPending, error } = useJournalNote(noteId);
@@ -80,18 +48,61 @@ function NotePlaceholder({ noteId }: { noteId: string }) {
   );
 }
 
+function JournalStreamBranch({ containerId }: { containerId: string }) {
+  const router = useRouter();
+  const { filters, setFilter, clear } = useJournalFilters();
+  const server = useMemo(() => journalServerFilters(filters), [filters]);
+  const stream = useJournalStream(containerId, server);
+  const tagColors = useTagColorMap();
+  const notes = useMemo(
+    () => selectJournalDay(stream.data, filters.day),
+    [filters.day, stream.data],
+  );
+  const accents = useJournalLinkAccents(containerId, server, stream.data);
+  const mutations = useJournalMutations(containerId);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const openNote = (note: JournalNote) =>
+    router.push(`/journal?note=${encodeURIComponent(note.id)}`);
+
+  const deleteNote = (note: JournalNote) => {
+    setDeletingId(note.id);
+    mutations.remove.mutate(
+      { id: note.id, reason: "deleted from the journal inbox" },
+      { onSettled: () => setDeletingId(null) },
+    );
+  };
+
+  return (
+    <div className="flex items-start gap-6">
+      <JournalFilters filters={filters} onChange={setFilter} onClear={clear} />
+      <div className="min-w-0 max-w-3xl flex-1 space-y-2">
+        {accents.cohortFailed ? (
+          <p className="text-xs text-warning" role="status">
+            The server could not say which notes are linked, so the colour coding is off
+            for now. The list below is still the real one.
+          </p>
+        ) : null}
+        <JournalStream
+          notes={notes}
+          loading={stream.loading}
+          error={stream.error}
+          journalMissing={containerId.length === 0}
+          tagColors={tagColors}
+          deletingId={deletingId}
+          accentOf={accents.accentOf}
+          onRetry={stream.refetch}
+          onOpen={openNote}
+          onDelete={deleteNote}
+        />
+      </div>
+    </div>
+  );
+}
+
 function JournalPageContent() {
   const searchParams = useSearchParams();
   const noteId = searchParams?.get("note") ?? "";
-  const day = searchParams?.get("day") ?? "";
-  const dayWindow = journalDayWindow(day);
-  const filters: JournalStreamFilters = {
-    from: dayWindow?.from ?? "",
-    to: dayWindow?.to ?? "",
-    tag: searchParams?.get("tag") ?? "",
-    link: searchParams?.get("link") ?? "",
-    project: searchParams?.get("project") ?? "",
-  };
   const { containerId, loading: containerLoading, error: containerError } = useJournalContainer();
 
   if (noteId.length > 0) {
@@ -121,7 +132,7 @@ function JournalPageContent() {
   return (
     <div className="space-y-4">
       <PageHeader title="Journal" description="Your notes, links and days." />
-      <StreamPlaceholder projectId={containerId} filters={filters} />
+      <JournalStreamBranch containerId={containerId} />
     </div>
   );
 }

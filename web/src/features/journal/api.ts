@@ -1,30 +1,16 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
-import type { JournalNote, JournalNoteFormValues, JournalStreamFilters } from "@/features/journal/types";
-
-function buildStreamQuery(projectId: string, filters: JournalStreamFilters): string {
-  const params = new URLSearchParams();
-  params.set("type", "journal");
-  // The server default for journal is state=all; the inbox must not surface
-  // tombstones or superseded rows, so the stream asks for active explicitly.
-  params.set("state", "active");
-  const tag = filters.tag.trim();
-  if (tag.length > 0) {
-    params.set("tag", tag);
-  }
-  if (filters.from.length > 0) {
-    params.set("since", filters.from);
-  }
-  if (filters.to.length > 0) {
-    params.set("until", filters.to);
-  }
-  return `/projects/${projectId}/entries?${params.toString()}`;
-}
+import { journalStreamPath } from "@/features/journal/lib/stream-query";
+import type {
+  JournalNote,
+  JournalNoteFormValues,
+  JournalServerFilters,
+} from "@/features/journal/types";
 
 export function listJournalNotes(
   projectId: string,
-  filters: JournalStreamFilters,
+  filters: JournalServerFilters,
 ): Promise<JournalNote[]> {
-  return apiGet<JournalNote[]>(buildStreamQuery(projectId, filters));
+  return apiGet<JournalNote[]>(journalStreamPath(projectId, filters));
 }
 
 export function getJournalNote(id: string): Promise<JournalNote> {
