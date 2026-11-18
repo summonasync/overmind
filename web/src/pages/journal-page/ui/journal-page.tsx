@@ -4,49 +4,25 @@ import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
-import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import {
   JournalFilters,
   JournalStream,
+  NoteView,
   journalServerFilters,
   selectJournalDay,
   useJournalContainer,
   useJournalFilters,
   useJournalLinkAccents,
   useJournalMutations,
-  useJournalNote,
   useJournalStream,
   useTagColorMap,
 } from "@/features/journal";
 import type { JournalNote } from "@/features/journal";
 
-// The stream branch is T7's; the note branch is still T5's placeholder and is replaced
-// whole by T8.
-
-function NotePlaceholder({ noteId }: { noteId: string }) {
-  const { data, isPending, error } = useJournalNote(noteId);
-
-  if (isPending) {
-    return <LoadingState label="Loading note…" />;
-  }
-  if (error) {
-    return <ErrorText error={error} />;
-  }
-  return (
-    <div className="space-y-3">
-      <PageBackLink href="/journal" label="Journal" />
-      <h1 className="text-2xl font-semibold text-foreground">{data.title || "(untitled)"}</h1>
-      <p className="text-xs text-muted font-mono">
-        {data.createdAt} · v{data.currentVersion} · {data.authorAlias ?? "you"}
-      </p>
-      <p className="text-xs text-muted font-mono">
-        {data.outgoing.length} outgoing · {data.incoming.length} backlinks · {data.unresolved.length} unresolved
-      </p>
-      <p className="text-sm text-foreground whitespace-pre-wrap">{data.content}</p>
-    </div>
-  );
-}
+// The stream branch is T7's; the note branch is T8's `NoteView`. Spec R5 puts the detail in a
+// query param (`?note=<id>`), not a path segment, so this page owns both branches and swaps
+// them on one parameter.
 
 function JournalStreamBranch({ containerId }: { containerId: string }) {
   const router = useRouter();
@@ -108,7 +84,7 @@ function JournalPageContent() {
   if (noteId.length > 0) {
     return (
       <div className="space-y-4">
-        <NotePlaceholder noteId={noteId} />
+        <NoteView noteId={noteId} search={searchParams?.toString() ?? ""} />
       </div>
     );
   }

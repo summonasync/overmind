@@ -2,6 +2,7 @@ export { CaptureOverlay } from "./components/capture-overlay";
 export { JournalCard } from "./components/journal-card";
 export { JournalFilters } from "./components/journal-filters";
 export { JournalStream } from "./components/journal-stream";
+export { NoteView } from "./components/note-view";
 export {
   EMPTY_JOURNAL_FILTERS,
   JOURNAL_FILTER_KEYS,

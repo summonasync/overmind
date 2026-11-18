@@ -316,6 +316,26 @@ test("the stream owns the four states and borrows the shell's one degraded banne
 // that crosses a feature edge is resolved, and one landing inside a sibling's subtree goes
 // red with the file:line that did it. A shared-layer relative import is not an offender —
 // shared sits below features, not beside them.
+//
+// Task 8 widened the matcher. The original `from "…"` form could not see a side-effect
+// `import "…"` or a dynamic `import("…")`, and the task-7 review planted both and measured them
+// green (review-184-17 n5). The next test is the proof that this matcher sees them now.
+const SPECIFIER = /\b(?:from|import|require)\s*\(?\s*"([^"]+)"\s*\)?/g;
+
+function barrelViolation(spec: string, own: string, file: string): boolean {
+  const featuresDir = join("src", "features");
+  let target: string;
+  if (spec.startsWith("@/features/")) {
+    target = spec.slice("@/features/".length);
+  } else if (spec.startsWith(".")) {
+    const hop = relative(featuresDir, resolve(dirname(file), spec));
+    if (hop.startsWith("..")) return false;
+    target = hop.split(sep).join("/");
+  } else return false;
+  const parts = target.split("/");
+  return parts.length >= 2 && parts[0] !== own && parts[1] !== "index";
+}
+
 test("no feature imports another feature's internals", () => {
   const featuresDir = join("src", "features");
   const slash = (path: string) => path.split(sep).join("/");
@@ -327,21 +347,32 @@ test("no feature imports another feature's internals", () => {
     readFileSync(at, "utf8")
       .split("\n")
       .forEach((line, i) => {
-        for (const match of line.matchAll(/from "([^"]+)"/g)) {
-          const spec = match[1];
-          let target: string;
-          if (spec.startsWith("@/features/")) {
-            target = spec.slice("@/features/".length);
-          } else if (spec.startsWith(".")) {
-            const hop = relative(featuresDir, resolve(dirname(at), spec));
-            if (hop.startsWith("..")) continue;
-            target = slash(hop);
-          } else continue;
-          const parts = target.split("/");
-          if (parts.length < 2 || parts[0] === own || parts[1] === "index") continue;
-          offenders.push(`${rel}:${i + 1} -> ${spec}`);
+        for (const match of line.matchAll(SPECIFIER)) {
+          if (barrelViolation(match[1], own, at)) {
+            offenders.push(`${rel}:${i + 1} -> ${match[1]}`);
+          }
         }
       });
   }
   assert.deepEqual(offenders, []);
+});
+
+// The guard proves itself against the exact shapes that used to slip: assert the matcher, not
+// just the empty offender list — a scan over a tree with nothing in it is a green that
+// measured nothing.
+test("the barrel wall reads side-effect and dynamic imports too", () => {
+  const file = join("src", "features", "journal", "components", "probe.tsx");
+  const read = (line: string) =>
+    [...line.matchAll(SPECIFIER)].filter((m) => barrelViolation(m[1], "journal", file)).length;
+
+  assert.equal(read('import "@/features/planning/lib/board-order";'), 1, "side-effect import passed unnoticed");
+  assert.equal(read('const load = () => import("@/features/planning/lib/board-order");'), 1, "dynamic import passed unnoticed");
+  assert.equal(read('const m = require("@/features/planning/lib/board-order");'), 1, "require passed unnoticed");
+  assert.equal(read('export { Board } from "@/features/planning/lib/feature-board";'), 1, "re-export still an offender");
+
+  assert.equal(read('import { Board } from "@/features/planning";'), 0, "the barrel is a legal door");
+  assert.equal(read('import "@/shared/ui/modal";'), 0, "shared sits below features, not beside them");
+  assert.equal(read('const load = () => import("@/shared/ui/modal");'), 0, "dynamic shared import is legal");
+  assert.equal(read('import "./note-form";'), 0, "a feature reaches into its own internals freely");
+  assert.equal(read('import { z } from "node:assert";'), 0, "a package specifier is not a feature edge");
 });

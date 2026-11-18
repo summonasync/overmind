@@ -16,6 +16,13 @@ export const journalKeys = {
   list: (projectId: string, filters: JournalServerFilters) =>
     [...journalKeys.lists(), projectId, filters] as const,
   detail: (id: string) => [...journalKeys.all, "detail", id] as const,
+  // The prefix every detail key shares. A save rewrites the rails of notes other than the one
+  // being edited — the target that just gained a backlink, the source that lost one, any note
+  // whose unresolved marker became a real edge — and the newly linked targets are precisely
+  // the ones the pre-save payload could not name. So the surface that shows rails stales the
+  // whole shelf, which costs a refetch only for what is mounted. Task 8's rail-keeping fix;
+  // see features/journal/components/note-view.tsx.
+  detailsRoot: () => [...journalKeys.all, "detail"] as const,
 };
 
 export const journalStreamQueryOptions = (projectId: string, filters: JournalServerFilters) =>
