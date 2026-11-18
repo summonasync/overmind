@@ -1116,10 +1116,19 @@ No additional prose — the tool description lost nothing.
     not — the restart restore wrote it, or the host renamed the session), `placeholder` (nothing
     anywhere). Plus the project's naming rules, the `session_identity_set` next step when the alias
     is still the shared placeholder, and the "already in force, do not rename" line when it is not.
+    With no naming rules set anywhere, the `namingRules` text depends on that pair: a placeholder
+    pair gets the "invent an alias" hint, a real pair in force gets the hint saying this pair
+    already satisfies naming and should be kept — so the hint and the in-force line never give
+    opposite advice.
   - **claimChurn** — absent when nothing is orphaned; otherwise the holders that stopped answering
     while still holding claims in this project: pair, `ended` or `stale`, death age, and the slugs
-    (capped at 10 per holder with the total alongside, 5 holders, freshest death first). A pair that
-    is yours adopts on your next write; a foreign one takes `planning_claim_feature`.
+    (capped at 10 per holder with the total alongside, 5 holders, freshest death first).
+    `sessionsTotal` is the churned-holder count before the 5-row cap, and the renderer turns the
+    difference into a `+N more holders not listed, M churned in total` line, so a holder the cap
+    dropped is accounted for instead of vanishing. A pair that
+    is yours adopts on your next write; a foreign one takes `planning_claim_feature`. A holder whose
+    session row was deleted from the registry is not listed here at all — the reconciliation note
+    under `planning_rescue_scan` says where it is.
   - **semantic** — search availability, with the verbatim probe reason when down.
   - **adapter** — adapterVersion vs hostVersion, with a restart warning when they diverge or
     the adapter predates version reporting.

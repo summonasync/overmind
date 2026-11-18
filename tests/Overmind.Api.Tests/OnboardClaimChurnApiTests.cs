@@ -117,6 +117,33 @@ public sealed class OnboardClaimChurnApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Onboard_CallerAgedOutBeforeAsking_IsRevivedByItsOwnAskAndAbsentFromChurn()
+    {
+        var projectId = await CreateProjectAsync();
+        var caller = await SeedSessionAsync("van-darkholme", "qwen", lastSeenMinutesAgo: 30);
+        await SeedClaimAsync(projectId, "020-own-stale-hold", caller, "van-darkholme", "qwen");
+        var foreign = await SeedSessionAsync("gone-crew", "claude", endedMinutesAgo: 10);
+        await SeedClaimAsync(projectId, "021-foreign-dead-hold", foreign, "gone-crew", "claude");
+
+        var churn = ChurnOf(await OnboardAsync(caller))!;
+
+        churn.Sessions.ShouldHaveSingleItem().Alias.ShouldBe("gone-crew");
+    }
+
+    [Fact]
+    public async Task Onboard_CallerRowAlreadyEnded_IsChurnEvenToItself()
+    {
+        var projectId = await CreateProjectAsync();
+        var caller = await SeedSessionAsync("van-darkholme", "qwen", endedMinutesAgo: 30);
+        await SeedClaimAsync(projectId, "022-own-ended-hold", caller, "van-darkholme", "qwen");
+
+        var row = (ChurnOf(await OnboardAsync(caller)))!.Sessions.ShouldHaveSingleItem();
+
+        row.Liveness.ShouldBe("ended");
+        row.Slugs.ShouldBe(["022-own-ended-hold"]);
+    }
+
+    [Fact]
     public async Task Onboard_ManyClaimsOnOneHolder_CapsTheListAndReportsTheTotal()
     {
         var projectId = await CreateProjectAsync();
@@ -146,6 +173,7 @@ public sealed class OnboardClaimChurnApiTests : IDisposable
         var churn = (ChurnOf(await OnboardAsync(Guid.NewGuid())))!;
 
         churn.Sessions.Count.ShouldBe(OnboardApi.ChurnSessionCap);
+        churn.SessionsTotal.ShouldBe(ages.Length);
         churn.Sessions.ShouldContain(row => row.Alias == "gone-01");
         churn.Sessions.ShouldNotContain(row => row.Alias == "gone-06");
         churn.Sessions.ShouldNotContain(row => row.Alias == "gone-07");

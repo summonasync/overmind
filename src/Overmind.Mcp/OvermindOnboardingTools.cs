@@ -398,6 +398,7 @@ public sealed class OvermindOnboardingTools
         }
 
         output.AppendLine("Claim churn: holders that stopped answering while still holding claims:");
+        var shown = 0;
         foreach (var row in sessions.EnumerateArray())
         {
             if (row.ValueKind != JsonValueKind.Object)
@@ -405,9 +406,23 @@ public sealed class OvermindOnboardingTools
                 continue;
             }
 
+            shown++;
             output.AppendLine(
                 $"- '{Word(row, "alias")}' by '{Word(row, "vendor")}' " +
                 $"({Word(row, "liveness")}, {Silence(row)}): holds {SlugList(row)}");
+        }
+
+        var dropped = Math.Max(
+            block.TryGetProperty("sessionsTotal", out var total) &&
+            total.ValueKind == JsonValueKind.Number
+                ? total.GetInt32()
+                : sessions.GetArrayLength(),
+            shown) - shown;
+
+        if (dropped > 0)
+        {
+            output.AppendLine(
+                $"(+{dropped} more holders not listed, {shown + dropped} churned in total)");
         }
 
         output.AppendLine(

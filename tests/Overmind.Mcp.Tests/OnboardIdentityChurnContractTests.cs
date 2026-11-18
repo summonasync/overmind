@@ -135,6 +135,46 @@ public sealed class OnboardIdentityChurnContractTests : IDisposable
         text.ShouldNotContain("Claim churn");
     }
 
+    [Fact]
+    public async Task Onboard_ChurnRowsBeyondTheCap_RenderTheDroppedHolderCount()
+    {
+        Route(WithChurn(9,
+            ChurnRow("mark-wolff", "claude", "ended", 20, ["010-a"], 1),
+            ChurnRow("van-darkholme", "qwen", "stale", 40, ["020-b"], 1)));
+        var driver = await StartAdapter();
+
+        var text = Canned.ToolResultText(await driver.CallToolAsync("overmind_onboard", new JsonObject()));
+
+        text.ShouldContain("(+7 more holders not listed, 9 churned in total)");
+    }
+
+    [Fact]
+    public async Task Onboard_ChurnRowsWithoutTheTotalField_RenderNoCountLine()
+    {
+        Route(WithChurn(ChurnRow("mark-wolff", "claude", "ended", 20, ["010-a"], 1)));
+        var driver = await StartAdapter();
+
+        var text = Canned.ToolResultText(await driver.CallToolAsync("overmind_onboard", new JsonObject()));
+
+        text.ShouldContain("- 'mark-wolff' by 'claude'");
+        text.ShouldNotContain("more holders not listed");
+    }
+
+    [Fact]
+    public async Task Onboard_InForcePairWithTheKeepItHint_PrintsTheHintAndNoInventStep()
+    {
+        var payload = JsonNode.Parse(IdentityPayload("mark-wolff", "claude"))!.AsObject();
+        payload["agentIdentity"]!["namingRules"] = "KEEP-THE-EFFECTIVE-PAIR-MARKER";
+        Route(payload.ToJsonString());
+        var driver = await StartAdapter();
+
+        var text = Canned.ToolResultText(await driver.CallToolAsync("overmind_onboard", new JsonObject()));
+
+        text.ShouldContain("KEEP-THE-EFFECTIVE-PAIR-MARKER");
+        text.ShouldContain("in force on your session row");
+        text.ShouldNotContain("Next step:");
+    }
+
     private static string IdentityPayload(string alias, string vendor) =>
         Canned.OnboardAgentIdentityJson
             .Replace("\"alias\":\"agent\"", $"\"alias\":\"{alias}\"")
@@ -153,10 +193,18 @@ public sealed class OnboardIdentityChurnContractTests : IDisposable
             ["slugsTotal"] = slugsTotal,
         };
 
-    private static string WithChurn(params JsonObject[] rows)
+    private static string WithChurn(params JsonObject[] rows) => WithChurn(null, rows);
+
+    private static string WithChurn(int? sessionsTotal, params JsonObject[] rows)
     {
         var payload = JsonNode.Parse(Canned.OnboardAgentIdentityJson)!;
-        payload["claimChurn"] = new JsonObject { ["sessions"] = new JsonArray([.. rows]) };
+        var churn = new JsonObject { ["sessions"] = new JsonArray([.. rows]) };
+        if (sessionsTotal is { } total)
+        {
+            churn["sessionsTotal"] = total;
+        }
+
+        payload["claimChurn"] = churn;
         return payload.ToJsonString();
     }
 

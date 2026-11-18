@@ -27,10 +27,13 @@ public sealed record OnboardSemanticBlock(bool Available, string? Reason);
 // its own environment instead.
 public sealed record OnboardAgentIdentityBlock(string Alias, string Vendor, string NamingRules);
 
-// Claims whose holder session is gone: the pair the board still reads, how the holder died and
-// when it was last seen, and the slugs it holds. Liveness is "ended" or "stale"; UnseenSince is the
-// end stamp for an ended holder and the last heartbeat for a stale one.
-public sealed record OnboardClaimChurnBlock(IReadOnlyList<OnboardChurnedSession> Sessions);
+// Claims whose holder session is gone: the pair the board still reads, how the holder died and when
+// it was last seen, and the slugs it holds. Liveness is "ended" or "stale"; UnseenSince is the end
+// stamp for an ended holder and the last heartbeat for a stale one. SessionsTotal counts churned
+// holders before the row cap, so the holders dropped from the list are still accounted for.
+public sealed record OnboardClaimChurnBlock(
+    IReadOnlyList<OnboardChurnedSession> Sessions,
+    int SessionsTotal);
 
 public sealed record OnboardChurnedSession(
     string Alias,

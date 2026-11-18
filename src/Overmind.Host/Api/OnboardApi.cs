@@ -95,6 +95,7 @@ public static class OnboardApi
 
         var board = await BuildBoardSummaryAsync(db, project.Id, ct);
         var callerSession = await ResolveCallerSessionAsync(db, http, ct);
+        var namingRules = await policy.ResolveAgentNamingRulesAsync(project, ct);
         var strategy = await policy.ResolveMaterializationAsync(project.Id, ct);
         var humanGate = await policy.ResolveValidationGateAsync(project.Id, ct);
         var vectorHealth = await semanticSearch.HealthReportAsync(ct);
@@ -124,7 +125,7 @@ public static class OnboardApi
             new OnboardAgentIdentityBlock(
                 callerSession?.Alias ?? AgentIdentityDefaults.Alias,
                 callerSession?.Vendor ?? AgentIdentityDefaults.Vendor,
-                await policy.ResolveAgentNamingRulesAsync(project, ct) ?? AgentIdentityDefaults.GenericNamingHint),
+                namingRules ?? NamingHint(callerSession)),
             await BuildChurnBlockAsync(db, project, ct),
             BuildAdapterBlock(http),
             new OnboardRescueBlock(project.RescuePolicy),
@@ -138,6 +139,14 @@ public static class OnboardApi
             ? await db.AgentSessions.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             : null;
     }
+
+    // The generic hint tells an agent to invent an alias. A caller whose session row already carries
+    // a real pair has nothing to invent, and the adapter renders "claim under it as shown" right under
+    // the hint — so with no project rules the hint itself has to say the effective pair is the answer.
+    private static string NamingHint(AgentSession? callerSession) =>
+        callerSession is { } session && !session.Alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal)
+            ? AgentIdentityDefaults.EffectivePairNamingHint
+            : AgentIdentityDefaults.GenericNamingHint;
 
     public const int ChurnSessionCap = 5;
     public const int ChurnSlugCap = 10;
@@ -200,10 +209,11 @@ public static class OnboardApi
                     slugs.Count);
             })
             .OrderByDescending(row => row.UnseenSince)
-            .Take(ChurnSessionCap)
             .ToList();
 
-        return churned.Count > 0 ? new OnboardClaimChurnBlock(churned) : null;
+        return churned.Count > 0
+            ? new OnboardClaimChurnBlock([.. churned.Take(ChurnSessionCap)], churned.Count)
+            : null;
     }
 
     private static async Task<IResult?> WorktreeRefusalAsync(string normalizedCwd, OvermindDbContext db, CancellationToken ct)
