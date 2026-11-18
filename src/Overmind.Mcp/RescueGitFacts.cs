@@ -13,4 +13,6 @@ public sealed record RescueGitFacts(
 {
     public bool NothingMeasured =>
         DirtyFiles is null && UnpushedCommits is null && Unmerged is null && LastCommitHash is null;
+
+    public bool NoCleanSignal => DirtyFiles is null && UnpushedCommits is null && Unmerged is null;
 }

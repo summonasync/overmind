@@ -728,9 +728,13 @@ convention named and the disk no longer has.
 | `lastCommit` | `git log -1 --format=%h%x09%cI` | `{hash, date}` |
 
 **Verdict per row.** `rescue-worthy` when anything is uncommitted, ahead of its base or unmerged —
-`reasons` names exactly which fact; `clean` when the measured facts say otherwise, and it lists the
-halves that stayed unmeasurable; `stale` when the worktree is gone and no branch survived to hold
-the work; `unknown` when git could not answer at all. `counts` groups verdicts across the rows.
+`reasons` names exactly which fact. `clean` needs at least one *measured* signal among
+`dirtyFiles`, `unpushedCommits`, `unmerged` to have said so, and it lists the halves that stayed
+unmeasurable; the "branch is merged and pushed" line is spoken only when both halves were measured
+clean — absence of data never claims safety. `stale` when the worktree is gone and no branch
+survived to hold the work; `unknown` when git could not answer, including a row where only
+`lastCommit` came back, and a row whose per-row git call threw (the scan survives, the other rows
+keep their facts). `counts` groups verdicts across the rows.
 
 **Degraded answers.** A top-level `discoveryError` means git answered nothing — the scan root is not
 inside a repository, or a listing command failed — and the rows still carry the board answer with

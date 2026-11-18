@@ -43,13 +43,35 @@ public static class RescueVerdict
 
         return signals.Count > 0
             ? new RescueVerdictResult(RescueWorthy, [.. notes, .. signals])
-            : new RescueVerdictResult(Clean, CleanReasons(location, facts));
+            : VerdictWithoutSignals(location, facts, notes);
+    }
+
+    private static RescueVerdictResult VerdictWithoutSignals(
+        RescueCodeLocation location,
+        RescueGitFacts facts,
+        List<string> notes)
+    {
+        // Nothing asked for a rescue. That is only evidence when at least one signal was measured:
+        // three nulls plus a working `log -1` mean git never answered the question, not that the
+        // work is safe. Claiming clean here is how a ddcc3f5-shaped loss gets labelled "nothing to save".
+        if (facts.NoCleanSignal)
+        {
+            var gaps = Unmeasured(facts);
+            if (facts.Error is { Length: > 0 } error)
+            {
+                gaps.Add(error);
+            }
+
+            return new RescueVerdictResult(Unknown, [.. notes, .. gaps]);
+        }
+
+        return new RescueVerdictResult(Clean, CleanReasons(location, facts));
     }
 
     private static IReadOnlyList<string> CleanReasons(RescueCodeLocation location, RescueGitFacts facts)
     {
         var reasons = new List<string>();
-        if (location.Stale)
+        if (location.Stale && facts.UnpushedCommits == 0 && facts.Unmerged == false)
         {
             reasons.Add($"worktree path {location.WorktreePath} is gone, but the branch is merged and pushed");
         }
@@ -69,18 +91,7 @@ public static class RescueVerdict
             reasons.Add($"already merged into {facts.Mainline}");
         }
 
-        foreach (var unknown in new[]
-                 {
-                     facts.DirtyFiles is null ? "worktree state unmeasurable" : null,
-                     facts.UnpushedCommits is null ? "unpushed count unknown" : null,
-                     facts.Unmerged is null ? "merge state unknown" : null,
-                 })
-        {
-            if (unknown is not null)
-            {
-                reasons.Add(unknown);
-            }
-        }
+        reasons.AddRange(Unmeasured(facts));
 
         if (facts.Error is { Length: > 0 } error)
         {
@@ -88,5 +99,26 @@ public static class RescueVerdict
         }
 
         return reasons;
+    }
+
+    private static List<string> Unmeasured(RescueGitFacts facts)
+    {
+        var gaps = new List<string>();
+        if (facts.DirtyFiles is null)
+        {
+            gaps.Add("worktree state unmeasurable");
+        }
+
+        if (facts.UnpushedCommits is null)
+        {
+            gaps.Add("unpushed count unknown");
+        }
+
+        if (facts.Unmerged is null)
+        {
+            gaps.Add("merge state unknown");
+        }
+
+        return gaps;
     }
 }

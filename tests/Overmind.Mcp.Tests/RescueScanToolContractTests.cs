@@ -208,6 +208,177 @@ public sealed class RescueScanToolContractTests : IDisposable
     }
 
     [Fact]
+    public async Task Scan_SweptWorktreeWithNeitherBaseNorMainline_IsUnknownAndNeverClaimsMergedOrPushed()
+    {
+        const string swept = "/repo/.lanes/235-swept-no-remote";
+        var tools = Tools(
+            GitStub(
+                [
+                    ("for-each-ref", 0, "main\nfeat/235-swept-no-remote\n"),
+                    ("rev-parse --abbrev-ref", 128, ""),
+                    ("log -1", 0, "eeeeeee\t2026-11-11T09:00:00Z\n"),
+                ],
+                ["origin/main", "main", "master"],
+                null),
+            [Candidate("235-swept-no-remote", "ended", swept, "feat/235-swept-no-remote")]);
+
+        var payload = await ScanAsync(tools);
+        var row = Only(payload);
+
+        row["code"]!["stale"]!.GetValue<bool>().ShouldBe(true);
+        row["git"]!["dirtyFiles"].ShouldBeNull();
+        row["git"]!["unpushedCommits"].ShouldBeNull();
+        row["git"]!["unmerged"].ShouldBeNull();
+        row["git"]!["lastCommit"]!["hash"]!.GetValue<string>().ShouldBe("eeeeeee");
+        row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Unknown);
+        Reasons(row).ShouldContain("worktree state unmeasurable");
+        Reasons(row).ShouldContain("unpushed count unknown");
+        Reasons(row).ShouldContain("merge state unknown");
+        Reasons(row).ShouldNotContain(reason => reason.Contains("merged and pushed", StringComparison.Ordinal));
+        Reasons(row).ShouldNotContain(reason => reason.Contains("nothing ahead of", StringComparison.Ordinal));
+        payload["counts"]!["clean"]!.GetValue<int>().ShouldBe(0);
+        payload["counts"]!["unknown"]!.GetValue<int>().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Scan_WorktreeMeasuredCleanWithTheBranchHalvesUnknown_IsStillCleanAndTheGuardDoesNotOvercorrect()
+    {
+        var tools = Tools(
+            GitStub(
+                [
+                    ("status --porcelain", 0, ""),
+                    ("rev-parse --abbrev-ref", 128, ""),
+                    ("log -1", 0, "fffffff\t2026-11-10T09:00:00Z\n"),
+                ],
+                ["origin/main", "main", "master"],
+                null),
+            [DeadClaim()]);
+
+        var row = Only(await ScanAsync(tools));
+
+        row["git"]!["dirtyFiles"]!.GetValue<int>().ShouldBe(0);
+        row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Clean);
+        Reasons(row).ShouldContain("nothing uncommitted in the worktree");
+        Reasons(row).ShouldContain("unpushed count unknown");
+        Reasons(row).ShouldContain("merge state unknown");
+    }
+
+    [Fact]
+    public async Task Scan_StaleRowWithMergeMeasuredButPushUnknown_IsCleanWithoutClaimingThePush()
+    {
+        const string swept = "/repo/.lanes/235-half-known";
+        var tools = Tools(
+            GitStub(
+                [
+                    ("for-each-ref", 0, "main\nfeat/235-half-known\n"),
+                    ("rev-parse --abbrev-ref", 128, ""),
+                    ("merge-base --is-ancestor", 0, ""),
+                    ("log -1", 0, "ggggggg\t2026-11-09T09:00:00Z\n"),
+                ],
+                ["origin/main"],
+                null),
+            [Candidate("235-half-known", "ended", swept, "feat/235-half-known")]);
+
+        var row = Only(await ScanAsync(tools));
+
+        row["code"]!["stale"]!.GetValue<bool>().ShouldBe(true);
+        row["git"]!["unpushedCommits"].ShouldBeNull();
+        row["git"]!["unmerged"]!.GetValue<bool>().ShouldBe(false);
+        row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Clean);
+        Reasons(row).ShouldContain("already merged into main");
+        Reasons(row).ShouldNotContain(reason => reason.Contains("merged and pushed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Scan_NoUpstreamAndNoMainlineAnywhere_LeavesUnpushedUnknownWithoutCountingAndSaysWhy()
+    {
+        var tools = Tools(
+            GitStub(
+                [
+                    ("status --porcelain", 0, " M orphaned.cs\n"),
+                    ("rev-parse --abbrev-ref", 128, ""),
+                    ("log -1", 0, "hhhhhhh\t2026-11-08T09:00:00Z\n"),
+                ],
+                ["origin/main", "main", "master"],
+                null),
+            [DeadClaim()]);
+
+        var row = Only(await ScanAsync(tools));
+
+        row["git"]!["unpushedCommits"].ShouldBeNull();
+        row["git"]!["unpushedBase"].ShouldBeNull();
+        row["git"]!["error"]!.GetValue<string>()
+            .ShouldContain("origin/main is not present locally, so unpushed work cannot be counted");
+        row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.RescueWorthy);
+        NoGitCall("rev-list");
+    }
+
+    [Fact]
+    public async Task Scan_ListingCommandFails_DegradesEveryRowAndNeverStartsPerRowGit()
+    {
+        foreach (var (prefix, message) in new[]
+                 {
+                     ("worktree list", "fatal: cannot read worktree list"),
+                     ("for-each-ref", "fatal: cannot iterate branches"),
+                 })
+        {
+            _gitCalls.Clear();
+            var tools = Tools(Git((prefix, 128, message)), [DeadClaim()]);
+            var payload = await ScanAsync(tools);
+
+            payload["discoveryError"]!.GetValue<string>().ShouldContain("listing failed");
+            payload["counts"]!["unknown"]!.GetValue<int>().ShouldBe(1);
+            var row = Only(payload);
+            row["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Unknown);
+            row["rescueAllowed"]!.GetValue<bool>().ShouldBe(false);
+            row["code"].ShouldBeNull();
+            row["git"].ShouldBeNull();
+            NoGitCall("status");
+            NoGitCall("rev-list");
+        }
+    }
+
+    [Fact]
+    public async Task Scan_GitNeverAnswersOnOneRow_DegradesThatRowAndKeepsTheSiblingFacts()
+    {
+        var healthy = Path.Combine(_root, "235-healthy");
+        Directory.CreateDirectory(healthy);
+        var tools = Tools(
+            GitStub(
+                [
+                    ("status --porcelain", 0, " M survivor.cs\n"),
+                    ("rev-parse --abbrev-ref", 0, $"origin/{DeadBranch}\n"),
+                    ("rev-list --count", 0, "3\n"),
+                    ("merge-base --is-ancestor", 1, ""),
+                    ("log -1", 0, "iiiiiii\t2026-11-07T09:00:00Z\n"),
+                ],
+                [],
+                _worktree),
+            [
+                Candidate("235-hung", "ended", _worktree, DeadBranch),
+                Candidate("235-dead-claim", "ended", healthy, DeadBranch),
+            ]);
+
+        var payload = await ScanAsync(tools);
+        var rows = payload["candidates"]!.AsArray();
+        rows.Count.ShouldBe(2);
+
+        var hung = rows[0]!.AsObject();
+        hung["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.Unknown);
+        hung["git"]!["dirtyFiles"].ShouldBeNull();
+        hung["git"]!["error"]!.GetValue<string>().ShouldContain("git scan failed for 235-hung");
+        Reasons(hung).ShouldContain(reason => reason.Contains("timed out", StringComparison.Ordinal));
+
+        var survivor = rows[1]!.AsObject();
+        survivor["git"]!["dirtyFiles"]!.GetValue<int>().ShouldBe(1);
+        survivor["git"]!["unpushedCommits"]!.GetValue<int>().ShouldBe(3);
+        survivor["verdict"]!.GetValue<string>().ShouldBe(RescueVerdict.RescueWorthy);
+
+        payload["counts"]!["unknown"]!.GetValue<int>().ShouldBe(1);
+        payload["counts"]!["rescueWorthy"]!.GetValue<int>().ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Scan_NonRepositoryAnywhere_DegradesHonestlyAndKeepsEveryBoardRow()
     {
         var stray = Directory.CreateTempSubdirectory("overmind-rescue-nongit").FullName;
@@ -405,7 +576,12 @@ public sealed class RescueScanToolContractTests : IDisposable
             ["rescuePolicy"] = rescuePolicy,
         };
 
-    private IGitCli Git(params (string Prefix, int Exit, string Output)[] rows)
+    private IGitCli Git(params (string Prefix, int Exit, string Output)[] rows) => GitStub(rows, [], null);
+
+    private IGitCli GitStub(
+        (string Prefix, int Exit, string Output)[] rows,
+        string[] absentRefs,
+        string? throwsIn)
     {
         (string Prefix, int Exit, string Output)[] listing =
         [
@@ -419,8 +595,21 @@ public sealed class RescueScanToolContractTests : IDisposable
         git.RunAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
+                var directory = call.ArgAt<string>(0);
                 var arguments = call.ArgAt<string>(1);
-                _gitCalls.Add((call.ArgAt<string>(0), arguments));
+                _gitCalls.Add((directory, arguments));
+
+                if (throwsIn is not null && directory == throwsIn)
+                {
+                    throw new McpException($"git {arguments} timed out after 10s in {directory}.");
+                }
+
+                if (absentRefs.Length > 0
+                    && arguments.StartsWith("rev-parse --verify", StringComparison.Ordinal)
+                    && absentRefs.Contains(arguments[(arguments.LastIndexOf(' ') + 1)..], StringComparer.Ordinal))
+                {
+                    return new GitCommandResult(1, "stub says no such ref", "");
+                }
 
                 var match = stages.FirstOrDefault(stage =>
                     arguments.StartsWith(stage.Prefix, StringComparison.Ordinal));

@@ -111,7 +111,18 @@ public sealed class RescueScanTools
 
         var location = RescueLocationPlanner.Locate(
             row.Slug, row.PinnedWorktreePath, row.PinnedBranch, listing.Worktrees, listing.Branches);
-        var facts = await scanner.ScanAsync(location, root, ct);
+        RescueGitFacts facts;
+        try
+        {
+            facts = await scanner.ScanAsync(location, root, ct);
+        }
+        catch (Exception ex) when (ex is McpException or InvalidOperationException)
+        {
+            // One git that never answered must not throw away the rows that already paid for their facts.
+            facts = new RescueGitFacts(null, null, null, null, null, null, null, null,
+                $"git scan failed for {row.Slug}: {ex.Message}");
+        }
+
         var verdict = RescueVerdict.Of(location, facts);
 
         source["code"] = new JsonObject
