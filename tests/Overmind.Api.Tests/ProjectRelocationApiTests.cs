@@ -128,7 +128,7 @@ public sealed class ProjectRelocationApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Relocate_CommitFaultsOnThePinWrite_LeavesNeitherPathNorPinsMoved()
+    public async Task Relocate_CommitFaultsOnThePinWrite_LeavesNothingMovedAndTheRetryHeals()
     {
         var (oldRoot, newRoot) = CreateRoots("commit-fault");
         var project = await CreateProjectAsync("commit-fault", oldRoot);
@@ -157,6 +157,23 @@ public sealed class ProjectRelocationApiTests : IDisposable
         var notifications = await ListNotificationsAsync();
         notifications.ShouldContain(n => n.Text == "control-baseline");
         notifications.Any(n => n.Text.Contains("relocated", StringComparison.Ordinal)).ShouldBeFalse();
+
+        using (var disarm = _factory.Services.CreateScope())
+        {
+            var disarmDb = disarm.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            await disarmDb.Database.ExecuteSqlRawAsync("DROP TRIGGER relocation_commit_fault");
+        }
+
+        var retry = await RelocateAsync(project.Id, project.Name, oldRoot, newRoot);
+        var retryPayload = await retry.Content.ReadAsStringAsync();
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK, retryPayload);
+        var healed = JsonSerializer.Deserialize<ProjectJson>(retryPayload, JsonOptions);
+        healed!.DiskPath.ShouldBe(newRoot);
+        healed.Relocation.ShouldNotBeNull().PinsRemapped.ShouldBe(1);
+
+        var healedDoor = await ReadFeatureAsync(project.Id, slug);
+        healedDoor.PinnedWorktreePath.ShouldBe(Path.Combine(newRoot, ".lanes", "027"));
+        CountMarkerLines(healedDoor.Body).ShouldBe(1);
     }
 
     [Fact]
