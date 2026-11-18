@@ -706,6 +706,14 @@ re-seeds the default text over a deliberate clearing — the migration that seed
 only rows that were already null before it ran. With `not-set` or `unreadable`, report the facts and
 ask the owner before pushing or merging.
 
+**`rescueAllowed` is a policy answer, not an evidence answer.** The per-row flag reports what the
+owner's standing directive permits, so under an `owner-set` policy it stays `true` even on a row whose
+`verdict` is `unknown` — a hung git or unmeasurable signals remove the proof, not the permission. The
+one exception is a listing failure: with no evidence anywhere every row is forced `false`. Consumers
+must read `verdict` and `reasons` before acting on the flag; an allowed-but-unknown row is permission
+without proof, and the gaps are named in `reasons` precisely so the rescuer can decide instead of
+guessing.
+
 **Scan root.** Git runs in the project's `diskPath` when that directory exists and sits inside a
 repository, otherwise in the adapter's working directory; `scanRoot.source` names the choice
 (`project-disk-path` | `adapter-workspace`) and `scanRoot.adapterWorkspace` carries the cwd either
