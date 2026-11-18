@@ -285,6 +285,21 @@ public sealed class PlanningFeature
         return true;
     }
 
+    public bool RemapCodePin(string previousWorktreePath, string relocatedWorktreePath, PlanningLogSource source)
+    {
+        if (!string.Equals(PinnedWorktreePath, previousWorktreePath, StringComparison.Ordinal) ||
+            string.Equals(PinnedWorktreePath, relocatedWorktreePath, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        PinnedWorktreePath = relocatedWorktreePath;
+        AppendLog(
+            $"code pin moved with project root: '{previousWorktreePath}' → '{relocatedWorktreePath}'",
+            source);
+        return true;
+    }
+
     private static string? NormalizePin(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();

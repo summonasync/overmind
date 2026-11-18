@@ -35,10 +35,10 @@ public static class ProjectPinRelocator
                 continue;
             }
 
-            db.Entry(feature).Property(f => f.PinnedWorktreePath).CurrentValue = relocatedPin;
-            feature.AppendLog(
-                $"code pin moved with project root: '{previousPin}' → '{relocatedPin}'",
-                source);
+            if (!feature.RemapCodePin(previousPin, relocatedPin, source))
+            {
+                continue;
+            }
 
             relocations.Add(new PinRelocation(feature.Slug, previousPin, relocatedPin));
         }

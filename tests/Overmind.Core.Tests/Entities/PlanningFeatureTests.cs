@@ -667,6 +667,56 @@ public class PlanningFeatureTests
     }
 
     [Fact]
+    public void RemapCodePin_MovedProjectRoot_RewritesThePinWithOneOldToNewLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/old/.lanes/008", PlanningLogSource.Agent);
+
+        var changed = feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        changed.ShouldBeTrue();
+        feature.PinnedWorktreePath.ShouldBe("/new/.lanes/008");
+        feature.PinnedBranch.ShouldBe("feat/pin");
+        var moved = MovedPinLines(feature);
+        moved.ShouldHaveSingleItem();
+        moved[0].Text.ShouldBe("code pin moved with project root: '/old/.lanes/008' → '/new/.lanes/008'");
+        moved[0].Source.ShouldBe(PlanningLogSource.Ui);
+    }
+
+    [Fact]
+    public void RemapCodePin_ReplayedAfterTheFirstMove_ChangesNothingAndAddsNoSecondLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/old/.lanes/008", PlanningLogSource.Agent);
+        feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        var again = feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        again.ShouldBeFalse();
+        feature.PinnedWorktreePath.ShouldBe("/new/.lanes/008");
+        MovedPinLines(feature).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void RemapCodePin_WhenThePinIsNotWhatTheCallerRead_LeavesThePinAndLogsNothing()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/other/.lanes/008", PlanningLogSource.Agent);
+
+        var changed = feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        changed.ShouldBeFalse();
+        feature.PinnedWorktreePath.ShouldBe("/other/.lanes/008");
+        MovedPinLines(feature).ShouldBeEmpty();
+    }
+
+    private static List<PlanningLogLine> MovedPinLines(PlanningFeature feature) =>
+    [
+        .. PlanningLog.Parse(feature.Body)
+            .Where(line => line.Text.Contains("code pin moved", StringComparison.Ordinal))
+    ];
+
+    [Fact]
     public void SetCodePin_PartialClear_KeepsOtherHalf()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
