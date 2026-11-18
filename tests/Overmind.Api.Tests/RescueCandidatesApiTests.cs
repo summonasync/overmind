@@ -155,6 +155,26 @@ public sealed class RescueCandidatesApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Takeover_SameAliasVendorMismatch_WritesNotificationCenterInfo()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeatureAsync(project.Id, "vendor-swap");
+        await BringToStatusAsync(project.Id, "vendor-swap", "inProgress");
+        await SeedSessionAsync("old-holder", "Dan", "claude", DateTime.UtcNow.AddHours(-2));
+        await SeedClaimAsync(project.Id, "vendor-swap", "Dan", "claude", "old-holder", DateTime.UtcNow.AddHours(-2));
+
+        var response = await SendClaimAsync(project.Id, "vendor-swap", "Dan", "qwen", Guid.NewGuid());
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var notifications = await GetNotificationsAsync();
+        var info = notifications.Items
+            .Where(n => n.Kind == "info" && n.FeatureSlug == "vendor-swap")
+            .ShouldHaveSingleItem();
+        info.Text.ShouldContain("Dan by qwen");
+        info.Text.ShouldContain("stale claim of 'vendor-swap' from Dan by claude");
+    }
+
+    [Fact]
     public async Task FreshClaim_WithNoFormerHolder_WritesNothing()
     {
         var project = await CreateProjectAsync();

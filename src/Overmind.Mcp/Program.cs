@@ -135,6 +135,7 @@ builder.Services.AddSingleton<PlanningBatchTools>();
 builder.Services.AddSingleton<PlanningMaterializationTools>();
 builder.Services.AddSingleton<PlanningArtifactAliasResolver>();
 builder.Services.AddSingleton<FeatureCodeTools>();
+builder.Services.AddSingleton<RescueScanTools>();
 builder.Services.AddSingleton<WaveListingCache>();
 builder.Services.AddSingleton<WaveSnapshotTools>();
 builder.Services.AddSingleton<WaveChatTools>();
@@ -180,6 +181,7 @@ builder.Services
     .WithTools<PlanningBatchTools>()
     .WithTools<PlanningMaterializationTools>()
     .WithTools<FeatureCodeTools>()
+    .WithTools<RescueScanTools>()
     .WithTools<WaveSnapshotTools>()
     .WithTools<WaveChatTools>()
     .WithTools<WaveRoleTools>()
