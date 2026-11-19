@@ -280,6 +280,69 @@ public class PlanningFeatureTests
     }
 
     [Fact]
+    public void Reattribute_HeldClaim_MovesOnlyThePair()
+    {
+        var sessionId = Guid.NewGuid();
+        var claimedAt = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", sessionId, claimedAt);
+
+        var moved = feature.Reattribute("mark-wolff", "claude");
+
+        moved.ShouldBeTrue();
+        feature.ClaimedByAlias.ShouldBe("mark-wolff");
+        feature.ClaimedByVendor.ShouldBe("claude");
+        feature.ClaimSessionId.ShouldBe(sessionId);
+        feature.ClaimedAt.ShouldBe(claimedAt);
+    }
+
+    [Theory]
+    [InlineData("agent", "unknown", false)]
+    [InlineData("agent", "claude", true)]
+    [InlineData("mark-wolff", "unknown", true)]
+    public void Reattribute_PairAlreadyInForce_IsNoOp(string alias, string vendor, bool expected)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", Guid.NewGuid(), DateTime.UtcNow);
+
+        feature.Reattribute(alias, vendor).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void Reattribute_UnclaimedFeature_IsNoOp()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+
+        feature.Reattribute("mark-wolff", "claude").ShouldBeFalse();
+        feature.ClaimedByAlias.ShouldBeNull();
+        feature.ClaimedByVendor.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("", "claude")]
+    [InlineData("mark-wolff", " ")]
+    [InlineData("mark-wolff", null)]
+    public void Reattribute_EmptyIdentity_Throws(string? alias, string? vendor)
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", Guid.NewGuid(), DateTime.UtcNow);
+
+        Should.Throw<ArgumentException>(() => feature.Reattribute(alias!, vendor!));
+    }
+
+    [Fact]
+    public void Reattribute_IdentityOverCap_Throws()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.Claim("agent", "unknown", Guid.NewGuid(), DateTime.UtcNow);
+
+        Should.Throw<ArgumentException>(() =>
+            feature.Reattribute(new string('a', 33), "claude"));
+
+        feature.ClaimedByAlias.ShouldBe("agent");
+    }
+
+    [Fact]
     public void AppendLog_AppendsLineWithoutBumpingVersion()
     {
         var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
@@ -602,6 +665,56 @@ public class PlanningFeatureTests
         lines.Count.ShouldBe(2);
         lines[1].Text.ShouldBe("code pin cleared");
     }
+
+    [Fact]
+    public void RemapCodePin_MovedProjectRoot_RewritesThePinWithOneOldToNewLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/old/.lanes/008", PlanningLogSource.Agent);
+
+        var changed = feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        changed.ShouldBeTrue();
+        feature.PinnedWorktreePath.ShouldBe("/new/.lanes/008");
+        feature.PinnedBranch.ShouldBe("feat/pin");
+        var moved = MovedPinLines(feature);
+        moved.ShouldHaveSingleItem();
+        moved[0].Text.ShouldBe("code pin moved with project root: '/old/.lanes/008' → '/new/.lanes/008'");
+        moved[0].Source.ShouldBe(PlanningLogSource.Ui);
+    }
+
+    [Fact]
+    public void RemapCodePin_ReplayedAfterTheFirstMove_ChangesNothingAndAddsNoSecondLine()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/old/.lanes/008", PlanningLogSource.Agent);
+        feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        var again = feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        again.ShouldBeFalse();
+        feature.PinnedWorktreePath.ShouldBe("/new/.lanes/008");
+        MovedPinLines(feature).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void RemapCodePin_WhenThePinIsNotWhatTheCallerRead_LeavesThePinAndLogsNothing()
+    {
+        var feature = PlanningFeature.Create(ProjectId, "slug", "title", "body");
+        feature.SetCodePin("feat/pin", "/other/.lanes/008", PlanningLogSource.Agent);
+
+        var changed = feature.RemapCodePin("/old/.lanes/008", "/new/.lanes/008", PlanningLogSource.Ui);
+
+        changed.ShouldBeFalse();
+        feature.PinnedWorktreePath.ShouldBe("/other/.lanes/008");
+        MovedPinLines(feature).ShouldBeEmpty();
+    }
+
+    private static List<PlanningLogLine> MovedPinLines(PlanningFeature feature) =>
+    [
+        .. PlanningLog.Parse(feature.Body)
+            .Where(line => line.Text.Contains("code pin moved", StringComparison.Ordinal))
+    ];
 
     [Fact]
     public void SetCodePin_PartialClear_KeepsOtherHalf()

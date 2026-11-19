@@ -91,6 +91,79 @@ public sealed class FeatureClaimServiceTests : IDisposable
         live.ShouldBe([]);
     }
 
+    [Fact]
+    public async Task ReattributeSessionClaims_RenamedHolder_MovesSnapshotsLogsAndReopensTheSpan()
+    {
+        var service = CreateClaimService();
+        var held = await CreateFeatureAsync("feat-held");
+        var foreign = await CreateFeatureAsync("feat-other");
+        var foreignSession = await AddSessionAsync("Van", "claude", DateTime.UtcNow);
+
+        await service.ClaimAsync(_projectId, "feat-held", "agent", "unknown", HolderSessionId);
+        await service.ClaimAsync(_projectId, "feat-other", "Van", "claude", foreignSession);
+        var span = _context.FeatureClaimSpans.Single(s => s.FeatureId == held.Id);
+        var spanId = span.Id;
+        var holdStart = span.ClaimedAt;
+        var claimStamp = held.ClaimedAt;
+
+        var moved = await service.ReattributeSessionClaimsAsync(HolderSessionId, "mark-wolff", "claude");
+
+        moved.ShouldBe(["feat-held"]);
+        held.ClaimedByAlias.ShouldBe("mark-wolff");
+        held.ClaimedByVendor.ShouldBe("claude");
+        held.ClaimSessionId.ShouldBe(HolderSessionId);
+        held.ClaimedAt.ShouldBe(claimStamp);
+        foreign.ClaimedByAlias.ShouldBe("Van");
+
+        PlanningLog.Parse(held.Body).ShouldContain(line =>
+            line.Text == "claim re-attributed: agent by unknown → mark-wolff by claude");
+
+        var closed = _context.FeatureClaimSpans.AsNoTracking().Single(s => s.Id == spanId);
+        closed.ReleasedAt.ShouldNotBeNull();
+        closed.Alias.ShouldBe("agent");
+
+        var reopened = _context.FeatureClaimSpans.AsNoTracking()
+            .Single(s => s.FeatureId == held.Id && s.ReleasedAt == null);
+        reopened.FeatureId.ShouldBe(held.Id);
+        reopened.Alias.ShouldBe("mark-wolff");
+        reopened.Vendor.ShouldBe("claude");
+        reopened.SessionId.ShouldBe(HolderSessionId);
+        reopened.ClaimedAt.ShouldBe(holdStart);
+
+        var foreignOpen = _context.FeatureClaimSpans.AsNoTracking()
+            .Single(s => s.FeatureId == foreign.Id && s.ReleasedAt == null);
+        foreignOpen.Alias.ShouldBe("Van");
+        _context.FeatureClaimSpans.AsNoTracking().Count(s => s.ReleasedAt != null).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ReattributeSessionClaims_SamePair_LeavesTheLedgerAlone()
+    {
+        var service = CreateClaimService();
+        var held = await CreateFeatureAsync();
+        await service.ClaimAsync(_projectId, "feat-a", "mark-wolff", "claude", HolderSessionId);
+        var spansBefore = await _context.FeatureClaimSpans.CountAsync();
+
+        var moved = await service.ReattributeSessionClaimsAsync(HolderSessionId, "mark-wolff", "claude");
+
+        moved.ShouldBeEmpty();
+        var spansAfter = await _context.FeatureClaimSpans.CountAsync();
+        spansAfter.ShouldBe(spansBefore);
+        PlanningLog.Parse(held.Body).ShouldNotContain(line =>
+            line.Text.StartsWith("claim re-attributed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReattributeSessionClaims_NoClaimsHeld_ReturnsEmpty()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+
+        var moved = await service.ReattributeSessionClaimsAsync(Guid.NewGuid(), "mark-wolff", "claude");
+
+        moved.ShouldBeEmpty();
+    }
+
     private async Task<PlanningFeature> CreateFeatureAsync(string slug = "feat-a") =>
         await CreateFeatureService().CreateAsync(_projectId, slug, "Title", "body");
 

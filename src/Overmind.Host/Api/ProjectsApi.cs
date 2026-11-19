@@ -6,6 +6,7 @@ using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Manifest;
 using Overmind.Infrastructure.Materialization;
+using Overmind.Infrastructure.Notifications;
 using Overmind.Infrastructure.Planning;
 using Overmind.Infrastructure.Persistence;
 
@@ -138,6 +139,8 @@ public static class ProjectsApi
         UpdateProjectRequest request,
         IValidator<UpdateProjectRequest> validator,
         PlanningPolicy policy,
+        PlanningMaterializationDispatcher materialization,
+        NotificationsService notifications,
         OvermindDbContext db,
         CancellationToken ct)
     {
@@ -161,16 +164,18 @@ public static class ProjectsApi
         }
 
         var candidateDiskPath = request.DiskPath.Trim();
+        var previousDiskPath = project.DiskPath;
         var diskPathComparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        if (!string.Equals(project.DiskPath, candidateDiskPath, diskPathComparison))
+        var relocated = !string.Equals(previousDiskPath, candidateDiskPath, diskPathComparison);
+        if (relocated)
         {
             var hasActiveKits = await db.ProjectKits.AnyAsync(pk => pk.ProjectId == id && pk.IsActive, ct);
             if (hasActiveKits)
             {
                 return HttpErrors.Conflict(
-                    $"DiskPath of project '{id}' cannot be changed while kits are active or files are materialized; deactivate kits first.");
+                    $"DiskPath of project '{id}' cannot be changed while kits are active; deactivate kits first.");
             }
 
             var strategy = await policy.ResolveMaterializationAsync(id, ct);
@@ -182,7 +187,16 @@ public static class ProjectsApi
                     return HttpErrors.BadRequest("Candidate path does not exist or is not a directory.");
                 }
 
-                var verification = await MirrorVerifier.VerifyAsync(candidateDiskPath, mirrorRows, ct);
+                MirrorVerificationResult verification;
+                try
+                {
+                    verification = await MirrorVerifier.VerifyAsync(candidateDiskPath, mirrorRows, ct);
+                }
+                catch (MaterializationException ex)
+                {
+                    return MaterializationErrors.Map(ex);
+                }
+
                 if (!verification.Passed)
                 {
                     return HttpErrors.Conflict(verification.Describe());
@@ -226,8 +240,51 @@ public static class ProjectsApi
             project.SetNumbering(targetStyle, targetPrefix);
         }
 
+        IReadOnlyList<PinRelocation> relocations = [];
+        if (relocated)
+        {
+            relocations = await ProjectPinRelocator.RelocateWorktreePinsAsync(
+                db, project, previousDiskPath, candidateDiskPath, PlanningLogSource.Ui, ct);
+
+            // One transaction, and the direction matters: CreateAsync saves on the same scoped
+            // context, so ITS flush carries the move, the remapped pins and the provenance lines
+            // together with the notification row — the relocation rides the reminder's save, not
+            // the other way round. A fault that would have lost the reminder therefore rolls the
+            // move back too, and the retry still reads relocated and fires the whole thing again.
+            // The dispatch stays behind the commit: its guard swallows and records a materializer
+            // fault, so the worst it can leave is a stale mirror — a derived projection that
+            // planning_materialize_status reports and the next board mutation re-passes.
+            await notifications.CreateAsync(
+                NotificationKind.Info,
+                RelocationCompanionSteps.DescribeNotification(
+                    project.Name, previousDiskPath, project.DiskPath, relocations.Count),
+                project.Id,
+                featureSlug: null,
+                tab: null,
+                agent: null,
+                ct);
+        }
+
         await db.SaveChangesAsync(ct);
-        return Results.Ok(ProjectMapper.ToResponse(project));
+
+        if (!relocated)
+        {
+            return Results.Ok(ProjectMapper.ToResponse(project));
+        }
+
+        if (relocations.Count > 0)
+        {
+            await materialization.DispatchAsync(project.Id, ct);
+        }
+
+        return Results.Ok(ProjectMapper.ToResponse(project) with
+        {
+            Relocation = new ProjectRelocation(
+                previousDiskPath,
+                relocations.Count,
+                [.. relocations.Select(relocation => relocation.Slug)],
+                [.. RelocationCompanionSteps.All]),
+        });
     }
 
     private static async Task<MirrorFileRow[]> LoadMirrorRowsAsync(

@@ -11,6 +11,14 @@ public sealed class SessionIdentityFileWriterTests : IDisposable
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), "overmind-identity-writer", Guid.NewGuid().ToString("N"));
 
+    private readonly string _repo;
+
+    public SessionIdentityFileWriterTests()
+    {
+        _repo = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(Path.Combine(_repo, ".git"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
@@ -20,7 +28,9 @@ public sealed class SessionIdentityFileWriterTests : IDisposable
     }
 
     private SessionIdentityFileWriter Writer(int? parentPid) =>
-        new(new FixedParentPid(parentPid), _root);
+        new(new FixedParentPid(parentPid), _root, Workspace());
+
+    private WorkspaceIdentityFile Workspace() => new(_root, _repo);
 
     private string TargetPath(int parentPid) =>
         Path.Combine(_root, "identity", $"parent-{parentPid}.json");
@@ -39,12 +49,36 @@ public sealed class SessionIdentityFileWriterTests : IDisposable
     }
 
     [Fact]
-    public void Write_UnresolvableParentProcess_SkipsSilently()
+    public void Write_RecordsTheWorkspaceFileAlongsideTheParentFile()
+    {
+        Writer(777).Write("van-darkholme", "claude", SessionId);
+
+        var saved = Workspace().TryRead();
+        saved!.Alias.ShouldBe("van-darkholme");
+        saved.Vendor.ShouldBe("claude");
+        saved.SessionId.ShouldBe(SessionId);
+    }
+
+    [Fact]
+    public void Write_PlaceholderIdentity_KeepsTheSavedWorkspaceIdentity()
+    {
+        Writer(777).Write("van-darkholme", "claude", SessionId);
+
+        Writer(777).Write("agent", "unknown", Guid.Parse("5c1e0000-0000-0000-0000-000000000002"));
+
+        var saved = Workspace().TryRead();
+        saved!.Alias.ShouldBe("van-darkholme");
+        saved.SessionId.ShouldBe(SessionId);
+        JsonNode.Parse(File.ReadAllText(TargetPath(777)))!["alias"]!.GetValue<string>().ShouldBe("agent");
+    }
+
+    [Fact]
+    public void Write_UnresolvableParentProcess_WritesOnlyTheWorkspaceFile()
     {
         Writer(null).Write("van-darkholme", "claude", SessionId);
 
-        Directory.Exists(Path.Combine(_root, "identity")).ShouldBeFalse();
-        File.Exists(TargetPath(777)).ShouldBeFalse();
+        Workspace().TryRead()!.Alias.ShouldBe("van-darkholme");
+        Directory.GetFiles(Path.Combine(_root, "identity"), "parent-*.json").ShouldBeEmpty();
     }
 
     [Fact]
@@ -77,7 +111,8 @@ public sealed class SessionIdentityFileWriterTests : IDisposable
 
         try
         {
-            Should.NotThrow(() => new SessionIdentityFileWriter(new FixedParentPid(777), brokenRoot)
+            Should.NotThrow(() => new SessionIdentityFileWriter(
+                new FixedParentPid(777), brokenRoot, new WorkspaceIdentityFile(brokenRoot, _repo))
                 .Write("van-darkholme", "claude", SessionId));
         }
         finally

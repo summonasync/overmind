@@ -80,7 +80,13 @@ function ProjectName({ projectId, asHeading }: ProjectNameProps) {
 
   return (
     <Tag className="mb-2 truncate font-mono text-sm font-semibold tracking-wide text-primary">
-      {name}
+      <a
+        href={`/dashboard?project=${encodeURIComponent(projectId)}`}
+        title="Open project dashboard"
+        className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        {name}
+      </a>
     </Tag>
   );
 }

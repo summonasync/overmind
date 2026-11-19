@@ -938,6 +938,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<int>("RequireHumanValidation")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("RescuePolicy")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")

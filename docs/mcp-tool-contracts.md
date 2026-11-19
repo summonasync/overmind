@@ -678,6 +678,107 @@ required param fails locally with no round-trip.
 
 **Echo.** `featureSlug` plus one compact row per op in request order — echo fields only, never
 artifact bodies. **Idempotency.** `operationId` as in `planning_upsert_artifact`.
+
+## planning_rescue_scan
+
+Which dead sessions left work nobody pushed. Read-only and idempotent: the board half comes from
+the host, the git half is measured adapter-side — the host never runs git.
+
+**Inputs.** `slug` optional (scan that candidate only), `projectId` optional and resolved from the
+working directory as everywhere else.
+
+**Board half.** `GET /api/agent/projects/{projectId}/planning/rescue-candidates`. Every host row is
+echoed verbatim — `slug`, `title`, `status`, `claimState`, `claimedByAlias`, `claimedByVendor`,
+`claimedAt`, `claimedByHuman`, `pinnedBranch`, `pinnedWorktreePath`, `updatedAt` — this tool only
+adds fields and renames none. `generatedAt` is the host stamp, copied to the top level.
+
+**Vocabulary.** `claimState` is RAW liveness and only ever `stale` | `ended`. The board projection
+and `overmind_wave_snapshot` report the same ended holder as `released`; the rescue door and this
+scan do not, on purpose — the rescue question is whether anybody still holds the work, and an
+ended holder answers it differently from a claim released on purpose. A consumer must not
+normalize one side into the other.
+
+**Deleted holders, and why the two surfaces differ.** A claim whose holder's `AgentSessions` row is
+gone from the registry reads as `ended` here — the rescue door treats a missing row exactly like an
+ended one, and `planning_claim_feature` does the same, so the work stays visible and taking it over
+stays allowed. The `claimChurn` block of `overmind_onboard` deliberately does not list such a holder:
+every churn column is heartbeat-derived (`unseenSince` is the end stamp or the last seen, and
+`deathAgeMinutes` is computed from it), and a deleted row has no heartbeat left to report. Inventing
+one from `feature.updatedAt` would print an unmeasured number as measured silence, so churn stays a
+join over the session rows it can actually date. Nothing in the product deletes session rows — this
+state arrives from direct database surgery or a future janitor — which is why the rescue door is the
+surface that owns it. An agent that finds an orphan here and not in churn has seen the whole answer,
+not a gap.
+
+**Policy block.** `policy.text` is the stored `RescuePolicy`, `policy.autonomy` is `owner-set`
+while the text is non-blank, `not-set` after the owner cleared it, `unreadable` when claim-settings
+did not answer; `policy.guidance` says what a rescuer may do. Blank means NO autonomy: a cleared
+policy is an owner directive, not a missing default, and neither this tool nor the migration
+re-seeds the default text over a deliberate clearing — the migration that seeded the default touched
+only rows that were already null before it ran. With `not-set` or `unreadable`, report the facts and
+ask the owner before pushing or merging.
+
+**`rescueAllowed` is a policy answer, not an evidence answer.** The per-row flag reports what the
+owner's standing directive permits, so under an `owner-set` policy it stays `true` even on a row whose
+`verdict` is `unknown` — a hung git or unmeasurable signals remove the proof, not the permission.
+Forcing `false` there would fuse the two axes and could block a rescue the owner explicitly allowed
+("everything unpushed may be pushed") just because git hung on one row. The one exception is a
+listing failure: with no evidence anywhere every row is forced `false`, and that is a capability
+statement, not an evidence one — such a row carries `code: null`, so there is no location a rescue
+could act on whatever the policy says. Consumers must read `verdict` and `reasons` before acting on
+the flag; an allowed-but-unknown row is permission without proof, and the gaps are named in `reasons`
+precisely so the rescuer can decide instead of guessing.
+
+**Scan root.** Git runs in the project's `diskPath` when that directory exists and sits inside a
+repository, otherwise in the adapter's working directory; `scanRoot.source` names the choice
+(`project-disk-path` | `adapter-workspace`) and `scanRoot.adapterWorkspace` carries the cwd either
+way.
+
+**Where the code is** (`code`): `pinnedWorktreePath` and `pinnedBranch` win (`source: "pin"`); with
+no pins the adapter falls back to the `feat/NNN-slug` convention over `git worktree list
+--porcelain` plus `for-each-ref refs/heads` — the same rule `planning_feature_code` answers with
+(`source: "discovery"`); nothing matched → `source: "none"`. `worktreeExists` and `branchExists`
+are measured, never inferred from the pin; `stale` marks a worktree path that the pin or the
+convention named and the disk no longer has.
+
+**Git facts** (`git`; each field is null when it could not be measured):
+
+| Field | Command | Reading |
+| --- | --- | --- |
+| `dirtyFiles`, `untrackedFiles` | `git status --porcelain` | counted in the worktree, so a gone worktree carries no dirt signal at all |
+| `unpushedCommits`, `unpushedBase` | `git rev-list --count <base>..HEAD` | `<base>` is the branch's upstream; a branch with no upstream falls back to `origin/main` |
+| `unmerged`, `mergedInto` | `git merge-base --is-ancestor HEAD <mainline>` | exit 0 merged, exit 1 not merged, any other exit unknown; `<mainline>` is the first of `origin/main`, `main`, `master` that exists locally |
+| `lastCommit` | `git log -1 --format=%h%x09%cI` | `{hash, date}` |
+
+**Verdict per row.** `rescue-worthy` when anything is uncommitted, ahead of its base or unmerged —
+`reasons` names exactly which fact. `clean` needs at least one *measured* signal among
+`dirtyFiles`, `unpushedCommits`, `unmerged` to have said so, and it lists the halves that stayed
+unmeasurable; the "branch is merged and pushed" line is spoken only when both halves were measured
+clean — absence of data never claims safety. `stale` when the worktree is gone and no branch
+survived to hold the work; `unknown` when git could not answer, including a row where only
+`lastCommit` came back, and a row whose per-row git call threw (the scan survives, the other rows
+keep their facts). `counts` groups verdicts across the rows.
+
+**Reasons mirror the fields.** The `worktree path … is gone, only the branch is left` line is spoken
+by every verdict that still knows where the work is — `rescue-worthy`, `clean` with an unmeasured
+push half, and `unknown` — so the prose cannot disagree with `code.stale` and
+`code.worktreeExists`. The stronger "gone, but the branch is merged and pushed" replaces it only when
+both halves were measured clean, and a row where nothing survived on disk says only
+`no branch or worktree` — never "the branch is left", because it isn't. Cancellation is not a
+degraded answer either: a cancelled caller token propagates out of the tool rather than being
+recorded as a per-row git failure, so a scan the caller pulled mid-flight never reports the work as
+merely unknown.
+
+**Degraded answers.** A top-level `discoveryError` means git answered nothing — the scan root is not
+inside a repository, or a listing command failed — and the rows still carry the board answer with
+`verdict: "unknown"`: the `planning_feature_code` `discoveryError` contract repeated here, not a new
+one. A missing worktree is a `stale`-marked row, not an error. Per-row `git.error` carries what the
+commands reported, including a ref name too unsafe to query.
+
+**What it never does.** Nothing is claimed, pushed, merged or written: the rescue stays the PR flow
+plus the review invariant, and the take-over itself is `planning_claim_feature`. Companions:
+`overmind_wave_snapshot` for the live wave picture, `planning_feature_code` for where one feature's
+code is.
 <!-- region:planning:end -->
 <!-- region:others:start -->
 
@@ -1062,14 +1163,33 @@ No additional prose — the tool description lost nothing.
     requires a live approval proof (`overmind_notify(kind=approval)` with a human reply newer
     than the artifact's last update; `409 ValidationProofRequired` without it); on = agents
     STOP until a human validates the artifact in the UI.
-  - **agentIdentity** — effective alias/vendor (env > placeholder, with its source), the
-    project's naming rules for choosing your own stable alias, and the `session_identity_set`
-    next step when the alias is still the shared placeholder.
+  - **agentIdentity** — the effective pair and where it was read from: the Host answers with your
+    live session row (`X-Overmind-Session`), the adapter names the source that actually produced it
+    — `slot` (set this session via `session_identity_set`), `env` (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`
+    agree with the row), `session` (the row carries a real pair the adapter's own environment does
+    not — the restart restore wrote it, or the host renamed the session), `placeholder` (nothing
+    anywhere). Plus the project's naming rules, the `session_identity_set` next step when the alias
+    is still the shared placeholder, and the "already in force, do not rename" line when it is not.
+    With no naming rules set anywhere, the `namingRules` text depends on that pair: a placeholder
+    pair gets the "invent an alias" hint, a real pair in force gets the hint saying this pair
+    already satisfies naming and should be kept — so the hint and the in-force line never give
+    opposite advice.
+  - **claimChurn** — absent when nothing is orphaned; otherwise the holders that stopped answering
+    while still holding claims in this project: pair, `ended` or `stale`, death age, and the slugs
+    (capped at 10 per holder with the total alongside, 5 holders, freshest death first).
+    `sessionsTotal` is the churned-holder count before the 5-row cap, and the renderer turns the
+    difference into a `+N more holders not listed, M churned in total` line, so a holder the cap
+    dropped is accounted for instead of vanishing. A pair that
+    is yours adopts on your next write; a foreign one takes `planning_claim_feature`. A holder whose
+    session row was deleted from the registry is not listed here at all — the reconciliation note
+    under `planning_rescue_scan` says where it is.
   - **semantic** — search availability, with the verbatim probe reason when down.
   - **adapter** — adapterVersion vs hostVersion, with a restart warning when they diverge or
     the adapter predates version reporting.
 - `brief=true` returns only the project id, board counts per status, humanGate and the
-  adapter version — the cheap repeat call for agents already onboarded and working a lane.
+  adapter version — the cheap repeat call for agents already onboarded and working a lane. It
+  deliberately carries neither agentIdentity nor claimChurn: the identity read is a start-of-work
+  act, and the churn list is a take-over guard, both priced above a repeat poll.
 
 ## planning_append_directive
 
@@ -1158,6 +1278,17 @@ No additional prose — the tool description lost nothing.
   reconnect identity: handshakes re-register under it instead of `OVERMIND_ALIAS`/
   `OVERMIND_VENDOR`. Without a registered session (adapter started with no host) the tool
   tells you to restart the adapter with the host running.
+- A rename takes the held claims with it. Every feature whose claim is bound to this session id
+  re-attributes to the new pair — `ClaimedByAlias`/`ClaimedByVendor` only: `ClaimedAt` and
+  `ClaimSessionId` stay put, so the hold does not restart because the alias did — and each feature
+  logs one line, `claim re-attributed: <old alias> by <old vendor> → <new alias> by <new vendor>`.
+  The response echoes the slugs that moved; an identical pair moves nothing and logs nothing.
+- The span ledger is append-only, so the rename closes the window that carried the old pair and
+  opens the current one under the new pair with the *original* hold start: the rescue digest reads
+  the open span's claim time as "held since", and a rename is not a new hold. No open span for a
+  feature (claim written outside the claim door) leaves the ledger untouched.
+- A foreign holder's claims are never moved by your rename: they keep their claim-time attribution
+  until that holder ages out — see the `claimChurn` block of `overmind_onboard` to see them first.
 
 ## wave_role_set
 

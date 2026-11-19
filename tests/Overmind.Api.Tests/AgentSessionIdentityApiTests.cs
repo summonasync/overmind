@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
+using Overmind.Core;
 using Overmind.Host.Api;
 using Shouldly;
 using Xunit;
@@ -81,6 +82,29 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
     }
 
     [Fact]
+    public async Task SetIdentity_ClaimGuardWritesNoRowsWithNoVisibleHolder_ReturnsTheRetryConflict()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        await ExecuteAsync($$"""
+            CREATE TRIGGER identity_claim_silent_noop
+            BEFORE UPDATE OF Alias ON AgentSessions
+            FOR EACH ROW WHEN OLD.Id = '{{sessionId.ToString().ToUpperInvariant()}}'
+            BEGIN SELECT RAISE(IGNORE); END
+            """);
+
+        var response = await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var detail = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["detail"]!
+            .GetValue<string>();
+        detail.ShouldContain("was claimed while this request was running");
+        detail.ShouldNotContain("is held by");
+        var (storedAlias, storedVendor) = await ReadIdentityAsync(sessionId);
+        storedAlias.ShouldBe("Dan");
+        storedVendor.ShouldBe("claude");
+    }
+
+    [Fact]
     public async Task SetIdentity_AliasHeldByStaleSession_Succeeds()
     {
         await SeedSessionAsync("Van", "qwen", lastSeenAgo: TimeSpan.FromMinutes(20));
@@ -132,30 +156,69 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
     }
 
     [Fact]
-    public async Task SetIdentity_MidHoldChange_WarnsNamingHeldClaims()
+    public async Task SetIdentity_MidHoldChange_ReattributesHeldClaimsAndLogsTheMove()
     {
         var sessionId = await RegisterAsync("Dan", "claude");
-        var slug = await SeedHeldClaimAsync(sessionId);
+        var claim = await SeedHeldClaimAsync(sessionId);
 
         var response = await SetIdentityAsync(sessionId, "Van", "qwen");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stored = await ReadClaimAsync(claim);
+        stored.Alias.ShouldBe("Van");
+        stored.Vendor.ShouldBe("qwen");
+        stored.SessionId.ShouldBe(SessionIdText(sessionId));
+        stored.ClaimedAt.ShouldBe(claim.ClaimedAt);
+
         var warnings = await ReadWarningsAsync(response);
-        warnings.ShouldNotBeEmpty();
-        warnings.ShouldContain(w => w.Contains(slug));
+        warnings.ShouldContain(w => w.Contains(claim.Slug) && w.Contains("logged the move"));
+        warnings.ShouldNotContain(w => w.Contains("claim-time attribution"));
+    }
+
+    [Fact]
+    public async Task SetIdentity_MidHoldChange_LogsOneReattributionLinePerFeature()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        var first = await SeedHeldClaimAsync(sessionId);
+        var second = await SeedHeldClaimAsync(sessionId);
+
+        await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        foreach (var claim in new[] { first, second })
+        {
+            var lines = PlanningLog.Parse((await ReadClaimAsync(claim)).Body);
+            lines.ShouldContain(line =>
+                line.Text == "claim re-attributed: Dan by claude → Van by qwen");
+            lines.Count(line => line.Text.StartsWith("claim re-attributed", StringComparison.Ordinal))
+                .ShouldBe(1, $"{claim.Slug} logged the move more than once");
+        }
+    }
+
+    [Fact]
+    public async Task SetIdentity_ForeignHolderSnapshot_IsLeftAlone()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        var mine = await SeedHeldClaimAsync(sessionId);
+        var foreign = await SeedHeldClaimAsync(Guid.NewGuid());
+
+        await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        (await ReadClaimAsync(foreign)).Alias.ShouldBe("Dan");
+        (await ReadClaimAsync(mine)).Alias.ShouldBe("Van");
     }
 
     [Fact]
     public async Task SetIdentity_SameIdentityWhileHoldingClaims_NoWarning()
     {
         var sessionId = await RegisterAsync("Dan", "claude");
-        await SeedHeldClaimAsync(sessionId);
+        var claim = await SeedHeldClaimAsync(sessionId);
 
         var response = await SetIdentityAsync(sessionId, "Dan", "claude");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var warnings = await ReadWarningsAsync(response);
         warnings.ShouldBeEmpty();
+        PlanningLog.Parse((await ReadClaimAsync(claim)).Body).ShouldBeEmpty();
     }
 
     [Theory]
@@ -198,7 +261,7 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
         return body.GetProperty("id").GetGuid();
     }
 
-    private async Task<string> SeedHeldClaimAsync(Guid sessionId)
+    private async Task<HeldClaim> SeedHeldClaimAsync(Guid sessionId)
     {
         var projectName = $"identity-hold-{Guid.NewGuid():N}";
         var projectResponse = await _client.PostAsJsonAsync(
@@ -213,16 +276,44 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
             new { Slug = slug, Title = "Identity hold", Body = string.Empty }, JsonOptions);
         featureResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
+        var claimedAt = DateTime.UtcNow;
+        var claimedAtText = Format(claimedAt);
         await ExecuteAsync($"""
             UPDATE PlanningFeatures
             SET ClaimedByAlias = 'Dan',
                 ClaimedByVendor = 'claude',
-                ClaimedAt = '{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}',
-                ClaimSessionId = '{sessionId.ToString().ToUpperInvariant()}'
-            WHERE ProjectId = '{projectId.ToString().ToUpperInvariant()}' AND Slug = '{slug}'
+                ClaimedAt = '{claimedAtText}',
+                ClaimSessionId = '{SessionIdText(sessionId)}'
+            WHERE ProjectId = '{SessionIdText(projectId)}' AND Slug = '{slug}'
             """);
-        return slug;
+        return new HeldClaim(projectId, slug, claimedAtText);
     }
+
+    private async Task<HeldClaimRow> ReadClaimAsync(HeldClaim claim)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText =
+            $"SELECT ClaimedByAlias, ClaimedByVendor, ClaimSessionId, ClaimedAt, Body " +
+            $"FROM PlanningFeatures WHERE ProjectId = '{SessionIdText(claim.ProjectId)}' AND Slug = '{claim.Slug}'";
+        using var reader = await command.ExecuteReaderAsync();
+        reader.Read().ShouldBeTrue($"no feature row for '{claim.Slug}'");
+        return new HeldClaimRow(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.IsDBNull(1) ? null : reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.GetString(4));
+    }
+
+    private static string SessionIdText(Guid value) => value.ToString().ToUpperInvariant();
+
+    private static string Format(DateTime value) =>
+        $"{value:yyyy-MM-dd HH:mm:ss}.{value.Millisecond:000}";
+
+    private sealed record HeldClaim(Guid ProjectId, string Slug, string ClaimedAt);
+
+    private sealed record HeldClaimRow(
+        string? Alias, string? Vendor, string? SessionId, string? ClaimedAt, string Body);
 
     private async Task SeedSessionAsync(
         string alias, string vendor, TimeSpan lastSeenAgo, TimeSpan? endedAgo = null)

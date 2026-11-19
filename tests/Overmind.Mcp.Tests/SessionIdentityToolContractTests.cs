@@ -54,7 +54,8 @@ public sealed class SessionIdentityToolContractTests : IAsyncLifetime
             $"Identity set to 'dan' by 'claude' (session {SessionId}).\n" +
             "Warnings:\n" +
             "- The placeholder identity 'agent' by 'unknown' was set; invent a project alias and set it again.\n" +
-            "- Identity changed while holding claims: demo-feature; the claims keep their claim-time attribution.");
+            "- Identity changed while holding claims: demo-feature; " +
+            "the claim snapshots now read 'dan' by 'claude' and each feature logged the move.");
     }
 
     [Fact]
@@ -130,7 +131,7 @@ public sealed class SessionIdentityToolContractTests : IAsyncLifetime
         $$"""{"session":{"id":"{{SessionId}}","alias":"{{alias}}","vendor":"{{vendor}}","startedAt":"2026-10-27T09:00:00Z","lastSeenAt":"2026-10-27T09:30:00Z","endedAt":null},"warnings":[]}""";
 
     private static string IdentityWithWarningsJson =>
-        $$"""{"session":{"id":"{{SessionId}}","alias":"dan","vendor":"claude","startedAt":"2026-10-27T09:00:00Z","lastSeenAt":"2026-10-27T09:30:00Z","endedAt":null},"warnings":["The placeholder identity 'agent' by 'unknown' was set; invent a project alias and set it again.","Identity changed while holding claims: demo-feature; the claims keep their claim-time attribution."]}""";
+        $$"""{"session":{"id":"{{SessionId}}","alias":"dan","vendor":"claude","startedAt":"2026-10-27T09:00:00Z","lastSeenAt":"2026-10-27T09:30:00Z","endedAt":null},"warnings":["The placeholder identity 'agent' by 'unknown' was set; invent a project alias and set it again.","Identity changed while holding claims: demo-feature; the claim snapshots now read 'dan' by 'claude' and each feature logged the move."]}""";
 
     private const string AliasHeldJson =
         """{"title":"AliasHeld","detail":"Alias 'dan' is held by the alive session 'van' by 'qwen'; a stale or ended holder frees the alias.","status":409}""";

@@ -50,21 +50,39 @@ if (!await new HostReadinessGate(http, Console.Error)
     return 2;
 }
 
-var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource());
+var workspaceIdentity = new WorkspaceIdentityFile();
+var identityFile = new SessionIdentityFileWriter(new ParentProcessIdSource(), workspaceIdentity: workspaceIdentity);
 var lifecycle = new AgentSessionLifecycle(http);
+
+var prunedIdentityFiles = SessionIdentityFiles.PruneStaleIdentityFiles();
+if (prunedIdentityFiles > 0)
+{
+    Console.Error.WriteLine($"[overmind-mcp] pruned {prunedIdentityFiles} stale identity file(s)");
+}
+
+// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
+// session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
+// and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
+// The same refresher restores the identity this workspace last worked under, so a claim made before
+// the process died reads as an own-alias claim and is adopted on the first mutation (feature 235 D1).
+var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile, workspaceIdentity);
 Guid adapterSessionId = Guid.Empty;
+var alias = AgentIdentity.ResolveAlias();
+var vendor = AgentIdentity.ResolveVendor();
 try
 {
-    var alias = AgentIdentity.ResolveAlias();
-    var vendor = AgentIdentity.ResolveVendor();
     adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
-    identityFile.Write(alias, vendor, adapterSessionId);
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
 catch (Exception ex)
 {
     Console.Error.WriteLine($"[overmind-mcp] WARN: session registration failed, claims will be refused: {ex.Message}");
+}
+
+if (adapterSessionId != Guid.Empty)
+{
+    await identityRefresher.RestoreAndStampAsync(adapterSessionId, alias, vendor, CancellationToken.None);
 }
 
 SessionHeartbeat? heartbeat = null;
@@ -76,10 +94,6 @@ if (adapterSessionId != Guid.Empty)
     Console.Error.WriteLine($"[overmind-mcp] heartbeat every {period.TotalMinutes:0.#} min");
 }
 
-// A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
-// session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
-// and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
-var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile);
 var wakeSlot = new WakeSignalSlot();
 
 // The SDK freezes McpJsonUtilities.DefaultOptions, and the JSON-RPC envelope goes through the
@@ -129,6 +143,7 @@ builder.Services.AddSingleton<PlanningBatchTools>();
 builder.Services.AddSingleton<PlanningMaterializationTools>();
 builder.Services.AddSingleton<PlanningArtifactAliasResolver>();
 builder.Services.AddSingleton<FeatureCodeTools>();
+builder.Services.AddSingleton<RescueScanTools>();
 builder.Services.AddSingleton<WaveListingCache>();
 builder.Services.AddSingleton<WaveSnapshotTools>();
 builder.Services.AddSingleton<WaveChatTools>();
@@ -174,6 +189,7 @@ builder.Services
     .WithTools<PlanningBatchTools>()
     .WithTools<PlanningMaterializationTools>()
     .WithTools<FeatureCodeTools>()
+    .WithTools<RescueScanTools>()
     .WithTools<WaveSnapshotTools>()
     .WithTools<WaveChatTools>()
     .WithTools<WaveRoleTools>()

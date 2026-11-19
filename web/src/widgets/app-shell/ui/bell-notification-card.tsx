@@ -35,7 +35,7 @@ export function BellNotificationCard({ item, marking, onMarkRead }: BellNotifica
       </span>
     </span>
   ) : (
-    <ProjectNameBadge projectId={projectId} className="text-sm!" />
+    <ProjectNameBadge projectId={projectId} className="text-sm!" plain />
   );
 
   return (

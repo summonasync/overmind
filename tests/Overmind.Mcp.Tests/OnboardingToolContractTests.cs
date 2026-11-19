@@ -135,6 +135,16 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task Onboard_Brief_WithRescuePayload_RendersNoRescueLine()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardRescueJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject { ["brief"] = true });
+
+        Canned.ToolResultText(response).ShouldNotContain("Rescue policy");
+    }
+
+    [Fact]
     public async Task Onboard_PostsCwdAndReturnsFormattedSummary()
     {
         var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
@@ -235,8 +245,10 @@ public class OnboardingToolContractTests : McpSessionTestBase
             .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
 
         ContractsDoc.Section("overmind_onboard").ShouldContain(
-            "effective alias/vendor (env > placeholder, with its source), the project's naming rules for choosing your own stable alias, " +
-            "and the session_identity_set next step when the alias is still the shared placeholder");
+            "the Host answers with your live session row (X-Overmind-Session), the adapter names the source that actually produced it");
+        ContractsDoc.Section("overmind_onboard").ShouldContain(
+            "the session_identity_set next step when the alias is still the shared placeholder, and the \"already in force, do not rename\" line when it is not");
+        ContractsDoc.Section("overmind_onboard").ShouldContain("death age, and the slugs");
         tools["overmind_onboard"]!["description"]!.GetValue<string>().ShouldContain("agent identity");
     }
 
@@ -352,6 +364,40 @@ public class OnboardingToolContractTests : McpSessionTestBase
 
         var text = Canned.ToolResultText(response);
         text.ShouldNotContain("Adapter:");
+    }
+
+    [Fact]
+    public async Task Onboard_RescueBlock_RendersPolicyBeforeQuickstart()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardRescueJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Rescue policy: everything unpushed may be pushed, everything unmerged I allow merging");
+
+        var rescueAt = text.IndexOf("Rescue policy:", StringComparison.Ordinal);
+        var quickstartAt = text.IndexOf(Canned.OnboardQuickstartText, StringComparison.Ordinal);
+        rescueAt.ShouldBeLessThan(quickstartAt);
+    }
+
+    [Fact]
+    public async Task Onboard_PayloadWithoutRescueBlock_RendersNoRescueLine()
+    {
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        Canned.ToolResultText(response).ShouldNotContain("Rescue policy");
+    }
+
+    [Fact]
+    public async Task Onboard_RescueBlockWithNullPolicy_RendersNoEmptyHeading()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardRescueNullPolicyJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        Canned.ToolResultText(response).ShouldNotContain("Rescue policy");
     }
 
     [Fact]

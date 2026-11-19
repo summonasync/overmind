@@ -45,7 +45,13 @@ export function ProjectsInfoPanel() {
                 key={project.id}
                 className="flex items-center justify-between gap-2 rounded-md bg-surface px-2.5 py-1.5"
               >
-                <span className="truncate text-xs text-foreground">{project.name}</span>
+                <a
+                  href={`/dashboard?project=${project.id}`}
+                  title="Open project dashboard"
+                  className="truncate text-xs text-foreground transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  {project.name}
+                </a>
                 <span className="shrink-0 font-mono text-[10px] text-muted">
                   {formatCalendarDate(project.createdAt)}
                 </span>

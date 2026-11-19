@@ -13,7 +13,7 @@ export function GlobalIssueRow({ issue }: GlobalIssueRowProps) {
       href={issueHref(issue.projectId, issue.id)}
       className="flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-border-strong hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
-      <ProjectNameBadge projectId={issue.projectId} className="shrink-0" />
+      <ProjectNameBadge projectId={issue.projectId} className="shrink-0" plain />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{issue.title}</p>
         <p className="mt-0.5 text-xs text-muted">{formatBacklogAge(issue.createdAt)}</p>

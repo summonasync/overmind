@@ -322,6 +322,39 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task Onboard_RescueBlock_SurfacesOwnerDirectiveForFreshProject()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Rescue.PolicyText.ShouldBe(
+            "everything unpushed may be pushed, everything unmerged I allow merging");
+    }
+
+    [Fact]
+    public async Task Onboard_RescueBlock_SurfacesEditedPolicy()
+    {
+        var name = $"onboard-{Guid.NewGuid():N}";
+        var project = await CreateProjectAsync(name, TestPaths.DiskPath(name));
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/projects/{project.Id}/claim-settings",
+            new
+            {
+                ClaimStaleThresholdMinutes = 15,
+                AgentNamingRules = (string?)null,
+                RescuePolicy = "rescue only after review passes",
+            });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var onboard = await OnboardAsync(new { Cwd = TestPaths.DiskPath(name) });
+
+        onboard.Rescue.PolicyText.ShouldBe("rescue only after review passes");
+    }
+
+    [Fact]
     public async Task Onboard_Quickstart_MentionsToolOrderAndEscapeHatch()
     {
         var name = $"onboard-{Guid.NewGuid():N}";
@@ -792,9 +825,11 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     public sealed record OnboardJson(
         Guid ProjectId, string ProjectName, bool Created, OnboardBoardJson Board,
         OnboardMaterializationJson Materialization, OnboardValidationJson Validation,
-        OnboardAdapterJson Adapter, string Quickstart);
+        OnboardAdapterJson Adapter, OnboardRescueJson Rescue, string Quickstart);
 
     public sealed record OnboardAdapterJson(string? AdapterVersion, string HostVersion, string? Warning);
+
+    public sealed record OnboardRescueJson(string? PolicyText);
 
     public sealed record OnboardBoardJson(Dictionary<string, int> CountsByStatus);
 

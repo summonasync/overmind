@@ -2,8 +2,10 @@ namespace Overmind.Host.Api.Contracts;
 
 public sealed record UpdateClaimSettingsRequest(
     int ClaimStaleThresholdMinutes,
-    string? AgentNamingRules);
+    string? AgentNamingRules,
+    string? RescuePolicy = null);
 
 public sealed record ClaimSettingsResponse(
     int ClaimStaleThresholdMinutes,
-    string? AgentNamingRules);
+    string? AgentNamingRules,
+    string? RescuePolicy);
