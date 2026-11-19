@@ -591,7 +591,8 @@ public sealed class KitScanner
         return files.Keys.Any(f =>
             f.StartsWith(prefix, StringComparison.Ordinal)
             && ParentRel(f) == candidateRel
-            && !string.Equals(Path.GetFileName(f), SkillFileName, StringComparison.OrdinalIgnoreCase));
+            && !string.Equals(Path.GetFileName(f), SkillFileName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetExtension(f), ".md", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasGateFiles(IReadOnlyDictionary<string, long> files, string candidateRel)

@@ -119,6 +119,23 @@ public sealed class KitScannerTests : IDisposable
     }
 
     [Fact]
+    public async Task Scan_FolderRoots_QualifyMarkdownProseButNotScripts()
+    {
+        WriteSkill("deploy", parentDirs: ["dotnet-crew"]);
+        WriteFile(Path.Combine(_root, "sociality", "SOCIAL_DICTIONARY.md"), "# Tone rules.\n");
+        WriteFile(Path.Combine(_root, "sociality", "GLOSSARY.MD"), "# Terms.\n");
+        WriteFile(Path.Combine(_root, "build", "pack.sh"), "#!/bin/sh\n");
+        WriteFile(Path.Combine(_root, "build", "manifest.json"), "{}\n");
+
+        var result = await CreateScanner().ScanAsync(_root);
+
+        result.Candidates.Select(c => c.RelativePath).ShouldBe(["dotnet-crew", "sociality"]);
+        var prose = result.Candidates.Single(c => c.RelativePath == "sociality");
+        prose.Skills.ShouldBeEmpty();
+        result.Candidates.Any(c => c.RelativePath == "build").ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Scan_PlatformMarkedAndAgnosticSkills_DetectsPlatforms()
     {
         WriteSkill("deploy", parentDirs: [".claude", "skills"]);
