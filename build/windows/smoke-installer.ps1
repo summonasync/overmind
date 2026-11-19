@@ -4,7 +4,7 @@ smoke-installer.ps1 - Windows installer smoke verification for Overmind.
 Usage: build\windows\smoke-installer.ps1 <path-to-overmind-setup.exe> [-KillLiveMcpAdapters]
 
 Silently installs setup.exe into a fresh temp prefix, boots the Host headless against an
-isolated database/models directory, asserts health, the seeded bundled crew kit, the web UI,
+isolated database/models directory, asserts health, the seeded bundled kit set (every kit the
 an MCP initialize handshake and a graceful POST /api/shutdown stop, then silently uninstalls
 and asserts no residue (install dir, Start Menu shortcut, uninstall registry key, PATH,
 ~/.overmind survives). Cell 1b runs the freshly installed overmind-mcp.exe with
@@ -349,7 +349,6 @@ try {
     $expectedPaths = @(
         'host\Overmind.Host.exe',
         'host\bundled\manifest.json',
-        'host\bundled\crew',
         'mcp\overmind-mcp.exe',
         'web\index.html'
     )
@@ -359,11 +358,36 @@ try {
             throw "cell 1 (silent install): expected path missing: $full"
         }
     }
-    $forbiddenPaths = @('run.cmd', 'install.ps1', 'host\bundled\crew\skills\synced')
+
+    $bundledManifest = Get-Content -LiteralPath (Join-Path $installDir1 'host\bundled\manifest.json') -Raw | ConvertFrom-Json
+    $bundledKits = @($bundledManifest.kits)
+    if ($bundledKits.Count -lt 1) {
+        throw 'cell 1 (silent install): bundled manifest.json lists no kits'
+    }
+    foreach ($kit in $bundledKits) {
+        $kitDir = Join-Path $installDir1 ('host\bundled\' + $kit.name)
+        if (-not (Test-Path -LiteralPath $kitDir)) {
+            throw "cell 1 (silent install): bundled kit folder missing: $kitDir"
+        }
+    }
+    foreach ($legacyKit in @($bundledManifest.legacy)) {
+        $legacyDir = Join-Path $installDir1 ('host\bundled\' + $legacyKit)
+        if (Test-Path -LiteralPath $legacyDir) {
+            throw "cell 1 (silent install): kit '$legacyKit' is listed as legacy and still shipped as a folder: $legacyDir"
+        }
+    }
+    $forbiddenPaths = @('run.cmd', 'install.ps1')
     foreach ($rel in $forbiddenPaths) {
         $full = Join-Path $installDir1 $rel
         if (Test-Path -LiteralPath $full) {
             throw "cell 1 (silent install): forbidden path present in installer payload: $full"
+        }
+    }
+
+    foreach ($kit in $bundledKits) {
+        $syncedPath = Join-Path $installDir1 ('host\bundled\' + $kit.name + '\skills\synced')
+        if (Test-Path -LiteralPath $syncedPath) {
+            throw "cell 1 (silent install): machine state shipped inside kit '$($kit.name)': $syncedPath"
         }
     }
 
@@ -429,16 +453,26 @@ try {
     }
     Write-Host "cell 3: health OK - status=ok"
 
-    $kitsResponse = Invoke-JsonGet -Uri "$baseUrl/api/kits" -CellLabel 'cell 4 (bundled kit)'
+    $kitsResponse = Invoke-JsonGet -Uri "$baseUrl/api/kits" -CellLabel 'cell 4 (bundled kits)'
     $kits = $kitsResponse.Content | ConvertFrom-Json
-    $crewKit = $kits | Where-Object { $_.name -eq 'crew' } | Select-Object -First 1
-    if (-not $crewKit) {
-        throw "cell 4 (bundled kit): no kit named 'crew' in /api/kits response"
+    foreach ($kit in $bundledKits) {
+        $kitRow = $kits | Where-Object { $_.name -eq $kit.name } | Select-Object -First 1
+        if (-not $kitRow) {
+            throw "cell 4 (bundled kits): no kit named '$($kit.name)' in /api/kits response"
+        }
+        if ($kitRow.sourceKind -ne 'bundled') {
+            throw "cell 4 (bundled kits): kit '$($kit.name)' sourceKind was '$($kitRow.sourceKind)', expected 'bundled'"
+        }
+        if ($kitRow.mandatory -ne $kit.mandatory) {
+            throw "cell 4 (bundled kits): kit '$($kit.name)' mandatory was '$($kitRow.mandatory)', manifest said '$($kit.mandatory)'"
+        }
     }
-    if ($crewKit.sourceKind -ne 'bundled') {
-        throw "cell 4 (bundled kit): crew kit sourceKind was '$($crewKit.sourceKind)', expected 'bundled'"
+    foreach ($legacyKit in @($bundledManifest.legacy)) {
+        if ($kits | Where-Object { $_.name -eq $legacyKit }) {
+            throw "cell 4 (bundled kits): legacy kit '$legacyKit' came back in a freshly seeded library"
+        }
     }
-    Write-Host "cell 4: bundled kit seeded OK - crew/bundled found next to host\bundled\"
+    Write-Host "cell 4: bundled kits seeded OK - $($bundledKits.Count) kits bundled, manifest mandatory flags reproduced next to host\bundled\"
 
     $webResponse = Invoke-JsonGet -Uri "$baseUrl/" -CellLabel 'cell 5 (web UI)'
     if ($webResponse.Content -notmatch '(?i)<!DOCTYPE html') {
@@ -839,7 +873,7 @@ try {
         }
     }
 
-    $smokeSummary = "install=OK port=$port2 health=ok crew kit seeded (bundled) web UI served MCP initialize ok (result.serverInfo) graceful shutdown 202+exit0 silent uninstall clean (Start Menu/uninstall-key/Path byte-identical, ~/.overmind intact) agent registration dry-run ok (overmind-mcp.exe install --dry-run exit 0, plan named an agent, nothing written) upgrade-over-running-install ok via the real host.port (installed overmind-mcp.exe genuinely locked+killed, graceful Host stop, web\index.html byte-for-byte replacement proof) PATH+autostart round-trip ok (mcppath/autostart tasks, REG_EXPAND_SZ preserved, Run key round-trip) path-length guard ok (silent pre-UI abort, exit code $overlongExitCode in $([Math]::Round($overlongStopwatch.Elapsed.TotalSeconds, 1))s, no files copied)"
+    $smokeSummary = "install=OK port=$port2 health=ok bundled kits seeded with manifest mandatory flags web UI served MCP initialize ok (result.serverInfo) graceful shutdown 202+exit0 silent uninstall clean (Start Menu/uninstall-key/Path byte-identical, ~/.overmind intact) agent registration dry-run ok (overmind-mcp.exe install --dry-run exit 0, plan named an agent, nothing written) upgrade-over-running-install ok via the real host.port (installed overmind-mcp.exe genuinely locked+killed, graceful Host stop, web\index.html byte-for-byte replacement proof) PATH+autostart round-trip ok (mcppath/autostart tasks, REG_EXPAND_SZ preserved, Run key round-trip) path-length guard ok (silent pre-UI abort, exit code $overlongExitCode in $([Math]::Round($overlongStopwatch.Elapsed.TotalSeconds, 1))s, no files copied)"
     Write-Host "SMOKE OK: $smokeSummary"
 }
 catch {

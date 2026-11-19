@@ -59,7 +59,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\host\{#AppExe}"; WorkingDir: 
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Overmind"; ValueData: """{app}\host\{#AppExe}"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [InstallDelete]
-Type: filesandordirs; Name: "{app}\host\bundled\crew"
+; The whole bundled tree is wiped before the copy: an upgrade from the single-kit layout must not
+; leave the retired kit folder next to the six kit folders the new manifest ships.
+Type: filesandordirs; Name: "{app}\host\bundled"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\host"

@@ -5,8 +5,9 @@
 # Usage: build/smoke.sh <overmind-<version>-linux-x64.tar.gz>
 #
 # Boots the Host with an isolated HOME and --no-tray, waits for ~/.overmind/host.port, then
-# asserts: health ok, bundled crew kit seeded via GET /api/kits, web UI served at /, seed log
-# line present, plus a watch-guard cell bounding Host/adapter inotify usage. SIGTERM shutdown.
+# asserts: health ok, every bundled kit from build/dist-layout.env seeded as bundled with its
+# mandatory flag, no legacy kit resurrected, web UI served at /, seed log line present, plus a
+# watch-guard cell bounding Host/adapter inotify usage. SIGTERM shutdown.
 
 set -euo pipefail
 
@@ -27,7 +28,7 @@ archive=$1
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-for tool in tar curl; do
+for tool in tar curl jq; do
     command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not on PATH"
 done
 
@@ -71,8 +72,26 @@ health=$(curl -fsS "http://127.0.0.1:$port/api/health")
 grep -q '"status":"ok"' <<<"$health" || die "health endpoint did not answer ok: $health"
 
 kits=$(curl -fsS "http://127.0.0.1:$port/api/kits")
-grep -q '"name":"crew"' <<<"$kits" || die "crew kit missing from /api/kits: $kits"
-grep -q '"sourceKind":"bundled"' <<<"$kits" || die "crew kit is not bundled: $kits"
+# shellcheck source=/dev/null
+source "$script_dir/dist-layout.env"
+seeded_count=0
+for kit in $BUNDLED_KITS; do
+    row=$(jq -c --arg kit "$kit" '.[] | select(.name == $kit)' <<<"$kits")
+    [[ -n $row ]] || die "bundled kit '$kit' missing from /api/kits: $kits"
+    [[ $(jq -r '.sourceKind' <<<"$row") == bundled ]] || die "kit '$kit' is not seeded as bundled: $row"
+    expected_mandatory=false
+    for mandatory in ${MANDATORY_KITS:-}; do
+        [[ $mandatory == "$kit" ]] && expected_mandatory=true
+    done
+    [[ $(jq -r '.mandatory' <<<"$row") == "$expected_mandatory" ]] ||
+        die "kit '$kit' mandatory flag was $(jq -r '.mandatory' <<<"$row"), expected $expected_mandatory"
+    seeded_count=$((seeded_count + 1))
+done
+for kit in ${LEGACY_KITS:-}; do
+    if jq -e --arg kit "$kit" 'any(.[]; .name == $kit)' <<<"$kits" >/dev/null; then
+        die "legacy kit '$kit' came back in a freshly seeded library: $kits"
+    fi
+done
 
 curl -fsS "http://127.0.0.1:$port/" | grep -qi '<!doctype html' || die "web UI not served at /"
 
@@ -84,4 +103,4 @@ host_pid=""
 
 "$script_dir/watch-guard.sh" "$root/mcp/overmind-mcp" "$root/host/Overmind.Host"
 
-echo "SMOKE OK: port=$port health=ok crew kit seeded (bundled) web UI served watch guard ok clean shutdown"
+echo "SMOKE OK: port=$port health=ok bundled kits seeded=$seeded_count mandatory flags honoured web UI served watch guard ok clean shutdown"
