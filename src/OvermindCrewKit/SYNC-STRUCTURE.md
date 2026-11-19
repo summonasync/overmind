@@ -8,8 +8,8 @@ This repo maintains one agent crew for four runtimes: **Kimi Code CLI** (`.kimi-
 
 - model names, aliases, and selection mechanics (Kimi `K2.7`/`K3` pool vs Claude `sonnet`/`opus` vs Qwen `qwen3.8-flash` pin vs Codex `gpt-6-luna`/`gpt-6.1-sol` tiers)
 - home directory paths (`~/.kimi-code/` vs `~/.claude/` vs `~/.qwen/` vs `~/.codex/`)
-- tool identifier names inside agent `tools:` allowlists (Claude Code `Read`/`Grep`/`Glob`/`Bash`/`WebSearch`/`FetchURL` vs canonical Qwen `read_file`/`grep_search`/`glob`/`run_shell_command`/`web_fetch`) — the *restriction* is mirrored, only the spelling follows the runtime; Codex agent roles are TOML and carry no allowlist at all — there is no `tools` field there and no per-role restriction text either (measured 2026-11-19: zero `mcp__` tokens across the 42 role files), so the restriction lives in `.codex/AGENTS.md` and the skill bodies
-- agent file format (Codex agent roles are standalone TOML files with exactly `name`, `description`, `model`, `developer_instructions` — strict deserialization, any other field silently drops the role)
+- tool identifier names inside agent `tools:` allowlists (Claude Code `Read`/`Grep`/`Glob`/`Bash`/`WebSearch`/`FetchURL` vs canonical Qwen `read_file`/`grep_search`/`glob`/`run_shell_command`/`web_fetch`) — the *restriction* is mirrored, only the spelling follows the runtime; Codex agent roles are TOML and carry no allowlist at all — there is no `tools` field there and no per-role restriction text either (measured 2026-11-19: zero `mcp__` tokens across the 46 role files), so the restriction lives in `.codex/AGENTS.md` and the skill bodies
+- agent file format (Codex agent roles are standalone TOML files with exactly `name`, `description`, `model`, `developer_instructions` — strict deserialization: any other field drops the role, and the drop is not silent: the loader warns `Ignoring malformed agent role definition` on stderr at session start (measured codex-cli 0.160.1, 2026-11-19; a `tools` key additionally collides with Codex's tool-configuration namespace, so per-role restriction cannot live in the role container — see KIT-MEMBERSHIP "Codex per-role tool restriction"))
 - runtime-specific features (Kimi `AgentSwarm` + config.toml secondary-model pool; Claude Task tool + settings.json; Qwen `agent` tool + `subagent_type: "fork"` + settings.json `permissions`/`hooks`; Codex `spawn_agent` tool + TOML role pins + 4 concurrency slots, full-history forks inherit the parent model)
 - enforcement mechanics (Kimi hooks/config, Claude prompt-enforced, Qwen `permissions.deny`/`ask` + `PostToolUse` hooks in `~/.qwen/settings.json`, Codex behavioral/prompt-only by crew decision — codex hooks exist in the runtime but the kit ships none and never writes `~/.codex/config.toml`)
 - Overmind MCP is the planning backend on all four sides — identical tool names (`mcp__overmind__*`), hard requirement everywhere
@@ -60,6 +60,10 @@ Applies to every markdown frontmatter (SKILL.md on all four sides, agent files o
 | `.kimi-code/agents/node-coder.md` | `.claude/agents/node-coder.md` | `.qwen/agents/node-coder.md` |
 | `.kimi-code/agents/python-code-reviewer.md` | `.claude/agents/python-code-reviewer.md` | `.qwen/agents/python-code-reviewer.md` |
 | `.kimi-code/agents/python-coder.md` | `.claude/agents/python-coder.md` | `.qwen/agents/python-coder.md` |
+| `.kimi-code/agents/rust-architect.md` | `.claude/agents/rust-architect.md` | `.qwen/agents/rust-architect.md` |
+| `.kimi-code/agents/rust-code-reviewer.md` | `.claude/agents/rust-code-reviewer.md` | `.qwen/agents/rust-code-reviewer.md` |
+| `.kimi-code/agents/rust-coder.md` | `.claude/agents/rust-coder.md` | `.qwen/agents/rust-coder.md` |
+| `.kimi-code/agents/rust-init.md` | `.claude/agents/rust-init.md` | `.qwen/agents/rust-init.md` |
 | `.kimi-code/agents/solution-architect.md` | `.claude/agents/solution-architect.md` | `.qwen/agents/solution-architect.md` |
 | `.kimi-code/agents/web-architect.md` | `.claude/agents/web-architect.md` | `.qwen/agents/web-architect.md` |
 | `.kimi-code/agents/web-code-reviewer.md` | `.claude/agents/web-code-reviewer.md` | `.qwen/agents/web-code-reviewer.md` |
@@ -99,6 +103,12 @@ Applies to every markdown frontmatter (SKILL.md on all four sides, agent files o
 | `.kimi-code/skills/python-best-practices/` | `.claude/skills/python-best-practices/` | `.qwen/skills/python-best-practices/` |
 | `.kimi-code/skills/python-code-reviewer/` | `.claude/skills/python-code-reviewer/` | `.qwen/skills/python-code-reviewer/` |
 | `.kimi-code/skills/python-coder/` | `.claude/skills/python-coder/` | `.qwen/skills/python-coder/` |
+| `.kimi-code/skills/rust-architect/` | `.claude/skills/rust-architect/` | `.qwen/skills/rust-architect/` |
+| `.kimi-code/skills/rust-best-practices/` | `.claude/skills/rust-best-practices/` | `.qwen/skills/rust-best-practices/` |
+| `.kimi-code/skills/rust-code-reviewer/` | `.claude/skills/rust-code-reviewer/` | `.qwen/skills/rust-code-reviewer/` |
+| `.kimi-code/skills/rust-coder/` | `.claude/skills/rust-coder/` | `.qwen/skills/rust-coder/` |
+| `.kimi-code/skills/rust-init/` | `.claude/skills/rust-init/` | `.qwen/skills/rust-init/` |
+| `.kimi-code/skills/cargo-licensing-guard/` | `.claude/skills/cargo-licensing-guard/` | `.qwen/skills/cargo-licensing-guard/` |
 | `.kimi-code/skills/solution-architect/` | `.claude/skills/solution-architect/` | `.qwen/skills/solution-architect/` |
 | `.kimi-code/skills/web-architect/` | `.claude/skills/web-architect/` | `.qwen/skills/web-architect/` |
 | `.kimi-code/skills/web-best-practices/` | `.claude/skills/web-best-practices/` | `.qwen/skills/web-best-practices/` |
@@ -160,8 +170,8 @@ The agent row is the one format break in the kit: md frontmatter on the four md-
 | Model pool enforcement | `[secondary_model]` in config.toml limits spawnable models | No config-level pool; policy text in CLAUDE.md + skill bodies | `model:` frontmatter pin per agent (`qwen3.8-flash` uniform), resolved through `modelProviders.openai` in settings.json; `inherit` forbidden for crew sub-agents | `model` field pin per TOML role (`gpt-6-luna` coders/fixer, `gpt-6.1-sol` heavy roles); complexity escalation via `spawn_agent(model="gpt-6.1-sol", fork_turns="none")` sanctioned by AGENTS.md; full-history forks forbidden (inherit parent model, reject overrides); 4 concurrency slots |
 | Parallel spawn primitive | `AgentSwarm` | Multiple `Task` tool calls in one message | Multiple `agent` tool calls in one message; `subagent_type: "fork"` when the child needs parent context | Multiple `spawn_agent` calls in one turn; `fork_turns` controls context propagation (`"none"`/numeric for model overrides) |
 | Deterministic enforcement | Hooks (PreToolUse/PostToolUse) + config deny-list | Prompt-enforced only | `permissions.deny`/`ask` + `PostToolUse` hooks in `~/.qwen/settings.json`, shipped as `.qwen/settings-snippet.jsonc` for hand-merging. Read/Edit deny rules also cover equivalent shell commands, so there is no `cat .env` bypass | Behavioral/prompt-only by crew decision: codex has hooks in the runtime (feature flag `hooks`, stable) but the kit ships none and never writes `~/.codex/config.toml`; verification discipline (build/lint in the same turn) replaces PostToolUse hooks |
-| Agent frontmatter extras | — | — | `tools` kept (canonical names); `whenToUse` folded into `description` (Qwen delegates on `description`) | Strict TOML: EXACTLY `name`, `description`, `model`, `developer_instructions` — any extra field makes the loader drop the role silently (fail-soft stderr warning at session start) |
-| MCP tools in allowlists (2026-10-15) | `mcp__overmind__*` listed verbatim in every `tools:` allowlist — MCP tool names are identical on every runtime | same | same; `Skill` and `Write` have Qwen ids `write_file` only — `Skill` is dropped, the augur researcher loads pdf/docx helpers through `run_shell_command` | no allowlist field and no per-role grant — the 42 TOML roles carry zero `mcp__` tokens (measured 2026-11-19); MCP access is declared in `.codex/AGENTS.md` and the skill bodies, and a `tools` field cannot be added there (the strict loader would drop the role) |
+| Agent frontmatter extras | — | — | `tools` kept (canonical names); `whenToUse` folded into `description` (Qwen delegates on `description`) | Strict TOML: EXACTLY `name`, `description`, `model`, `developer_instructions` — any extra field makes the loader drop the role (measured 2026-11-19 on 0.160.1: session-start stderr warning `Ignoring malformed agent role definition`, so fail-soft and observable, not silent; a `tools` value additionally parses against the tool-config namespace, never an allowlist) |
+| MCP tools in allowlists (2026-10-15) | `mcp__overmind__*` listed verbatim in every `tools:` allowlist — MCP tool names are identical on every runtime | same | same; `Skill` and `Write` have Qwen ids `write_file` only — `Skill` is dropped, the augur researcher loads pdf/docx helpers through `run_shell_command` | no allowlist field and no per-role grant — the 46 TOML roles carry zero `mcp__` tokens (re-measured 2026-11-19 after rust parity); MCP access is declared in `.codex/AGENTS.md` and the skill bodies, and a `tools` field cannot be added there (the strict loader drops the role — measured, not folklore) |
 | Tool names in allowlists | Kimi tool ids | Claude Code tool ids (`Read`, `Grep`, `Glob`, `Bash`, `WebSearch`, `FetchURL`) | Canonical Qwen tool ids (`read_file`, `grep_search`, `glob`, `run_shell_command`, `web_fetch`). `WebSearch` has no Qwen equivalent — it and `FetchURL` collapse into a single `web_fetch` entry | No allowlist field — restrictions carried in `.codex/AGENTS.md` and the skill bodies, not per role |
 
 ## Translation table (Kimi → Claude)
@@ -232,7 +242,7 @@ Apply strictly in this order (most specific first). After the table, a manual pa
 | 14 | `~/.claude` / `sonnet` / `opus` / `haiku` (if porting from the Claude side instead) | `~/.codex` / `gpt-6-luna` (coders, fixer) / `gpt-6.1-sol` (everything else) |
 | — | `mcp__overmind__*` / `planning_*` / `overmind_*` tool names | DO NOT TRANSLATE — MCP tool names are identical on every runtime |
 
-Model pin table for agent ports (verified codex-cli 0.160.1, 2026-10-07): `gpt-6-luna` → `fast-fixer-coder` + 7 language coders (dotnet, go, node, web, python, js-platform, maui); `gpt-6.1-sol` → all remaining roles (orchestrators, reviewers, architects, audit, detection, obfuscation, ceremony, planners, helpers). Complex coder tasks escalate the same luna-pinned role via `spawn_agent(model="gpt-6.1-sol", fork_turns="none")` per AGENTS.md.
+Model pin table for agent ports (verified codex-cli 0.160.1, 2026-10-07): `gpt-6-luna` → `fast-fixer-coder` + 8 language coders (dotnet, go, node, web, python, js-platform, maui, rust); `gpt-6.1-sol` → all remaining roles (orchestrators, reviewers, architects, audit, detection, obfuscation, ceremony, planners, helpers). Complex coder tasks escalate the same luna-pinned role via `spawn_agent(model="gpt-6.1-sol", fork_turns="none")` per AGENTS.md.
 
 ## Deploy modes (`manifest.json`)
 
@@ -248,6 +258,10 @@ Every manifest entry carries an explicit `mode` — the `install.sh`/`uninstall.
 `~/.claude/skills` is **merge since 2026-10-15**: the home also hosts Anthropic-synced skills (`synced/`) that a whole-directory mirror would delete.
 
 `~/.codex/skills` and `~/.codex/agents` are **mirror by user decision (2026-10-07)**: they are crew-owned; third-party skills or roles dropped there are deleted on the next install.
+
+**Codex skills-directory semantics (T0 decision, feature 250, 2026-11-19).** Three surfaces, don't conflate them: (1) the kit repo side stays `.codex/skills/` — source of the mirror deploy; (2) Overmind *materialization* of codex skills lands in the target project's `.agents/skills/` (`platforms.json` codex entry — the documented current path: repo `.agents/skills` scanned CWD→repo root, user `$HOME/.agents/skills`, admin `/etc/codex/skills`, system bundled; 002 ADR amended in TECHNICAL-SOLUTIONS.md); (3) the home deploy still targets `~/.codex/skills/` — measured live on codex-cli 0.160.1 (2026-11-19): `$CODEX_HOME/skills` is scanned as a skill root even though current docs no longer list it, so the legacy home keeps working on the installed CLI; relocating the install target to `$HOME/.agents/skills` is an open follow-up (manifest/install), and `$HOME/.agents/skills` is shared with Kimi (`~/.agents/skills`, per its docs, merged with Kimi-specific skills) and Gemini (`.agents/skills` alias per its docs) — byte-identical agnostic content makes the sharing a duplication, not a collision; duplicate names stay visible (Codex docs: shared names are not merged). Context budget, measured 2026-11-19 on the same CLI: the 57 kit skills + 4 system-bundled render an initial list of ~22.1k chars (~5.5k tokens), no description shortened, no skill omitted — `skills.max_context_tokens` needs no tuning today; recheck after a CLI upgrade since the default budget is 2% of the model's context window.
+
+**No gemini/antigravity mirror sides (feature 250 T5, owner-scope exclusion).** `platforms.json` carries `gemini` (`.gemini/skills`) and `antigravity` (`.antigravity/skills`) as *materialization targets* only — an Overmind kit lands skills for those platforms in the target project, and that is the surface the crew supports for them. The quadruple-edit contract stays four-sided by owner ruling (spec anti-scope: no native home skills loader for these two at kit level). Recorded against the docs so nobody "fixes" this by inventing a side: Gemini CLI itself does read user-level `~/.gemini/skills/` (alias `~/.agents/skills/`) and project `.gemini/skills/` — adding a fifth mirror side is a scope change, not a gap repair; the shared `.agents/skills` alias already serves those runtimes the moment materialization or the user home populates it.
 
 ## Skill authoring rules
 
@@ -273,7 +287,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    ```
    ripgrep-based tooling skips dot-directories by default — pass the runtime dir explicitly, or add `--hidden`.
 3. `Known intentional differences` table still accurate — if a runtime gains/loses a capability, update this file, not just one side.
-4. Count parity intact: 42 agent files + 51 skill dirs on all four runtime sides (the pre-existing qwen gap — `git-commit-ai-detector` — was closed 2026-11-01).
+4. Count parity intact: 46 agent files + 57 skill dirs on all four runtime sides (rust parity landed 2026-11-19 — the `.claude`-only 57/46 vs 51/42 asymmetry is closed; the pre-existing qwen gap — `git-commit-ai-detector` — was closed 2026-11-01).
    ```bash
    for d in .kimi-code .claude .qwen .codex; do printf '%-22s agents=%s skills=%s\n' "$d" "$(ls "$d/agents" | wc -l)" "$(ls "$d/skills" | wc -l)"; done
    ```
@@ -289,7 +303,7 @@ Applies to creating or editing any skill in this repo. The verification half liv
    ```bash
    grep -rnE '^(description|whenToUse): [^"|>-].*: ' .kimi-code/agents .claude/agents .qwen/agents   # must be empty
    ```
-8. Codex role files stay minimal TOML — exactly `name`, `description`, `model`, `developer_instructions`; anything else silently drops the role:
+8. Codex role files stay minimal TOML — exactly `name`, `description`, `model`, `developer_instructions`; anything else drops the role (loader warns on stderr — measured 2026-11-19, see KIT-MEMBERSHIP):
    ```bash
    python3 - <<'EOF'
 import glob, tomllib, sys

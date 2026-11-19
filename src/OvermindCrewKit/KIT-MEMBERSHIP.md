@@ -58,7 +58,7 @@ arrays describe what is actually on disk, side by side.
 |-----|---------|-------|
 | `overmind-ceremony` (mandatory) | `overmind-ceremony` plus the language-agnostic process and orchestration roles: `architect-review`, `audit-orchestrator`, `coding-challenge-orchestrator`, `documentation-writer`, `fast-fixer-coder`, `feature-orchestrator`, `naming-sensei`, `pipeline-doctor`, `product-strategist`, `solution-architect`, `sprint-planner`, `wave-marshal` | also owns all per-side prose and runtime config (see below) |
 | `dotnet-crew` | `dotnet-architect`, `dotnet-best-practices`, `dotnet-code-reviewer`, `dotnet-coder`, `dotnet-init`, `nuget-licensing-guard` | |
-| `rust-crew` | `rust-architect`, `rust-best-practices`, `rust-code-reviewer`, `rust-coder`, `rust-init`, `cargo-licensing-guard` | present on `.claude` only until T5 parity |
+| `rust-crew` | `rust-architect`, `rust-best-practices`, `rust-code-reviewer`, `rust-coder`, `rust-init`, `cargo-licensing-guard` | on all four sides since the 2026-11-19 T5 parity |
 | `js-crew` | `web-*` (4), `node-*` (4), `js-platform-*` (3), `frontend-designer` | |
 | `sociality` | `.kimi-code/SOCIAL_DICTIONARY.md` | see *Open boundary* below |
 | `crew-extras` | `go-*` (3), `python-*` (3), `maui-coder`, `augur-*` (6), `ai-code-detector`, `ai-obfuscator`, `ai-obfuscation-reviewer`, `git-commit-ai-detector`, `umbraco-sensei`, `tutor-master`, `squeezr-ops` | the leftovers bucket the owner defined |
@@ -67,9 +67,12 @@ Spec R1 also names `stuck` in the extras bucket. There is no `stuck` skill
 directory in the kit — it is a runtime-bundled Qwen Code skill, never a kit member,
 so it is not assignable and appears nowhere in the manifest.
 
-Skill counts across the four sides: 57 canonical skills (`.claude` side), the other
-three sides carry 51 each today; 46 canonical agent definitions, 42 on the other
-three sides; 15 prose/config files.
+Skill counts across the four sides: 57 skill dirs and 46 agent definitions on
+every side — rust parity landed on all four sides 2026-11-19 (feature 250 T5), so
+the `.claude`-only asymmetry is closed; 15 prose/config files. Membership is
+derived from disk by `tools/gen-kit-membership.py` and re-checked by
+`tools/check-kit-membership.py`, which prints the per-run denominators (scanned,
+skipped, parsed) — counts quoted in prose rot, the checker's do not.
 
 ## Recorded decisions
 
@@ -109,13 +112,38 @@ three sides; 15 prose/config files.
   the same pass), `.claude` already correct on all 13 grant-bearing roles, and
   `.codex` not a carrier at all: its TOML roles expose only `name`, `description`,
   `model`, `developer_instructions`, so there is no misplaced list to move and a
-  `tools` field would make the loader drop the role. Measured: zero `mcp__` tokens
-  across all 42 `.codex/agents/*.toml` — on that side MCP access is declared in
+  `tools` field makes the loader drop the role. Measured: zero `mcp__` tokens
+  across all 46 `.codex/agents/*.toml` (re-measured 2026-11-19 after rust parity,
+  was 42 before) — on that side MCP access is declared in
   `.codex/AGENTS.md` and the skill bodies, never per role (SYNC-STRUCTURE's
   "prose inside `developer_instructions`" wording said otherwise; corrected 2026-11-19
   against the content). So 242 is a three-side repair plus one structurally exempt
   side, and the codex exemption is a *container* property, not a grant that was
   checked and found in place.
+- **The codex role loader is strict but not silent — measured 2026-11-19 on
+  codex-cli 0.160.1** (scratch `CODEX_HOME` under the lane worktree, live config
+  untouched): a role file with an extra field is dropped with a stderr warning at
+  session start — `warning: Ignoring malformed agent role definition: failed to
+  deserialize agent role file at …`. Two drop flavors: an unknown field name
+  reports `unknown field`, and a `tools` key is worse than unknown — it collides
+  with Codex's tool-*configuration* namespace (deserialized against
+  `WebSearchToolConfigInput`), so even a value that parsed would configure tools,
+  never allowlist them. A per-role tool restriction cannot be expressed in the
+  role container at all.
+- **Codex per-role tool restriction: accepted risk (owner-facing decision,
+  2026-11-19, closes the T1 WARNING-1 handoff).** Options weighed: (a) restriction
+  wording in `developer_instructions` — prose only, no enforcement, and it would
+  rewrite all 46 roles for a guarantee the codex side never claimed; (b)
+  `agents/openai.yaml` per skill — measured against docs: `dependencies.tools`
+  *declares* MCP dependencies and `policy.allow_implicit_invocation` gates prompt
+  triggering; neither restricts the session's tool surface, so it is not the 242
+  mechanism; (c) accept explicitly. Chosen: **(c) + (a) as mitigation-in-place** —
+  the codex side's enforcement was already declared behavioral/prompt-only by crew
+  decision (SYNC-STRUCTURE, "Deterministic enforcement" row), and the read-only
+  reviewer contract lives in the reviewer skill bodies, which every codex session
+  loads. Residual risk: a codex reviewer role *can* write, unlike the three
+  allowlist sides; nothing gates it at load time. If Codex ever ships a role-level
+  restriction field, revisit; tracked nowhere else — this bullet is the record.
 
 ## Open boundary
 
