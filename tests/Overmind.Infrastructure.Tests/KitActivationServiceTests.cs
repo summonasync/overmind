@@ -75,7 +75,7 @@ public sealed class KitActivationServiceTests : IDisposable
 
         failure.Kind.ShouldBe(KitActivationFailureKind.MandatoryGlobal);
         failure.Message.ShouldContain("mandatory-global");
-        await ctx.ProjectKits.CountAsync(pk => pk.KitId == mandatoryKitId).ShouldBe(0);
+        (await ctx.ProjectKits.CountAsync(pk => pk.KitId == mandatoryKitId)).ShouldBe(0);
         ctx.MaterializedFiles.Count(m => m.KitId == mandatoryKitId).ShouldBe(0);
         Directory.Exists(_projectDir).ShouldBeTrue();
         Directory.EnumerateFiles(_projectDir).ShouldBeEmpty();
@@ -135,7 +135,7 @@ public sealed class KitActivationServiceTests : IDisposable
             () => service.ActivateAsync(project.Id, Guid.NewGuid(), false, CancellationToken.None));
 
         failure.Kind.ShouldBe(MaterializationFailureKind.NotFound);
-        await ctx.ProjectKits.AnyAsync().ShouldBe(false);
+        (await ctx.ProjectKits.AnyAsync()).ShouldBeFalse();
     }
 
     private async Task<(Guid ProjectId, Guid KitAId, Guid KitBId)> SeedTwoOptionalKitsAsync(OvermindDbContext ctx)

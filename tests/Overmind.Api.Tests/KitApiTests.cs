@@ -515,6 +515,26 @@ public sealed class KitApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Activate_UnknownProject_Returns404()
+    {
+        var kit = await CreateKitAsync("solo", 1);
+
+        var activate = await _client.PostAsync($"/api/projects/{Guid.NewGuid()}/kits/{kit.Id}/activate", null);
+
+        activate.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Activate_UnknownKit_Returns404()
+    {
+        var project = await CreateProjectAsync();
+
+        var activate = await _client.PostAsync($"/api/projects/{project.Id}/kits/{Guid.NewGuid()}/activate", null);
+
+        activate.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Activate_AlreadyActiveKit_Returns200Idempotent()
     {
         var project = await CreateProjectAsync();

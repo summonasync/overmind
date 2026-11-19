@@ -519,10 +519,11 @@ public sealed class MaterializationTests : IDisposable
             AgentPlatform.Claude,
             ".claude/skills/overmind-bootstrap/SKILL.md",
             ContentHash.Sha256("# stale layout bootstrap\n"));
-        var foreignKitId = Guid.NewGuid();
+        var foreignKit = SkillKit.Create("foreign-pack", 1, "kept");
+        ctx.SkillKits.Add(foreignKit);
         var foreignRow = MaterializedFile.Create(
             projectId,
-            foreignKitId,
+            foreignKit.Id,
             AgentPlatform.Claude,
             ".claude/skills/foreign/KEEP.md",
             ContentHash.Sha256("foreign kit file\n"));
@@ -531,6 +532,8 @@ public sealed class MaterializationTests : IDisposable
 
         var stalePath = Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md");
         var foreignPath = Path.Combine(_projectDir, ".claude", "skills", "foreign", "KEEP.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(stalePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(foreignPath)!);
         await File.WriteAllTextAsync(stalePath, "# stale layout bootstrap\n");
         await File.WriteAllTextAsync(foreignPath, "foreign kit file\n");
 
@@ -541,7 +544,7 @@ public sealed class MaterializationTests : IDisposable
         File.Exists(foreignPath).ShouldBeTrue();
         (await ctx.MaterializedFiles
             .AnyAsync(m => m.RelativePath == ".claude/skills/overmind-bootstrap/SKILL.md")).ShouldBe(false);
-        (await ctx.MaterializedFiles.AnyAsync(m => m.KitId == foreignKitId)).ShouldBe(true);
+        (await ctx.MaterializedFiles.AnyAsync(m => m.KitId == foreignKit.Id)).ShouldBeTrue();
         File.Exists(Path.Combine(
             _projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack", "SKILL.md")).ShouldBeTrue();
     }
