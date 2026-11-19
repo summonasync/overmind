@@ -102,13 +102,20 @@ three sides; 15 prose/config files.
   Feature 242's repair (the `mcp__overmind__*` grant was sitting below the closing
   `---` on the `.qwen` and `.kimi-code` sides) lives inside the agent files; the
   checker parses it on every markdown side and fails if any grant line falls
-  outside the frontmatter. Measured on this checkout: 12 affected files per side on
+  outside the frontmatter, then sweeps *all* side markdown — skills included — for
+  the same defect shape. Measured on this checkout: 12 affected files per side on
   `.qwen` and `.kimi-code` (8 `*reviewer` roles plus `ai-code-detector`,
   `git-commit-ai-detector`, `naming-sensei`, `pipeline-doctor` — the same defect, so
   the same pass), `.claude` already correct on all 13 grant-bearing roles, and
   `.codex` not a carrier at all: its TOML roles expose only `name`, `description`,
   `model`, `developer_instructions`, so there is no misplaced list to move and a
-  `tools` field would make the loader drop the role.
+  `tools` field would make the loader drop the role. Measured: zero `mcp__` tokens
+  across all 42 `.codex/agents/*.toml` — on that side MCP access is declared in
+  `.codex/AGENTS.md` and the skill bodies, never per role (SYNC-STRUCTURE's
+  "prose inside `developer_instructions`" wording said otherwise; corrected 2026-11-19
+  against the content). So 242 is a three-side repair plus one structurally exempt
+  side, and the codex exemption is a *container* property, not a grant that was
+  checked and found in place.
 
 ## Open boundary
 

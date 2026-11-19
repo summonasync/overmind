@@ -9,7 +9,9 @@ Two independent gates, one exit code:
 2. Frontmatter — every agent file on the markdown sides parses as YAML, no
    `- mcp__…` grant line survives below the closing `---` (feature 242), and the
    Overmind MCP grant is present inside the frontmatter where a side declares
-   one. The Codex side has no YAML frontmatter by design (TOML roles carry
+   one. The stray-grant sweep covers every markdown file under the four sides
+   (skills included), so the same defect shape cannot hide outside the agent
+   files. The Codex side has no YAML frontmatter by design (TOML roles carry
    `name`, `description`, `model`, `developer_instructions` only) and is
    reported, not failed.
 
@@ -92,6 +94,38 @@ def frontmatter_bounds(lines):
     return None
 
 
+def side_md_files():
+    """Every markdown file under the four side dirs. glob's `*` skips dot-names,
+    so the side roots are walked explicitly — otherwise the whole kit reads clean
+    while zero side files were actually opened."""
+    for side in SIDES:
+        for root, _dirs, names in os.walk(side):
+            for name in sorted(names):
+                if name.endswith(".md"):
+                    yield os.path.join(root, name)
+
+
+def check_stray_grants(errors, notes):
+    """Feature 242's defect shape: the `mcp__…` grant list sitting below the
+    closing `---`, i.e. as body prose instead of frontmatter. Swept across every
+    side markdown file, skills included, not just the agent files."""
+    scanned = 0
+    stray = 0
+    for path in side_md_files():
+        lines = open(path, encoding="utf-8").read().split("\n")
+        close = frontmatter_bounds(lines)
+        if close is None:
+            continue
+        scanned += 1
+        hits = [i + 1 for i, line in enumerate(lines) if i > close and GRANT_RE.match(line)]
+        if hits:
+            stray += len(hits)
+            errors.append(
+                f"{path}: {len(hits)} mcp grant lines below the frontmatter (first at line {hits[0]})"
+            )
+    notes.append(f"side markdown files swept for stray grants: {scanned}   stray lines: {stray}")
+
+
 def check_frontmatter(errors, notes):
     import yaml
 
@@ -128,6 +162,15 @@ def check_frontmatter(errors, notes):
                 )
     notes.append(f"markdown agent files parsed: {parsed}")
     notes.append(f"files with the mcp grant inside frontmatter: {len(granted)}")
+    by_side = {}
+    for path, count in granted:
+        by_side.setdefault(path.split("/")[0], []).append(count)
+    for side in MD_SIDES:
+        sizes = sorted(set(by_side.get(side, [])))
+        notes.append(
+            f"  {side}: {len(by_side.get(side, []))} grant-bearing roles"
+            + (f" (grant size {sizes})" if len(sizes) == 1 else "")
+        )
     return granted
 
 
@@ -159,6 +202,7 @@ def main():
 
     counts, assigned, on_disk, orphans = check_membership(manifest, errors)
     granted = check_frontmatter(errors, notes)
+    check_stray_grants(errors, notes)
     codex_offenders = check_codex(notes)
     if codex_offenders:
         errors.extend(f"{path}: codex role carries non-TOML-allowed fields" for path in codex_offenders)
