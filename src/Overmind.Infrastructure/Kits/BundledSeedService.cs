@@ -61,7 +61,8 @@ public sealed class BundledSeedService
                     return BundledSeedResult.Nothing(BundledSeedOutcome.LibraryInUse);
                 }
 
-                var counts = await ImportMissingKitsAsync(manifest.Kits, ct);
+                var counts = await ImportMissingKitsAsync(manifest.Kits.Select(k => k.Name).ToList(), ct);
+                await ApplyMandatoryFlagsAsync(manifest, ct);
                 await StampVersionAsync(manifest.BundleVersion, ct);
                 _logger.LogInformation(
                     "Seeded bundled kits at version {BundleVersion}: {Imported} imported, {Failed} failed",
@@ -83,6 +84,7 @@ public sealed class BundledSeedService
             }
 
             var upgraded = await UpgradeAsync(manifest, ct);
+            await ApplyMandatoryFlagsAsync(manifest, ct);
             await StampVersionAsync(manifest.BundleVersion, ct);
             _logger.LogInformation(
                 "Upgraded bundled kits to version {BundleVersion}: {Imported} imported, {Updated} updated, {Skipped} skipped, {Failed} failed",
@@ -113,8 +115,9 @@ public sealed class BundledSeedService
         var skipped = 0;
         var failed = 0;
 
-        foreach (var kitName in manifest.Kits)
+        foreach (var bundledKit in manifest.Kits)
         {
+            var kitName = bundledKit.Name;
             if (!existingByName.TryGetValue(kitName, out var kit))
             {
                 selections.Add(new KitImportSelection(kitName, kitName));
@@ -175,6 +178,32 @@ public sealed class BundledSeedService
 
         var imported = report.Kits.Count(k => k.Success);
         return new KitCounts(imported, report.Kits.Count - imported);
+    }
+
+    private async Task ApplyMandatoryFlagsAsync(BundledManifest manifest, CancellationToken ct)
+    {
+        var byName = (await _db.SkillKits.ToListAsync(ct))
+            .GroupBy(k => k.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var changed = 0;
+        foreach (var bundledKit in manifest.Kits)
+        {
+            if (!byName.TryGetValue(bundledKit.Name, out var kit)
+                || kit.SourceKind != KitSourceKind.Bundled
+                || kit.Mandatory == bundledKit.Mandatory)
+            {
+                continue;
+            }
+
+            kit.SetMandatory(bundledKit.Mandatory);
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            await _db.SaveChangesAsync(ct);
+        }
     }
 
     private async Task RepointSourceAsync(SkillKit kit, string kitName, CancellationToken ct)

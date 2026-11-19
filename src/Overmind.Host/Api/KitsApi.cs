@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
+using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Host.Api;
@@ -182,82 +183,42 @@ public static class KitsApi
         Guid projectId,
         Guid kitId,
         bool? force,
-        OvermindDbContext db,
-        IMaterializer materializer,
+        KitActivationService activation,
         CancellationToken ct)
     {
-        var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
-        if (!projectExists)
-        {
-            return HttpErrors.NotFound($"Project '{projectId}' was not found.");
-        }
-
-        var kitExists = await db.SkillKits.AnyAsync(k => k.Id == kitId, ct);
-        if (!kitExists)
-        {
-            return HttpErrors.NotFound($"Kit '{kitId}' was not found.");
-        }
-
-        var otherActiveLink = await db.ProjectKits
-            .FirstOrDefaultAsync(pk => pk.ProjectId == projectId && pk.IsActive && pk.KitId != kitId, ct);
-        if (otherActiveLink is not null)
-        {
-            var activeKit = await db.SkillKits.FirstOrDefaultAsync(k => k.Id == otherActiveLink.KitId, ct);
-            var activeKitLabel = activeKit is null
-                ? $"'{otherActiveLink.KitId}'"
-                : $"'{activeKit.Name}' ('{otherActiveLink.KitId}')";
-            return HttpErrors.Conflict(
-                $"Cannot activate kit '{kitId}': kit {activeKitLabel} is already active for project '{projectId}'. Deactivate it first.");
-        }
-
         try
         {
-            var report = await materializer.MaterializeAsync(projectId, kitId, force == true, ct);
-
-            var link = await db.ProjectKits
-                .FirstOrDefaultAsync(pk => pk.ProjectId == projectId && pk.KitId == kitId, ct);
-            if (link is null)
-            {
-                db.ProjectKits.Add(ProjectKit.Create(projectId, kitId));
-            }
-            else
-            {
-                link.Activate();
-            }
-
-            await db.SaveChangesAsync(ct);
+            var report = await activation.ActivateAsync(projectId, kitId, force == true, ct);
             return Results.Ok(KitMapper.ToResponse(report));
         }
         catch (MaterializationException ex)
         {
             return MaterializationErrors.Map(ex);
+        }
+        catch (KitActivationException ex)
+        {
+            return KitActivationErrors.Map(ex);
         }
     }
 
     private static async Task<IResult> Deactivate(
         Guid projectId,
         Guid kitId,
-        OvermindDbContext db,
-        IMaterializer materializer,
+        KitActivationService activation,
         CancellationToken ct)
     {
-        var link = await db.ProjectKits
-            .FirstOrDefaultAsync(pk => pk.ProjectId == projectId && pk.KitId == kitId, ct);
-        if (link is null)
-        {
-            return HttpErrors.NotFound($"Kit '{kitId}' is not linked to project '{projectId}'.");
-        }
-
         try
         {
-            var report = await materializer.DematerializeAsync(projectId, kitId, ct);
-            link.Deactivate();
-            await db.SaveChangesAsync(ct);
+            var report = await activation.DeactivateAsync(projectId, kitId, ct);
             return Results.Ok(KitMapper.ToResponse(report));
         }
         catch (MaterializationException ex)
         {
             return MaterializationErrors.Map(ex);
+        }
+        catch (KitActivationException ex)
+        {
+            return KitActivationErrors.Map(ex);
         }
     }
 

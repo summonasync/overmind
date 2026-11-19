@@ -61,7 +61,7 @@ public sealed class KitApiTests : IDisposable
 
         var claudeFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
         var kimiFile = Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md");
-        var bootstrap = Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md");
+        var bootstrap = Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-quality", "SKILL.md");
 
         File.Exists(claudeFile).ShouldBeTrue();
         File.Exists(kimiFile).ShouldBeTrue();
@@ -442,7 +442,7 @@ public sealed class KitApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Activate_SecondKitWhileAnotherActive_Returns409ThenSwitchSucceeds()
+    public async Task Activate_SecondOptionalKit_StacksBothKitsFiles()
     {
         var project = await CreateProjectAsync();
         var skillA = await CreateSinglePlatformSkillAsync(project.Id, "Reviewer", "claude", "reviewer/SKILL.md");
@@ -456,17 +456,18 @@ public sealed class KitApiTests : IDisposable
         activateA.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var activateB = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kitB.Id}/activate", null);
-        activateB.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-
-        var problem = await activateB.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem.ShouldNotBeNull();
-        problem!.Detail!.ShouldContain("pack-alpha");
-        problem!.Detail!.ShouldContain("Deactivate it first");
+        activateB.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var reviewerFile = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
         var testerFile = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");
+        var bootstrapAlpha = Path.Combine(
+            _projectDir, ".claude", "skills", "overmind-bootstrap-pack-alpha", "SKILL.md");
+        var bootstrapBeta = Path.Combine(
+            _projectDir, ".claude", "skills", "overmind-bootstrap-pack-beta", "SKILL.md");
         File.Exists(reviewerFile).ShouldBeTrue();
-        File.Exists(testerFile).ShouldBeFalse();
+        File.Exists(testerFile).ShouldBeTrue();
+        File.Exists(bootstrapAlpha).ShouldBeTrue();
+        File.Exists(bootstrapBeta).ShouldBeTrue();
 
         var drift = await _client.GetFromJsonAsync<List<DriftJson>>($"/api/projects/{project.Id}/drift", JsonOptions);
         drift.ShouldNotBeNull();
@@ -475,11 +476,42 @@ public sealed class KitApiTests : IDisposable
         var deactivateA = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kitA.Id}/deactivate", null);
         deactivateA.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var activateBAfter = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kitB.Id}/activate", null);
-        activateBAfter.StatusCode.ShouldBe(HttpStatusCode.OK);
-
         File.Exists(reviewerFile).ShouldBeFalse();
+        File.Exists(bootstrapAlpha).ShouldBeFalse();
         File.Exists(testerFile).ShouldBeTrue();
+        File.Exists(bootstrapBeta).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Activate_MandatoryGlobalKit_Returns409AndWritesNothing()
+    {
+        var project = await CreateProjectAsync();
+        var skill = await CreateSinglePlatformSkillAsync(project.Id, "Ceremony", "claude", "ceremony/SKILL.md");
+        var kit = await CreateKitAsync("overmind-ceremony", 1);
+        await _client.PostAsync($"/api/kits/{kit.Id}/entries/{skill.Id}", null);
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            var tracked = db.SkillKits.Find(kit.Id);
+            tracked!.SetMandatory(true);
+            await db.SaveChangesAsync();
+        }
+
+        var activate = await _client.PostAsync($"/api/projects/{project.Id}/kits/{kit.Id}/activate", null);
+        activate.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var problem = await activate.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem.ShouldNotBeNull();
+        problem!.Title.ShouldBe("MandatoryGlobal");
+        problem!.Detail!.ShouldContain("mandatory-global");
+
+        var ceremonyFile = Path.Combine(_projectDir, ".claude", "skills", "ceremony", "ceremony", "SKILL.md");
+        File.Exists(ceremonyFile).ShouldBeFalse();
+
+        var listed = await _client.GetFromJsonAsync<List<KitJson>>("/api/kits", JsonOptions);
+        listed.ShouldNotBeNull();
+        listed!.Single(k => k.Id == kit.Id).Mandatory.ShouldBeTrue();
     }
 
     [Fact]
@@ -608,7 +640,8 @@ public sealed class KitApiTests : IDisposable
         List<Guid> EntryIds,
         string SourceKind,
         string? SourcePath,
-        DateTime? ImportedAtUtc);
+        DateTime? ImportedAtUtc,
+        bool Mandatory);
 
     public sealed record DriftJson(string Platform, string RelativePath, string Kind);
 

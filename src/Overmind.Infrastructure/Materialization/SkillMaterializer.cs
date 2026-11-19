@@ -88,6 +88,7 @@ public sealed class SkillMaterializer : IMaterializer
             }
 
             failedPath = null;
+            PruneStaleRows(tracked, kitId, plans, project.DiskPath, warnings);
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
@@ -149,6 +150,32 @@ public sealed class SkillMaterializer : IMaterializer
         if (locallyModified is not null)
         {
             throw MaterializationException.LocalEdits(locallyModified);
+        }
+    }
+
+    // A kit's tracked set is the plan plus nothing else: rows left from an earlier layout (the
+    // pre-namespacing shared bootstrap dir) are deleted here, so re-activation cannot leave a
+    // stale bootstrap that drift detection still watches. Other kits' rows are never touched.
+    private void PruneStaleRows(
+        List<MaterializedFile> tracked, Guid kitId, List<FilePlan> plans, string diskPath, List<string> warnings)
+    {
+        var planned = new HashSet<string>(plans.Select(p => p.AbsolutePath), PathGuard.PathComparer);
+        var stale = tracked
+            .Where(m => m.KitId == kitId &&
+                        !planned.Contains(PathGuard.ResolveUnderRoot(diskPath, m.RelativePath)))
+            .ToArray();
+
+        foreach (var row in stale)
+        {
+            var absolute = PathGuard.ResolveUnderRoot(diskPath, row.RelativePath);
+            if (File.Exists(absolute))
+            {
+                File.Delete(absolute);
+                DirectoryPruner.PruneEmptyDirectories(absolute, diskPath);
+                warnings.Add($"Removed stale tracked file: {absolute}");
+            }
+
+            _db.MaterializedFiles.Remove(row);
         }
     }
 
@@ -273,8 +300,8 @@ public sealed class SkillMaterializer : IMaterializer
 
         foreach (var platform in targeted)
         {
-            var relative = $"{_platforms.GetSkillsDir(platform)}/overmind-bootstrap/SKILL.md";
-            plans.Add(FilePlan.Create(project.DiskPath, platform, relative, BuildBootstrap(project.Id, gates, guards)));
+            var relative = $"{_platforms.GetSkillsDir(platform)}/{BootstrapDirectoryName(kit)}/SKILL.md";
+            plans.Add(FilePlan.Create(project.DiskPath, platform, relative, BuildBootstrap(project.Id, kit, gates, guards)));
         }
 
         var duplicate = plans
@@ -294,6 +321,9 @@ public sealed class SkillMaterializer : IMaterializer
         plans.Add(FilePlan.Create(project.DiskPath, platform, relative, file.Content));
     }
 
+    private static string BootstrapDirectoryName(SkillKit kit) =>
+        $"overmind-bootstrap-{Slug.From(kit.Name, "kit")}";
+
     private static void TrackPlatform(List<AgentPlatform> targeted, AgentPlatform platform)
     {
         if (!targeted.Contains(platform))
@@ -302,10 +332,11 @@ public sealed class SkillMaterializer : IMaterializer
         }
     }
 
-    private static string BuildBootstrap(Guid projectId, IReadOnlyList<ContextEntry> gates, IReadOnlyList<ContextEntry> guards)
+    private static string BuildBootstrap(
+        Guid projectId, SkillKit kit, IReadOnlyList<ContextEntry> gates, IReadOnlyList<ContextEntry> guards)
     {
         var builder = new StringBuilder();
-        builder.Append("# Overmind Bootstrap\n\n");
+        builder.Append($"# Overmind Bootstrap — {kit.Name}\n\n");
         builder.Append("This project is managed by Overmind. At the start of every session, read the project context through Overmind:\n\n");
         builder.Append($"- Gates: overmind://projects/{projectId}/gates\n");
         builder.Append($"- Guards: overmind://projects/{projectId}/guards\n");

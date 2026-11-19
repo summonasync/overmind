@@ -15,7 +15,8 @@ public static class KitMapper
             kit.SkillKitEntries.Select(e => e.EntryId).OrderBy(id => id).ToArray(),
             kit.SourceKind,
             kit.SourcePath,
-            kit.ImportedAtUtc);
+            kit.ImportedAtUtc,
+            kit.Mandatory);
     }
 
     public static MaterializationReportResponse ToResponse(MaterializationReport report)

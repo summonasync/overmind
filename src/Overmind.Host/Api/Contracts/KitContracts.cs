@@ -14,7 +14,8 @@ public sealed record KitResponse(
     IReadOnlyList<Guid> EntryIds,
     KitSourceKind SourceKind,
     string? SourcePath,
-    DateTime? ImportedAtUtc);
+    DateTime? ImportedAtUtc,
+    bool Mandatory);
 
 public sealed record MaterializedFileResponse(AgentPlatform Platform, string RelativePath, string Sha256);
 

@@ -129,6 +129,7 @@ public static class DependencyInjection
 
         services.AddScoped<KitScanner>();
         services.AddScoped<KitImporter>();
+        services.AddScoped<KitActivationService>();
         services.AddScoped<BundledKitForkService>();
         services.AddScoped<BundledSeedService>(provider => new BundledSeedService(
             provider.GetRequiredService<OvermindDbContext>(),

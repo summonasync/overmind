@@ -42,8 +42,8 @@ public sealed class MaterializationTests : IDisposable
         var claudeReviewer = Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md");
         var kimiReviewer = Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md");
         var claudeTester = Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md");
-        var claudeBootstrap = Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md");
-        var kimiBootstrap = Path.Combine(_projectDir, ".kimi-code", "skills", "overmind-bootstrap", "SKILL.md");
+        var claudeBootstrap = Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack", "SKILL.md");
+        var kimiBootstrap = Path.Combine(_projectDir, ".kimi-code", "skills", "overmind-bootstrap-quality-pack", "SKILL.md");
 
         File.Exists(claudeReviewer).ShouldBeTrue();
         File.Exists(kimiReviewer).ShouldBeTrue();
@@ -66,10 +66,10 @@ public sealed class MaterializationTests : IDisposable
         rows.Select(r => r.RelativePath).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(
             new[]
             {
-                ".claude/skills/overmind-bootstrap/SKILL.md",
+                ".claude/skills/overmind-bootstrap-quality-pack/SKILL.md",
                 ".claude/skills/reviewer/reviewer/SKILL.md",
                 ".claude/skills/tester/tester/SKILL.md",
-                ".kimi-code/skills/overmind-bootstrap/SKILL.md",
+                ".kimi-code/skills/overmind-bootstrap-quality-pack/SKILL.md",
                 ".kimi-code/skills/reviewer/reviewer/SKILL.md",
             });
 
@@ -91,8 +91,9 @@ public sealed class MaterializationTests : IDisposable
         await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
 
         var bootstrap = await File.ReadAllTextAsync(
-            Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md"));
+            Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack", "SKILL.md"));
 
+        bootstrap.ShouldContain("# Overmind Bootstrap — quality-pack");
         bootstrap.ShouldContain($"overmind://projects/{projectId}/gates");
         bootstrap.ShouldContain($"overmind://projects/{projectId}/guards");
         bootstrap.ShouldContain("All tests must pass before merge.");
@@ -122,8 +123,8 @@ public sealed class MaterializationTests : IDisposable
         File.Exists(Path.Combine(_projectDir, ".claude", "skills", "reviewer", "reviewer", "SKILL.md")).ShouldBeFalse();
         File.Exists(Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md")).ShouldBeFalse();
         File.Exists(Path.Combine(_projectDir, ".claude", "skills", "tester", "tester", "SKILL.md")).ShouldBeFalse();
-        File.Exists(Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md")).ShouldBeFalse();
-        File.Exists(Path.Combine(_projectDir, ".kimi-code", "skills", "overmind-bootstrap", "SKILL.md")).ShouldBeFalse();
+        File.Exists(Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack", "SKILL.md")).ShouldBeFalse();
+        File.Exists(Path.Combine(_projectDir, ".kimi-code", "skills", "overmind-bootstrap-quality-pack", "SKILL.md")).ShouldBeFalse();
 
         File.Exists(foreign).ShouldBeTrue();
         File.Exists(notes).ShouldBeTrue();
@@ -131,7 +132,7 @@ public sealed class MaterializationTests : IDisposable
         (await ctx.MaterializedFiles.CountAsync()).ShouldBe(0);
         Directory.Exists(Path.Combine(_projectDir, ".claude", "skills", "reviewer")).ShouldBeFalse();
         Directory.Exists(Path.Combine(_projectDir, ".claude", "skills", "tester")).ShouldBeFalse();
-        Directory.Exists(Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap")).ShouldBeFalse();
+        Directory.Exists(Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack")).ShouldBeFalse();
         Directory.Exists(Path.Combine(_projectDir, ".kimi-code")).ShouldBeFalse();
         Directory.Exists(Path.Combine(_projectDir, ".claude", "skills", "foreign")).ShouldBeTrue();
     }
@@ -193,7 +194,7 @@ public sealed class MaterializationTests : IDisposable
         File.Exists(testerFile).ShouldBeTrue();
 
         var bootstrap = await File.ReadAllTextAsync(
-            Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md"));
+            Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-pack-b", "SKILL.md"));
         bootstrap.ShouldContain("Guard from kit B.");
         bootstrap.ShouldNotContain("Gate from kit A.");
     }
@@ -421,7 +422,7 @@ public sealed class MaterializationTests : IDisposable
 
         File.Exists(reviewerFile).ShouldBeFalse();
         File.Exists(Path.Combine(_projectDir, ".kimi-code", "skills", "reviewer", "reviewer", "SKILL.md")).ShouldBeFalse();
-        File.Exists(Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md")).ShouldBeFalse();
+        File.Exists(Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack", "SKILL.md")).ShouldBeFalse();
         File.Exists(Path.Combine(testerSlugDir, "tester")).ShouldBeTrue();
     }
 
@@ -442,7 +443,7 @@ public sealed class MaterializationTests : IDisposable
         foreach (var dir in platformDirs)
         {
             File.Exists(Path.Combine(_projectDir, dir, "skills", "linter", "linter", "SKILL.md")).ShouldBeTrue();
-            File.Exists(Path.Combine(_projectDir, dir, "skills", "overmind-bootstrap", "SKILL.md")).ShouldBeTrue();
+            File.Exists(Path.Combine(_projectDir, dir, "skills", "overmind-bootstrap-mixed-pack", "SKILL.md")).ShouldBeTrue();
         }
 
         var claudeLinter = await File.ReadAllBytesAsync(
@@ -467,7 +468,7 @@ public sealed class MaterializationTests : IDisposable
         rows.Count(r => r.RelativePath == ".qwen/skills/linter/linter/SKILL.md").ShouldBe(1);
         rows.ShouldContain(r =>
             r.Platform == AgentPlatform.Qwen &&
-            r.RelativePath == ".qwen/skills/overmind-bootstrap/SKILL.md");
+            r.RelativePath == ".qwen/skills/overmind-bootstrap-mixed-pack/SKILL.md");
         rows.ShouldContain(r =>
             r.Platform == AgentPlatform.Claude &&
             r.RelativePath == ".claude/skills/reviewer/reviewer/SKILL.md");
@@ -501,6 +502,48 @@ public sealed class MaterializationTests : IDisposable
             i.Kind == DriftKind.Missing &&
             i.RelativePath == ".gemini/skills/linter/linter/SKILL.md" &&
             i.Platform == AgentPlatform.Gemini);
+    }
+
+    [Fact]
+    public async Task Materialize_TrackedRowFromPreviousBootstrapLayout_RemovesStaleFileOnlyForThatKit()
+    {
+        var (projectId, kitId) = await SeedDefaultKitAsync();
+
+        using var ctx = _db.CreateContext();
+        var materializer = CreateMaterializer(ctx);
+        await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
+
+        var staleRow = MaterializedFile.Create(
+            projectId,
+            kitId,
+            AgentPlatform.Claude,
+            ".claude/skills/overmind-bootstrap/SKILL.md",
+            ContentHash.Sha256("# stale layout bootstrap\n"));
+        var foreignKitId = Guid.NewGuid();
+        var foreignRow = MaterializedFile.Create(
+            projectId,
+            foreignKitId,
+            AgentPlatform.Claude,
+            ".claude/skills/foreign/KEEP.md",
+            ContentHash.Sha256("foreign kit file\n"));
+        ctx.MaterializedFiles.AddRange(staleRow, foreignRow);
+        await ctx.SaveChangesAsync();
+
+        var stalePath = Path.Combine(_projectDir, ".claude", "skills", "overmind-bootstrap", "SKILL.md");
+        var foreignPath = Path.Combine(_projectDir, ".claude", "skills", "foreign", "KEEP.md");
+        await File.WriteAllTextAsync(stalePath, "# stale layout bootstrap\n");
+        await File.WriteAllTextAsync(foreignPath, "foreign kit file\n");
+
+        var report = await materializer.MaterializeAsync(projectId, kitId, ct: CancellationToken.None);
+
+        File.Exists(stalePath).ShouldBeFalse();
+        report.Warnings.ShouldContain(w => w.Contains("overmind-bootstrap/SKILL.md", StringComparison.Ordinal));
+        File.Exists(foreignPath).ShouldBeTrue();
+        (await ctx.MaterializedFiles
+            .AnyAsync(m => m.RelativePath == ".claude/skills/overmind-bootstrap/SKILL.md")).ShouldBe(false);
+        (await ctx.MaterializedFiles.AnyAsync(m => m.KitId == foreignKitId)).ShouldBe(true);
+        File.Exists(Path.Combine(
+            _projectDir, ".claude", "skills", "overmind-bootstrap-quality-pack", "SKILL.md")).ShouldBeTrue();
     }
 
     [Fact]

@@ -13,6 +13,7 @@ public sealed class SkillKit
     public KitSourceKind SourceKind { get; private set; }
     public string? SourcePath { get; private set; }
     public DateTime? ImportedAtUtc { get; private set; }
+    public bool Mandatory { get; private set; }
 
     public List<SkillKitEntry> SkillKitEntries { get; private set; } = [];
 
@@ -65,6 +66,19 @@ public sealed class SkillKit
         SourceKind = KitSourceKind.Manual;
         SourcePath = null;
         ImportedAtUtc = null;
+    }
+
+    public void SetMandatory(bool mandatory)
+    {
+        Mandatory = mandatory;
+    }
+
+    public void EnsureProjectActivatable()
+    {
+        if (Mandatory)
+        {
+            throw KitActivationException.MandatoryGlobalKit(Id, Name);
+        }
     }
 
     public void AddEntry(Guid entryId, string? importedContentHash = null, string? relativePath = null)

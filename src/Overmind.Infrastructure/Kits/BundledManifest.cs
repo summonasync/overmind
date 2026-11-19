@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Overmind.Infrastructure.Kits;
 
-public sealed record BundledManifest(int BundleVersion, IReadOnlyList<string> Kits)
+public sealed record BundledManifest(int BundleVersion, IReadOnlyList<BundledKit> Kits)
 {
     public static bool TryLoad(string path, [NotNullWhen(true)] out BundledManifest? manifest)
     {
@@ -37,16 +37,10 @@ public sealed record BundledManifest(int BundleVersion, IReadOnlyList<string> Ki
             return false;
         }
 
-        var kits = new List<string>();
+        var kits = new List<BundledKit>();
         foreach (var kitElement in kitsElement.EnumerateArray())
         {
-            if (kitElement.ValueKind is not JsonValueKind.String)
-            {
-                return false;
-            }
-
-            var kit = kitElement.GetString()!.Trim();
-            if (kit.Length == 0)
+            if (!TryReadKit(kitElement, out var kit))
             {
                 return false;
             }
@@ -55,6 +49,49 @@ public sealed record BundledManifest(int BundleVersion, IReadOnlyList<string> Ki
         }
 
         manifest = new BundledManifest(bundleVersion, kits);
+        return true;
+    }
+
+    private static bool TryReadKit(JsonElement element, out BundledKit kit)
+    {
+        kit = null!;
+        if (element.ValueKind is JsonValueKind.String)
+        {
+            var legacyName = element.GetString()!.Trim();
+            if (legacyName.Length == 0)
+            {
+                return false;
+            }
+
+            kit = new BundledKit(legacyName, false);
+            return true;
+        }
+
+        if (element.ValueKind is not JsonValueKind.Object
+            || !element.TryGetProperty("name", out var nameElement)
+            || nameElement.ValueKind is not JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var name = nameElement.GetString()!.Trim();
+        if (name.Length == 0)
+        {
+            return false;
+        }
+
+        var mandatory = false;
+        if (element.TryGetProperty("mandatory", out var mandatoryElement))
+        {
+            if (mandatoryElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                return false;
+            }
+
+            mandatory = mandatoryElement.GetBoolean();
+        }
+
+        kit = new BundledKit(name, mandatory);
         return true;
     }
 }
