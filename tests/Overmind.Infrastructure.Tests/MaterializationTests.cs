@@ -437,7 +437,7 @@ public sealed class MaterializationTests : IDisposable
 
         var platformDirs = new[]
         {
-            ".claude", ".kimi-code", ".codex", ".gemini", ".antigravity", ".qwen"
+            ".claude", ".kimi-code", ".agents", ".gemini", ".antigravity", ".qwen"
         };
 
         foreach (var dir in platformDirs)
@@ -562,7 +562,7 @@ public sealed class MaterializationTests : IDisposable
         report.Files.Count.ShouldBe(13);
         (await ctx.MaterializedFiles.CountAsync()).ShouldBe(0);
 
-        foreach (var dir in new[] { ".claude", ".kimi-code", ".codex", ".gemini", ".antigravity", ".qwen" })
+        foreach (var dir in new[] { ".claude", ".kimi-code", ".agents", ".gemini", ".antigravity", ".qwen" })
         {
             Directory.Exists(Path.Combine(_projectDir, dir)).ShouldBeFalse();
         }
