@@ -86,10 +86,16 @@ public sealed class KitScanner
 
         foreach (var top in topLevelDirs.Order(StringComparer.Ordinal))
         {
+            var ownedPrefix = top + Path.DirectorySeparatorChar;
             var owned = skills
-                .Where(s => s.RelPath.StartsWith(top + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                .Where(s => s.RelPath.StartsWith(ownedPrefix, StringComparison.Ordinal))
                 .ToList();
-            if (owned.Count == 0 && !HasGateFiles(walk.Files, top))
+
+            // A named folder qualifies by owning any file at all: the kit split ships kits whose
+            // membership is prose only (sociality), and a bundle that declares six kits has to
+            // land six, not five plus a failed import on every install. The root case below keeps
+            // the stricter rule — a stray README beside the kit folders is not a kit.
+            if (owned.Count == 0 && !walk.Files.Keys.Any(f => f.StartsWith(ownedPrefix, StringComparison.Ordinal)))
             {
                 continue;
             }
@@ -97,7 +103,7 @@ public sealed class KitScanner
             candidateNames.Add(top);
             result.Candidates.Add(await BuildCandidateAsync(
                 top, top, owned,
-                file => file.StartsWith(top + Path.DirectorySeparatorChar, StringComparison.Ordinal),
+                file => file.StartsWith(ownedPrefix, StringComparison.Ordinal),
                 walk, existingKits, root, ct));
         }
 

@@ -6,7 +6,8 @@ public sealed record BundledSeedResult(
     int KitsImported,
     int KitsUpdated,
     int KitsSkipped,
-    int KitsFailed)
+    int KitsFailed,
+    int KitsMarkedLegacy)
 {
-    public static BundledSeedResult Nothing(BundledSeedOutcome outcome) => new(outcome, 0, 0, 0, 0, 0);
+    public static BundledSeedResult Nothing(BundledSeedOutcome outcome) => new(outcome, 0, 0, 0, 0, 0, 0);
 }

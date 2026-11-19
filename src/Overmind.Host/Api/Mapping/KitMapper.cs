@@ -16,7 +16,8 @@ public static class KitMapper
             kit.SourceKind,
             kit.SourcePath,
             kit.ImportedAtUtc,
-            kit.Mandatory);
+            kit.Mandatory,
+            kit.Legacy);
     }
 
     public static MaterializationReportResponse ToResponse(MaterializationReport report)

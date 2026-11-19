@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Materialization;
 using Overmind.Infrastructure.Persistence;
 
 namespace Overmind.Infrastructure.Kits;
@@ -18,19 +19,25 @@ public sealed class BundledSeedService
     private readonly AppSettingsService _settings;
     private readonly ILogger<BundledSeedService> _logger;
     private readonly string _bundledDirectory;
+    private readonly LegacyKitMigrationService _migration;
+    private readonly IGlobalKitDeployer? _globalDeployer;
 
     public BundledSeedService(
         OvermindDbContext db,
         KitImporter importer,
         AppSettingsService settings,
         ILogger<BundledSeedService> logger,
-        string bundledDirectory)
+        string bundledDirectory,
+        LegacyKitMigrationService migration,
+        IGlobalKitDeployer? globalDeployer)
     {
         _db = db;
         _importer = importer;
         _settings = settings;
         _logger = logger;
         _bundledDirectory = bundledDirectory;
+        _migration = migration;
+        _globalDeployer = globalDeployer;
     }
 
     public async Task<BundledSeedResult> RunAsync(CancellationToken ct = default)
@@ -63,12 +70,15 @@ public sealed class BundledSeedService
 
                 var counts = await ImportMissingKitsAsync(manifest.Kits.Select(k => k.Name).ToList(), ct);
                 await ApplyMandatoryFlagsAsync(manifest, ct);
+                var seededMigration = await _migration.RunAsync(manifest, ct);
+                await RouteMandatoryKitsAsync(manifest, ct);
                 await StampVersionAsync(manifest.BundleVersion, ct);
                 _logger.LogInformation(
-                    "Seeded bundled kits at version {BundleVersion}: {Imported} imported, {Failed} failed",
-                    manifest.BundleVersion, counts.Imported, counts.Failed);
+                    "Seeded bundled kits at version {BundleVersion}: {Imported} imported, {Failed} failed, {Retired} legacy kit(s) marked",
+                    manifest.BundleVersion, counts.Imported, counts.Failed, seededMigration.KitsMarkedLegacy);
                 return new BundledSeedResult(
-                    BundledSeedOutcome.Seeded, manifest.BundleVersion, counts.Imported, 0, 0, counts.Failed);
+                    BundledSeedOutcome.Seeded, manifest.BundleVersion,
+                    counts.Imported, 0, 0, counts.Failed, seededMigration.KitsMarkedLegacy);
             }
 
             if (!int.TryParse(stored, CultureInfo.InvariantCulture, out var seededVersion))
@@ -85,13 +95,16 @@ public sealed class BundledSeedService
 
             var upgraded = await UpgradeAsync(manifest, ct);
             await ApplyMandatoryFlagsAsync(manifest, ct);
+            var retired = await _migration.RunAsync(manifest, ct);
+            await RouteMandatoryKitsAsync(manifest, ct);
             await StampVersionAsync(manifest.BundleVersion, ct);
             _logger.LogInformation(
-                "Upgraded bundled kits to version {BundleVersion}: {Imported} imported, {Updated} updated, {Skipped} skipped, {Failed} failed",
-                manifest.BundleVersion, upgraded.Imported, upgraded.Updated, upgraded.Skipped, upgraded.Failed);
+                "Upgraded bundled kits to version {BundleVersion}: {Imported} imported, {Updated} updated, {Skipped} skipped, {Failed} failed, {Retired} legacy kit(s) marked, {RetiredProjects} project(s) migrated",
+                manifest.BundleVersion, upgraded.Imported, upgraded.Updated, upgraded.Skipped, upgraded.Failed,
+                retired.KitsMarkedLegacy, retired.ProjectsMigrated);
             return new BundledSeedResult(
                 BundledSeedOutcome.Upgraded, manifest.BundleVersion,
-                upgraded.Imported, upgraded.Updated, upgraded.Skipped, upgraded.Failed);
+                upgraded.Imported, upgraded.Updated, upgraded.Skipped, upgraded.Failed, retired.KitsMarkedLegacy);
         }
         catch (OperationCanceledException)
         {
@@ -167,7 +180,13 @@ public sealed class BundledSeedService
             return new KitCounts(0, 0);
         }
 
-        var selections = kitNames.Select(name => new KitImportSelection(name, name)).ToArray();
+        var (importable, slugCollisions) = await PartitionByBootstrapSlugAsync(kitNames, ct);
+        if (importable.Count == 0)
+        {
+            return new KitCounts(0, slugCollisions);
+        }
+
+        var selections = importable.Select(name => new KitImportSelection(name, name)).ToArray();
         var report = await _importer.CommitAsync(_bundledDirectory, selections, bundled: true, ct);
 
         foreach (var failure in report.Kits.Where(k => !k.Success))
@@ -177,7 +196,82 @@ public sealed class BundledSeedService
         }
 
         var imported = report.Kits.Count(k => k.Success);
-        return new KitCounts(imported, report.Kits.Count - imported);
+        return new KitCounts(imported, report.Kits.Count - imported + slugCollisions);
+    }
+
+    // Two kit names with the same slug share one bootstrap directory, so a second kit under a
+    // colliding name would overwrite the first one's bootstrap. The bundle never creates such a
+    // pair: the colliding name is dropped and reported as a failed kit instead.
+    private async Task<(List<string> Names, int Collisions)> PartitionByBootstrapSlugAsync(
+        IReadOnlyList<string> kitNames, CancellationToken ct)
+    {
+        var taken = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var existing in await _db.SkillKits.AsNoTracking().Select(k => k.Name).ToListAsync(ct))
+        {
+            taken.TryAdd(Slug.From(existing, "kit"), existing);
+        }
+
+        var names = new List<string>();
+        var collisions = 0;
+        foreach (var name in kitNames)
+        {
+            var slug = Slug.From(name, "kit");
+            if (taken.TryGetValue(slug, out var owner) && !string.Equals(owner, name, StringComparison.Ordinal))
+            {
+                collisions++;
+                _logger.LogWarning(
+                    "Bundled kit '{KitName}' would share the bootstrap directory of kit '{Owner}'; import skipped",
+                    name, owner);
+                continue;
+            }
+
+            taken[slug] = name;
+            names.Add(name);
+        }
+
+        return (names, collisions);
+    }
+
+    private async Task RouteMandatoryKitsAsync(BundledManifest manifest, CancellationToken ct)
+    {
+        var mandatory = manifest.Kits.Where(k => k.Mandatory).ToList();
+        if (mandatory.Count == 0)
+        {
+            return;
+        }
+
+        if (_globalDeployer is null)
+        {
+            _logger.LogWarning(
+                "Mandatory kit(s) {KitNames} have no global door wired into the host; mandatory-global materialization is pending feature 251",
+                string.Join(", ", mandatory.Select(k => k.Name)));
+            return;
+        }
+
+        var byName = (await _db.SkillKits.AsNoTracking().ToListAsync(ct))
+            .GroupBy(k => k.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var bundled in mandatory)
+        {
+            if (!byName.TryGetValue(bundled.Name, out var kit) || kit.SourceKind != KitSourceKind.Bundled)
+            {
+                continue;
+            }
+
+            try
+            {
+                await _globalDeployer.DeployAsync(kit, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Global deployment of mandatory kit '{KitName}' failed", kit.Name);
+            }
+        }
     }
 
     private async Task ApplyMandatoryFlagsAsync(BundledManifest manifest, CancellationToken ct)

@@ -3,7 +3,10 @@ using System.Text.Json;
 
 namespace Overmind.Infrastructure.Kits;
 
-public sealed record BundledManifest(int BundleVersion, IReadOnlyList<BundledKit> Kits)
+public sealed record BundledManifest(
+    int BundleVersion,
+    IReadOnlyList<BundledKit> Kits,
+    IReadOnlyList<string> Legacy)
 {
     public static bool TryLoad(string path, [NotNullWhen(true)] out BundledManifest? manifest)
     {
@@ -48,7 +51,32 @@ public sealed record BundledManifest(int BundleVersion, IReadOnlyList<BundledKit
             kits.Add(kit);
         }
 
-        manifest = new BundledManifest(bundleVersion, kits);
+        IReadOnlyList<string> legacy = [];
+        if (root.TryGetProperty("legacy", out var legacyElement))
+        {
+            if (legacyElement.ValueKind is not JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            var names = new List<string>();
+            foreach (var nameElement in legacyElement.EnumerateArray())
+            {
+                var name = nameElement.ValueKind == JsonValueKind.String
+                    ? nameElement.GetString()!.Trim()
+                    : string.Empty;
+                if (name.Length == 0)
+                {
+                    return false;
+                }
+
+                names.Add(name);
+            }
+
+            legacy = names;
+        }
+
+        manifest = new BundledManifest(bundleVersion, kits, legacy);
         return true;
     }
 

@@ -14,6 +14,7 @@ public sealed class SkillKit
     public string? SourcePath { get; private set; }
     public DateTime? ImportedAtUtc { get; private set; }
     public bool Mandatory { get; private set; }
+    public bool Legacy { get; private set; }
 
     public List<SkillKitEntry> SkillKitEntries { get; private set; } = [];
 
@@ -71,6 +72,11 @@ public sealed class SkillKit
     public void SetMandatory(bool mandatory)
     {
         Mandatory = mandatory;
+    }
+
+    public void MarkLegacy()
+    {
+        Legacy = true;
     }
 
     public void EnsureProjectActivatable()

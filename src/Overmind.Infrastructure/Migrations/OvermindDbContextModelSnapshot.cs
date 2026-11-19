@@ -977,6 +977,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime?>("ImportedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Legacy")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("Mandatory")
                         .HasColumnType("INTEGER");
 

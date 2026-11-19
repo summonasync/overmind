@@ -15,7 +15,8 @@ public sealed record KitResponse(
     KitSourceKind SourceKind,
     string? SourcePath,
     DateTime? ImportedAtUtc,
-    bool Mandatory);
+    bool Mandatory,
+    bool Legacy);
 
 public sealed record MaterializedFileResponse(AgentPlatform Platform, string RelativePath, string Sha256);
 
