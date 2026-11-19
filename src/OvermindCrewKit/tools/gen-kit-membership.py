@@ -5,12 +5,22 @@ Membership is derived from what is on disk, classified by the spec R1 rules
 (feature 250). Re-run after a mirror-parity change (rust skills landing on the
 other sides, new skills) and commit the regenerated file.
 
-    python3 tools/gen-kit-membership.py
+    python3 tools/gen-kit-membership.py            # rewrite the manifest
+    python3 tools/gen-kit-membership.py --check     # drift gate, writes nothing
 """
 
+import difflib
 import glob
 import json
 import os
+import sys
+
+USAGE = """usage: gen-kit-membership.py [--check]
+
+  --check       generate in memory, compare with kit-membership.json on disk,
+                exit 1 when it drifts; the file is never written
+  -h, --help    show this help without touching the manifest
+"""
 
 SIDES = [".claude", ".codex", ".kimi-code", ".qwen"]
 
@@ -118,14 +128,48 @@ def collect() -> dict:
     return members
 
 
-def main() -> int:
+def render(members: dict) -> str:
+    return json.dumps(members, indent=2, ensure_ascii=False) + "\n"
+
+
+def main(argv: list[str]) -> int:
+    flags = argv[1:]
+    if {"-h", "--help"} & set(flags):
+        sys.stdout.write(USAGE)
+        return 0
+    unknown = [flag for flag in flags if flag != "--check"]
+    if unknown:
+        sys.stderr.write(f"unrecognized argument: {unknown[0]}\n\n{USAGE}")
+        return 2
+    check = "--check" in flags
+
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     os.chdir(root)
     members = collect()
+    generated = render(members)
     total = sum(len(paths) for paths in members.values())
+
+    if check:
+        try:
+            with open("kit-membership.json", encoding="utf-8") as handle:
+                on_disk = handle.read()
+        except FileNotFoundError:
+            print("kit-membership.json is missing — run without --check to generate it",
+                  file=sys.stderr)
+            return 1
+        if on_disk.replace("\r\n", "\n") == generated:
+            print(f"kit-membership.json matches the mirror sides: {total} paths")
+            return 0
+        print("kit-membership.json is stale — regenerate it without --check", file=sys.stderr)
+        report = difflib.unified_diff(on_disk.splitlines(), generated.splitlines(),
+                                      fromfile="kit-membership.json", tofile="generated",
+                                      lineterm="")
+        for line in list(report)[:20]:
+            print(line, file=sys.stderr)
+        return 1
+
     with open("kit-membership.json", "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(members, indent=2, ensure_ascii=False))
-        handle.write("\n")
+        handle.write(generated)
     print(f"wrote kit-membership.json: {total} paths")
     for kit in KITS:
         print(f"  {kit}: {len(members[kit])}")
@@ -133,4 +177,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv))

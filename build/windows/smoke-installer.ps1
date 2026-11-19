@@ -5,10 +5,11 @@ Usage: build\windows\smoke-installer.ps1 <path-to-overmind-setup.exe> [-KillLive
 
 Silently installs setup.exe into a fresh temp prefix, boots the Host headless against an
 isolated database/models directory, asserts health, the seeded bundled kit set (every kit the
-an MCP initialize handshake and a graceful POST /api/shutdown stop, then silently uninstalls
-and asserts no residue (install dir, Start Menu shortcut, uninstall registry key, PATH,
-~/.overmind survives). Cell 1b runs the freshly installed overmind-mcp.exe with
-'install --dry-run' (that install used /TASKS="" so the mcpregister [Run] entry never fired)
+manifest ships), an MCP initialize handshake and a graceful POST /api/shutdown stop, then
+silently uninstalls and asserts no residue (install dir, Start Menu shortcut, uninstall
+registry key, PATH, ~/.overmind survives). Cell 1b runs the freshly installed
+overmind-mcp.exe with 'install --dry-run' (that install used /TASKS="" so the mcpregister
+[Run] entry never fired)
 and asserts exit 0 plus a plan naming an agent - --dry-run guarantees nothing is written, so
 this never touches a real agent config. Repeats install+boot+upgrade-over-running-install
 through the real ~/.overmind/host.port discovery path (its pre-existing content, if any, is

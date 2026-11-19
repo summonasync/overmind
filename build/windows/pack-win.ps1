@@ -182,7 +182,12 @@ function Get-KitItemDest {
     }
     foreach ($cross in $CrossSideItems) {
         if ($cross -and $Item -eq $cross) {
-            $relative = Split-Path -Path $cross -Leaf
+            # Strip the leading segment and keep the rest, matching pack.sh (${cross#*/}) and the
+            # side branch above; Split-Path -Leaf would flatten a nested cross-side item and the
+            # two pack emitters would disagree on the kit folder layout. Membership paths are
+            # slash-delimited on both platforms.
+            $slash = $cross.IndexOf('/')
+            $relative = if ($slash -ge 0) { $cross.Substring($slash + 1) } else { $cross }
             if (Test-KitExcluded -Relative $relative -Excludes $Excludes) {
                 return ''
             }

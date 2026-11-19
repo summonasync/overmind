@@ -132,6 +132,7 @@ kit_item_dest() {
     for cross in "${KIT_CROSS_SIDE_LIST[@]}"; do
         [[ -n $cross ]] || continue
         if [[ $item == "$cross" ]]; then
+            # Leading-segment strip, substructure kept: pack-win.ps1 Get-KitItemDest mirrors this.
             rel=${cross#*/}
             ! kit_excluded "$rel" || return 1
             printf '%s\n' "$rel"
