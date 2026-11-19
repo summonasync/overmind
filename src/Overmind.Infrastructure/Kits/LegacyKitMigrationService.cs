@@ -26,6 +26,16 @@ public sealed class LegacyKitMigrationService(
             .GroupBy(k => k.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+        var pending = manifest.Legacy
+            .Select(name => kitsByName.TryGetValue(name, out var kit) ? kit : null)
+            .Where(kit => kit is not null && !kit.Legacy)
+            .ToList();
+
+        if (pending.Count == 0)
+        {
+            return LegacyKitMigrationReport.Empty;
+        }
+
         var successors = ResolveSuccessors(manifest, kitsByName);
         if (successors.Count == 0)
         {
@@ -40,21 +50,21 @@ public sealed class LegacyKitMigrationService(
         var activations = 0;
         var failed = 0;
 
-        foreach (var legacyName in manifest.Legacy)
+        foreach (var legacyKit in pending)
         {
-            if (!kitsByName.TryGetValue(legacyName, out var legacyKit) || legacyKit.Legacy)
-            {
-                continue;
-            }
-
             var links = await db.ProjectKits.Where(pk => pk.KitId == legacyKit.Id).ToListAsync(ct);
             var projectFailures = 0;
             foreach (var link in links)
             {
                 try
                 {
-                    activations += await MigrateProjectAsync(link, successors, ct);
+                    var (landed, clean) = await MigrateProjectAsync(link, successors, ct);
+                    activations += landed;
                     projects++;
+                    if (!clean)
+                    {
+                        projectFailures++;
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -116,26 +126,43 @@ public sealed class LegacyKitMigrationService(
         return successors;
     }
 
-    private async Task<int> MigrateProjectAsync(
+    private async Task<(int Activations, bool Clean)> MigrateProjectAsync(
         ProjectKit link, IReadOnlyList<SkillKit> successors, CancellationToken ct)
     {
         // The retired kit's files leave the disk while its activation row still reads active, and
-        // the row flips only once every successor landed: a project whose successor import failed
+        // the row flips only once every successor landed: a project whose successor refused to land
         // keeps an active link, so the next boot recognises it as unfinished instead of leaving it
         // stripped of every skill it had. Materialization also refuses to write a file another kit
         // owns, so the successors cannot be activated over the retired kit's content.
         await materializer.DematerializeAsync(link.ProjectId, link.KitId, ct);
 
+        var activations = 0;
+        var clean = true;
         foreach (var kit in successors)
         {
-            await activation.ActivateAsync(link.ProjectId, kit.Id, force: false, ct);
+            try
+            {
+                await activation.ActivateAsync(link.ProjectId, kit.Id, force: false, ct);
+                activations++;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                clean = false;
+                logger.LogError(ex,
+                    "Optional kit '{KitName}' refused to land in project {ProjectId}; the retired kit stays active there until the next boot finishes the swap",
+                    kit.Name, link.ProjectId);
+            }
         }
 
-        if (link.IsActive)
+        if (clean && link.IsActive)
         {
             await activation.DeactivateAsync(link.ProjectId, link.KitId, ct);
         }
 
-        return successors.Count;
+        return (activations, clean);
     }
 }

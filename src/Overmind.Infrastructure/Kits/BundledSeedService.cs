@@ -90,7 +90,15 @@ public sealed class BundledSeedService
 
             if (seededVersion >= manifest.BundleVersion)
             {
-                return BundledSeedResult.Nothing(BundledSeedOutcome.UpToDate);
+                // The version is stamped even when a project failed to migrate, so the repair leg
+                // runs here as well: a kit stays unmarked until every project it touched is done,
+                // and the next boot finishes what this one could not.
+                var repairs = await _migration.RunAsync(manifest, ct);
+                return repairs.KitsMarkedLegacy > 0 || repairs.ProjectsMigrated > 0
+                    ? new BundledSeedResult(
+                        BundledSeedOutcome.UpToDate, manifest.BundleVersion,
+                        0, 0, 0, 0, repairs.KitsMarkedLegacy)
+                    : BundledSeedResult.Nothing(BundledSeedOutcome.UpToDate);
             }
 
             var upgraded = await UpgradeAsync(manifest, ct);

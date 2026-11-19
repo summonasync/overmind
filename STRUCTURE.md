@@ -14,7 +14,7 @@ How the repo is organized and the rules for writing code in it. System design li
 ├── FEATURELIST/              # field feedback from agents on other projects, materialized from Overmind notes;
 │                              #   raw input for the board, not a decision record (README.md is the index)
 ├── build/                    # packaging: pack.sh/install.sh/run.sh (portable, unix), install.ps1/run.cmd (portable, win),
-│                              #   dist-layout.env (shared crew-kit + folder-name contract), windows/ (Inno Setup channel:
+│                              #   dist-layout.env (bundled kit set + folder-name contract), windows/ (Inno Setup channel:
 │                              #   overmind.iss, pack-win.ps1, make-icon.ps1 + overmind.ico, smoke-installer.ps1)
 ├── src/
 │   ├── Overmind.Core/        # domain: Entities/, Enums/, Abstractions/ — zero dependencies

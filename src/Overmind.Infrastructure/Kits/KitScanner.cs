@@ -91,11 +91,10 @@ public sealed class KitScanner
                 .Where(s => s.RelPath.StartsWith(ownedPrefix, StringComparison.Ordinal))
                 .ToList();
 
-            // A named folder qualifies by owning any file at all: the kit split ships kits whose
-            // membership is prose only (sociality), and a bundle that declares six kits has to
-            // land six, not five plus a failed import on every install. The root case below keeps
-            // the stricter rule — a stray README beside the kit folders is not a kit.
-            if (owned.Count == 0 && !walk.Files.Keys.Any(f => f.StartsWith(ownedPrefix, StringComparison.Ordinal)))
+            // A folder that keeps kit prose at its own root qualifies even without skills: the kit
+            // split ships kits whose membership is tone content only (sociality), and a bundle that
+            // declares six kits has to land six, not five plus a failed import on every install.
+            if (owned.Count == 0 && !HasGateFiles(walk.Files, top) && !OwnsKitRootFiles(walk.Files, top))
             {
                 continue;
             }
@@ -578,6 +577,21 @@ public sealed class KitScanner
         }
 
         return false;
+    }
+
+    private static bool OwnsKitRootFiles(IReadOnlyDictionary<string, long> files, string candidateRel)
+    {
+        if (string.Equals(candidateRel, "gates", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(candidateRel, "guards", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var prefix = candidateRel + Path.DirectorySeparatorChar;
+        return files.Keys.Any(f =>
+            f.StartsWith(prefix, StringComparison.Ordinal)
+            && ParentRel(f) == candidateRel
+            && !string.Equals(Path.GetFileName(f), SkillFileName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasGateFiles(IReadOnlyDictionary<string, long> files, string candidateRel)
