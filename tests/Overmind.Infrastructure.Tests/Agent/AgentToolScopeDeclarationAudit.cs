@@ -92,6 +92,7 @@ internal static class AgentToolScopeDeclarationAudit
 
             violations.AddRange(PolicyViolations(spec, bucket));
             violations.AddRange(SchemaViolations(spec, bucket));
+            violations.AddRange(DispatchViolations(spec));
         }
 
         return violations;
@@ -133,6 +134,24 @@ internal static class AgentToolScopeDeclarationAudit
         if (spec.Scope != expected)
         {
             yield return $"{spec.Name} is declared {bucket} but carries policy {spec.Scope}, expected {expected}";
+        }
+    }
+
+    // The dispatch-shape rules of feature 246 T0: a spec that declares a caller-scoped handler must reach the
+    // request through it on every branch the loop can take, otherwise the privileged branch is the unchecked one.
+    private static IEnumerable<string> DispatchViolations(AgentToolSpec spec)
+    {
+        if (spec.ScopedInvoke is not null && spec.DelegatedInvoke is not null && spec.DelegatedScopedInvoke is null)
+        {
+            yield return $"{spec.Name} declares a caller-scoped handler and an unscoped delegated handler: " +
+                         "arming delegated approvals would dispatch the object-addressed call without the " +
+                         "conversation scope — declare DelegatedScopedInvoke for it";
+        }
+
+        if (spec.DelegatedScopedInvoke is not null && spec.ScopedInvoke is null)
+        {
+            yield return $"{spec.Name} declares a caller-scoped delegated handler but no caller-scoped plain " +
+                         "handler: the same door would reach the host unscoped whenever delegation is off";
         }
     }
 

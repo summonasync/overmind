@@ -170,14 +170,21 @@ public static class PlanningAgentTools
         async (args, ct) => await api.GetAsync(
             AgentToolArgs.BuildQuery($"{ProjectPath(AgentToolArgs.RequiredProjectId(args))}/features/{Uri.EscapeDataString(AgentToolArgs.RequiredString(args, "slug"))}/artifacts", args, "kind"), ct));
 
-    private static AgentToolSpec ReadArtifactSpec(AgentLoopbackClient api) => new(
-        "planning_read_artifact",
-        "Reads one artifact by id — full body, or pass sections for the cheap targeted read (e.g. sections=log,obstacles).",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"sections":{"type":"string"}},"required":["artifactId"]}
-        """,
-        async (args, ct) => await api.GetAsync(
-            AgentToolArgs.BuildQuery($"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}", args, "sections"), ct));
+    private static AgentToolSpec ReadArtifactSpec(AgentLoopbackClient api)
+    {
+        string ReadPath(JsonElement args) => AgentToolArgs.BuildQuery(
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}", args, "sections");
+
+        return new AgentToolSpec(
+            "planning_read_artifact",
+            "Reads one artifact by id — full body, or pass sections for the cheap targeted read (e.g. sections=log,obstacles).",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"sections":{"type":"string"}},"required":["artifactId"]}
+            """,
+            async (args, ct) => await api.GetAsync(ReadPath(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+                ReadPath(args), new AgentCaller(callerProjectId), ct));
+    }
 
     private static AgentToolSpec ReadArtifactDiffSpec(AgentLoopbackClient api) => new(
         "planning_read_artifact_diff",
@@ -473,8 +480,12 @@ public static class PlanningAgentTools
             """,
             async (args, ct) => await api.PostAsync(ValidatePath(args), Payload(args), ct),
             AgentToolCategory.HumanGated,
-            (args, instructionMessageId, ct) => api.PostAsync(
-                ValidatePath(args), Payload(args), DelegatedHeaders(instructionMessageId), ct),
+            null,
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+                ValidatePath(args), Payload(args), new AgentCaller(callerProjectId), ct),
+            DelegatedScopedInvoke: (args, instructionMessageId, callerProjectId, ct) => api.PostAsync(
+                ValidatePath(args), Payload(args), new AgentCaller(callerProjectId),
+                DelegatedHeaders(instructionMessageId), ct),
             Scope: AgentToolScope.Enforce);
     }
 

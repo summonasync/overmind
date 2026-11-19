@@ -12,39 +12,67 @@ public sealed class AgentLoopbackClient(HttpClient http)
     public async Task<JsonElement> GetAsync(string pathAndQuery, CancellationToken ct) =>
         await SendAsync(() => http.GetAsync(pathAndQuery, HttpCompletionOption.ResponseHeadersRead, ct), "GET " + pathAndQuery, ct);
 
+    public async Task<JsonElement> GetAsync(string pathAndQuery, AgentCaller caller, CancellationToken ct) =>
+        await SendAsync(
+            () => http.SendAsync(Build(HttpMethod.Get, pathAndQuery, null, caller), HttpCompletionOption.ResponseHeadersRead, ct),
+            "GET " + pathAndQuery, ct);
+
     public async Task<JsonElement> PostAsync(string path, object body, CancellationToken ct) =>
-        await SendAsync(() => SendJsonAsync(HttpMethod.Post, path, body, null, ct), "POST " + path, ct);
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Post, path, body, null), ct), "POST " + path, ct);
 
     public async Task<JsonElement> PostAsync(
         string path, object body, IReadOnlyDictionary<string, string>? headers, CancellationToken ct) =>
-        await SendAsync(() => SendJsonAsync(HttpMethod.Post, path, body, headers, ct), "POST " + path, ct);
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Post, path, body, null, headers), ct), "POST " + path, ct);
+
+    public async Task<JsonElement> PostAsync(string path, object body, AgentCaller caller, CancellationToken ct) =>
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Post, path, body, caller), ct), "POST " + path, ct);
+
+    public async Task<JsonElement> PostAsync(
+        string path,
+        object body,
+        AgentCaller caller,
+        IReadOnlyDictionary<string, string>? headers,
+        CancellationToken ct) =>
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Post, path, body, caller, headers), ct), "POST " + path, ct);
 
     public async Task<JsonElement> PutAsync(string path, object body, CancellationToken ct) =>
-        await SendAsync(() => SendJsonAsync(HttpMethod.Put, path, body, null, ct), "PUT " + path, ct);
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Put, path, body, null), ct), "PUT " + path, ct);
+
+    public async Task<JsonElement> PutAsync(string path, object body, AgentCaller caller, CancellationToken ct) =>
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Put, path, body, caller), ct), "PUT " + path, ct);
 
     public async Task<JsonElement> DeleteAsync(string path, CancellationToken ct) =>
-        await SendAsync(() => http.DeleteAsync(path, ct), "DELETE " + path, ct);
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Delete, path, null, null), ct), "DELETE " + path, ct);
+
+    public async Task<JsonElement> DeleteAsync(string path, AgentCaller caller, CancellationToken ct) =>
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Delete, path, null, caller), ct), "DELETE " + path, ct);
 
     public async Task<JsonElement> DeleteAsync(string path, object body, CancellationToken ct) =>
-        await SendAsync(() => SendJsonAsync(HttpMethod.Delete, path, body, null, ct), "DELETE " + path, ct);
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Delete, path, body, null), ct), "DELETE " + path, ct);
 
-    private async Task<HttpResponseMessage> SendJsonAsync(
-        HttpMethod method, string path, object body, IReadOnlyDictionary<string, string>? headers, CancellationToken ct)
+    public async Task<JsonElement> DeleteAsync(string path, object body, AgentCaller caller, CancellationToken ct) =>
+        await SendAsync(() => http.SendAsync(Build(HttpMethod.Delete, path, body, caller), ct), "DELETE " + path, ct);
+
+    private HttpRequestMessage Build(
+        HttpMethod method,
+        string path,
+        object? body,
+        AgentCaller? caller,
+        IReadOnlyDictionary<string, string>? headers = null)
     {
-        var json = JsonSerializer.Serialize(body, JsonOptions);
-        var request = new HttpRequestMessage(method, path)
+        var request = new HttpRequestMessage(method, path);
+        if (body is not null)
         {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-        if (headers is not null)
-        {
-            foreach (var (name, value) in headers)
-            {
-                request.Headers.Add(name, value);
-            }
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
         }
 
-        return await http.SendAsync(request, ct);
+        foreach (var (name, value) in AgentCallerHeaders.Pair(caller, headers))
+        {
+            request.Headers.Add(name, value);
+        }
+
+        return request;
     }
 
     private static async Task<JsonElement> SendAsync(
