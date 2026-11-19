@@ -19,7 +19,10 @@ The crew: orchestrators, coders, reviewers, architects, a product strategist (`p
 ```
 .
 ├── SYNC-STRUCTURE.md      # quadruple-edit contract: file mapping, translation tables, deploy modes, checklist
+├── KIT-MEMBERSHIP.md      # kit-membership.json: shape + which kit owns which content item
+├── kit-membership.json    # six-kit membership map, read by the bundle pipeline (feature 250)
 ├── manifest.json          # deploy manifest: single source of truth for install/uninstall scripts
+├── tools/                 # kit maintenance: gen-kit-membership.py, check-kit-membership.py
 ├── install.ps1            # deploy to tool homes (Windows); -DryRun prints plan only
 ├── install.sh             # deploy to tool homes (Git Bash/Linux); --dry-run prints plan only
 ├── uninstall.ps1          # remove deployed paths (Windows); -DryRun / -Force
