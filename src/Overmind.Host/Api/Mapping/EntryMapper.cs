@@ -6,7 +6,10 @@ namespace Overmind.Host.Api.Mapping;
 
 public static class EntryMapper
 {
-    public static EntryResponse ToResponse(ContextEntry entry)
+    public static EntryResponse ToResponse(ContextEntry entry) =>
+        ToDetailResponse(entry, new EntryLinkView([], [], []));
+
+    public static EntryResponse ToDetailResponse(ContextEntry entry, EntryLinkView links)
     {
         return new EntryResponse(
             entry.Id,
@@ -40,7 +43,10 @@ public static class EntryMapper
             entry.StateProof,
             entry.SupersededById,
             entry.Enforces,
-            entry.AuthorAlias);
+            entry.AuthorAlias,
+            links.Outgoing,
+            links.Incoming,
+            links.Unresolved);
     }
 
     public static SkillFile ToEntity(SkillFileDto dto) =>

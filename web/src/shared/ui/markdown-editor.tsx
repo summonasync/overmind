@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/shared/lib/cn";
 import { MarkdownViewer } from "@/shared/ui/markdown-viewer";
 import { Textarea } from "@/shared/ui/textarea";
@@ -8,14 +8,31 @@ import { WritePreviewToggle } from "@/shared/ui/write-preview-toggle";
 
 const PREVIEW_DEBOUNCE_MS = 200;
 
+// The field's own attributes, minus the two the editor owns: `value` is the controlled line it
+// feeds from its caller, and `className` carries the write/preview visibility rules. A caller
+// that passes `onChange` takes over the field's change wiring — it must call `onValueChange`
+// itself, which is the point: an autocomplete overlay needs the keystroke and the caret, not
+// just the resulting string.
+export type MarkdownEditorBodyProps = Omit<
+  TextareaHTMLAttributes<HTMLTextAreaElement>,
+  "value" | "className"
+>;
+
 interface MarkdownEditorProps {
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  bodyProps?: MarkdownEditorBodyProps;
 }
 
-export function MarkdownEditor({ value, onValueChange, placeholder, className }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  value,
+  onValueChange,
+  placeholder,
+  className,
+  bodyProps,
+}: MarkdownEditorProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [preview, setPreview] = useState(value);
 
@@ -36,6 +53,7 @@ export function MarkdownEditor({ value, onValueChange, placeholder, className }:
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           placeholder={placeholder}
+          {...bodyProps}
         />
         <div
           className={cn(

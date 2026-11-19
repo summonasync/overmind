@@ -10,7 +10,18 @@ public sealed class CreateEntryRequestValidator : AbstractValidator<CreateEntryR
 
     public CreateEntryRequestValidator()
     {
-        RuleFor(x => x.ProjectId).NotEmpty();
+        RuleFor(x => x.ProjectId)
+            .NotEmpty()
+            .Unless(x => x.Type == EntryType.Journal);
+
+        // The empty guid is a different input from JSON null and NotEmpty only owns the null: on a Guid? it
+        // compares against default(Guid?), so a present-but-zero guid walks straight through it. Spec R2 lets a
+        // journal thought lose its destination; no other type may, because an ownerless create is exactly what
+        // the handler's reserved-container bootstrap answers.
+        RuleFor(x => x.ProjectId)
+            .Must(projectId => projectId is null || projectId.Value != Guid.Empty)
+            .WithMessage("ProjectId cannot be the empty guid.")
+            .Unless(x => x.Type == EntryType.Journal);
         RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Content).NotEmpty();
