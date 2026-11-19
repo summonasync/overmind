@@ -47,7 +47,12 @@ export function TagEditor({ tags, colors, onAdd, onRemove }: TagEditorProps) {
                 onRemove(tag);
               }}
               aria-label={`Remove tag ${tag}`}
-              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              // The passport's target rule (§2, WCAG 2.5.8) judges a pointer target by its
+              // rendered box, not by the glyph inside it, and a bare 10px cross is half that
+              // floor. The box grows to 24×24 and the negative margins take the extra 12px back
+              // out of the chip's layout, so the glyph still reads at 10px — the shape
+              // widgets/app-shell/ui/bell-notification-card.tsx already uses for the same rule.
+              className="-m-1.5 grid min-h-6 min-w-6 place-items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <X size={10} aria-hidden />
             </button>

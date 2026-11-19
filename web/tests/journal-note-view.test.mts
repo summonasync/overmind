@@ -212,6 +212,67 @@ test("the note arm offers only titles a bare marker can land on", () => {
   assert.equal(isBareTitleLinkable("Plain title"), true);
 });
 
+test("a title wearing the parser's close marker is never offered as an existing link", () => {
+  // The hazard, stated with the Host's own rule instead of asserted from prose: WikiLinkParser
+  // takes the target between `[[` and the FIRST `]]` it finds after it, so a marker built from a
+  // title that carries the pair resolves to the title's head. That is either a dead end or, if
+  // another note owns the truncated words, an edge to the wrong note.
+  const targetOf = (marker: string) => marker.slice(2, marker.indexOf("]]", 2));
+  assert.equal(targetOf(entryMarker("Roadmap [[2026]] plans")), "Roadmap [[2026");
+  assert.equal(targetOf(entryMarker("Todo [draft]")), "Todo [draft");
+  assert.equal(targetOf(entryMarker("Roadmap plans")), "Roadmap plans");
+
+  assert.equal(isBareTitleLinkable("Roadmap [[2026]] plans"), false);
+  assert.equal(isBareTitleLinkable("Todo [draft]"), false);
+  assert.equal(isBareTitleLinkable("a]]b"), false);
+  assert.equal(isBareTitleLinkable("Roadmap plans"), true);
+  assert.equal(isBareTitleLinkable("Deep ] work"), true);
+
+  const candidates: CandidateSet = {
+    ...EMPTY_CANDIDATES,
+    notes: [
+      { id: "n1", title: "Roadmap [[2026]] plans" },
+      { id: "n2", title: "a]]b" },
+      { id: "n3", title: "Todo [draft]" },
+      { id: "n4", title: "Roadmap plans" },
+    ],
+    projects: [{ id: "p1", name: "Ove]]rmind" }],
+  };
+
+  const shape = (query: string) =>
+    buildLinkSuggestions(candidates, { query, currentNoteId: "x" }).map((row) => [
+      row.kind,
+      row.marker,
+      row.createsNote,
+    ]);
+
+  // The one reachable title is still offered as a link; the three bracket cases are not offered
+  // at all. An empty query reaches every arm's filter, so the project arm is measured here too.
+  assert.deepEqual(shape(""), [["note", "[[Roadmap plans]]", false]]);
+  assert.deepEqual(shape("roadmap"), [
+    ["note", "[[Roadmap plans]]", false],
+    ["create", "[[roadmap]]", true],
+  ]);
+  // A bracket title can neither be proposed as a link nor as a creation — the create arm has
+  // refused brackets since the first cut, and now the existing-note arms do too.
+  assert.deepEqual(shape("a]]b"), []);
+  assert.deepEqual(shape("todo"), [["create", "[[todo]]", true]]);
+  assert.deepEqual(shape("draft"), [["create", "[[draft]]", true]]);
+  assert.deepEqual(shape("ove"), [["create", "[[ove]]", true]]);
+  assert.deepEqual(shape("rmind"), [["create", "[[rmind]]", true]]);
+
+  // Nothing on screen may close before its own tail, for any query.
+  for (const query of ["", "roadmap", "a]]b", "todo", "draft", "ove", "rmind", "plans"]) {
+    for (const row of buildLinkSuggestions(candidates, { query, currentNoteId: "x" })) {
+      assert.equal(
+        row.marker.indexOf("]]", 2),
+        row.marker.length - 2,
+        `${row.key} closes early for query ${query}: ${row.marker}`,
+      );
+    }
+  }
+});
+
 test("ranking puts the exact title first, then the prefix, then the substring", () => {
   const candidates: CandidateSet = {
     ...EMPTY_CANDIDATES,
@@ -311,13 +372,23 @@ test("no suggestion can masquerade as an edge the Host would not create", () => 
       { id: "n2", title: "feature:sneaky" },
       { id: "n3", title: "" },
       { id: "n4", title: "  padded  " },
+      { id: "n5", title: "a]]b" },
+      { id: "n6", title: "ends ]" },
     ],
-    projects: [{ id: "p1", name: "Overmind" }],
+    projects: [
+      { id: "p1", name: "Overmind" },
+      { id: "p2", name: "bad]]name" },
+    ],
     features: [{ projectId: "p1", projectName: "Overmind", slug: "184-x", title: "X" }],
   };
-  for (const query of ["", "f", "feat", "plain", "pad", "no-such", "project:", "184"]) {
+  for (const query of ["", "f", "feat", "plain", "pad", "no-such", "project:", "184", "a]]b", "ends", "bad"]) {
     for (const row of buildLinkSuggestions(candidates, { query, currentNoteId: "n1" })) {
-      const inner = row.marker.slice(2, -2);
+      // Read the marker the way the parser reads it: the target runs from `[[` to the first
+      // `]]` after it. A row whose close sits before its own tail is a row that saves into
+      // something other than what the owner saw on screen.
+      const closesAt = row.marker.indexOf("]]", 2);
+      assert.equal(closesAt, row.marker.length - 2, `marker closes early: ${row.marker}`);
+      const inner = row.marker.slice(2, closesAt);
       assert.match(row.marker, /^\[\[.+\]\]$/, `empty marker for query ${query}`);
       if (row.kind === "feature") {
         assert.match(inner, /^feature:[a-z0-9][a-z0-9-]*$/, inner);
@@ -511,6 +582,28 @@ test("the autocomplete is a combobox the textarea points at, not a second focus 
   }
   // The list must not steal focus on mousedown or the caret the insert is written around is gone.
   assert.match(list, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
+  // Fifteen arm rows against a seven-row window: the highlighted option has to be scrolled to,
+  // and it has to be found by the same id the field points at with aria-activedescendant, so the
+  // row that moves on screen and the row the screen reader names cannot drift apart.
+  assert.match(list, /scrollIntoView\(\{ block: "nearest" \}\)/, "the active option stopped following the arrow keys");
+  assert.match(list, /wikilinkOptionId\(activeIndex\)/, "the scroll stopped tracking the announced option");
+  assert.match(editor, /"aria-activedescendant": listed \? wikilinkOptionId\(activeIndex\)/);
+});
+
+test("the slice's pointer targets keep the passport's 24px floor", () => {
+  // §2 / WCAG 2.5.8: judge the target by its rendered box, not by the glyph inside it. The tag
+  // cross is a 10px glyph, so the box has to be grown and the chip's layout paid back.
+  const tags = sliceFile("components/tag-editor.tsx");
+  const removeAt = tags.indexOf("aria-label={`Remove tag");
+  assert.ok(removeAt > 0, "the tag remove affordance lost its accessible name");
+  const removeButton = tags.slice(removeAt, tags.indexOf(">", removeAt));
+  assert.match(removeButton, /min-h-6 min-w-6/, "the tag cross is back under the 24px target floor");
+  assert.match(removeButton, /-m-1\.5/, "the grown hit box leaks into the chip's layout");
+  assert.match(removeButton, /place-items-center/);
+  // The create affordance moved off `size="xs"` (20px tall) onto `sm` (24px).
+  const unresolved = sliceFile("components/unresolved-list.tsx");
+  assert.match(unresolved, /<Button[\s\S]{0,240}size="sm"/, "the create affordance shrank back to xs");
+  assert.equal(/<Button[\s\S]{0,120}size="xs"/.test(unresolved), false);
 });
 
 test("the note view edits through the shared markdown pair, not a private one", () => {

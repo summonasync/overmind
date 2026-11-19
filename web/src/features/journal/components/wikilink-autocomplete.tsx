@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Folder, ListChecks, Plus } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { ENTRY_TYPE_META } from "@/shared/lib/entry-type";
@@ -43,12 +44,30 @@ export function WikiLinkAutocomplete({
   onPick,
   onHover,
 }: WikiLinkAutocompleteProps) {
+  const list = useRef<HTMLUListElement | null>(null);
+
+  // All four arms at their caps fill about fifteen rows against a window of roughly seven, so
+  // the keyboard walk runs off the bottom of the listbox: aria-activedescendant keeps the
+  // screen reader on the highlighted row, but nothing kept the row on the screen. The lookup
+  // goes through the same id helper the field's aria-activedescendant is built from, so the
+  // element that scrolls and the element that is announced cannot drift apart. `block:
+  // "nearest"` is the non-jumping half of the fix — a row already inside the window does not
+  // move the list at all, and the scroll stays inside the listbox's own overflow box.
+  useEffect(() => {
+    if (rows.length === 0) {
+      return;
+    }
+    const activeOption = list.current?.querySelector<HTMLElement>(`#${wikilinkOptionId(activeIndex)}`);
+    activeOption?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, rows.length]);
+
   if (anchor === null || rows.length === 0) {
     return null;
   }
 
   return (
     <ul
+      ref={list}
       id={WIKILINK_LIST_ID}
       role="listbox"
       aria-label="Link suggestions"

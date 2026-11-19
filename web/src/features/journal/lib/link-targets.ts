@@ -50,6 +50,8 @@ export interface SuggestionLimits {
 export const DEFAULT_LIMITS: SuggestionLimits = { notes: 6, projects: 4, features: 4 };
 
 const RESERVED_PREFIX = /^(feature|project):/i;
+const CLOSE_MARKER = "]]";
+const CLOSE_BRACKET = "]";
 
 export function isSuggested(query: string, label: string): boolean {
   if (query.length === 0) {
@@ -61,10 +63,21 @@ export function isSuggested(query: string, label: string): boolean {
 // `WikiLinkParser.ToTarget` reads a leading `feature:`/`project:` as a kind marker before it
 // ever considers the title branch, so a note titled `feature:184` is a title nothing can
 // point at with `[[feature:184]]`. Offering it would put a proposal on screen that saves as
-// a dead end.
+// a dead end. The close-marker rule below is the same refusal one layer down.
 export function isBareTitleLinkable(title: string): boolean {
   const trimmed = title.trim();
-  return trimmed.length > 0 && !RESERVED_PREFIX.test(trimmed);
+  return trimmed.length > 0 && !RESERVED_PREFIX.test(trimmed) && parsesBackWhole(trimmed);
+}
+
+// The parser closes a marker at the FIRST `]]` after the opening pair — a single `IndexOf`
+// with no second look — so a value carrying that pair resolves to its own head, and a value
+// ending in `]` resolves short as well, because the trailing bracket merges with the pair the
+// marker appends. `[[Roadmap [[2026]] plans]]` is therefore a link to `Roadmap [[2026`: a dead
+// end at best, and at worst a silent edge to whichever note happens to own the truncated
+// words. Titles are typed freely in this view and derived from first lines, and a registry
+// project name is free text too, so both arms drop such rows rather than propose them.
+function parsesBackWhole(value: string): boolean {
+  return !value.includes(CLOSE_MARKER) && !value.endsWith(CLOSE_BRACKET);
 }
 
 export function buildLinkSuggestions(
@@ -97,6 +110,9 @@ export function buildLinkSuggestions(
     if (rows.filter((row) => row.kind === "project").length >= limits.projects) {
       break;
     }
+    if (!parsesBackWhole(project.name)) {
+      continue;
+    }
     if (!isSuggested(query, project.name)) {
       continue;
     }
@@ -113,7 +129,9 @@ export function buildLinkSuggestions(
   }
 
   // Exact-slug resolution needs exactly one row on the whole board set; two projects with a
-  // borrowed slug make the Host answer unresolved, so neither of them gets offered.
+  // borrowed slug make the Host answer unresolved, so neither of them gets offered. The slug
+  // arm needs no bracket refusal of its own: the Host writes slugs through `SlugPattern`, a
+  // charset with no close marker in it, so the pair this arm appends is always the only one.
   const slugCount = new Map<string, number>();
   for (const feature of candidates.features) {
     if (feature.slug.trim().length === 0) {

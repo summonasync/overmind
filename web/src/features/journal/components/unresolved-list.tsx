@@ -47,7 +47,9 @@ export function UnresolvedList({ targets, creating, onCreate }: UnresolvedListPr
               <p className="mt-0.5 text-xs text-muted">{deadEndDetail(kind)}</p>
               {title === null ? null : (
                 <Button
-                  size="xs"
+                  // xs is 20px tall, under the passport's 24×24 pointer floor (§2 / WCAG 2.5.8);
+                  // sm measures exactly 24 and keeps the rail's density.
+                  size="sm"
                   variant="accent"
                   className="mt-1"
                   disabled={creating !== null}
