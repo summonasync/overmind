@@ -108,13 +108,21 @@ def side_md_files():
 def check_stray_grants(errors, notes):
     """Feature 242's defect shape: the `mcp__…` grant list sitting below the
     closing `---`, i.e. as body prose instead of frontmatter. Swept across every
-    side markdown file, skills included, not just the agent files."""
+    side markdown file, skills included, not just the agent files.
+
+    A file without frontmatter bounds is skipped — and a skipped file is a file
+    the sweep never opened, so the skipped denominator is printed (T5/S1: a green
+    run must show how much of the tree it actually looked at). A SKILL.md without
+    frontmatter is a defect, not a skip: the skill loaders parse exactly that
+    block, so it hard-fails instead of silently shrinking the scan."""
     scanned = 0
+    skipped = []
     stray = 0
     for path in side_md_files():
         lines = open(path, encoding="utf-8").read().split("\n")
         close = frontmatter_bounds(lines)
         if close is None:
+            skipped.append(path)
             continue
         scanned += 1
         hits = [i + 1 for i, line in enumerate(lines) if i > close and GRANT_RE.match(line)]
@@ -123,7 +131,14 @@ def check_stray_grants(errors, notes):
             errors.append(
                 f"{path}: {len(hits)} mcp grant lines below the frontmatter (first at line {hits[0]})"
             )
-    notes.append(f"side markdown files swept for stray grants: {scanned}   stray lines: {stray}")
+    notes.append(
+        f"side markdown files swept for stray grants: {scanned}   skipped (no frontmatter): {len(skipped)}   stray lines: {stray}"
+    )
+    for path in skipped:
+        print(f"  skipped: {path}")
+    bad_skill_md = [p for p in skipped if re.fullmatch(r"\.\w[\w-]*/skills/[^/]+/SKILL\.md", p)]
+    for path in bad_skill_md:
+        errors.append(f"{path}: SKILL.md without frontmatter — excluded from the sweep and unloadable as a skill")
 
 
 def check_frontmatter(errors, notes):
