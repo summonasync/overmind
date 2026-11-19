@@ -156,6 +156,31 @@ public sealed class EntryLinkResolverTests : IDisposable
         links.Single().ToId.ShouldBe(expected);
     }
 
+    // The theory above always has TWO variants coexisting, so it can only prove the refusal arm.
+    // This is the other half of R3's rule: with no exact casing and exactly ONE variant, the marker
+    // resolves — the ambiguity that makes a marker a dead end does not exist yet.
+    [Fact]
+    public async Task ResolveProjectMarker_NoExactCasingAndASingleVariant_Resolves()
+    {
+        var soloId = Guid.NewGuid();
+        await _context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt)
+            VALUES ({0}, {1}, {2}, {3}, {4})
+            """,
+            soloId.ToString().ToUpperInvariant(),
+            "solo-variant",
+            "/tmp/solo-variant",
+            "the only casing of this name",
+            "2026-01-01 00:00:00");
+
+        var links = await ResolveAsync("[[project:Solo-Variant]]");
+
+        links.ShouldHaveSingleItem();
+        links.Single().Kind.ShouldBe(EntryLinkKind.Project);
+        links.Single().ToId.ShouldBe(soloId);
+    }
+
     [Fact]
     public async Task Resolve_SameTitleTwice_TakesTheMostRecentlyUpdated()
     {
