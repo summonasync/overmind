@@ -22,6 +22,25 @@ export function KitsInfoPanel() {
         </div>
       </InfoPanelSection>
 
+      <InfoPanelSection title="Kit Classes">
+        <div className="space-y-2 text-xs leading-relaxed text-muted">
+          <p>
+            <span className="font-semibold text-foreground">Mandatory</span> kits materialize into
+            global skills — the agent home skill directories, always on, no per-project activation.
+            The global home door ships with the global kit materialization feature; until then a
+            mandatory kit cannot be deployed from here.
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Optional</span> kits activate per
+            project and stack — a project can run several optional kits at once.
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Legacy</span> kits were retired by the
+            kit split; they stay in the library for reference and no longer refresh.
+          </p>
+        </div>
+      </InfoPanelSection>
+
       <InfoPanelSection title="Drift Checks">
         <p className="text-xs leading-relaxed text-muted">
           Expand a kit and run a drift check against a linked project to compare materialized files
