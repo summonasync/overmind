@@ -487,6 +487,16 @@ public sealed class PlanningException : Exception
             $"Address an artifact of '{callerProjectId}' — planning_list_artifacts lists that project's features — " +
             $"or say to the owner that this work belongs to '{owningProjectId}'.");
 
+    public static PlanningException IssueOutsideCallerProject(
+        Guid issueId, Guid owningProjectId, Guid callerProjectId) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.IssueOutsideCallerProject,
+            $"Issue '{issueId}' belongs to project '{owningProjectId}', but this conversation belongs to project " +
+            $"'{callerProjectId}'. The host compared the object you addressed with the conversation's project and " +
+            "refused the call, so nothing was read or written and the issue stayed on its own board. " +
+            $"Address an issue of '{callerProjectId}' — issues_list reads that board — or file a request on " +
+            $"'{owningProjectId}' with issues_create, which is the door that may write to another board while " +
+            "presenting your own project.");
+
     public static PlanningException AgentCallerScopeUnverifiable(string defect) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AgentCallerScopeUnverifiable,
             $"The caller identity is unverifiable: {defect}. The host cannot tell which project this conversation " +

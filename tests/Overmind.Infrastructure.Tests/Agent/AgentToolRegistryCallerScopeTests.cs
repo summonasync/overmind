@@ -143,10 +143,10 @@ public sealed class AgentToolRegistryCallerScopeTests : IDisposable
 
     // One pin per family still on the old delegate, plus planning_upsert_artifact: an argument-addressed
     // door that 246 never converts, so this row cannot go stale half-way through the feature.
+    // The issue family converted in T2; the entry rows move when T3 converts them.
     [Theory]
     [InlineData("read_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11"}""")]
     [InlineData("update_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11","content":"x"}""")]
-    [InlineData("issues_get", """{"issueId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f12"}""")]
     [InlineData("planning_upsert_artifact", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01","slug":"001-x","kind":"spec","body":"b"}""")]
     public async Task InvokeAsync_DoorStillOnTheOldDelegate_CarriesNoCallerHeadersYet(string tool, string json)
     {

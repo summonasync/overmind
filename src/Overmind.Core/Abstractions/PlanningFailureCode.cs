@@ -89,5 +89,6 @@ public enum PlanningFailureCode
     InvalidBatchOp,
     BatchArtifactOutsideFeature,
     ArtifactOutsideCallerProject,
+    IssueOutsideCallerProject,
     AgentCallerScopeUnverifiable
 }
