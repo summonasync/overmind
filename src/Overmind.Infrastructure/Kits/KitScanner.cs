@@ -86,10 +86,15 @@ public sealed class KitScanner
 
         foreach (var top in topLevelDirs.Order(StringComparer.Ordinal))
         {
+            var ownedPrefix = top + Path.DirectorySeparatorChar;
             var owned = skills
-                .Where(s => s.RelPath.StartsWith(top + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                .Where(s => s.RelPath.StartsWith(ownedPrefix, StringComparison.Ordinal))
                 .ToList();
-            if (owned.Count == 0 && !HasGateFiles(walk.Files, top))
+
+            // A folder that keeps kit prose at its own root qualifies even without skills: the kit
+            // split ships kits whose membership is tone content only (sociality), and a bundle that
+            // declares six kits has to land six, not five plus a failed import on every install.
+            if (owned.Count == 0 && !HasGateFiles(walk.Files, top) && !OwnsKitRootFiles(walk.Files, top))
             {
                 continue;
             }
@@ -97,7 +102,7 @@ public sealed class KitScanner
             candidateNames.Add(top);
             result.Candidates.Add(await BuildCandidateAsync(
                 top, top, owned,
-                file => file.StartsWith(top + Path.DirectorySeparatorChar, StringComparison.Ordinal),
+                file => file.StartsWith(ownedPrefix, StringComparison.Ordinal),
                 walk, existingKits, root, ct));
         }
 
@@ -572,6 +577,22 @@ public sealed class KitScanner
         }
 
         return false;
+    }
+
+    private static bool OwnsKitRootFiles(IReadOnlyDictionary<string, long> files, string candidateRel)
+    {
+        if (string.Equals(candidateRel, "gates", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(candidateRel, "guards", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var prefix = candidateRel + Path.DirectorySeparatorChar;
+        return files.Keys.Any(f =>
+            f.StartsWith(prefix, StringComparison.Ordinal)
+            && ParentRel(f) == candidateRel
+            && !string.Equals(Path.GetFileName(f), SkillFileName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetExtension(f), ".md", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasGateFiles(IReadOnlyDictionary<string, long> files, string candidateRel)

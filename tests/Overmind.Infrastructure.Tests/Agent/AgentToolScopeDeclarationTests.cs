@@ -43,14 +43,20 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
         declaredTotal.ShouldBe(registered,
             "the declared buckets must cover the registry exactly — a gap here is an unclassified tool");
         _output.WriteLine(
-            $"registry {_registry.Count} specs, {AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count} declared doors, " +
+            $"registry {_registry.Count} specs, {AgentToolScopeDeclarationAudit.DeclaredEnforced.Count} closed object doors, " +
+            $"{AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count} declared doors, " +
             $"{AgentToolScopeDeclarationAudit.SessionScoped.Count} session, {AgentToolScopeDeclarationAudit.Discovery.Count} discovery, " +
             $"{AgentToolScopeDeclarationAudit.CrossProject.Count} cross-project, " +
             $"{AgentToolScopeDeclarationAudit.ArgumentEnforced.Count} argument-enforced, " +
             $"{AgentToolScopeDeclarationAudit.NoAddressedTarget.Count} addressing no target, " +
             $"{AgentToolScopeDeclarationAudit.ScopedHandleExceptions.Count} scoped-handle exceptions");
         registered.ShouldBeGreaterThanOrEqualTo(70);
-        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count.ShouldBe(19);
+        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count.ShouldBe(3,
+            "the kit doors are the only object-addressed hole left after 246 T1-T3, and the number is the sample size");
+        AgentToolScopeDeclarationAudit.DeclaredEnforced.Count.ShouldBe(16);
+        (AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count +
+         AgentToolScopeDeclarationAudit.DeclaredEnforced.Count).ShouldBe(19,
+            "the object-addressed surface 241 declared is 16 closed plus 3 still open — the total must survive the move");
         AgentToolScopeDeclarationAudit.CrossProject.Count.ShouldBe(1);
         AgentToolScopeDeclarationAudit.SessionScoped.Count.ShouldBe(7);
         AgentToolScopeDeclarationAudit.Discovery.Count.ShouldBe(3);
@@ -99,7 +105,7 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
     }
 
     [Fact]
-    public void CrossProject_IsDeclaredOnTheFilingDoorAlone_WhileTheFourIssueIdDoorsStayInTheGap()
+    public void CrossProject_IsDeclaredOnTheFilingDoorAlone_WhileTheFourIssueIdDoorsAreClosed()
     {
         var marked = _registry.Specs
             .Where(spec => spec.Scope == AgentToolScope.CrossProject)
@@ -109,11 +115,11 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
         marked.ShouldBe(AgentToolScopeDeclarationAudit.CrossProject, ignoreOrder: true);
         marked.ShouldHaveSingleItem();
         Spec("issues_append").Scope.ShouldBe(AgentToolScope.Enforce);
-        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.ShouldContain("issues_append",
-            "issues_append addresses an issue by id — marking it CrossProject would delete a tracked hole");
         foreach (var door in new[] { "issues_get", "issues_set_status", "issues_promote", "issues_append" })
         {
-            AgentToolScopeDeclarationAudit.ObjectDeterminedGap.ShouldContain(door);
+            AgentToolScopeDeclarationAudit.DeclaredEnforced.ShouldContain(door,
+                $"{door} addresses an issue by id and 246 T2 compares it — marking it CrossProject would " +
+                "delete a tracked hole, leaving it in the gap would deny a closed door");
         }
     }
 
@@ -130,25 +136,33 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
             AgentToolScopeDeclarationAudit.ObjectDetermined(spec).ShouldBeTrue(name);
             AgentToolScopeDeclarationAudit.CarriesProjectArgument(spec).ShouldBeTrue(
                 $"{name} does carry projectId — that is exactly why a has-no-projectId classifier would mis-file it");
-            AgentToolScopeDeclarationAudit.ObjectDeterminedGap.ShouldContain(name);
+            AgentToolScopeDeclarationAudit.DeclaredEnforced.ShouldContain(name,
+                $"{name} is the dangerous shape 246 closed: an own projectId satisfied the argument check while " +
+                "the artifactId could name any board");
+            AgentToolScopeDeclarationAudit.BucketOf(name).ShouldBe("DeclaredEnforced");
         }
     }
 
     [Fact]
     public void Gap_TheObjectDeterminedSetIsWhatTheRuleDerives()
     {
-        // Deliberately policy-blind: a door addressed by object id is a hole whatever scope someone declares
-        // for it, so marking it CrossProject cannot shrink the tracked set — only closing it in 246 can.
+        // Deliberately policy-blind: a door addressed by object id is object-addressed whatever scope
+        // someone declares for it, so the derived set cannot shrink when a door is closed — only the
+        // bucket it is filed in moves.
         var derived = _registry.Specs
             .Where(AgentToolScopeDeclarationAudit.ObjectDetermined)
             .Select(spec => spec.Name)
             .ToList();
 
+        var filed = AgentToolScopeDeclarationAudit.ObjectDeterminedGap
+            .Concat(AgentToolScopeDeclarationAudit.DeclaredEnforced)
+            .ToList();
+
         derived
             .Where(name => !AgentToolScopeDeclarationAudit.ScopedHandleExceptions.Contains(name))
-            .ShouldBe(AgentToolScopeDeclarationAudit.ObjectDeterminedGap, ignoreOrder: true);
-        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.Count.ShouldBe(19,
-            "the declared gap stays at 19 doors while 241 ships argument-level enforcement only");
+            .ShouldBe(filed, ignoreOrder: true);
+        filed.Count.ShouldBe(19,
+            "16 doors 246 closed plus the 3 kit doors still declared open — the surface 241 measured must be whole");
         derived.ShouldContain("ack_entry",
             "ack_entry carries a required projectId with the handle and is exempt only because the service scopes it");
     }
@@ -160,8 +174,53 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
 
         spec.Category.ShouldBe(AgentToolCategory.HumanGated);
         spec.Scope.ShouldBe(AgentToolScope.Enforce, "human-gating answers who may call, not which project it may touch");
-        AgentToolScopeDeclarationAudit.BucketOf("planning_validate").ShouldBe("ObjectDeterminedGap");
+        AgentToolScopeDeclarationAudit.BucketOf("planning_validate").ShouldBe("DeclaredEnforced",
+            "human-gating answers who may call, not which project it may touch — 246 T1 closed the object check");
         AgentToolScopeDeclarationAudit.CarriesProjectArgument(spec).ShouldBeFalse();
+    }
+
+    // AC-2: the kit doors are the remaining hole, and the reason is a fact about the schema, not a sentence
+    // in a comment — so the test reads the entity. If a ProjectId ever appears on SkillKit, this goes red and
+    // the three doors have to move to DeclaredEnforced with real enforcement behind them.
+    [Fact]
+    public void Gap_KitDoorsStayDeclared_WithTheReasonThatActuallyMakesThemOpen()
+    {
+        AgentToolScopeDeclarationAudit.ObjectDeterminedGap.ShouldBe(
+            ["kit_import", "kit_import_scan", "kit_reimport"], ignoreOrder: true);
+
+        typeof(Overmind.Core.SkillKit).GetProperty("ProjectId").ShouldBeNull(
+            "a kit is a global library object; without an owning project there is nothing to compare a " +
+            "conversation's scope against, which is why these three are declared open rather than closed");
+
+        foreach (var name in AgentToolScopeDeclarationAudit.ObjectDeterminedGap)
+        {
+            Spec(name).ScopedInvoke.ShouldBeNull(
+                $"{name} is declared a gap — a scoped handler would mean the bucket is lying");
+        }
+    }
+
+    // AC-4: the counted surface is derived from schemas, never from the policy a door declares. Marking a
+    // closed door CrossProject (or anything else) must not make the tracked set shrink by one.
+    [Theory]
+    [InlineData(AgentToolScope.Enforce)]
+    [InlineData(AgentToolScope.CrossProject)]
+    [InlineData(AgentToolScope.SessionScoped)]
+    [InlineData(AgentToolScope.Discovery)]
+    public void Coverage_CountedSurfaceIsBlindToTheDeclaredPolicy(AgentToolScope policy)
+    {
+        var mutated = ReplaceInRegistry("planning_read_artifact",
+            Spec("planning_read_artifact", """
+                {"type":"object","properties":{"artifactId":{"type":"string"}},"required":["artifactId"]}
+                """, scope: policy));
+
+        var counted = mutated
+            .Where(AgentToolScopeDeclarationAudit.ObjectDetermined)
+            .Where(spec => !AgentToolScopeDeclarationAudit.ScopedHandleExceptions.Contains(spec.Name))
+            .Count();
+
+        counted.ShouldBe(19,
+            $"re-declaring a door as {policy} changed the counted object-addressed surface — the count would " +
+            "then be a function of prose, not of what the schemas can name");
     }
 
     [Fact]
@@ -175,16 +234,24 @@ public sealed class AgentToolScopeDeclarationTests : IDisposable
     }
 
     [Fact]
-    public void Tripwire_NewObjectDeterminedSpecMissingFromGap_IsFlagged()
+    public void Tripwire_NewIdAddressedSpecWithoutDeclaration_FailsTheAuditTwice()
     {
-        var mutated = AppendToRegistry(Spec("issues_unassign", """
+        var probe = Spec("issues_unassign", """
             {"type":"object","properties":{"issueId":{"type":"string"}},"required":["issueId"]}
-            """));
+            """);
+        var mutated = AppendToRegistry(probe);
 
         var violations = ViolationsFor(mutated);
-        violations.ShouldContain(v => v.Contains("planning", StringComparison.OrdinalIgnoreCase) ||
-                                      v.Contains("unclassified"), "a new door cannot pass the audit silently");
-        violations.ShouldContain(v => v.Contains("issues_unassign"));
+
+        // A new door cannot pass silently: it is unclassified, and the coverage invariant goes red by itself
+        // because 19 declared object doors no longer add up to a registry that grew by one.
+        violations.ShouldContain(v => v.Contains("unclassified") && v.Contains("issues_unassign"),
+            "the audit must name the undeclared door, not just report a count mismatch");
+
+        var declaredTotal = AgentToolScopeDeclarationAudit.AllDeclared().Values.Sum(bucket => bucket.Count);
+        declaredTotal.ShouldNotBe(mutated.Count,
+            $"declared {declaredTotal} vs registry {mutated.Count}: the buckets are exhaustive by construction, " +
+            "so an undeclared door breaks the total even before anyone reads the violation list");
     }
 
     [Fact]

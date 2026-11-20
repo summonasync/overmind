@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Overmind.Infrastructure.Agent.Tools;
 
 public static class IssueAgentTools
@@ -46,13 +48,20 @@ public static class IssueAgentTools
                 args, "status", "authorProjectId", "kind"),
             ct));
 
-    private static AgentToolSpec GetSpec(AgentLoopbackClient api) => new(
-        "issues_get",
-        "Reads one issue in full: card (title, body, status, author provenance, lifecycle timestamps) plus the chronological append trail.",
-        """
-        {"type":"object","properties":{"issueId":{"type":"string"}},"required":["issueId"]}
-        """,
-        async (args, ct) => await api.GetAsync($"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}", ct));
+    private static AgentToolSpec GetSpec(AgentLoopbackClient api)
+    {
+        string IssuePath(JsonElement args) => $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}";
+
+        return new(
+            "issues_get",
+            "Reads one issue in full: card (title, body, status, author provenance, lifecycle timestamps) plus the chronological append trail.",
+            """
+            {"type":"object","properties":{"issueId":{"type":"string"}},"required":["issueId"]}
+            """,
+            async (args, ct) => await api.GetAsync(IssuePath(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+                IssuePath(args), new AgentCaller(callerProjectId), ct));
+    }
 
     private static AgentToolSpec AppendSpec(AgentLoopbackClient api) => new(
         "issues_append",
@@ -62,11 +71,18 @@ public static class IssueAgentTools
         """,
         async (args, ct) => await api.PostAsync(
             $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}/append",
-            new AgentToolPayload()
-                .Set("authorProjectId", AgentToolArgs.RequiredGuid(args, "authorProjectId"))
-                .Set("text", AgentToolArgs.RequiredString(args, "text"))
-                .Build(),
+            AppendPayload(args),
+            ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+            $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}/append",
+            AppendPayload(args),
+            new AgentCaller(callerProjectId),
             ct));
+
+    internal static object AppendPayload(JsonElement args) => new AgentToolPayload()
+        .Set("authorProjectId", AgentToolArgs.RequiredGuid(args, "authorProjectId"))
+        .Set("text", AgentToolArgs.RequiredString(args, "text"))
+        .Build();
 
     private static AgentToolSpec SetStatusSpec(AgentLoopbackClient api) => new(
         "issues_set_status",
@@ -76,11 +92,18 @@ public static class IssueAgentTools
         """,
         async (args, ct) => await api.PostAsync(
             $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}/status",
-            new AgentToolPayload()
-                .Set("status", AgentToolArgs.RequiredString(args, "status"))
-                .Set("source", AgentToolArgs.RequiredString(args, "source"))
-                .Build(),
+            StatusPayload(args),
+            ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+            $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}/status",
+            StatusPayload(args),
+            new AgentCaller(callerProjectId),
             ct));
+
+    internal static object StatusPayload(JsonElement args) => new AgentToolPayload()
+        .Set("status", AgentToolArgs.RequiredString(args, "status"))
+        .Set("source", AgentToolArgs.RequiredString(args, "source"))
+        .Build();
 
     private static AgentToolSpec PromoteSpec(AgentLoopbackClient api) => new(
         "issues_promote",
@@ -90,9 +113,16 @@ public static class IssueAgentTools
         """,
         async (args, ct) => await api.PostAsync(
             $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}/promote",
-            new AgentToolPayload()
-                .Set("featureSlug", AgentToolArgs.RequiredString(args, "featureSlug"))
-                .Set("source", AgentToolArgs.RequiredString(args, "source"))
-                .Build(),
+            PromotePayload(args),
+            ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+            $"/api/agent/issues/{AgentToolArgs.RequiredGuid(args, "issueId")}/promote",
+            PromotePayload(args),
+            new AgentCaller(callerProjectId),
             ct));
+
+    internal static object PromotePayload(JsonElement args) => new AgentToolPayload()
+        .Set("featureSlug", AgentToolArgs.RequiredString(args, "featureSlug"))
+        .Set("source", AgentToolArgs.RequiredString(args, "source"))
+        .Build();
 }

@@ -61,7 +61,7 @@ public sealed class NotificationValidatorPromptComposer : IAgentPromptComposer
             - When the owner's reply approves the pending gate and delegated approvals are effectively on for the project, call planning_validate (or planning_set_feature_status for done flips) - the loop attaches the delegated instruction reference to your tool call automatically.
             - When delegated approvals are off, do not call planning_validate or planning_set_feature_status: say the human door in the Overmind UI stays open and stop.
             - When the reply is a question or a context request, answer it concisely from the tool results.
-            - planning_validate and planning_set_feature_status name an artifact by id, which no argument comparison reaches - feature 246 owns those doors.
+            - planning_validate and planning_set_feature_status address an artifact by id, so whether the host accepts one depends on the conversation's project owning that artifact (feature 246); on a project-less turn there is no owner to match, which is a pass-through, not a licence.
             - Every planning mutation needs a logNote: state the owner's intent.
             - You are not a chat buddy: no small talk, no promises of follow-ups; end the turn after the act or the answer.
             """);

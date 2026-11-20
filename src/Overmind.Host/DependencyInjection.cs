@@ -136,13 +136,19 @@ public static class DependencyInjection
 
         services.AddScoped<KitScanner>();
         services.AddScoped<KitImporter>();
+        services.AddScoped<KitActivationService>();
+        services.AddScoped<LegacyKitMigrationService>();
         services.AddScoped<BundledKitForkService>();
         services.AddScoped<BundledSeedService>(provider => new BundledSeedService(
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<KitImporter>(),
             provider.GetRequiredService<AppSettingsService>(),
             provider.GetRequiredService<ILogger<BundledSeedService>>(),
-            OvermindPaths.BundledDirectory));
+            OvermindPaths.BundledDirectory,
+            provider.GetRequiredService<LegacyKitMigrationService>(),
+            // No IGlobalKitDeployer is registered yet: the mandatory kit's home-directory door is
+            // feature 251, and the seed records the missing door in the log until then.
+            provider.GetService<IGlobalKitDeployer>()));
 
         services.AddSingleton<IOvermindCliLocator, OvermindCliLocator>();
         services.AddSingleton<IGrimoireEngineRunner, GrimoireEngineRunner>();
