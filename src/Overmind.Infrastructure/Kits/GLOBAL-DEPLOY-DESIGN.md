@@ -8,7 +8,7 @@ An agent from `AgentRegistry.All` counts as **installed** when its first existin
 
 - False positive: config dir survives a deleted CLI install (harmless — writing skills there is still valid).
 - False negative: a CLI installed but never launched has no config dir yet — nothing to deploy to until first launch, acceptable.
-- Home skills dir per platform comes from `PlatformDirectoryMap` (`platforms.json`); it is joined onto the RESOLVED config dir when the candidate was env-based (`$CODEX_HOME` → `<codexHome>/.agents/skills`), else onto the literal `~/…` root from platforms.json. Env-var home roots take precedence over `~` in the same way `AgentRegistry` consumers already resolve.
+- Home skills dir per platform comes from `PlatformDirectoryMap` (`platforms.json`); env-based candidates join the TAIL segment of that path (`skills`) under the env root — `$CODEX_HOME=/x` → `/x/skills` — because the env root already IS the agent's home root; literal candidates join the full platforms.json path against `$HOME` (`~` → `.claude/skills`). Env-var home roots take precedence over `~` in the same way `AgentRegistry` consumers already resolve.
 
 ## 2. Shared-homes table — merge everywhere, mirror never (app door)
 
@@ -54,7 +54,7 @@ Deploy payload = the SourcePath `skills/` subtree only (agent roles, prose confi
 ## 5. Tracking — new Core entities (ruling 1)
 
 `src/Overmind.Core/Entities/GlobalMaterializedFile.cs`:
-`Id, KitId, Platform (AgentPlatform), RelativePath, Sha256, MaterializedAt` — the home-root analogue of `MaterializedFile` (project-rooted entity untouched).
+`Id, KitId, Platform (AgentPlatform), RelativePath, Sha256, MaterializedAt` — the home-root analogue of `MaterializedFile` (project-rooted entity untouched). Kit deletion cascades rows away but leaves home files on disk — `KitsApi.Delete` must refuse or dematerialize a kit that carries global rows (decided in T3; review F6).
 
 `src/Overmind.Core/Entities/GlobalMarkerDeployment.cs`:
 `Id, KitId, Platform, EntryFileName, ContentSha256, DeployedAt` — one row per (kit, platform) with a woven block; `ContentSha256` is the hash of the exact block body for drift detection.
@@ -82,4 +82,4 @@ GET    /api/kits/global/state              per kit × platform state matrix + dr
 
 ## 8. Boot-seed / migration legs (T2)
 
-Registration replaces the deliberate null in `DependencyInjection.cs`; `BundledSeedService`'s existing mandatory-deploy call goes live; swallow-and-log stays for a null/failed door; the crew→6 migration deploys ceremony globally when the door is present. Tests cover: fresh seed invokes DeployAsync per detected agent, null-door path still logged, migration swallow path.
+Registration replaces the deliberate null in `DependencyInjection.cs`; `BundledSeedService`'s existing mandatory-deploy call goes live; swallow-and-log stays for a null/failed door; the crew→6 migration deploys ceremony globally when the door is present. Tests cover: fresh seed invokes DeployAsync per detected agent, null-door path still logged, migration swallow path. The seed path deploys with **force:true by design** (R3: the mandatory kit has no opt-out, so hand edits inside its content are corrected on every boot; the kits-page copy states it — review F5).

@@ -339,4 +339,74 @@ public sealed class HomeKitDeployerTests : IDisposable
 
         resolved.ShouldBeNull();
     }
+
+    [Fact]
+    public async Task Crlf_source_deploys_without_false_local_edit_detection()
+    {
+        var dir = Path.Combine(_sources, "dotnet-crew", "dotnet-coder");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "SKILL.md"), "---\r\nname: dotnet-coder\r\ndescription: CRLF authored.\r\n---\r\n\r\nBody.\r\n");
+        var kit = SeedKit("dotnet-crew", Path.Combine(_sources, "dotnet-crew"));
+        Directory.CreateDirectory(ClaudeHomeSkills);
+        var deployer = CreateDeployer(ClaudeSpec);
+
+        await deployer.DeployAsync(kit.Id, "claude", force: false);
+        var redploy = await deployer.DeployAsync(kit.Id, "claude", force: false);
+        redploy.Success.ShouldBeTrue();
+        redploy.Entries.ShouldNotContain(e => e.Outcome == GlobalDeployOutcome.Refused);
+
+        var drift = await deployer.DetectDriftAsync();
+        drift.ShouldNotContain(i => i.KitId == kit.Id);
+    }
+
+    [Fact]
+    public async Task Deploying_to_one_agent_leaves_another_agents_home_untouched()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kit = SeedKit("dotnet-crew", source);
+        Directory.CreateDirectory(ClaudeHomeSkills);
+        Directory.CreateDirectory(Path.Combine(_homeRoot, "qwen-cfg"));
+        var deployer = CreateDeployer(ClaudeSpec, QwenSpec);
+
+        await deployer.DeployAsync(kit.Id, "claude", force: false);
+
+        Directory.Exists(Path.Combine(_homeRoot, ".qwen", "skills", "dotnet-coder")).ShouldBeFalse();
+        (await _context.GlobalMaterializedFiles.ToListAsync()).ShouldNotContain(f => f.Platform == AgentPlatform.Qwen);
+    }
+
+    [Fact]
+    public async Task Seed_contract_deploys_the_mandatory_kit_to_every_detected_agent()
+    {
+        var source = WriteSkillSource("overmind-ceremony", "overmind-ceremony");
+        var kit = SeedKit("overmind-ceremony", source, mandatory: true);
+        Directory.CreateDirectory(ClaudeHomeSkills);
+        Directory.CreateDirectory(Path.Combine(_homeRoot, ".qwen", "skills"));
+        IGlobalKitDeployer door = CreateDeployer(ClaudeSpec, QwenSpec);
+
+        await door.DeployAsync(kit, CancellationToken.None);
+
+        File.Exists(Path.Combine(ClaudeHomeSkills, "overmind-ceremony", "SKILL.md")).ShouldBeTrue();
+        File.Exists(Path.Combine(_homeRoot, ".qwen", "skills", "overmind-ceremony", "SKILL.md")).ShouldBeTrue();
+        var platforms = await _context.GlobalMaterializedFiles.Select(f => f.Platform).ToListAsync();
+        platforms.ShouldContain(AgentPlatform.Claude);
+        platforms.ShouldContain(AgentPlatform.Qwen);
+    }
+
+    [Fact]
+    public async Task Drift_reports_rows_from_platforms_no_longer_installed()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kit = SeedKit("dotnet-crew", source);
+        Directory.CreateDirectory(ClaudeHomeSkills);
+        var deployer = CreateDeployer(ClaudeSpec);
+        await deployer.DeployAsync(kit.Id, "claude", force: false);
+
+        var qwenRow = GlobalMaterializedFile.Create(kit.Id, AgentPlatform.Qwen, "dotnet-coder/SKILL.md", "deadhash");
+        _context.GlobalMaterializedFiles.Add(qwenRow);
+        await _context.SaveChangesAsync();
+
+        var drift = await deployer.DetectDriftAsync();
+
+        drift.ShouldContain(i => i.Platform == AgentPlatform.Qwen && i.Kind == GlobalDriftKind.Missing);
+    }
 }

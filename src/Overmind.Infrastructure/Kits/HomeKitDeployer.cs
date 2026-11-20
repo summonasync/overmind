@@ -106,7 +106,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         {
             foreach (var row in rows)
             {
-                var absolute = Path.Combine(home.SkillsDir, row.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                var absolute = PathGuard.ResolveUnderRoot(home.SkillsDir, row.RelativePath);
                 if (File.Exists(absolute))
                 {
                     File.Delete(absolute);
@@ -119,23 +119,24 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
 
             foreach (var markerRow in markerRows)
             {
-                if (File.Exists(markerRow.EntryFilePath))
+                var entryPath = PathGuard.ResolveAbsoluteUnderRoot(home.ConfigDir, markerRow.EntryFilePath);
+                if (File.Exists(entryPath))
                 {
-                    var text = await File.ReadAllTextAsync(markerRow.EntryFilePath, ct);
+                    var text = await File.ReadAllTextAsync(entryPath, ct);
                     var (newText, removed) = MarkerBlockWriter.Cut(text, kit.Name);
                     if (removed)
                     {
                         if (string.IsNullOrWhiteSpace(newText))
                         {
-                            File.Delete(markerRow.EntryFilePath);
+                            File.Delete(entryPath);
                         }
                         else
                         {
-                            await File.WriteAllTextAsync(markerRow.EntryFilePath, newText, ContentHash.Utf8NoBom, ct);
+                            await File.WriteAllTextAsync(entryPath, newText, ContentHash.Utf8NoBom, ct);
                         }
 
                         entries.Add(new GlobalDeployEntry(
-                            GlobalDeployEntryKind.MarkerBlock, home.Platform, markerRow.EntryFilePath, GlobalDeployOutcome.Written));
+                            GlobalDeployEntryKind.MarkerBlock, home.Platform, entryPath, GlobalDeployOutcome.Written));
                     }
                 }
 
@@ -171,7 +172,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
                 continue;
             }
 
-            var absolute = Path.Combine(home.SkillsDir, row.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var absolute = PathGuard.ResolveUnderRoot(home.SkillsDir, row.RelativePath);
             if (!File.Exists(absolute))
             {
                 items.Add(new GlobalDriftItem(row.KitId, row.Platform, row.RelativePath, GlobalDriftKind.Missing));
@@ -188,22 +189,39 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
 
         foreach (var markerRow in markerRows)
         {
-            if (!File.Exists(markerRow.EntryFilePath))
+            AgentHomeResolution.ResolvedHome? markerHome = null;
+            if (homes.TryGetValue(markerRow.Platform, out var candidate))
             {
-                items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, markerRow.EntryFilePath, GlobalDriftKind.MarkerMissing));
+                try
+                {
+                    markerHome = candidate;
+                    var entryPath = PathGuard.ResolveAbsoluteUnderRoot(markerHome.ConfigDir, markerRow.EntryFilePath);
+                    if (!File.Exists(entryPath))
+                    {
+                        items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, entryPath, GlobalDriftKind.MarkerMissing));
+                        continue;
+                    }
+
+                    var text = await File.ReadAllTextAsync(entryPath, ct);
+                    var blockHash = ExtractBlockHash(text, markerRow.KitId, entryPath);
+                    if (blockHash is null)
+                    {
+                        items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, entryPath, GlobalDriftKind.MarkerMissing));
+                    }
+                    else if (!string.Equals(blockHash, markerRow.ContentSha256, StringComparison.OrdinalIgnoreCase))
+                    {
+                        items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, entryPath, GlobalDriftKind.MarkerModified));
+                    }
+                }
+                catch (MaterializationException)
+                {
+                    items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, markerRow.EntryFilePath, GlobalDriftKind.MarkerMissing));
+                }
+
                 continue;
             }
 
-            var text = await File.ReadAllTextAsync(markerRow.EntryFilePath, ct);
-            var blockHash = ExtractBlockHash(text, markerRow.KitId, markerRow.EntryFilePath);
-            if (blockHash is null)
-            {
-                items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, markerRow.EntryFilePath, GlobalDriftKind.MarkerMissing));
-            }
-            else if (!string.Equals(blockHash, markerRow.ContentSha256, StringComparison.OrdinalIgnoreCase))
-            {
-                items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, markerRow.EntryFilePath, GlobalDriftKind.MarkerModified));
-            }
+            items.Add(new GlobalDriftItem(markerRow.KitId, markerRow.Platform, markerRow.EntryFilePath, GlobalDriftKind.MarkerMissing));
         }
 
         return items;
@@ -280,10 +298,11 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         }
 
         var refused = new List<string>();
+        var preImages = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (var plan in plans)
         {
             var row = tracked.FirstOrDefault(m => PathGuard.PathsEqual(
-                Path.Combine(home.SkillsDir, m.RelativePath.Replace('/', Path.DirectorySeparatorChar)), plan.AbsolutePath));
+                PathGuard.ResolveUnderRoot(home.SkillsDir, m.RelativePath), plan.AbsolutePath));
 
             if (row is null && File.Exists(plan.AbsolutePath))
             {
@@ -295,6 +314,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
                     continue;
                 }
 
+                preImages[plan.AbsolutePath] = await File.ReadAllBytesAsync(plan.AbsolutePath, ct);
                 warnings.Add($"Overwrote untracked file: {plan.AbsolutePath}");
             }
 
@@ -314,6 +334,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
                         continue;
                     }
 
+                    preImages[plan.AbsolutePath] = bytes;
                     warnings.Add($"Overwrote locally modified file: {plan.AbsolutePath}");
                 }
             }
@@ -328,6 +349,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         }
 
         var written = new List<string>();
+        var weaveUndos = new List<(string Path, string? Original)>();
         string? failedPath = null;
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -339,12 +361,15 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
                 {
                     failedPath = plan.AbsolutePath;
                     Directory.CreateDirectory(Path.GetDirectoryName(plan.AbsolutePath)!);
-                    await File.WriteAllTextAsync(plan.AbsolutePath, plan.Content, ContentHash.Utf8NoBom, ct);
+                    // Row hashes are computed over ContentHash-normalized content (LF), so the
+                    // disk bytes must match that shape or every later guard call treats the
+                    // door's own file as locally modified (251 hard review F1).
+                    await File.WriteAllTextAsync(plan.AbsolutePath, ContentHash.Normalize(plan.Content), ContentHash.Utf8NoBom, ct);
                     written.Add(plan.AbsolutePath);
 
                 var hash = ContentHash.Sha256(plan.Content);
                 var row = tracked.FirstOrDefault(m => PathGuard.PathsEqual(
-                    Path.Combine(home.SkillsDir, m.RelativePath.Replace('/', Path.DirectorySeparatorChar)), plan.AbsolutePath));
+                    PathGuard.ResolveUnderRoot(home.SkillsDir, m.RelativePath), plan.AbsolutePath));
                 if (row is not null)
                 {
                     row.Refresh(hash);
@@ -368,7 +393,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
             {
                 var content = string.Join("\n\n",
                     proseFiles.Select(n => File.ReadAllText(Path.Combine(sourcePath, n))).Select(c => c.TrimEnd('\n')));
-                await WeaveAsync(kit, home, content, entries, ct);
+                weaveUndos.Add(await WeaveAsync(kit, home, content, entries, ct));
             }
             else
             {
@@ -379,7 +404,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
                         "kit prose ships through install.sh — weave is prose-only-kits only"));
                 }
 
-                await UnweaveAsync(kit, home, entries, ct);
+                weaveUndos.Add(await UnweaveAsync(kit, home, entries, ct));
             }
 
             failedPath = null;
@@ -389,9 +414,28 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         catch (Exception ex) when (ex is not MaterializationException and not OperationCanceledException)
         {
             await tx.RollbackAsync(ct);
+            foreach (var (path, original) in weaveUndos)
+            {
+                if (original is null)
+                {
+                    DirectoryPruner.TryDelete(path);
+                }
+                else
+                {
+                    await File.WriteAllTextAsync(path, original, ContentHash.Utf8NoBom);
+                }
+            }
+
             foreach (var path in written)
             {
-                DirectoryPruner.TryDelete(path);
+                if (preImages.TryGetValue(path, out var preImage))
+                {
+                    await File.WriteAllBytesAsync(path, preImage);
+                }
+                else
+                {
+                    DirectoryPruner.TryDelete(path);
+                }
             }
 
             throw MaterializationException.IoFailure(failedPath ?? "database", ex);
@@ -400,11 +444,17 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         return Finish(kit.Id, home.Platform.ToString(), started, entries, warnings);
     }
 
-    private async Task WeaveAsync(SkillKit kit, AgentHomeResolution.ResolvedHome home, string content, List<GlobalDeployEntry> entries, CancellationToken ct)
+    private async Task<(string Path, string? Original)> WeaveAsync(
+        SkillKit kit, AgentHomeResolution.ResolvedHome home, string content, List<GlobalDeployEntry> entries, CancellationToken ct)
     {
         var entryFile = home.EntryFile;
-        var text = File.Exists(entryFile) ? await File.ReadAllTextAsync(entryFile, ct) : string.Empty;
-        var (newText, changed, blockHash) = MarkerBlockWriter.Upsert(text, kit.Name, content);
+        string? originalText = null;
+        if (File.Exists(entryFile))
+        {
+            originalText = await File.ReadAllTextAsync(entryFile, ct);
+        }
+
+        var (newText, changed, blockHash) = MarkerBlockWriter.Upsert(originalText ?? string.Empty, kit.Name, content);
         if (changed)
         {
             await File.WriteAllTextAsync(entryFile, newText, ContentHash.Utf8NoBom, ct);
@@ -422,37 +472,42 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         }
 
         entries.Add(new GlobalDeployEntry(GlobalDeployEntryKind.MarkerBlock, home.Platform, entryFile, GlobalDeployOutcome.Written));
+        return (entryFile, originalText);
     }
 
-    private async Task UnweaveAsync(SkillKit kit, AgentHomeResolution.ResolvedHome home, List<GlobalDeployEntry> entries, CancellationToken ct)
+    private async Task<(string Path, string? Original)> UnweaveAsync(
+        SkillKit kit, AgentHomeResolution.ResolvedHome home, List<GlobalDeployEntry> entries, CancellationToken ct)
     {
         var markerRow = await _db.GlobalMarkerDeployments
             .FirstOrDefaultAsync(m => m.KitId == kit.Id && m.Platform == home.Platform, ct);
         if (markerRow is null)
         {
-            return;
+            return (string.Empty, null);
         }
 
-        if (File.Exists(markerRow.EntryFilePath))
+        var entryPath = PathGuard.ResolveAbsoluteUnderRoot(home.ConfigDir, markerRow.EntryFilePath);
+        string? text = null;
+        if (File.Exists(entryPath))
         {
-            var text = await File.ReadAllTextAsync(markerRow.EntryFilePath, ct);
+            text = await File.ReadAllTextAsync(entryPath, ct);
             var (newText, removed) = MarkerBlockWriter.Cut(text, kit.Name);
             if (removed)
             {
                 if (string.IsNullOrWhiteSpace(newText))
                 {
-                    File.Delete(markerRow.EntryFilePath);
+                    File.Delete(entryPath);
                 }
                 else
                 {
-                    await File.WriteAllTextAsync(markerRow.EntryFilePath, newText, ContentHash.Utf8NoBom, ct);
+                    await File.WriteAllTextAsync(entryPath, newText, ContentHash.Utf8NoBom, ct);
                 }
 
-                entries.Add(new GlobalDeployEntry(GlobalDeployEntryKind.MarkerBlock, home.Platform, markerRow.EntryFilePath, GlobalDeployOutcome.Written));
+                entries.Add(new GlobalDeployEntry(GlobalDeployEntryKind.MarkerBlock, home.Platform, entryPath, GlobalDeployOutcome.Written));
             }
         }
 
         _db.GlobalMarkerDeployments.Remove(markerRow);
+        return (entryPath, text);
     }
 
     private void PruneStaleRows(
@@ -461,12 +516,12 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
     {
         var planned = new HashSet<string>(plans.Select(p => p.AbsolutePath), PathGuard.PathComparer);
         var stale = tracked
-            .Where(m => !planned.Contains(Path.Combine(home.SkillsDir, m.RelativePath.Replace('/', Path.DirectorySeparatorChar))))
+            .Where(m => !planned.Contains(PathGuard.ResolveUnderRoot(home.SkillsDir, m.RelativePath)))
             .ToArray();
 
         foreach (var row in stale)
         {
-            var absolute = Path.Combine(home.SkillsDir, row.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var absolute = PathGuard.ResolveUnderRoot(home.SkillsDir, row.RelativePath);
             if (File.Exists(absolute))
             {
                 File.Delete(absolute);
