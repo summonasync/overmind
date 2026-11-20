@@ -135,6 +135,12 @@ Both hook scripts **fail open**: no payload, unknown tool, no project anchor, mi
 
 Any change to crew behavior, agents, skills, or policies must be applied to **all four mirrors in the same commit**. File quadruples, allowed tool-specific divergences, the Kimi→Claude, Kimi→Qwen and Kimi→Codex translation tables, deploy modes, and the pre-commit grep checklist are defined in [SYNC-STRUCTURE.md](SYNC-STRUCTURE.md). Read it before touching `.kimi-code/`, `.claude/`, `.qwen/`, or `.codex/`.
 
+## Agent tool grants are a privilege reduction
+
+Roles that declare a `tools:` frontmatter (the restricted class — reviewers, auditors, detectors: `RESTRICTED_ROLES` in [tools/check-kit-membership.py](tools/check-kit-membership.py)) deliberately get a **narrower** surface than the runtimes' default inherit-everything: MCP grants are pinned to the ruled set of 8 Overmind read tools + `write_entry` (a reviewer files its own verdict but must never be able to close the gate it signs — owner ballot 2026-11-16, Option A trim applied to all three md sides 2026-11-20) plus the 6 read-only squeezr tools. Side-specific built-ins (`Read`/`read_file` families) stay per-role and are not part of that contract.
+
+The side effect cuts both ways: anything MCP that is not **named explicitly** does not exist for the role — an allowlisted reviewer cannot reach `planning_set_status`, `planning_validate`, `issues_*`, or any other unlisted tool, even read-only ones (`list_projects`, `planning_task_queue`). To widen a restricted role, extend `RULED_MCP_GRANTS` / `RESTRICTED_ROLES` in the checker deliberately and let the review gate see it; `tools/check-kit-membership.py` fails the tree on any unruled grant, any roster drift, or any stray `mcp__` line below a frontmatter block. Whole-file `grep mcp__` is not a valid check here — it counts dead body lines and lies; the checker parses between the first two `---` lines.
+
 ## Crew docs
 
 - `.kimi-code/AGENTS.md` / `.claude/CLAUDE.md` / `.qwen/QWEN.md` / `.codex/AGENTS.md` — stack, conventions, workflow, delegation policy (authoritative crew contract)
