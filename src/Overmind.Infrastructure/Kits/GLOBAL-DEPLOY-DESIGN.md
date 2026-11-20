@@ -21,7 +21,7 @@ An agent from `AgentRegistry.All` counts as **installed** when its first existin
 | gemini | `~/.gemini/skills` | merge | treated as potentially shared |
 | antigravity | `~/.antigravity/skills` | merge | treated as potentially shared |
 
-The app door **never** whole-directory-deletes anything under a home: deploy writes tracked files only, dematerialize deletes tracked rows only. `mirror` mode remains an install.sh bootstrap concept (with its crew-owned exclusions) and does not exist in the door. Missing home skills dir = **skip, never create** (ruling 2) — a skipped directory lands in the run report as `skipped` with the reason.
+The app door **never** whole-directory-deletes anything under a home: deploy writes tracked files only, dematerialize deletes tracked rows only. `mirror` mode remains an install.sh bootstrap concept (with its crew-owned exclusions) and does not exist in the door. Missing home skills dir = **skip, never create** (ruling 2) — a skipped directory lands in the run report as `skipped` with the reason. Merge-everywhere is a deliberate conservative reading of R4's «whole-mirror only for crew-owned directories»: no home skills dir is provably crew-owned (all six host or may host third-party content), so the whole-mirror branch exists in install.sh only (review W2).
 
 ## 3. Deploy source
 
@@ -46,8 +46,10 @@ Deploy payload = the SourcePath `skills/` subtree only (agent roles, prose confi
 - Dematerialize: cut the block and one following newline; if the file becomes whitespace-only, delete the file; files outside markers are never touched.
 - Entry file per agent = `<resolved config dir>/<AgentFileCandidates[0]>` (claude → `~/.claude/CLAUDE.md`, qwen → `~/.qwen/QWEN.md`, codex → `<codexHome>/AGENTS.md`, kimi → `~/.kimi-code/AGENTS.md`, gemini → `~/.gemini/GEMINI.md`, antigravity → `~/.gemini/config/AGENTS.md`).
 - Marker content source: `*.md` files at the kit SourcePath TOP level, excluding the INFRA names (`README.md`, `SYNC-STRUCTURE.md`, `KIT-MEMBERSHIP.md`, `BACKLOG.md`), concatenated in sorted order with `\n\n` separators. For `sociality` this resolves to `SOCIAL_DICTIONARY.md`.
-- Managed zone: hand edits between markers are overwritten by the next deploy (kits-page copy states it); content outside markers is byte-untouchable.
-- Weave applies to prose-bearing kits regardless of entry count (zero-entry kits like sociality get exactly this surface).
+- **Weave gate (review B1 fix): PROSE-ONLY kits only** — a kit qualifies when it carries ZERO kit entries (`SkillKitEntries` empty) AND has marker content. Kits with entries (e.g. `overmind-ceremony`, whose SourcePath root carries AGENTS.md/CLAUDE.md/QWEN.md/SKILLFLOW.md/WAKE-CHANNEL.md) are NEVER woven — their prose reaches homes through install.sh's whole-file deployment, not through this door. The spec's R6 class is prose-only kits; sociality is the only one today.
+- Managed zone: hand edits between markers are overwritten by the next deploy (kits-page copy states it); content outside markers is byte-untouchable. A whitespace-only entry file after a cut is deleted only when the door holds its `GlobalMarkerDeployment` row — the door only deletes what it wrote.
+- **Entry-file ownership vs install.sh (review B2 resolution): install.sh mirrors the entry docs (`CLAUDE.md`, `QWEN.md`, `AGENTS.md`) whole-file, so every bootstrap run erases marker blocks. Disposition: SELF-HEALING — every deploy of a prose-only kit re-weaves its block (insert when missing), the drift scan surfaces `marker missing` as drifted, and a redeploy (UI button or seed) restores it. The churn is documented and owner-visible; the R7 follow-up card (253) owns the install-side decision on entry-file modes.**
+- Stale-file lifecycle on kit update: deploy re-plans from SourcePath every time and `PruneStaleRows` removes tracked files that left the plan — reconcile-on-deploy is built in (review W1).
 
 ## 5. Tracking — new Core entities (ruling 1)
 
