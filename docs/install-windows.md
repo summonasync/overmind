@@ -1,7 +1,7 @@
 # Installing Overmind on Windows
 
 > **Verification mode: source-verified.** Every statement below was read out of the
-> Windows build and installer sources plus the Host runtime code at `main` @ `5904f671`
+> Windows build and installer sources plus the Host runtime code at `origin/main` @ `5904f671`
 > (`build/windows/overmind.iss`, `build/windows/pack-win.ps1`,
 > `build/windows/smoke-installer.ps1`, `build/install.ps1`, `build/run.cmd`,
 > `build/pack.sh`, `build/dist-layout.env`, `src/Overmind.Host/*`). No Windows installer
