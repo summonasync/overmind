@@ -69,6 +69,24 @@ contenders. **Overmind** won — the mind of the StarCraft swarm that commands
 the zergling broods. Because that is exactly what happens: your Claudes and
 Kimis are the zerglings, and here they finally share a head.
 
+## Install
+
+Download, run, it works — the platform pages say how:
+
+- **Windows** — `overmind-<version>-setup.exe` (Inno Setup, per-user install,
+  no admin rights needed). What the wizard writes, how an upgrade stops a
+  running Host and what uninstall does to `~/.overmind`:
+  [docs/install-windows.md](docs/install-windows.md).
+- **Ubuntu / Debian** — a portable tarball with `build/install.sh` unpacking
+  it and `run.sh` starting the Host, plus the optional systemd-user unit if
+  you want it up at login: [docs/install-ubuntu.md](docs/install-ubuntu.md).
+- **Getting an agent to see it** — Claude Code, Qwen Code, Kimi Code, Codex:
+  the MCP adapter config per runtime and what registration actually edits in
+  your own settings file: [docs/agent-connection.md](docs/agent-connection.md).
+
+macOS has no installer yet — the `dotnet run` route below is how it runs
+today (and note the tray limitation in Quickstart).
+
 ## Quickstart
 
 ```bash
@@ -344,7 +362,7 @@ web/                          Next.js 16 static-export SPA (FSD), served by the 
 
 ## License
 
-TBD
+Apache-2.0 — see [LICENSE](LICENSE). SPDX identifier: `Apache-2.0`.
 
 ---
 
