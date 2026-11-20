@@ -77,9 +77,12 @@ Download, run, it works — the platform pages say how:
   no admin rights needed). What the wizard writes, how an upgrade stops a
   running Host and what uninstall does to `~/.overmind`:
   [docs/install-windows.md](docs/install-windows.md).
-- **Ubuntu / Debian** — a portable tarball with `build/install.sh` unpacking
-  it and `run.sh` starting the Host, plus the optional systemd-user unit if
-  you want it up at login: [docs/install-ubuntu.md](docs/install-ubuntu.md).
+- **Ubuntu / Debian** — no packaged installer: `build/pack.sh` cuts a
+  portable tarball, you unpack it yourself, `run.sh` starts the Host, and
+  `build/install.sh` registers the XDG autostart entry for the unpacked
+  folder (it unpacks nothing — the name is a trap). Optional systemd-user
+  unit if you want it up at login:
+  [docs/install-ubuntu.md](docs/install-ubuntu.md).
 - **Getting an agent to see it** — Claude Code, Qwen Code, Kimi Code, Codex:
   the MCP adapter config per runtime and what registration actually edits in
   your own settings file: [docs/agent-connection.md](docs/agent-connection.md).
