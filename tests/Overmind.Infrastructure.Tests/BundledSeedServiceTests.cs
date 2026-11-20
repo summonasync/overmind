@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Overmind.Core;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Kits;
@@ -32,15 +33,25 @@ public sealed class BundledSeedServiceTests : IDisposable
         }
     }
 
-    private BundledSeedService CreateService()
+    private BundledSeedService CreateService(IGlobalKitDeployer? globalDeployer = null) =>
+        CreateService(_bundle, globalDeployer);
+
+    private BundledSeedService CreateService(string bundleDirectory, IGlobalKitDeployer? globalDeployer = null)
     {
         var platformMap = PlatformDirectoryMap.Load();
+        var materializer = new SkillMaterializer(_context, platformMap);
         return new BundledSeedService(
             _context,
             new KitImporter(_context, new KitScanner(_context, platformMap), platformMap),
             new AppSettingsService(_context),
             NullLogger<BundledSeedService>.Instance,
-            _bundle);
+            bundleDirectory,
+            new LegacyKitMigrationService(
+                _context,
+                new KitActivationService(_context, materializer),
+                materializer,
+                NullLogger<LegacyKitMigrationService>.Instance),
+            globalDeployer);
     }
 
     private static string SkillYaml(string name, string description = "Does a thing.") =>
@@ -53,6 +64,13 @@ public sealed class BundledSeedServiceTests : IDisposable
         File.WriteAllText(Path.Combine(dir, "SKILL.md"), content ?? SkillYaml(skillName));
     }
 
+    private void WriteProseOnlyKitFolder(string kitName)
+    {
+        var dir = Path.Combine(_bundle, kitName);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "SOCIAL_DICTIONARY.md"), "# Tone rules.\n");
+    }
+
     private void WriteManifest(int version, params string[] kits)
     {
         Directory.CreateDirectory(_bundle);
@@ -60,6 +78,20 @@ public sealed class BundledSeedServiceTests : IDisposable
             Path.Combine(_bundle, "manifest.json"),
             JsonSerializer.Serialize(new { bundleVersion = version, kits }));
     }
+
+    private void WriteManifestFile(string content)
+    {
+        Directory.CreateDirectory(_bundle);
+        File.WriteAllText(Path.Combine(_bundle, "manifest.json"), content);
+    }
+
+    private void WriteObjectManifest(int version, (string Name, bool Mandatory)[] kits, string[]? legacy = null) =>
+        WriteManifestFile(JsonSerializer.Serialize(new
+        {
+            bundleVersion = version,
+            kits = kits.Select(kit => new { name = kit.Name, mandatory = kit.Mandatory }).ToArray(),
+            legacy = legacy ?? Array.Empty<string>()
+        }));
 
     private async Task<string> ReadVersionAsync()
     {
@@ -259,6 +291,14 @@ public sealed class BundledSeedServiceTests : IDisposable
     [InlineData("{\"bundleVersion\":2}")]
     [InlineData("{\"bundleVersion\":0,\"kits\":[\"kit-a\"]}")]
     [InlineData("{\"bundleVersion\":2,\"kits\":[\"  \"]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[{\"name\":\"  \",\"mandatory\":true}]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[{\"mandatory\":true}]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[{\"name\":\"kit-a\",\"mandatory\":\"yes\"}]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[{\"name\":\"kit-a\",\"mandatory\":1}]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[{\"name\":\"kit-a\",\"mandatory\":null}]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[\"kit-a\"],\"legacy\":[\"  \"]}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[\"kit-a\"],\"legacy\":\"crew\"}")]
+    [InlineData("{\"bundleVersion\":2,\"kits\":[\"kit-a\"],\"legacy\":[7]}")]
     public async Task Run_InvalidManifest_IsNoOp(string manifestContent)
     {
         WriteKitFolder("kit-a", "alpha");
@@ -270,6 +310,146 @@ public sealed class BundledSeedServiceTests : IDisposable
         using var verify = _db.CreateContext();
         (await verify.SkillKits.CountAsync()).ShouldBe(0);
         (await verify.AppSettings.AnyAsync()).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Run_ManifestKitObjectForm_MarksMandatoryFromManifest(bool mandatory)
+    {
+        WriteKitFolder("kit-a", "alpha");
+        WriteObjectManifest(2, [("kit-a", mandatory)]);
+
+        var result = await CreateService().RunAsync();
+
+        result.Outcome.ShouldBe(BundledSeedOutcome.Seeded);
+        using var verify = _db.CreateContext();
+        var kit = (await verify.SkillKits.ToListAsync()).Single();
+        kit.SourceKind.ShouldBe(KitSourceKind.Bundled);
+        kit.Mandatory.ShouldBe(mandatory);
+        kit.Legacy.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Run_ManualKitCollidingWithMandatoryName_KeepsMandatoryFalse()
+    {
+        WriteKitFolder("kit-a", "alpha");
+        WriteManifest(1, "kit-a");
+        await CreateService().RunAsync();
+
+        await _context.Database.ExecuteSqlAsync($"DELETE FROM \"SkillKits\"");
+        _context.SkillKits.Add(SkillKit.Create("kit-a", 1, "user-made"));
+        await _context.SaveChangesAsync();
+
+        WriteObjectManifest(2, [("kit-a", true)]);
+
+        var result = await CreateService().RunAsync();
+
+        result.KitsSkipped.ShouldBe(1);
+        using var verify = _db.CreateContext();
+        var kit = (await verify.SkillKits.ToListAsync()).Single();
+        kit.SourceKind.ShouldBe(KitSourceKind.Manual);
+        kit.Mandatory.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Run_SplitBundle_FreshLibrarySeedsAllSixKitsIncludingTheProseOnlyOne()
+    {
+        WriteKitFolder("overmind-ceremony", "overmind-ceremony");
+        WriteKitFolder("dotnet-crew", "dotnet-coder");
+        WriteKitFolder("rust-crew", "rust-coder");
+        WriteKitFolder("js-crew", "web-coder");
+        WriteKitFolder("crew-extras", "go-coder");
+        WriteProseOnlyKitFolder("sociality");
+        WriteObjectManifest(4,
+        [
+            ("overmind-ceremony", true),
+            ("dotnet-crew", false),
+            ("rust-crew", false),
+            ("js-crew", false),
+            ("sociality", false),
+            ("crew-extras", false)
+        ]);
+
+        var result = await CreateService().RunAsync();
+
+        result.Outcome.ShouldBe(BundledSeedOutcome.Seeded);
+        result.KitsImported.ShouldBe(6);
+        result.KitsFailed.ShouldBe(0);
+        (await ReadVersionAsync()).ShouldBe("4");
+
+        using var verify = _db.CreateContext();
+        var kits = await verify.SkillKits
+            .Include(k => k.SkillKitEntries)
+            .ToListAsync();
+        kits.Count.ShouldBe(6);
+        kits.ShouldAllBe(k => k.SourceKind == KitSourceKind.Bundled);
+        kits.Single(k => k.Name == "overmind-ceremony").Mandatory.ShouldBeTrue();
+        kits.Where(k => k.Name != "overmind-ceremony").ShouldAllBe(k => !k.Mandatory);
+        kits.Single(k => k.Name == "sociality").SkillKitEntries.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Run_KitNameSharingAnotherBootstrapSlug_ImportsOneAndReportsTheOtherFailed()
+    {
+        WriteKitFolder("kit-a", "alpha");
+        WriteKitFolder("kit a", "beta");
+        WriteObjectManifest(1, [("kit-a", false), ("kit a", false)]);
+
+        var result = await CreateService().RunAsync();
+
+        result.Outcome.ShouldBe(BundledSeedOutcome.Seeded);
+        result.KitsImported.ShouldBe(1);
+        result.KitsFailed.ShouldBe(1);
+        using var verify = _db.CreateContext();
+        (await verify.SkillKits.SingleAsync()).Name.ShouldBe("kit-a");
+    }
+
+    [Fact]
+    public async Task Run_MandatoryKitWithoutGlobalDoor_StillSeedsAndLeavesTheLibraryMandatory()
+    {
+        WriteKitFolder("overmind-ceremony", "overmind-ceremony");
+        WriteObjectManifest(1, [("overmind-ceremony", true)]);
+
+        var result = await CreateService().RunAsync();
+
+        result.Outcome.ShouldBe(BundledSeedOutcome.Seeded);
+        result.KitsImported.ShouldBe(1);
+        using var verify = _db.CreateContext();
+        (await verify.SkillKits.SingleAsync()).Mandatory.ShouldBeTrue();
+        (await verify.ProjectKits.AnyAsync()).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Run_MandatoryKitGlobalDoorWired_ReceivesTheMandatoryKitOnly()
+    {
+        WriteKitFolder("overmind-ceremony", "overmind-ceremony");
+        WriteKitFolder("dotnet-crew", "dotnet-coder");
+        WriteObjectManifest(1, [("overmind-ceremony", true), ("dotnet-crew", false)]);
+        var deployer = Substitute.For<IGlobalKitDeployer>();
+
+        await CreateService(deployer).RunAsync();
+
+        await deployer.Received(1).DeployAsync(
+            Arg.Is<SkillKit>(kit => kit.Name == "overmind-ceremony"), Arg.Any<CancellationToken>());
+        await deployer.DidNotReceive().DeployAsync(
+            Arg.Is<SkillKit>(kit => kit.Name == "dotnet-crew"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Run_GlobalDoorThrows_ImportedKitsRemainAndVersionIsStamped()
+    {
+        WriteKitFolder("overmind-ceremony", "overmind-ceremony");
+        WriteObjectManifest(1, [("overmind-ceremony", true)]);
+        var deployer = Substitute.For<IGlobalKitDeployer>();
+        deployer.DeployAsync(Arg.Any<SkillKit>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("home door is down")));
+
+        var result = await CreateService(deployer).RunAsync();
+
+        result.Outcome.ShouldBe(BundledSeedOutcome.Seeded);
+        result.KitsImported.ShouldBe(1);
+        (await ReadVersionAsync()).ShouldBe("1");
     }
 
     [Fact]
@@ -309,13 +489,7 @@ public sealed class BundledSeedServiceTests : IDisposable
                 Path.Combine(relocated, "manifest.json"),
                 JsonSerializer.Serialize(new { bundleVersion = 2, kits = new[] { "kit-a" } }));
 
-            var platformMap = PlatformDirectoryMap.Load();
-            var service = new BundledSeedService(
-                _context,
-                new KitImporter(_context, new KitScanner(_context, platformMap), platformMap),
-                new AppSettingsService(_context),
-                NullLogger<BundledSeedService>.Instance,
-                relocated);
+            var service = CreateService(relocated);
             var result = await service.RunAsync();
 
             result.Outcome.ShouldBe(BundledSeedOutcome.Upgraded);

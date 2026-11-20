@@ -4,50 +4,53 @@
 
 Single source of truth for one AI agent crew running on four runtimes: **Kimi Code CLI**, **Claude Code**, **Qwen Code**, and **OpenAI Codex CLI**. The repo holds all mirrors side by side; `.kimi-code/` (incl. `AGENTS.md`) serves Kimi Code CLI, `.claude/` (incl. `CLAUDE.md`) serves Claude Code, `.qwen/` (incl. `QWEN.md`) serves Qwen Code, `.codex/` (incl. `AGENTS.md`) serves Codex CLI. Content (rules, workflows, skills, agents) is semantically identical across the four; only tool-specific details (model names, home paths, tool identifiers, runtime features, enforcement mechanics) differ.
 
-The crew: orchestrators, coders, reviewers, architects, a product strategist (`product-strategist`), an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming sensei (`naming-sensei`) — 35 agents, 43 skills, one workflow graph.
+The crew: orchestrators, coders, reviewers, architects, a product strategist (`product-strategist`), an audit machine, an AI-trace obfuscator, a CI self-healer (`pipeline-doctor`), an overmind ceremony master (`overmind-ceremony`) and a naming sensei (`naming-sensei`) — 46 agents, 57 skills on every side, one workflow graph. The membership inventory of record is `KIT-MEMBERSHIP.md` + `kit-membership.json`; `python3 tools/check-kit-membership.py` re-derives the counts from disk.
 
 ## Prerequisites
 
 - **Kimi Code CLI** (v2 engine).
 - **Overmind MCP server — REQUIRED** in every runtime you use. The crew's planning ceremonies (feature board, spec/plan/task artifacts, validation gates, sub-agent briefing) run exclusively through overmind MCP tools; without them the pipeline stops (hard requirement — see `overmind-ceremony` skill). MCP tool names are identical across runtimes.
 - **Claude Code**.
-- **Qwen Code** — skills deploy to `~/.qwen/skills/`, agents to `~/.qwen/agents/`, rules to `~/.qwen/QWEN.md` (all native Qwen Code locations). Sub-agent models are pinned in agent frontmatter to `qwen3.7-plus` (execution/review) and `qwen3.8-max` (orchestration, audit, detection, obfuscation); both resolve through `modelProviders.openai` in `~/.qwen/settings.json` (ModelStudio Token Plan). If your provider lineup differs, re-point the pins — see `SYNC-STRUCTURE.md` checklist item 6.
-- **OpenAI Codex CLI** — skills deploy to `~/.codex/skills/`, sub-agent roles to `~/.codex/agents/` (verified format: standalone TOML with exactly `name`, `description`, `model`, `developer_instructions` — the loader is strict, an extra field silently drops the role), rules to `~/.codex/AGENTS.md`. Requires codex-cli with skills + custom-agent support (verified on 0.160.1). Sub-agent model tiers are pinned per role: `gpt-6-luna` for the fixer and language coders, `gpt-6.1-sol` for everything else; complex coder tasks escalate the same role via `spawn_agent(model="gpt-6.1-sol", fork_turns="none")` — sanctioned by `.codex/AGENTS.md`. The kit never writes `~/.codex/config.toml`; MCP servers (overmind, squeezr) are registered separately (`codex mcp add` / vendor installers).
+- **Qwen Code** — skills deploy to `~/.qwen/skills/`, agents to `~/.qwen/agents/`, rules to `~/.qwen/QWEN.md` (all native Qwen Code locations). Sub-agent models are pinned in agent frontmatter to `qwen3.8-flash` for every role (measured 2026-11-19: 46 of 46 agent files — the earlier execution/review vs orchestration tier split is gone); the pin resolves through `modelProviders.openai` in `~/.qwen/settings.json` (ModelStudio Token Plan). If your provider lineup differs, re-point the pins — see `SYNC-STRUCTURE.md` checklist item 6.
+- **OpenAI Codex CLI** — skills deploy to `~/.codex/skills/` (legacy home root — still scanned by the installed 0.160.1, measured 2026-11-19; current docs list `$HOME/.agents/skills` as the user root and that relocation is an open install-side follow-up), sub-agent roles to `~/.codex/agents/` (verified format: standalone TOML with exactly `name`, `description`, `model`, `developer_instructions` — the loader is strict, an extra field drops the role with a session-start stderr warning; measured 2026-11-19, see KIT-MEMBERSHIP), rules to `~/.codex/AGENTS.md`. Requires codex-cli with skills + custom-agent support (verified on 0.160.1). Overmind materializes kit skills into a project's `.agents/skills/` for the codex platform (`platforms.json`, 002 ADR amended 2026-11-19). Sub-agent model tiers are pinned per role: `gpt-6-luna` for the fixer and language coders, `gpt-6.1-sol` for everything else; complex coder tasks escalate the same role via `spawn_agent(model="gpt-6.1-sol", fork_turns="none")` — sanctioned by `.codex/AGENTS.md`. The kit never writes `~/.codex/config.toml`; MCP servers (overmind, squeezr) are registered separately (`codex mcp add` / vendor installers).
 
 ## Layout
 
 ```
 .
 ├── SYNC-STRUCTURE.md      # quadruple-edit contract: file mapping, translation tables, deploy modes, checklist
+├── KIT-MEMBERSHIP.md      # kit-membership.json: shape + which kit owns which content item
+├── kit-membership.json    # six-kit membership map, read by the bundle pipeline (feature 250)
 ├── manifest.json          # deploy manifest: single source of truth for install/uninstall scripts
+├── tools/                 # kit maintenance: gen-kit-membership.py, check-kit-membership.py
 ├── install.ps1            # deploy to tool homes (Windows); -DryRun prints plan only
 ├── install.sh             # deploy to tool homes (Git Bash/Linux); --dry-run prints plan only
 ├── uninstall.ps1          # remove deployed paths (Windows); -DryRun / -Force
 ├── uninstall.sh           # remove deployed paths (Git Bash/Linux); --dry-run / --force
 ├── .kimi-code/
 │   ├── AGENTS.md          # Kimi-side crew contract (global tool memory)
-│   ├── agents/            # 35 agent definitions
-│   ├── skills/            # 43 skill directories
+│   ├── agents/            # 46 agent definitions
+│   ├── skills/            # 57 skill directories
 │   ├── SKILLFLOW.md       # workflow graph shared by all skills
 │   ├── SOCIAL_DICTIONARY.md  # tone/slang vocabulary (Kimi home in repo; deployed to all four homes)
 │   ├── WAKE-CHANNEL.md    # file-based wake drop recipe for the 190 tick (Kimi home in repo; deployed to all four homes)
 │   └── config.toml        # Kimi runtime config (secondary-model pool) — Kimi only
 ├── .claude/
 │   ├── CLAUDE.md          # Claude-side mirror of AGENTS.md
-│   ├── agents/            # 35 agent definitions (Claude format)
-│   ├── skills/            # 43 skill directories
+│   ├── agents/            # 46 agent definitions (Claude format)
+│   ├── skills/            # 57 skill directories
 │   └── SKILLFLOW.md
 ├── .qwen/
 │   ├── QWEN.md            # Qwen-side mirror of AGENTS.md (deploys to ~/.qwen/)
-│   ├── agents/            # 34 agent definitions (Qwen format: model pins + canonical tool ids)
-│   ├── skills/            # 42 skill directories
+│   ├── agents/            # 46 agent definitions (Qwen format: model pins + canonical tool ids)
+│   ├── skills/            # 57 skill directories
 │   ├── SKILLFLOW.md
 │   ├── settings-snippet.jsonc  # Qwen-only permissions/hooks layer — merge by hand, never auto-installed
 │   └── hooks/             # Qwen-only PostToolUse verification hook (.ps1 + .sh)
 ├── .codex/
 │   ├── AGENTS.md          # Codex-side mirror of AGENTS.md (deploys to ~/.codex/)
-│   ├── agents/            # 35 sub-agent roles (TOML: name/description/model/developer_instructions)
-│   ├── skills/            # 43 skill directories
+│   ├── agents/            # 46 sub-agent roles (TOML: name/description/model/developer_instructions)
+│   ├── skills/            # 57 skill directories
 │   └── SKILLFLOW.md
 └── BACKLOG/                 # per-project artifact tree, materialized by Overmind (read-only mirror)
 ```
@@ -121,11 +124,11 @@ Both hook scripts **fail open**: no payload, unknown tool, no project anchor, mi
 ## Known issues
 
 - **`~/.qwen/QWEN.md` is global memory for every project**: Qwen Code loads it in every session on this machine, exactly like `~/.claude/CLAUDE.md` does for Claude Code. The crew contract is deliberately opinionated (Russian-only conversation, .NET/Next.js defaults) — if that leaks into unrelated work, scope it down or move the stack sections into per-project `QWEN.md`.
-- **This repo's `.qwen/` is also live project config**: Qwen Code reads `.qwen/skills/` and `.qwen/agents/` as *project-level* customizations, so working inside `Skills_dotNetCrew` activates all 42 skills and 34 agents for that session. Same as `.claude/` does for Claude Code — intended, but worth knowing when you wonder where a skill came from.
+- **This repo's `.qwen/` is also live project config**: Qwen Code reads `.qwen/skills/` and `.qwen/agents/` as *project-level* customizations, so working inside `Skills_dotNetCrew` activates all 57 skills and 46 agents for that session. Same as `.claude/` does for Claude Code — intended, but worth knowing when you wonder where a skill came from.
 - **`WebSearch` has no Qwen Code equivalent**: agents that carried `WebSearch` + `FetchURL` on the Claude side collapse to a single `web_fetch` entry on the Qwen side. Capability loss is limited to search-engine queries; direct URL fetching is unchanged.
 - **`settings-snippet.jsonc` path patterns are unverified end-to-end**: the `permissions` rule syntax follows the documented specifier forms, but the snippet has not been applied to a live `settings.json` and probed. Check `/permissions` after merging.
 - **`~/.codex/skills/` and `~/.codex/agents/` are mirror-owned**: both deploy with `mirror` mode by crew decision (2026-10-07) — any third-party skill or role dropped there is deleted on the next `install.*`. Move non-crew content elsewhere before installing.
-- **Codex roles are strict TOML**: the role loader accepts exactly `name`, `description`, `model`, `developer_instructions`; an unknown field silently drops the role (a warning appears at session start). If a spawned role "does not exist", check the file's fields first.
+- **Codex roles are strict TOML**: the role loader accepts exactly `name`, `description`, `model`, `developer_instructions`; an unknown field drops the role — measured 2026-11-19 on 0.160.1, with a session-start stderr warning (`Ignoring malformed agent role definition`), so it is fail-soft and observable, not silent. A `tools` field additionally collides with Codex's tool-configuration namespace and can never express a per-role allowlist. If a spawned role "does not exist", check the file's fields first.
 - **`gpt-6.1-sol` can be at capacity**: the priority pool occasionally rejects requests with "Selected model is at capacity". Sub-agent pins stay as-is; interactive fallback to `gpt-5.6-sol` (`codex exec -m ...`) is a session-level choice, not a pin change.
 
 ## Editing rule

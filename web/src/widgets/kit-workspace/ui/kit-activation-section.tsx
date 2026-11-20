@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { Button } from "@/shared/ui/button";
+import { ErrorText } from "@/shared/ui/error-text";
 import { Select } from "@/shared/ui/select";
 import { Zerling, ZERLING_SIZES } from "@/shared/ui/zerling";
 import type { ProjectResponse } from "@/features/projects";
-import { useKitMutations } from "@/features/kits";
+import { kitActivationErrorCopy, useKitMutations } from "@/features/kits";
 import type { KitResponse, MaterializationReportResponse } from "@/features/kits";
 
 type KitMutations = ReturnType<typeof useKitMutations>;
@@ -25,27 +26,48 @@ export function KitActivationSection({ kit, projects, mutations }: KitActivation
       return;
     }
     const mutation = activate ? mutations.activate : mutations.deactivate;
-    mutation.mutate(
-      { projectId: linkProjectId, kitId: kit.id },
-      { onSuccess: setReport },
-    );
+    mutation.mutate({ projectId: linkProjectId, kitId: kit.id }, { onSuccess: setReport });
   };
+
+  // Reframed copy for activation refusals; the detail panel no longer carries these
+  // two errors in its generic list.
+  const activationError = kitActivationErrorCopy(mutations.activate.error ?? mutations.deactivate.error);
 
   return (
     <section>
       <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
         Activation
       </h3>
-      {report ? (
-        <p className="mb-2 flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success">
-          <Zerling pose="celebrating" size={ZERLING_SIZES.banner} />
-          <span>
-            Last operation: {report.files.length} file(s) affected
-            {report.files.length > 0 ? ` (e.g. ${report.files[0].relativePath})` : ""}.
-          </span>
+      <p className="mb-2 text-xs leading-relaxed text-muted">
+        Optional kits stack: a project can have several optional kits active at once (say dotnet-crew
+        and js-crew on a fullstack repo), each materializing side by side into its agent files.
+      </p>
+      {kit.legacy ? (
+        <p className="mb-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          This kit is legacy — retired by the kit split and no longer refreshed by bundle updates.
+          Prefer the per-language kits.
         </p>
       ) : null}
-      <div className="flex flex-wrap gap-2">
+      {report ? (
+        <div className="mb-2 space-y-1">
+          <p className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success">
+            <Zerling pose="celebrating" size={ZERLING_SIZES.banner} />
+            <span>
+              Last operation: {report.files.length} file(s) affected
+              {report.files.length > 0 ? ` (e.g. ${report.files[0].relativePath})` : ""}.
+            </span>
+          </p>
+          {report.warnings.length > 0 ? (
+            <ul className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+              {report.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      <ErrorText error={activationError} />
+      <div className="mt-2 flex flex-wrap gap-2">
         <Select
           aria-label="Project to link"
           value={linkProjectId}
