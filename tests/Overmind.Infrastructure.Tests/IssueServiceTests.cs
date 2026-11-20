@@ -495,6 +495,109 @@ public sealed class IssueServiceTests : IDisposable
         counter.Queries.ShouldBe(1);
     }
 
+    // 246 T2 / R6: the caller-scope comparison must not read the issue twice. Each door runs twice over
+    // the same card - once with no caller (the pre-246 shape) and once with the owning project id - and
+    // the command counts must be equal. The baseline is asserted non-zero in the same test, so equality
+    // measured over nothing cannot pass.
+    [Theory]
+    [InlineData("get", 2)]
+    [InlineData("append", 3)]
+    [InlineData("status", 2)]
+    public async Task CallerScopeComparison_AddsNoQueryToIssueDoors(string door, int baseline)
+    {
+        // A fresh card per run: the mutating doors would otherwise compare a first transition against a
+        // second one that has nothing left to do, and the counts would differ for a reason that has
+        // nothing to do with the scope guard.
+        var unscoped = await CountAsync((await SeedIssueAsync()).Id, door, null);
+        var scoped = await CountAsync((await SeedIssueAsync()).Id, door, _boardProjectId);
+
+        // Pinned absolutely, not just compared: equality alone passes when a query is added to BOTH
+        // shapes, which is exactly how a first draft of this test was vacuous (found by an A-B control
+        // that injected an extra query into the guard and stayed green).
+        unscoped.ShouldBe(baseline, $"{door}: baseline measured with the scope guard disabled");
+        scoped.ShouldBe(baseline, $"{door}: the scope comparison must not add a query");
+    }
+
+    private async Task<int> CountAsync(Guid issueId, string door, Guid? callerProjectId)
+    {
+        var counter = new ScopeCommandCounter();
+        await using var context = _db.CreateContext(counter);
+
+        await RunAsync(CreateIssueService(context), issueId, door, callerProjectId);
+        return counter.Commands;
+    }
+
+    // The claim is "the guard adds no query", and the cheapest way a scope guard grows one is an
+    // existence check - Any/Count - which EF runs as a SCALAR, not a reader. Counting readers only
+    // would leave that invisible, so this counter covers all six command shapes.
+    private sealed class ScopeCommandCounter : DbCommandInterceptor
+    {
+        public int Commands { get; private set; }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Commands++;
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands++;
+            return ValueTask.FromResult(result);
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            Commands++;
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands++;
+            return ValueTask.FromResult(result);
+        }
+
+        public override InterceptionResult<object> ScalarExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result)
+        {
+            Commands++;
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands++;
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private async Task RunAsync(
+        IssueService service, Guid issueId, string door, Guid? callerProjectId)
+    {
+        switch (door)
+        {
+            case "get":
+                await service.GetAsync(issueId, CancellationToken.None, callerProjectId);
+                break;
+            case "append":
+                await service.AppendAsync(issueId, _authorProjectId, "note", CancellationToken.None, callerProjectId);
+                break;
+            case "status":
+                await service.SetStatusAsync(
+                    issueId, IssueStatus.Triaged, PlanningLogSource.Agent, CancellationToken.None, callerProjectId);
+                break;
+        }
+    }
+
     private sealed class CommandCounter : DbCommandInterceptor
     {
         public int Queries { get; private set; }

@@ -32,16 +32,19 @@ public static class AgentPlanningApi
         AppendPlanningLogRequest request,
         IValidator<AppendPlanningLogRequest> validator,
         PlanningArtifactService service,
+        HttpRequest http,
         CancellationToken ct) =>
-        PlanningArtifactsApi.AppendLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
+        PlanningArtifactsApi.AppendLogForDoor(
+            id, request, validator, service, PlanningLogSource.Agent, http, ct);
 
     internal static Task<IResult> EditLog(
         Guid id,
         EditPlanningLogRequest request,
         IValidator<EditPlanningLogRequest> validator,
         PlanningArtifactService service,
+        HttpRequest http,
         CancellationToken ct) =>
-        PlanningArtifactsApi.EditLogForDoor(id, request, validator, service, PlanningLogSource.Agent, ct);
+        PlanningArtifactsApi.EditLogForDoor(id, request, validator, service, PlanningLogSource.Agent, http, ct);
 
     private static RouteHandlerBuilder LockToClaim(this RouteHandlerBuilder builder) =>
         builder.AddEndpointFilter(OperationReplayFilter.Instance)
@@ -296,6 +299,11 @@ public static class AgentPlanningApi
     {
         var asMigrated = request?.AsMigrated == true;
 
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         if (asMigrated && string.IsNullOrWhiteSpace(request!.LogNote))
         {
             return PlanningErrors.Map(PlanningException.MigratedNoteRequired());
@@ -323,6 +331,14 @@ public static class AgentPlanningApi
                 $"Artifact '{id}' was not found. {PlanningException.ArtifactNotFoundHint}");
         }
 
+        // Before the validation gate: that refusal names the feature slug, and a slug is a fact about a
+        // board this conversation has no business learning the name of.
+        if (callerProjectId is { } caller && target.ProjectId != caller)
+        {
+            return PlanningErrors.Map(
+                PlanningException.ArtifactOutsideCallerProject(id, target.ProjectId, caller));
+        }
+
         if (!asMigrated && await policy.ResolveValidationGateAsync(target.ProjectId, ct))
         {
             return PlanningErrors.Map(PlanningException.HumanValidationRequired(target.Kind, target.FeatureSlug));
@@ -348,7 +364,8 @@ public static class AgentPlanningApi
                 migrationNote ?? delegatedNote,
                 PlanningLogSource.Agent,
                 requireHumanProof: delegatedNote is null && !asMigrated && documentGated,
-                ct: ct);
+                ct: ct,
+                callerProjectId: callerProjectId);
         }
         catch (PlanningException ex)
         {
@@ -359,11 +376,23 @@ public static class AgentPlanningApi
     }
 
     internal static async Task<IResult> GetArtifact(
-        Guid id, string? sections, OvermindDbContext db,
+        Guid id, string? sections, PlanningArtifactService artifactService, HttpRequest http,
         TaskDependencyService taskDependencies, CancellationToken ct)
     {
-        var artifact = await db.PlanningArtifacts
-            .FirstOrDefaultAsync(a => a.Id == id, ct);
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
+        PlanningArtifactReadRow? artifact;
+        try
+        {
+            artifact = await artifactService.ReadAsync(id, ct, callerProjectId);
+        }
+        catch (PlanningException ex)
+        {
+            return PlanningErrors.Map(ex);
+        }
 
         if (artifact is null)
         {
@@ -390,7 +419,7 @@ public static class AgentPlanningApi
     }
 
     private static async Task<int[]?> BlockedOrdersForReadAsync(
-        TaskDependencyService taskDependencies, PlanningArtifact artifact, CancellationToken ct)
+        TaskDependencyService taskDependencies, PlanningArtifactReadRow artifact, CancellationToken ct)
     {
         if (artifact.Kind != PlanningArtifactKind.Task)
         {
@@ -421,8 +450,14 @@ public static class AgentPlanningApi
         SetPlanningArtifactStatusRequest request,
         IValidator<SetPlanningArtifactStatusRequest> validator,
         PlanningArtifactService service,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         var validation = await validator.ValidateAsync(request, ct);
         if (!validation.IsValid)
         {
@@ -432,7 +467,8 @@ public static class AgentPlanningApi
         try
         {
             var result = await service.SetStatusAsync(
-                id, request.Status, PlanningLogSource.Agent, request.LogNote, ct, requireHumanProof: true);
+                id, request.Status, PlanningLogSource.Agent, request.LogNote, ct,
+                requireHumanProof: true, callerProjectId: callerProjectId);
             return Results.Ok(new SetPlanningArtifactStatusResponse(
                 result.ArtifactId,
                 result.Status,
@@ -952,8 +988,14 @@ public static class AgentPlanningApi
         [FromBody] DeletePlanningArtifactRequest? request,
         PlanningArtifactService service,
         OvermindDbContext db,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         PlanningArtifact artifact;
         try
         {
@@ -962,7 +1004,8 @@ public static class AgentPlanningApi
                 byHuman: false,
                 request?.LogNote,
                 PlanningDoorSource.Resolve(request?.Source, PlanningLogSource.Agent),
-                ct);
+                ct,
+                callerProjectId);
         }
         catch (PlanningException ex)
         {
@@ -977,8 +1020,14 @@ public static class AgentPlanningApi
         Guid id,
         PatchPlanningArtifactRequest request,
         PlanningArtifactService service,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         if (!CarriesPatchShape(request))
         {
             return PlanningErrors.Map(PlanningException.InvalidPatchRequest());
@@ -998,7 +1047,8 @@ public static class AgentPlanningApi
                     Remove: op == "remove_section",
                     Reason: request.Reason),
                 ct,
-                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent));
+                PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent),
+                callerProjectId);
             var artifact = result.Artifact;
 
             return Results.Ok(new PlanningArtifactPatchResponse(
