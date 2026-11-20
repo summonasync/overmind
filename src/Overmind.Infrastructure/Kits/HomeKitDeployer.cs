@@ -29,19 +29,22 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
     private readonly IReadOnlyList<AgentHomeSpec> _agentHomes;
     private readonly ILogger<HomeKitDeployer> _logger;
     private readonly string _homeRoot;
+    private readonly IReadOnlyDictionary<string, string>? _envOverride;
 
     public HomeKitDeployer(
         OvermindDbContext db,
         PlatformDirectoryMap platforms,
         IReadOnlyList<AgentHomeSpec> agentHomes,
         ILogger<HomeKitDeployer> logger,
-        string? homeRootOverride = null)
+        string? homeRootOverride = null,
+        IReadOnlyDictionary<string, string>? envOverride = null)
     {
         _db = db;
         _platforms = platforms;
         _agentHomes = agentHomes;
         _logger = logger;
         _homeRoot = homeRootOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _envOverride = envOverride;
     }
 
     // Boot-seed contract: the mandatory kit goes to every detected agent.
@@ -562,8 +565,8 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         return MarkerBlockWriter.ContentSha256(entryText[startIndex..(endIndex + end.Length)]);
     }
 
-    private static Dictionary<string, string> EnvSnapshot() =>
-        Environment.GetEnvironmentVariables()
+    private IReadOnlyDictionary<string, string> EnvSnapshot() =>
+        _envOverride ?? Environment.GetEnvironmentVariables()
             .Cast<System.Collections.DictionaryEntry>()
             .ToDictionary(d => (string)d.Key, d => (string)(d.Value ?? string.Empty));
 

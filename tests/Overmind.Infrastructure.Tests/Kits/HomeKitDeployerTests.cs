@@ -43,6 +43,9 @@ public sealed class HomeKitDeployerTests : IDisposable
     private HomeKitDeployer CreateDeployer(params AgentHomeSpec[] specs) =>
         new(_context, _platforms, specs, NullLogger<HomeKitDeployer>.Instance, _homeRoot);
 
+    private HomeKitDeployer CreateDeployer(AgentHomeSpec[] specs, IReadOnlyDictionary<string, string> envOverride) =>
+        new(_context, _platforms, specs, NullLogger<HomeKitDeployer>.Instance, _homeRoot, envOverride);
+
     private AgentHomeSpec ClaudeSpec { get; } = new("claude", AgentPlatform.Claude, ["~/claude-cfg"], "CLAUDE.md");
 
     private AgentHomeSpec QwenSpec { get; } = new("qwen", AgentPlatform.Qwen, ["~/qwen-cfg"], "QWEN.md");
@@ -408,5 +411,47 @@ public sealed class HomeKitDeployerTests : IDisposable
         var drift = await deployer.DetectDriftAsync();
 
         drift.ShouldContain(i => i.Platform == AgentPlatform.Qwen && i.Kind == GlobalDriftKind.Missing);
+    }
+
+    [Fact]
+    public async Task Codex_literal_home_deploy_lands_in_the_agents_skills_root()
+    {
+        var source = WriteSkillSource("rust-crew", "rust-coder");
+        var kit = SeedKit("rust-crew", source);
+        var configDir = Path.Combine(_homeRoot, "codex-cfg");
+        Directory.CreateDirectory(configDir);
+        Directory.CreateDirectory(Path.Combine(_homeRoot, ".agents", "skills"));
+        var deployer = CreateDeployer(new AgentHomeSpec("codex", AgentPlatform.Codex, ["~/codex-cfg"], "AGENTS.md"));
+
+        var report = await deployer.DeployAsync(kit.Id, "codex", force: false);
+
+        report.Success.ShouldBeTrue();
+        File.Exists(Path.Combine(_homeRoot, ".agents", "skills", "rust-coder", "SKILL.md")).ShouldBeTrue();
+        Directory.Exists(Path.Combine(_homeRoot, ".codex", "skills")).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Codex_env_home_deploy_joins_the_skills_tail_under_the_env_root()
+    {
+        var source = WriteSkillSource("rust-crew", "rust-coder");
+        var kit = SeedKit("rust-crew", source);
+        var envRoot = Path.Combine(Path.GetTempPath(), $"codexhome-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(envRoot);
+        Directory.CreateDirectory(Path.Combine(envRoot, "skills"));
+        try
+        {
+            var deployer = CreateDeployer(
+                [new AgentHomeSpec("codex", AgentPlatform.Codex, ["$CODEX_TEST_HOME"], "AGENTS.md")],
+                envOverride: new Dictionary<string, string> { ["CODEX_TEST_HOME"] = envRoot });
+
+            var report = await deployer.DeployAsync(kit.Id, "codex", force: false);
+
+            report.Success.ShouldBeTrue();
+            File.Exists(Path.Combine(envRoot, "skills", "rust-coder", "SKILL.md")).ShouldBeTrue();
+        }
+        finally
+        {
+            Directory.Delete(envRoot, recursive: true);
+        }
     }
 }
