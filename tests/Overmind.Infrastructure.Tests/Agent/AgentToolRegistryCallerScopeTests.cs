@@ -50,6 +50,31 @@ public sealed class AgentToolRegistryCallerScopeTests : IDisposable
         Marker(request).ShouldBe(AgentCallerHeaders.MarkerValue, tool);
     }
 
+    // T3: the entry family addresses stored objects by id and carries no projectId argument, so the
+    // caller pair is the only thing that can tell the host which board the conversation belongs to.
+    [Theory]
+    [InlineData("read_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11"}""")]
+    [InlineData("update_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11","content":"x"}""")]
+    [InlineData("delete_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11","reason":"cleanup"}""")]
+    [InlineData("entry_versions", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11"}""")]
+    public async Task InvokeAsync_EntryDoor_ReachesTheSharedRouteWithTheCallerPair(string tool, string json)
+    {
+        var (registry, handler) = Registry();
+        var instruction = Guid.NewGuid();
+
+        var result = await registry.InvokeAsync(
+            tool, JsonDocument.Parse(json).RootElement.Clone(),
+            new AgentToolInvocation(true, instruction, Guid.NewGuid(), ConversationProject),
+            CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(
+            $"{tool}: an error here means the conversion did not reach the wire: {result.GetRawText()}");
+
+        var request = handler.Requests.ShouldHaveSingleItem($"{tool} must not spend a round-trip on scope");
+        Scope(request).ShouldBe(ConversationProject.ToString("D"), tool);
+        Marker(request).ShouldBe(AgentCallerHeaders.MarkerValue, tool);
+    }
+
     // The other half of the same sentence: where a projectId argument IS present, 241's argument guard is
     // still the first thing to refuse a foreign one, before any caller pair reaches the host.
     [Theory]
@@ -141,12 +166,10 @@ public sealed class AgentToolRegistryCallerScopeTests : IDisposable
         Scope(request).ShouldBe(AgentCallerHeaders.GlobalScopeValue);
     }
 
-    // One pin per family still on the old delegate, plus planning_upsert_artifact: an argument-addressed
-    // door that 246 never converts, so this row cannot go stale half-way through the feature.
-    // The issue family converted in T2; the entry rows move when T3 converts them.
+    // What is left on the old delegate after T1, T2 and T3: argument-addressed doors whose scope is
+    // already decided by their own arguments, which 246 never converts. This row is meant to survive
+    // the rest of the feature — it pins that the conversion did not leak into such a door.
     [Theory]
-    [InlineData("read_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11"}""")]
-    [InlineData("update_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11","content":"x"}""")]
     [InlineData("planning_upsert_artifact", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01","slug":"001-x","kind":"spec","body":"b"}""")]
     public async Task InvokeAsync_DoorStillOnTheOldDelegate_CarriesNoCallerHeadersYet(string tool, string json)
     {
@@ -156,8 +179,8 @@ public sealed class AgentToolRegistryCallerScopeTests : IDisposable
             Turn(ConversationProject), CancellationToken.None);
 
         var request = handler.Requests.ShouldHaveSingleItem();
-        request.Headers.Contains(AgentCallerHeaders.ScopeHeader).ShouldBeFalse($"{tool} converts in its family task");
-        request.Headers.Contains(AgentCallerHeaders.MarkerHeader).ShouldBeFalse($"{tool} converts in its family task");
+        request.Headers.Contains(AgentCallerHeaders.ScopeHeader).ShouldBeFalse($"{tool} is argument-addressed and stays unpaired");
+        request.Headers.Contains(AgentCallerHeaders.MarkerHeader).ShouldBeFalse($"{tool} is argument-addressed and stays unpaired");
     }
 
     [Fact]

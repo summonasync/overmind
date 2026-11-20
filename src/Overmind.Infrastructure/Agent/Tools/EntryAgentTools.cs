@@ -34,7 +34,9 @@ public static class EntryAgentTools
         """
         {"type":"object","properties":{"entryId":{"type":"string"}},"required":["entryId"]}
         """,
-        async (args, ct) => await api.GetAsync($"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}", ct));
+        async (args, ct) => await api.GetAsync(EntryPath(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+            EntryPath(args), new AgentCaller(callerProjectId), ct));
 
     private static AgentToolSpec WriteEntrySpec(AgentLoopbackClient api) => new(
         "write_entry",
@@ -60,12 +62,14 @@ public static class EntryAgentTools
         {"type":"object","properties":{"entryId":{"type":"string"},"content":{"type":"string"}},"required":["entryId","content"]}
         """,
         async (args, ct) => await api.PutAsync(
-            $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}",
-            new AgentToolPayload()
-                .Set("title", AgentToolArgs.OptionalString(args, "title"))
-                .Set("content", AgentToolArgs.RequiredString(args, "content"))
-                .Build(),
-            ct));
+            EntryPath(args), UpdatePayload(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.PutAsync(
+            EntryPath(args), UpdatePayload(args), new AgentCaller(callerProjectId), ct));
+
+    internal static object UpdatePayload(JsonElement args) => new AgentToolPayload()
+        .Set("title", AgentToolArgs.OptionalString(args, "title"))
+        .Set("content", AgentToolArgs.RequiredString(args, "content"))
+        .Build();
 
     private static AgentToolSpec DeleteEntrySpec(AgentLoopbackClient api) => new(
         "delete_entry",
@@ -74,11 +78,13 @@ public static class EntryAgentTools
         {"type":"object","properties":{"entryId":{"type":"string"},"reason":{"type":"string"}},"required":["entryId"]}
         """,
         async (args, ct) => await api.DeleteAsync(
-            $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}",
-            new AgentToolPayload()
-                .Set("reason", AgentToolArgs.OptionalString(args, "reason"))
-                .Build(),
-            ct));
+            EntryPath(args), DeletePayload(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.DeleteAsync(
+            EntryPath(args), DeletePayload(args), new AgentCaller(callerProjectId), ct));
+
+    internal static object DeletePayload(JsonElement args) => new AgentToolPayload()
+        .Set("reason", AgentToolArgs.OptionalString(args, "reason"))
+        .Build();
 
     private static AgentToolSpec AckEntrySpec(AgentLoopbackClient api) => new(
         "ack_entry",
@@ -97,8 +103,9 @@ public static class EntryAgentTools
         """
         {"type":"object","properties":{"entryId":{"type":"string"}},"required":["entryId"]}
         """,
-        async (args, ct) => await api.GetAsync(
-            $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}/versions", ct));
+        async (args, ct) => await api.GetAsync(VersionsPath(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+            VersionsPath(args), new AgentCaller(callerProjectId), ct));
 
     private static AgentToolSpec SearchSpec(AgentLoopbackClient api) => new(
         "search",
@@ -109,4 +116,10 @@ public static class EntryAgentTools
         async (args, ct) => await api.GetAsync(
             AgentToolArgs.BuildQuery("/api/search", args, "query", "mode", "projectId"), ct));
 
+    // The entry doors address one stored entry, so the same path is written by both the plain delegate
+    // (the standalone MCP adapter, no caller identity) and the scoped one (the embedded agent).
+    private static string EntryPath(JsonElement args) =>
+        $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}";
+
+    private static string VersionsPath(JsonElement args) => $"{EntryPath(args)}/versions";
 }

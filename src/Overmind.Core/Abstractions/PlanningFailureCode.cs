@@ -90,5 +90,6 @@ public enum PlanningFailureCode
     BatchArtifactOutsideFeature,
     ArtifactOutsideCallerProject,
     IssueOutsideCallerProject,
+    EntryOutsideCallerProject,
     AgentCallerScopeUnverifiable
 }

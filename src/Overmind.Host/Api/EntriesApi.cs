@@ -174,23 +174,39 @@ public static class EntriesApi
         return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
     }
 
-    private static async Task<IResult> GetById(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetById(
+        Guid id, HttpRequest http, OvermindDbContext db, CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
         var entry = await LoadEntryAsync(db, id, ct);
-        return entry is null
-            ? HttpErrors.NotFound($"Entry '{id}' was not found.")
-            : Results.Ok(EntryMapper.ToResponse(entry));
+        if (entry is null)
+        {
+            return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        return CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId)
+            ?? Results.Ok(EntryMapper.ToResponse(entry));
     }
 
     private static async Task<IResult> Update(
         Guid id,
         UpdateEntryRequest request,
         IValidator<UpdateEntryRequest> validator,
+        HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
         var validation = await validator.ValidateAsync(request, ct);
         if (!validation.IsValid)
         {
@@ -206,6 +222,11 @@ public static class EntriesApi
         if (entry is null)
         {
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+        {
+            return refused;
         }
 
         if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
@@ -275,10 +296,20 @@ public static class EntriesApi
         EntryIndexingService indexing,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
         var entry = await db.ContextEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
         {
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+        {
+            return refused;
         }
 
         ContextEntry? tombstone = null;
@@ -438,12 +469,29 @@ public static class EntriesApi
             : $"{session.Alias} ({session.Vendor})";
     }
 
-    private static async Task<IResult> ListVersions(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListVersions(
+        Guid id, HttpRequest http, OvermindDbContext db, CancellationToken ct)
     {
-        var entryExists = await db.ContextEntries.AnyAsync(e => e.Id == id, ct);
-        if (!entryExists)
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
+        // Reading the owning project off the existence probe keeps the guard free of a second command;
+        // AnyAsync would have answered the same question with one scalar and thrown the answer away.
+        var owningProjectId = await db.ContextEntries
+            .Where(e => e.Id == id)
+            .Select(e => (Guid?)e.ProjectId)
+            .FirstOrDefaultAsync(ct);
+
+        if (owningProjectId is null)
         {
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        if (CallerScopeRefusal(id, owningProjectId.Value, callerProjectId) is { } refused)
+        {
+            return refused;
         }
 
         var versions = await db.EntryVersions
@@ -454,6 +502,16 @@ public static class EntriesApi
 
         return Results.Ok(versions);
     }
+
+    // Entries are the one object family whose routes the web UI shares with agents, so the question is
+    // never "is this an entries route" but "did the embedded-agent transport identify a project". No
+    // pair means no comparison: a human reading another project's note is today's behaviour and stays it.
+    private static IResult? CallerScopeRefusal(
+        Guid entryId, Guid owningProjectId, Guid? callerProjectId) =>
+        callerProjectId is { } caller && caller != owningProjectId
+            ? PlanningErrors.Map(PlanningException.EntryOutsideCallerProject(
+                entryId, owningProjectId, caller))
+            : null;
 
     private static async Task<ContextEntry?> LoadEntryAsync(OvermindDbContext db, Guid id, CancellationToken ct)
     {

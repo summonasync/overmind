@@ -497,6 +497,16 @@ public sealed class PlanningException : Exception
             $"'{owningProjectId}' with issues_create, which is the door that may write to another board while " +
             "presenting your own project.");
 
+    public static PlanningException EntryOutsideCallerProject(
+        Guid entryId, Guid owningProjectId, Guid callerProjectId) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.EntryOutsideCallerProject,
+            $"Entry '{entryId}' belongs to project '{owningProjectId}', but this conversation belongs to project " +
+            $"'{callerProjectId}'. The host compared the object you addressed with the conversation's project and " +
+            "refused the call, so nothing was read, changed or deleted and the entry stayed on its own board. " +
+            $"Address an entry of '{callerProjectId}' — list_entries reads that project's notes, decisions, gates " +
+            "and guards. Another project's context is not this conversation's to edit; if the knowledge belongs " +
+            $"there, say so to the owner of '{owningProjectId}'.");
+
     public static PlanningException AgentCallerScopeUnverifiable(string defect) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AgentCallerScopeUnverifiable,
             $"The caller identity is unverifiable: {defect}. The host cannot tell which project this conversation " +
