@@ -14,6 +14,12 @@ public sealed class EntryLink
     public DateTime CreatedAt { get; private set; }
 
     public static EntryLink CreateDerived(Guid fromEntryId, EntryLinkKind toKind, Guid toId)
+        => Create(fromEntryId, toKind, toId, EntryLinkOrigin.Derived);
+
+    public static EntryLink CreateManual(Guid fromEntryId, EntryLinkKind toKind, Guid toId)
+        => Create(fromEntryId, toKind, toId, EntryLinkOrigin.Manual);
+
+    private static EntryLink Create(Guid fromEntryId, EntryLinkKind toKind, Guid toId, EntryLinkOrigin origin)
     {
         if (toId == Guid.Empty)
         {
@@ -31,7 +37,7 @@ public sealed class EntryLink
             FromEntryId = fromEntryId,
             ToKind = toKind,
             ToId = toId,
-            Origin = EntryLinkOrigin.Derived,
+            Origin = origin,
             CreatedAt = DateTime.UtcNow
         };
     }
