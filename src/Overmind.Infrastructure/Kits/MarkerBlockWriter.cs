@@ -70,14 +70,18 @@ public static class MarkerBlockWriter
             return (entryText, false);
         }
 
-        var cut = entryText.Remove(startIndex, endIndex + end.Length - startIndex);
-        if (startIndex < cut.Length && startIndex > 0 && cut[startIndex - 1] == '\n')
+        // Upsert inserts its own separator newline before the block and BuildBlock ends
+        // with a trailing newline after the end marker; cutting takes both with it so the
+        // file returns to its pre-weave shape.
+        if (startIndex > 0 && entryText[startIndex - 1] == '\n')
         {
-            var rest = cut[startIndex..];
-            if (rest.StartsWith('\n'))
-            {
-                cut = cut.Remove(startIndex, 1);
-            }
+            startIndex -= 1;
+        }
+
+        var cut = entryText.Remove(startIndex, endIndex + end.Length - startIndex);
+        if (startIndex < cut.Length && cut[startIndex] == '\n')
+        {
+            cut = cut.Remove(startIndex, 1);
         }
 
         return (cut, true);

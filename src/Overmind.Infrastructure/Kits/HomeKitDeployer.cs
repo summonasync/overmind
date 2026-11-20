@@ -231,13 +231,6 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
             return Finish(kit.Id, home.Platform.ToString(), started, entries, warnings);
         }
 
-        if (!Directory.Exists(home.SkillsDir))
-        {
-            entries.Add(new GlobalDeployEntry(
-                GlobalDeployEntryKind.File, home.Platform, home.SkillsDir, GlobalDeployOutcome.Skipped, "home skills dir missing"));
-            return Finish(kit.Id, home.Platform.ToString(), started, entries, warnings);
-        }
-
         var skillDirs = Directory.EnumerateDirectories(sourcePath)
             .Where(d => File.Exists(Path.Combine(d, "SKILL.md")))
             .OrderBy(d => d, StringComparer.Ordinal)
@@ -255,20 +248,36 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
             return Finish(kit.Id, home.Platform.ToString(), started, entries, warnings);
         }
 
-        var plans = new List<HomeFilePlan>();
-        foreach (var dir in skillDirs)
+        // The mirror half needs the home skills dir to exist (skip, never create); the
+        // prose-only weave half is independent — it writes the agent's entry file, which
+        // lives under the detected config dir, so prose-only kits deploy without any
+        // skills directory at all.
+        var mirrorSkipped = false;
+        if (skillDirs.Count > 0 && !Directory.Exists(home.SkillsDir))
         {
-            var dirName = Path.GetFileName(dir);
-            foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
-            {
-                var relative = $"{dirName}/{Path.GetRelativePath(dir, file).Replace(Path.DirectorySeparatorChar, '/')}";
-                plans.Add(new HomeFilePlan(Path.Combine(home.SkillsDir, relative.Replace('/', Path.DirectorySeparatorChar)), relative, await File.ReadAllTextAsync(file, ct)));
-            }
+            mirrorSkipped = true;
+            entries.Add(new GlobalDeployEntry(
+                GlobalDeployEntryKind.File, home.Platform, home.SkillsDir, GlobalDeployOutcome.Skipped, "home skills dir missing"));
         }
 
-        var tracked = await _db.GlobalMaterializedFiles
-            .Where(m => m.KitId == kit.Id && m.Platform == home.Platform)
-            .ToListAsync(ct);
+        var plans = new List<HomeFilePlan>();
+        var tracked = new List<GlobalMaterializedFile>();
+        if (!mirrorSkipped)
+        {
+            foreach (var dir in skillDirs)
+            {
+                var dirName = Path.GetFileName(dir);
+                foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                {
+                    var relative = $"{dirName}/{Path.GetRelativePath(dir, file).Replace(Path.DirectorySeparatorChar, '/')}";
+                    plans.Add(new HomeFilePlan(Path.Combine(home.SkillsDir, relative.Replace('/', Path.DirectorySeparatorChar)), relative, await File.ReadAllTextAsync(file, ct)));
+                }
+            }
+
+            tracked = await _db.GlobalMaterializedFiles
+                .Where(m => m.KitId == kit.Id && m.Platform == home.Platform)
+                .ToListAsync(ct);
+        }
 
         var refused = new List<string>();
         foreach (var plan in plans)
@@ -324,11 +333,14 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         try
         {
-            foreach (var plan in plans.Where(p => !refused.Contains(p.AbsolutePath)))
+            if (!mirrorSkipped)
             {
-                failedPath = plan.AbsolutePath;
-                await File.WriteAllTextAsync(plan.AbsolutePath, plan.Content, ContentHash.Utf8NoBom, ct);
-                written.Add(plan.AbsolutePath);
+                foreach (var plan in plans.Where(p => !refused.Contains(p.AbsolutePath)))
+                {
+                    failedPath = plan.AbsolutePath;
+                    Directory.CreateDirectory(Path.GetDirectoryName(plan.AbsolutePath)!);
+                    await File.WriteAllTextAsync(plan.AbsolutePath, plan.Content, ContentHash.Utf8NoBom, ct);
+                    written.Add(plan.AbsolutePath);
 
                 var hash = ContentHash.Sha256(plan.Content);
                 var row = tracked.FirstOrDefault(m => PathGuard.PathsEqual(
@@ -346,6 +358,7 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
             }
 
             PruneStaleRows(tracked, plans, home, warnings, entries);
+            }
 
             // Prose-only gate (251 review B1): the weave surface belongs to zero-entry kits
             // alone; kits carrying entries (overmind-ceremony and every language crew) reach
