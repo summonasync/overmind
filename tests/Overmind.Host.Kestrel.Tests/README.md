@@ -24,3 +24,28 @@ SPA fallback, middleware order. Every test class carries `[Trait("Host", "Kestre
 - fake embedding model directory (same trick as `ApiFactory`) so semantic search boots offline;
 - stub conversation stream source + turn-stream gate for future legs that need to control
   agent-chat stream timing.
+
+## Browser harness (CDP)
+
+Browser-level tests drive real chrome against a real host build of the web app:
+
+- `[BrowserFact]` instead of `[Fact]` for every browser test — the attribute probes for a
+  chrome binary and a node/npm toolchain at discovery time and emits `[SKIP]` with a reason
+  when either is missing. A browser test placed outside `KestrelBrowserCollection` fails
+  loudly on fixture use, so it cannot silently skip or run host-less.
+- Discovery overrides for forcing a path: `OVERMIND_TEST_CHROME_BIN` and
+  `OVERMIND_TEST_NODE_BIN` point at an explicit binary (set them to a nonexistent path to
+  exercise the skip contract locally).
+- `BrowserHostFixture` builds the web static export once per run (`npm ci` + `npm run build`
+  in the repo's `web/`, generous timeout) and boots a second Kestrel host whose web root is
+  that build output. The static gate on `OVERMIND_WEB_ROOT` serializes the env between the
+  two hosts in one process — boot the browser fixture's host only through the fixture, and
+  only one factory instance may set the env at a time.
+- `CdpChatHarness` (Page + Runtime domains only) exposes `SeedState`, `Navigate`,
+  `Evaluate`, `SnapshotDom`, `TypeIntoComposer`, `ClickSend`. Typing goes through React
+  state (native prototype setter + bubbled input event on the controlled composer), so the
+  legs observe what a human would produce.
+- Existing legs to copy from: `SendPathOrderingBrowserTests` (stream gate held mid-turn,
+  structural DOM pins) and `CompletionWindowBrowserTests` (two-slot response delay:
+  history held after its handler, attach held before its handler).
+
