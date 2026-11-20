@@ -317,6 +317,9 @@ Path-level (no line anchor) sources: `src/OvermindCrewKit/manifest.json`,
 Overmind board read of feature 251 (2026-11-20, recorded in the task log).
 
 Verification run at write time: every one of the 70 distinct targets was resolved against the
-worktree and checked for a non-empty span at the cited lines (0 problems). Live/dark markers in
-the body: 4 × **live on main**, 3 × **dark until 251**, plus the marker legend in the preamble.
+worktree and checked for a non-empty span at the cited lines (0 problems). Marker uses in the
+body — the preamble legend and this index section excluded, re-measured by the T4 feature sweep:
+3 × **live on main** (the three section 7 rows) and 3 × **dark until 251** (one section 7 row,
+the 251-hole paragraph, the board-state paragraph); the preamble legend states each marker once
+more, so a whole-file count reads 5 and 5 including this sentence.
 
