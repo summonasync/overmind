@@ -483,7 +483,28 @@ public sealed class AgentSessionLockApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Write_StaleSelfClaim_AdoptsAndProceeds()
+    public async Task Write_StaleSelfClaimOnSameSession_ReadoptsAndLogs()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow.AddHours(-2));
+        await ClaimFeatureAsync(project.Id, "claimable");
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/planning/features/claimable/status",
+            new { Status = "inProgress", LogNote = "resuming" }, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/claimable", JsonOptions);
+        feature!.Body.ShouldContain("stale claim re-adopted by resumed session Dan by qwen");
+        (await ScalarAsync<int>(
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{HolderSessionId.ToString().ToUpperInvariant()}'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Write_StaleSameAliasForeignSession_StillRefused()
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "claimable");
@@ -495,12 +516,9 @@ public sealed class AgentSessionLockApiTests : IDisposable
             $"/api/agent/projects/{project.Id}/planning/features/claimable/status",
             new { Status = "inProgress", LogNote = "resuming" }, callerId);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var feature = await _client.GetFromJsonAsync<FeatureJson>(
-            $"/api/projects/{project.Id}/planning/features/claimable", JsonOptions);
-        feature!.Body.ShouldContain("session restarted, claim adopted by Dan by qwen");
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await ScalarAsync<int>(
-            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{callerId.ToString().ToUpperInvariant()}'"))
+            $"SELECT COUNT(*) FROM PlanningFeatures WHERE Slug = 'claimable' AND ClaimSessionId = '{HolderSessionId.ToString().ToUpperInvariant()}'"))
             .ShouldBe(1);
     }
 

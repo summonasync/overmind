@@ -293,13 +293,13 @@ public sealed class FeatureClaimService
         await EnsureHolderCoreAsync(feature, sessionId, ct);
     }
 
-    // Write-path gate behind the ClaimLockFilter. A stale/ended claim held by the caller's own
-    // alias+vendor is adopted on the spot (fresh session binding, feature log line) so an adapter
-    // restart never blocks its own writes; a foreign holder keeps the explicit claim call as the
-    // only takeover door, alive or stale.
+    // Write-path gate behind the ClaimLockFilter. Claim binding follows the session id: the same
+    // session keeps its claim alive (Touch re-animates a stale row) and gets a logged re-adopt when
+    // the row comes back stale or ended; any other session keeps the explicit claim call as the
+    // only takeover door, alive or stale — matching aliases no longer auto-adopt on writes.
     private async Task EnsureHolderCoreAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
     {
-        if (feature.ClaimSessionId is not { } holderId || holderId == sessionId)
+        if (feature.ClaimSessionId is not { } holderId)
         {
             return;
         }
@@ -309,37 +309,23 @@ public sealed class FeatureClaimService
         var liveness = holder?.Liveness(DateTime.UtcNow, project.ClaimStaleThresholdMinutes)
                        ?? AgentSessionLiveness.Ended;
 
-        if (liveness != AgentSessionLiveness.Alive && await TryAdoptAsync(feature, sessionId, ct))
+        if (holderId != sessionId)
+        {
+            throw PlanningException.FeatureClaimHeld(
+                feature.Slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
+        }
+
+        if (liveness == AgentSessionLiveness.Alive || holder is null)
         {
             return;
         }
 
-        throw PlanningException.FeatureClaimHeld(
-            feature.Slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
-    }
-
-    private async Task<bool> TryAdoptAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
-    {
-        if (sessionId is not { } callerId)
-        {
-            return false;
-        }
-
-        var caller = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == callerId, ct);
-        if (caller is null ||
-            !string.Equals(feature.ClaimedByAlias, caller.Alias, StringComparison.Ordinal) ||
-            !string.Equals(feature.ClaimedByVendor, caller.Vendor, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
         var now = DateTime.UtcNow;
-        feature.Claim(caller.Alias, caller.Vendor, callerId, now);
+        feature.Claim(holder.Alias, holder.Vendor, holderId, now);
         feature.AppendLog(
-            $"session restarted, claim adopted by {caller.Alias} by {caller.Vendor}",
+            $"stale claim re-adopted by resumed session {holder.Alias} by {holder.Vendor}",
             PlanningLogSource.Agent);
-        await PersistAsync(feature, caller.Alias, caller.Vendor, callerId, now, ct);
-        return true;
+        await PersistAsync(feature, holder.Alias, holder.Vendor, holderId, now, ct);
     }
 
     private async Task<(string Alias, string Vendor)> ResolveIdentityAsync(
