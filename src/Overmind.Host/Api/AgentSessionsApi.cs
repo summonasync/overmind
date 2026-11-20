@@ -37,13 +37,28 @@ public static class AgentSessionsApi
         {
             // Reconnect re-attach: the workspace stamp names the row this adapter registered last
             // run, so resuming keeps its alias+vendor and its session id — the id claim locks match
-            // on. Only the placeholder path resumes; an explicit alias is the operator's choice and
-            // keeps the fresh-registration path, as does an alive rival holding the row's alias.
+            // on. The rival check rides the same conditional write as the identity door's alias
+            // claim, so a concurrent identity_set loses cleanly and the loser falls through to a
+            // fresh registration. Only the placeholder path resumes; an explicit alias is the
+            // operator's choice and always mints fresh.
+            var now = DateTime.UtcNow;
             var aliveSince = await AliveSinceAsync(db, ct);
-            if (await FindAliveAliasHolderAsync(db, prior.Id, prior.Alias, aliveSince, ct) is null)
+            var resumed = await db.AgentSessions
+                .Where(s => s.Id == priorId &&
+                            s.Alias == prior.Alias &&
+                            !db.AgentSessions.Any(h =>
+                                h.Id != priorId &&
+                                h.Alias == prior.Alias &&
+                                h.EndedAt == null &&
+                                h.LastSeenAt >= aliveSince))
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(s => s.StartedAt, now)
+                    .SetProperty(s => s.LastSeenAt, now)
+                    .SetProperty(s => s.EndedAt, (DateTime?)null), ct);
+
+            if (resumed == 1)
             {
-                prior.Resume();
-                await db.SaveChangesAsync(ct);
+                await db.Entry(prior).ReloadAsync(ct);
                 return Results.Created($"/api/agent/sessions/{prior.Id}", ToResponse(prior));
             }
         }

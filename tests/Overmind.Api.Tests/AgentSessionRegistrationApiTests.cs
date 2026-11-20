@@ -100,6 +100,38 @@ public sealed class AgentSessionRegistrationApiTests : IDisposable
         vendor.ShouldBe("unknown");
     }
 
+    [Fact]
+    public async Task Register_PriorRowEnded_ResumesIt()
+    {
+        var priorId = await SeedSessionAsync(
+            "danny-lee", "claude", lastSeenAgo: TimeSpan.FromMinutes(40), endedAgo: TimeSpan.FromMinutes(2));
+
+        var (id, alias, _) = await RegisterAsync("agent", "unknown", priorId);
+
+        id.ShouldBe(priorId);
+        alias.ShouldBe("danny-lee");
+        var (_, endedAt) = await ReadLivenessAsync(priorId);
+        endedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Register_ResumeWriteLostToConcurrentClaim_FallsBackToFresh()
+    {
+        var priorId = await SeedSessionAsync("danny-lee", "claude", lastSeenAgo: TimeSpan.FromMinutes(40));
+        await ExecuteAsync($"""
+            CREATE TRIGGER resume_silent_noop
+            BEFORE UPDATE OF EndedAt ON AgentSessions
+            FOR EACH ROW WHEN OLD.Id = '{priorId.ToString().ToUpperInvariant()}'
+            BEGIN SELECT RAISE(IGNORE); END
+            """);
+
+        var (id, alias, vendor) = await RegisterAsync("agent", "unknown", priorId);
+
+        id.ShouldNotBe(priorId);
+        alias.ShouldBe("agent");
+        vendor.ShouldBe("unknown");
+    }
+
     private async Task<(Guid Id, string Alias, string Vendor)> RegisterAsync(
         string alias, string vendor, Guid? priorSessionId)
     {

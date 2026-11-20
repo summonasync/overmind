@@ -67,14 +67,6 @@ public sealed class AgentSession
 
     public void End() => EndedAt ??= DateTime.UtcNow;
 
-    public void Resume()
-    {
-        var now = DateTime.UtcNow;
-        StartedAt = now;
-        LastSeenAt = now;
-        EndedAt = null;
-    }
-
     public void SetRole(string role) => Role = NormalizeRole(role);
 
     public void RenameAlias(string alias)

@@ -69,13 +69,13 @@ var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile, wo
 Guid adapterSessionId = Guid.Empty;
 var alias = AgentIdentity.ResolveAlias();
 var vendor = AgentIdentity.ResolveVendor();
+var stamp = workspaceIdentity.TryRead();
 try
 {
     // The workspace stamp names the row this workspace registered last run; passing it lets the
     // host resume that row (identity and session id survive the restart) instead of minting a
     // fresh placeholder row under which held claims strand.
-    var priorSessionId = workspaceIdentity.TryRead()?.SessionId;
-    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, priorSessionId, CancellationToken.None);
+    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, stamp?.SessionId, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
@@ -84,7 +84,14 @@ catch (Exception ex)
     Console.Error.WriteLine($"[overmind-mcp] WARN: session registration failed, claims will be refused: {ex.Message}");
 }
 
-if (adapterSessionId != Guid.Empty)
+if (adapterSessionId != Guid.Empty && stamp is { } saved && adapterSessionId == saved.SessionId)
+{
+    // The host resumed the stamped row and its identity came back with it, so the restore leg has
+    // nothing to negotiate here. Setting the slot would be worse than useless: an explicit alias
+    // makes later reconnects mint fresh rows instead of resuming this one (review-258-01 B1).
+    identityFile.Write(saved.Alias, saved.Vendor, adapterSessionId);
+}
+else if (adapterSessionId != Guid.Empty)
 {
     await identityRefresher.RestoreAndStampAsync(adapterSessionId, alias, vendor, CancellationToken.None);
 }
