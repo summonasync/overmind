@@ -228,10 +228,38 @@ public sealed class AgentEntryCallerScopeApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    // ---- the agent-prefixed mutation routes ----
+
+    // Feature 184 moved update_entry and delete_entry onto /api/agent/entries while read_entry and
+    // entry_versions stayed on the shared route. The guard lives in the handler, so both prefixes reach the
+    // same code - but a test that only ever walked the shared path would not notice if a future change gave
+    // the agent subgroup its own handler. These two pin the route the tools actually call.
+    [Fact]
+    public async Task UpdateEntry_AgentPrefixedRoute_ForeignEntry_Refused()
+    {
+        var response = await AsOwnAsync(
+            HttpMethod.Put, AgentEntryUrl(_foreignEntry), UpdateBody("Foreign note", "injected via agent route"));
+
+        await AssertScopeRefusalAsync(response, "update_entry on /api/agent/entries");
+    }
+
+    [Fact]
+    public async Task DeleteEntry_AgentPrefixedRoute_ForeignEntry_Refused()
+    {
+        var response = await AsOwnAsync(
+            HttpMethod.Delete, $"{AgentEntryUrl(_foreignEntry)}?reason=agent%20route%20probe");
+
+        await AssertScopeRefusalAsync(response, "delete_entry on /api/agent/entries");
+    }
+
     // ---- R6: the comparison must not cost a round-trip ----
 
+    // read_entry's baseline is 2, not the 1 measured at T3: merging origin/main brought feature 184's
+    // link projection into the same handler, so the door now runs one more query for everybody. The claim
+    // under test is that the scope check adds nothing to whatever the door already costs, and the scoped
+    // arm still has to equal the unscoped one.
     [Theory]
-    [InlineData("read_entry", "get", 1)]
+    [InlineData("read_entry", "get", 2)]
     [InlineData("entry_versions", "versions", 2)]
     public async Task CallerScopeComparison_AddsNoQueryToEntryReadDoors(
         string door, string verb, int baseline)
@@ -280,6 +308,8 @@ public sealed class AgentEntryCallerScopeApiTests : IAsyncLifetime
     }
 
     private static string EntryUrl(Guid entryId) => $"/api/entries/{entryId}";
+
+    private static string AgentEntryUrl(Guid entryId) => $"/api/agent/entries/{entryId}";
 
     // The update contract requires a title even when only the body changes, so every PUT here states it.
     private static object UpdateBody(string title, string content) => new

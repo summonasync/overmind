@@ -8,6 +8,7 @@ using Overmind.Host.Api.Validation;
 using Overmind.Infrastructure.Agent;
 using Overmind.Infrastructure.Agent.Routes;
 using Overmind.Infrastructure.Configuration;
+using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Embeddings;
 using Overmind.Infrastructure.Grimoire;
 using Overmind.Infrastructure.Kits;
@@ -123,19 +124,30 @@ public static class DependencyInjection
         services.AddScoped<VectorSearchTester>();
         services.AddScoped<EntryIndexingService>();
         services.AddScoped<ReindexService>();
+        services.AddScoped<JournalProjectStore>();
+        services.AddScoped<EntryLinkResolver>();
+        services.AddScoped<EntryLinkWriter>();
+        services.AddScoped<EntryLinkReader>();
+        services.AddScoped<EntryLinkTriage>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddScoped<IMaterializer, SkillMaterializer>();
 
         services.AddScoped<KitScanner>();
         services.AddScoped<KitImporter>();
+        services.AddScoped<KitActivationService>();
+        services.AddScoped<LegacyKitMigrationService>();
         services.AddScoped<BundledKitForkService>();
         services.AddScoped<BundledSeedService>(provider => new BundledSeedService(
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<KitImporter>(),
             provider.GetRequiredService<AppSettingsService>(),
             provider.GetRequiredService<ILogger<BundledSeedService>>(),
-            OvermindPaths.BundledDirectory));
+            OvermindPaths.BundledDirectory,
+            provider.GetRequiredService<LegacyKitMigrationService>(),
+            // No IGlobalKitDeployer is registered yet: the mandatory kit's home-directory door is
+            // feature 251, and the seed records the missing door in the log until then.
+            provider.GetService<IGlobalKitDeployer>()));
 
         services.AddSingleton<IOvermindCliLocator, OvermindCliLocator>();
         services.AddSingleton<IGrimoireEngineRunner, GrimoireEngineRunner>();

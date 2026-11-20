@@ -268,6 +268,36 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("EntryAcks");
                 });
 
+            modelBuilder.Entity("Overmind.Core.EntryLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FromEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ToId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ToKind")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ToKind", "ToId");
+
+                    b.HasIndex("FromEntryId", "ToKind", "ToId")
+                        .IsUnique();
+
+                    b.ToTable("EntryLinks");
+                });
+
             modelBuilder.Entity("Overmind.Core.EntryTag", b =>
                 {
                     b.Property<Guid>("EntryId")
@@ -977,6 +1007,12 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime?>("ImportedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Legacy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Mandatory")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1345,6 +1381,15 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasOne("Overmind.Core.ContextEntry", null)
                         .WithMany("Acks")
                         .HasForeignKey("ContextEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.EntryLink", b =>
+                {
+                    b.HasOne("Overmind.Core.ContextEntry", null)
+                        .WithMany()
+                        .HasForeignKey("FromEntryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -11,6 +11,8 @@ export interface KitResponse {
   sourceKind: KitSourceKind;
   sourcePath: string | null;
   importedAtUtc: string | null;
+  mandatory: boolean;
+  legacy: boolean;
 }
 
 export interface KitFormValues {
@@ -29,6 +31,7 @@ export interface MaterializationReportResponse {
   projectId: string;
   kitId: string;
   files: MaterializedFileResponse[];
+  warnings: string[];
 }
 
 export interface DriftItemResponse {

@@ -1,7 +1,7 @@
 {
   "claude": { "skillsDir": ".claude/skills" },
   "kimiCode": { "skillsDir": ".kimi-code/skills" },
-  "codex": { "skillsDir": ".codex/skills" },
+  "codex": { "skillsDir": ".agents/skills" },
   "gemini": { "skillsDir": ".gemini/skills" },
   "antigravity": { "skillsDir": ".antigravity/skills" },
   "qwen": { "skillsDir": ".qwen/skills" }

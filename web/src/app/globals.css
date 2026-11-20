@@ -13,7 +13,8 @@
   --color-muted: #8b8b96;
   --color-primary: #a855f7;
   --color-primary-hover: #9333ea;
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: #14141c;
+  --color-primary-hover-foreground: #ffffff;
   --color-success: #22c55e;
   --color-danger: #ef4444;
   --color-warning: #f59e0b;

@@ -7,6 +7,7 @@ export { SkillFilesEditor } from "./components/skill-files-editor";
 export { TagManager } from "./components/tag-manager";
 export { useEntryList, useEntryMutations } from "./lib/use-entries";
 export { useTagColorUpdate, useTagList } from "./lib/use-tags";
+export { entryTagChipStyle } from "./lib/entry-read";
 export {
   entryKeys,
   entryListQueryOptions,

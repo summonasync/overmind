@@ -5,6 +5,7 @@ using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Host.Api.Validation;
+using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Kits;
 using Overmind.Infrastructure.Persistence;
 using Overmind.Infrastructure.Planning;
@@ -32,6 +33,18 @@ public static class EntriesApi
         var agent = routes.MapGroup("/api/agent");
         agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
 
+        // Spec R6 as an invariant rather than a list: every entry mutation registered under the /api/agent prefix
+        // lands on this subgroup, and the journal refusal hangs on the subgroup, so a new verb inherits it by
+        // placement.
+        // The route-table test derives its cases from the registered endpoints, so a mutation verb registered
+        // anywhere else under this prefix turns that test red without anyone updating a verb list.
+        var agentEntryWrites = routes.MapGroup("/api/agent").AddEndpointFilter(JournalWriteLockFilter.Instance);
+        agentEntryWrites.MapPost("/entries", Create);
+        agentEntryWrites.MapPut("/entries/{id:guid}", Update);
+        agentEntryWrites.MapDelete("/entries/{id:guid}", Delete);
+        agentEntryWrites.MapPost("/entries/{id:guid}/lift", Lift);
+        agentEntryWrites.MapPost("/entries/{id:guid}/append", Append);
+
         return group;
     }
 
@@ -44,8 +57,11 @@ public static class EntriesApi
         DateTime? until,
         string? author,
         string? q,
+        string? link,
+        string? project,
         OvermindDbContext db,
         FtsSearchService search,
+        EntryLinkTriage triage,
         CancellationToken ct)
     {
         var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
@@ -60,17 +76,31 @@ public static class EntriesApi
             return stateFailure;
         }
 
+        var linkFailure = EntryStreamFilter.ValidateLink(link, out var linked);
+        if (linkFailure is not null)
+        {
+            return linkFailure;
+        }
+
+        var (projectFilter, projectFailure) = await EntryStreamFilter.ResolveProjectAsync(db, project, ct);
+        if (projectFailure is not null)
+        {
+            return projectFailure;
+        }
+
         if (!string.IsNullOrWhiteSpace(q))
         {
             var hits = await search.SearchAsync(projectId, q, 100, ct);
             var hitIds = hits.Select(h => h.EntryId).ToArray();
 
-            var entries = await db.ContextEntries
+            var searched = db.ContextEntries
                 .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
                 .Include(e => e.SkillFiles)
                 .Include(e => e.Acks)
                 .AsSplitQuery()
-                .Where(e => hitIds.Contains(e.Id))
+                .Where(e => hitIds.Contains(e.Id));
+
+            var entries = await EntryStreamFilter.Apply(searched, triage, linked, projectFilter)
                 .ToListAsync(ct);
 
             var responses = entries
@@ -109,6 +139,7 @@ public static class EntriesApi
         }
 
         query = EntryQueryFilters.Apply(query, since, until, author);
+        query = EntryStreamFilter.Apply(query, triage, linked, projectFilter);
 
         var listed = await query
             .OrderByDescending(e => e.UpdatedAt)
@@ -123,6 +154,9 @@ public static class EntriesApi
         HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
+        EntryLinkWriter writer,
+        JournalProjectStore journals,
+        ILoggerFactory writes,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -131,51 +165,97 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var projectExists = await db.Projects.AnyAsync(p => p.Id == request.ProjectId, ct);
-        if (!projectExists)
+        var explicitProject = request.ProjectId is { } named && named != Guid.Empty ? named : (Guid?)null;
+        if (request.Type != EntryType.Journal && explicitProject is null)
         {
-            return HttpErrors.NotFound($"Project '{request.ProjectId}' was not found.");
+            // Defence in depth for the line that mints the human's container: "no destination" means the reserved
+            // container only for a journal create (spec R2). The validator refuses the same shape, so reaching
+            // here needs validator/DTO drift — which is exactly the drift task 14 shipped by widening ProjectId
+            // to Guid? and turning NotEmpty into a null-only check.
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(CreateEntryRequest.ProjectId)] = ["ProjectId is required for every type but journal."],
+            });
         }
 
-        var tags = await ResolveTagsAsync(db, request.Tags, ct);
-
-        ContextEntry entry;
-        if (request.Type == EntryType.Skill)
+        if (explicitProject is { } target)
         {
-            var files = request.SkillFiles!.Select(EntryMapper.ToEntity);
-            entry = ContextEntry.CreateSkill(request.ProjectId, request.Title, request.Content, files);
-        }
-        else
-        {
-            entry = ContextEntry.Create(request.ProjectId, request.Type, request.Title, request.Content);
+            var projectExists = await db.Projects.AnyAsync(p => p.Id == target, ct);
+            if (!projectExists)
+            {
+                return HttpErrors.NotFound($"Project '{target}' was not found.");
+            }
         }
 
-        foreach (var tag in tags)
+        ContextEntry? committed = null;
+        var outcome = await EntryWriteCommit.RunAsync(
+            db,
+            writer,
+            writes,
+            async attemptCt =>
+            {
+                // Spec R2: the reserved container is born inside this same transaction, so the human door never
+                // needs an id the browser cannot know. A named project still wins over it, and nothing but a
+                // journal create can arrive here without one.
+                var containerId = explicitProject ?? await journals.EnsureIdAsync(attemptCt);
+
+                var tags = await ResolveTagsAsync(db, request.Tags, attemptCt);
+
+                ContextEntry entry;
+                if (request.Type == EntryType.Skill)
+                {
+                    var files = request.SkillFiles!.Select(EntryMapper.ToEntity);
+                    entry = ContextEntry.CreateSkill(containerId, request.Title, request.Content, files);
+                }
+                else
+                {
+                    entry = ContextEntry.Create(containerId, request.Type, request.Title, request.Content);
+                }
+
+                foreach (var tag in tags)
+                {
+                    entry.AddTag(tag);
+                }
+
+                db.ContextEntries.Add(entry);
+                if (request.Enforces.HasValue)
+                {
+                    db.Entry(entry).Property(e => e.Enforces).CurrentValue = request.Enforces.Value;
+                }
+
+                var authorAlias = await ResolveAuthorAliasAsync(db, http, attemptCt);
+                if (authorAlias is not null)
+                {
+                    db.Entry(entry).Property(e => e.AuthorAlias).CurrentValue = authorAlias;
+                }
+
+                committed = entry;
+                return new EntryWriteCommit.Work(
+                    entry.Id,
+                    entry.Content,
+                    async saveCt =>
+                    {
+                        await db.SaveChangesAsync(saveCt);
+                        return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
+                    });
+            },
+            ct);
+
+        if (committed is not null)
         {
-            entry.AddTag(tag);
+            await indexing.IndexAsync(committed, ct);
         }
 
-        db.ContextEntries.Add(entry);
-        if (request.Enforces.HasValue)
-        {
-            db.Entry(entry).Property(e => e.Enforces).CurrentValue = request.Enforces.Value;
-        }
-
-        var authorAlias = await ResolveAuthorAliasAsync(db, http, ct);
-        if (authorAlias is not null)
-        {
-            db.Entry(entry).Property(e => e.AuthorAlias).CurrentValue = authorAlias;
-        }
-
-        await db.SaveChangesAsync(ct);
-
-        await indexing.IndexAsync(entry, ct);
-
-        return Results.Created($"/api/entries/{entry.Id}", EntryMapper.ToResponse(entry));
+        return outcome;
     }
 
     private static async Task<IResult> GetById(
-        Guid id, HttpRequest http, OvermindDbContext db, CancellationToken ct)
+        Guid id,
+        HttpRequest http,
+        OvermindDbContext db,
+        EntryLinkResolver resolver,
+        EntryLinkReader links,
+        CancellationToken ct)
     {
         if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
         {
@@ -188,8 +268,15 @@ public static class EntriesApi
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
         }
 
-        return CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId)
-            ?? Results.Ok(EntryMapper.ToResponse(entry));
+        // The scope check runs before the link projection: a refused read must not spend the queries the
+        // detail view needs, and the caller must not learn anything about another board's edges either.
+        if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+        {
+            return refused;
+        }
+
+        var view = await EntryLinkProjection.LoadAsync(resolver, links, entry, ct);
+        return Results.Ok(EntryMapper.ToDetailResponse(entry, view));
     }
 
     private static async Task<IResult> Update(
@@ -200,6 +287,8 @@ public static class EntriesApi
         OvermindDbContext db,
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
+        EntryLinkWriter writer,
+        ILoggerFactory writes,
         CancellationToken ct)
     {
         if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
@@ -213,79 +302,101 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var entry = await db.ContextEntries
-            .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
-            .Include(e => e.SkillFiles)
-            .Include(e => e.Acks)
-            .FirstOrDefaultAsync(e => e.Id == id, ct);
-
-        if (entry is null)
-        {
-            return HttpErrors.NotFound($"Entry '{id}' was not found.");
-        }
-
-        if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
-        {
-            return refused;
-        }
-
-        if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
-        {
-            return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Invalid skill files",
-                detail: "Only entries of type 'Skill' can carry skill files.");
-        }
-
-        if (request.Enforces is { } enforces)
-        {
-            if (enforces && entry.Type != EntryType.Decision)
+        ContextEntry? committed = null;
+        var outcome = await EntryWriteCommit.RunAsync(
+            db,
+            writer,
+            writes,
+            async attemptCt =>
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status400BadRequest,
-                    title: "Invalid enforces flag",
-                    detail: CreateEntryRequestValidator.EnforcesDecisionOnly);
-            }
+                var entry = await db.ContextEntries
+                    .Include(e => e.EntryTags).ThenInclude(t => t.Tag)
+                    .Include(e => e.SkillFiles)
+                    .Include(e => e.Acks)
+                    .FirstOrDefaultAsync(e => e.Id == id, attemptCt);
 
-            db.Entry(entry).Property(e => e.Enforces).CurrentValue = enforces;
-        }
+                if (entry is null)
+                {
+                    return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
+                }
 
-        var contentChanged = !string.Equals(entry.Content, request.Content, StringComparison.Ordinal);
+                // The rejection channel the wrapper already provides, so the scope check rides the load that
+                // is running and the transaction never mutates an entry from another board.
+                if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+                {
+                    return EntryWriteCommit.Work.Rejected(refused);
+                }
 
-        entry.UpdateContent(request.Content);
-        db.Entry(entry).Property(e => e.Title).CurrentValue = request.Title.Trim();
+                if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
+                {
+                    return EntryWriteCommit.Work.Rejected(Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: "Invalid skill files",
+                        detail: "Only entries of type 'Skill' can carry skill files."));
+                }
 
-        if (request.Tags is not null)
+                if (request.Enforces is { } enforces)
+                {
+                    if (enforces && entry.Type != EntryType.Decision)
+                    {
+                        return EntryWriteCommit.Work.Rejected(Results.Problem(
+                            statusCode: StatusCodes.Status400BadRequest,
+                            title: "Invalid enforces flag",
+                            detail: CreateEntryRequestValidator.EnforcesDecisionOnly));
+                    }
+
+                    db.Entry(entry).Property(e => e.Enforces).CurrentValue = enforces;
+                }
+
+                var contentChanged = !string.Equals(entry.Content, request.Content, StringComparison.Ordinal);
+
+                entry.UpdateContent(request.Content);
+                db.Entry(entry).Property(e => e.Title).CurrentValue = request.Title.Trim();
+
+                if (request.Tags is not null)
+                {
+                    entry.EntryTags.Clear();
+                    foreach (var tag in await ResolveTagsAsync(db, request.Tags, attemptCt))
+                    {
+                        entry.AddTag(tag);
+                    }
+                }
+
+                if (request.SkillFiles is { Length: > 0 })
+                {
+                    db.SkillFiles.RemoveRange(entry.SkillFiles);
+                    entry.SkillFiles.Clear();
+
+                    foreach (var file in request.SkillFiles.Select(EntryMapper.ToEntity))
+                    {
+                        db.Entry(file).Property(f => f.EntryId).CurrentValue = entry.Id;
+                        db.SkillFiles.Add(file);
+                    }
+                }
+
+                if (contentChanged)
+                {
+                    await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, attemptCt);
+                }
+
+                committed = entry;
+                return new EntryWriteCommit.Work(
+                    entry.Id,
+                    entry.Content,
+                    async saveCt =>
+                    {
+                        await db.SaveChangesAsync(saveCt);
+                        return Results.Ok(EntryMapper.ToResponse(entry));
+                    });
+            },
+            ct);
+
+        if (committed is not null)
         {
-            entry.EntryTags.Clear();
-            foreach (var tag in await ResolveTagsAsync(db, request.Tags, ct))
-            {
-                entry.AddTag(tag);
-            }
+            await indexing.IndexAsync(committed, ct);
         }
 
-        if (request.SkillFiles is { Length: > 0 })
-        {
-            db.SkillFiles.RemoveRange(entry.SkillFiles);
-            entry.SkillFiles.Clear();
-
-            foreach (var file in request.SkillFiles.Select(EntryMapper.ToEntity))
-            {
-                db.Entry(file).Property(f => f.EntryId).CurrentValue = entry.Id;
-                db.SkillFiles.Add(file);
-            }
-        }
-
-        if (contentChanged)
-        {
-            await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, ct);
-        }
-
-        await db.SaveChangesAsync(ct);
-
-        await indexing.IndexAsync(entry, ct);
-
-        return Results.Ok(EntryMapper.ToResponse(entry));
+        return outcome;
     }
 
     private static async Task<IResult> Delete(
@@ -422,6 +533,8 @@ public static class EntriesApi
         OvermindDbContext db,
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
+        EntryLinkWriter writer,
+        ILoggerFactory writes,
         CancellationToken ct)
     {
         var validation = await validator.ValidateAsync(request, ct);
@@ -430,19 +543,40 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var entry = await LoadEntryAsync(db, id, ct);
-        if (entry is null)
+        ContextEntry? committed = null;
+        var outcome = await EntryWriteCommit.RunAsync(
+            db,
+            writer,
+            writes,
+            async attemptCt =>
+            {
+                var entry = await LoadEntryAsync(db, id, attemptCt);
+                if (entry is null)
+                {
+                    return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
+                }
+
+                entry.AppendFollowUp(request.Text);
+                await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, attemptCt);
+
+                committed = entry;
+                return new EntryWriteCommit.Work(
+                    entry.Id,
+                    entry.Content,
+                    async saveCt =>
+                    {
+                        await db.SaveChangesAsync(saveCt);
+                        return Results.Ok(EntryMapper.ToResponse(entry));
+                    });
+            },
+            ct);
+
+        if (committed is not null)
         {
-            return HttpErrors.NotFound($"Entry '{id}' was not found.");
+            await indexing.IndexAsync(committed, ct);
         }
 
-        entry.AppendFollowUp(request.Text);
-        await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, ct);
-        await db.SaveChangesAsync(ct);
-
-        await indexing.IndexAsync(entry, ct);
-
-        return Results.Ok(EntryMapper.ToResponse(entry));
+        return outcome;
     }
 
     private static async Task<string?> ResolveAuthorAliasAsync(OvermindDbContext db, HttpRequest http, CancellationToken ct)

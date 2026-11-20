@@ -19,14 +19,12 @@ public sealed class UniqueKitNameMigrationTests : IDisposable
         {
             db.Database.Migrate("20260914151947_SkillFileAgnosticPlatform");
 
-            db.SkillKits.AddRange(firstAlpha, firstBeta, SkillKit.Create("gamma", 1, string.Empty));
-            db.SaveChanges();
-
-            db.SkillKits.AddRange(
-                SkillKit.Create("alpha", 1, string.Empty),
-                SkillKit.Create("alpha", 1, string.Empty),
-                SkillKit.Create("beta", 1, string.Empty));
-            db.SaveChanges();
+            InsertBeforeUniqueIndex(db, firstAlpha);
+            InsertBeforeUniqueIndex(db, firstBeta);
+            InsertBeforeUniqueIndex(db, SkillKit.Create("gamma", 1, string.Empty));
+            InsertBeforeUniqueIndex(db, SkillKit.Create("alpha", 1, string.Empty));
+            InsertBeforeUniqueIndex(db, SkillKit.Create("alpha", 1, string.Empty));
+            InsertBeforeUniqueIndex(db, SkillKit.Create("beta", 1, string.Empty));
 
             db.Database.Migrate();
         }
@@ -43,6 +41,14 @@ public sealed class UniqueKitNameMigrationTests : IDisposable
             Should.Throw<DbUpdateException>(() => db.SaveChanges());
         }
     }
+
+    // The rows that predate the unique index go in as raw SQL: the historical schema lacks the
+    // columns the current model maps (Mandatory since 250/T2, Legacy since 250/T3), so SaveChanges
+    // would fail on the schema instead of proving what the migration does to duplicate names.
+    private static void InsertBeforeUniqueIndex(OvermindDbContext db, SkillKit kit) =>
+        db.Database.ExecuteSqlRaw(
+            "INSERT INTO SkillKits (Id, Name, Version, Description, SourceKind) VALUES ({0}, {1}, {2}, {3}, {4})",
+            kit.Id, kit.Name, kit.Version, kit.Description, (int)kit.SourceKind);
 
     private OvermindDbContext CreateContext()
     {

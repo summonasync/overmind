@@ -6,7 +6,8 @@ export type EntryType =
   | "skill"
   | "tombstone"
   | "idea"
-  | "audit";
+  | "audit"
+  | "journal";
 
 export type AgentPlatform = "claude" | "kimiCode" | "codex" | "gemini" | "antigravity" | "qwen";
 

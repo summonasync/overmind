@@ -1,7 +1,9 @@
 "use client";
 
 import { Suspense, useCallback, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import background from "@/shared/assets/brand/background.png";
+import { CaptureOverlay, useCaptureHotkeys } from "@/features/journal";
 import { InfoPanelProvider } from "@/widgets/app-shell/lib/info-panel-context";
 import { AgentChatBubble } from "@/widgets/agent-chat-bubble";
 import { ApprovalBubble } from "@/widgets/app-shell/ui/approval-bubble";
@@ -20,9 +22,15 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname() ?? "/";
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(
     () => typeof window !== "undefined" && window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1",
   );
+
+  const openCapture = useCallback(() => setCaptureOpen(true), []);
+  const closeCapture = useCallback(() => setCaptureOpen(false), []);
+  useCaptureHotkeys({ onOpen: openCapture, pathname });
 
   const togglePanel = useCallback(() => {
     setPanelCollapsed((current) => {
@@ -61,6 +69,7 @@ export function AppShell({ children }: AppShellProps) {
         </Suspense>
         <AttentionSurfaces />
         <AgentChatBubble />
+        <CaptureOverlay open={captureOpen} onClose={closeCapture} />
       </div>
     </InfoPanelProvider>
   );
