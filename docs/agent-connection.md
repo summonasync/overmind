@@ -59,7 +59,7 @@ What an agent actually needs to know from it:
   (a lane build, a test instance) and need the adapter pinned to one of them.
 - **Content roots are pinned, so cwd does not matter.** Both Host and adapter pin their
   content root to the install dir, not the caller's cwd — the adapter can be spawned from a
-  huge repo tree at near-zero inotify cost (`CONTEXT.md:26`).
+  huge repo tree at near-zero inotify cost (`CONTEXT.md:29`).
 - **Failure mode you will see.** The adapter exits with code 2 and a stderr hint if the Host
   API is unreachable at startup (`CONTEXT.md:72`). If a runtime reports the MCP server as
   failed to start, start the Host (or click the tray icon → Open) before debugging the config.
@@ -84,12 +84,12 @@ in `src/Overmind.Mcp/Registration/AgentRegistry.cs:8-70`.
 
 | Runtime | User-global MCP config | Project-scope MCP config | Format | Registry row |
 |---|---|---|---|---|
-| claude | `~/.claude.json` (top-level `mcpServers`) | `<gitroot>/.mcp.json` | JSON `mcpServers` | `AgentRegistry.cs:21-30`, `CONTEXT.md:78` |
-| qwen | `~/.qwen/settings.json` | `<gitroot>/.qwen/settings.json` | JSON `mcpServers` | `AgentRegistry.cs:53-62`, `CONTEXT.md:80` |
-| kimi-code | `$KIMI_CODE_HOME/mcp.json` (fallback `~/.kimi-code/mcp.json`) | `<gitroot>/.mcp.json` | JSON `mcpServers` | `AgentRegistry.cs:8-19`, `CONTEXT.md:77` |
-| codex | `$CODEX_HOME/config.toml` (fallback `~/.codex/config.toml`) | `<gitroot>/.codex/config.toml` | TOML `[mcp_servers.*]` (Tomlyn 0.20.x, BSD-2-Clause) | `AgentRegistry.cs:32-41`, `CONTEXT.md:79` |
+| claude | `~/.claude.json` (top-level `mcpServers`) | `<gitroot>/.mcp.json` | JSON `mcpServers` | `AgentRegistry.cs:21-30`, `CONTEXT.md:79` |
+| qwen | `~/.qwen/settings.json` | `<gitroot>/.qwen/settings.json` | JSON `mcpServers` | `AgentRegistry.cs:53-62`, `CONTEXT.md:82` |
+| kimi-code | `$KIMI_CODE_HOME/mcp.json` (fallback `~/.kimi-code/mcp.json`) | `<gitroot>/.mcp.json` | JSON `mcpServers` | `AgentRegistry.cs:8-19`, `CONTEXT.md:78` |
+| codex | `$CODEX_HOME/config.toml` (fallback `~/.codex/config.toml`) | `<gitroot>/.codex/config.toml` | TOML `[mcp_servers.*]` (Tomlyn 0.20.x, BSD-2-Clause) | `AgentRegistry.cs:32-41`, `CONTEXT.md:80` |
 
-**Dev-loop caveat** (`CONTEXT.md:83`): running the installer through `dotnet exec
+**Dev-loop caveat** (`CONTEXT.md:85`): running the installer through `dotnet exec
 overmind-mcp.dll` makes `Environment.ProcessPath` the muxer, so a non-dry-run install from a
 dev loop registers the *wrong* command path. Install from the packaged binary, or from the
 stable link `~/apps/overmind/mcp/overmind-mcp`, which the registered path prefers when it
@@ -207,7 +207,7 @@ developer_instructions = """…the md-side agent body…"""
   `audits/review-250-t5-codex-evidence-2026-11-19.md:11-35` — `w2-ok` (four fields) produced
   no warning as the control; `w2-extra` (`tools = [...]`) and `w2-unknown`
   (`someUnknownField = 42`) were both dropped with the warnings quoted above; the
-  namespace-collision finding is `audits/review-250-t5-codex-evidence-2026-11-19.md:32-34`.
+  namespace-collision finding is `audits/review-250-t5-codex-evidence-2026-11-19.md:29-31`.
 - Consequences worth writing into any port: per-role restriction cannot live in the role
   container, so it lives in `.codex/AGENTS.md` and the skill bodies. The 46 role files carry
   zero `mcp__` tokens — re-measured 2026-11-19: `SYNC-STRUCTURE.md:174`, and the kit-side
@@ -230,7 +230,7 @@ Counts on every side: 57 skill dirs, 46 agent definitions, 15 prose/config files
 |---|---|---|
 | Six-kit shape exists (membership map, pack per kit, bundled manifest carrying `{name, mandatory}`) | **live on main** | `KIT-MEMBERSHIP.md:11-33`; `build/pack.sh:189-193` |
 | Per-project kit activation for **optional** kits (activate / deactivate / drift, one seam, materializer writes the platform dirs above) | **live on main** since 250 | `KitActivationService.cs:11-39`, `CONTEXT.md:65` (`KitsApi` incl. activate/deactivate/drift) |
-| `overmind-ceremony` is flagged mandatory and lands through the bundled seed | **live on main** as a DB flag; the seed reproduces the `mandatory` flag (`BundledSeedService.cs:72`, `SkillKit.cs:16,72`) | `CONTEXT.md:61`, `build/pack.sh:190-193` |
+| `overmind-ceremony` is flagged mandatory and lands through the bundled seed | **live on main** as a DB flag; the seed reproduces the `mandatory` flag (`BundledSeedService.cs:72`, `SkillKit.cs:16,72`) | `CONTEXT.md:63`, `build/pack.sh:190-193` |
 | The mandatory kit reaching an agent **HOME** directory *from the app* | **dark until 251** | see below |
 | The mandatory kit being activatable **per project** | **refused by design** — `SkillKit.EnsureProjectActivatable` throws `MandatoryGlobalKit` and `KitActivationService` calls it before any disk work (`KitActivationService.cs:23`, `SkillKit.cs:82-88`) | live guard, live behavior |
 
