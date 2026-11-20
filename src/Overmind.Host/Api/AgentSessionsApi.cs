@@ -29,6 +29,25 @@ public static class AgentSessionsApi
             return HttpErrors.BadRequest("Alias and vendor are required to register an agent session.");
         }
 
+        var alias = request.Alias.Trim();
+        if (alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal) &&
+            request.PriorSessionId is { } priorId &&
+            await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == priorId, ct) is { } prior &&
+            !prior.Alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal))
+        {
+            // Reconnect re-attach: the workspace stamp names the row this adapter registered last
+            // run, so resuming keeps its alias+vendor and its session id — the id claim locks match
+            // on. Only the placeholder path resumes; an explicit alias is the operator's choice and
+            // keeps the fresh-registration path, as does an alive rival holding the row's alias.
+            var aliveSince = await AliveSinceAsync(db, ct);
+            if (await FindAliveAliasHolderAsync(db, prior.Id, prior.Alias, aliveSince, ct) is null)
+            {
+                prior.Resume();
+                await db.SaveChangesAsync(ct);
+                return Results.Created($"/api/agent/sessions/{prior.Id}", ToResponse(prior));
+            }
+        }
+
         AgentSession session;
         try
         {

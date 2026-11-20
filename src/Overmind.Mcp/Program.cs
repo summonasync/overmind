@@ -71,7 +71,11 @@ var alias = AgentIdentity.ResolveAlias();
 var vendor = AgentIdentity.ResolveVendor();
 try
 {
-    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, CancellationToken.None);
+    // The workspace stamp names the row this workspace registered last run; passing it lets the
+    // host resume that row (identity and session id survive the restart) instead of minting a
+    // fresh placeholder row under which held claims strand.
+    var priorSessionId = workspaceIdentity.TryRead()?.SessionId;
+    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, priorSessionId, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
