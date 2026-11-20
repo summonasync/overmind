@@ -129,6 +129,7 @@ public static class DependencyInjection
         services.AddScoped<EntryLinkWriter>();
         services.AddScoped<EntryLinkReader>();
         services.AddScoped<EntryLinkTriage>();
+        services.AddScoped<GraphReader>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddScoped<IMaterializer, SkillMaterializer>();

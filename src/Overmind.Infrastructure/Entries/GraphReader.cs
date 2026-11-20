@@ -128,9 +128,10 @@ public sealed class GraphReader
         return query;
     }
 
-    // A search term becomes a LIKE pattern that matches a substring, case-insensitive for ASCII as SQLite's LIKE
-    // is; a term that is only wildcards or blank yields null so the caller skips the filter rather than matching
-    // the literal '%'. The escape character keeps a real % or _ in the term as itself.
+    // A search term becomes a LIKE pattern matching a substring — case-insensitive for ASCII as SQLite's LIKE is,
+    // case-sensitive otherwise, so a Cyrillic title in the wrong case does not match. Only a blank term yields null
+    // and skips the filter; a term of pure wildcards is escaped and matched literally, so a bare '%' looks for a
+    // percent sign, not for everything. The escape character keeps a real % or _ in the term as itself.
     private static string? LikePattern(string? search)
     {
         var value = search?.Trim();
