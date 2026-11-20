@@ -42,8 +42,10 @@ public sealed record GraphCountsDto(
     // predicate yet carry no edge in this payload, because every one of their links leaves this view (to a Done
     // feature the default hides). A node with two such links still counts once. It is the honest answer to "why
     // is this dot isolated when it is not an orphan" — the legend says "N notes here link to something outside
-    // this view", never "N links lead outside", which this number cannot back. The dropped-edge count itself is
-    // not carried here (GraphReader never surfaces it); T6 derives it from Nodes+Edges if the legend ever needs it.
+    // this view", never "N links lead outside", which this number cannot back. The dropped-edge count is not carried
+    // here and is NOT derivable from this payload: a node hiding one link and a node hiding two produce identical
+    // nodes, edges, orphans and IsolatedInView. Anyone who wants the link tally must surface it where the edges are
+    // dropped (GraphReader), not reconstruct it downstream.
     int IsolatedInView);
 
 public sealed record GraphResponse(
