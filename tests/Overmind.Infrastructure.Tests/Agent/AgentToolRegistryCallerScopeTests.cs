@@ -17,6 +17,76 @@ public sealed class AgentToolRegistryCallerScopeTests : IDisposable
 
     private static readonly Guid ConversationProject = Guid.Parse("019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01");
 
+    // Every artifact door now travels with the caller pair the host compares against — and it travels on
+    // one request, because the object-scope check reads headers the same call already carries (R6).
+    // The turn is armed for all eight: that is the branch where an unscoped dispatch would be the most
+    // privileged one, and these four doors carry their conversation's own projectId so 241's argument
+    // guard cannot be what silences them.
+    [Theory]
+    [InlineData("planning_read_artifact", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13"}""")]
+    [InlineData("planning_read_artifact_diff", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","fromVersion":1,"toVersion":2}""")]
+    [InlineData("planning_set_status", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","status":"inProgress","logNote":"taking it"}""")]
+    [InlineData("planning_validate", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13"}""")]
+    [InlineData("planning_append_log", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","note":"progress","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01"}""")]
+    [InlineData("planning_edit_log", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","text":"corrected","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01"}""")]
+    [InlineData("planning_patch_artifact", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","section":"goal","content":"<goal>x</goal>","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01"}""")]
+    [InlineData("planning_delete_artifact", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","logNote":"draft cleanup","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01"}""")]
+    public async Task InvokeAsync_ArtifactDoor_ReachesTheHostWithTheCallerPairInOneRequest(string tool, string json)
+    {
+        var (registry, handler) = Registry();
+        var instruction = Guid.NewGuid();
+
+        var result = await registry.InvokeAsync(
+            tool, JsonDocument.Parse(json).RootElement.Clone(),
+            new AgentToolInvocation(true, instruction, Guid.NewGuid(), ConversationProject),
+            CancellationToken.None);
+
+        result.TryGetProperty("error", out _).ShouldBeFalse(
+            $"{tool}: an error here means a guard refused before the wire — the argument guard, not 246, " +
+            $"would produce exactly this shape: {result.GetRawText()}");
+
+        var request = handler.Requests.ShouldHaveSingleItem($"{tool} must not spend a second round-trip on scope");
+        Scope(request).ShouldBe(ConversationProject.ToString("D"), tool);
+        Marker(request).ShouldBe(AgentCallerHeaders.MarkerValue, tool);
+    }
+
+    // The other half of the same sentence: where a projectId argument IS present, 241's argument guard is
+    // still the first thing to refuse a foreign one, before any caller pair reaches the host.
+    [Theory]
+    [InlineData("planning_append_log", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","note":"n","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f99"}""")]
+    [InlineData("planning_edit_log", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","text":"t","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f99"}""")]
+    [InlineData("planning_patch_artifact", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","section":"goal","content":"c","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f99"}""")]
+    [InlineData("planning_delete_artifact", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f99"}""")]
+    public async Task InvokeAsync_ArtifactDoorWithForeignProjectArgument_RefusedByTheArgumentGuardFirst(
+        string tool, string json)
+    {
+        var (registry, handler) = Registry();
+
+        var result = await registry.InvokeAsync(
+            tool, JsonDocument.Parse(json).RootElement.Clone(), Turn(ConversationProject), CancellationToken.None);
+
+        result.GetProperty("code").GetString().ShouldBe(
+            AgentToolRegistry.ProjectScopeMismatchCode,
+            $"{tool}: a 246 test that passes by tripping this guard proves nothing about the object scope");
+        handler.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ArtifactDoorOfAGlobalConversation_SendsTheSentinelAndNothingElse()
+    {
+        var (registry, handler) = Registry();
+
+        await registry.InvokeAsync(
+            "planning_patch_artifact",
+            Args(new { artifactId = Guid.NewGuid(), section = "goal", content = "<goal>x</goal>" }),
+            Turn(null),
+            CancellationToken.None);
+
+        var request = handler.Requests.ShouldHaveSingleItem();
+        Marker(request).ShouldBe(AgentCallerHeaders.MarkerValue);
+        Scope(request).ShouldBe(AgentCallerHeaders.GlobalScopeValue);
+    }
+
     [Fact]
     public async Task InvokeAsync_ScopedDoorOnThePlainBranch_CarriesTheConversationScope()
     {
@@ -71,11 +141,13 @@ public sealed class AgentToolRegistryCallerScopeTests : IDisposable
         Scope(request).ShouldBe(AgentCallerHeaders.GlobalScopeValue);
     }
 
+    // One pin per family still on the old delegate, plus planning_upsert_artifact: an argument-addressed
+    // door that 246 never converts, so this row cannot go stale half-way through the feature.
     [Theory]
     [InlineData("read_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11"}""")]
     [InlineData("update_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11","content":"x"}""")]
     [InlineData("issues_get", """{"issueId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f12"}""")]
-    [InlineData("planning_patch_artifact", """{"artifactId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f13","brief":"x"}""")]
+    [InlineData("planning_upsert_artifact", """{"projectId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f01","slug":"001-x","kind":"spec","body":"b"}""")]
     public async Task InvokeAsync_DoorStillOnTheOldDelegate_CarriesNoCallerHeadersYet(string tool, string json)
     {
         var (registry, handler) = Registry();

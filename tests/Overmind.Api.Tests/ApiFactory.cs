@@ -30,7 +30,7 @@ public sealed class StubConversationStreamSource(TurnStreamGate gate) : IConvers
     }
 }
 
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databasePath;
     private readonly bool _preserveDatabase;

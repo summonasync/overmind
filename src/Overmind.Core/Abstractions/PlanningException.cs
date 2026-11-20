@@ -477,4 +477,21 @@ public sealed class PlanningException : Exception
             $"Operation id '{operationId}' was already used with a different request (method, path or body differ). " +
             "An operation id replays only its own request: resend the identical payload to get the stored response, " +
             "or mint a new id for a different operation.");
+
+    public static PlanningException ArtifactOutsideCallerProject(
+        Guid artifactId, Guid owningProjectId, Guid callerProjectId) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ArtifactOutsideCallerProject,
+            $"Artifact '{artifactId}' belongs to project '{owningProjectId}', but this conversation belongs to project " +
+            $"'{callerProjectId}'. The host compared the object you addressed with the conversation's project and " +
+            "refused the call, so nothing was read or written and the artifact's content stayed on its own board. " +
+            $"Address an artifact of '{callerProjectId}' — planning_list_artifacts lists that project's features — " +
+            $"or say to the owner that this work belongs to '{owningProjectId}'.");
+
+    public static PlanningException AgentCallerScopeUnverifiable(string defect) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AgentCallerScopeUnverifiable,
+            $"The caller identity is unverifiable: {defect}. The host cannot tell which project this conversation " +
+            "belongs to, and refusing beats guessing — nothing was read or written. The agent marker and the caller " +
+            "scope travel only as a pair, emitted together by the embedded-agent transport and never assembled by " +
+            "hand; a conversation without a project still sends the pair, with the scope written as the literal " +
+            "'global'.");
 }

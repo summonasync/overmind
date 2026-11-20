@@ -87,5 +87,7 @@ public enum PlanningFailureCode
     MissingConversationMessage,
     BatchEmpty,
     InvalidBatchOp,
-    BatchArtifactOutsideFeature
+    BatchArtifactOutsideFeature,
+    ArtifactOutsideCallerProject,
+    AgentCallerScopeUnverifiable
 }

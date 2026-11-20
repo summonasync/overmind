@@ -120,6 +120,26 @@ public sealed class AgentLoopbackClientCallerScopeTests
     }
 
     [Fact]
+    public void Pair_WithoutACaller_RefusesAnyReservedHeaderNameNotJustTheHalfPair()
+    {
+        var forged = new Dictionary<string, string>
+        {
+            [AgentCallerHeaders.MarkerHeader.ToLowerInvariant()] = "embedded-agent",
+            [AgentCallerHeaders.ScopeHeader.ToUpperInvariant()] = Guid.NewGuid().ToString("D"),
+        };
+
+        var error = Should.Throw<AgentCallerContractException>(() => AgentCallerHeaders.Pair(null, forged));
+
+        error.Code.ShouldBe(AgentCallerHeaders.ReservedHeaderCollisionCode);
+        error.Message.ShouldContain(AgentCallerHeaders.MarkerHeader, Case.Sensitive,
+            "a complete pair assembled by hand is still identity the transport never issued");
+        error.Message.ShouldContain(AgentCallerHeaders.ScopeHeader, Case.Sensitive);
+        error.Message.ShouldNotContain(
+            AgentCallerHeaders.MarkerHeader.ToLowerInvariant(), Case.Sensitive,
+            "the refusal names the headers as the host spells them, not as the caller typed them");
+    }
+
+    [Fact]
     public async Task HandPassedCallerHeaderTogetherWithTheTransportCaller_IsRefusedAsACollision()
     {
         var (client, handler) = Client();
