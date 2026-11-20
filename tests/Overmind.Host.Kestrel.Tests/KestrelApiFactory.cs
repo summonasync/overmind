@@ -21,8 +21,10 @@ public sealed class KestrelApiFactory : WebApplicationFactory<Program>
     private readonly string _databasePath;
     private readonly string _portFilePath;
     private readonly string _webRoot;
+    private readonly bool _ownsWebRoot;
 
     private static readonly object ModelSeedLock = new();
+    private static readonly object WebRootGate = new();
 
     static KestrelApiFactory()
     {
@@ -39,16 +41,37 @@ public sealed class KestrelApiFactory : WebApplicationFactory<Program>
     }
 
     public KestrelApiFactory()
+        : this(CreateTemporaryWebRoot(), ownsWebRoot: true)
+    {
+    }
+
+    internal KestrelApiFactory(string webRoot)
+        : this(webRoot, ownsWebRoot: false)
+    {
+    }
+
+    private KestrelApiFactory(string webRoot, bool ownsWebRoot)
     {
         UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
         _databasePath = Path.Combine(Path.GetTempPath(), $"overmind-kestrel-{Guid.NewGuid():N}.db");
         _portFilePath = Path.Combine(Path.GetTempPath(), $"overmind-kestrel-{Guid.NewGuid():N}.port");
-        _webRoot = Path.Combine(Path.GetTempPath(), $"overmind-kestrel-wwwroot-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_webRoot);
+        _webRoot = webRoot;
+        _ownsWebRoot = ownsWebRoot;
+        lock (WebRootGate)
+        {
+            Environment.SetEnvironmentVariable("OVERMIND_WEB_ROOT", _webRoot);
+            _ = Services;
+        }
+    }
+
+    private static string CreateTemporaryWebRoot()
+    {
+        var webRoot = Path.Combine(Path.GetTempPath(), $"overmind-kestrel-wwwroot-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(webRoot);
         File.WriteAllText(
-            Path.Combine(_webRoot, "index.html"),
+            Path.Combine(webRoot, "index.html"),
             "<!doctype html><html><body>overmind kestrel test shell</body></html>");
-        Environment.SetEnvironmentVariable("OVERMIND_WEB_ROOT", _webRoot);
+        return webRoot;
     }
 
     public string BaseUrl
@@ -122,7 +145,7 @@ public sealed class KestrelApiFactory : WebApplicationFactory<Program>
             File.Delete(_portFilePath);
         }
 
-        if (Directory.Exists(_webRoot))
+        if (_ownsWebRoot && Directory.Exists(_webRoot))
         {
             Directory.Delete(_webRoot, recursive: true);
         }
