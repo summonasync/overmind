@@ -35,9 +35,10 @@ public static class GraphMapper
     private static GraphPositionDto ToPosition(GraphPosition position) =>
         new(position.Kind, position.Id, position.X, position.Y);
 
-    // A node the field marks as linked but that carries no rendered edge has every real link leaving this view —
-    // it would draw as an isolated dot the legend cannot otherwise explain. Off-view is counted from the projection
-    // it ships with, so the metric cannot disagree with the payload it describes.
+    // A node the field flags as linked but that carries no rendered edge has every real link leaving this view —
+    // it would draw as an isolated dot the legend cannot otherwise explain. The count is over NODES, not links: a
+    // node with two such links counts once. It is derived from the projection's own orphan flag and the rendered
+    // edges it ships with, so it cannot disagree with the payload it describes.
     private static GraphCountsDto ToCounts(GraphField field)
     {
         var rendered = new HashSet<GraphNodeId>();
@@ -47,13 +48,13 @@ public static class GraphMapper
             rendered.Add(edge.To);
         }
 
-        var offView = field.Nodes.Count(node => !node.IsOrphan
+        var isolatedInView = field.Nodes.Count(node => !node.IsOrphan
             && !rendered.Contains(new GraphNodeId(node.Kind, node.Id)));
 
         var counts = field.Counts;
         return new GraphCountsDto(
             counts.Nodes, counts.Edges, counts.Orphans,
             counts.EntryNodes, counts.ProjectNodes, counts.FeatureNodes,
-            offView);
+            isolatedInView);
     }
 }

@@ -23,10 +23,11 @@ public sealed class GraphApiTests : IAsyncLifetime
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
 
-    // Projects P1/P2/P3, open features F1 (InProgress) and F3 (Draft), a Done feature F2, and four entry nodes.
-    // E1 links F1; E4 links the Done F2 — the one node that is genuinely linked yet renders off-view until widened.
+    // Projects P1/P2/P3, open features F1 (InProgress) and F3 (Draft), Done features F2 and F5, four entry nodes.
+    // E1 links the open F1. E4 links BOTH Done features — the discriminating node: it carries two links that leave
+    // the default view, so a link count would read 2 where the view-isolated count reads 1 (one node, two links).
     private Guid _p1, _p2, _p3;
-    private Guid _f1, _f2, _f3;
+    private Guid _f1, _f2, _f3, _f5;
     private Guid _e1, _e2, _e3, _e4;
 
     public GraphApiTests() => _client = _factory.CreateClient();
@@ -53,15 +54,20 @@ public sealed class GraphApiTests : IAsyncLifetime
         var feature1 = Feature(_p1, "F1", "Alpha feature", PlanningFeatureStatus.InProgress);
         var feature2 = Feature(_p1, "F2", "Alpha archive", PlanningFeatureStatus.Done);
         var feature3 = Feature(_p2, "F3", "Beta feature", PlanningFeatureStatus.Draft);
-        db.PlanningFeatures.AddRange(feature1, feature2, feature3);
+        var feature5 = Feature(_p1, "F5", "Alpha archive two", PlanningFeatureStatus.Done);
+        db.PlanningFeatures.AddRange(feature1, feature2, feature3, feature5);
         _f1 = feature1.Id;
         _f2 = feature2.Id;
         _f3 = feature3.Id;
+        _f5 = feature5.Id;
         await db.SaveChangesAsync();
 
+        // E4 carries two derived links, both to Done features the default filter hides — the node whose link count
+        // (2) and whose isolated-in-view count (1) the review showed a name like OffViewLinks silently confuses.
         db.EntryLinks.AddRange(
             EntryLink.CreateDerived(_e1, EntryLinkKind.Feature, _f1),
-            EntryLink.CreateDerived(_e4, EntryLinkKind.Feature, _f2));
+            EntryLink.CreateDerived(_e4, EntryLinkKind.Feature, _f2),
+            EntryLink.CreateDerived(_e4, EntryLinkKind.Feature, _f5));
         await db.SaveChangesAsync();
     }
 
@@ -91,7 +97,7 @@ public sealed class GraphApiTests : IAsyncLifetime
         }
 
         AssertCountsMatchRows(payload);
-        AssertSplit(payload, nodes: 9, edges: 1, orphans: 6, entryNodes: 4, projectNodes: 3, featureNodes: 2, offView: 1);
+        AssertSplit(payload, nodes: 9, edges: 1, orphans: 6, entryNodes: 4, projectNodes: 3, featureNodes: 2, isolatedInView: 1);
     }
 
     [Fact]
@@ -100,11 +106,12 @@ public sealed class GraphApiTests : IAsyncLifetime
         var widened = await Graph("?includeDone=true");
 
         AssertCountsMatchRows(widened);
-        AssertSplit(widened, nodes: 10, edges: 2, orphans: 6, entryNodes: 4, projectNodes: 3, featureNodes: 3, offView: 0);
+        AssertSplit(widened, nodes: 11, edges: 3, orphans: 6, entryNodes: 4, projectNodes: 3, featureNodes: 4, isolatedInView: 0);
 
-        // Both halves of the mechanism, asserted as numbers, not "it works": the Done feature joins only widened,
-        // and E4's edge to it is dropped from the default view and rendered once widened.
+        // Both halves of the mechanism, asserted as numbers, not "it works": the Done features join only widened,
+        // and E4's two edges to them are dropped from the default view and rendered once widened.
         widened.Nodes.ShouldContain(node => node.Id == _f2);
+        widened.Nodes.ShouldContain(node => node.Id == _f5);
         var baseline = await Graph("?");
         baseline.Nodes.ShouldNotContain(node => node.Id == _f2);
         widened.Edges.ShouldContain(edge =>
@@ -162,7 +169,7 @@ public sealed class GraphApiTests : IAsyncLifetime
         payload.Nodes.ShouldAllBe(node => node.ProjectId == _p1);
         payload.Nodes.ShouldContain(node => node.Kind == "project" && node.Id == _p1);
         payload.Nodes.ShouldNotContain(node => node.Id == _p2);
-        AssertSplit(payload, nodes: 5, edges: 1, orphans: 2, entryNodes: 3, projectNodes: 1, featureNodes: 1, offView: 1);
+        AssertSplit(payload, nodes: 5, edges: 1, orphans: 2, entryNodes: 3, projectNodes: 1, featureNodes: 1, isolatedInView: 1);
     }
 
     [Fact]
@@ -253,15 +260,22 @@ public sealed class GraphApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task OffViewCount_LinksLeadOutsideThisView_InTheDefaultField()
+    public async Task IsolatedInView_CountsNodesNotLinks_OneNodeCarryingTwoOffViewLinksIsStillOne()
     {
-        // Minor #5: E4 is linked (not an orphan) yet its only edge goes to a Done feature the default hides, so
-        // it would render as an unexplained isolated dot. The count names that honestly, and it vanishes widened.
+        // B1's unit pin. E4 links two Done features the default view hides: a LINK count would report 2 here, the
+        // isolated-in-view NODE count reports 1. Widening proves E4 really carries both links (they surface as two
+        // rendered edges) yet once they render the node is no longer isolated — so the metric moves 1 -> 0 on the
+        // NODE, never on the link tally. Without this case the 1/0 split is ambiguous and the name could lie.
         var defaultView = await Graph("?");
-        defaultView.Counts.OffViewLinks.ShouldBe(1);
+        defaultView.Counts.IsolatedInView.ShouldBe(1, "one node, even though it carries two off-view links");
 
         var widened = await Graph("?includeDone=true");
-        widened.Counts.OffViewLinks.ShouldBe(0);
+        var e4Links = widened.Edges.Count(edge => edge.FromId == _e4 && edge.ToKind == "feature");
+        e4Links.ShouldBe(2, "the same node has two rendered links once widened — so a link count would be 2");
+        widened.Counts.IsolatedInView.ShouldBe(0, "the node is no longer isolated in the widened view");
+
+        // No node with a single off-view link can be mistaken for this metric: the count is per isolated node.
+        defaultView.Nodes.Single(node => node.Id == _e4).Orphan.ShouldBeFalse();
     }
 
     [Fact]
@@ -345,7 +359,7 @@ public sealed class GraphApiTests : IAsyncLifetime
 
     private static void AssertSplit(
         GraphEnvelope payload, int nodes, int edges, int orphans,
-        int entryNodes, int projectNodes, int featureNodes, int offView)
+        int entryNodes, int projectNodes, int featureNodes, int isolatedInView)
     {
         payload.Counts.Nodes.ShouldBe(nodes);
         payload.Counts.Edges.ShouldBe(edges);
@@ -353,7 +367,7 @@ public sealed class GraphApiTests : IAsyncLifetime
         payload.Counts.EntryNodes.ShouldBe(entryNodes);
         payload.Counts.ProjectNodes.ShouldBe(projectNodes);
         payload.Counts.FeatureNodes.ShouldBe(featureNodes);
-        payload.Counts.OffViewLinks.ShouldBe(offView);
+        payload.Counts.IsolatedInView.ShouldBe(isolatedInView);
     }
 
     private static Guid Entry(OvermindDbContext db, Guid projectId, EntryType type, string title, string content)
@@ -395,7 +409,7 @@ public sealed class GraphApiTests : IAsyncLifetime
     public sealed record GraphEdgeDto(string FromKind, Guid FromId, string ToKind, Guid ToId, bool HasManual);
 
     public sealed record GraphCountsDto(
-        int Nodes, int Edges, int Orphans, int EntryNodes, int ProjectNodes, int FeatureNodes, int OffViewLinks);
+        int Nodes, int Edges, int Orphans, int EntryNodes, int ProjectNodes, int FeatureNodes, int IsolatedInView);
 
     public sealed record GraphEnvelope(
         List<GraphNodeDto> Nodes,

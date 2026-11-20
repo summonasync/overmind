@@ -38,10 +38,13 @@ public sealed record GraphCountsDto(
     int EntryNodes,
     int ProjectNodes,
     int FeatureNodes,
-    // Nodes drawn here that are linked in reality but whose every link leaves this view (to a Done feature the
-    // default hides, or a task the canvas never draws). It is the honest answer to "why is this dot isolated when
-    // it is not an orphan" — the legend can say "N notes link elsewhere" instead of the payload lying by omission.
-    int OffViewLinks);
+    // A NODE count, not a link count: how many of the nodes drawn here are flagged linked by the shared triage
+    // predicate yet carry no edge in this payload, because every one of their links leaves this view (to a Done
+    // feature the default hides). A node with two such links still counts once. It is the honest answer to "why
+    // is this dot isolated when it is not an orphan" — the legend says "N notes here link to something outside
+    // this view", never "N links lead outside", which this number cannot back. The dropped-edge count itself is
+    // not carried here (GraphReader never surfaces it); T6 derives it from Nodes+Edges if the legend ever needs it.
+    int IsolatedInView);
 
 public sealed record GraphResponse(
     IReadOnlyList<GraphNodeDto> Nodes,
