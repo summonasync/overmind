@@ -236,8 +236,12 @@ The ready installer — `overmind-<version>-setup.exe` (Inno Setup), built by
   without agent registrations, that is just a convenience.
 - **Upgrading.** Running `setup.exe` again over an existing install is an
   in-place upgrade: the installer stops a running Host itself via
-  `POST /api/shutdown` (a planned stop, not `taskkill`) before replacing
-  files, then may restart it.
+  `POST /api/shutdown` (a planned stop), polling its health endpoint for up
+  to 10 seconds, and only then falls back to `taskkill /F` on your username.
+  It does **not** restart the Host after a silent upgrade — the start entry
+  is `postinstall skipifsilent`, so only the interactive last-page
+  **Start Overmind now** checkbox launches it
+  ([docs/install-windows.md](docs/install-windows.md#upgrading)).
 - **Uninstalling.** Through "Apps & features" / Control Panel, like any
   program. The installer asks in a separate dialog whether to delete user
   data (`%USERPROFILE%\.overmind` — the database, settings, downloaded
