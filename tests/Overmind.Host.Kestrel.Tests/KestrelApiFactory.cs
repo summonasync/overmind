@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -104,6 +105,8 @@ public sealed class KestrelApiFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<KestrelTurnStreamGate>();
+            services.AddSingleton<KestrelResponseDelayGate>();
+            services.AddSingleton<IStartupFilter, KestrelResponseDelayStartupFilter>();
             services.RemoveAll<IConversationStreamSource>();
             services.AddSingleton<IConversationStreamSource>(sp =>
                 new StubKestrelConversationStreamSource(sp.GetRequiredService<KestrelTurnStreamGate>()));
