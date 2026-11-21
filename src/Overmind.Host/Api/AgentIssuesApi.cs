@@ -134,11 +134,16 @@ public static class AgentIssuesApi
             return callerRefusal!;
         }
 
+        var warnings = new List<object>();
+        var text = SoftCapSoften.Cap(request.Text, SoftCapLimits.FollowUpText, warnings);
         try
         {
-            var append = await service.AppendAsync(id, request.AuthorProjectId, request.Text, ct, callerProjectId);
+            var append = await service.AppendAsync(id, request.AuthorProjectId, text!, ct, callerProjectId);
             return Results.Ok(new IssueAppendItem(
-                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt));
+                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt)
+            {
+                Warnings = SoftCapSoften.Merge(warnings)
+            });
         }
         catch (PlanningException ex)
         {
@@ -207,12 +212,17 @@ public static class AgentIssuesApi
         IssueService service,
         CancellationToken ct)
     {
+        var warnings = new List<object>();
+        var text = SoftCapSoften.Cap(request.Text, SoftCapLimits.FollowUpText, warnings);
         try
         {
             await EnsureIssueOnBoardAsync(service, projectId, id, ct);
-            var append = await service.AppendAsync(id, request.AuthorProjectId, request.Text, ct);
+            var append = await service.AppendAsync(id, request.AuthorProjectId, text!, ct);
             return Results.Ok(new IssueAppendItem(
-                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt));
+                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt)
+            {
+                Warnings = SoftCapSoften.Merge(warnings)
+            });
         }
         catch (PlanningException ex)
         {

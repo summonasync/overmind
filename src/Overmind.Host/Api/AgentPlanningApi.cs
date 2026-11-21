@@ -464,17 +464,20 @@ public static class AgentPlanningApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
+        var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             var result = await service.SetStatusAsync(
-                id, request.Status, PlanningLogSource.Agent, request.LogNote, ct,
+                id, request.Status, PlanningLogSource.Agent, logNote!, ct,
                 requireHumanProof: true, callerProjectId: callerProjectId);
             return Results.Ok(new SetPlanningArtifactStatusResponse(
                 result.ArtifactId,
                 result.Status,
                 result.Version,
                 result.LastLogLine,
-                result.Warnings,
+                SoftCapSoften.Merge(soft, result.Warnings),
                 result.FeatureStatusChanged));
         }
         catch (PlanningException ex)
@@ -513,10 +516,13 @@ public static class AgentPlanningApi
             delegatedProvenance = DelegatedApprovalGate.ProvenanceLine(grant);
         }
 
+        var soft = new List<object>();
+        var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             await service.SetStatusAsync(
-                projectId, slug, request.Status, request.LogNote,
+                projectId, slug, request.Status, logNote!,
                 requireHumanTap: delegatedProvenance is null, ct, delegatedProvenance);
         }
         catch (PlanningException ex)
@@ -526,7 +532,7 @@ public static class AgentPlanningApi
 
         var feature = await db.PlanningFeatures
             .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Slug == slug, ct);
-        return Results.Ok(PlanningMapper.ToMutationResponse(feature!));
+        return Results.Ok(PlanningMapper.ToMutationResponse(feature!) with { Warnings = SoftCapSoften.Merge(soft) });
     }
 
     internal static async Task<IResult> UpdateFeature(
@@ -547,14 +553,20 @@ public static class AgentPlanningApi
             ? null
             : Enum.Parse<FeaturePriority>(request.Priority, ignoreCase: true);
 
+        var soft = new List<object>();
+        var updateLogNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             var feature = await service.UpdateAsync(
                 projectId, slug, request.Title, request.Body,
-                priority, request.LogNote, PlanningLogSource.Agent, request.Lane, request.CodeSurfaces, ct);
+                priority, updateLogNote!, PlanningLogSource.Agent, request.Lane, request.CodeSurfaces, ct);
 
             return Results.Ok(new PlanningFeatureAgentUpdateResponse(
-                feature.Slug, feature.Status, feature.Version, feature.UpdatedAt, feature.Body.Length));
+                feature.Slug, feature.Status, feature.Version, feature.UpdatedAt, feature.Body.Length)
+            {
+                Warnings = SoftCapSoften.Merge(soft)
+            });
         }
         catch (PlanningException ex)
         {
@@ -578,16 +590,23 @@ public static class AgentPlanningApi
 
         var section = request.Section.Trim();
 
+        var soft = new List<object>();
+        var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft, singleLine: true);
+        var patchLogNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             var feature = await service.PatchAsync(
                 projectId, slug, section, request.Content,
-                request.Remove, request.Reason, request.LogNote,
+                request.Remove, patchReason, patchLogNote!,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent), ct);
 
             return Results.Ok(new PlanningFeaturePatchResponse(
                 feature.Slug, section, feature.Status, feature.Version,
-                feature.Body.Length, feature.LastLogLine));
+                feature.Body.Length, feature.LastLogLine)
+            {
+                Warnings = SoftCapSoften.Merge(soft)
+            });
         }
         catch (PlanningException ex)
         {
@@ -615,9 +634,10 @@ public static class AgentPlanningApi
         try
         {
             var feature = await PlanningArtifactsApi.ResolveFeatureOrThrow(db, projectId, slug, ct);
-            var ops = await MapBatchOpsAsync(feature, request.Ops, db, ct);
+            var soft = new List<object>();
+            var ops = await MapBatchOpsAsync(feature, request.Ops, db, soft, ct);
             var result = await batchService.ApplyAsync(projectId, slug, ops, ct);
-            return Results.Ok(ToBatchResponse(result, request.Ops, origin, context));
+            return Results.Ok(ToBatchResponse(result, request.Ops, origin, context, soft));
         }
         catch (PlanningException ex)
         {
@@ -626,19 +646,23 @@ public static class AgentPlanningApi
     }
 
     private static async Task<List<PlanningBatchOp>> MapBatchOpsAsync(
-        PlanningFeature feature, PlanningBatchOpRequest[] wireOps, OvermindDbContext db, CancellationToken ct)
+        PlanningFeature feature,
+        PlanningBatchOpRequest[] wireOps,
+        OvermindDbContext db,
+        List<object> soft,
+        CancellationToken ct)
     {
         var ops = new List<PlanningBatchOp>(wireOps.Length);
         for (var i = 0; i < wireOps.Length; i++)
         {
-            ops.Add(await MapBatchOpAsync(feature, i, wireOps[i], db, ct));
+            ops.Add(await MapBatchOpAsync(feature, i, wireOps[i], db, soft, ct));
         }
 
         return ops;
     }
 
     private static async Task<PlanningBatchOp> MapBatchOpAsync(
-        PlanningFeature feature, int index, PlanningBatchOpRequest wire, OvermindDbContext db, CancellationToken ct)
+        PlanningFeature feature, int index, PlanningBatchOpRequest wire, OvermindDbContext db, List<object> soft, CancellationToken ct)
     {
         if (!TryParseOpName(wire.Op, out var name))
         {
@@ -647,17 +671,19 @@ public static class AgentPlanningApi
 
         return name switch
         {
-            PlanningBatchOpName.Patch => await MapPatchOpAsync(feature, index, wire, db, ct),
+            PlanningBatchOpName.Patch => await MapPatchOpAsync(feature, index, wire, db, soft, ct),
             PlanningBatchOpName.AppendLog => new PlanningBatchOp(
-                name, ArtifactId: await AddressBatchArtifactAsync(feature, wire, index, db, ct), Note: wire.Note),
-            PlanningBatchOpName.SetStatus => await MapSetStatusOpAsync(feature, index, wire, db, ct),
-            PlanningBatchOpName.UpsertTasks => new PlanningBatchOp(name, Tasks: MapBatchTasks(wire.Tasks, index)),
-            PlanningBatchOpName.Notify => MapNotifyOp(index, wire),
+                name,
+                ArtifactId: await AddressBatchArtifactAsync(feature, wire, index, db, ct),
+                Note: SoftCapSoften.Cap(wire.Note, SoftCapLimits.LogLine, soft)),
+            PlanningBatchOpName.SetStatus => await MapSetStatusOpAsync(feature, index, wire, db, soft, ct),
+            PlanningBatchOpName.UpsertTasks => new PlanningBatchOp(name, Tasks: MapBatchTasks(wire.Tasks, index, soft)),
+            PlanningBatchOpName.Notify => MapNotifyOp(index, SoftCapSoften.Cap(wire.Text, AgentNotification.MaxTextLength, soft), wire),
             _ => throw PlanningException.BatchOp(index, BatchOpUnknown(wire.Op)),
         };
     }
 
-    private static PlanningTaskUpsert[]? MapBatchTasks(PlanningTaskUpsertRequest[]? tasks, int index)
+    private static PlanningTaskUpsert[]? MapBatchTasks(PlanningTaskUpsertRequest[]? tasks, int index, List<object> soft)
     {
         if (tasks is null)
         {
@@ -674,14 +700,19 @@ public static class AgentPlanningApi
             }
 
             mapped[i] = new PlanningTaskUpsert(
-                task.Body, task.Order, task.Review, task.LogNote, task.Brief, task.BlockedBy);
+                task.Body,
+                task.Order,
+                task.Review,
+                SoftCapSoften.Cap(task.LogNote, SoftCapLimits.LogLine, soft),
+                SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true),
+                task.BlockedBy);
         }
 
         return mapped;
     }
 
     private static async Task<PlanningBatchOp> MapPatchOpAsync(
-        PlanningFeature feature, int index, PlanningBatchOpRequest wire, OvermindDbContext db, CancellationToken ct)
+        PlanningFeature feature, int index, PlanningBatchOpRequest wire, OvermindDbContext db, List<object> soft, CancellationToken ct)
     {
         var artifactId = await AddressBatchArtifactAsync(feature, wire, index, db, ct);
         var wirePatch = wire.Patch;
@@ -701,15 +732,16 @@ public static class AgentPlanningApi
             ArtifactId: artifactId,
             Patch: new PlanningArtifactPatch(
                 wirePatch.Section, wirePatch.Content, wirePatch.AcIndex, wirePatch.AcText,
-                wirePatch.Brief, wirePatch.LogNote,
+                SoftCapSoften.Cap(wirePatch.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true),
+                SoftCapSoften.Cap(wirePatch.LogNote, SoftCapLimits.LogLine, soft),
                 Untick: op == "untick_ac",
                 Amend: op == "amend_result",
                 Remove: op == "remove_section",
-                Reason: wirePatch.Reason));
+                Reason: SoftCapSoften.Cap(wirePatch.Reason, SoftCapLimits.Reason, soft, singleLine: true)));
     }
 
     private static async Task<PlanningBatchOp> MapSetStatusOpAsync(
-        PlanningFeature feature, int index, PlanningBatchOpRequest wire, OvermindDbContext db, CancellationToken ct)
+        PlanningFeature feature, int index, PlanningBatchOpRequest wire, OvermindDbContext db, List<object> soft, CancellationToken ct)
     {
         var artifactId = await AddressBatchArtifactAsync(feature, wire, index, db, ct);
 
@@ -733,10 +765,11 @@ public static class AgentPlanningApi
         }
 
         return new PlanningBatchOp(
-            PlanningBatchOpName.SetStatus, ArtifactId: artifactId, Status: status, LogNote: wire.LogNote);
+            PlanningBatchOpName.SetStatus, ArtifactId: artifactId, Status: status,
+            LogNote: SoftCapSoften.Cap(wire.LogNote, SoftCapLimits.LogLine, soft));
     }
 
-    private static PlanningBatchOp MapNotifyOp(int index, PlanningBatchOpRequest wire)
+    private static PlanningBatchOp MapNotifyOp(int index, string? text, PlanningBatchOpRequest wire)
     {
         if (wire.Kind is null)
         {
@@ -753,7 +786,7 @@ public static class AgentPlanningApi
         return new PlanningBatchOp(
             PlanningBatchOpName.Notify,
             Kind: kind,
-            Text: wire.Text,
+            Text: text,
             Tab: wire.Tab,
             FeatureSlug: wire.FeatureSlug,
             From: wire.From);
@@ -852,11 +885,11 @@ public static class AgentPlanningApi
     }
 
     private static PlanningBatchResponse ToBatchResponse(
-        PlanningBatchResult result, PlanningBatchOpRequest[] wireOps, BrowserOrigin origin, HttpContext context) =>
+        PlanningBatchResult result, PlanningBatchOpRequest[] wireOps, BrowserOrigin origin, HttpContext context, List<object> soft) =>
         new(
             result.FeatureSlug,
             [.. result.Results.Select((op, i) => ToBatchOpResult(op, i, wireOps[i], origin, context))],
-            result.Warnings is { Count: > 0 } ? [.. result.Warnings] : null);
+            SoftCapSoften.Merge(soft, result.Warnings));
 
     private static PlanningBatchOpResultResponse ToBatchOpResult(
         PlanningBatchOpResult op, int index, PlanningBatchOpRequest wire, BrowserOrigin origin, HttpContext context)
@@ -1033,6 +1066,11 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(PlanningException.InvalidPatchRequest());
         }
 
+        var soft = new List<object>();
+        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true);
+        var patchLogNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+        var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft, singleLine: true);
+
         try
         {
             var op = request.Op!.Trim();
@@ -1041,11 +1079,11 @@ public static class AgentPlanningApi
                 id,
                 new PlanningArtifactPatch(
                     request.Section, request.Content, request.AcIndex, request.AcText,
-                    request.Brief, request.LogNote,
+                    brief, patchLogNote,
                     Untick: op == "untick_ac",
                     Amend: op == "amend_result",
                     Remove: op == "remove_section",
-                    Reason: request.Reason),
+                    Reason: patchReason),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent),
                 callerProjectId);
@@ -1064,7 +1102,8 @@ public static class AgentPlanningApi
                 flipsAc ? result.TickedIndex : null,
                 flipsAc ? result.TickedText : null,
                 flipsAc ? result.NoChange : null,
-                artifact.ValidationProofVoided));
+                artifact.ValidationProofVoided,
+                SoftCapSoften.Merge(soft)));
         }
         catch (PlanningException ex)
         {

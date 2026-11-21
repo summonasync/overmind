@@ -43,8 +43,10 @@ public static class NotificationsApi
         }
 
         var kind = Enum.Parse<NotificationKind>(request.Kind, ignoreCase: true);
+        var warnings = new List<object>();
+        var text = SoftCapSoften.Cap(request.Text, AgentNotification.MaxTextLength, warnings);
         var notification = await service.CreateAsync(
-            kind, request.Text, request.ProjectId, request.FeatureSlug, request.Tab, request.From, ct);
+            kind, text!, request.ProjectId, request.FeatureSlug, request.Tab, request.From, ct);
 
         if (notification is null)
         {
@@ -54,7 +56,8 @@ public static class NotificationsApi
         var url = NotificationLinks.Dashboard(
             origin.Resolve(context), notification.ProjectId, notification.FeatureSlug, notification.Tab);
 
-        return Results.Created($"/api/notifications/{notification.Id}", NotificationMapper.ToAgentResponse(notification, url));
+        return Results.Created($"/api/notifications/{notification.Id}",
+            NotificationMapper.ToAgentResponse(notification, url) with { Warnings = SoftCapSoften.Merge(warnings) });
     }
 
     internal static async Task<IResult> Replies(

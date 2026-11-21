@@ -543,6 +543,9 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var warnings = new List<object>();
+        var followUpText = SoftCapSoften.Cap(request.Text, SoftCapLimits.FollowUpText, warnings);
+
         ContextEntry? committed = null;
         var outcome = await EntryWriteCommit.RunAsync(
             db,
@@ -556,7 +559,7 @@ public static class EntriesApi
                     return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
                 }
 
-                entry.AppendFollowUp(request.Text);
+                entry.AppendFollowUp(followUpText!);
                 await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, attemptCt);
 
                 committed = entry;
@@ -566,7 +569,7 @@ public static class EntriesApi
                     async saveCt =>
                     {
                         await db.SaveChangesAsync(saveCt);
-                        return Results.Ok(EntryMapper.ToResponse(entry));
+                        return Results.Ok(EntryMapper.ToResponse(entry) with { Warnings = SoftCapSoften.Merge(warnings) });
                     });
             },
             ct);

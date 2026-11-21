@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
@@ -13,7 +14,8 @@ public sealed record WaveMessageResponse(
     string Text,
     IReadOnlyList<string> Mentions,
     DateTime CreatedAt,
-    string AuthorRole = AgentSession.DefaultRole);
+    string AuthorRole = AgentSession.DefaultRole,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record WaveUnreadResponse(WaveMessageResponse[] Items, DateTime WatermarkAt);
 

@@ -63,11 +63,14 @@ public static class LanesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
+        var contour = SoftCapSoften.Cap(request.Contour, PlanningLane.MaxContourLength, soft);
+
         try
         {
             var lane = await lanes.CreateLaneAsync(
-                projectId, request.Name, request.Contour, request.Priority, request.BoundAlias, ct);
-            return Results.Ok(ToRow(lane));
+                projectId, request.Name, contour, request.Priority, request.BoundAlias, ct);
+            return Results.Ok(ToRow(lane) with { Warnings = SoftCapSoften.Merge(soft) });
         }
         catch (PlanningException ex)
         {
@@ -92,10 +95,11 @@ public static class LanesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
         try
         {
-            var roster = await lanes.SetLanesAsync(projectId, ToUpserts(request.Lanes), ct);
-            return Results.Ok(ToResponse(roster));
+            var roster = await lanes.SetLanesAsync(projectId, ToUpserts(request.Lanes, soft), ct);
+            return Results.Ok(ToResponse(roster) with { Warnings = SoftCapSoften.Merge(soft) });
         }
         catch (PlanningException ex)
         {
@@ -128,11 +132,12 @@ public static class LanesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
         return await WriteAsync(
             projectId,
             new LaneUpsert(
                 name,
-                request.Contour,
+                SoftCapSoften.Cap(request.Contour, PlanningLane.MaxContourLength, soft),
                 request.SerialOrder,
                 request.Priority,
                 request.LiveSurfaces is null
@@ -141,6 +146,7 @@ public static class LanesApi
                 request.BoundAlias),
             LaneWriteMode.Update,
             lanes,
+            soft,
             ct);
     }
 
@@ -166,12 +172,12 @@ public static class LanesApi
     }
 
     private static async Task<IResult> WriteAsync(
-        Guid projectId, LaneUpsert lane, LaneWriteMode mode, LaneService lanes, CancellationToken ct)
+        Guid projectId, LaneUpsert lane, LaneWriteMode mode, LaneService lanes, List<object> soft, CancellationToken ct)
     {
         try
         {
             var roster = await lanes.UpsertLaneAsync(projectId, lane, mode, ct);
-            return Results.Ok(ToResponse(roster));
+            return Results.Ok(ToResponse(roster) with { Warnings = SoftCapSoften.Merge(soft) });
         }
         catch (PlanningException ex)
         {
@@ -200,11 +206,11 @@ public static class LanesApi
     private static LanesResponse ToResponse(IReadOnlyList<LaneRow> roster) =>
         new([.. roster.Select(ToRow)]);
 
-    private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes) =>
+    private static IReadOnlyList<LaneUpsert> ToUpserts(LaneUpsertRequest[] lanes, List<object> soft) =>
     [
         .. lanes.Select(lane => new LaneUpsert(
             lane.Name,
-            lane.Contour,
+            SoftCapSoften.Cap(lane.Contour, PlanningLane.MaxContourLength, soft),
             lane.SerialOrder,
             lane.Priority,
             lane.LiveSurfaces is null
