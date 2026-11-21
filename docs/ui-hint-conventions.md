@@ -28,8 +28,9 @@ Keep the native attribute, change nothing, when the claim is not a claim:
    `<EmptyState>`, `<WikiSection>`, `<ChoiceButton>` is a heading prop, not a hover claim —
    that class verdict covers most of the 205 untouched rows.
 
-Exception worth naming: `title={maybeUndefined}` on a state branch silently ships an empty
-tooltip. `feature-claim-chip.tsx:45` did that for a stale chip with no `claimedAt`; branch the
+Exception worth naming: `title={maybeUndefined}` on a state branch ships no tooltip at all —
+React omits an undefined `title` attribute, so the affordance is an absent bubble, not an empty
+one. `feature-claim-chip.tsx:57` did that for a stale chip with no `claimedAt` (pre-fix); branch the
 text or drop the attribute.
 
 CSS truncation alone never makes a plain title a disclosure gap.
@@ -44,7 +45,7 @@ state or discloses an outcome (who holds a claim, why something is blocked, what
 decision was, whether a folder is readable). T2 converted 10 rows on this test, T1 2 badge rows.
 
 Converting keeps the visible `title=` for mouse users — the fix is an extra AT path, not a swap
-(`feature-claim-chip.tsx:36` still carries the title after `5a7f81ca`).
+(`feature-claim-chip.tsx:57` still carries the title after `5a7f81ca`).
 
 `aria-label` on the same tag clears the harness mouse-only flag but does not clear the visual
 gap: the native bubble still only renders on hover, so a keyboard-only sighted user sees nothing.
@@ -54,7 +55,9 @@ gap: the native bubble still only renders on hover, so a keyboard-only sighted u
 ## Which mechanism
 
 - **Short claim, host takes focus** → `sr-only` description node + `aria-describedby` on the
-  host. `features/planning/components/feature-claim-chip.tsx:29-38` at `5a7f81ca`;
+  host, anchor id scoped per instance.
+  `features/planning/components/feature-claim-chip.tsx:26-45` (human arm, `claim-chip-human-${slug}-desc`)
+  after `5efb1da7` fixed the static-id shape;
   `features/entries/components/entry-state-chip.tsx:19-23` at `d68bbbe0`. No new chrome, no
   layout change.
 - **Host never takes focus** (disabled buttons are not focusable, so `aria-describedby` on them
@@ -82,7 +85,9 @@ Traps, all hit in this pass:
   first/last rounding onto the `<li>` (`kit-list.tsx:26,33`) — otherwise the last row's bubble is
   cut while the keyboard user still gets `aria-describedby`: a half-fix that looks done.
 - Anchor ids must be per instance. One shared id across list rows collides, so the kits bubbles
-  use `hint-kit-<kitId>-class` / `-source` (`kit-class-badge.tsx:14`).
+  use `hint-kit-<kitId>-class` / `-source` (`kit-class-badge.tsx:14`). The claim chip shipped
+  exactly this defect with static `claim-chip-*-desc` ids (`5a7f81ca`), caught by the wave B
+  review — it now scopes all three arms by slug (`claim-chip-alive-<slug>-desc`, `5efb1da7`).
 
 ## Wording
 
