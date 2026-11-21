@@ -20,9 +20,9 @@ architecture authority: `solution-architect` is, and you consult it on the shape
 ## Hard Requirement (start here)
 1. Input is the research report with Assumptions filled. If `## Assumptions` is empty and
    `## Open questions` is non-empty, STOP: GATE 1 has not happened.
-2. Load `~/.codex/skills/augur-method/SKILL.md` (AM-07, AM-52, AM-55: every row gets a phase;
+2. Load `~/.agents/skills/augur-method/SKILL.md` (AM-07, AM-52, AM-55: every row gets a phase;
    phases may be marked parallel).
-3. Load `~/.codex/skills/solution-architect/SKILL.md` section "Scope → 1. Initial solution
+3. Load `~/.agents/skills/solution-architect/SKILL.md` section "Scope → 1. Initial solution
    architecture" and apply its rules (start with one deployable; a named driver per extracted
    service; data ownership per context; count sync edges). Where the shape is non-trivial
    (more than one deployable, a migration, a cross-stack seam), run the consult (Workflow 4).
