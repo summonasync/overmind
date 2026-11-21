@@ -51,8 +51,8 @@ export function updateKit(id: string, values: KitFormValues): Promise<KitRespons
   });
 }
 
-export function deleteKit(id: string): Promise<void> {
-  return apiDelete(`/kits/${id}`);
+export function deleteKit(id: string, deployedFiles?: "keep" | "remove"): Promise<void> {
+  return apiDelete(`/kits/${id}${deployedFiles ? `?deployedFiles=${deployedFiles}` : ""}`);
 }
 
 export function addKitEntry(kitId: string, entryId: string): Promise<KitResponse> {
