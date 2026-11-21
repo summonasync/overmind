@@ -44,3 +44,12 @@ public sealed record GlobalDriftItem(
     AgentPlatform Platform,
     string Path,
     GlobalDriftKind Kind);
+
+public sealed record GlobalKitStateItem(
+    Guid KitId,
+    string KitName,
+    bool Mandatory,
+    AgentPlatform Platform,
+    string State,
+    string[] Paths,
+    GlobalDriftItem[] Drifts);
