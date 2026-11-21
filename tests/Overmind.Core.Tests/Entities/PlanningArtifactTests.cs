@@ -970,6 +970,14 @@ end
         ex.Code.ShouldBe(PlanningFailureCode.PatchHeadingAmbiguous);
         ex.Message.ShouldContain("2 H2 headings");
         ex.Message.ShouldContain("'## Scope', '## Scope'");
+
+        // 266/T3 row 4 — the frequency leader's wording upgrade: the count alone sent people hunting
+        // for duplicate headings that were never there. The rule the throw actually enforces is that
+        // content is the block under the heading and the heading line itself is byte-stable.
+        ex.Message.ShouldContain("the heading line itself stays byte-stable");
+        ex.Message.ShouldContain("resend with that line stripped from the content");
+        ex.Message.ShouldContain("merge or rename the duplicates");
+
         artifact.Body.ShouldBe(body);
         artifact.Version.ShouldBe(1);
         artifact.Versions.ShouldBeEmpty();

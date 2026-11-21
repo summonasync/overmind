@@ -194,15 +194,34 @@ public sealed class PlanningException : Exception
             $"{(presentHeadings.Count == 0 ? "(none)" : string.Join(", ", presentHeadings.Select(h => $"'{h}'")))}. " +
             "Heading sections resolve case-sensitively by their exact text.");
 
-    public static PlanningException PatchHeadingAmbiguous(string heading, IReadOnlyList<string> headings) =>
-        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchHeadingAmbiguous,
+    public static PlanningException PatchHeadingAmbiguous(string heading, IReadOnlyList<string> headings)
+    {
+        // 266/T3 wording upgrade, frequency leader of the crew's 400s: the count alone made people
+        // hunt for duplicate headings that were never there. The rule the throw actually enforces
+        // is that content is the block UNDER the heading and the heading line itself is
+        // byte-stable — say that, keep the count and the merge-or-rename fallback honest.
+        var bodyLine = headings.Count > 0 ? headings[0] : heading;
+        return new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchHeadingAmbiguous,
             $"Heading '{heading}' matches {headings.Count} H2 headings in the body ({string.Join(", ", headings.Select(h => $"'{h}'"))}); " +
-            "a patch would rewrite an arbitrary one — nothing was modified. Merge or rename the duplicates first.");
+            "a patch would rewrite an arbitrary one — nothing was modified. " +
+            $"The usual cause is the content repeating the heading line: a heading patch takes the block that sits under '{bodyLine}' " +
+            "and the heading line itself stays byte-stable, so resend with that line stripped from the content. " +
+            "If the body really does carry the heading twice, merge or rename the duplicates first.");
+    }
 
     public static PlanningException PatchRemoveReasonRequired(string section) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.PatchRemoveReasonRequired,
             $"Tombstoning '{section}' requires a reason: the '<removed date — reason>' marker records why the block died, " +
             "and that reason is what keeps it from being silently resurrected. Resend with reason.");
+
+    // 266/T3 row 9: the reason rides a one-line marker ('<removed yyyy-MM-dd — reason>'), so a
+    // newline in it is not formatting but a broken record — no reader recognises the tombstone
+    // any more. Same single-line rule the brief and the decline reason already carry.
+    public static PlanningException RemoveReasonMultiline() =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.RemoveReasonMultiline,
+            $"The tombstone reason must be single-line text of at most {SoftCapLimits.Reason} characters: it is written into " +
+            "one '<removed yyyy-MM-dd — reason>' line, and a newline inside the reason makes that line unreadable — " +
+            "nothing was modified. Resend with the reason collapsed to one line.");
 
     public static PlanningException PatchRemoveNotAllowedForXmlSection(string section) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.RemoveNotAllowedForXmlSection,

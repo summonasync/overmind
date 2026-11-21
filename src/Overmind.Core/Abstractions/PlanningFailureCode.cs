@@ -28,6 +28,7 @@ public enum PlanningFailureCode
     PatchHeadingNotFound,
     PatchHeadingAmbiguous,
     PatchRemoveReasonRequired,
+    RemoveReasonMultiline,
     RemoveNotAllowedForXmlSection,
     TickItemNotFound,
     TickTextAmbiguous,
