@@ -5,7 +5,9 @@ outcome of feature 257: a 253-surface inventory (`audits/ui-hints-257-inventory-
 harness `audits/tools-257-hint-inventory.py`, tree at `aee7d413`) and its adjudication
 (`audits/ui-hints-257-t2-verdicts-2026-11-21.md` plus the T1–T3 task logs). Pass totals: T2 scope
 215 rows — 205 truthful untouched, 10 disclosure fixes, 0 stale, 0 lying; T1 9 kits rows — 8
-truthful, 1 stale; T3 grimoire 8 rows — 7 truthful, 1 lying fixed; 16 settings fields gained help.
+truthful, 1 stale; 16 settings fields gained help. The 8 grimoire rows re-adjudicated by T3's
+follow-up (7 truthful, 1 lying) sit inside T2's 215, so the pass holds one lie, not two — and the
+re-adjudication is the lesson in the wording section below.
 
 ## When a plain `title=` is fine
 
@@ -31,10 +33,9 @@ tooltip. `feature-claim-chip.tsx:45` did that for a stale chip with no `claimedA
 text or drop the attribute.
 
 CSS truncation alone never makes a plain title a disclosure gap.
-`features/grimoire/components/grimoire-status-tile.tsx:110-111` carries `title={status.binaryPath}`
-on a `<dd>` whose visible text node is the same string — truncate clips pixels, the text node still
-reaches assistive tech, so the tooltip only recovers the tail for mouse users. Check the text node
-before converting; the T3 follow-up kept that row out of the conversion count on exactly that read.
+`features/grimoire/components/grimoire-status-tile.tsx:110-111` puts `title={status.binaryPath}` on
+a `<dd>` whose visible text node is that same string — truncate clips pixels, the text node still
+reaches assistive tech, so the tooltip only recovers the tail for mouse users.
 
 ## When conversion is required
 
@@ -99,7 +100,9 @@ Traps, all hit in this pass:
   what holds in either arm state. The sibling claim "Runs Grimoire's own install channel when one
   is configured" (line 95) stays truthful because the conditional holds vacuously when the channel
   is empty. When copy papers over a behaviour worth changing, file the behaviour as its own
-  feature (this became 267) instead of letting the hint carry the lie.
+  feature (this became 267) instead of letting the hint carry the lie. Note how this row was
+  missed: an earlier verdict cleared it by class — "the host renders hint text visibly" — which
+  proves delivery, never truth. Visible is not the same as correct.
 - A group note and its field lines must not duplicate. Three settings group notes were rewritten
   so the per-field line carries the behavior and the paragraph stops restating it (T3 log);
   `settings-form.tsx:262` is the field-level shape.
