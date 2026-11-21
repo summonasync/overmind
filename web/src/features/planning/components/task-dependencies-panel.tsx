@@ -60,8 +60,10 @@ export function TaskDependenciesPanel({ featureSlug, numbering, tasks }: TaskDep
 }
 
 function BlockerRefChip({ blocker }: { blocker: TaskBlockerRef }) {
+  const descId = `blocker-chip-${blocker.order}-desc`;
   return (
     <span
+      aria-describedby={descId}
       title={`${blocker.closed ? "Closed" : "Open"} blocker — ${taskBlockerLabel(blocker)}`}
       className={cn(
         "rounded-md border px-2 py-0.5 font-mono text-xs font-medium",
@@ -71,6 +73,9 @@ function BlockerRefChip({ blocker }: { blocker: TaskBlockerRef }) {
       )}
     >
       {taskBlockerLabel(blocker)}
+      <span id={descId} className="sr-only">
+        {`${blocker.closed ? "Closed" : "Open"} blocker — ${taskBlockerLabel(blocker)}`}
+      </span>
     </span>
   );
 }

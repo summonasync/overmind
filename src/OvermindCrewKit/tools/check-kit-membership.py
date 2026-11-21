@@ -7,9 +7,11 @@ Two independent gates, one exit code:
    disk is assigned to exactly one kit: zero orphans (unassigned), zero
    duplicates, zero stale entries pointing at paths that no longer exist.
 2. Frontmatter — every agent file on the markdown sides parses as YAML, no
-   `- mcp__…` grant line survives below the closing `---` (feature 242), and the
-   Overmind MCP grant is present inside the frontmatter where a side declares
-   one. The stray-grant sweep covers every markdown file under the four sides
+   `- mcp__…` grant line survives below the closing `---` (feature 242), and
+   check (c): every allowlist-bearing role carries exactly the ruled MCP set
+   (RULED_MCP_GRANTS) and sits on the RESTRICTED_ROLES roster, while every
+   rostered role carries its allowlist (feature 242, Option A trim). The
+   stray-grant sweep covers every markdown file under the four sides
    (skills included), so the same defect shape cannot hide outside the agent
    files. The Codex side has no YAML frontmatter by design (TOML roles carry
    `name`, `description`, `model`, `developer_instructions` only) and is
@@ -29,6 +31,52 @@ SIDES = [".claude", ".codex", ".kimi-code", ".qwen"]
 MD_SIDES = [".claude", ".kimi-code", ".qwen"]
 GRANT_RE = re.compile(r"^\s*-\s*(mcp__\S+)\s*$")
 KIT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Feature 242 (owner ballot 2026-11-16 + Option A trim 2026-11-20): the restricted
+# class — every role that carries a tools: allowlist — holds exactly this MCP set,
+# nothing more. A reviewer must not be able to close the gate it signs, so the
+# write-side tools (set_status, upsert_artifact, validate, claims, issues_*, ...)
+# are withheld from the allowlist wholesale; squeezr tools are read-only and named
+# explicitly. This list is the single source of that contract; KIT-MEMBERSHIP.md
+# links here instead of restating it.
+RULED_MCP_GRANTS = frozenset(
+    [
+        "mcp__overmind__planning_read_artifact",
+        "mcp__overmind__planning_read_feature",
+        "mcp__overmind__planning_list_artifacts",
+        "mcp__overmind__planning_list_features",
+        "mcp__overmind__list_entries",
+        "mcp__overmind__read_entry",
+        "mcp__overmind__search",
+        "mcp__overmind__write_entry",
+        "mcp__squeezr__index_status",
+        "mcp__squeezr__repo_map",
+        "mcp__squeezr__code_search",
+        "mcp__squeezr__symbol_lookup",
+        "mcp__squeezr__expand_span",
+        "mcp__squeezr__find_references",
+    ]
+)
+
+RESTRICTED_ROLES = frozenset(
+    [
+        "ai-code-detector",
+        "ai-obfuscation-reviewer",
+        "architect-review",
+        "augur-challenger",
+        "augur-researcher",
+        "dotnet-code-reviewer",
+        "git-commit-ai-detector",
+        "go-code-reviewer",
+        "js-platform-code-reviewer",
+        "naming-sensei",
+        "node-code-reviewer",
+        "pipeline-doctor",
+        "python-code-reviewer",
+        "rust-code-reviewer",
+        "web-code-reviewer",
+    ]
+)
 
 # Repo infrastructure at the kit root: deployment mechanics, not kit content.
 # Not materialized into any agent home, so not assignable to a kit.
@@ -146,6 +194,7 @@ def check_frontmatter(errors, notes):
 
     parsed = 0
     granted = []
+    restricted_seen = {side: set() for side in MD_SIDES}
     for side in MD_SIDES:
         for path in sorted(glob.glob(f"{side}/agents/*.md")):
             lines = open(path, encoding="utf-8").read().split("\n")
@@ -162,10 +211,27 @@ def check_frontmatter(errors, notes):
                 errors.append(f"{path}: frontmatter is not a mapping with a name")
                 continue
             parsed += 1
+            role = data["name"]
             tools = data.get("tools") or []
-            grant = [t for t in tools if isinstance(t, str) and t.startswith("mcp__overmind__")]
+            grant = [t for t in tools if isinstance(t, str) and t.startswith("mcp__")]
             if grant:
                 granted.append((path, len(grant)))
+                # Check (c): an allowlist-bearing role is the restricted class —
+                # its MCP grants must equal the ruled set exactly, and the role
+                # must be on the RESTRICTED_ROLES roster (an allowlist appearing
+                # on an orchestrator would widen a gate-signing role by accident).
+                extra = sorted(set(grant) - RULED_MCP_GRANTS)
+                missing = sorted(RULED_MCP_GRANTS - set(grant))
+                if extra:
+                    errors.append(f"{path}: non-ruled MCP grants present ({', '.join(extra)})")
+                if missing:
+                    errors.append(f"{path}: ruled MCP grants missing ({', '.join(missing)})")
+                if role not in RESTRICTED_ROLES:
+                    errors.append(
+                        f"{path}: allowlist on role '{role}' outside RESTRICTED_ROLES — "
+                        "restrict the role or extend the roster deliberately"
+                    )
+                restricted_seen[side].add(role)
             stray = [
                 (i + 1, m.group(1))
                 for i, line in enumerate(lines)
@@ -175,6 +241,10 @@ def check_frontmatter(errors, notes):
                 errors.append(
                     f"{path}: {len(stray)} mcp grant lines below the frontmatter (first at line {stray[0][0]})"
                 )
+    for side in MD_SIDES:
+        absent = sorted(RESTRICTED_ROLES - restricted_seen[side])
+        for role in absent:
+            errors.append(f"{side}/agents/{role}.md: restricted role carries no allowlist — trimmed by accident?")
     notes.append(f"markdown agent files parsed: {parsed}")
     notes.append(f"files with the mcp grant inside frontmatter: {len(granted)}")
     by_side = {}
@@ -186,6 +256,10 @@ def check_frontmatter(errors, notes):
             f"  {side}: {len(by_side.get(side, []))} grant-bearing roles"
             + (f" (grant size {sizes})" if len(sizes) == 1 else "")
         )
+    notes.append(
+        f"restricted-class check (c): roster {len(RESTRICTED_ROLES)} roles x {len(MD_SIDES)} sides, "
+        f"ruled MCP set = {len(RULED_MCP_GRANTS)} tools"
+    )
     return granted
 
 
@@ -237,7 +311,7 @@ def main():
             agents = [p for p in manifest_paths(manifest) if p.startswith(f"{side}/agents/")]
             prose = [p for p in manifest_paths(manifest) if p.startswith(f"{side}/") and p not in skills and p not in agents]
             print(f"    {side:<12} skills={len(skills)} agents={len(agents)} prose/config={len(prose)}")
-        print("  grant sizes (mcp__overmind__ entries inside frontmatter):")
+        print("  grant sizes (mcp__ entries inside frontmatter):")
         for path, count in granted:
             print(f"    {path} {count}")
         print("  kit-root infrastructure excluded from membership:")

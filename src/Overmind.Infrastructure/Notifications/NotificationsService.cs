@@ -96,6 +96,7 @@ public sealed class NotificationsService(
     }
 
     public async Task<IReadOnlyList<AgentNotification>> ListRepliesAsync(
+        Guid? callerSessionId,
         Guid? projectId,
         bool includeRead,
         DateTime? since,
@@ -132,10 +133,35 @@ public sealed class NotificationsService(
             replied = replied.Where(n => n.FeatureSlug == slug);
         }
 
-        return await replied
+        var replies = await replied
             .OrderByDescending(n => n.RepliedAt)
             .Take(ListCapacity)
             .ToListAsync(ct);
+
+        await TryAdvanceReplyCursorAsync(callerSessionId, replies, ct);
+
+        return replies;
+    }
+
+    private async Task TryAdvanceReplyCursorAsync(
+        Guid? callerSessionId, IReadOnlyList<AgentNotification> replies, CancellationToken ct)
+    {
+        if (callerSessionId is not { } sessionId
+            || replies.Count == 0
+            || replies.Count >= ListCapacity
+            || replies[0].RepliedAt is not { } delivered)
+        {
+            return;
+        }
+
+        var session = await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null)
+        {
+            return;
+        }
+
+        session.AdvanceReplyCursor(delivered);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<AgentNotification?> MarkReadAsync(Guid id, CancellationToken ct)

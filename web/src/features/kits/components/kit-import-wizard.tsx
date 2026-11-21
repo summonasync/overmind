@@ -66,7 +66,7 @@ export function KitImportWizard({ preview, importing, error, onConfirm, onCancel
     return (
       <EmptyState
         title="No importable kits found"
-        hint="A kit candidate is a top-level folder containing SKILL.md folders or gate/guard files."
+        hint="A kit candidate is a top-level folder with skill folders, gates/guards files, or prose at its own root — the scanned folder itself counts too."
         action={
           <Button variant="secondary" onClick={onCancel}>
             Close

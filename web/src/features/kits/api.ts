@@ -1,6 +1,8 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
 import type {
   DriftItemResponse,
+  GlobalDeployReportResponse,
+  GlobalKitStateItemResponse,
   KitFormValues,
   KitImportReportResponse,
   KitImportSelectionRequest,
@@ -71,4 +73,20 @@ export function deactivateKit(projectId: string, kitId: string): Promise<Materia
 
 export function getDrift(projectId: string): Promise<DriftItemResponse[]> {
   return apiGet<DriftItemResponse[]>(`/projects/${projectId}/drift`);
+}
+
+export function getGlobalKitState(): Promise<GlobalKitStateItemResponse[]> {
+  return apiGet<GlobalKitStateItemResponse[]>("/kits/global/state");
+}
+
+export function deployKitGlobal(
+  kitId: string,
+  agent: string,
+  force: boolean,
+): Promise<GlobalDeployReportResponse> {
+  return apiPost<GlobalDeployReportResponse>(`/kits/${kitId}/global/${agent}?force=${force}`);
+}
+
+export function removeKitGlobal(kitId: string, agent: string): Promise<GlobalDeployReportResponse> {
+  return apiDelete<GlobalDeployReportResponse>(`/kits/${kitId}/global/${agent}`);
 }

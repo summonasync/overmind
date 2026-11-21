@@ -10,6 +10,12 @@ public delegate Task<JsonElement> AgentDelegatedToolHandler(
 public delegate Task<JsonElement> AgentConversationToolHandler(
     JsonElement arguments, Guid conversationId, CancellationToken ct);
 
+public delegate Task<JsonElement> AgentScopedToolHandler(
+    JsonElement arguments, Guid? callerProjectId, CancellationToken ct);
+
+public delegate Task<JsonElement> AgentDelegatedScopedToolHandler(
+    JsonElement arguments, Guid instructionMessageId, Guid? callerProjectId, CancellationToken ct);
+
 public sealed record AgentToolSpec(
     string Name,
     string Description,
@@ -18,4 +24,6 @@ public sealed record AgentToolSpec(
     AgentToolCategory Category = AgentToolCategory.Standard,
     AgentDelegatedToolHandler? DelegatedInvoke = null,
     AgentConversationToolHandler? ConversationInvoke = null,
-    AgentToolScope Scope = AgentToolScope.Enforce);
+    AgentToolScope Scope = AgentToolScope.Enforce,
+    AgentScopedToolHandler? ScopedInvoke = null,
+    AgentDelegatedScopedToolHandler? DelegatedScopedInvoke = null);

@@ -49,13 +49,12 @@ public sealed class AgentWakeService(OvermindDbContext db)
         CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
-        var replySince = since ?? now - WakeReplyLookback.Resolve();
+        var replySince = since ?? await ResolveReplyCursorAsync(alias, ct) ?? now;
         var mentionSince = since ?? lastSeenAt;
 
         var replies = await db.AgentNotifications
             .AsNoTracking()
             .Where(n => n.Agent == alias && n.ReplyText != null
-                && (since != null || n.ReadAt == null)
                 && (projectId == null || n.ProjectId == projectId)
                 && (n.RepliedAt > replySince || sinceRefId != null && n.RepliedAt == replySince))
             .OrderBy(n => n.RepliedAt)
@@ -89,6 +88,17 @@ public sealed class AgentWakeService(OvermindDbContext db)
         var page = signals.Take(PageSize).ToList();
         var cursor = page.Count > 0 ? page[^1].CreatedAt : since ?? now;
         return new AgentWakePage(page, cursor, page.Count > 0 ? page[^1].RefId : null);
+    }
+
+    private async Task<DateTime?> ResolveReplyCursorAsync(string alias, CancellationToken ct)
+    {
+        var normalized = WaveWatermark.NormalizeAlias(alias);
+        return await db.AgentSessions
+            .AsNoTracking()
+            .Where(s => s.Alias.ToLower() == normalized)
+            .OrderByDescending(s => s.LastSeenAt)
+            .Select(s => s.ReplyCursorAt)
+            .FirstOrDefaultAsync(ct);
     }
 
     private static string Excerpt(string text)

@@ -83,6 +83,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("LastSeenAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ReplyCursorAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -410,6 +413,90 @@ namespace Overmind.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("FrontmatterKeys");
+                });
+
+            modelBuilder.Entity("Overmind.Core.GlobalMarkerDeployment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DeployedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntryFilePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("KitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Platform")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KitId", "Platform")
+                        .IsUnique();
+
+                    b.ToTable("GlobalMarkerDeployments");
+                });
+
+            modelBuilder.Entity("Overmind.Core.GlobalMaterializationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReportJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind");
+
+                    b.ToTable("GlobalMaterializationRuns");
+                });
+
+            modelBuilder.Entity("Overmind.Core.GlobalMaterializedFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("KitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("MaterializedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Platform")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KitId", "Platform");
+
+                    b.ToTable("GlobalMaterializedFiles");
                 });
 
             modelBuilder.Entity("Overmind.Core.Issue", b =>
@@ -1433,6 +1520,24 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasOne("Overmind.Core.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.GlobalMarkerDeployment", b =>
+                {
+                    b.HasOne("Overmind.Core.SkillKit", null)
+                        .WithMany()
+                        .HasForeignKey("KitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Overmind.Core.GlobalMaterializedFile", b =>
+                {
+                    b.HasOne("Overmind.Core.SkillKit", null)
+                        .WithMany()
+                        .HasForeignKey("KitId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

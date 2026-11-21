@@ -31,13 +31,53 @@ public class NotificationToolContractTests : McpSessionTestBase
         var replies = tools["overmind_replies"]!["description"]!.GetValue<string>();
         replies.ShouldContain("Polls the human's replies");
         replies.ShouldContain("replyText is the human's decision");
+        replies.ShouldContain("advances this session's reply cursor");
+        replies.ShouldContain("retiring those replies from overmind_wake_peek's default window");
         replies.ShouldContain("an over-narrow filter returns an empty array, not an error");
+        replies.ShouldNotContain("consumed on read");
 
         var repliesSection = ContractsDoc.Section("overmind_replies");
         repliesSection.ShouldContain("offset-less values read as UTC");
         repliesSection.ShouldContain("Poll it after asking a question or requesting approval");
+        repliesSection.ShouldContain("advances that session's reply cursor");
+        repliesSection.ShouldContain("forward-only");
+        repliesSection.ShouldContain("short of the 50-reply delivery cap");
+        repliesSection.ShouldContain("shown there = the peek→replies flow completed");
+        repliesSection.ShouldContain("Read state is the human's inbox mechanic");
+        repliesSection.ShouldNotContain("false matches nothing");
         // The create:false half of the old "never creates a project row" prose is a behavior contract
         // and stays pinned as behavior in Replies_NoProject_ResolvesThroughOnboard.
+    }
+
+    [Fact]
+    public async Task ToolsList_WakePeek_DescribesTheReplyCursorWindow()
+    {
+        var response = await Driver.ListToolsAsync();
+
+        var tools = response["result"]!["tools"]!.AsArray()
+            .ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
+
+        var peek = tools["overmind_wake_peek"]!["description"]!.GetValue<string>();
+        peek.ShouldContain("a side-effect-free peek at pending signals");
+        peek.ShouldContain("human replies to this session's notifications");
+        peek.ShouldContain("Advances nothing");
+        peek.ShouldContain("once overmind_replies delivered it on a final page");
+        peek.ShouldContain("an explicit since replays consumed traffic");
+        peek.ShouldContain("docs/mcp-tool-contracts.md#overmind_wake_peek");
+        peek.ShouldNotContain("unread replies");
+
+        var section = ContractsDoc.Section("overmind_wake_peek");
+        section.ShouldContain("after the session's reply cursor");
+        section.ShouldContain("a reply stays visible until the peek→replies flow completed");
+        section.ShouldContain("starts at now");
+        section.ShouldContain("a fresh session never re-lights older replies");
+        section.ShouldContain("replaces the reply cursor for this one call");
+        section.ShouldContain("already-consumed replies come back");
+        section.ShouldContain("cursor is inclusive-exact");
+        section.ShouldContain("only the reply arm's default window moved");
+        section.ShouldNotContain("7 days");
+        section.ShouldNotContain("readAt");
+        section.ShouldNotContain("LOOKBACK");
     }
 
     [Fact]

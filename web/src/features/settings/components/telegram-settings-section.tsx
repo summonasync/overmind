@@ -103,6 +103,10 @@ export function TelegramSettingsSection({ settings }: TelegramSettingsSectionPro
             autoComplete="off"
           />
         </Field>
+        <p className="text-xs text-muted">
+          Token from @BotFather; the Host polls with it and never sends it back to the page — leave
+          blank to keep the token already saved.
+        </p>
         {settings.telegramBotTokenConfigured ? (
           <Badge tone="success">Bot token configured</Badge>
         ) : (

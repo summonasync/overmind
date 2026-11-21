@@ -9,15 +9,15 @@ namespace Overmind.Host.Api;
 public static class AgentWakeApi
 {
     public const string Description =
-        "Pending signals for the calling session, side-effect free. Reply signals are unread human " +
-        "replies on this session's notifications: the default window skips replies already carrying " +
-        "readAt (consumed) and covers the last 7 days, tunable via OVERMIND_WAKE_REPLY_LOOKBACK_DAYS " +
-        "(values below 1 clamp to 1); an explicit since replays read replies too. Replies scope to the " +
-        "projectId query parameter when the adapter sends one, and stay machine-wide otherwise. " +
-        "Mention signals are wave chat messages mentioning this session's alias with CreatedAt after " +
-        "since, defaulting to after the session's LastSeenAt before this request touched it. Signals are " +
-        "ordered by createdAt asc, capped at 100; the cursor is the newest createdAt seen followed by '|' " +
-        "and the newest signal's ref id, or the request since on an empty page — echo it verbatim as since to page on.";
+        "Pending signals for the calling session, side-effect free. Reply signals are human replies " +
+        "on this session's notifications with repliedAt after the session's reply cursor — a session " +
+        "without a cursor starts at now and never re-lights older replies; an explicit since replaces " +
+        "the cursor for that single call. Replies scope to the projectId query parameter when the " +
+        "adapter sends one, and stay machine-wide otherwise. Mention signals are wave chat messages " +
+        "mentioning this session's alias with CreatedAt after since, defaulting to after the session's " +
+        "LastSeenAt before this request touched it. Signals are ordered by createdAt asc, capped at 100; " +
+        "the cursor is the newest createdAt seen followed by '|' and the newest signal's ref id, or the " +
+        "request since on an empty page — echo it verbatim as since to page on.";
 
     public static RouteGroupBuilder MapAgentWakeApi(this IEndpointRouteBuilder routes)
     {

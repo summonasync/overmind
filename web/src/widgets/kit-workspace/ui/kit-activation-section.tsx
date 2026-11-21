@@ -6,7 +6,7 @@ import { ErrorText } from "@/shared/ui/error-text";
 import { Select } from "@/shared/ui/select";
 import { Zerling, ZERLING_SIZES } from "@/shared/ui/zerling";
 import type { ProjectResponse } from "@/features/projects";
-import { kitActivationErrorCopy, useKitMutations } from "@/features/kits";
+import { kitActivateErrorCopy, kitDeactivateErrorCopy, useKitMutations } from "@/features/kits";
 import type { KitResponse, MaterializationReportResponse } from "@/features/kits";
 
 type KitMutations = ReturnType<typeof useKitMutations>;
@@ -29,9 +29,11 @@ export function KitActivationSection({ kit, projects, mutations }: KitActivation
     mutation.mutate({ projectId: linkProjectId, kitId: kit.id }, { onSuccess: setReport });
   };
 
-  // Reframed copy for activation refusals; the detail panel no longer carries these
-  // two errors in its generic list.
-  const activationError = kitActivationErrorCopy(mutations.activate.error ?? mutations.deactivate.error);
+  // Reframed copy for activation refusals, per arm; the detail panel no longer carries
+  // these errors in its generic list.
+  const activationError =
+    kitActivateErrorCopy(mutations.activate.error) ??
+    kitDeactivateErrorCopy(mutations.deactivate.error);
 
   return (
     <section>

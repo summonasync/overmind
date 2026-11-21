@@ -11,7 +11,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; codex-skills) echo "$HOME/.agents";; esac }
 
 # Every manifest entry carries all four fields in this exact order — the no-python fallback
 # below groups grep hits four at a time, so a missing "mode" would desynchronise the whole list.
@@ -52,8 +52,16 @@ entries="$(parse_manifest)" || { echo "Failed to parse manifest.json" >&2; exit 
 while read -r src home type mode; do
     hp="$(home_path "$home")"
     if [[ -z "${HOME_OK[$home]:-}" ]]; then
-        if [[ -d "$hp" ]]; then HOME_OK[$home]=1
-        else HOME_OK[$home]=0; echo "Home $hp not found, skipping its entries."; fi
+        gate="$hp"
+        [[ "$home" == "codex-skills" ]] && gate="$HOME/.codex"  # runtime marker gates the relocated skills root
+        if [[ -d "$gate" ]]; then
+            HOME_OK[$home]=1
+            if [[ "$home" == "codex-skills" && ! -d "$hp" ]]; then
+                if [[ $DRY == 1 ]]; then echo "Would mkdir -p $hp"
+                else mkdir -p "$hp"; fi
+            fi
+        else
+            HOME_OK[$home]=0; echo "Home $gate not found, skipping its entries."; fi
     fi
     [[ "${HOME_OK[$home]}" == "0" ]] && continue
 
@@ -72,7 +80,13 @@ while read -r src home type mode; do
             mirror_dir "$ROOT/$src" "$hp/$name"
         fi
     else
-        copy_file "$ROOT/$src" "$hp"
+        # '===OVERMIND' marks the 251 global-deploy managed zone: a live entry doc carrying it
+        # is owned by the app door — a whole-file copy here would erase its marker blocks.
+        if [[ -f "$hp/$name" ]] && grep -q '===OVERMIND' "$hp/$name"; then
+            echo "Skipping $name: live entry doc carries an OVERMIND marker block"
+        else
+            copy_file "$ROOT/$src" "$hp"
+        fi
     fi
 done <<< "$entries"
 

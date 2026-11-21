@@ -199,11 +199,17 @@ public static class PlanningArtifactsApi
         int? from,
         int? to,
         PlanningArtifactDiffService diffService,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         try
         {
-            var result = await diffService.DiffAsync(id, from, to, ct);
+            var result = await diffService.DiffAsync(id, from, to, ct, callerProjectId);
             return Results.Ok(new PlanningArtifactDiffResponse(
                 result.ArtifactId, result.FromVersion, result.ToVersion, result.Diff));
         }
@@ -308,8 +314,9 @@ public static class PlanningArtifactsApi
         AppendPlanningLogRequest request,
         IValidator<AppendPlanningLogRequest> validator,
         PlanningArtifactService service,
+        HttpRequest http,
         CancellationToken ct) =>
-        AppendLogForDoor(id, request, validator, service, PlanningLogSource.Ui, ct);
+        AppendLogForDoor(id, request, validator, service, PlanningLogSource.Ui, http, ct);
 
     internal static async Task<IResult> AppendLogForDoor(
         Guid id,
@@ -317,8 +324,14 @@ public static class PlanningArtifactsApi
         IValidator<AppendPlanningLogRequest> validator,
         PlanningArtifactService service,
         PlanningLogSource fallbackSource,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         var validation = await validator.ValidateAsync(request, ct);
         if (!validation.IsValid)
         {
@@ -329,7 +342,7 @@ public static class PlanningArtifactsApi
         {
             var artifact = await service.AppendLogAsync(
                 id, request.Note, ct,
-                PlanningDoorSource.Resolve(request.Source, fallbackSource));
+                PlanningDoorSource.Resolve(request.Source, fallbackSource), callerProjectId);
             return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
         }
         catch (PlanningException ex)
@@ -343,8 +356,9 @@ public static class PlanningArtifactsApi
         EditPlanningLogRequest request,
         IValidator<EditPlanningLogRequest> validator,
         PlanningArtifactService service,
+        HttpRequest http,
         CancellationToken ct) =>
-        EditLogForDoor(id, request, validator, service, PlanningLogSource.Ui, ct);
+        EditLogForDoor(id, request, validator, service, PlanningLogSource.Ui, http, ct);
 
     internal static async Task<IResult> EditLogForDoor(
         Guid id,
@@ -352,8 +366,14 @@ public static class PlanningArtifactsApi
         IValidator<EditPlanningLogRequest> validator,
         PlanningArtifactService service,
         PlanningLogSource actor,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         var validation = await validator.ValidateAsync(request, ct);
         if (!validation.IsValid)
         {
@@ -362,7 +382,7 @@ public static class PlanningArtifactsApi
 
         try
         {
-            var artifact = await service.EditNewestLogAsync(id, request.Text, actor, ct);
+            var artifact = await service.EditNewestLogAsync(id, request.Text, actor, ct, callerProjectId);
             return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
         }
         catch (PlanningException ex)

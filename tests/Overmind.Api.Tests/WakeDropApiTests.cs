@@ -43,17 +43,18 @@ public sealed class WakeDropApiTests : IDisposable
     {
         var alias = "Dan";
         await StartSessionAsync(alias);
+        await SetSessionReplyCursorAsync(alias, DateTime.UtcNow.AddMinutes(-30));
         var projectId = await CreateProjectAsync();
         var file = Path.Combine(_wakeRoot, $"{alias.ToLowerInvariant()}.json");
-        var pending = await SeedPendingReplyAsync(alias);
 
         var first = await NotifyAgentAsync(alias, "approve the wake gate");
+        await Task.Delay(5);
         await ReplyAsync(first, "approved");
 
         var pushed = await WaitForDropAsync(file, d => d.Signals.Count == 1);
         pushed.Alias.ShouldBe(alias.ToLowerInvariant());
         pushed.Signals.Single().Kind.ShouldBe(AgentWakeService.ReplyKind);
-        pushed.Signals.Single().RefId.ShouldBe(pending);
+        pushed.Signals.Single().RefId.ShouldBe(first);
 
         await Task.Delay(5);
         await PostHumanAsync(projectId, "erin", $"ping @{alias} from the wave");
@@ -75,11 +76,11 @@ public sealed class WakeDropApiTests : IDisposable
         await ReplyAsync(second, "approved again");
         await PostHumanAsync(projectId, "erin", $"second ping @{alias} from the wave");
 
-        var advanced = await WaitForDropAsync(file, d => d.Signals.Count == 3);
+        var advanced = await WaitForDropAsync(file, d => d.Signals.Count == 4);
         advanced.Cursor.ShouldNotBe(drop.Cursor);
-        advanced.Signals.ShouldNotContain(s => s.RefId == first,
-            "the reply flow stamps ReadAt at birth, so live replies never enter the default drop window");
-        advanced.Signals.ShouldNotContain(s => s.RefId == second);
+        advanced.Signals.ShouldContain(s => s.RefId == first,
+            "readAt no longer gates the wake window — replies ride the session cursor");
+        advanced.Signals.ShouldContain(s => s.RefId == second);
         advanced.Signals.Last().Kind.ShouldBe(AgentWakeService.MentionKind);
         advanced.Cursor.ShouldBe(
             $"{advanced.Signals[^1].CreatedAt:O}|{advanced.Signals[^1].RefId}");
@@ -88,21 +89,14 @@ public sealed class WakeDropApiTests : IDisposable
             .ShouldBe([$"{alias.ToLowerInvariant()}.json"]);
     }
 
-    private async Task<Guid> SeedPendingReplyAsync(string agent)
+    private async Task SetSessionReplyCursorAsync(string alias, DateTime at)
     {
-        var id = Guid.NewGuid();
-        var repliedAt = DateTime.UtcNow.AddMinutes(-4);
         await using var connection = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        // schema-coupled on purpose: the API cannot birth an unread reply (084), so this seed
-        // writes the table directly; the kind is a named enum, not a bare literal
-        command.CommandText = $"""
-            INSERT INTO AgentNotifications (Id, ProjectId, Kind, FeatureSlug, Tab, Text, Agent, CreatedAt, ReadAt, ReplyText, RepliedAt, HiddenAt)
-            VALUES ('{id.ToString().ToUpperInvariant()}', NULL, {(int)NotificationKind.Question}, NULL, NULL, 'earlier gate', '{agent}', '{Timestamp(repliedAt)}', NULL, 'approved earlier', '{Timestamp(repliedAt)}', NULL)
-            """;
+        // schema-coupled on purpose: no host surface moves ReplyCursorAt yet — 244 task 1 owns the advance
+        command.CommandText = $"UPDATE AgentSessions SET ReplyCursorAt = '{Timestamp(at)}' WHERE Alias = '{alias}'";
         await command.ExecuteNonQueryAsync();
-        return id;
     }
 
     private static string Timestamp(DateTime at) => at.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF");
