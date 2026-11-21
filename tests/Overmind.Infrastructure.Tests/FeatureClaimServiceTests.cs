@@ -108,7 +108,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
 
         var moved = await service.ReattributeSessionClaimsAsync(HolderSessionId, "mark-wolff", "claude");
 
-        moved.ShouldBe(["feat-held"]);
+        moved.Select(m => m.Slug).ShouldBe(["feat-held"]);
         held.ClaimedByAlias.ShouldBe("mark-wolff");
         held.ClaimedByVendor.ShouldBe("claude");
         held.ClaimSessionId.ShouldBe(HolderSessionId);

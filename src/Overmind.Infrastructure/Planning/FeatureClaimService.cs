@@ -146,7 +146,10 @@ public sealed class FeatureClaimService
     // to the new pair, one feature log line records the move, and the open span is re-opened under
     // it. Claim time and session binding are untouched — the hold does not restart because the alias
     // did. Returns the slugs that moved, so the caller can echo them.
-    public async Task<IReadOnlyList<string>> ReattributeSessionClaimsAsync(
+    // Re-attribution writes join the caller's ambient transaction (the identity door's alias claim
+    // and this must commit or roll back together — issue ef10a2ff), so the materialization dispatch
+    // moved here would read uncommitted state; the caller dispatches after its commit.
+    public async Task<IReadOnlyList<(Guid ProjectId, string Slug)>> ReattributeSessionClaimsAsync(
         Guid sessionId, string alias, string vendor, CancellationToken ct = default)
     {
         var held = await _db.PlanningFeatures
@@ -154,8 +157,7 @@ public sealed class FeatureClaimService
             .OrderBy(f => f.Slug)
             .ToListAsync(ct);
 
-        List<string> moved = [];
-        List<Guid> movedProjects = [];
+        List<(Guid ProjectId, string Slug)> moved = [];
         var now = DateTime.UtcNow;
 
         foreach (var feature in held)
@@ -172,22 +174,24 @@ public sealed class FeatureClaimService
                 $"claim re-attributed: {formerAlias} by {formerVendor} → {alias} by {vendor}",
                 PlanningLogSource.Agent);
             await ClaimSpanLedger.ReattributeOpenAsync(_db, feature, alias, vendor, now, ct);
-            moved.Add(feature.Slug);
-            movedProjects.Add(feature.ProjectId);
+            moved.Add((feature.ProjectId, feature.Slug));
         }
 
-        if (moved.Count == 0)
+        if (moved.Count > 0)
         {
-            return moved;
-        }
-
-        await _db.SaveChangesAsync(ct);
-        foreach (var projectId in movedProjects.Distinct())
-        {
-            await _materialization.DispatchAsync(projectId, ct);
+            await _db.SaveChangesAsync(ct);
         }
 
         return moved;
+    }
+
+    public async Task DispatchMaterializationAsync(
+        IEnumerable<Guid> projectIds, CancellationToken ct = default)
+    {
+        foreach (var projectId in projectIds.Distinct())
+        {
+            await _materialization.DispatchAsync(projectId, ct);
+        }
     }
 
     public async Task<IReadOnlyDictionary<Guid, AgentSessionLiveness>> ClaimLivenessAsync(

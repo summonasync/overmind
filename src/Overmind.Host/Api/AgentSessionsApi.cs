@@ -124,6 +124,7 @@ public static class AgentSessionsApi
 
         var identityChanged = !string.Equals(alias, session.Alias, StringComparison.Ordinal) ||
                               !string.Equals(vendor, session.Vendor, StringComparison.Ordinal);
+        var previousAlias = session.Alias;
 
         try
         {
@@ -137,6 +138,10 @@ public static class AgentSessionsApi
         // The pre-check above is only the friendly answer; between it and this write another adapter can
         // land the same alias, so the claim itself carries the guard — SQLite runs the statement as one
         // atomic write, and the loser sees the winner's row and gets 0 rows back.
+        // The alias claim and the held-claim re-attribution share one transaction (issue ef10a2ff):
+        // a re-attribution failure rolls the alias back too, held claims stay functional under the
+        // old pair, and the retry — which still sees identityChanged — heals the move.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         if (!await TryClaimAliasAsync(db, id, session.Alias, session.Vendor, aliveSince, ct))
         {
             var rival = await FindAliveAliasHolderAsync(db, id, session.Alias, aliveSince, ct);
@@ -145,12 +150,31 @@ public static class AgentSessionsApi
                 : $"Alias '{session.Alias}' was claimed while this request was running; set the identity again.");
         }
 
-        IReadOnlyList<string> moved = identityChanged
-            ? await claims.ReattributeSessionClaimsAsync(id, session.Alias, session.Vendor, ct)
-            : [];
+        List<(Guid ProjectId, string Slug)> moved = [];
+        if (identityChanged)
+        {
+            try
+            {
+                moved = [.. await claims.ReattributeSessionClaimsAsync(id, session.Alias, session.Vendor, ct)];
+            }
+            catch (DbUpdateException)
+            {
+                await tx.RollbackAsync(ct);
+                return HttpErrors.Conflict(
+                    $"Re-attribution failed; the identity change was rolled back and '{previousAlias}' " +
+                    "remains in force. Set the identity again.");
+            }
+        }
+
+        await tx.CommitAsync(ct);
+        if (moved.Count > 0)
+        {
+            await claims.DispatchMaterializationAsync(moved.Select(m => m.ProjectId), ct);
+        }
 
         return Results.Ok(new AgentSessionIdentityResponse(
-            ToResponse(session), BuildIdentityWarnings(session.Alias, session.Vendor, moved)));
+            ToResponse(session),
+            BuildIdentityWarnings(session.Alias, session.Vendor, [.. moved.Select(m => m.Slug)])));
     }
 
     // The union of project alive windows: a holder counts as alive while any project would still count it.
