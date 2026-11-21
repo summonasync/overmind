@@ -697,6 +697,26 @@ test("a refusal renders as a named-card status, not as the error banner", () => 
   assert.match(component, /<ErrorText error=\{promotion\.error\} \/>/);
 });
 
+test("cancel performs no request at all — there is no draft to abandon server-side", () => {
+  // The door is only ever called from the confirm path, so "cancel leaves nothing behind" is a
+  // property of this surface, not a rollback asked of the Host: no edge, no card, no draft entry
+  // exists because no second request was ever made.
+  const component = sliceFile("components/promote-note.tsx");
+  const closeBody = component.slice(component.indexOf("const close = () => {"), component.indexOf("const patch ="));
+  assert.ok(closeBody.length > 40, "the cancel handler is gone");
+  for (const forbidden of ["submit", "mutate", "promoteNote"]) {
+    assert.equal(
+      closeBody.includes(forbidden),
+      false,
+      `cancel reached for "${forbidden}" — the act must belong to Confirm alone`,
+    );
+  }
+  // Confirm is the single caller of the mutation, and it is a form submit, not a field change.
+  const submits = component.match(/promotion\.submit\(/g) ?? [];
+  assert.equal(submits.length, 1, `${submits.length} call sites can start a promotion`);
+  assert.match(component, /const confirm = \(\) => \{[\s\S]{0,160}promotion\.submit\(/);
+});
+
 test("the note's own text is not an input to the act", () => {
   // The door writes no note, and neither may this surface: no update, no lift, no append anywhere
   // on the promotion path. Measured against the pipeline as well — see the report's probe log, the
