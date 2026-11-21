@@ -7,7 +7,11 @@ import { LoadingState } from "@/shared/ui/loading-state";
 import { PageBackLink } from "@/shared/ui/page-back-link";
 import { PageHeader } from "@/shared/ui/page-header";
 import { emptyGraphField } from "@/features/journal/lib/graph-payload";
-import { emptyFieldMessage } from "@/features/journal/lib/graph-copy";
+import {
+  FILTER_DETAIL_FRAMING,
+  activeFilterNames,
+  emptyFieldMessage,
+} from "@/features/journal/lib/graph-copy";
 import { withFocus } from "@/features/journal/lib/graph-filters";
 import { GraphCanvas } from "@/features/journal/components/graph-canvas";
 import { GraphFilters } from "@/features/journal/components/graph-filters";
@@ -50,8 +54,21 @@ function GraphBranch() {
   }
   if (error !== null) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
+        {/* A refusal that names filters is only actionable with the filter bar in reach, so the
+            controls stay mounted above the error instead of being replaced by it. */}
+        <GraphFilters filters={filters} onChange={setFilter} onClear={clear} />
+        {/* The server sentence, verbatim: `ErrorText` prints `error.message`, which is the
+            problem+json `detail` the endpoint wrote. Nothing here paraphrases or narrows it. */}
         <ErrorText error={error} />
+        <p className="text-sm text-muted" role="status">
+          {FILTER_DETAIL_FRAMING}
+        </p>
+        <p className="text-xs text-muted" role="status">
+          {activeFilterNames(filters).length > 0
+            ? `Active on this field: ${activeFilterNames(filters).join(", ")}.`
+            : "No narrowing filter is active on this field."}
+        </p>
         <button
           type="button"
           onClick={() => refetch()}
@@ -86,6 +103,7 @@ function GraphBranch() {
             field={shown}
             node={selectedNode}
             focusedHandle={filters.focus}
+            filters={filters}
             onClear={() => setFilter(withFocus(filters, ""))}
             onCentre={(handle) => setFilter(withFocus(filters, handle))}
             onOpenNote={openNote}

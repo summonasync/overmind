@@ -46,7 +46,7 @@ export function noteHrefFromGraph(id: string, graphSearch: string): string {
 // fighting back. A note opened from the graph goes back to the graph instead, with the field
 // it was showing.
 export function streamHrefFrom(search: string): string {
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const params = paramsOf(search);
   params.delete("note");
   if (params.get("from") === GRAPH_ORIGIN) {
     const carried = params.get("gq") ?? "";
@@ -54,6 +54,17 @@ export function streamHrefFrom(search: string): string {
   }
   const query = params.toString();
   return query.length > 0 ? `/journal?${query}` : "/journal";
+}
+
+// The label has to answer the same question the href answers. A note opened off the canvas came
+// from the map, and a back link that says "Journal" while it takes the owner to `/journal/graph`
+// is the surface lying about where it is standing.
+export function backLinkLabelFrom(search: string): string {
+  return paramsOf(search).get("from") === GRAPH_ORIGIN ? "Back to graph map" : "Journal";
+}
+
+function paramsOf(search: string): URLSearchParams {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
 }
 
 export interface OutgoingGroups {

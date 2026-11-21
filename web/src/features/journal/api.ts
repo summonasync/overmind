@@ -8,7 +8,9 @@ import type {
   JournalNote,
   JournalNoteFormValues,
   JournalServerFilters,
+  NotePromotionResult,
 } from "@/features/journal/types";
+import { type PromotionRequest } from "@/features/journal/lib/note-promotion";
 
 export function listJournalNotes(
   projectId: string,
@@ -63,4 +65,21 @@ export function deleteJournalNote(id: string, reason?: string): Promise<JournalN
 export async function getJournalGraph(filters: GraphViewFilters): Promise<GraphField> {
   const raw: unknown = await apiGet<unknown>(graphPath(filters));
   return normalizeGraphField(raw);
+}
+
+// The triage door, on the human prefix (spec R8: promoting one of the owner's thoughts is the
+// owner's act). One POST answers with the artifact it minted and the card to invalidate; the door
+// writes no note and copies no text, so there is nothing to pre-save here.
+//
+// The body is the door's own shape: `{projectId,title,body,priority?}` for a feature,
+// `{featureId,body,brief?}` for a task. Priority is deliberately absent — the door's default is the
+// P2 every un-prioritised card starts on, and the surface that asks for a priority is a later card.
+export function promoteNote(entryId: string, request: PromotionRequest): Promise<NotePromotionResult> {
+  const path = `/entries/${encodeURIComponent(entryId)}/promote-to-${request.target}`;
+  const body =
+    request.target === "feature"
+      ? { projectId: request.projectId, title: request.title, body: request.body }
+      : { featureId: request.featureId, body: request.body, brief: request.brief };
+
+  return apiPost<NotePromotionResult>(path, body);
 }
