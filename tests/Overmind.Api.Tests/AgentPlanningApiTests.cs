@@ -2993,10 +2993,10 @@ public sealed class AgentPlanningApiTests : IDisposable
 
     [Theory]
     [InlineData(5000, 3)]
-    [InlineData(501, 1)]
     [InlineData(20, 2)]
-    public async Task Patch_SetBrief_OverCapOrMultiline_Returns400InvalidBrief(int length, int lineCount)
+    public async Task Patch_SetBrief_Multiline_Returns400InvalidBrief(int length, int lineCount)
     {
+        // 266 keeps the single-line rule hard on brief — only length softened.
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "feat", "Feature");
         var task = await CreateAgentArtifactAsync(project.Id, "feat", new
@@ -3013,6 +3013,31 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("InvalidBrief");
+    }
+
+    [Theory]
+    [InlineData(501, 501, false)]
+    [InlineData(611, 600, true)]
+    public async Task Patch_SetBrief_OverCap_IsAcceptedWithWarnings(int sent, int stored, bool truncated)
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "feat2", "Feature");
+        var task = await CreateAgentArtifactAsync(project.Id, "feat2", new
+        {
+            Kind = "task",
+            Body = "# Task\n\n<goal>\nWire it.\n</goal>\n"
+        });
+
+        var response = await _client.PostAsJsonAsync(
+            AgentPatchUrl(task.Id),
+            new { Op = "set_brief", Brief = new string('x', sent) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var warning = doc.RootElement.GetProperty("warnings")[0];
+        warning.GetProperty("accepted_len").GetInt32().ShouldBe(stored);
+        warning.GetProperty("limit").GetInt32().ShouldBe(500);
+        warning.GetProperty("truncated").GetBoolean().ShouldBe(truncated);
     }
 
     [Theory]

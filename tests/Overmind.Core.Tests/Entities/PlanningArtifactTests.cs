@@ -1872,15 +1872,20 @@ end
     }
 
     [Fact]
-    public void SetBrief_OverCap_ThrowsInvalidBrief()
+    public void SetBrief_GraceBandStoresWhole_OverCeilingThrowsInvalidBrief()
     {
+        // 266: BriefMaxLength is the soft cap enforced at the doors; the entity keeps the
+        // grace ceiling as the storage backstop, so band values are legal here.
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
 
+        artifact.SetBrief(new string('x', PlanningArtifact.BriefMaxLength + 1));
+        artifact.Brief!.Length.ShouldBe(PlanningArtifact.BriefMaxLength + 1);
+
         var ex = Should.Throw<PlanningException>(
-            () => artifact.SetBrief(new string('x', PlanningArtifact.BriefMaxLength + 1)));
+            () => artifact.SetBrief(new string('x', SoftCap.Ceiling(PlanningArtifact.BriefMaxLength) + 1)));
 
         ex.Code.ShouldBe(PlanningFailureCode.InvalidBrief);
-        artifact.Brief.ShouldBeNull();
+        artifact.Brief!.Length.ShouldBe(PlanningArtifact.BriefMaxLength + 1);
     }
 
     [Fact]

@@ -224,14 +224,21 @@ public sealed class LaneServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SetLanes_ContourOverTheCap_Throws()
+    public async Task SetLanes_ContourOverGraceCeiling_Throws()
     {
+        // 266: contour band values store whole at the doors; the service throws only past the ceiling.
         var service = CreateService();
+        await SeedLaneAsync("frontend", "short");
+        var ceiling = SoftCap.Ceiling(PlanningLane.MaxContourLength);
+
+        var inBand = await service.SetLanesAsync(
+            _projectId, [new LaneUpsert("frontend", new string('x', PlanningLane.MaxContourLength + 1), null)]);
+        inBand.Single(l => l.Name == "frontend").Contour!.Length.ShouldBe(PlanningLane.MaxContourLength + 1);
 
         var ex = await Should.ThrowAsync<ArgumentException>(() => service.SetLanesAsync(
-            _projectId, [new LaneUpsert("frontend", new string('x', PlanningLane.MaxContourLength + 1), null)]));
+            _projectId, [new LaneUpsert("frontend", new string('x', ceiling + 1), null)]));
 
-        ex.Message.ShouldContain($"exceeds the {PlanningLane.MaxContourLength} character cap");
+        ex.Message.ShouldContain($"exceeds the {ceiling} character hard ceiling");
     }
 
     [Fact]
