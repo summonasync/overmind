@@ -51,9 +51,9 @@ public sealed class LaneTools
             [
                 new TextContentBlock
                 {
-                    Text = count == 0
+                    Text = (count == 0
                         ? "No lanes in the roster — the payload wrote nothing: an empty payload is a no-op, and lanes are born via planning_create_lane or planning_update_feature (lane=...)."
-                        : $"Lane roster holds {count} lane(s): {string.Join(", ", names)}."
+                        : $"Lane roster holds {count} lane(s): {string.Join(", ", names)}.") + SoftCapWarningsSuffix(roster)
                 }
             ]
         };
@@ -106,11 +106,19 @@ public sealed class LaneTools
             [
                 new TextContentBlock
                 {
-                    Text = $"Lane '{stored}' is in the roster — born now, or the echo of an existing one (case-insensitive)."
+                    Text = $"Lane '{stored}' is in the roster — born now, or the echo of an existing one (case-insensitive)." + SoftCapWarningsSuffix(lane)
                 }
             ]
         };
     }
+
+    // Soft-cap 266: a capped contour arrives accepted-with-warnings; the text doors must not
+    // swallow them, so every lane echo carries the raw warnings array through.
+    private static string SoftCapWarningsSuffix(JsonElement payload) =>
+        payload.TryGetProperty("warnings", out var warnings) &&
+        warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0
+            ? $"\nWarnings: {warnings.GetRawText()}"
+            : string.Empty;
 
     [McpServerTool(Name = "planning_remove_lane", Destructive = true, Idempotent = true)]
     [Description("Removes one lane from the roster — the only manual removal path; a lane retires itself " +

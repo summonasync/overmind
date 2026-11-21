@@ -468,6 +468,12 @@ public sealed class PlanningArtifactTools
             echo["validationProofVoided"] = validationProofVoided.GetString();
         }
 
+        if (patch.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0)
+        {
+            echo["warnings"] = JsonNode.Parse(warnings.GetRawText());
+        }
+
         CarryReplayedFlag(echo, patch);
         return new CallToolResult
         {
