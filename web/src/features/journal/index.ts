@@ -1,3 +1,9 @@
+// The graph surface is deliberately NOT re-exported here: this barrel is what every journal
+// consumer imports, and `components/graph-canvas` pulls d3-force behind it. Re-exporting the
+// island would put the simulation in every route's bundle, which R3's acceptance row measures.
+// The graph page reaches its own feature by path — the same way projects-page reaches
+// `features/projects/lib/project-order`. A pin in `web/tests/journal-graph.test.mts` guards it.
+
 export { CaptureOverlay } from "./components/capture-overlay";
 export { JournalCard } from "./components/journal-card";
 export { JournalFilters } from "./components/journal-filters";
@@ -34,6 +40,16 @@ export {
   pickJournalContainerId,
 } from "./queries";
 export type {
+  GraphCounts,
+  GraphEdge,
+  GraphEntryType,
+  GraphFeatureStatus,
+  GraphField,
+  GraphViewFilters,
+  GraphNode,
+  GraphNodeKind,
+  GraphNodeState,
+  GraphPosition,
   JournalBacklink,
   JournalLinkAccent,
   JournalLinkFilter,

@@ -1,6 +1,6 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
-import { getJournalNote, listJournalNotes } from "@/features/journal/api";
-import type { JournalServerFilters } from "@/features/journal/types";
+import { getJournalGraph, getJournalNote, listJournalNotes } from "@/features/journal/api";
+import type { GraphViewFilters, JournalServerFilters } from "@/features/journal/types";
 import type { ProjectResponse } from "@/features/projects";
 import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
 
@@ -30,6 +30,23 @@ export const journalStreamQueryOptions = (projectId: string, filters: JournalSer
     queryKey: journalKeys.list(projectId, filters),
     queryFn: () => listJournalNotes(projectId, filters),
     enabled: projectId.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
+  });
+
+export const graphKeys = {
+  all: ["journal", "graph"] as const,
+  // Every graph filter is the endpoint's own input, so all of them ride the key — the field a
+  // widened `includeDone` answers is not the field the default answers, and reusing one cache
+  // for both is how a legend starts describing a view nobody asked for.
+  field: (filters: GraphViewFilters) => [...graphKeys.all, filters] as const,
+};
+
+export const graphQueryOptions = (filters: GraphViewFilters) =>
+  queryOptions({
+    queryKey: graphKeys.field(filters),
+    queryFn: () => getJournalGraph(filters),
+    // The field ages with the inbox it maps, so a link an agent wrote while the owner was
+    // looking shows up on the same beat the stream rows move.
     refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });
 

@@ -1,6 +1,10 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
+import { normalizeGraphField } from "@/features/journal/lib/graph-payload";
+import { graphPath } from "@/features/journal/lib/graph-query";
 import { journalStreamPath } from "@/features/journal/lib/stream-query";
 import type {
+  GraphField,
+  GraphViewFilters,
   JournalNote,
   JournalNoteFormValues,
   JournalServerFilters,
@@ -50,4 +54,13 @@ export function deleteJournalNote(id: string, reason?: string): Promise<JournalN
   const trimmed = reason?.trim();
   const query = trimmed ? `?reason=${encodeURIComponent(trimmed)}` : "";
   return apiDelete<JournalNote | undefined>(`/entries/${id}${query}`);
+}
+
+// One request for the whole field (R1): nodes, edges, positions and counts in a single payload,
+// so the canvas never issues a per-node follow-up to draw a link. The wire is normalised on the
+// way in rather than inspected at every draw site — that is where "Task is never a node" stops
+// being a comment and becomes a rule.
+export async function getJournalGraph(filters: GraphViewFilters): Promise<GraphField> {
+  const raw: unknown = await apiGet<unknown>(graphPath(filters));
+  return normalizeGraphField(raw);
 }
