@@ -24,16 +24,27 @@ internal static class AgentToolScopeDeclarationAudit
     ];
 
     // Object-determined doors: the schema can name a stored object without naming the project that
-    // owns it. Enforcing this half is feature 246, not 241 — 241 ships argument-level enforcement plus
-    // this declaration. The four optional-projectId doors are the dangerous shape: sending the
-    // conversation's own projectId satisfies the argument check while the artifactId names any project.
-    internal static readonly IReadOnlyList<string> ObjectDeterminedGap =
+    // owns it. The dangerous shape was the four optional-projectId doors — sending the conversation's
+    // own projectId satisfied 241's argument check while the artifactId still named any project.
+    // Closed by feature 246 (T1 artifacts, T2 issues, T3 entries): the host compares the object's owning
+    // project with the conversation's at the point the row is already loaded. Kept as its own bucket
+    // rather than folded into ArgumentEnforced because the check answers a different question - whose
+    // object is this, not which project did the argument name - and the derivation below stays blind to
+    // whichever policy a door declares.
+    internal static readonly IReadOnlyList<string> DeclaredEnforced =
     [
         "delete_entry", "entry_versions", "issues_append", "issues_get",
-        "issues_promote", "issues_set_status", "kit_import", "kit_import_scan",
-        "kit_reimport", "planning_append_log", "planning_delete_artifact", "planning_edit_log",
-        "planning_patch_artifact", "planning_read_artifact", "planning_read_artifact_diff", "planning_set_status",
-        "planning_validate", "read_entry", "update_entry",
+        "issues_promote", "issues_set_status", "planning_append_log", "planning_delete_artifact",
+        "planning_edit_log", "planning_patch_artifact", "planning_read_artifact", "planning_read_artifact_diff",
+        "planning_set_status", "planning_validate", "read_entry", "update_entry",
+    ];
+
+    // Still open, and open on purpose: a kit is a global library object — SkillKits carries no ProjectId —
+    // so there is no owning project to compare against and "project scope" has no meaning for these three.
+    // Tracked as a declared hole in board card ba0d50f4, not as enforcement the server forgot to add.
+    internal static readonly IReadOnlyList<string> ObjectDeterminedGap =
+    [
+        "kit_import", "kit_import_scan", "kit_reimport",
     ];
 
     // A handle carried together with a REQUIRED projectId is a door only if the service resolves the
@@ -82,6 +93,15 @@ internal static class AgentToolScopeDeclarationAudit
             }
         }
 
+        foreach (var clash in AllDeclared().Values.SelectMany(bucket => bucket)
+                     .GroupBy(name => name, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1))
+        {
+            violations.Add(
+                $"declared in {clash.Count()} buckets — {clash.Key}: buckets must be disjoint or the coverage " +
+                "count silently double-counts a door and can equal the registry total while hiding another");
+        }
+
         foreach (var spec in specs)
         {
             var bucket = BucketOf(spec.Name);
@@ -92,6 +112,7 @@ internal static class AgentToolScopeDeclarationAudit
 
             violations.AddRange(PolicyViolations(spec, bucket));
             violations.AddRange(SchemaViolations(spec, bucket));
+            violations.AddRange(DispatchViolations(spec));
         }
 
         return violations;
@@ -102,6 +123,7 @@ internal static class AgentToolScopeDeclarationAudit
         ["SessionScoped"] = SessionScoped,
         ["Discovery"] = Discovery,
         ["CrossProject"] = CrossProject,
+        ["DeclaredEnforced"] = DeclaredEnforced,
         ["ObjectDeterminedGap"] = ObjectDeterminedGap,
         ["ScopedHandleException"] = ScopedHandleExceptions,
         ["ArgumentEnforced"] = ArgumentEnforced,
@@ -136,6 +158,24 @@ internal static class AgentToolScopeDeclarationAudit
         }
     }
 
+    // The dispatch-shape rules of feature 246 T0: a spec that declares a caller-scoped handler must reach the
+    // request through it on every branch the loop can take, otherwise the privileged branch is the unchecked one.
+    private static IEnumerable<string> DispatchViolations(AgentToolSpec spec)
+    {
+        if (spec.ScopedInvoke is not null && spec.DelegatedInvoke is not null && spec.DelegatedScopedInvoke is null)
+        {
+            yield return $"{spec.Name} declares a caller-scoped handler and an unscoped delegated handler: " +
+                         "arming delegated approvals would dispatch the object-addressed call without the " +
+                         "conversation scope — declare DelegatedScopedInvoke for it";
+        }
+
+        if (spec.DelegatedScopedInvoke is not null && spec.ScopedInvoke is null)
+        {
+            yield return $"{spec.Name} declares a caller-scoped delegated handler but no caller-scoped plain " +
+                         "handler: the same door would reach the host unscoped whenever delegation is off";
+        }
+    }
+
     private static IEnumerable<string> SchemaViolations(AgentToolSpec spec, string? bucket)
     {
         var schema = Schema(spec);
@@ -147,6 +187,15 @@ internal static class AgentToolScopeDeclarationAudit
             case "SessionScoped" when CarriesProjectArgument(spec):
                 yield return $"{spec.Name} is SessionScoped but its schema now addresses a project — " +
                              "reclassify it, a session-scoped tool must take no projectId argument";
+                break;
+            case "DeclaredEnforced" when !ObjectDetermined(spec):
+                yield return $"{spec.Name} is declared caller-enforced but its schema no longer addresses an " +
+                             "object — reclassify it, the bucket it sits in is a claim about a comparison";
+                break;
+            case "DeclaredEnforced" when spec.ScopedInvoke is null:
+                yield return $"{spec.Name} is declared caller-enforced but carries no caller-scoped handler: the " +
+                             "audit would claim a comparison the transport never sends, which is worse than an " +
+                             "open gap — declare it in ObjectDeterminedGap until it is converted";
                 break;
             case "ObjectDeterminedGap" when !ObjectDetermined(spec):
                 yield return $"{spec.Name} is declared an object-determined door but its schema no longer addresses an object";

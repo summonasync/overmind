@@ -24,7 +24,9 @@ public static class ContextAgentTools
         "state matters; it is a read of the board, not a way to collect project ids. When the conversation " +
         "belongs to a project the host compares the projectId a call carries with it and rejects a foreign one; " +
         "when it belongs to no project nothing is compared and the call is recorded as global in the trail. " +
-        "Either way a call that addresses an object by id sits outside that comparison (feature 246 owns them). " +
+        "Either way a call that addresses a stored object by id is answered only for the project that owns it " +
+        "when the conversation has one (feature 246); path-addressed kit operations have no owning project to " +
+        "match against and are a declared gap. " +
         "Optional projectId scopes the queue rows to one project. A failed board read marks the result degraded; " +
         "memory facts silently drop when grimoire is unavailable.",
         """
