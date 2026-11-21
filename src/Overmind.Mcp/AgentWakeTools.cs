@@ -9,11 +9,11 @@ namespace Overmind.Mcp;
 public sealed class AgentWakeTools(OvermindApiClient api, ProjectResolver projects)
 {
     [McpServerTool(Name = "overmind_wake_peek", Destructive = false, ReadOnly = true, Idempotent = true)]
-    [Description("Wake ritual: a side-effect-free peek at pending signals — unread replies " +
+    [Description("Wake ritual: a side-effect-free peek at pending signals — human replies " +
         "to this session's notifications (kind 'notification-reply') and wave chat mentions of its " +
-        "alias (kind 'wave-mention'). Advances nothing; consume with overmind_replies and " +
-        "wave_chat_unread. Consumed replies leave the default window; an explicit since " +
-        "replays them. Contract: docs/mcp-tool-contracts.md#overmind_wake_peek.")]
+        "alias (kind 'wave-mention'). Advances nothing; a reply leaves the default window once " +
+        "overmind_replies delivered it on a final page, an explicit since replays consumed " +
+        "traffic. Contract: docs/mcp-tool-contracts.md#overmind_wake_peek.")]
     public async Task<JsonElement> Peek(
         [Description("Optional ISO-8601 timestamp or the cursor echoed by the previous call, verbatim; " +
             "omit for the endpoint defaults.")] string? since = null,
