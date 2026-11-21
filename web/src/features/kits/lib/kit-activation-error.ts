@@ -1,9 +1,11 @@
 import { ApiError } from "@/shared/api/client";
 
-// Activation refusals arrive as Problem documents; the title carries the failure code
-// (MandatoryGlobal) or "Not Found" (NotLinked — the detail there is a pair of GUIDs,
-// useless to a human, so both arms get reframed copy).
-export function kitActivationErrorCopy(error: Error | null): Error | null {
+// Activation refusals arrive as Problem documents: the title carries the failure code for
+// MandatoryGlobal, but a plain "Not Found" for every 404 — and the two arms 404 for different
+// reasons (activate loses the kit or project row, deactivate finds no link), while the host
+// detail is a pair of GUIDs. So each arm reframes its own honest cause and the identifiers
+// never reach the screen.
+export function kitActivateErrorCopy(error: Error | null): Error | null {
   if (!(error instanceof ApiError)) {
     return error;
   }
@@ -15,8 +17,20 @@ export function kitActivationErrorCopy(error: Error | null): Error | null {
   }
 
   if (error.status === 404) {
-    return new Error("This kit is not linked to the selected project — activate it before deactivating.");
+    return new Error(
+      "The kit or the selected project is no longer in the library — refresh the list and pick again.",
+    );
   }
 
   return error;
+}
+
+export function kitDeactivateErrorCopy(error: Error | null): Error | null {
+  if (!(error instanceof ApiError) || error.status !== 404) {
+    return error;
+  }
+
+  return new Error(
+    "This kit has no active link in the selected project, or the project itself is gone — there is nothing to deactivate.",
+  );
 }
