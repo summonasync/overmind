@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageBackLink } from "@/shared/ui/page-back-link";
@@ -19,7 +19,7 @@ import {
   useGraphFilters,
   useReducedMotion,
 } from "@/features/journal/lib/use-graph";
-import { noteHref } from "@/features/journal/lib/note-rails";
+import { noteHrefFromGraph } from "@/features/journal/lib/note-rails";
 import type { GraphField } from "@/features/journal/types";
 
 // The route is the app's first heavy client island under a static export: the shell below is a
@@ -28,6 +28,7 @@ import type { GraphField } from "@/features/journal/types";
 // bundle. R4's click rule lives here, not in the canvas: selection is state, never a route.
 function GraphBranch() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { filters, setFilter, clear } = useGraphFilters();
   const { field, loading, error, refetch } = useGraphField(filters);
   const reducedMotion = useReducedMotion();
@@ -39,7 +40,10 @@ function GraphBranch() {
     [selectedKey, shown.nodes],
   );
 
-  const openNote = (id: string) => router.push(noteHref(id));
+  // A note opened from the field carries the field's filters along, so the note view's back
+  // link brings the owner home to the view they left rather than to the inbox.
+  const openNote = (id: string) =>
+    router.push(noteHrefFromGraph(id, searchParams?.toString() ?? ""));
 
   if (loading && field === undefined) {
     return <LoadingState label="Loading the field…" />;

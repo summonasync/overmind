@@ -16,6 +16,7 @@ import {
   ceilingMessage,
   GRAPH_CONTROL_LABELS,
   graphAriaLabel,
+  reducedMotionMessage,
   unsupportedRowsNotice,
 } from "@/features/journal/lib/graph-copy";
 import {
@@ -26,7 +27,7 @@ import {
   releasePinnedNodes,
   seedLayoutLinks,
   seedPositions,
-  settleLayout,
+  settleWithinBudget,
   SIM_CEILING,
   startForceLayout,
   type LayoutHandle,
@@ -223,7 +224,7 @@ export function GraphCanvas({
     }
 
     if (reducedMotion) {
-      settleLayout(nodesRef.current, linksRef.current, forces);
+      settleWithinBudget(nodesRef.current, linksRef.current, forces);
       draw();
       return;
     }
@@ -449,6 +450,12 @@ export function GraphCanvas({
       {overCeiling ? (
         <p className="text-sm text-warning" role="status">
           {ceilingMessage(field.nodes.length, SIM_CEILING)}
+        </p>
+      ) : null}
+
+      {reducedMotion && !overCeiling ? (
+        <p className="text-xs text-muted" role="status">
+          {reducedMotionMessage(field.nodes.length)}
         </p>
       ) : null}
 

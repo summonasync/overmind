@@ -109,7 +109,10 @@ function NoteContext({ id, onOpenNote }: { id: string; onOpenNote: (id: string) 
 
   return (
     <div className="space-y-2">
-      <div className="max-h-[220px] overflow-y-auto rounded-md border border-border bg-surface-raised p-2 text-sm text-foreground">
+      {/* The preview box carries no fill of its own: a raised surface would drop the markdown
+          links the viewer paints in --color-primary to 4.3605:1, under the AA text floor this
+          card is held to. The border is the separation. */}
+      <div className="max-h-[220px] overflow-y-auto rounded-md border border-border p-2 text-sm text-foreground">
         <MarkdownViewer content={noteExcerpt(data.content)} />
       </div>
       <p className="text-xs text-muted">

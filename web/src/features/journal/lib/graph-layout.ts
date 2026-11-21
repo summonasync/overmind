@@ -144,10 +144,20 @@ export function startForceLayout(
 }
 
 // Reduced motion and the over-ceiling settled frame both mean "no animation", and the cheap way
-// to honour it is to run the same forces to convergence in one synchronous pass instead of on
-// a frame clock. 300 ticks is d3's own default run length (alpha 1 → alphaMin 0.001 at the
-// default decay), so this is the layout the animated version would have arrived at.
+// to honour it is to run the same forces in one synchronous pass instead of on a frame clock.
+// That pass is bounded by node count, because a synchronous settle is main-thread work: measured
+// on this box at 999 nodes one tick costs about 11 ms, so an unbounded 300-tick convergence would
+// block for ~1.8 s — a hang wearing an accessibility badge. The seed spiral is already a legible
+// layout, so a bounded refinement improves it rather than compromising it, and the bound is a
+// count and not a clock: the same field settles to the same frame on every reload.
 export const SETTLE_TICKS = 300;
+
+export function settleTicksFor(nodeCount: number): number {
+  if (nodeCount <= 100) return 300;
+  if (nodeCount <= 300) return 100;
+  if (nodeCount <= 600) return 40;
+  return 20;
+}
 
 export function settleLayout(
   nodes: LayoutNode[],
@@ -160,6 +170,14 @@ export function settleLayout(
     handle.simulation.tick();
   }
   handle.stop();
+}
+
+export function settleWithinBudget(
+  nodes: LayoutNode[],
+  links: LayoutLink[],
+  forces: FieldForces,
+): void {
+  settleLayout(nodes, links, forces, settleTicksFor(nodes.length));
 }
 
 // Over the ceiling nothing is simulated at all: the seed spiral is the frame, which is O(n) and

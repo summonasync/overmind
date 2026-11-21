@@ -1,6 +1,6 @@
 dead-override sweep — current run
 css chunks measured: 1
-denominator: 50 call-site(s) with className · 3 primitive(s) with base density (badge, button, select) · 0 dead token(s) on 0 site(s)
+denominator: 52 call-site(s) with className · 3 primitive(s) with base density (badge, button, select) · 0 dead token(s) on 0 site(s)
 
 dead — call-site token loses to the primitive base token (0)
 
