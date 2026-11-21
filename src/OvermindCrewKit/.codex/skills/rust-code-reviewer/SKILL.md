@@ -21,7 +21,7 @@ Before reviewing code, read project documentation in this strict order:
 
 ## Review Checklist (MUST CHECK)
 
-**BP-IDs are the primary checklist.** Load `~/.codex/skills/rust-best-practices/SKILL.md` and check every applicable rule; cite violations as `BP-NN (severity)` in the review output. The checklist below complements, not replaces, BP-IDs.
+**BP-IDs are the primary checklist.** Load `~/.agents/skills/rust-best-practices/SKILL.md` and check every applicable rule; cite violations as `BP-NN (severity)` in the review output. The checklist below complements, not replaces, BP-IDs.
 
 ### Architecture & Layers
 - [ ] **Workspace layering respected.** `core` has zero IO deps (no tokio/sqlx/reqwest). `app` has no infra imports. Shells are thin dispatchers.
