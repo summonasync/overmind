@@ -24,6 +24,9 @@ public static class KitsApi
         group.MapPost("/projects/{projectId:guid}/kits/{kitId:guid}/activate", Activate);
         group.MapPost("/projects/{projectId:guid}/kits/{kitId:guid}/deactivate", Deactivate);
         group.MapGet("/projects/{projectId:guid}/drift", Drift);
+        group.MapPost("/kits/{kitId:guid}/global/{agent}", GlobalDeploy);
+        group.MapDelete("/kits/{kitId:guid}/global/{agent}", GlobalRemove);
+        group.MapGet("/kits/global/state", GlobalState);
 
         return group;
     }
@@ -220,6 +223,55 @@ public static class KitsApi
         {
             return KitActivationErrors.Map(ex);
         }
+    }
+
+    private static async Task<IResult> GlobalDeploy(
+        Guid kitId,
+        string agent,
+        bool? force,
+        HomeKitDeployer deployer,
+        CancellationToken ct)
+    {
+        try
+        {
+            var report = await deployer.DeployAsync(kitId, agent, force == true, ct);
+            return Results.Ok(report);
+        }
+        catch (MaterializationException ex)
+        {
+            return MaterializationErrors.Map(ex);
+        }
+        catch (KitActivationException ex)
+        {
+            return KitActivationErrors.Map(ex);
+        }
+    }
+
+    private static async Task<IResult> GlobalRemove(
+        Guid kitId,
+        string agent,
+        HomeKitDeployer deployer,
+        CancellationToken ct)
+    {
+        try
+        {
+            var report = await deployer.DematerializeAsync(kitId, agent, ct);
+            return Results.Ok(report);
+        }
+        catch (MaterializationException ex)
+        {
+            return MaterializationErrors.Map(ex);
+        }
+        catch (KitActivationException ex)
+        {
+            return KitActivationErrors.Map(ex);
+        }
+    }
+
+    private static async Task<IResult> GlobalState(HomeKitDeployer deployer, CancellationToken ct)
+    {
+        var snapshot = await deployer.GetGlobalStateAsync(ct);
+        return Results.Ok(snapshot);
     }
 
     private static async Task<IResult> Drift(

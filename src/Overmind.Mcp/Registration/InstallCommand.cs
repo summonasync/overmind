@@ -1,3 +1,5 @@
+using Overmind.Core.Agents;
+
 namespace Overmind.Mcp.Registration;
 
 public sealed class InstallCommand

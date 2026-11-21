@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getDrift, listKits } from "@/features/kits/api";
+import { getDrift, getGlobalKitState, listKits } from "@/features/kits/api";
 
 export const kitKeys = {
   all: ["kits"] as const,
@@ -20,4 +20,10 @@ export const driftQueryOptions = (projectId: string) =>
     queryKey: kitKeys.drift(projectId),
     queryFn: () => getDrift(projectId),
     enabled: projectId.length > 0,
+  });
+
+export const globalStateQueryOptions = () =>
+  queryOptions({
+    queryKey: [...kitKeys.all, "global-state"] as const,
+    queryFn: getGlobalKitState,
   });
