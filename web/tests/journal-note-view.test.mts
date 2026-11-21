@@ -92,6 +92,27 @@ const T8_SLICE = [
   "lib/use-note-links.ts",
 ] as const;
 
+// The graph files 237 T6 shipped. Named once, in the same ledger style as T8_SLICE above, and
+// swept by the hex guard below together with it — R3 asked for the existing pin to be extended,
+// not for a second guard anyone could forget to run. `journal-graph.test.mts` pins this list
+// against its own copy, so the two cannot drift.
+const T6_GRAPH_SLICE = [
+  "components/graph-canvas.tsx",
+  "components/graph-filters.tsx",
+  "components/graph-legend.tsx",
+  "components/graph-node-list.tsx",
+  "components/graph-node-panel.tsx",
+  "lib/graph-copy.ts",
+  "lib/graph-filters.ts",
+  "lib/graph-layout.ts",
+  "lib/graph-paint.ts",
+  "lib/graph-palette.ts",
+  "lib/graph-payload.ts",
+  "lib/graph-query.ts",
+  "lib/graph-view.ts",
+  "lib/use-graph.ts",
+] as const;
+
 const NOTE: JournalNote = {
   id: "11111111-1111-4111-8111-111111111111",
   projectId: "journal",
@@ -694,7 +715,7 @@ test("the note view edits through the shared markdown pair, not a private one", 
 
 test("zero hex literals in the slice", () => {
   const offenders: string[] = [];
-  for (const file of T8_SLICE) {
+  for (const file of [...T8_SLICE, ...T6_GRAPH_SLICE]) {
     sliceFile(file)
       .split("\n")
       .forEach((line, i) => {
@@ -848,4 +869,9 @@ test("the slice file names are the ones the guards above measure", () => {
     assert.ok(sliceFile(file).length > 200, `${file} is missing, empty or wrong`);
   }
   assert.equal(T8_SLICE.length, 13);
+
+  for (const file of T6_GRAPH_SLICE) {
+    assert.ok(sliceFile(file).length > 200, `${file} is missing, empty or wrong`);
+  }
+  assert.equal(T6_GRAPH_SLICE.length, 14);
 });

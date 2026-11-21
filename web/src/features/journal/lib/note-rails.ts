@@ -16,12 +16,42 @@ export function dayHref(day: string): string {
   return `/journal?day=${encodeURIComponent(day)}`;
 }
 
+// The graph route records itself in the note address it navigates to, and `gq` carries the
+// filters the field was showing. Without the pair, "double-click a note, read it, tap back"
+// lands the owner in the inbox with the map's filters gone — the round trip the graph's own
+// acceptance row asks for. Kept to the two names this app owns: no arbitrary origin URL is
+// accepted, so the param cannot be steered anywhere else.
+export const GRAPH_ORIGIN = "journal-graph";
+
+export function graphHrefFrom(graphSearch: string): string {
+  const params = new URLSearchParams(graphSearch.startsWith("?") ? graphSearch.slice(1) : graphSearch);
+  params.delete("note");
+  const query = params.toString();
+  return query.length > 0 ? `/journal/graph?${query}` : "/journal/graph";
+}
+
+export function noteHrefFromGraph(id: string, graphSearch: string): string {
+  const carried = new URLSearchParams(graphSearch.startsWith("?") ? graphSearch.slice(1) : graphSearch);
+  carried.delete("note");
+  const target = new URLSearchParams({ note: id, from: GRAPH_ORIGIN });
+  const query = carried.toString();
+  if (query.length > 0) {
+    target.set("gq", query);
+  }
+  return `/journal?${target.toString()}`;
+}
+
 // The back link goes home with the filters the owner arrived on, minus `note` — losing the
 // day or tag chip they had set is the kind of thing that makes a stream feel like it is
-// fighting back.
+// fighting back. A note opened from the graph goes back to the graph instead, with the field
+// it was showing.
 export function streamHrefFrom(search: string): string {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   params.delete("note");
+  if (params.get("from") === GRAPH_ORIGIN) {
+    const carried = params.get("gq") ?? "";
+    return graphHrefFrom(carried);
+  }
   const query = params.toString();
   return query.length > 0 ? `/journal?${query}` : "/journal";
 }
