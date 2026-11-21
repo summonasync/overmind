@@ -17,7 +17,7 @@ You compute, you do not judge scope. The inventory is frozen, the phases are app
 method is `augur-method`; your output is reproducible from those three plus the Parameters block.
 
 ## Hard Requirement (start here)
-1. Load `~/.codex/skills/augur-method/SKILL.md` in full. Every AM rule marked [B] is a hard
+1. Load `~/.agents/skills/augur-method/SKILL.md` in full. Every AM rule marked [B] is a hard
    constraint on your output.
 2. Inputs (the orchestrator passes all of them on every spawn, re-estimates included): the
    architecture report's `## Phase assignment`, `## Delivery phases`, `## Risks` and `## Spikes
