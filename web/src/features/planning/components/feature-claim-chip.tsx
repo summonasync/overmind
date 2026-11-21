@@ -24,17 +24,25 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
 
   if (item.claimedByHuman) {
     return (
-      <span
-        className={cn(chipBase, "border border-border/50 bg-surface-raised text-muted/80")}
-        title={
-          claimedOn === undefined
-            ? `Held by a human on the board (${holder})`
-            : `Held by a human on the board (${holder}) — since ${claimedOn}`
-        }
-      >
-        human-held
-        {age !== null ? ` · ${age}` : ""}
-      </span>
+      <>
+        <span
+          id="claim-chip-human-desc"
+          role="note"
+          className="sr-only"
+        >{`Held by a human on the board (${holder})${claimedOn === undefined ? "" : ` — since ${claimedOn}`}`}</span>
+        <span
+          className={cn(chipBase, "border border-border/50 bg-surface-raised text-muted/80")}
+          aria-describedby="claim-chip-human-desc"
+          title={
+            claimedOn === undefined
+              ? `Held by a human on the board (${holder})`
+              : `Held by a human on the board (${holder}) — since ${claimedOn}`
+          }
+        >
+          human-held
+          {age !== null ? ` · ${age}` : ""}
+        </span>
+      </>
     );
   }
 
@@ -42,9 +50,14 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
     return (
       <span
         className={cn(chipBase, "border border-border bg-surface-raised text-muted")}
+        aria-describedby="claim-chip-stale-desc"
         title={claimedOn}
       >
         stale{age !== null ? ` ${age}` : ""} · {holder}
+        <span id="claim-chip-stale-desc" className="sr-only">
+          Claimed{claimedOn === undefined ? "" : ` since ${claimedOn}`} — the holder session is no
+          longer alive, the claim can be taken over.
+        </span>
       </span>
     );
   }
@@ -60,6 +73,7 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
   return (
     <span
       className={cn(chipBase, "border border-success/30 bg-success/10 text-success")}
+      aria-describedby="claim-chip-alive-desc"
       title={claimedOn}
       data-claim-state="alive"
     >
@@ -67,6 +81,9 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
       <span className="sr-only">alive</span>
       {holder}
       {age !== null ? ` · ${age}` : ""}
+      <span id="claim-chip-alive-desc" className="sr-only">
+        Claimed{claimedOn === undefined ? "" : ` since ${claimedOn}`} by a live session
+      </span>
     </span>
   );
 }

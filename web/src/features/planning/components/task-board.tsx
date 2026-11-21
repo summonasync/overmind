@@ -186,10 +186,14 @@ function TaskCard({ task, siblings, featureSlug, numbering, onOpen, onMove, onDe
           <Badge tone={task.review === "hard" ? "warning" : "neutral"}>{task.review}</Badge>
           {blockers.length > 0 ? (
             <span
+              aria-describedby={`task-board-blocked-${task.order}`}
               title={`Blocked by ${taskBlockersSummary(blockers)}`}
               className="inline-flex items-center rounded-md border border-border/50 px-2 py-0.5 font-mono text-xs font-medium text-muted/70"
             >
               blocked
+              <span id={`task-board-blocked-${task.order}`} className="sr-only">
+                {`Blocked by ${taskBlockersSummary(blockers)}`}
+              </span>
             </span>
           ) : null}
         </span>
