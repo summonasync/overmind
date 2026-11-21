@@ -127,6 +127,45 @@ public class EntryLinkTests
         manual.Id.ShouldNotBe(derived.Id);
     }
 
+    // The columns carry no check constraint, so the closed vocabulary is the entity's promise. Both factories
+    // route through one guard, and CreateManual is what made a caller-supplied kind reachable at all.
+    [Theory]
+    [InlineData((EntryLinkKind)(-1))]
+    [InlineData((EntryLinkKind)4)]
+    [InlineData((EntryLinkKind)99)]
+    public void CreateDerived_UndefinedTargetKind_Throws(EntryLinkKind kind)
+    {
+        var ex = Should.Throw<ArgumentOutOfRangeException>(() =>
+            EntryLink.CreateDerived(Guid.NewGuid(), kind, Guid.NewGuid()));
+
+        ex.ParamName.ShouldBe("toKind");
+    }
+
+    [Theory]
+    [InlineData((EntryLinkKind)(-1))]
+    [InlineData((EntryLinkKind)4)]
+    [InlineData((EntryLinkKind)99)]
+    public void CreateManual_UndefinedTargetKind_Throws(EntryLinkKind kind)
+    {
+        var ex = Should.Throw<ArgumentOutOfRangeException>(() =>
+            EntryLink.CreateManual(Guid.NewGuid(), kind, Guid.NewGuid()));
+
+        ex.ParamName.ShouldBe("toKind");
+    }
+
+    [Fact]
+    public void Create_UndefinedTargetKind_RejectsBeforeTheIdGuards_AndLeavesNoRow()
+    {
+        var from = Guid.NewGuid();
+        var to = Guid.NewGuid();
+
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            EntryLink.CreateManual(from, (EntryLinkKind)4, to));
+
+        var link = EntryLink.CreateManual(from, EntryLinkKind.Task, to);
+        link.ToKind.ShouldBe(EntryLinkKind.Task);
+    }
+
     [Fact]
     public void EntryLinkKind_IsTheClosedTargetVocabulary()
     {

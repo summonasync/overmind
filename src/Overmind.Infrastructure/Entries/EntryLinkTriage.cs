@@ -73,6 +73,9 @@ public sealed class EntryLinkTriage
                   || link.ToKind == EntryLinkKind.Project
                       && _db.Projects.Any(project => project.Id == link.ToId)
                   || link.ToKind == EntryLinkKind.Feature
-                      && _db.PlanningFeatures.Any(feature => feature.Id == link.ToId))
+                      && _db.PlanningFeatures.Any(feature => feature.Id == link.ToId)
+                  || link.ToKind == EntryLinkKind.Task
+                      && _db.PlanningArtifacts.Any(artifact =>
+                          artifact.Id == link.ToId && artifact.Kind == PlanningArtifactKind.Task))
         select link;
 }

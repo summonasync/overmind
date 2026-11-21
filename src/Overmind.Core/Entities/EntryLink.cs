@@ -21,6 +21,12 @@ public sealed class EntryLink
 
     private static EntryLink Create(Guid fromEntryId, EntryLinkKind toKind, Guid toId, EntryLinkOrigin origin)
     {
+        if (!Enum.IsDefined(toKind))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(toKind), toKind, "A link target must name a kind the enum defines.");
+        }
+
         if (toId == Guid.Empty)
         {
             throw new ArgumentException("A link target requires an id.", nameof(toId));
