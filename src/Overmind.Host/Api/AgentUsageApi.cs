@@ -7,7 +7,7 @@ public static class AgentUsageApi
 {
     public static RouteGroupBuilder MapAgentUsageApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent");
+        var group = routes.MapAgentGroup();
         group.MapGet("/usage", GetUsage);
         return group;
     }

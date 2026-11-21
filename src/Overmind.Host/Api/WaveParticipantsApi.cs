@@ -14,7 +14,7 @@ public static class WaveParticipantsApi
         var human = routes.MapGroup("/api");
         human.MapGet("/projects/{projectId:guid}/wave/participants", Participants);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapGet("/projects/{projectId:guid}/wave/participants", Participants);
 
         return human;

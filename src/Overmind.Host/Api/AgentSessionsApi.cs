@@ -10,7 +10,7 @@ public static class AgentSessionsApi
 {
     public static RouteGroupBuilder MapAgentSessionsApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent");
+        var group = routes.MapAgentGroup();
 
         group.MapPost("/sessions", Register);
         group.MapPost("/sessions/{id:guid}/role", SetRole);

@@ -27,7 +27,7 @@ public static class WaveChatApi
         human.MapGet("/projects/{projectId:guid}/wave/rooms", RoomsForHuman);
         human.MapGet("/projects/{projectId:guid}/wave/stream", StreamForHuman);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapPost("/projects/{projectId:guid}/wave/rooms/{room}/messages", PostForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/unread", UnreadForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/peek", PeekForAgent);

@@ -21,7 +21,7 @@ public static class NotificationsApi
         human.MapPost("/notifications/clear-read", ClearRead);
         human.MapPost("/notifications/clear-conversations", ClearConversations);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapPost("/notifications", Create);
         agent.MapGet("/notifications/replies", Replies);
 

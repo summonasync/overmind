@@ -9,7 +9,7 @@ public static class AgentIssuesApi
 {
     public static RouteGroupBuilder MapAgentIssuesApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent/projects/{projectId:guid}/issues");
+        var group = routes.MapGroup("/api/agent/projects/{projectId:guid}/issues").AddEndpointFilter(UnknownPropertyProbeFilter.Instance);
 
         group.MapPost(string.Empty, Create);
         group.MapGet(string.Empty, List);
@@ -18,7 +18,7 @@ public static class AgentIssuesApi
         group.MapPost("/{id:guid}/status", SetStatus);
         group.MapPost("/{id:guid}/promote", Promote);
 
-        var idGroup = routes.MapGroup("/api/agent/issues");
+        var idGroup = routes.MapGroup("/api/agent/issues").AddEndpointFilter(UnknownPropertyProbeFilter.Instance);
 
         idGroup.MapGet("/{id:guid}", GetById);
         idGroup.MapPost("/{id:guid}/append", AppendById);

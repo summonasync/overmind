@@ -26,7 +26,7 @@ public static class LanesApi
         human.MapPut(LanePathPrefix + CollectionLiteral + "/{name}", Update);
         human.MapDelete(LanePathPrefix + CollectionLiteral + "/{name}", Delete);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapGet(LanePathPrefix + CollectionLiteral, List);
         agent.MapPost(LanePathPrefix + CollectionLiteral, Create);
         agent.MapPut(LanePathPrefix + CollectionLiteral, RosterWriterRetired);

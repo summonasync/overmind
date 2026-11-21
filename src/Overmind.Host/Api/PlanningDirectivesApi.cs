@@ -16,7 +16,7 @@ public static class PlanningDirectivesApi
         human.MapPost("/projects/{projectId:guid}/planning/features/{slug}/directives", AppendForHuman).OpenCoordination();
         human.MapPost("/projects/{projectId:guid}/planning/features/{slug}/directives/{directiveId:guid}/ack", AckForHuman).OpenCoordination();
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapPost("/projects/{projectId:guid}/planning/features/{slug}/directives", AppendForAgent).OpenCoordination();
         agent.MapPost("/projects/{projectId:guid}/planning/features/{slug}/directives/{directiveId:guid}/ack", AckForAgent).OpenCoordination();
 

@@ -78,7 +78,7 @@ public static class AgentPlanningApi
 
     public static RouteGroupBuilder MapAgentPlanningApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent");
+        var group = routes.MapAgentGroup();
 
         group.MapGet("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.Board);
         group.MapPost("/projects/{projectId:guid}/planning/features", PlanningFeaturesApi.CreateFeature);
@@ -590,6 +590,13 @@ public static class AgentPlanningApi
 
         var section = request.Section.Trim();
 
+        // Row 9: the tombstone reason is one line, and the shape rule runs before the soft cap so
+        // a long reason cannot be laundered into compliance by truncation.
+        if (request.Remove && SoftCapSoften.IsMultiline(request.Reason))
+        {
+            return PlanningErrors.Map(PlanningException.RemoveReasonMultiline());
+        }
+
         var soft = new List<object>();
         var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft);
         var patchLogNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
@@ -735,6 +742,11 @@ public static class AgentPlanningApi
         if (SoftCapSoften.IsMultiline(wirePatch.Brief))
         {
             throw PlanningException.BatchOp(index, PlanningException.InvalidBrief());
+        }
+
+        if (op == "remove_section" && SoftCapSoften.IsMultiline(wirePatch.Reason))
+        {
+            throw PlanningException.BatchOp(index, PlanningException.RemoveReasonMultiline());
         }
 
         return new PlanningBatchOp(
@@ -1081,6 +1093,12 @@ public static class AgentPlanningApi
         if (SoftCapSoften.IsMultiline(request.Brief))
         {
             return PlanningErrors.Map(PlanningException.InvalidBrief());
+        }
+
+        if (string.Equals(request.Op, "remove_section", StringComparison.OrdinalIgnoreCase)
+            && SoftCapSoften.IsMultiline(request.Reason))
+        {
+            return PlanningErrors.Map(PlanningException.RemoveReasonMultiline());
         }
 
         var soft = new List<object>();

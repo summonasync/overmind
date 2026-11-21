@@ -30,7 +30,7 @@ public static class EntriesApi
         group.MapGet("/entries/{id:guid}/versions", ListVersions);
         group.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForHuman);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
 
         // Spec R6 as an invariant rather than a list: every entry mutation registered under the /api/agent prefix
@@ -38,7 +38,7 @@ public static class EntriesApi
         // placement.
         // The route-table test derives its cases from the registered endpoints, so a mutation verb registered
         // anywhere else under this prefix turns that test red without anyone updating a verb list.
-        var agentEntryWrites = routes.MapGroup("/api/agent").AddEndpointFilter(JournalWriteLockFilter.Instance);
+        var agentEntryWrites = routes.MapAgentGroup().AddEndpointFilter(JournalWriteLockFilter.Instance);
         agentEntryWrites.MapPost("/entries", Create);
         agentEntryWrites.MapPut("/entries/{id:guid}", Update);
         agentEntryWrites.MapDelete("/entries/{id:guid}", Delete);
