@@ -105,34 +105,42 @@ public sealed class AgentWakeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Wake_WithoutSince_DefaultsRepliesToTheLastSevenDays()
+    public async Task Wake_WithoutSince_DefaultsRepliesToAfterTheSessionReplyCursor()
     {
-        await SeedNotificationAsync("Dan", "ancient", "old reply", UtcNow.AddDays(-8));
+        var ancient = await SeedNotificationAsync("Dan", "ancient", "old reply", UtcNow.AddDays(-8));
         var recent = await SeedNotificationAsync("Dan", "current", "fresh reply", UtcNow.AddDays(-1));
 
+        var birth = await WakeAsync();
+        birth.Signals.ShouldBeEmpty();
+
+        await SetSessionReplyCursorAsync(UtcNow.AddHours(-30));
         var wake = await WakeAsync();
 
         wake.Signals.Select(s => s.RefId).ShouldBe([recent]);
+        wake.Signals.ShouldNotContain(s => s.RefId == ancient);
     }
 
     [Fact]
-    public async Task Wake_DefaultWindow_DropsReadReplies_AndSinceReplayReturnsThem()
+    public async Task Wake_DefaultWindow_DropsRepliesBeforeTheCursor_AndSinceReplayReturnsThem()
     {
-        var pending = await SeedNotificationAsync("Dan", "open gate", "pending reply", MinutesAgo(10));
-        var consumed = await SeedNotificationAsync(
-            "Dan", "closed gate", "consumed reply", MinutesAgo(20), readAt: MinutesAgo(5));
+        var before = await SeedNotificationAsync(
+            "Dan", "older gate", "consumed reply", MinutesAgo(20), readAt: MinutesAgo(5));
+        var after = await SeedNotificationAsync(
+            "Dan", "open gate", "pending reply", MinutesAgo(10), readAt: MinutesAgo(2));
 
+        await SetSessionReplyCursorAsync(MinutesAgo(15));
         var wake = await WakeAsync();
-        wake.Signals.Select(s => s.RefId).ShouldBe([pending]);
+        wake.Signals.Select(s => s.RefId).ShouldBe([after]);
 
         var replay = await WakeAsync(Uri.EscapeDataString(MinutesAgo(60).ToString("O")));
-        replay.Signals.Select(s => s.RefId).ShouldBe([consumed, pending]);
+        replay.Signals.Select(s => s.RefId).ShouldBe([before, after]);
     }
 
     [Fact]
-    public async Task Wake_AfterMarkRead_TheSignalLeavesTheDefaultWindow()
+    public async Task Wake_AfterMarkRead_TheReplyStaysInTheCursorWindow()
     {
         var pending = await SeedNotificationAsync("Dan", "gate", "approved", MinutesAgo(10));
+        await SetSessionReplyCursorAsync(MinutesAgo(30));
 
         var before = await WakeAsync();
         before.Signals.Select(s => s.RefId).ShouldBe([pending]);
@@ -141,7 +149,7 @@ public sealed class AgentWakeApiTests : IDisposable
         read.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var after = await WakeAsync();
-        after.Signals.ShouldBeEmpty();
+        after.Signals.Select(s => s.RefId).ShouldBe([pending]);
     }
 
     [Fact]
@@ -149,6 +157,7 @@ public sealed class AgentWakeApiTests : IDisposable
     {
         var home = await CreateProjectAsync();
         var foreign = await CreateProjectAsync();
+        await SetSessionReplyCursorAsync(MinutesAgo(30));
         var mine = await SeedNotificationAsync(
             "Dan", "home gate", "home reply", MinutesAgo(10), readAt: null, projectId: home);
         await SeedNotificationAsync(
@@ -340,10 +349,9 @@ public sealed class AgentWakeApiTests : IDisposable
         var description = endpoint.Metadata.OfType<IEndpointDescriptionMetadata>().Single().Description;
 
         description.ShouldContain("side-effect free");
-        description.ShouldContain("readAt (consumed)");
-        description.ShouldContain("the last 7 days");
-        description.ShouldContain("OVERMIND_WAKE_REPLY_LOOKBACK_DAYS");
-        description.ShouldContain("clamp");
+        description.ShouldContain("reply cursor");
+        description.ShouldContain("starts at now");
+        description.ShouldContain("an explicit since replaces the cursor");
         description.ShouldContain("machine-wide");
         description.ShouldContain("LastSeenAt");
         description.ShouldContain("echo it verbatim as since");
@@ -449,6 +457,12 @@ public sealed class AgentWakeApiTests : IDisposable
             $"UPDATE AgentSessions SET LastSeenAt = '{Timestamp(at)}' WHERE Id = '{AgentSessionId.ToString().ToUpperInvariant()}'");
     }
 
+    private async Task SetSessionReplyCursorAsync(DateTime at)
+    {
+        await ExecuteAsync(
+            $"UPDATE AgentSessions SET ReplyCursorAt = '{Timestamp(at)}' WHERE Id = '{AgentSessionId.ToString().ToUpperInvariant()}'");
+    }
+
     private async Task<Guid> SeedNotificationAsync(
         string agent, string text, string? replyText, DateTime repliedAt,
         DateTime? readAt = null, Guid? projectId = null)
@@ -457,8 +471,9 @@ public sealed class AgentWakeApiTests : IDisposable
         var replied = replyText is null ? "NULL" : $"'{replyText}'";
         var read = readAt is null ? "NULL" : $"'{Timestamp(readAt.Value)}'";
         var project = projectId is null ? "NULL" : $"'{projectId.Value.ToString().ToUpperInvariant()}'";
-        // schema-coupled on purpose: the reply flow stamps ReadAt at birth (084), so window shapes
-        // are only reachable through the table; the kind is a named enum, not a bare literal
+        // schema-coupled on purpose: the reply flow stamps ReadAt at birth (084) and the wake window
+        // rides the session's ReplyCursorAt, so replied/read/cursor shapes are only reachable through
+        // the table; the kind is a named enum, not a bare literal
         await ExecuteAsync($"""
             INSERT INTO AgentNotifications (Id, ProjectId, Kind, FeatureSlug, Tab, Text, Agent, CreatedAt, ReadAt, ReplyText, RepliedAt, HiddenAt)
             VALUES ('{id.ToString().ToUpperInvariant()}', {project}, {(int)NotificationKind.Question}, NULL, NULL, '{text}', '{agent}', '{Timestamp(repliedAt)}', {read}, {replied}, '{Timestamp(repliedAt)}', NULL)

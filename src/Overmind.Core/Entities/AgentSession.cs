@@ -19,6 +19,7 @@ public sealed class AgentSession
     public DateTime StartedAt { get; private set; }
     public DateTime LastSeenAt { get; private set; }
     public DateTime? EndedAt { get; private set; }
+    public DateTime? ReplyCursorAt { get; private set; }
 
     public static AgentSession Create(string alias, string vendor, string role = DefaultRole)
     {
@@ -66,6 +67,14 @@ public sealed class AgentSession
     }
 
     public void End() => EndedAt ??= DateTime.UtcNow;
+
+    public void AdvanceReplyCursor(DateTime at)
+    {
+        if (ReplyCursorAt is null || at > ReplyCursorAt)
+        {
+            ReplyCursorAt = at;
+        }
+    }
 
     public void SetRole(string role) => Role = NormalizeRole(role);
 

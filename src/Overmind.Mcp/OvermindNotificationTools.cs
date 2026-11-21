@@ -64,11 +64,12 @@ public sealed class OvermindNotificationTools
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]
     [Description("Polls the human's replies to your overmind_notify messages, newest first — each item's " +
-        "replyText is the human's decision. Filters combine; an over-narrow filter returns an empty array, " +
-        "not an error.")]
+        "replyText is the human's decision. A complete read advances this session's reply cursor, " +
+        "retiring those replies from overmind_wake_peek's default window. Filters combine; an " +
+        "over-narrow filter returns an empty array, not an error.")]
     public async Task<JsonElement> Replies(
         [Description("Optional project id.")] Guid? projectId = null,
-        [Description("False matches nothing — replies are consumed on read; keep the default.")] bool? includeRead = null,
+        [Description("False narrows to replies the human has not read yet; keep the default.")] bool? includeRead = null,
         [Description("Only replies after this ISO-8601 instant (offset-less reads as UTC).")] string? since = null,
         [Description("Notification kind: info, question or approval.")] string? kind = null,
         [Description("Feature slug to narrow to.")] string? featureSlug = null,
