@@ -47,6 +47,10 @@ while read -r src home type mode; do
     [[ "$home" == "codex-skills" ]] && gate="$HOME/.codex"  # same runtime gate as install; ~/.agents may not exist yet
     [[ -d "$gate" ]] || continue
     name="$(basename "$src")"
+    # Crew skills installed before the .agents relocation live under the old home root
+    # ($HOME/.codex/$name) — dead weight after the move, scrubbed when present. Runs in
+    # both modes, before the merge branch takes its per-child path.
+    [[ "$home" == "codex-skills" && -e "$HOME/.codex/$name" ]] && add_target "$HOME/.codex/$name"
     if [[ "$type" == "dir" && "$mode" == "merge" ]]; then
         # Merge-mode deploys children individually, so removal is per child too — the shared
         # destination directory itself may hold third-party content we must not touch.
@@ -65,9 +69,6 @@ while read -r src home type mode; do
         continue
     fi
     add_target "$hp/$name"
-    # Crew skills installed before the .agents relocation live under the old home root
-    # ($HOME/.codex/$name) — dead weight after the move, scrubbed when present.
-    [[ "$home" == "codex-skills" && -e "$HOME/.codex/$name" ]] && add_target "$HOME/.codex/$name"
 done <<< "$entries"
 
 if [[ $DRY == 1 ]]; then

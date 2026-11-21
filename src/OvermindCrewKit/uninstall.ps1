@@ -23,6 +23,16 @@ foreach ($entry in $manifest.entries) {
     if (-not (Test-Path $gate)) { continue }
     $name = Split-Path -Leaf $entry.source
 
+    # Crew skills installed before the .agents relocation live under the old home root
+    # ($HOME/.codex/$name) — dead weight after the move, scrubbed when present. Runs in
+    # both modes, before the merge branch takes its per-child path.
+    if ($entry.home -eq 'codex-skills') {
+        $legacy = Join-Path (Join-Path $HOME '.codex') $name
+        if (Test-Path $legacy) {
+            $targets += [pscustomobject]@{ Path = $legacy; Type = 'dir'; Home = (Join-Path $HOME '.codex') }
+        }
+    }
+
     if ($entry.type -eq 'dir' -and $entry.mode -eq 'merge') {
         # Merge-mode deploys children individually, so removal is per child too — the shared
         # destination directory itself may hold third-party content we must not touch.
@@ -45,14 +55,6 @@ foreach ($entry in $manifest.entries) {
     }
 
     $targets += [pscustomobject]@{ Path = $target; Type = $entry.type; Home = $destHome }
-    # Crew skills installed before the .agents relocation live under the old home root
-    # ($HOME/.codex/$name) — dead weight after the move, scrubbed when present.
-    if ($entry.home -eq 'codex-skills') {
-        $legacy = Join-Path (Join-Path $HOME '.codex') $name
-        if (Test-Path $legacy) {
-            $targets += [pscustomobject]@{ Path = $legacy; Type = 'dir'; Home = (Join-Path $HOME '.codex') }
-        }
-    }
 }
 
 $targets = @($targets | Sort-Object -Property Path -Unique)
