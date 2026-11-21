@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Overmind.Core;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Persistence;
@@ -85,13 +86,73 @@ public static class GraphApi
 
         // The projection windows from a focus it recognises and answers empty for one it does not; an empty field
         // that was asked to centre on a node is a bad focus, not a field with nothing in it, so it names itself.
+        // It also has to say WHICH half went wrong: when the node is real and a co-filter dropped it, blaming the
+        // node sends the owner chasing the dot they clicked (review-237-03 m5).
         if (focusRequested && field.Nodes.Count == 0)
         {
+            if (focusNode is { } node && await IsFieldNode(db, node, ct))
+            {
+                var coFilters = ActiveCoFilters(type, project, term, includeDoneFeatures);
+                return HttpErrors.NotFound(
+                    $"'focus' names a node that exists ({focus}), but this view filtered it out" +
+                    (coFilters.Count > 0
+                        ? $" — the filter to widen: {string.Join(", ", coFilters)}."
+                        : " — no narrowing filter is active, so the node is outside the drawn universe."),
+                    "UnknownGraphFocus");
+            }
+
             return HttpErrors.NotFound(
                 $"'focus' names no node in the graph: {focus}.",
                 "UnknownGraphFocus");
         }
 
         return Results.Ok(GraphMapper.ToResponse(field));
+    }
+
+    // Existence in the node universe, not in this view: the same three entry types R1 fixes, the same live-row
+    // hygiene triage applies, and a feature the default filter hides is still a node the canvas can centre on.
+    private static async Task<bool> IsFieldNode(OvermindDbContext db, GraphNodeId node, CancellationToken ct)
+    {
+        return node.Kind switch
+        {
+            EntryLinkKind.Entry => await db.ContextEntries.AnyAsync(entry =>
+                entry.Id == node.Id
+                && GraphReadRequest.NodeEntryTypes.Contains(entry.Type)
+                && entry.State == ContextEntry.ActiveState
+                && entry.Type != EntryType.Tombstone, ct),
+            EntryLinkKind.Project => await db.Projects.AnyAsync(project => project.Id == node.Id, ct),
+            EntryLinkKind.Feature => await db.PlanningFeatures.AnyAsync(feature => feature.Id == node.Id, ct),
+            _ => false,
+        };
+    }
+
+    // Every filter that could have removed a real node from the field, named as the query parameter the owner
+    // actually set. orphansOnly never reaches here — it is refused as contradictory with focus before the read.
+    private static List<string> ActiveCoFilters(
+        string[]? type, string? project, string? term, bool includeDoneFeatures)
+    {
+        var names = new List<string>();
+
+        if (type is { Length: > 0 })
+        {
+            names.Add("'type'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(project))
+        {
+            names.Add("'project'");
+        }
+
+        if (term is not null)
+        {
+            names.Add("'search'");
+        }
+
+        if (!includeDoneFeatures)
+        {
+            names.Add("'includeDone' (Done features are hidden until widened)");
+        }
+
+        return names;
     }
 }

@@ -221,6 +221,45 @@ public sealed class GraphApiTests : IAsyncLifetime
         (await ReadProblem(response)).Title.ShouldBe("UnknownGraphFocus");
     }
 
+    [Fact]
+    public async Task FocusCoFilteredOutOfTheView_NamesTheCoFilter_NotTheNode()
+    {
+        // Review-237-03 m5, measured as ProbeC: E1 is a real node and 'search=zzzz' is what hid it, but the door
+        // answered "focus names no node" — the owner gets blamed for the dot they clicked. The two 404s share a
+        // code and must not share a sentence.
+        var hidden = await _client.GetAsync($"/api/graph?focus=entry:{_e1}&search=zzzz");
+        var hiddenProblem = await ReadProblem(hidden);
+
+        hidden.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        hiddenProblem.Title.ShouldBe("UnknownGraphFocus");
+        hiddenProblem.Detail.ShouldContain("names a node that exists");
+        hiddenProblem.Detail.ShouldContain("'search'");
+
+        var unknown = await _client.GetAsync($"/api/graph?focus=entry:{Guid.NewGuid()}");
+        var unknownProblem = await ReadProblem(unknown);
+
+        unknown.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        unknownProblem.Detail.ShouldContain("names no node");
+        unknownProblem.Detail.ShouldNotBe(hiddenProblem.Detail);
+    }
+
+    [Fact]
+    public async Task FocusOnADoneFeatureInTheDefaultView_NamesTheWideningFilter()
+    {
+        // The second combination of the same defect: F2 exists and is a node, the default hides Done features.
+        // Widening is the answer, so the detail has to say so rather than call the node unknown.
+        var hidden = await _client.GetAsync($"/api/graph?focus=feature:{_f2}");
+        var problem = await ReadProblem(hidden);
+
+        hidden.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        problem.Title.ShouldBe("UnknownGraphFocus");
+        problem.Detail.ShouldContain("names a node that exists");
+        problem.Detail.ShouldContain("'includeDone'");
+
+        var widened = await _client.GetAsync($"/api/graph?focus=feature:{_f2}&includeDone=true");
+        widened.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Theory]
     [InlineData("?type=bogus", "UnknownGraphTypeFilter")]
     [InlineData("?orphansOnly=maybe", "InvalidGraphFlag")]

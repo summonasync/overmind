@@ -343,6 +343,7 @@ public sealed class TriagePromotionTests : IDisposable
         var dispatcher = TestPlanningDispatcher.Create(context, _materializer);
         return new TriagePromotionService(
             context,
+            new EntryLinkTriage(context),
             new PlanningFeatureService(
                 context,
                 _materializer,

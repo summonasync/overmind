@@ -16,6 +16,7 @@ namespace Overmind.Infrastructure.Entries;
 public sealed class TriagePromotionService
 {
     private readonly OvermindDbContext _db;
+    private readonly EntryLinkTriage _triage;
     private readonly PlanningFeatureService _features;
     private readonly PlanningArtifactService _artifacts;
     private readonly PlanningBatchScope _batch;
@@ -23,12 +24,14 @@ public sealed class TriagePromotionService
 
     public TriagePromotionService(
         OvermindDbContext db,
+        EntryLinkTriage triage,
         PlanningFeatureService features,
         PlanningArtifactService artifacts,
         PlanningBatchScope batch,
         PlanningMaterializationDispatcher materialization)
     {
         _db = db;
+        _triage = triage;
         _features = features;
         _artifacts = artifacts;
         _batch = batch;
@@ -122,15 +125,17 @@ public sealed class TriagePromotionService
     // first one's target would let a double click look like a sorted note while a second thought went unsaid.
     // Only an edge whose artifact still exists counts as a promotion — delete the card and the note is back in
     // the pile to be promoted again, which is the same hygiene the triage predicate applies to buried rows.
+    //
+    // The lift reads the shared edge universe rather than restating it: an edge that does not make the note linked
+    // must not make it unpromotable either, or a Manual Task edge sitting on a non-task artifact would strand the
+    // note in the pile with the door closed. The kinds are the two this door can itself write.
     private async Task RequireNotPromotedAsync(Guid entryId, CancellationToken ct)
     {
-        var prior = await _db.EntryLinks.AsNoTracking()
+        var prior = await _triage.Edges()
             .Where(link => link.FromEntryId == entryId
                            && link.Origin == EntryLinkOrigin.Manual
-                           && ((link.ToKind == EntryLinkKind.Feature
-                                    && _db.PlanningFeatures.Any(feature => feature.Id == link.ToId))
-                                || (link.ToKind == EntryLinkKind.Task
-                                    && _db.PlanningArtifacts.Any(artifact => artifact.Id == link.ToId))))
+                           && (link.ToKind == EntryLinkKind.Feature
+                               || link.ToKind == EntryLinkKind.Task))
             .Select(link => new { link.ToKind, link.ToId })
             .FirstOrDefaultAsync(ct);
 
@@ -155,7 +160,7 @@ public sealed class TriagePromotionService
         }
 
         var task = await _db.PlanningArtifacts.AsNoTracking()
-            .Where(artifact => artifact.Id == targetId)
+            .Where(artifact => artifact.Id == targetId && artifact.Kind == PlanningArtifactKind.Task)
             .Select(artifact => new { artifact.Order, artifact.FeatureId })
             .FirstOrDefaultAsync(ct);
 
