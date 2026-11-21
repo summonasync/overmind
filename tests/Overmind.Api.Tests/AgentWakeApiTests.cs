@@ -157,6 +157,7 @@ public sealed class AgentWakeApiTests : IDisposable
     {
         var home = await CreateProjectAsync();
         var foreign = await CreateProjectAsync();
+        await SetSessionReplyCursorAsync(MinutesAgo(30));
         var mine = await SeedNotificationAsync(
             "Dan", "home gate", "home reply", MinutesAgo(10), readAt: null, projectId: home);
         await SeedNotificationAsync(
