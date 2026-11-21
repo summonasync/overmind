@@ -87,7 +87,7 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
           </p>
           <ChoiceButton
             title="Install it yourself"
-            hint="Show the install steps. Nothing runs and nothing is written to your agent configs."
+            hint="Shows the hand-install steps unless the configured channel installs it first; no agent config is touched either way."
             onClick={() => openInstructionsStep("manual")}
           />
           <ChoiceButton
