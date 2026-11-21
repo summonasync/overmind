@@ -57,6 +57,55 @@ public sealed class AgentScopeBoundaryTextTests : IDisposable
         "refused instead of", "scope is checked", "and refuses a foreign",
     ];
 
+    // The sweep above only forbids over-claiming. These assert the new truth is actually present, because a
+    // prompt that quietly drops back to "object-addressed calls are a gap" would pass every ShouldNotContain
+    // in this file while lying about what T1-T3 shipped.
+    [Fact]
+    public async Task ScopedPrompt_NamesTheClosedDoorsAndTheOneHoleLeftOpen()
+    {
+        var system = await ComposeAsync(Conversation.Create(Guid.NewGuid(), "scoped chat"));
+
+        foreach (var handle in new[] { "artifactId", "issueId", "entryId" })
+        {
+            system.ShouldContain(handle, Case.Sensitive,
+                $"the prompt must still name {handle} - and say the host checks it against the owner");
+        }
+
+        system.ShouldContain("kit_reimport", Case.Sensitive,
+            "the remaining gap has to stay named by the doors that constitute it, not described in the abstract");
+        system.ShouldContain("human UI", Case.Sensitive,
+            "spec R8's sentence names two things that stay unscoped - dropping the second half would be an " +
+            "underclaim in the other direction, and the model reads this text as the contract");
+        system.ShouldContain("declared gap", Case.Insensitive);
+        system.ShouldNotContain("sees arguments only", Case.Insensitive,
+            "object-addressed calls are no longer outside the check - this was the pre-246 sentence");
+        system.ShouldNotContain("sit outside the scope check in every shape", Case.Insensitive,
+            customMessage: "that claim is only true for a conversation without a project, and it lives in that branch now");
+    }
+
+    [Fact]
+    public async Task GlobalPrompt_KeepsThePassThroughHonestWithoutPromisingAComparison()
+    {
+        var system = await ComposeAsync(Conversation.Create(null, "global chat"));
+
+        system.ShouldContain("246", Case.Sensitive);
+        system.ShouldContain("pass-through", Case.Insensitive,
+            "a project-less turn must be told its calls are unchecked because there is no owner, not because they are safe");
+        system.ShouldContain("absence of a comparison", Case.Insensitive,
+            customMessage: "the sentence must name the mechanism honestly instead of letting the model read a licence");
+    }
+
+    [Fact]
+    public void BoardContextDescription_NoLongerFilesObjectDoorsAsOutsideTheCheck()
+    {
+        var description = CreateRegistry().Specs.Single(spec => spec.Name == "get_board_context").Description;
+
+        description.ShouldContain("246", Case.Sensitive);
+        description.ShouldContain("kit", Case.Insensitive,
+            "the tool description must point at the path-addressed kit operations as what remains open");
+        description.ShouldNotContain("sits outside that comparison", Case.Insensitive);
+    }
+
     [Theory]
     [InlineData("main")]
     [InlineData("validator")]

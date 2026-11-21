@@ -128,9 +128,10 @@ public sealed class IssueService
     }
 
     public async Task<(Issue Issue, IReadOnlyList<IssueAppend> Appends)> GetAsync(
-        Guid issueId, CancellationToken ct = default)
+        Guid issueId, CancellationToken ct = default, Guid? callerProjectId = null)
     {
         var issue = await RequireIssueAsync(issueId, ct);
+        GuardCallerScope(issue, callerProjectId);
         var appends = await _db.IssueAppends
             .AsNoTracking()
             .Where(a => a.IssueId == issueId)
@@ -142,10 +143,14 @@ public sealed class IssueService
     }
 
     public async Task<IssueAppend> AppendAsync(
-        Guid issueId, Guid authorProjectId, string text, CancellationToken ct = default)
+        Guid issueId, Guid authorProjectId, string text, CancellationToken ct = default,
+        Guid? callerProjectId = null)
     {
         await RequireProjectAsync(authorProjectId, ct);
         var issue = await RequireIssueAsync(issueId, ct);
+        // authorProjectId answers "who is speaking"; ownership of the card is a different question
+        // and the caller's project is compared against the issue, not against the author.
+        GuardCallerScope(issue, callerProjectId);
         var append = issue.Append(authorProjectId, text);
         _db.IssueAppends.Add(append);
         await _db.SaveChangesAsync(ct);
@@ -153,9 +158,11 @@ public sealed class IssueService
     }
 
     public async Task<Issue> SetStatusAsync(
-        Guid issueId, IssueStatus target, PlanningLogSource source, CancellationToken ct = default)
+        Guid issueId, IssueStatus target, PlanningLogSource source, CancellationToken ct = default,
+        Guid? callerProjectId = null)
     {
         var issue = await RequireIssueAsync(issueId, ct);
+        GuardCallerScope(issue, callerProjectId);
         issue.SetStatus(target, source);
         await _db.SaveChangesAsync(ct);
         return issue;
@@ -166,9 +173,10 @@ public sealed class IssueService
     // sessionId null = the human door, which promotes anything.
     public async Task<(Issue Issue, PlanningArtifact Artifact)> PromoteAsync(
         Guid issueId, string featureSlug, PlanningLogSource source, Guid? sessionId = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? callerProjectId = null)
     {
         var issue = await RequireIssueAsync(issueId, ct);
+        GuardCallerScope(issue, callerProjectId);
         var feature = await _db.PlanningFeatures
             .FirstOrDefaultAsync(f => f.ProjectId == issue.ProjectId && f.Slug == featureSlug, ct)
             ?? throw PlanningException.MissingFeature(featureSlug);
@@ -200,4 +208,15 @@ public sealed class IssueService
     private async Task<Issue> RequireIssueAsync(Guid issueId, CancellationToken ct) =>
         await _db.Issues.FirstOrDefaultAsync(i => i.Id == issueId, ct)
         ?? throw PlanningException.MissingIssue(issueId);
+
+    // One refusal point for the four id-addressed issue doors. A null caller means the call did not
+    // present the embedded-agent pair - the external MCP adapter and the human UI both address issues
+    // by id without one - and is therefore not compared, per spec R2 as amended.
+    private static void GuardCallerScope(Issue issue, Guid? callerProjectId)
+    {
+        if (callerProjectId is { } caller && caller != issue.ProjectId)
+        {
+            throw PlanningException.IssueOutsideCallerProject(issue.Id, issue.ProjectId, caller);
+        }
+    }
 }

@@ -69,6 +69,27 @@ contenders. **Overmind** won — the mind of the StarCraft swarm that commands
 the zergling broods. Because that is exactly what happens: your Claudes and
 Kimis are the zerglings, and here they finally share a head.
 
+## Install
+
+Download, run, it works — the platform pages say how:
+
+- **Windows** — `overmind-<version>-setup.exe` (Inno Setup, per-user install,
+  no admin rights needed). What the wizard writes, how an upgrade stops a
+  running Host and what uninstall does to `~/.overmind`:
+  [docs/install-windows.md](docs/install-windows.md).
+- **Ubuntu / Debian** — no packaged installer: `build/pack.sh` cuts a
+  portable tarball, you unpack it yourself, `run.sh` starts the Host, and
+  `build/install.sh` registers the XDG autostart entry for the unpacked
+  folder (it unpacks nothing — the name is a trap). Optional systemd-user
+  unit if you want it up at login:
+  [docs/install-ubuntu.md](docs/install-ubuntu.md).
+- **Getting an agent to see it** — Claude Code, Qwen Code, Kimi Code, Codex:
+  the MCP adapter config per runtime and what registration actually edits in
+  your own settings file: [docs/agent-connection.md](docs/agent-connection.md).
+
+macOS has no installer yet — the `dotnet run` route below is how it runs
+today (and note the tray limitation in Quickstart).
+
 ## Quickstart
 
 ```bash
@@ -215,8 +236,12 @@ The ready installer — `overmind-<version>-setup.exe` (Inno Setup), built by
   without agent registrations, that is just a convenience.
 - **Upgrading.** Running `setup.exe` again over an existing install is an
   in-place upgrade: the installer stops a running Host itself via
-  `POST /api/shutdown` (a planned stop, not `taskkill`) before replacing
-  files, then may restart it.
+  `POST /api/shutdown` (a planned stop), polling its health endpoint for up
+  to 10 seconds, and only then falls back to `taskkill /F` on your username.
+  It does **not** restart the Host after a silent upgrade — the start entry
+  is `postinstall skipifsilent`, so only the interactive last-page
+  **Start Overmind now** checkbox launches it
+  ([docs/install-windows.md](docs/install-windows.md#upgrading)).
 - **Uninstalling.** Through "Apps & features" / Control Panel, like any
   program. The installer asks in a separate dialog whether to delete user
   data (`%USERPROFILE%\.overmind` — the database, settings, downloaded
@@ -344,7 +369,7 @@ web/                          Next.js 16 static-export SPA (FSD), served by the 
 
 ## License
 
-TBD
+Apache-2.0 — see [LICENSE](LICENSE). SPDX identifier: `Apache-2.0`.
 
 ---
 

@@ -14,15 +14,27 @@ public sealed class PlanningArtifactDiffService
     }
 
     public async Task<PlanningArtifactDiffResult> DiffAsync(
-        Guid artifactId, int? fromVersion, int? toVersion, CancellationToken ct = default)
+        Guid artifactId, int? fromVersion, int? toVersion, CancellationToken ct = default,
+        Guid? callerProjectId = null)
     {
-        var artifact = await _db.PlanningArtifacts
+        var load = _db.PlanningArtifacts
             .Include(a => a.Versions)
-            .FirstOrDefaultAsync(a => a.Id == artifactId, ct);
+            .Where(a => a.Id == artifactId);
+
+        if (callerProjectId is { } caller)
+        {
+            // Folded into the load that already runs: the accepted call costs the same single query.
+            load = load.Where(a => _db.PlanningFeatures
+                .Any(f => f.Id == a.FeatureId && f.ProjectId == caller));
+        }
+
+        var artifact = await load.FirstOrDefaultAsync(ct);
 
         if (artifact is null)
         {
-            throw PlanningException.MissingArtifact(artifactId);
+            throw callerProjectId is null
+                ? PlanningException.MissingArtifact(artifactId)
+                : await RefuseForeignOrMissingAsync(artifactId, callerProjectId.Value, ct);
         }
 
         var from = fromVersion ?? artifact.Version - 1;
@@ -39,6 +51,21 @@ public sealed class PlanningArtifactDiffService
             to,
             PlanningUnifiedDiff.Build(
                 VersionBody(artifact, from), VersionBody(artifact, to)));
+    }
+
+    private async Task<PlanningException> RefuseForeignOrMissingAsync(
+        Guid artifactId, Guid callerProjectId, CancellationToken ct)
+    {
+        var owner = await _db.PlanningArtifacts
+            .Where(a => a.Id == artifactId)
+            .Select(a => _db.PlanningFeatures.Where(f => f.Id == a.FeatureId).Select(f => f.ProjectId).First())
+            .FirstOrDefaultAsync(ct);
+
+        // The refused load returns nothing to read the owner off, so naming the owning project — which the
+        // refusal text owes the caller — costs this one scalar lookup on the refusal path only.
+        return owner is { } owning && owning != Guid.Empty
+            ? PlanningException.ArtifactOutsideCallerProject(artifactId, owning, callerProjectId)
+            : PlanningException.MissingArtifact(artifactId);
     }
 
     private static string VersionBody(PlanningArtifact artifact, int version)

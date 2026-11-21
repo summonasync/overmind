@@ -118,11 +118,22 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
 
         try
         {
-            if (invocation.DelegationArmed &&
-                invocation.InstructionMessageId is { } instructionId &&
-                spec.DelegatedInvoke is { } delegated)
+            if (invocation.DelegationArmed && invocation.InstructionMessageId is { } instructionId)
             {
-                return await delegated(arguments, instructionId, ct);
+                if (spec.DelegatedScopedInvoke is { } delegatedScoped)
+                {
+                    return await delegatedScoped(arguments, instructionId, invocation.ProjectId, ct);
+                }
+
+                if (spec.DelegatedInvoke is { } delegated)
+                {
+                    return await delegated(arguments, instructionId, ct);
+                }
+            }
+
+            if (spec.ScopedInvoke is { } scoped)
+            {
+                return await scoped(arguments, invocation.ProjectId, ct);
             }
 
             return spec.ConversationInvoke is { } conversationScoped
@@ -130,6 +141,10 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
                     ? await conversationScoped(arguments, conversationId, ct)
                     : Error(string.Format(ConversationScopeMissingMessage, name))
                 : await spec.Invoke(arguments, ct);
+        }
+        catch (AgentCallerContractException ex)
+        {
+            return ScopedError(ex.Message, ex.Code);
         }
         catch (LoopbackApiException ex)
         {
@@ -156,7 +171,8 @@ public sealed class AgentToolRegistry : IAgentToolInvoker
                 string.Format(HumanGatedToolMessage, spec.Name),
             AgentToolCategory.HumanGated when invocation.InstructionMessageId is null =>
                 string.Format(DelegationInstructionMissingMessage, spec.Name),
-            AgentToolCategory.HumanGated when spec.DelegatedInvoke is null =>
+            AgentToolCategory.HumanGated
+                when spec.DelegatedInvoke is null && spec.DelegatedScopedInvoke is null =>
                 string.Format(DelegatedDispatchMissingMessage, spec.Name),
             _ => null
         };
