@@ -1,3 +1,4 @@
+using Overmind.Core.Agents;
 using Overmind.Mcp.Registration;
 using Shouldly;
 using Xunit;
