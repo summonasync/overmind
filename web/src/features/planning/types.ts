@@ -58,7 +58,7 @@ export const HUMAN_VALIDATION_OVERRIDES: readonly HumanValidationOverride[] = [
   "off",
 ];
 
-export type PlanningClaimState = "alive" | "stale" | "ended";
+export type PlanningClaimState = "alive" | "stale" | "ended" | "released";
 
 export interface PlanningLaneHolder {
   alias: string;
@@ -96,15 +96,13 @@ export interface ReorderPlanningQueueValues {
   slugs: string[];
 }
 
-export type PlanningInboxClaimState = PlanningClaimState | "released";
-
 export interface PlanningInboxItem {
   slug: string;
   title: string;
   phase: string;
   queuePosition: number;
   claimedByAlias: string | null;
-  claimState: PlanningInboxClaimState | null;
+  claimState: PlanningClaimState | null;
   pendingSince: string;
   link: string | null;
 }
