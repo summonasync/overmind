@@ -172,20 +172,94 @@ test("a blocked form never produces a request, so cancel cannot reach the door",
 
 test("the api layer posts to the two human-door verbs and writes no note", () => {
   const api = sliceFile("api.ts");
-  assert.match(api, /promote-to-\$\{request\.target\}/, "the promote verbs are not door-shaped");
-  for (const verb of ["promote-to-feature", "promote-to-task"]) {
-    assert.ok(api.includes(verb) || true, verb);
-  }
+  // The verbs are read off the door itself, not restated here: `JournalTriageApi` registers the
+  // two routes, and the client builds the suffix from its own target union.
+  const door = readFileSync(
+    new URL("../../src/Overmind.Host/Api/JournalTriageApi.cs", import.meta.url),
+    "utf8",
+  );
+  const suffixes = [...door.matchAll(/\/entries\/\{id:guid\}\/(promote-to-[a-z]+)/g)].map(
+    (match) => match[1]!.replace("promote-to-", ""),
+  );
+  assert.deepEqual(suffixes, ["feature", "task"], "the door grew or renamed a verb this pin missed");
+  assert.match(api, /promote-to-\$\{request\.target\}/, "the client stopped building the door's path");
+
   // The promotion body carries no note text: spec R6's rule that the note is never the artifact.
   const promoteBody = api.slice(api.indexOf("export function promoteNote"));
-  assert.ok(
-    !/content:/.test(promoteBody),
-    "the promotion started copying the note's body onto the wire",
+  assert.ok(promoteBody.length > 100, "the promote function is gone");
+  assert.equal(
+    /content:/.test(promoteBody),
+    false,
+    "the promotion started shipping the note's body onto the wire",
   );
-  assert.ok(
-    !/apiPut|apiDelete/.test(promoteBody),
+  assert.equal(
+    /apiPut|apiDelete/.test(promoteBody),
+    false,
     "the promotion path reached for a note write — the door writes no note",
   );
+});
+
+test("the request the client builds is the body the door validates", async () => {
+  // A real run through the slice's api layer and the shared client: the assertion is about the
+  // bytes on the wire, not about a string in a source file. Both arms, because they are two doors
+  // with two bodies and a test that walks one of them measures half the act.
+  const calls: { url: string; method: string; body: string }[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    calls.push({
+      url: String(input),
+      method: String(init?.method ?? "GET"),
+      body: String(init?.body ?? ""),
+    });
+    return new Response(
+      JSON.stringify({
+        entryId: NOTE_ID,
+        targetKind: JSON.parse(String(init?.body ?? "{}")).brief === undefined ? "feature" : "task",
+        targetId: FEATURE_ID,
+        featureId: FEATURE_ID,
+        featureSlug: "042-promoted-thought",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    const { promoteNote } = (await jiti.import("../src/features/journal/api.ts")) as unknown as {
+      promoteNote: (id: string, request: unknown) => Promise<NotePromotionResult>;
+    };
+
+    const feature = await promoteNote(NOTE_ID, promotionRequest(readyForm));
+    assert.equal(calls.length, 1, `the feature arm made ${calls.length} requests, expected one`);
+    assert.equal(calls[0]!.url, `/api/entries/${NOTE_ID}/promote-to-feature`);
+    assert.equal(calls[0]!.method, "POST");
+    assert.deepEqual(JSON.parse(calls[0]!.body), {
+      projectId: BOARD_ID,
+      title: "A card worth reading later",
+      body: "What the card is for, written at the act.",
+    });
+    assert.equal(feature.targetKind, "feature");
+    assert.equal(feature.featureSlug, "042-promoted-thought");
+
+    const task = await promoteNote(
+      NOTE_ID,
+      promotionRequest({ ...readyForm, target: "task", featureId: FEATURE_ID, name: " Brief " }),
+    );
+    assert.equal(calls.length, 2, `the task arm made ${calls.length - 1} requests, expected one`);
+    assert.equal(calls[1]!.url, `/api/entries/${NOTE_ID}/promote-to-task`);
+    assert.deepEqual(JSON.parse(calls[1]!.body), {
+      featureId: FEATURE_ID,
+      body: "What the card is for, written at the act.",
+      brief: "Brief",
+    });
+    assert.equal(task.targetKind, "task");
+
+    // Neither arm ever carries the note's own text.
+    for (const call of calls) {
+      assert.equal(/content/.test(call.body), false, "the promotion shipped note text on the wire");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 // ── Exactly the caches the response names ─────────────────────────────────────────────
@@ -624,7 +698,9 @@ test("a refusal renders as a named-card status, not as the error banner", () => 
 });
 
 test("the note's own text is not an input to the act", () => {
-  // The door writes no note, and the surface must not either: no update, no lift, no append.
+  // The door writes no note, and neither may this surface: no update, no lift, no append anywhere
+  // on the promotion path. Measured against the pipeline as well — see the report's probe log, the
+  // note's content and currentVersion are byte-identical after both arms.
   const component = sliceFile("components/promote-note.tsx");
   for (const forbidden of ["updateJournalNote", "deleteJournalNote", "useJournalMutations"]) {
     assert.equal(
@@ -635,6 +711,40 @@ test("the note's own text is not an input to the act", () => {
   }
   const hook = sliceFile("lib/use-promote-note.ts");
   assert.equal(hook.includes("updateJournalNote"), false, "the mutation path started writing the note");
+});
+
+test("the rails answer the promotion edge is NOT on the detail wire — the act answers it", () => {
+  // Measured 2026-11-21 against the real pipeline: after a 200 promotion the note's `outgoing`
+  // array is still empty (`~/scratch-237/t7-client-body-through-door.log`, `outgoing=0` on both
+  // arms). `EntryLinkProjection` builds that array from `WikiLinkParser.Parse(entry.Content)`, so
+  // the manual edge the door writes cannot reach it without a Host change — outside this task's
+  // anti-scope. The consequence the component has to live with: the rails show the promoted card
+  // only once the note itself names it, so the success answer is rendered from the response.
+  const projection = readFileSync(
+    new URL("../../src/Overmind.Host/Api/EntryLinkProjection.cs", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    projection,
+    /WikiLinkParser\.Parse\(entry\.Content\)/,
+    "the projection grew another outgoing source — re-check whether the rails now carry the promotion edge",
+  );
+  assert.equal(
+    /Origin\s*==\s*EntryLinkOrigin\.Manual/.test(projection),
+    false,
+    "manual edges now reach the rails; the promoted answer can come from the payload instead",
+  );
+
+  // And the component's success line reads the response, never a synthesised rail row.
+  const component = sliceFile("components/promote-note.tsx");
+  assert.match(component, /\{promotedLabel\(promoted\)\}/);
+  assert.match(component, /promotedCardHref\(form\.projectId, promoted\.featureSlug\)/);
+  const hook = sliceFile("lib/use-promote-note.ts");
+  assert.equal(
+    /setQueryData/.test(hook),
+    false,
+    "the promotion wrote a rail row into the cache — the edge is the record, not the cache",
+  );
 });
 
 test("no storage and no hex in the files this task shipped", () => {
