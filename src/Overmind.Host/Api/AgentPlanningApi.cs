@@ -899,7 +899,8 @@ public static class AgentPlanningApi
             flipsAc ? result.TickedIndex : null,
             flipsAc ? result.TickedText : null,
             flipsAc ? result.NoChange : null,
-            artifact.ValidationProofVoided);
+            artifact.ValidationProofVoided,
+            artifact.ValidationProofVoidCause);
     }
 
     private static CreatePlanningTasksResponse TasksEcho(PlanningTaskBatchResult result) =>
@@ -1064,7 +1065,8 @@ public static class AgentPlanningApi
                 flipsAc ? result.TickedIndex : null,
                 flipsAc ? result.TickedText : null,
                 flipsAc ? result.NoChange : null,
-                artifact.ValidationProofVoided));
+                artifact.ValidationProofVoided,
+                artifact.ValidationProofVoidCause));
         }
         catch (PlanningException ex)
         {

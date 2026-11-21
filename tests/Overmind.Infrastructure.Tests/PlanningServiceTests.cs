@@ -1817,9 +1817,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
-        ex.Message.ShouldBe(
+        ex.Message.ShouldStartWith(
             "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
             "and wait for the human's reply in the notification center, or validate via the UI.");
+        ex.Message.ShouldContain("One reply validates the spec and the plan together");
 
         var persisted = await _context.PlanningArtifacts.FirstAsync(a => a.Id == spec.Id);
         persisted.Status.ShouldBe(PlanningArtifactStatus.Draft);
@@ -2802,9 +2803,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
-        ex.Message.ShouldBe(
+        ex.Message.ShouldStartWith(
             "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
             "and wait for the human's reply in the notification center, or validate via the UI.");
+        ex.Message.ShouldContain("One reply validates the spec and the plan together");
     }
 
     [Fact]
@@ -3341,6 +3343,48 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var ex = await Should.ThrowAsync<PlanningException>(
             () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
 
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    // The 5b70d40c one-pass sequence: notify -> reply -> draft the plan -> validate spec -> validate
+    // plan, one reply, no 409. The never-edited plan draft is covered by the tap; the first gated
+    // edit after it voids.
+    [Fact]
+    public async Task ValidateAsync_PlanDraftedAfterReply_OneReplyCoversBoth_NextEditVoids()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nship it\n</goal>\n",
+            null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "approve the spec; the plan lands next", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var plan = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Plan, "# Plan\n\n<goal>\nslice it\n</goal>\n",
+            null, null, null, default);
+        plan.CreatedAt.ShouldBeGreaterThan(notification.RepliedAt!.Value);
+
+        var validatedSpec = await artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default);
+        validatedSpec.Status.ShouldBe(PlanningArtifactStatus.Validated);
+
+        var validatedPlan = await artifactService.ValidateAsync(plan.Id, requireHumanProof: true, ct: default);
+        validatedPlan.Status.ShouldBe(PlanningArtifactStatus.Validated);
+
+        var patched = await artifactService.PatchAsync(
+            plan.Id,
+            new PlanningArtifactPatch(Section: "goal", Content: "resliced", LogNote: "scope moved"),
+            source: PlanningLogSource.Agent);
+        patched.Artifact.ValidationProofVoidCause.ShouldBe("section 'goal' changed");
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(plan.Id, requireHumanProof: true, ct: default));
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
     }
 
