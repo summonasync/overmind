@@ -70,7 +70,7 @@ public sealed class DirectiveServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Append_TrimsText_AndRejectsBlankOrOverCap()
+    public async Task Append_TrimsText_AndRejectsBlank()
     {
         var appended = await Service().AppendAsync(
             _projectId, _slug, "  padded directive  ", new DirectiveAuthor("Dan", "qwen", HolderSessionId));
@@ -78,22 +78,29 @@ public sealed class DirectiveServiceTests : IDisposable
 
         await Should.ThrowAsync<ArgumentException>(() => Service().AppendAsync(
             _projectId, _slug, "   ", new DirectiveAuthor("Dan", "qwen", HolderSessionId)));
+    }
 
-        await Should.ThrowAsync<ArgumentException>(() => Service().AppendAsync(
-            _projectId, _slug, new string('x', PlanningDirective.MaxTextLength + 1),
-            new DirectiveAuthor("Dan", "qwen", HolderSessionId)));
+    // The door owns the zones (266 T2); storage only keeps the whole band and refuses a bypass
+    // past the grace ceiling, so the ceiling row here is the backstop, not the product rule.
+    [Theory]
+    [InlineData(2000)]
+    [InlineData(2001)]
+    [InlineData(2440)]
+    public async Task Append_WithinTheStoredBand_KeepsTheWholeText(int length)
+    {
+        var appended = await Service().AppendAsync(
+            _projectId, _slug, new string('x', length), new DirectiveAuthor("Dan", "qwen", HolderSessionId));
+
+        appended.Text.Length.ShouldBe(length);
     }
 
     [Fact]
-    public async Task Append_Boundary_2000Accepted_2001Rejected()
+    public async Task Append_PastTheStoredCeiling_ThrowsNamingBothNumbers()
     {
-        var atCap = await Service().AppendAsync(
-            _projectId, _slug, new string('x', 2000), new DirectiveAuthor("Dan", "qwen", HolderSessionId));
-        atCap.Text.Length.ShouldBe(2000);
-
         var ex = await Should.ThrowAsync<ArgumentException>(() => Service().AppendAsync(
-            _projectId, _slug, new string('x', 2001), new DirectiveAuthor("Dan", "qwen", HolderSessionId)));
+            _projectId, _slug, new string('x', 2441), new DirectiveAuthor("Dan", "qwen", HolderSessionId)));
 
+        ex.Message.ShouldContain("2440");
         ex.Message.ShouldContain("2000");
     }
 

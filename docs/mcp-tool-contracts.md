@@ -1196,14 +1196,19 @@ No additional prose — the tool description lost nothing.
 - The one write that crosses the claim lock: any session may append to ANY feature regardless
   of claim ownership or feature status — a HOLD / SYNC / YIELD from a wave marshal or lane
   neighbor reaches a live holder without taking over the claim.
-- Directives are append-only and attributed: `text` is trimmed, capped at 2000 chars enforced
-  adapter-side, and stamped with the sender's session identity. Nothing else is touched — no
-  artifacts, no statuses, no version bumps; the 409 claim lock itself stays intact.
+- Directives are append-only and attributed: `text` is trimmed and stamped with the sender's
+  session identity. A directive is a command, so the soft cap 2000 never cuts it: up to the 2440
+  accept ceiling the whole text lands and the echo carries `warnings[]` (`accepted_len`, `limit`,
+  `truncated: false`); past the ceiling the write is refused with `DirectiveTextTooLong` naming
+  field, limit, actual and a `lost_tail_preview` of the tail that would have been lost, and no
+  directive row is stored. Nothing else is touched — no artifacts, no statuses, no version bumps;
+  the 409 claim lock itself stays intact.
 - The holder sees open directives on `planning_current_task` and `planning_read_feature`
   payloads (`openDirectives`, oldest first) and on queue rows as `openDirectiveCount`; acks
   via `planning_ack_directive`.
 - Etiquette example: `HOLD: proxy.ts is shared with 134 — sync before the next push`.
-- Echo: directive id + the holder-sees/acks reminder.
+- Echo: directive id + the holder-sees/acks reminder, with the raw `warnings` array appended when
+  the grace band accepted an over-cap command.
 
 ## planning_ack_directive
 

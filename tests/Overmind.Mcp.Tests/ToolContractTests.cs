@@ -362,7 +362,7 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_AppendDirective_DescriptionStatesThe2000Cap()
+    public async Task ToolsList_AppendDirective_DescriptionStatesTheImperativeCap()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -374,12 +374,12 @@ public class ToolContractTests : McpSessionTestBase
         description.ShouldNotContain("capped at 500 chars");
 
         ContractsDoc.Section("planning_append_directive")
-            .ShouldContain("text is trimmed, capped at 2000 chars enforced adapter-side");
+            .ShouldContain("the soft cap 2000 never cuts it");
 
         var textProperty = tools["planning_append_directive"]!["inputSchema"]!["properties"]!["text"]!;
         var parameterDescription = textProperty["description"]!.GetValue<string>();
-        parameterDescription.ShouldContain("max 2000 chars");
-        parameterDescription.ShouldNotContain("max 500 chars");
+        parameterDescription.ShouldContain("soft cap 2000 chars");
+        parameterDescription.ShouldNotContain("max 2000 chars");
     }
 
     [Fact]

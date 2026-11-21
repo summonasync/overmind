@@ -208,7 +208,8 @@ public sealed record OpenDirectiveResponse(
     string? AuthorAlias,
     string? AuthorVendor,
     DateTime CreatedAt,
-    bool Ack);
+    bool Ack,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record AppendPlanningDirectiveRequest(string Text);
 

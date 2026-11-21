@@ -147,13 +147,46 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AppendDirective_OverCap_RefusedLocallyBeforeAnyRequest()
+    public async Task AppendDirective_GraceBand_SendsTheWholeCommandAndEchoesWarnings()
     {
-        var ex = await Should.ThrowAsync<McpException>(
-            () => Tool().AppendDirective(Canned.PlanningSlug, new string('x', 2001)));
+        var warned = new JsonObject
+        {
+            ["id"] = DirectiveId,
+            ["text"] = new string('x', 2001),
+            ["authorAlias"] = "Marshal",
+            ["createdAt"] = "2026-10-17T12:00:00Z",
+            ["ack"] = false,
+            ["warnings"] = new JsonArray(new JsonObject
+            {
+                ["accepted_len"] = 2001,
+                ["limit"] = 2000,
+                ["truncated"] = false,
+            })
+        }.ToJsonString();
+        _stub.Route("POST", AppendRoute, 200, warned);
+        var text = new string('x', 2001);
 
-        ex.Message.ShouldBe("text is 2001 chars; cap is 2000; cut 1");
-        _stub.Requests.ShouldBeEmpty();
+        var result = await Tool().AppendDirective(Canned.PlanningSlug, text, Canned.ProjectId);
+
+        _stub.Requests.Single(r => r.Method == "POST").Body.ShouldContain($"\"text\":\"{text}\"");
+        Text(result).ShouldContain("Warnings:");
+        Text(result).ShouldContain("accepted_len");
+    }
+
+    [Fact]
+    public async Task AppendDirective_BeyondCeiling_NoLocalLint_AndTheHostRejectSurfaces()
+    {
+        _stub.Route("POST", AppendRoute, 400,
+            """{"title":"DirectiveTextTooLong","detail":"Directive text is 2441 characters; the limit is 2000 """ +
+            """and the accept ceiling is 2440. Nothing was stored: a directive is a command, so this door """ +
+            """never truncates. The tail that would have been lost reads \"tail\". Compress and resend."}""");
+
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AppendDirective(Canned.PlanningSlug, new string('x', 2441), Canned.ProjectId));
+
+        ex.Message.ShouldContain("is 2441 characters");
+        ex.Message.ShouldContain("limit is 2000");
+        ex.Message.ShouldContain("tail");
     }
 
     [Fact]

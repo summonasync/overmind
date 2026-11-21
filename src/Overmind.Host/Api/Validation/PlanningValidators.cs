@@ -390,7 +390,7 @@ public sealed class AppendPlanningDirectiveRequestValidator : AbstractValidator<
 {
     public AppendPlanningDirectiveRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(PlanningDirective.MaxTextLength);
+        RuleFor(x => x.Text).NotEmpty();
     }
 }
 
@@ -398,7 +398,7 @@ public sealed class AppendPlanningDirectiveHumanRequestValidator : AbstractValid
 {
     public AppendPlanningDirectiveHumanRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(PlanningDirective.MaxTextLength);
+        RuleFor(x => x.Text).NotEmpty();
         RuleFor(x => x.Alias).MaximumLength(PlanningDirective.MaxIdentityLength);
         RuleFor(x => x.Vendor).MaximumLength(PlanningDirective.MaxIdentityLength);
     }

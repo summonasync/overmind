@@ -113,10 +113,22 @@ public static class PlanningDirectivesApi
         Guid projectId, string slug, string text, DirectiveAuthor author,
         DirectiveService directives, CancellationToken ct)
     {
+        var trimmed = text.Trim();
+        var outcome = SoftCap.Apply(trimmed, PlanningDirective.MaxTextLength);
+        if (outcome.Warning is { Truncated: true } rejected)
+        {
+            return PlanningErrors.Map(PlanningException.DirectiveTextTooLong(
+                trimmed.Length, PlanningDirective.MaxTextLength,
+                SoftCap.Ceiling(PlanningDirective.MaxTextLength), rejected.LostTailPreview));
+        }
+
         try
         {
-            var directive = await directives.AppendAsync(projectId, slug, text, author, ct);
-            return Results.Ok(ToResponse(directive));
+            var directive = await directives.AppendAsync(projectId, slug, outcome.Stored!, author, ct);
+            return Results.Ok(ToResponse(directive) with
+            {
+                Warnings = outcome.Warning is null ? null : [outcome.Warning]
+            });
         }
         catch (PlanningException ex)
         {

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -8,8 +9,6 @@ namespace Overmind.Mcp;
 [McpServerToolType]
 public sealed class DirectiveTools
 {
-    private const int DirectiveTextCap = 2000;
-
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
     private readonly ProjectResolver _projects;
@@ -28,11 +27,10 @@ public sealed class DirectiveTools
         "this over wave_chat_post when the message belongs to a feature, not a room.")]
     public async Task<CallToolResult> AppendDirective(
         [Description("Target feature slug.")] string slug,
-        [Description("Directive text, max 2000 chars, stamped with the sender's session identity.")] string text,
+        [Description("Directive text, soft cap 2000 chars: whole up to 2440, beyond rejected with a lost-tail preview.")] string text,
         [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        TextCapLint.Cap(text, DirectiveTextCap);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var directive = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{resolved}/planning/features/{slug}/directives",
@@ -40,6 +38,10 @@ public sealed class DirectiveTools
             ct), readback: null, ct);
 
         var id = directive.GetProperty("id").GetString();
+        var warningNote = directive.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0
+            ? $"\nWarnings: {warnings.GetRawText()}"
+            : string.Empty;
         return new CallToolResult
         {
             Content =
@@ -47,7 +49,7 @@ public sealed class DirectiveTools
                 new TextContentBlock
                 {
                     Text = $"Directive {id} appended on '{slug}' — the holder sees it on planning_current_task " +
-                           "and acknowledges via planning_ack_directive."
+                           "and acknowledges via planning_ack_directive." + warningNote
                 }
             ]
         };

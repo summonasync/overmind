@@ -381,7 +381,7 @@ public sealed class OvermindDbContext : DbContext
                 .HasForeignKey(d => d.PlanningFeatureId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            builder.Property(d => d.Text).HasMaxLength(PlanningDirective.MaxTextLength);
+            builder.Property(d => d.Text).HasMaxLength(SoftCap.Ceiling(PlanningDirective.MaxTextLength));
             builder.Property(d => d.AuthorAlias).HasMaxLength(PlanningDirective.MaxIdentityLength);
             builder.Property(d => d.AuthorVendor).HasMaxLength(PlanningDirective.MaxIdentityLength);
             builder.Property(d => d.AckByAlias).HasMaxLength(PlanningDirective.MaxIdentityLength);

@@ -457,6 +457,13 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ConversationTextTooLong,
             $"Conversation message text is {length} characters; the cap is {cap}.");
 
+    public static PlanningException DirectiveTextTooLong(int actual, int limit, int ceiling, string? lostTailPreview) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.DirectiveTextTooLong,
+            $"Directive text is {actual} characters; the limit is {limit} and the accept ceiling is {ceiling}. " +
+            "Nothing was stored: a directive is a command, so this door never truncates. " +
+            $"The tail that would have been lost reads \"{lostTailPreview}\". " +
+            "Compress below the ceiling and resend.");
+
     public static PlanningException MissingDirective(Guid directiveId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingDirective,
             $"Directive '{directiveId}' was not found on this feature — it may live on another feature, " +

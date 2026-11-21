@@ -82,6 +82,7 @@ public enum PlanningFailureCode
     InvalidOperationId,
     MissingWaveRoom,
     WaveTextTooLong,
+    DirectiveTextTooLong,
     MissingConversation,
     ConversationTextTooLong,
     MissingConversationMessage,
