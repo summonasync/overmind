@@ -11,6 +11,9 @@ public sealed class TelegramWaveSnapshotFormatterTests
 {
     private static readonly DateTime Generated = new(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc);
 
+    // Direct Holder construction: the digest's [released] is the orphan projection only (no
+    // holder row behind the claim); a dead holder renders [ended] and is pinned through the
+    // service path in TelegramWaveSnapshotFlowTests.
     [Fact]
     public void ClaimStates_RenderDistinctly()
     {
