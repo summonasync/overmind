@@ -14,6 +14,9 @@ public static partial class PlanningSections
     [GeneratedRegex(@"(?m)^[ \t]*</(?<name>[a-z][a-z0-9-]*)>[ \t]*\r?$", RegexOptions.None, 2000)]
     private static partial Regex CloseTagPattern();
 
+    [GeneratedRegex(@"\[[xX ]\]")]
+    private static partial Regex AcMarker();
+
     [GeneratedRegex(@"^[a-z][a-z0-9-]*$", RegexOptions.None, 200)]
     private static partial Regex NamePattern();
 
@@ -112,6 +115,25 @@ public static partial class PlanningSections
         return body.Length == 0 || body.EndsWith('\n')
             ? string.Concat(body, section)
             : string.Concat(body, "\n", section);
+    }
+
+    // The void-relevant content of a validated spec/plan: body minus the log section, with AC
+    // checkbox markers canonicalized. Log appends and tick flips are bookkeeping — they compare
+    // equal here, so the content clock ignores them; everything else is gated (feature 259).
+    public static string GatedContentOf(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+
+        var withoutLog = body;
+        if (TryFind("log", body, out var log))
+        {
+            var closeEnd = body.IndexOf('\n', log.CloseIndex) is { } lineFeed && lineFeed >= 0
+                ? lineFeed + 1
+                : body.Length;
+            withoutLog = string.Concat(body.AsSpan(0, log.OpenIndex), body.AsSpan(closeEnd));
+        }
+
+        return AcMarker().Replace(withoutLog, "[ ]").TrimEnd();
     }
 
     public static string Normalize(string body)

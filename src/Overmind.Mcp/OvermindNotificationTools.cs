@@ -59,7 +59,22 @@ public sealed class OvermindNotificationTools
             payload["from"] = from;
         }
 
-        return await Guarded(() => _api.PostAsync("/api/agent/notifications", payload, ct));
+        var response = await Guarded(() => _api.PostAsync("/api/agent/notifications", payload, ct));
+        if (NormalizeKind(kind) == "approval" && featureSlug is not null)
+        {
+            // The proof recipe: one reply validates spec and plan together, and covers never-edited
+            // first drafts — telling the agent up front is what stops defensive double-tapping.
+            var echo = JsonNode.Parse(response.GetRawText()) as JsonObject;
+            if (echo is not null)
+            {
+                echo["hint"] = "One reply validates the spec AND the plan of this feature — draft both " +
+                    "gated artifacts before tapping if you want both pre-seen. A tap also covers " +
+                    "never-edited first drafts; any gated edit after the tap voids it.";
+                return JsonSerializer.SerializeToElement(echo);
+            }
+        }
+
+        return response;
     }
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]

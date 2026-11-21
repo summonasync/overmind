@@ -1944,6 +1944,33 @@ end
     }
 
     [Fact]
+    public void AcTextChange_MovesContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId, PlanningArtifactKind.Spec,
+            "# Spec\n\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>\n");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.UpdateBody(
+            "# Spec\n\n<acceptance-criteria>\n- [ ] hold the line forever\n</acceptance-criteria>\n",
+            logNote: "criterion reworded");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void LogOnlyBodyResend_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\noriginal\n</goal>\n");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+        var withLogLine = PlanningLog.Append(artifact.Body, "service line", source: PlanningLogSource.Agent);
+
+        artifact.UpdateBody(withLogLine, logNote: "resending with the log line merged in");
+
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
+    }
+
+    [Fact]
     public void AppendLog_LeavesContentUpdatedAtUntouched()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "body content");
@@ -2027,14 +2054,14 @@ end
     }
 
     [Fact]
-    public void TickAc_BumpsContentUpdatedAt()
+    public void TickAc_LeavesContentUpdatedAtUntouched()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
 
         artifact.TickAc(1, null);
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
     }
 
     [Fact]
