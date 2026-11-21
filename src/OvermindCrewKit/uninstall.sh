@@ -12,7 +12,7 @@ done
 
 have_python() { command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; }
 
-home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; esac }
+home_path() { case "$1" in kimi) echo "$HOME/.kimi-code";; claude) echo "$HOME/.claude";; qwen) echo "$HOME/.qwen";; codex) echo "$HOME/.codex";; codex-skills) echo "$HOME/.agents";; esac }
 
 # Every manifest entry carries all four fields in this exact order — the no-python fallback
 # below groups grep hits four at a time, so a missing "mode" would desynchronise the whole list.
@@ -43,7 +43,9 @@ entries="$(parse_manifest)" || { echo "Failed to parse manifest.json" >&2; exit 
 [[ -n "$entries" ]] || { echo "manifest.json parsed to zero entries" >&2; exit 1; }
 while read -r src home type mode; do
     hp="$(home_path "$home")"
-    [[ -d "$hp" ]] || continue
+    gate="$hp"
+    [[ "$home" == "codex-skills" ]] && gate="$HOME/.codex"  # same runtime gate as install; ~/.agents may not exist yet
+    [[ -d "$gate" ]] || continue
     name="$(basename "$src")"
     if [[ "$type" == "dir" && "$mode" == "merge" ]]; then
         # Merge-mode deploys children individually, so removal is per child too — the shared
@@ -56,7 +58,16 @@ while read -r src home type mode; do
         done
         continue
     fi
+    # '===OVERMIND' marks the 251 managed zone: a woven entry doc belongs to the app door,
+    # not to this kit — uninstall never removes it.
+    if [[ "$type" == "file" && -f "$hp/$name" ]] && grep -q '===OVERMIND' "$hp/$name"; then
+        echo "Skipping $name: live entry doc carries an OVERMIND marker block"
+        continue
+    fi
     add_target "$hp/$name"
+    # Crew skills installed before the .agents relocation live under the old home root
+    # ($HOME/.codex/$name) — dead weight after the move, scrubbed when present.
+    [[ "$home" == "codex-skills" && -e "$HOME/.codex/$name" ]] && add_target "$HOME/.codex/$name"
 done <<< "$entries"
 
 if [[ $DRY == 1 ]]; then
@@ -77,7 +88,7 @@ for t in "${targets[@]:-}"; do
     [[ -e "$t" ]] && { rm -rf "$t"; echo "Removed $t"; }
     parent="$(dirname "$t")"
     case "$parent" in
-        "$HOME/.kimi-code"|"$HOME/.claude"|"$HOME/.qwen"|"$HOME/.codex") ;;  # never touch home root
+        "$HOME/.kimi-code"|"$HOME/.claude"|"$HOME/.qwen"|"$HOME/.codex"|"$HOME/.agents") ;;  # never touch home root
         *) [[ -d "$parent" ]] && [[ -z "$(ls -A "$parent")" ]] && { rm -rf "$parent"; echo "Removed empty dir $parent"; } ;;
     esac
 done
