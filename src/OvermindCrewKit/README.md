@@ -91,7 +91,7 @@ What goes where (mirrors `manifest.json`):
 | `.claude/agents/`, `.claude/skills/`, `.claude/SKILLFLOW.md`, `.claude/CLAUDE.md` | `~/.claude/` |
 | `.qwen/agents/`, `.qwen/skills/`, `.qwen/hooks/` (merge mode), `.qwen/QWEN.md`, `.qwen/SKILLFLOW.md`, `.qwen/settings-snippet.jsonc` | `~/.qwen/` |
 | `.codex/agents/`, `.codex/AGENTS.md`, `.codex/SKILLFLOW.md` | `~/.codex/` |
-| `.codex/skills/` | `~/.agents/` (relocated from `~/.codex/` by 253) |
+| `.codex/skills/` (merge) | `~/.agents/` (relocated from `~/.codex/` by 253; shared root — per-child deploy) |
 | `.kimi-code/SOCIAL_DICTIONARY.md` | all four homes |
 
 A project's `BACKLOG/` tree is never deployed — it is materialized by the Overmind MCP server from the board, per project.
@@ -128,7 +128,7 @@ Both hook scripts **fail open**: no payload, unknown tool, no project anchor, mi
 - **This repo's `.qwen/` is also live project config**: Qwen Code reads `.qwen/skills/` and `.qwen/agents/` as *project-level* customizations, so working inside `Skills_dotNetCrew` activates all 57 skills and 46 agents for that session. Same as `.claude/` does for Claude Code — intended, but worth knowing when you wonder where a skill came from.
 - **`WebSearch` has no Qwen Code equivalent**: agents that carried `WebSearch` + `FetchURL` on the Claude side collapse to a single `web_fetch` entry on the Qwen side. Capability loss is limited to search-engine queries; direct URL fetching is unchanged.
 - **`settings-snippet.jsonc` path patterns are unverified end-to-end**: the `permissions` rule syntax follows the documented specifier forms, but the snippet has not been applied to a live `settings.json` and probed. Check `/permissions` after merging.
-- **`~/.agents/skills/` and `~/.codex/agents/` are mirror-owned**: both deploy with `mirror` mode by crew decision (2026-10-07) — any third-party skill or role dropped there is deleted on the next `install.*`. Move non-crew content elsewhere before installing. Pre-relocation crew copies under `~/.codex/skills/` are scrubbed by `uninstall.*`.
+- **`~/.agents/skills/` is merge-owned since 253**: the root is shared with Kimi and Gemini (per their docs), so crew skills deploy per-child and third-party content survives; pre-relocation crew copies under `~/.codex/skills/` are scrubbed by `uninstall.*`. **`~/.codex/agents/` stays mirror-owned** (crew decision 2026-10-07) — any third-party role dropped there is deleted on the next `install.*`. Move non-crew content elsewhere before installing.
 - **Codex roles are strict TOML**: the role loader accepts exactly `name`, `description`, `model`, `developer_instructions`; an unknown field drops the role — measured 2026-11-19 on 0.160.1, with a session-start stderr warning (`Ignoring malformed agent role definition`), so it is fail-soft and observable, not silent. A `tools` field additionally collides with Codex's tool-configuration namespace and can never express a per-role allowlist. If a spawned role "does not exist", check the file's fields first.
 - **`gpt-6.1-sol` can be at capacity**: the priority pool occasionally rejects requests with "Selected model is at capacity". Sub-agent pins stay as-is; interactive fallback to `gpt-5.6-sol` (`codex exec -m ...`) is a session-level choice, not a pin change.
 
