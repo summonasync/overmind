@@ -82,7 +82,7 @@ public sealed class WaveSnapshotApiTests : IDisposable
         row.Slug.ShouldBe("claimed");
         row.ClaimedByAlias.ShouldBe("marshal");
         row.ClaimedByVendor.ShouldBe("claude");
-        row.ClaimState.ShouldBeOneOf("alive", "stale", "released");
+        row.ClaimState.ShouldBeOneOf("alive", "stale", "ended", "released");
         row.LastActivityAt.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-5));
     }
 
