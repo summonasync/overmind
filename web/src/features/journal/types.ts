@@ -83,3 +83,93 @@ export interface JournalServerFilters {
   link: JournalLinkFilter;
   project: string;
 }
+
+// ── The graph field ────────────────────────────────────────────────────────────────────
+//
+// Two vocabularies live in this slice and they are NOT the same union (review-237-03 m6).
+// `JournalLinkKind` above is the rail's four target kinds. A graph NODE is one of three:
+// `task` is an edge target the promotion door writes, never a dot the canvas can draw —
+// `GraphQueryFilter.ValidateFocus` refuses `focus=task:*` and `GraphReader.BuildEdgesAsync`
+// drops any edge whose endpoint is not in the node set. Reusing `JournalLinkKind` here would
+// make the payload lie in the other direction and ask the renderer for a shape that cannot
+// exist, so the narrower union is the type and `lib/graph-payload.ts` refuses a fourth kind
+// at the door instead of drawing it.
+//
+// Every member is spelled the way the wire spells it: the Host registers
+// `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)` in `DependencyInjection.cs`
+// (`ConfigureHttpJsonOptions`), so `kind` arrives `"entry"`, never `"Entry"`. The switch arms
+// in `lib/graph-payload.ts` are the executable statement of that posture.
+export type GraphNodeKind = "entry" | "project" | "feature";
+
+// R1's node universe: Journal, Decision and Idea entries. Audit/Note/Skill/Tombstone/Gate and
+// Guard rows are not nodes in v1, and `GraphQueryFilter.ValidateEntryTypes` 400s anything else.
+export type GraphEntryType = "journal" | "decision" | "idea";
+
+export type GraphFeatureStatus = "draft" | "ready" | "inProgress" | "review" | "done";
+
+export interface GraphNode {
+  kind: GraphNodeKind;
+  id: string;
+  label: string;
+  projectId: string;
+  entryType: GraphEntryType | null;
+  featureStatus: GraphFeatureStatus | null;
+  // True means this row carries no link anywhere; `lib/graph-payload.ts` derives the third
+  // state (linked, but with every link leaving this view) from this flag plus the edge set.
+  orphan: boolean;
+}
+
+export type GraphNodeState = "linked" | "orphan" | "offView";
+
+export interface GraphEdge {
+  fromKind: GraphNodeKind;
+  fromId: string;
+  toKind: GraphNodeKind;
+  toId: string;
+  hasManual: boolean;
+}
+
+export interface GraphPosition {
+  kind: GraphNodeKind;
+  id: string;
+  x: number;
+  y: number;
+}
+
+// `isolatedInView` is a NODE count, not a link count: the dropped-edge tally is not
+// reconstructible from this payload (`GraphContracts.cs` says so), so the legend may say "N
+// notes here link to something outside this view" and must never say "N links lead outside".
+export interface GraphCounts {
+  nodes: number;
+  edges: number;
+  orphans: number;
+  entryNodes: number;
+  projectNodes: number;
+  featureNodes: number;
+  isolatedInView: number;
+}
+
+export interface GraphField {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  positions: GraphPosition[];
+  counts: GraphCounts;
+  // Rows the wire carried that this build cannot draw, counted rather than dropped silently —
+  // an empty array is the normal case, a non-empty one says the endpoint grew past the union.
+  unsupported: { nodes: number; edges: number };
+}
+
+// Every field travels, so one shape serves the URL and the request: unlike the stream, where
+// `day` partitions locally and must stay out of the cache key, the graph's filters are all the
+// endpoint's own. `lib/graph-filters.ts` reads and writes it, `lib/graph-query.ts` sends it.
+// `depth` stays a string because the URL keeps the untyped text — an empty depth means "the
+// endpoint's own default of one hop", and coercing it to 0 client-side would ask for nothing.
+export interface GraphViewFilters {
+  types: GraphEntryType[];
+  project: string;
+  focus: string;
+  depth: string;
+  orphansOnly: boolean;
+  includeDone: boolean;
+  search: string;
+}
