@@ -30,6 +30,16 @@ public static class AgentSessionsApi
         }
 
         var alias = request.Alias.Trim();
+        // Registration liveness door (issue f0e4c26f): two adapters with an explicit OVERMIND_ALIAS
+        // must not both read alive — the second registration names the holder instead of silently
+        // coexisting. Stale or ended holders free the alias, the placeholder path never hits this.
+        var aliveSince = await AliveSinceAsync(db, ct);
+        if (!alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal) &&
+            await FindAliveAliasHolderAsync(db, Guid.Empty, alias, aliveSince, ct) is { } aliveHolder)
+        {
+            return HttpErrors.Conflict(AliasHeldDetail(alias, aliveHolder));
+        }
+
         if (alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal) &&
             request.PriorSessionId is { } priorId &&
             await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == priorId, ct) is { } prior &&
@@ -42,7 +52,6 @@ public static class AgentSessionsApi
             // fresh registration. Only the placeholder path resumes; an explicit alias is the
             // operator's choice and always mints fresh.
             var now = DateTime.UtcNow;
-            var aliveSince = await AliveSinceAsync(db, ct);
             var resumed = await db.AgentSessions
                 .Where(s => s.Id == priorId &&
                             s.Alias == prior.Alias &&

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using Overmind.Host.Api;
 using Shouldly;
@@ -86,6 +87,51 @@ public sealed class AgentSessionRegistrationApiTests : IDisposable
         id.ShouldNotBe(priorId);
         alias.ShouldBe("agent");
         vendor.ShouldBe("unknown");
+    }
+
+    [Fact]
+    public async Task Register_ExplicitAliasHeldByAliveSession_Returns409NamingTheHolder()
+    {
+        await SeedSessionAsync("van-darkholme", "qwen", lastSeenAgo: TimeSpan.Zero);
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/agent/sessions",
+            new { Alias = "van-darkholme", Vendor = "claude" },
+            JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var detail = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["detail"]!
+            .GetValue<string>();
+        detail.ShouldContain("van-darkholme");
+        detail.ShouldContain("qwen");
+        (await ScalarCountAsync($"SELECT COUNT(*) FROM AgentSessions WHERE Alias = 'van-darkholme'"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Register_ExplicitAliasHeldByStaleSession_Succeeds()
+    {
+        await SeedSessionAsync("van-darkholme", "qwen", lastSeenAgo: TimeSpan.FromMinutes(40));
+
+        var (id, alias, vendor) = await RegisterAsync("van-darkholme", "claude", null);
+
+        alias.ShouldBe("van-darkholme");
+        vendor.ShouldBe("claude");
+        var (_, endedAt) = await ReadLivenessAsync(id);
+        endedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Register_ExplicitAliasHeldByEndedSession_Succeeds()
+    {
+        await SeedSessionAsync(
+            "van-darkholme", "qwen", lastSeenAgo: TimeSpan.FromMinutes(40), endedAgo: TimeSpan.FromMinutes(2));
+
+        var (id, alias, _) = await RegisterAsync("van-darkholme", "claude", null);
+
+        alias.ShouldBe("van-darkholme");
+        var (_, endedAt) = await ReadLivenessAsync(id);
+        endedAt.ShouldBeNull();
     }
 
     [Fact]
@@ -180,5 +226,13 @@ public sealed class AgentSessionRegistrationApiTests : IDisposable
         using var command = _db.CreateCommand();
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task<int> ScalarCountAsync(string sql)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = sql;
+        var result = await command.ExecuteScalarAsync();
+        return Convert.ToInt32(result);
     }
 }
