@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join, relative } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -75,6 +77,26 @@ import type {
 
 const sliceFile = (path: string) =>
   readFileSync(new URL(`../src/features/journal/${path}`, import.meta.url), "utf8");
+
+// Strings that exist only in the graph island. A copy change moves them; the barrel rule below
+// names the ones it measured so it cannot silently measure nothing.
+const ISLAND_MARKERS = ["Graph map:", "Nodes in this view", "live-simulation ceiling"];
+
+function filesUnder(dir: string, match: (name: string) => boolean): string[] {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...filesUnder(path, match));
+    } else if (match(entry.name)) {
+      found.push(path);
+    }
+  }
+  return found;
+}
 
 const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic", importSource: "react" },
@@ -386,8 +408,6 @@ test("resolvePalette follows var() chains and reports what it cannot resolve", (
     "--color-type-note": "#60a5fa",
     "--color-ceremony-goal": "var(--color-success)",
     "--color-success": "#22c55e",
-    "--color-border": "#262633",
-    "--color-border-strong": "#35354a",
     "--color-primary": "#a855f7",
     "--color-background": "#0a0a0f",
     "--color-foreground": "#e4e4e7",
@@ -404,13 +424,15 @@ test("resolvePalette follows var() chains and reports what it cannot resolve", (
 });
 
 test("a var() cycle is cut off instead of hanging the frame", () => {
+  // Probed on the canvas slot: since R3's amendment the edge token is shared with the dashed
+  // ring, so cycling it would (correctly) report two unresolved roles and hide what broke.
   const looped = resolvePalette((name) => {
-    if (name === GRAPH_TOKENS.edge) return "var(--color-a)";
+    if (name === GRAPH_TOKENS.canvas) return "var(--color-a)";
     if (name === "--color-a") return "var(--color-b)";
     if (name === "--color-b") return "var(--color-a)";
     return "#202028";
   });
-  assert.deepEqual(looped.unresolved, ["edge"], "the cycle hung or silently painted");
+  assert.deepEqual(looped.unresolved, ["canvas"], "the cycle hung or silently painted");
 });
 
 test("node colour is type for entries and kind for the rest", () => {
@@ -497,7 +519,7 @@ test("the ceiling is 1000 nodes and the mode flips above it", () => {
   assert.equal(layoutModeFor(1000), "simulate");
   assert.equal(layoutModeFor(1001), "settled");
   assert.equal(isOverCeiling(1200), true);
-  assert.match(ceilingMessage(1204, SIM_CEILING), /1204 nodes is above the 1000-node/);
+  assert.match(ceilingMessage(1204, SIM_CEILING), /1204 nodes are above the 1000-node/);
 });
 
 test("neighbourhoods are built from links, not rescanned per frame", () => {
@@ -628,8 +650,6 @@ const PALETTE_TABLE: Record<string, string> = {
   "--color-primary": "#a855f7",
   "--color-ceremony-goal": "var(--color-success)",
   "--color-success": "#22c55e",
-  "--color-border": "#262633",
-  "--color-border-strong": "#35354a",
   "--color-background": "#0a0a0f",
   "--color-foreground": "#e4e4e7",
   "--color-muted": "#8b8b96",
@@ -719,6 +739,56 @@ test("the three node states are all drawn", () => {
   assert.ok(anyHollow, "the orphan shell lost its distinct alpha");
 });
 
+test("the edge ladder is two named tokens, not two shades everyone agreed on", () => {
+  assert.equal(GRAPH_TOKENS.edge, "--color-muted", "R3's amended resting edge token moved");
+  assert.equal(GRAPH_TOKENS.edgeStrong, "--color-foreground", "R3's amended incident edge token moved");
+
+  const ladder = resolvePalette((name) => `painted(${name})`).colors;
+  assert.notEqual(ladder.edge, ladder.edgeStrong, "the ladder collapsed onto one rung");
+
+  const { nodes, scene } = sceneOf({ colors: ladder });
+  const project = nodes.find((n) => n.id === PROJECT_ID)!;
+  const projectKey = nodeKey(project.kind, project.id);
+  const edge = (call: PaintCall) =>
+    call.op === "stroke" &&
+    call.dash.length === 0 &&
+    (call.strokeStyle === ladder.edge || call.strokeStyle === ladder.edgeStrong);
+
+  const hover = recorder();
+  drawScene(
+    hover.target as never,
+    { ...scene, hoverKey: projectKey, neighbours: new Set([projectKey]) } as never,
+  );
+  const hoveredEdges = hover.calls.filter(edge);
+  assert.equal(hoveredEdges.length, scene.links.length, "a link painted no edge — this run measured nothing");
+  assert.equal(
+    hoveredEdges.filter((call) => call.strokeStyle === ladder.edgeStrong).length,
+    1,
+    "hovering one endpoint did not lift exactly the incident link",
+  );
+  assert.equal(
+    hoveredEdges.filter((call) => call.strokeStyle === ladder.edge).length,
+    scene.links.length - 1,
+    "the resting links left the base rung while nothing was picked",
+  );
+
+  const selection = recorder();
+  drawScene(
+    selection.target as never,
+    { ...scene, hoverKey: null, selectedKey: projectKey } as never,
+  );
+  const selectedEdges = selection.calls.filter(edge);
+  assert.equal(
+    selectedEdges.filter((call) => call.strokeStyle === ladder.edgeStrong).length,
+    1,
+    "a picked node no longer strengthens its own links",
+  );
+  assert.ok(
+    selectedEdges.every((call) => call.globalAlpha === 1),
+    "selection alone faded the field — the 30% dim is a hover act, not a click act",
+  );
+});
+
 test("the selection ring wears the primary token at 40 percent", () => {
   const { target, calls } = recorder();
   const { nodes, scene } = sceneOf();
@@ -778,7 +848,7 @@ test("over the ceiling the island says the real count instead of animating", () 
       onOpenNote: noop,
     }),
   );
-  assert.match(html, /1201 nodes is above the 1000-node live-simulation ceiling/);
+  assert.match(html, /1201 nodes are above the 1000-node live-simulation ceiling/);
 });
 
 test("the list alternative covers every node and is the keyboard path", () => {
@@ -912,6 +982,37 @@ test("the graph route lives in the pages layer and the island stays out of the b
     assert.ok(
       !barrel.includes(banned),
       `the journal barrel re-exports ${banned} — every route that imports the barrel would then carry the island`,
+    );
+  }
+
+  // The text list above only sees what the barrel NAMES. A re-export through an intermediate
+  // module keeps the file clean and still pulls d3-force into every route, so the shipped
+  // bundle is the second half of this rule — measured, not inferred.
+  const outRoot = fileURLToPath(new URL("../out/", import.meta.url));
+  const chunks = filesUnder(join(outRoot, "_next/static/chunks"), (name) => name.endsWith(".js"));
+  const exported = filesUnder(outRoot, (name) => name.endsWith(".html"));
+  assert.ok(
+    chunks.length > 0 && exported.length > 1,
+    `web/out carries ${chunks.length} chunk(s) and ${exported.length} route(s) — run \`npm run build\` in web/ before \`npm test\`; this half of the barrel rule measures the shipped bundle and cannot measure an absent one`,
+  );
+
+  for (const marker of ISLAND_MARKERS) {
+    const island = chunks.filter((chunk) => readFileSync(chunk, "utf8").includes(marker));
+    assert.ok(
+      island.length > 0,
+      `no chunk in web/out holds "${marker}" while web/out does exist — the export is stale; rebuild before trusting this rule`,
+    );
+    const names = island.map((chunk) => basename(chunk));
+    const carriers = exported
+      .filter((file) => {
+        const html = readFileSync(file, "utf8");
+        return names.some((name) => html.includes(name));
+      })
+      .map((file) => relative(outRoot, file).split("\\").join("/"));
+    assert.deepEqual(
+      carriers,
+      ["journal/graph.html"],
+      `"${marker}" is painted into ${carriers.join(", ") || "no route"} — the island reached a shared chunk, so every route importing the journal barrel now ships the simulation`,
     );
   }
 });

@@ -41,9 +41,9 @@ export function nodeCountLabel(counts: GraphCounts): string {
 
 // R9: the ceiling notice names the real count instead of quietly going static.
 export function ceilingMessage(nodeCount: number, ceiling: number): string {
-  const plural = nodeCount === 1 ? "node" : "nodes";
+  const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
   return (
-    `${nodeCount} ${plural} is above the ${ceiling}-node live-simulation ceiling, so nothing is animating. ` +
+    `${head} above the ${ceiling}-node live-simulation ceiling, so nothing is animating. ` +
     "The field is drawn in its settled layout and the list below stays the primary path."
   );
 }

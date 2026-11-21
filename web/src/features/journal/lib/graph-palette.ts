@@ -13,8 +13,12 @@ export const GRAPH_TOKENS = {
   idea: "--color-type-idea",
   project: "--color-primary",
   feature: "--color-ceremony-goal",
-  edge: "--color-border",
-  edgeStrong: "--color-border-strong",
+  // The amended R3 pair reuses two tokens the theme already ships, so the resting edge reads
+  // the same name as the dashed ring and the incident edge the same name as a label. Two
+  // semantic slots, one token each: the ladder stays a contrast step (5.86:1 then 15.57:1)
+  // without R3's "no new colour tokens" being quietly broken.
+  edge: "--color-muted",
+  edgeStrong: "--color-foreground",
   selected: "--color-primary",
   canvas: "--color-background",
   label: "--color-foreground",
