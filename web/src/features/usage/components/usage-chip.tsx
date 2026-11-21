@@ -21,18 +21,25 @@ export function UsageChip({ projectId, slug }: UsageChipProps) {
     return null;
   }
 
+  const claim = `${row.records} record${row.records === 1 ? "" : "s"}${
+    row.cost > 0 ? ` · ${formatCost(row.cost)}` : ""
+  }`;
+  const descId = `usage-chip-${slug}-desc`;
+
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium font-mono",
         "border border-border/50 bg-surface-raised text-muted",
       )}
-      title={`${row.records} record${row.records === 1 ? "" : "s"}${
-        row.cost > 0 ? ` · ${formatCost(row.cost)}` : ""
-      }`}
+      aria-describedby={descId}
+      title={claim}
     >
       {formatCompactTokens(tokens)}
       {row.cost > 0 ? ` · ${formatCost(row.cost)}` : ""}
+      <span id={descId} className="sr-only">
+        {claim}
+      </span>
     </span>
   );
 }

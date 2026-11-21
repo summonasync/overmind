@@ -139,9 +139,9 @@
     },
     {
       "source": ".codex/skills",
-      "home": "codex",
+      "home": "codex-skills",
       "type": "dir",
-      "mode": "mirror"
+      "mode": "merge"
     },
     {
       "source": ".codex/AGENTS.md",

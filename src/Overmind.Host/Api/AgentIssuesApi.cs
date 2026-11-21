@@ -104,11 +104,16 @@ public static class AgentIssuesApi
     }
 
     internal static async Task<IResult> GetById(
-        Guid id, IssueService service, CancellationToken ct)
+        Guid id, IssueService service, HttpRequest http, CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         try
         {
-            var (issue, appends) = await service.GetAsync(id, ct);
+            var (issue, appends) = await service.GetAsync(id, ct, callerProjectId);
             return Results.Ok(ToCard(issue, appends));
         }
         catch (PlanningException ex)
@@ -121,11 +126,17 @@ public static class AgentIssuesApi
         Guid id,
         AppendIssueRequest request,
         IssueService service,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         try
         {
-            var append = await service.AppendAsync(id, request.AuthorProjectId, request.Text, ct);
+            var append = await service.AppendAsync(id, request.AuthorProjectId, request.Text, ct, callerProjectId);
             return Results.Ok(new IssueAppendItem(
                 append.Id, append.AuthorProjectId, append.Text, append.CreatedAt));
         }
@@ -143,11 +154,17 @@ public static class AgentIssuesApi
         Guid id,
         SetIssueStatusRequest request,
         IssueService service,
+        HttpRequest http,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         try
         {
-            var issue = await service.SetStatusAsync(id, request.Status, request.Source, ct);
+            var issue = await service.SetStatusAsync(id, request.Status, request.Source, ct, callerProjectId);
             return Results.Ok(new SetIssueStatusResponse(
                 issue.Id, issue.Status, issue.StatusSource, issue.ClosedAt));
         }
@@ -165,11 +182,16 @@ public static class AgentIssuesApi
         CancellationToken ct)
     {
         SessionHeader.TryRead(http, out var sessionId);
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var callerRefusal))
+        {
+            return callerRefusal!;
+        }
+
         try
         {
             var (issue, artifact) = await service.PromoteAsync(
                 id, request.FeatureSlug, request.Source, sessionId,
-                SessionTouchMiddleware.PreTouchLastSeenOf(http), ct);
+                SessionTouchMiddleware.PreTouchLastSeenOf(http), ct, callerProjectId);
             return Results.Ok(new IssuePromoteResponse(
                 issue.Id, issue.Status, artifact.Id, artifact.FeatureId, artifact.Version));
         }

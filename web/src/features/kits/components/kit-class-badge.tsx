@@ -1,14 +1,21 @@
 import { Badge } from "@/shared/ui/badge";
+import { Hint } from "@/shared/ui/hint";
 import type { KitResponse } from "@/features/kits/types";
 
-const LEGACY_TOOLTIP = "Retired by the kit split — kept in the library for reference, no longer refreshed by bundle updates.";
+const LEGACY_HINT =
+  "Retired by the kit split — kept in the library for reference, no longer refreshed by bundle updates.";
 
 export function KitClassBadge({ kit }: { kit: KitResponse }) {
   if (kit.legacy) {
     return (
-      <span title={LEGACY_TOOLTIP} className="inline-flex">
-        <Badge tone="warning">legacy</Badge>
-      </span>
+      <Hint
+        label="Legacy kit"
+        align="left"
+        id={`hint-kit-${kit.id}-class`}
+        trigger={<Badge tone="warning">legacy</Badge>}
+      >
+        {LEGACY_HINT}
+      </Hint>
     );
   }
 

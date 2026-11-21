@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
+using Overmind.Core.Agents;
+
 namespace Overmind.Mcp.Registration;
 
 public static class InstallOptionsParser

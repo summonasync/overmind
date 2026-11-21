@@ -34,7 +34,9 @@ public static class EntryAgentTools
         """
         {"type":"object","properties":{"entryId":{"type":"string"}},"required":["entryId"]}
         """,
-        async (args, ct) => await api.GetAsync($"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}", ct));
+        async (args, ct) => await api.GetAsync(EntryPath(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+            EntryPath(args), new AgentCaller(callerProjectId), ct));
 
     private static AgentToolSpec WriteEntrySpec(AgentLoopbackClient api) => new(
         "write_entry",
@@ -60,12 +62,14 @@ public static class EntryAgentTools
         {"type":"object","properties":{"entryId":{"type":"string"},"content":{"type":"string"}},"required":["entryId","content"]}
         """,
         async (args, ct) => await api.PutAsync(
-            $"/api/agent/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}",
-            new AgentToolPayload()
-                .Set("title", AgentToolArgs.OptionalString(args, "title"))
-                .Set("content", AgentToolArgs.RequiredString(args, "content"))
-                .Build(),
-            ct));
+            AgentEntryPath(args), UpdatePayload(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.PutAsync(
+            AgentEntryPath(args), UpdatePayload(args), new AgentCaller(callerProjectId), ct));
+
+    internal static object UpdatePayload(JsonElement args) => new AgentToolPayload()
+        .Set("title", AgentToolArgs.OptionalString(args, "title"))
+        .Set("content", AgentToolArgs.RequiredString(args, "content"))
+        .Build();
 
     // The embedded loop is thin by design: the write_entry and update_entry specs carry a client-side refusal for the
     // types the door will not take, and delete_entry does not pre-read — it trusts the route gate and surfaces the
@@ -81,10 +85,14 @@ public static class EntryAgentTools
         """
         {"type":"object","properties":{"entryId":{"type":"string"},"reason":{"type":"string"}},"required":["entryId"]}
         """,
-        async (args, ct) => await api.DeleteAsync(
-            AgentToolArgs.BuildQuery(
-                $"/api/agent/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}", args, "reason"),
-            ct));
+        async (args, ct) => await api.DeleteAsync(DeleteQuery(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.DeleteAsync(
+            DeleteQuery(args), new AgentCaller(callerProjectId), ct));
+
+    // The reason travels in the query string because that is where the delete route reads it: a DELETE body
+    // is bound by nobody, and serialising it used to leave every embedded tombstone born reasonless.
+    private static string DeleteQuery(JsonElement args) =>
+        AgentToolArgs.BuildQuery(AgentEntryPath(args), args, "reason");
 
     private static AgentToolSpec AckEntrySpec(AgentLoopbackClient api) => new(
         "ack_entry",
@@ -103,8 +111,9 @@ public static class EntryAgentTools
         """
         {"type":"object","properties":{"entryId":{"type":"string"}},"required":["entryId"]}
         """,
-        async (args, ct) => await api.GetAsync(
-            $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}/versions", ct));
+        async (args, ct) => await api.GetAsync(VersionsPath(args), ct),
+        ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+            VersionsPath(args), new AgentCaller(callerProjectId), ct));
 
     private static AgentToolSpec SearchSpec(AgentLoopbackClient api) => new(
         "search",
@@ -115,4 +124,18 @@ public static class EntryAgentTools
         async (args, ct) => await api.GetAsync(
             AgentToolArgs.BuildQuery("/api/search", args, "query", "mode", "projectId"), ct));
 
+    // The entry doors address one stored entry, so the same path is written by both the plain delegate
+    // (the standalone MCP adapter, no caller identity) and the scoped one (the embedded agent).
+    //
+    // Reads stay on the shared route the web UI uses; the mutations moved under /api/agent, where the
+    // journal write gate hangs on the subgroup so a new verb inherits it by placement. The scope check does
+    // not care which of the two it is on - it keys on the caller pair - but a test that only ever exercised
+    // the shared path would miss a future handler swap, so both are covered.
+    private static string EntryPath(JsonElement args) =>
+        $"/api/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}";
+
+    private static string AgentEntryPath(JsonElement args) =>
+        $"/api/agent/entries/{AgentToolArgs.RequiredGuid(args, "entryId")}";
+
+    private static string VersionsPath(JsonElement args) => $"{EntryPath(args)}/versions";
 }

@@ -6,7 +6,6 @@ using Xunit;
 
 namespace Overmind.Infrastructure.Tests;
 
-[Collection(nameof(ProcessEnvironment))]
 public sealed class AgentWakeSnapshotTests : IDisposable
 {
     private readonly TempDatabase _db = new();
@@ -26,7 +25,6 @@ public sealed class AgentWakeSnapshotTests : IDisposable
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, null);
         _context.Dispose();
         _db.Dispose();
     }
@@ -36,8 +34,10 @@ public sealed class AgentWakeSnapshotTests : IDisposable
     {
         var alias = "billy";
         var lastSeen = DateTime.UtcNow.AddHours(-2);
-        _context.AgentSessions.Add(AgentSession.Restore(
-            Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen));
+        var session = AgentSession.Restore(
+            Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen);
+        session.AdvanceReplyCursor(DateTime.UtcNow.AddHours(-1));
+        _context.AgentSessions.Add(session);
         _context.AgentNotifications.Add(AgentNotification.Restore(
             Guid.NewGuid(), _projectId, NotificationKind.Question, null, null,
             "gate needs you", alias, DateTime.UtcNow.AddMinutes(-30),
@@ -62,7 +62,36 @@ public sealed class AgentWakeSnapshotTests : IDisposable
     }
 
     [Fact]
-    public async Task DefaultWindow_ExcludesConsumedReplies_AndSinceReplayReturnsThem()
+    public async Task DefaultWindow_StartsAtTheSessionReplyCursor_AndSinceReplayReturnsOlderReplies()
+    {
+        var alias = "billy";
+        var lastSeen = DateTime.UtcNow.AddHours(-2);
+        var session = AgentSession.Restore(
+            Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen);
+        session.AdvanceReplyCursor(DateTime.UtcNow.AddMinutes(-30));
+        _context.AgentSessions.Add(session);
+        _context.AgentNotifications.Add(AgentNotification.Restore(
+            Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
+            "older gate", alias, DateTime.UtcNow.AddMinutes(-40),
+            readAt: DateTime.UtcNow.AddMinutes(-35),
+            replyText: "delivered earlier", repliedAt: DateTime.UtcNow.AddMinutes(-40)));
+        _context.AgentNotifications.Add(AgentNotification.Restore(
+            Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
+            "open gate", alias, DateTime.UtcNow.AddMinutes(-20),
+            readAt: DateTime.UtcNow.AddMinutes(-10),
+            replyText: "delivered after the cursor", repliedAt: DateTime.UtcNow.AddMinutes(-20)));
+        await _context.SaveChangesAsync();
+
+        var pending = await _wake.PendingAsync(alias, lastSeen, null, null, null, CancellationToken.None);
+        pending.Signals.Select(s => s.Excerpt).ShouldBe(["delivered after the cursor"]);
+
+        var replay = await _wake.PendingAsync(
+            alias, lastSeen, DateTime.UtcNow.AddDays(-1), null, null, CancellationToken.None);
+        replay.Signals.Select(s => s.Excerpt).ShouldBe(["delivered earlier", "delivered after the cursor"]);
+    }
+
+    [Fact]
+    public async Task DefaultWindow_WithoutACursor_StartsAtNow_AndLightsNoAncientReplies()
     {
         var alias = "billy";
         var lastSeen = DateTime.UtcNow.AddHours(-2);
@@ -70,21 +99,20 @@ public sealed class AgentWakeSnapshotTests : IDisposable
             Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen));
         _context.AgentNotifications.Add(AgentNotification.Restore(
             Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
-            "pending gate", alias, DateTime.UtcNow.AddMinutes(-30),
-            replyText: "approved", repliedAt: DateTime.UtcNow.AddMinutes(-20)));
+            "ancient gate", alias, DateTime.UtcNow.AddDays(-3),
+            replyText: "three days old", repliedAt: DateTime.UtcNow.AddDays(-2)));
         _context.AgentNotifications.Add(AgentNotification.Restore(
             Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
-            "consumed gate", alias, DateTime.UtcNow.AddMinutes(-30),
-            readAt: DateTime.UtcNow.AddMinutes(-10),
-            replyText: "approved earlier", repliedAt: DateTime.UtcNow.AddMinutes(-25)));
+            "recent gate", alias, DateTime.UtcNow.AddMinutes(-30),
+            replyText: "ten minutes old", repliedAt: DateTime.UtcNow.AddMinutes(-10)));
         await _context.SaveChangesAsync();
 
         var pending = await _wake.PendingAsync(alias, lastSeen, null, null, null, CancellationToken.None);
-        pending.Signals.Select(s => s.Excerpt).ShouldBe(["approved"]);
+        pending.Signals.ShouldBeEmpty();
 
-        var replay = await _wake.PendingAsync(
-            alias, lastSeen, DateTime.UtcNow.AddDays(-1), null, null, CancellationToken.None);
-        replay.Signals.Select(s => s.Excerpt).ShouldBe(["approved earlier", "approved"]);
+        var snapshot = await _wake.SnapshotAsync(alias, CancellationToken.None);
+        snapshot.ShouldNotBeNull();
+        snapshot.Signals.ShouldBeEmpty();
     }
 
     [Fact]
@@ -94,8 +122,10 @@ public sealed class AgentWakeSnapshotTests : IDisposable
         _context.Projects.Add(other);
         var alias = "billy";
         var lastSeen = DateTime.UtcNow.AddHours(-2);
-        _context.AgentSessions.Add(AgentSession.Restore(
-            Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen));
+        var session = AgentSession.Restore(
+            Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen);
+        session.AdvanceReplyCursor(DateTime.UtcNow.AddHours(-1));
+        _context.AgentSessions.Add(session);
         _context.AgentNotifications.Add(AgentNotification.Restore(
             Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
             "home gate", alias, DateTime.UtcNow.AddMinutes(-30),
@@ -112,67 +142,6 @@ public sealed class AgentWakeSnapshotTests : IDisposable
 
         var machineWide = await _wake.PendingAsync(alias, lastSeen, null, null, null, CancellationToken.None);
         machineWide.Signals.Select(s => s.Excerpt).ShouldBe(["home reply", "foreign reply"]);
-    }
-
-    [Fact]
-    public async Task Pending_ReplyLookback_FollowsEnvironment_AndClampsToOneDay()
-    {
-        var alias = "billy";
-        var lastSeen = DateTime.UtcNow.AddHours(-2);
-        _context.AgentSessions.Add(AgentSession.Restore(
-            Guid.NewGuid(), alias, "claude", lastSeen.AddHours(-1), lastSeen));
-        _context.AgentNotifications.Add(AgentNotification.Restore(
-            Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
-            "ancient gate", alias, DateTime.UtcNow.AddDays(-3),
-            replyText: "three days old", repliedAt: DateTime.UtcNow.AddDays(-2)));
-        _context.AgentNotifications.Add(AgentNotification.Restore(
-            Guid.NewGuid(), _projectId, NotificationKind.Approval, null, null,
-            "fresh gate", alias, DateTime.UtcNow.AddMinutes(-30),
-            replyText: "still pending", repliedAt: DateTime.UtcNow.AddMinutes(-20)));
-        await _context.SaveChangesAsync();
-
-        var defaultWindow = await _wake.PendingAsync(alias, lastSeen, null, null, null, CancellationToken.None);
-        defaultWindow.Signals.Select(s => s.Excerpt).ShouldBe(["three days old", "still pending"]);
-
-        try
-        {
-            Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, "1");
-            var narrowed = await _wake.PendingAsync(alias, lastSeen, null, null, null, CancellationToken.None);
-            narrowed.Signals.Select(s => s.Excerpt).ShouldBe(["still pending"]);
-
-            Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, "0");
-            var clamped = await _wake.PendingAsync(alias, lastSeen, null, null, null, CancellationToken.None);
-            clamped.Signals.Select(s => s.Excerpt).ShouldBe(["still pending"]);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, null);
-        }
-    }
-
-    [Theory]
-    [InlineData(null, 7)]
-    [InlineData("", 7)]
-    [InlineData("junk", 7)]
-    [InlineData("2.5", 7)]
-    [InlineData("3", 3)]
-    [InlineData(" 4 ", 4)]
-    [InlineData("0", 1)]
-    [InlineData("-9", 1)]
-    [InlineData("366", 365)]
-    [InlineData("2147483647", 365)]
-    public void ResolveDays_EnvironmentValue_DefaultsAndClamps(string? raw, int expectedDays)
-    {
-        Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, raw);
-        try
-        {
-            WakeReplyLookback.ResolveDays().ShouldBe(expectedDays);
-            WakeReplyLookback.Resolve().ShouldBe(TimeSpan.FromDays(expectedDays));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(WakeReplyLookback.EnvironmentVariable, null);
-        }
     }
 
     [Fact]

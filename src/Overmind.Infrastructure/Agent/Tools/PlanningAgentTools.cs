@@ -170,23 +170,38 @@ public static class PlanningAgentTools
         async (args, ct) => await api.GetAsync(
             AgentToolArgs.BuildQuery($"{ProjectPath(AgentToolArgs.RequiredProjectId(args))}/features/{Uri.EscapeDataString(AgentToolArgs.RequiredString(args, "slug"))}/artifacts", args, "kind"), ct));
 
-    private static AgentToolSpec ReadArtifactSpec(AgentLoopbackClient api) => new(
-        "planning_read_artifact",
-        "Reads one artifact by id — full body, or pass sections for the cheap targeted read (e.g. sections=log,obstacles).",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"sections":{"type":"string"}},"required":["artifactId"]}
-        """,
-        async (args, ct) => await api.GetAsync(
-            AgentToolArgs.BuildQuery($"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}", args, "sections"), ct));
+    private static AgentToolSpec ReadArtifactSpec(AgentLoopbackClient api)
+    {
+        string ReadPath(JsonElement args) => AgentToolArgs.BuildQuery(
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}", args, "sections");
 
-    private static AgentToolSpec ReadArtifactDiffSpec(AgentLoopbackClient api) => new(
-        "planning_read_artifact_diff",
-        "Diffs two versions of one artifact as a unified diff; adjacent versions may be log-only bumps (empty diff is a valid answer).",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"fromVersion":{"type":"integer"},"toVersion":{"type":"integer"}},"required":["artifactId"]}
-        """,
-        async (args, ct) => await api.GetAsync(
-            AgentToolArgs.BuildQuery($"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/diff", args, "fromVersion", "toVersion"), ct));
+        return new AgentToolSpec(
+            "planning_read_artifact",
+            "Reads one artifact by id — full body, or pass sections for the cheap targeted read (e.g. sections=log,obstacles).",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"sections":{"type":"string"}},"required":["artifactId"]}
+            """,
+            async (args, ct) => await api.GetAsync(ReadPath(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+                ReadPath(args), new AgentCaller(callerProjectId), ct));
+    }
+
+    private static AgentToolSpec ReadArtifactDiffSpec(AgentLoopbackClient api)
+    {
+        string DiffPath(JsonElement args) => AgentToolArgs.BuildQuery(
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/diff",
+            args, "fromVersion", "toVersion");
+
+        return new AgentToolSpec(
+            "planning_read_artifact_diff",
+            "Diffs two versions of one artifact as a unified diff; adjacent versions may be log-only bumps (empty diff is a valid answer).",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"fromVersion":{"type":"integer"},"toVersion":{"type":"integer"}},"required":["artifactId"]}
+            """,
+            async (args, ct) => await api.GetAsync(DiffPath(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.GetAsync(
+                DiffPath(args), new AgentCaller(callerProjectId), ct));
+    }
 
     private static AgentToolSpec UpsertArtifactSpec(AgentLoopbackClient api) => new(
         "planning_upsert_artifact",
@@ -231,94 +246,129 @@ public static class PlanningAgentTools
                 ct);
         });
 
-    private static AgentToolSpec PatchArtifactSpec(AgentLoopbackClient api) => new(
-        "planning_patch_artifact",
-        "Corrects one artifact in place without resending the body: replace/insert one XML section or one '## Heading' block, tick or untick one acceptance item (acIndex or acText), set a task brief, append a result amendment (amend=true), or tombstone a heading (remove=true + reason). logNote is mandatory once the artifact is validated.",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"section":{"type":"string"},"content":{"type":"string"},"acIndex":{"type":"integer"},"acText":{"type":"string"},"untick":{"type":"boolean"},"brief":{"type":"string"},"amend":{"type":"boolean"},"remove":{"type":"boolean"},"reason":{"type":"string"},"logNote":{"type":"string"},"source":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"},"operationId":{"type":"string"}},"required":["artifactId"]}
-        """,
-        async (args, ct) => await api.PostAsync(
-            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/patch",
-            new AgentToolPayload()
-                .Set("section", AgentToolArgs.OptionalString(args, "section"))
-                .Set("content", AgentToolArgs.OptionalString(args, "content"))
-                .Set("acIndex", AgentToolArgs.OptionalInt(args, "acIndex"))
-                .Set("acText", AgentToolArgs.OptionalString(args, "acText"))
-                .Set("untick", AgentToolArgs.OptionalBool(args, "untick"))
-                .Set("brief", AgentToolArgs.OptionalString(args, "brief"))
-                .Set("amend", AgentToolArgs.OptionalBool(args, "amend"))
-                .Set("remove", AgentToolArgs.OptionalBool(args, "remove"))
-                .Set("reason", AgentToolArgs.OptionalString(args, "reason"))
-                .Set("logNote", AgentToolArgs.OptionalString(args, "logNote"))
-                .Set("source", AgentToolArgs.OptionalString(args, "source"))
-                .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
-                .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
-                .Set("operationId", AgentToolArgs.OptionalGuid(args, "operationId"))
-                .Build(),
-            ct));
+    private static AgentToolSpec PatchArtifactSpec(AgentLoopbackClient api)
+    {
+        string PatchPath(JsonElement args) =>
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/patch";
 
-    private static AgentToolSpec SetArtifactStatusSpec(AgentLoopbackClient api) => new(
-        "planning_set_status",
-        "Moves one artifact status with a mandatory logNote. Spec/plan: draft, validated (validated is human-gated — a draft spec or plan of yours waits for the human door). Task: todo, inProgress, review, done, blocked.",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"status":{"type":"string"},"logNote":{"type":"string"}},"required":["artifactId","status","logNote"]}
-        """,
-        async (args, ct) => await api.PostAsync(
-            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/status",
-            new
-            {
-                status = AgentToolArgs.RequiredString(args, "status"),
-                logNote = AgentToolArgs.RequiredString(args, "logNote")
-            },
-            ct));
+        object PatchPayload(JsonElement args) => new AgentToolPayload()
+            .Set("section", AgentToolArgs.OptionalString(args, "section"))
+            .Set("content", AgentToolArgs.OptionalString(args, "content"))
+            .Set("acIndex", AgentToolArgs.OptionalInt(args, "acIndex"))
+            .Set("acText", AgentToolArgs.OptionalString(args, "acText"))
+            .Set("untick", AgentToolArgs.OptionalBool(args, "untick"))
+            .Set("brief", AgentToolArgs.OptionalString(args, "brief"))
+            .Set("amend", AgentToolArgs.OptionalBool(args, "amend"))
+            .Set("remove", AgentToolArgs.OptionalBool(args, "remove"))
+            .Set("reason", AgentToolArgs.OptionalString(args, "reason"))
+            .Set("logNote", AgentToolArgs.OptionalString(args, "logNote"))
+            .Set("source", AgentToolArgs.OptionalString(args, "source"))
+            .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
+            .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
+            .Set("operationId", AgentToolArgs.OptionalGuid(args, "operationId"))
+            .Build();
 
-    private static AgentToolSpec AppendLogSpec(AgentLoopbackClient api) => new(
-        "planning_append_log",
-        "Appends one dated log line to an artifact without touching its body — progress notes, obstacle mentions, AC evidence. Address the artifact by id, or by alias ('<slug>/T<order>', '<slug>/S') plus projectId.",
-        """
-        {"type":"object","properties":{"note":{"type":"string"},"artifactId":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"},"operationId":{"type":"string"}},"required":["note"]}
-        """,
-        async (args, ct) => await api.PostAsync(
-            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/log",
-            new AgentToolPayload()
-                .Set("note", AgentToolArgs.OptionalString(args, "note"))
-                .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
-                .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
-                .Set("operationId", AgentToolArgs.OptionalGuid(args, "operationId"))
-                .Build(),
-            ct));
+        return new AgentToolSpec(
+            "planning_patch_artifact",
+            "Corrects one artifact in place without resending the body: replace/insert one XML section or one '## Heading' block, tick or untick one acceptance item (acIndex or acText), set a task brief, append a result amendment (amend=true), or tombstone a heading (remove=true + reason). logNote is mandatory once the artifact is validated.",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"section":{"type":"string"},"content":{"type":"string"},"acIndex":{"type":"integer"},"acText":{"type":"string"},"untick":{"type":"boolean"},"brief":{"type":"string"},"amend":{"type":"boolean"},"remove":{"type":"boolean"},"reason":{"type":"string"},"logNote":{"type":"string"},"source":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"},"operationId":{"type":"string"}},"required":["artifactId"]}
+            """,
+            async (args, ct) => await api.PostAsync(PatchPath(args), PatchPayload(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+                PatchPath(args), PatchPayload(args), new AgentCaller(callerProjectId), ct));
+    }
 
-    private static AgentToolSpec EditLogSpec(AgentLoopbackClient api) => new(
-        "planning_edit_log",
-        "Corrects the newest log line on one artifact — single-line replacement; the date and actor marker are preserved, only the prose changes.",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"text":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"},"operationId":{"type":"string"}},"required":["artifactId","text"]}
-        """,
-        async (args, ct) => await api.PutAsync(
-            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/log",
-            new AgentToolPayload()
-                .Set("text", AgentToolArgs.OptionalString(args, "text"))
-                .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
-                .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
-                .Set("operationId", AgentToolArgs.OptionalGuid(args, "operationId"))
-                .Build(),
-            ct));
+    private static AgentToolSpec SetArtifactStatusSpec(AgentLoopbackClient api)
+    {
+        string StatusPath(JsonElement args) =>
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/status";
 
-    private static AgentToolSpec DeleteArtifactSpec(AgentLoopbackClient api) => new(
-        "planning_delete_artifact",
-        "Soft-deletes one artifact as a draft only; validated artifacts are the human's door. A task with dependents is refused until its edges are cleaned up. logNote carries the reason into the feature log.",
-        """
-        {"type":"object","properties":{"artifactId":{"type":"string"},"logNote":{"type":"string"},"source":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"}},"required":["artifactId"]}
-        """,
-        async (args, ct) => await api.DeleteAsync(
-            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}",
-            new AgentToolPayload()
-                .Set("logNote", AgentToolArgs.OptionalString(args, "logNote"))
-                .Set("source", AgentToolArgs.OptionalString(args, "source"))
-                .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
-                .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
-                .Build(),
-            ct));
+        object StatusPayload(JsonElement args) => new
+        {
+            status = AgentToolArgs.RequiredString(args, "status"),
+            logNote = AgentToolArgs.RequiredString(args, "logNote")
+        };
+
+        return new AgentToolSpec(
+            "planning_set_status",
+            "Moves one artifact status with a mandatory logNote. Spec/plan: draft, validated (validated is human-gated — a draft spec or plan of yours waits for the human door). Task: todo, inProgress, review, done, blocked.",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"status":{"type":"string"},"logNote":{"type":"string"}},"required":["artifactId","status","logNote"]}
+            """,
+            async (args, ct) => await api.PostAsync(StatusPath(args), StatusPayload(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+                StatusPath(args), StatusPayload(args), new AgentCaller(callerProjectId), ct));
+    }
+
+    private static AgentToolSpec AppendLogSpec(AgentLoopbackClient api)
+    {
+        string AppendPath(JsonElement args) =>
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/log";
+
+        object AppendPayload(JsonElement args) => new AgentToolPayload()
+            .Set("note", AgentToolArgs.OptionalString(args, "note"))
+            .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
+            .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
+            .Set("operationId", AgentToolArgs.OptionalGuid(args, "operationId"))
+            .Build();
+
+        return new AgentToolSpec(
+            "planning_append_log",
+            "Appends one dated log line to an artifact without touching its body — progress notes, obstacle mentions, AC evidence. Address the artifact by id, or by alias ('<slug>/T<order>', '<slug>/S') plus projectId.",
+            """
+            {"type":"object","properties":{"note":{"type":"string"},"artifactId":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"},"operationId":{"type":"string"}},"required":["note"]}
+            """,
+            async (args, ct) => await api.PostAsync(AppendPath(args), AppendPayload(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+                AppendPath(args), AppendPayload(args), new AgentCaller(callerProjectId), ct));
+    }
+
+    private static AgentToolSpec EditLogSpec(AgentLoopbackClient api)
+    {
+        string EditPath(JsonElement args) =>
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}/log";
+
+        object EditPayload(JsonElement args) => new AgentToolPayload()
+            .Set("text", AgentToolArgs.OptionalString(args, "text"))
+            .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
+            .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
+            .Set("operationId", AgentToolArgs.OptionalGuid(args, "operationId"))
+            .Build();
+
+        return new AgentToolSpec(
+            "planning_edit_log",
+            "Corrects the newest log line on one artifact — single-line replacement; the date and actor marker are preserved, only the prose changes.",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"text":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"},"operationId":{"type":"string"}},"required":["artifactId","text"]}
+            """,
+            async (args, ct) => await api.PutAsync(EditPath(args), EditPayload(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.PutAsync(
+                EditPath(args), EditPayload(args), new AgentCaller(callerProjectId), ct));
+    }
+
+    private static AgentToolSpec DeleteArtifactSpec(AgentLoopbackClient api)
+    {
+        string DeletePath(JsonElement args) =>
+            $"/api/agent/planning/artifacts/{AgentToolArgs.RequiredGuid(args, "artifactId")}";
+
+        object DeletePayload(JsonElement args) => new AgentToolPayload()
+            .Set("logNote", AgentToolArgs.OptionalString(args, "logNote"))
+            .Set("source", AgentToolArgs.OptionalString(args, "source"))
+            .Set("alias", AgentToolArgs.OptionalString(args, "alias"))
+            .Set("projectId", AgentToolArgs.OptionalGuid(args, "projectId"))
+            .Build();
+
+        return new AgentToolSpec(
+            "planning_delete_artifact",
+            "Soft-deletes one artifact as a draft only; validated artifacts are the human's door. A task with dependents is refused until its edges are cleaned up. logNote carries the reason into the feature log.",
+            """
+            {"type":"object","properties":{"artifactId":{"type":"string"},"logNote":{"type":"string"},"source":{"type":"string"},"alias":{"type":"string"},"projectId":{"type":"string"}},"required":["artifactId"]}
+            """,
+            async (args, ct) => await api.DeleteAsync(DeletePath(args), DeletePayload(args), ct),
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.DeleteAsync(
+                DeletePath(args), DeletePayload(args), new AgentCaller(callerProjectId), ct));
+    }
 
     private static AgentToolSpec ClaimSpec(AgentLoopbackClient api) => new(
         "planning_claim_feature",
@@ -471,10 +521,16 @@ public static class PlanningAgentTools
             """
             {"type":"object","properties":{"artifactId":{"type":"string"},"asMigrated":{"type":"boolean"},"logNote":{"type":"string"}},"required":["artifactId"]}
             """,
+            // Required by the record and unreachable while ScopedInvoke is declared — the registry prefers the
+            // scoped handler on every branch; the slot stays because the record demands it.
             async (args, ct) => await api.PostAsync(ValidatePath(args), Payload(args), ct),
             AgentToolCategory.HumanGated,
-            (args, instructionMessageId, ct) => api.PostAsync(
-                ValidatePath(args), Payload(args), DelegatedHeaders(instructionMessageId), ct),
+            null,
+            ScopedInvoke: async (args, callerProjectId, ct) => await api.PostAsync(
+                ValidatePath(args), Payload(args), new AgentCaller(callerProjectId), ct),
+            DelegatedScopedInvoke: (args, instructionMessageId, callerProjectId, ct) => api.PostAsync(
+                ValidatePath(args), Payload(args), new AgentCaller(callerProjectId),
+                DelegatedHeaders(instructionMessageId), ct),
             Scope: AgentToolScope.Enforce);
     }
 

@@ -318,9 +318,27 @@ public sealed class PlanningArtifactService
         return (artifact, true, true);
     }
 
+    public async Task<PlanningArtifactReadRow?> ReadAsync(
+        Guid artifactId, CancellationToken ct = default, Guid? callerProjectId = null)
+    {
+        var row = await _db.PlanningArtifacts
+            .Where(a => a.Id == artifactId)
+            .Select(a => new PlanningArtifactReadRow(
+                a.Id, a.Kind, a.Status, a.Version, a.Order, a.UpdatedAt, a.Brief, a.Body, a.FeatureId,
+                _db.PlanningFeatures.Where(f => f.Id == a.FeatureId).Select(f => f.ProjectId).First()))
+            .FirstOrDefaultAsync(ct);
+
+        if (row is not null)
+        {
+            GuardCallerScope(artifactId, row.OwningProjectId, callerProjectId);
+        }
+
+        return row;
+    }
+
     public async Task<PlanningArtifactStatusResult> SetStatusAsync(
         Guid artifactId, PlanningArtifactStatus status, PlanningLogSource source, string logNote,
-        CancellationToken ct = default, bool requireHumanProof = false)
+        CancellationToken ct = default, bool requireHumanProof = false, Guid? callerProjectId = null)
     {
         if (string.IsNullOrWhiteSpace(logNote))
         {
@@ -329,6 +347,7 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
 
         if (requireHumanProof && IsDocumentValidation(artifact.Kind, status))
         {
@@ -397,7 +416,7 @@ public sealed class PlanningArtifactService
 
     public async Task<PlanningArtifactPatchResult> PatchAsync(
         Guid artifactId, PlanningArtifactPatch patch, CancellationToken ct = default,
-        PlanningLogSource? source = null)
+        PlanningLogSource? source = null, Guid? callerProjectId = null)
     {
         ArgumentNullException.ThrowIfNull(patch);
 
@@ -418,6 +437,7 @@ public sealed class PlanningArtifactService
 
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
         var preMutationContentUpdatedAt = artifact.ContentUpdatedAt;
         var noChange = false;
         int? tickedIndex = null;
@@ -509,10 +529,11 @@ public sealed class PlanningArtifactService
 
     public async Task<PlanningArtifact> ValidateAsync(
         Guid artifactId, string? logNote = null, PlanningLogSource? source = null,
-        bool requireHumanProof = false, CancellationToken ct = default)
+        bool requireHumanProof = false, CancellationToken ct = default, Guid? callerProjectId = null)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
 
         if (requireHumanProof && string.IsNullOrWhiteSpace(logNote))
         {
@@ -597,7 +618,9 @@ public sealed class PlanningArtifactService
             throw PlanningException.CannotDeclineTask();
         }
 
-        return await AppendLogAsync(artifact, DeclineNote(reason), ct, PlanningLogSource.Ui);
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+
+        return await AppendLogAsync(artifact, feature, DeclineNote(reason), ct, PlanningLogSource.Ui);
     }
 
     private static string DeclineNote(string? reason)
@@ -609,19 +632,21 @@ public sealed class PlanningArtifactService
             : $"declined by human: {trimmed}";
     }
 
-    public async Task<PlanningArtifact> AppendLogAsync(Guid artifactId, string note, CancellationToken ct = default,
-        PlanningLogSource? source = null)
+    public async Task<PlanningArtifact> AppendLogAsync(
+        Guid artifactId, string note, CancellationToken ct = default,
+        PlanningLogSource? source = null, Guid? callerProjectId = null)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
 
-        return await AppendLogAsync(artifact, note, ct, source);
+        return await AppendLogAsync(artifact, feature, note, ct, source);
     }
 
     private async Task<PlanningArtifact> AppendLogAsync(
-        PlanningArtifact artifact, string note, CancellationToken ct, PlanningLogSource? source)
+        PlanningArtifact artifact, PlanningFeature feature, string note, CancellationToken ct,
+        PlanningLogSource? source)
     {
-        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
-
         artifact.AppendLog(note, source);
         feature.Touch();
 
@@ -631,10 +656,12 @@ public sealed class PlanningArtifactService
     }
 
     public async Task<PlanningArtifact> EditNewestLogAsync(
-        Guid artifactId, string text, PlanningLogSource actor, CancellationToken ct = default)
+        Guid artifactId, string text, PlanningLogSource actor, CancellationToken ct = default,
+        Guid? callerProjectId = null)
     {
         var artifact = await LoadArtifactOrThrow(artifactId, ct);
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
 
         artifact.EditNewestLog(text, actor);
         feature.Touch();
@@ -650,7 +677,8 @@ public sealed class PlanningArtifactService
         bool byHuman,
         string? logNote = null,
         PlanningLogSource? source = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Guid? callerProjectId = null)
     {
         var artifact = await _db.PlanningArtifacts
             .Include(a => a.BlockedBy)
@@ -661,14 +689,15 @@ public sealed class PlanningArtifactService
             throw PlanningException.MissingArtifact(artifactId);
         }
 
+        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
+        GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
+
         var dependents = await DependentOrdersAsync(artifactId, ct);
         if (dependents.Count > 0)
         {
             throw PlanningException.DeletionBlockedByDependents(
                 [.. dependents.Select(o => $"task {o:D2}")]);
         }
-
-        var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
 
         artifact.Delete(byHuman);
 
@@ -750,6 +779,14 @@ public sealed class PlanningArtifactService
         }
 
         return artifact;
+    }
+
+    private static void GuardCallerScope(Guid artifactId, Guid owningProjectId, Guid? callerProjectId)
+    {
+        if (callerProjectId is { } caller && owningProjectId != caller)
+        {
+            throw PlanningException.ArtifactOutsideCallerProject(artifactId, owningProjectId, caller);
+        }
     }
 
     private async Task SaveAndDispatchAsync(Guid projectId, CancellationToken ct)

@@ -670,6 +670,35 @@ public sealed class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task AuditTrail_GlobalConversation_EntryDoorRowCarriesTheGlobalScopeMarker()
+    {
+        // T3 / AC-4: the entry doors are the family whose routes the web UI shares, so the no-project
+        // conversation must get through them - and the trail has to say that the scope was not the
+        // conversation's, because for entries there is no argument that would have said it instead.
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.TextUpdate("Reading a note. "),
+            FakeAgentChatClient.ToolCallUpdate(
+                "c1", "read_entry", """{"entryId":"019712af-8ea4-7aa1-9f5b-2f3c4d5e6f11"}"""),
+            FakeAgentChatClient.UsageUpdate(40)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("The note is read."),
+            FakeAgentChatClient.UsageUpdate(15)
+        ]);
+        var loop = CreateLoop(client);
+
+        await CollectAsync(loop);
+
+        var rows = await _messages.ListPageAsync(_conversation.Id, ct: CancellationToken.None);
+        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+        using var document = JsonDocument.Parse(toolRow.Content);
+        document.RootElement.GetProperty("tool").GetString().ShouldBe("read_entry");
+        document.RootElement.GetProperty("globalScope").GetBoolean().ShouldBeTrue(
+            customMessage: $"an entry call from a project-less conversation must be marked: {toolRow.Content}");
+    }
+
+    [Fact]
     public async Task AuditTrail_ScopedConversation_ToolRowNamesItsProjectAndStaysUnmarked()
     {
         var project = Project.Create($"audit-{Guid.NewGuid():N}", Path.GetTempPath(), string.Empty);

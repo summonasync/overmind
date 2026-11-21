@@ -7,7 +7,7 @@ import type { PlanningFeatureBoardItem } from "@/features/planning/types";
 interface FeatureClaimChipProps {
   item: Pick<
     PlanningFeatureBoardItem,
-    "claimedByAlias" | "claimedByVendor" | "claimedAt" | "claimState" | "claimedByHuman"
+    "slug" | "claimedByAlias" | "claimedByVendor" | "claimedAt" | "claimState" | "claimedByHuman"
   >;
 }
 
@@ -23,28 +23,43 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
   const claimedOn = item.claimedAt === null ? undefined : formatCalendarDate(item.claimedAt);
 
   if (item.claimedByHuman) {
+    const humanDescId = `claim-chip-human-${item.slug}-desc`;
     return (
-      <span
-        className={cn(chipBase, "border border-border/50 bg-surface-raised text-muted/80")}
-        title={
-          claimedOn === undefined
-            ? `Held by a human on the board (${holder})`
-            : `Held by a human on the board (${holder}) — since ${claimedOn}`
-        }
-      >
-        human-held
-        {age !== null ? ` · ${age}` : ""}
-      </span>
+      <>
+        <span
+          id={humanDescId}
+          role="note"
+          className="sr-only"
+        >{`Held by a human on the board (${holder})${claimedOn === undefined ? "" : ` — since ${claimedOn}`}`}</span>
+        <span
+          className={cn(chipBase, "border border-border/50 bg-surface-raised text-muted/80")}
+          aria-describedby={humanDescId}
+          title={
+            claimedOn === undefined
+              ? `Held by a human on the board (${holder})`
+              : `Held by a human on the board (${holder}) — since ${claimedOn}`
+          }
+        >
+          human-held
+          {age !== null ? ` · ${age}` : ""}
+        </span>
+      </>
     );
   }
 
   if (item.claimState === "stale") {
+    const staleDescId = `claim-chip-stale-${item.slug}-desc`;
     return (
       <span
         className={cn(chipBase, "border border-border bg-surface-raised text-muted")}
+        aria-describedby={staleDescId}
         title={claimedOn}
       >
         stale{age !== null ? ` ${age}` : ""} · {holder}
+        <span id={staleDescId} className="sr-only">
+          Claimed{claimedOn === undefined ? "" : ` since ${claimedOn}`} — the holder session is no
+          longer alive, the claim can be taken over.
+        </span>
       </span>
     );
   }
@@ -57,9 +72,11 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
     );
   }
 
+  const aliveDescId = `claim-chip-alive-${item.slug}-desc`;
   return (
     <span
       className={cn(chipBase, "border border-success/30 bg-success/10 text-success")}
+      aria-describedby={aliveDescId}
       title={claimedOn}
       data-claim-state="alive"
     >
@@ -67,6 +84,9 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
       <span className="sr-only">alive</span>
       {holder}
       {age !== null ? ` · ${age}` : ""}
+      <span id={aliveDescId} className="sr-only">
+        Claimed{claimedOn === undefined ? "" : ` since ${claimedOn}`} by a live session
+      </span>
     </span>
   );
 }
