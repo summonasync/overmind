@@ -159,6 +159,41 @@ export interface GraphField {
   unsupported: { nodes: number; edges: number };
 }
 
+// ── Triage: the note becoming board work ───────────────────────────────────────────────
+//
+// `NotePromotionResult` is `NotePromotionResponse` on the wire — the door's whole answer, in the
+// fields the surface can act on. `featureSlug` is what the board cache addresses a card by, and
+// `targetKind`/`targetId` name the artifact the provenance edge points at, which for a task is the
+// task and not its parent.
+export interface NotePromotionResult {
+  entryId: string;
+  targetKind: PromotionTargetKind;
+  targetId: string;
+  featureId: string;
+  featureSlug: string;
+}
+
+// The two targets the owner can sort a thought into, spelled as the wire spells them. Narrower
+// than `JournalLinkKind` on purpose: `entry` and `project` are what a note links to by writing a
+// marker, never what a promotion mints.
+export type PromotionTargetKind = "feature" | "task";
+
+// The form state, as opposed to the door's body: a task names itself with a brief and carries the
+// contract in the body, a feature names itself with a title, and both need a board to land on.
+export interface PromotionForm {
+  target: PromotionTargetKind;
+  projectId: string;
+  featureId: string;
+  name: string;
+  body: string;
+}
+
+export interface FeatureCandidate {
+  id: string;
+  label: string;
+  done: boolean;
+}
+
 // Every field travels, so one shape serves the URL and the request: unlike the stream, where
 // `day` partitions locally and must stay out of the cache key, the graph's filters are all the
 // endpoint's own. `lib/graph-filters.ts` reads and writes it, `lib/graph-query.ts` sends it.

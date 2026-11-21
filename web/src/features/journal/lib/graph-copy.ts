@@ -1,4 +1,4 @@
-import type { GraphCounts, GraphNode, GraphNodeState } from "../types.ts";
+import type { GraphCounts, GraphNode, GraphNodeState, GraphViewFilters } from "../types.ts";
 
 // Every string the graph surface shows, in one module: the a11y label, the legend, the ceiling
 // notice and the control copy are pinned from here, and the wording duty below is checked
@@ -73,6 +73,47 @@ export function unsupportedRowsNotice(nodes: number, edges: number): string {
     parts.push(`${edges} link row${edges === 1 ? "" : "s"} whose endpoint is not in this view`);
   }
   return `The payload also carried ${parts.join(" and ")}. The endpoint vocabulary grew past this surface.`;
+}
+
+// The focus-refusal detail, framed as the kind of list it is.
+//
+// `GraphApi.ActiveCoFilters` enumerates every narrowing filter that was ACTIVE on the request, not
+// the subset that removed the node: `?focus=entry:<decision>&type=journal` answers naming `'type'`
+// and `'includeDone'`, although widening `includeDone` would not bring that node back
+// (review-237-05 M1, measured on the built pipeline). The list is truthful as a superset — the real
+// culprit is always in it — so the server sentence is rendered verbatim and this line says what it
+// is. Nothing on the surface may promote one of its names to the cause.
+export const FILTER_DETAIL_FRAMING =
+  "These are the filters the field was narrowed by. Widening one of them may bring the node back; " +
+  "the list names what was active, not which one dropped this node.";
+
+// The framing is checkable against the controls under it, so it reads from the same filter state
+// the chips do rather than from a paraphrase of the server sentence.
+export function activeFilterNames(filters: GraphViewFilters): string[] {
+  const names: string[] = [];
+
+  if (filters.types.length > 0) {
+    names.push("entry types");
+  }
+  if (filters.project.length > 0) {
+    names.push("project");
+  }
+  if (filters.search.trim().length > 0) {
+    names.push("title search");
+  }
+  if (filters.orphansOnly) {
+    names.push("unlinked only");
+  }
+  // Not-inverted on purpose: Done features are hidden unless the owner widened them, so "hidden" is
+  // the active narrowing at the default setting — which is exactly the case M1 was measured in.
+  if (!filters.includeDone) {
+    names.push("Done features hidden");
+  }
+  if (filters.focus.length > 0) {
+    names.push("focus window");
+  }
+
+  return names;
 }
 
 export function nodeKindLabel(node: GraphNode): string {

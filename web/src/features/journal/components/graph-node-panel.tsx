@@ -14,12 +14,16 @@ import { focusHandleOf } from "@/features/journal/lib/graph-filters";
 import { graphNodeStates, nodeKey } from "@/features/journal/lib/graph-payload";
 import { useJournalNote } from "@/features/journal/lib/use-journal";
 import { noteHref } from "@/features/journal/lib/note-rails";
-import type { GraphField, GraphNode } from "@/features/journal/types";
+import { PromoteNote } from "@/features/journal/components/promote-note";
+import type { GraphField, GraphNode, GraphViewFilters } from "@/features/journal/types";
 
 interface GraphNodePanelProps {
   field: GraphField;
   node: GraphNode | null;
   focusedHandle: string;
+  // The panel needs the filters for one thing only: handing them to the promotion, so a successful
+  // act stales the field the owner is looking at rather than every field the cache has held.
+  filters?: GraphViewFilters;
   onClear: () => void;
   onCentre: (handle: string) => void;
   onOpenNote: (id: string) => void;
@@ -32,6 +36,7 @@ export function GraphNodePanel({
   field,
   node,
   focusedHandle,
+  filters,
   onClear,
   onCentre,
   onOpenNote,
@@ -70,7 +75,7 @@ export function GraphNodePanel({
       </div>
 
       {node.kind === "entry" ? (
-        <NoteContext id={node.id} onOpenNote={onOpenNote} />
+        <NoteContext id={node.id} filters={filters} onOpenNote={onOpenNote} />
       ) : (
         <p className="text-xs text-muted">{addressGap(node.kind)}</p>
       )}
@@ -92,7 +97,15 @@ export function GraphNodePanel({
 // The note's own context comes from the same detail door the note view uses — preview plus
 // backlinks — because a second "graph context" endpoint would be a second definition of what a
 // note is, and R2 says the graph does not invent link semantics.
-function NoteContext({ id, onOpenNote }: { id: string; onOpenNote: (id: string) => void }) {
+function NoteContext({
+  id,
+  filters,
+  onOpenNote,
+}: {
+  id: string;
+  filters?: GraphViewFilters;
+  onOpenNote: (id: string) => void;
+}) {
   const note = useJournalNote(id);
 
   if (note.isPending) {
@@ -141,6 +154,10 @@ function NoteContext({ id, onOpenNote }: { id: string; onOpenNote: (id: string) 
       <Button size="sm" variant="accent" onClick={() => onOpenNote(id)}>
         {GRAPH_CONTROL_LABELS.openNote}
       </Button>
+      {/* R6's exit door, reachable from the node the owner is already reading. The panel keeps the
+          field's filters so the promotion stales the field this surface is drawing, not every
+          field the cache has ever held. */}
+      <PromoteNote entryId={id} noteTitle={data.title} graphFilters={filters} />
     </div>
   );
 }
