@@ -206,10 +206,12 @@ public sealed class FeatureClaimService
             .ToDictionaryAsync(s => s.Id, ct);
         var now = DateTime.UtcNow;
 
+        // Released means orphan only: no holder row survived for the claim — take-over is
+        // legitimate. A dead holder projects Ended, it is never collapsed into Released.
         return claimed.ToDictionary(
             f => f.Id,
             f => sessions.TryGetValue(f.ClaimSessionId!.Value, out var session)
-                ? session.Liveness(now, project.ClaimStaleThresholdMinutes).ToClaimState()
+                ? session.Liveness(now, project.ClaimStaleThresholdMinutes)
                 : AgentSessionLiveness.Released);
     }
 
