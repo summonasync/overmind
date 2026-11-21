@@ -555,6 +555,35 @@ public sealed class AgentSessionLockApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Promote_StaleSelfClaim_ReadoptsAndLogs()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "claimable");
+        await SeedHolderSessionAsync(DateTime.UtcNow.AddHours(-2));
+        await ClaimFeatureAsync(project.Id, "claimable");
+        var issueId = await CreateOpenIssueAsync(project.Id);
+
+        var response = await SendAsync(HttpMethod.Post,
+            $"/api/agent/projects/{project.Id}/issues/{issueId}/promote",
+            new { FeatureSlug = "claimable", Source = "Agent" }, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var feature = await _client.GetFromJsonAsync<FeatureJson>(
+            $"/api/projects/{project.Id}/planning/features/claimable", JsonOptions);
+        feature!.Body.ShouldContain("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    private async Task<Guid> CreateOpenIssueAsync(Guid projectId)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/agent/projects/{projectId}/issues",
+            new { AuthorProjectId = projectId, Title = "Promote me", Body = "body" }, JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        return body.GetProperty("id").GetGuid();
+    }
+
+    [Fact]
     public async Task Write_AliveSelfIdentityClaim_StillRefused()
     {
         var project = await CreateProjectAsync();

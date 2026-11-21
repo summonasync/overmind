@@ -278,7 +278,8 @@ public sealed class FeatureClaimService
     }
 
     public async Task EnsureImportAllowedAsync(
-        Guid projectId, Guid? sessionId, string slug, CancellationToken ct = default)
+        Guid projectId, Guid? sessionId, string slug, DateTime? observedLastSeenAt = null,
+        CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -292,7 +293,7 @@ public sealed class FeatureClaimService
             return;
         }
 
-        await EnsureHolderCoreAsync(feature, sessionId, null, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, observedLastSeenAt, ct);
     }
 
     // Write-path gate behind the ClaimLockFilter. Claim binding follows the session id: the same

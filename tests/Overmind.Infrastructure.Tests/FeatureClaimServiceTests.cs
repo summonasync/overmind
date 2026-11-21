@@ -620,6 +620,22 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureImportAllowed_StaleSameSessionClaim_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        await service.EnsureImportAllowedAsync(_projectId, HolderSessionId, "feat-a");
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
     public async Task EnsureHolder_ReadoptHealsTheRow_SecondWriteIsSilent()
     {
         await CreateFeatureAsync();

@@ -168,7 +168,8 @@ public static class AgentIssuesApi
         try
         {
             var (issue, artifact) = await service.PromoteAsync(
-                id, request.FeatureSlug, request.Source, sessionId, ct);
+                id, request.FeatureSlug, request.Source, sessionId,
+                SessionTouchMiddleware.PreTouchLastSeenOf(http), ct);
             return Results.Ok(new IssuePromoteResponse(
                 issue.Id, issue.Status, artifact.Id, artifact.FeatureId, artifact.Version));
         }
@@ -235,7 +236,8 @@ public static class AgentIssuesApi
         {
             await EnsureIssueOnBoardAsync(service, projectId, id, ct);
             var (issue, artifact) = await service.PromoteAsync(
-                id, request.FeatureSlug, request.Source, sessionId, ct);
+                id, request.FeatureSlug, request.Source, sessionId,
+                SessionTouchMiddleware.PreTouchLastSeenOf(http), ct);
             return Results.Ok(new IssuePromoteResponse(
                 issue.Id, issue.Status, artifact.Id, artifact.FeatureId, artifact.Version));
         }
