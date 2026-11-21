@@ -14,11 +14,15 @@ export function EntryStateChip({ entry }: { entry: EntryResponse }) {
     return null;
   }
   const meta = STATE_CHIP_META[state];
+  const descId = `entry-state-${entry.id}-desc`;
   return (
-    <span title={entry.stateReason ?? "No reason recorded"}>
+    <span aria-describedby={descId} title={entry.stateReason ?? "No reason recorded"}>
       <Badge tone={meta.tone} size="xs">
         {meta.label}
       </Badge>
+      <span id={descId} className="sr-only">
+        {`${meta.label}: ${entry.stateReason ?? "no reason recorded"}`}
+      </span>
     </span>
   );
 }
