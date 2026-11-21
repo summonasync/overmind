@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Overmind.Core;
 using Overmind.Host.AgentChat;
 using Overmind.Host.Api.Contracts;
@@ -139,11 +140,17 @@ public static class DependencyInjection
         services.AddScoped<KitActivationService>();
         services.AddScoped<LegacyKitMigrationService>();
         services.AddScoped<BundledKitForkService>();
-        services.AddScoped<IGlobalKitDeployer>(provider => new HomeKitDeployer(
-            provider.GetRequiredService<OvermindDbContext>(),
-            provider.GetRequiredService<PlatformDirectoryMap>(),
-            provider.GetRequiredService<IReadOnlyList<AgentHomeSpec>>(),
-            provider.GetRequiredService<ILogger<HomeKitDeployer>>()));
+        services.AddScoped<HomeKitDeployer>(provider =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            return new HomeKitDeployer(
+                provider.GetRequiredService<OvermindDbContext>(),
+                provider.GetRequiredService<PlatformDirectoryMap>(),
+                provider.GetRequiredService<IReadOnlyList<AgentHomeSpec>>(),
+                provider.GetRequiredService<ILogger<HomeKitDeployer>>(),
+                configuration["Kits:GlobalHomeRoot"]);
+        });
+        services.AddScoped<IGlobalKitDeployer>(provider => provider.GetRequiredService<HomeKitDeployer>());
         services.AddScoped<BundledSeedService>(provider => new BundledSeedService(
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<KitImporter>(),

@@ -230,6 +230,45 @@ public sealed class HomeKitDeployer : IGlobalKitDeployer
         return items;
     }
 
+    // Snapshot for the kits-page door: per kit x detected platform, one of
+    // undeployed / deployed / drifted. Drift covers tracked-file hashes and marker
+    // blocks; paths lists what the door is tracking for that pair.
+    public async Task<IReadOnlyList<GlobalKitStateItem>> GetGlobalStateAsync(CancellationToken ct = default)
+    {
+        var kits = await _db.SkillKits.AsNoTracking().ToListAsync(ct);
+        var rows = await _db.GlobalMaterializedFiles.AsNoTracking().ToListAsync(ct);
+        var markers = await _db.GlobalMarkerDeployments.AsNoTracking().ToListAsync(ct);
+        var homes = ResolveInstalled().ToDictionary(h => h.Platform, h => h);
+        var drift = await DetectDriftAsync(ct);
+
+        var items = new List<GlobalKitStateItem>();
+        foreach (var kit in kits)
+        {
+            foreach (var home in homes.Values)
+            {
+                var kitRows = rows.Where(r => r.KitId == kit.Id && r.Platform == home.Platform).ToList();
+                var kitMarkers = markers.Where(m => m.KitId == kit.Id && m.Platform == home.Platform).ToList();
+                var kitDrift = drift.Where(d => d.KitId == kit.Id && d.Platform == home.Platform).ToList();
+
+                var state = (kitRows.Count, kitMarkers.Count, kitDrift.Count) switch
+                {
+                    (0, 0, _) => "undeployed",
+                    (_, _, 0) => "deployed",
+                    _ => "drifted"
+                };
+
+                var paths = kitRows
+                    .Select(r => r.RelativePath)
+                    .Concat(kitMarkers.Select(m => m.EntryFilePath))
+                    .ToArray();
+
+                items.Add(new GlobalKitStateItem(kit.Id, kit.Name, kit.Mandatory, home.Platform, state, paths, kitDrift.ToArray()));
+            }
+        }
+
+        return items;
+    }
+
     private async Task<GlobalDeployReport> DeployCoreAsync(SkillKit kit, AgentHomeResolution.ResolvedHome home, bool force, CancellationToken ct)
     {
         var started = DateTime.UtcNow;
