@@ -198,7 +198,8 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
     }
 
     [Fact]
-    public async Task SetIdentity_MidHoldChange_ReattributesHeldClaimsAndLogsTheMove()    {
+    public async Task SetIdentity_MidHoldChange_ReattributesHeldClaimsAndLogsTheMove()
+    {
         var sessionId = await RegisterAsync("Dan", "claude");
         var claim = await SeedHeldClaimAsync(sessionId);
 
