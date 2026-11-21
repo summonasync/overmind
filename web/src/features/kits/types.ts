@@ -136,3 +136,30 @@ export interface KitReimportReportResponse {
   removedCount: number;
   entries: KitReimportEntryResponse[];
 }
+
+export interface GlobalDriftItemResponse {
+  kitId: string;
+  platform: string;
+  path: string;
+  kind: "missing" | "modified" | "markerMissing" | "markerModified";
+}
+
+export interface GlobalKitStateItemResponse {
+  kitId: string;
+  kitName: string;
+  mandatory: boolean;
+  platform: string;
+  state: "undeployed" | "deployed" | "drifted";
+  paths: string[];
+  drifts: GlobalDriftItemResponse[];
+}
+
+export interface GlobalDeployReportResponse {
+  kitId: string;
+  agent: string;
+  startedAt: string;
+  finishedAt: string;
+  entries: { kind: string; platform: string; path: string; outcome: string; reason: string | null }[];
+  warnings: string[];
+  success: boolean;
+}

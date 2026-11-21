@@ -10,7 +10,7 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { FolderPickerModal } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { KitDetailPanel } from "@/widgets/kit-workspace/ui/kit-detail-panel";
-import { KitForm, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
+import { KitForm, KitGlobalDeploySection, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
 import type { KitFormValues, KitResponse } from "@/features/kits";
 import { KitsInfoPanel } from "@/pages/kits-page/ui/kits-info-panel";
 
@@ -84,6 +84,7 @@ export function KitsPage() {
             onDelete={setDeleting}
           />
           {expandedKit ? <KitDetailPanel kit={expandedKit} /> : null}
+          <KitGlobalDeploySection />
         </>
       )}
 
