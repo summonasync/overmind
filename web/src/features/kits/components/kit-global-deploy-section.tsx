@@ -12,7 +12,10 @@ import { deployKitGlobal, removeKitGlobal } from "@/features/kits/api";
 import { globalStateQueryOptions, kitKeys } from "@/features/kits/queries";
 import type { GlobalKitStateItemResponse } from "@/features/kits/types";
 
-const stateBadge: Record<string, { label: string; tone: "primary" | "warning" | "neutral" }> = {
+const stateBadge: Record<
+  GlobalKitStateItemResponse["state"],
+  { label: string; tone: "primary" | "warning" | "neutral" }
+> = {
   deployed: { label: "deployed", tone: "primary" },
   drifted: { label: "drifted", tone: "warning" },
   undeployed: { label: "not deployed", tone: "neutral" },
@@ -84,7 +87,8 @@ export function KitGlobalDeploySection() {
             </div>
             {rows.map((row) => {
               const badge = stateBadge[row.state];
-              const isPending = pending === `${row.kitId}:${row.platform}`;
+              const rowPending = pending === `${row.kitId}:${row.platform}`;
+              const handEdited = row.drifts.some((d) => d.kind === "modified");
               const canRemove = !first.mandatory && row.state !== "undeployed";
               return (
                 <div key={row.platform} className="flex items-center gap-2 text-sm">
@@ -92,14 +96,17 @@ export function KitGlobalDeploySection() {
                   <Badge tone={badge.tone}>{badge.label}</Badge>
                   {row.state === "drifted" && (
                     <span className="text-muted-foreground">
-                      {row.drifts.map((d) => d.kind).join(", ")} — redeploy to fix
+                      {row.drifts.map((d) => d.kind).join(", ")}
+                      {handEdited
+                        ? " — hand-edited file, remove then deploy to reset"
+                        : " — redeploy restores"}
                     </span>
                   )}
                   <div className="ml-auto flex gap-2">
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled={isPending}
+                      disabled={rowPending}
                       onClick={() => {
                         setDeployError(null);
                         setPending(`${row.kitId}:${row.platform}`);
@@ -109,12 +116,12 @@ export function KitGlobalDeploySection() {
                         );
                       }}
                     >
-                      {isPending ? "…" : row.state === "undeployed" ? "Deploy" : "Redeploy"}
+                      {rowPending ? "…" : row.state === "undeployed" ? "Deploy" : "Redeploy"}
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={isPending || !canRemove}
+                      disabled={rowPending || !canRemove}
                       onClick={() => setRemoving(row)}
                     >
                       Remove
