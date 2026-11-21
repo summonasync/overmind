@@ -166,6 +166,24 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Digest_DeadHolderSession_RendersEnded()
+    {
+        await SeedProjectAsync("Overmind", []);
+        var dead = await SeedSessionAsync(
+            "ghost",
+            "claude",
+            lastSeenAt: DateTime.UtcNow - TimeSpan.FromMinutes(30),
+            endedAt: DateTime.UtcNow.AddMinutes(-20));
+        await SeedFeatureAsync("215-wave", FeaturePriority.P1, PlanningFeatureStatus.InProgress, 1, dead);
+
+        await RunSnapshotAsync();
+
+        var digest = SentText(SentRequests().ShouldHaveSingleItem());
+        digest.ShouldContain("215-wave · ghost/claude [ended]");
+        digest.ShouldNotContain("ghost/claude [released]");
+    }
+
+    [Fact]
     public async Task Digest_CountsOnlyMentionsInsideTheWindow()
     {
         await SeedProjectAsync("Overmind", []);
@@ -390,12 +408,13 @@ public sealed class TelegramWaveSnapshotFlowTests : IAsyncLifetime
     }
 
     private async Task<AgentSession> SeedSessionAsync(
-        string alias, string vendor, DateTime? lastSeenAt = null)
+        string alias, string vendor, DateTime? lastSeenAt = null, DateTime? endedAt = null)
     {
         await using var context = _temp.CreateContext();
-        var session = lastSeenAt is null
+        var session = lastSeenAt is null && endedAt is null
             ? AgentSession.Create(alias, vendor)
-            : AgentSession.Restore(Guid.NewGuid(), alias, vendor, lastSeenAt.Value, lastSeenAt.Value);
+            : AgentSession.Restore(
+                Guid.NewGuid(), alias, vendor, lastSeenAt ?? DateTime.UtcNow, lastSeenAt ?? DateTime.UtcNow, endedAt);
         context.AgentSessions.Add(session);
         await context.SaveChangesAsync();
         return session;

@@ -68,9 +68,9 @@ The full feature board of one project. Read-only and idempotent.
 **Rows.** `slug`, `title`, `status`, `priority`, `lane`, `specStatus`/`planStatus`, task progress
 (`taskTotal`, `taskDone`, `taskCounts`: todo/inProgress/review/done/blocked — the parts sum to
 `taskTotal`), `createdAt`, `updatedAt`, and on claimed entries the claim block
-(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | released).
-`released` means the holder session ended; `stale` and `released` claims are take-over-able
-through `planning_claim_feature`.
+(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | ended, `released`
+only for the orphan whose holder session row is gone). `stale`, `ended` and `released` claims
+are take-over-able through `planning_claim_feature`; only a live holder blocks.
 
 **Filters** (AND, all additive — omit everything for the unchanged full board): `status`
 (draft | ready | inProgress | done | review), `priority` (p0-p3), `lane` (case-insensitive
@@ -93,8 +93,8 @@ tasks, `acTicked`/`acTotal`) without artifact bodies or log lines.
 `planning_list_artifacts` is the cheaper roster, `planning_read_artifact` one body.
 
 **Payload.** The claim block appears when the feature is claimed
-(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | released).
-`review` appears on task payloads only.
+(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | ended, `released`
+only for the orphan whose holder session row is gone). `review` appears on task payloads only.
 
 **Projection knobs**, mutually exclusive: `compact` returns the predefined cheap shape — scalars
 and the claim block stay, the body collapses to `bodyChars`, artifacts become roster rows (kind,
@@ -215,7 +215,8 @@ out. Read-only. The board order IS the queue — this tool is its projection.
 **Rows.** `slug`, `number`, `title`, `priority`, `status`, `queuePosition`, `specStatus`,
 `planStatus`, `taskDone`, `taskTotal`, `taskCounts` (sums to `taskTotal`), `readiness` 0-3,
 `blockedBy`, `isBlocked`, `createdAt`, `updatedAt`, and the claim block when claimed
-(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | released).
+(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | ended, `released`
+only for the orphan whose holder session row is gone).
 
 **Ceremony context per row.** `phase` — drafting | writing spec | planning | plan validated |
 in progress | review | awaiting-human | done — derived server-side from spec/plan/task/result
@@ -253,9 +254,10 @@ liveness; reads stay open and the human door in the Overmind UI is never locked.
 
 **Outcomes.** Feature done → 409. A live foreign session holding the claim → 409 naming the
 holder, regardless of alias+vendor match — a name collision cannot hijack a live holder. A stale
-or released claim by a different session → take-over succeeds and is logged. Your own alias+vendor
-on an ended session (an adapter restart) → auto-adopt with a fresh session binding. Claims clear
-themselves when the holder session ends or goes stale past the project threshold.
+or ended claim by a different session → take-over succeeds and is logged. A claim whose holder
+session row is gone reads `released` — the orphan state — and takes over the same way. Your own
+alias+vendor on an ended session (an adapter restart) → auto-adopt with a fresh session binding.
+Claims clear themselves when the holder session ends or goes stale past the project threshold.
 
 **Identity.** `alias` and `vendor` are optional (32 characters each) and fall back to the
 identity the session registered with (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`). Claims bind by session
@@ -694,11 +696,11 @@ echoed verbatim — `slug`, `title`, `status`, `claimState`, `claimedByAlias`, `
 `claimedAt`, `claimedByHuman`, `pinnedBranch`, `pinnedWorktreePath`, `updatedAt` — this tool only
 adds fields and renames none. `generatedAt` is the host stamp, copied to the top level.
 
-**Vocabulary.** `claimState` is RAW liveness and only ever `stale` | `ended`. The board projection
-and `overmind_wave_snapshot` report the same ended holder as `released`; the rescue door and this
-scan do not, on purpose — the rescue question is whether anybody still holds the work, and an
-ended holder answers it differently from a claim released on purpose. A consumer must not
-normalize one side into the other.
+**Vocabulary.** `claimState` is RAW liveness and only ever `stale` | `ended` — the orphan whose
+holder session row is gone also reads `ended` here. The board vocabulary adds exactly one value
+to the same three: that orphan reads `released` on the board surfaces. Everything else agrees —
+a dead holder is `ended` on both sides — and a consumer must not collapse the two in either
+direction: `ended` means a dead holder kept its session row, `released` means no row survived.
 
 **Deleted holders, and why the two surfaces differ.** A claim whose holder's `AgentSessions` row is
 gone from the registry reads as `ended` here — the rescue door treats a missing row exactly like an
@@ -984,8 +986,10 @@ No additional prose — the tool description lost nothing.
   lane watches, shown verbatim; entries whose glob matches a claimant feature's
   `codeSurfaces` surface as informational warnings in `planning_claim_feature` responses);
   `openFeatureCount` (non-done features currently in the lane); `holder` (alias + vendor +
-  claimState of the alive claim on any feature in the lane); and the features themselves
-  (slug, status, claim identity, claimState).
+  claimState, populated only while a claim is `alive` — the one state that makes a lane busy);
+  and the features themselves (slug, status, claim identity, `claimState` — the board
+  vocabulary: alive | stale | ended, `released` only for the orphan whose holder session row is
+  gone).
 - The wave marshal reads this before deciding who moves — a lane is busy when some feature in
   it holds an alive claim by another agent.
 
@@ -1091,7 +1095,8 @@ No additional prose — the tool description lost nothing.
 ## overmind_wave_snapshot
 
 - **Host half** returns: the task queue (`planning_task_queue` rows verbatim), per-claim
-  identity (alias, vendor, claimState, claimedAt, claimedByHuman, last board activity), per
+  identity (alias, vendor, claimState: alive | stale | ended, released only for the orphan whose
+  holder session row is gone, claimedAt, claimedByHuman, last board activity), per
   in-flight feature (claimed or inProgress/review) code pins, open feature blockers rolled up
   per feature, and the latest coordination entries by tag (default `wave-sync`,
   `lane-marshalling`).

@@ -370,7 +370,7 @@ public sealed class PlanningFeatureTools
     }
 
     [McpServerTool(Name = "planning_claim_feature", Destructive = false, Idempotent = false)]
-    [Description("Claims a feature for your session — the mutation lock. A live foreign holder 409s by name; stale or released claims are take-over-able.")]
+    [Description("Claims a feature for your session — the mutation lock. A live foreign holder 409s by name; stale or ended claims are take-over-able. released marks the orphan whose holder session row is gone — take-over legitimate.")]
     public async Task<CallToolResult> ClaimFeature(
         [Description("Feature slug.")] string slug,
         [Description("Optional alias; defaults to the session's.")] string? alias = null,

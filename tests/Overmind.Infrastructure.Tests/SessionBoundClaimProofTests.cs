@@ -89,7 +89,7 @@ public sealed class SessionBoundClaimProofTests : IDisposable
     }
 
     [Fact]
-    public async Task ClaimLiveness_EndedHolder_ReportsReleasedAndTakeOverDoorsUnchanged()
+    public async Task ClaimLiveness_EndedHolder_ReportsEndedAndTakeOverDoorsUnchanged()
     {
         await CreateFeatureAsync();
         var service = CreateClaimService();
@@ -99,7 +99,7 @@ public sealed class SessionBoundClaimProofTests : IDisposable
         var liveness = await service.ClaimLivenessAsync(
             _projectId, await ClaimedFeaturesAsync());
 
-        liveness.Values.ShouldAllBe(l => l == AgentSessionLiveness.Released);
+        liveness.Values.ShouldAllBe(l => l == AgentSessionLiveness.Ended);
 
         var taken = await service.ClaimAsync(_projectId, "feat-a", "Bobby", "claude", ForeignSessionId);
         PlanningLog.Parse(taken.Body).Last().Text
