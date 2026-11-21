@@ -168,6 +168,10 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
           ))}
         </Select>
       </Field>
+      <p className="text-xs text-muted">
+        Picks the embedder that turns entries into vectors — switching it stales the index, so
+        reindex after saving.
+      </p>
 
       {embeddingProvider === "ollama" ? (
         <>
@@ -179,6 +183,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
               placeholder="http://127.0.0.1:11434"
             />
           </Field>
+          <p className="text-xs text-muted">
+            Where the Host reaches Ollama; a local install needs no API key.
+          </p>
           <Field label="Ollama embedding model" htmlFor="ollama-model">
             <Input
               id="ollama-model"
@@ -187,6 +194,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
               placeholder="nomic-embed-text"
             />
           </Field>
+          <p className="text-xs text-muted">
+            Model Ollama loads for every embed call — changing it means re-embedding all entries.
+          </p>
         </>
       ) : null}
 
@@ -200,6 +210,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
               placeholder="https://api.openai.com/v1"
             />
           </Field>
+          <p className="text-xs text-muted">
+            Root of the OpenAI-compatible API the Host calls for embeddings.
+          </p>
           <Field label="OpenAI API key" htmlFor="openai-key">
             <Input
               id="openai-key"
@@ -210,6 +223,10 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
               autoComplete="off"
             />
           </Field>
+          <p className="text-xs text-muted">
+            Sent as the bearer token on each embed call; stored on this machine and never shown
+            back — leave blank to keep the key already saved.
+          </p>
           {settings.openAiApiKeyConfigured ? (
             <Badge tone="success">API key configured</Badge>
           ) : (
@@ -228,6 +245,10 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             placeholder="http://127.0.0.1:6334"
           />
         </Field>
+        <p className="text-xs text-muted">
+          gRPC address of the vector store semantic search reads; pointing it elsewhere stales the
+          index.
+        </p>
         <Button type="button" variant="secondary" onClick={handleTest} disabled={testPending}>
           {testPending ? "Testing…" : "Test connection"}
         </Button>
@@ -238,41 +259,52 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
       <div className="space-y-3 border-t border-border pt-4">
         <h3 className="text-sm font-semibold text-foreground">Planning workflow</h3>
         <p className="text-xs text-muted">
-          Projects on inherit or unset follow these defaults: materialization decides whether spec,
-          plan and task files are written into the project folder; human validation forces agents to
-          wait for an approval in this UI.
+          Fallback for projects that choose inherit or leave the switch unset — each project can
+          override both.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Materialization default" htmlFor="planning-materialization-default">
-            <Select
-              id="planning-materialization-default"
-              value={planningMaterializationDefault}
-              onChange={(event) => setPlanningMaterializationDefault(event.target.value as PlanningMaterializationDefault)}
-              className="w-full"
-            >
-              {MATERIALIZATION_DEFAULTS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Require human validation default" htmlFor="planning-validation-default">
-            <Select
-              id="planning-validation-default"
-              value={planningRequireHumanValidationDefault}
-              onChange={(event) =>
-                setPlanningRequireHumanValidationDefault(event.target.value as PlanningValidationDefault)
-              }
-              className="w-full"
-            >
-              {VALIDATION_DEFAULTS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div>
+            <Field label="Materialization default" htmlFor="planning-materialization-default">
+              <Select
+                id="planning-materialization-default"
+                value={planningMaterializationDefault}
+                onChange={(event) => setPlanningMaterializationDefault(event.target.value as PlanningMaterializationDefault)}
+                className="w-full"
+              >
+                {MATERIALIZATION_DEFAULTS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <p className="mt-1 text-xs text-muted">
+              off writes no planning files; on mirrors spec, plan and task into the project folder;
+              archive keeps that mirror in Overmind&apos;s data folder instead of your repo.
+            </p>
+          </div>
+          <div>
+            <Field label="Require human validation default" htmlFor="planning-validation-default">
+              <Select
+                id="planning-validation-default"
+                value={planningRequireHumanValidationDefault}
+                onChange={(event) =>
+                  setPlanningRequireHumanValidationDefault(event.target.value as PlanningValidationDefault)
+                }
+                className="w-full"
+              >
+                {VALIDATION_DEFAULTS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <p className="mt-1 text-xs text-muted">
+              on makes an agent stop and wait for your approval tap before a spec or plan counts as
+              validated.
+            </p>
+          </div>
         </div>
         <Field label="Agent naming rules default" htmlFor="planning-agent-naming-rules-default">
           <Textarea
@@ -284,14 +316,17 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             placeholder="Aliases look like Dan, Rex. One agent, one claim at a time…"
           />
         </Field>
+        <p className="text-xs text-muted">
+          Text every onboarding agent receives when its project sets no rules of its own — say here
+          how an alias is invented.
+        </p>
         <p className="text-xs text-muted">{planningAgentNamingRulesDefault.length}/2000</p>
       </div>
 
       <div className="space-y-3 border-t border-border pt-4">
         <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
         <p className="text-xs text-muted">
-          Nudges remind you about work waiting on your approval. Quiet stays silent, mini shows a
-          one-time hint, nag repeats on the interval below.
+          The approval bubble nudges you while work waits on your reply.
         </p>
         <Field label="Nudge mode" htmlFor="notification-nudge-mode">
           <Select
@@ -317,28 +352,36 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             ))}
           </Select>
         </Field>
+        <p className="text-xs text-muted">
+          quiet never pops; mini pops once and then collapses to an icon until you open it; nag
+          keeps re-popping on the interval below.
+        </p>
         {notificationNudgeMode === "nag" ? (
-          <Field label="Nag interval (minutes)" htmlFor="notification-nudge-interval-minutes">
-            <Input
-              id="notification-nudge-interval-minutes"
-              type="number"
-              min={1}
-              step={1}
-              value={notificationNudgeIntervalMinutes}
-              onChange={(event) => {
-                setNotificationNudgeIntervalMinutes(event.target.value);
-                setIntervalError(null);
-              }}
-            />
-          </Field>
+          <>
+            <Field label="Nag interval (minutes)" htmlFor="notification-nudge-interval-minutes">
+              <Input
+                id="notification-nudge-interval-minutes"
+                type="number"
+                min={1}
+                step={1}
+                value={notificationNudgeIntervalMinutes}
+                onChange={(event) => {
+                  setNotificationNudgeIntervalMinutes(event.target.value);
+                  setIntervalError(null);
+                }}
+              />
+            </Field>
+            <p className="text-xs text-muted">
+              Minutes the bubble stays hidden between nag re-pops.
+            </p>
+          </>
         ) : null}
       </div>
 
       <div className="space-y-3 border-t border-border pt-4">
         <h3 className="text-sm font-semibold text-foreground">Agent</h3>
         <p className="text-xs text-muted">
-          OpenAI-compatible endpoint for the embedded management agent that chats on the Agent chat
-          page. The API key is stored server-side and never rendered back.
+          Drives the embedded management agent that chats on the Agent chat page.
         </p>
         <Field label="Base URL" htmlFor="agent-base-url">
           <Input
@@ -348,6 +391,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             placeholder="https://api.z.ai/api/paas/v4"
           />
         </Field>
+        <p className="text-xs text-muted">
+          OpenAI-compatible endpoint the agent&apos;s requests go to.
+        </p>
         <Field label="Model" htmlFor="agent-model">
           <Input
             id="agent-model"
@@ -356,6 +402,9 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             placeholder="glm-5.3-flash"
           />
         </Field>
+        <p className="text-xs text-muted">
+          Model id the Host sends with each agent turn.
+        </p>
         <Field label="API key" htmlFor="agent-api-key">
           <Input
             id="agent-api-key"
@@ -366,34 +415,47 @@ export function SettingsForm({ settings, pending, error, onSubmit, onTest, testP
             autoComplete="off"
           />
         </Field>
+        <p className="text-xs text-muted">
+          Kept server-side and never rendered back; leave blank to keep the key already saved.
+        </p>
         {settings.agentApiKeyConfigured ? (
           <Badge tone="success">API key configured</Badge>
         ) : (
           <Badge tone="warning">No API key configured</Badge>
         )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Per-turn max tokens" htmlFor="agent-per-turn-max-tokens">
-            <Input
-              id="agent-per-turn-max-tokens"
-              type="number"
-              min={1}
-              step={1}
-              value={agentPerTurnMaxTokens}
-              onChange={(event) => setAgentPerTurnMaxTokens(event.target.value)}
-            />
-          </Field>
-          <Field label="Daily budget (tokens)" htmlFor="agent-daily-budget">
-            <Input
-              id="agent-daily-budget"
-              type="number"
-              min={0}
-              step={1}
-              value={agentDailyBudget}
-              onChange={(event) => setAgentDailyBudget(event.target.value)}
-            />
-          </Field>
+          <div>
+            <Field label="Per-turn max tokens" htmlFor="agent-per-turn-max-tokens">
+              <Input
+                id="agent-per-turn-max-tokens"
+                type="number"
+                min={1}
+                step={1}
+                value={agentPerTurnMaxTokens}
+                onChange={(event) => setAgentPerTurnMaxTokens(event.target.value)}
+              />
+            </Field>
+            <p className="mt-1 text-xs text-muted">
+              The Host cuts a turn off with an error once that turn&apos;s token use passes the cap.
+            </p>
+          </div>
+          <div>
+            <Field label="Daily budget (tokens)" htmlFor="agent-daily-budget">
+              <Input
+                id="agent-daily-budget"
+                type="number"
+                min={0}
+                step={1}
+                value={agentDailyBudget}
+                onChange={(event) => setAgentDailyBudget(event.target.value)}
+              />
+            </Field>
+            <p className="mt-1 text-xs text-muted">
+              Stops new agent turns for the rest of the day once spent; 0 keeps the agent
+              unrestricted.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted">A daily budget of 0 keeps the agent unrestricted.</p>
         <Field label="Route match threshold" htmlFor="agent-route-match-threshold">
           <Input
             id="agent-route-match-threshold"

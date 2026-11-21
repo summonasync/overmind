@@ -240,6 +240,7 @@ function EntryRow({ entry, onOpen }: { entry: DirectoryEntry; onOpen: (path: str
       <Folder size={16} aria-hidden className="shrink-0 opacity-70" />
       <span className="min-w-0 flex-1 truncate text-sm font-medium">{entry.name}</span>
       {!entry.accessible ? <span className="shrink-0 text-xs text-muted">Unavailable</span> : null}
+      <span className="sr-only">{`${entry.path}${entry.accessible ? "" : " — not accessible"}`}</span>
     </button>
   );
 }

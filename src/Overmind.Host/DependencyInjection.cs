@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Overmind.Core;
 using Overmind.Host.AgentChat;
 using Overmind.Host.Api.Contracts;
@@ -133,6 +134,7 @@ public static class DependencyInjection
         services.AddScoped<TriagePromotionService>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
+        services.AddSingleton(AgentHomeCatalog.Build());
         services.AddScoped<IMaterializer, SkillMaterializer>();
 
         services.AddScoped<KitScanner>();
@@ -140,6 +142,17 @@ public static class DependencyInjection
         services.AddScoped<KitActivationService>();
         services.AddScoped<LegacyKitMigrationService>();
         services.AddScoped<BundledKitForkService>();
+        services.AddScoped<HomeKitDeployer>(provider =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            return new HomeKitDeployer(
+                provider.GetRequiredService<OvermindDbContext>(),
+                provider.GetRequiredService<PlatformDirectoryMap>(),
+                provider.GetRequiredService<IReadOnlyList<AgentHomeSpec>>(),
+                provider.GetRequiredService<ILogger<HomeKitDeployer>>(),
+                configuration["Kits:GlobalHomeRoot"]);
+        });
+        services.AddScoped<IGlobalKitDeployer>(provider => provider.GetRequiredService<HomeKitDeployer>());
         services.AddScoped<BundledSeedService>(provider => new BundledSeedService(
             provider.GetRequiredService<OvermindDbContext>(),
             provider.GetRequiredService<KitImporter>(),
@@ -147,9 +160,7 @@ public static class DependencyInjection
             provider.GetRequiredService<ILogger<BundledSeedService>>(),
             OvermindPaths.BundledDirectory,
             provider.GetRequiredService<LegacyKitMigrationService>(),
-            // No IGlobalKitDeployer is registered yet: the mandatory kit's home-directory door is
-            // feature 251, and the seed records the missing door in the log until then.
-            provider.GetService<IGlobalKitDeployer>()));
+            provider.GetRequiredService<IGlobalKitDeployer>()));
 
         services.AddSingleton<IOvermindCliLocator, OvermindCliLocator>();
         services.AddSingleton<IGrimoireEngineRunner, GrimoireEngineRunner>();

@@ -68,6 +68,7 @@ export function LaneFeatureMove({
       </button>
       <span className={positionClasses} title={`Band ${priority} slot ${target.position}`}>
         {target.position}
+        <span className="sr-only">{` — band ${priority}`}</span>
       </span>
     </div>
   );

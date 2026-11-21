@@ -2,6 +2,8 @@ using Tomlyn;
 using Tomlyn.Model;
 using Tomlyn.Syntax;
 
+using Overmind.Core.Agents;
+
 namespace Overmind.Mcp.Registration;
 
 public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine

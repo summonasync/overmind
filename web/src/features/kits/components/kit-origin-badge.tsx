@@ -1,8 +1,9 @@
 import { Badge } from "@/shared/ui/badge";
+import { Hint } from "@/shared/ui/hint";
 import { formatImportedAt } from "@/features/kits/lib/import-labels";
 import type { KitResponse } from "@/features/kits/types";
 
-export function kitOriginTooltip(kit: KitResponse): string | undefined {
+export function kitOriginHint(kit: KitResponse): string | undefined {
   if (kit.sourceKind !== "imported") {
     return undefined;
   }
@@ -11,7 +12,7 @@ export function kitOriginTooltip(kit: KitResponse): string | undefined {
 }
 
 export function KitOriginBadge({ kit }: { kit: KitResponse }) {
-  const tooltip = kitOriginTooltip(kit);
+  const hint = kitOriginHint(kit);
 
   const badge =
     kit.sourceKind === "imported" ? (
@@ -22,11 +23,18 @@ export function KitOriginBadge({ kit }: { kit: KitResponse }) {
       <Badge>manual</Badge>
     );
 
-  return tooltip ? (
-    <span title={tooltip} className="inline-flex">
-      {badge}
-    </span>
-  ) : (
-    badge
+  if (!hint) {
+    return badge;
+  }
+
+  return (
+    <Hint
+      label="Import source"
+      align="left"
+      id={`hint-kit-${kit.id}-source`}
+      trigger={badge}
+    >
+      {hint}
+    </Hint>
   );
 }
