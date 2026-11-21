@@ -8,6 +8,18 @@ resolution mechanics — lives here. One section per tool; the section heading i
 tool name, and that heading is the anchor (`docs/mcp-tool-contracts.md#<tool-name>`).
 Planning ceremony mechanics stay in the `overmind-ceremony` skill; this doc is the wire contract.
 
+Two cross-cutting response shapes live here rather than repeated in every tool section.
+Rejections: a planning ProblemDetails may carry a top-level `fix` string — a one-line remedy
+mapped by `PlanningErrors.Map` — and the adapter appends `". Fix: …"` to the tool-error text
+wherever the rejection body carries one. The 404 short-circuit in `OvermindApiClient` runs
+before that read and appends no fix (known gap, named in the 266 result). `fix` rides
+rejections only and is disjoint from `warnings[]`, which appears only on accepted payloads.
+The `warnings[]` rows come in two shapes: soft-cap grace (`accepted_len`, `limit`,
+`truncated`, optional `lost_tail_preview`) and the unknown-field probe
+(`{property, applied: false, note}`). The probe runs over every `/api/agent` JSON body: a
+top-level field no bound request type reads is named there instead of vanishing silently;
+fields that do bind behave byte-identically, and non-accepted results leave untouched.
+
 ## overmind_wake_peek
 
 Wake ritual for the calling session: a side-effect-free read of the two pending-signal arms.
@@ -198,7 +210,10 @@ name (letters, digits and hyphens, starting with a letter). There is no heading 
 
 **Tombstone.** `remove=true` with `reason` replaces the resolved section, wrapper tags included,
 with a single `<removed YYYY-MM-DD — reason>` line. `remove` without `reason` is refused, and
-`content` must be omitted with `remove`.
+`content` must be omitted with `remove`. The reason is a single-line field: a newline anywhere in
+it is refused with `400 RemoveReasonMultiline` BEFORE the 500-char soft cap runs, so truncation
+can never launder a multiline reason into an unreadable marker. The same rule guards the artifact
+patch and batch `remove_section` doors.
 
 **Guards.** The `<log>` section is append-only: patching it is a 400, and a logNote-only append
 belongs to `planning_update_feature`. Replacing an existing section without content, an
@@ -517,7 +532,8 @@ artifact demotes it and needs `logNote` like any content edit.
 **Tombstone.** `remove=true` with `reason` replaces the resolved heading block — heading line
 included — with a single `<removed YYYY-MM-DD — reason>` line. `remove` without `reason` is
 refused; removing an XML section is refused in v1 (`RemoveNotAllowedForXmlSection`) — tombstones
-are heading-mode only.
+are heading-mode only. The reason is a single-line field (`400 RemoveReasonMultiline` before the
+500-char soft cap, same rule and error as the feature door).
 
 **Acceptance-criteria ticks.** `acIndex` is 1-based and its numbering matches the materialized
 mirror and the 400 diagnostics. `acText` is the recommended selector — fall back to the index
@@ -1142,9 +1158,16 @@ No additional prose — the tool description lost nothing.
 - Notifications you sent via `overmind_notify` that carry a reply, newest first; each item's
   `replyText` is the human's decision. Poll it after asking a question or requesting
   approval.
+- **Compact by default.** Rows are projected to `{id, kind, featureSlug, tab, agent, createdAt,
+  text, replyText, repliedAt}` with the stored notification `text` excerpted to 200 chars;
+  `textExcerpted` counts the cuts and `fullRows` names the way out. The reply SET is
+  unchanged — only the row shape moves. `full=true` returns the stored rows untouched.
 - Filters combine (AND): `since` — only replies newer than it, e.g. the artifact's last
   update when hunting a validation proof; the zone offset is optional and offset-less values
-  read as UTC, the way artifact timestamps are emitted. `kind` — info/question/approval.
+  read as UTC, the way artifact timestamps are emitted. An empty or blank `since` behaves
+  exactly like an omitted one: it is dropped before the call goes out and imposes NO lower
+  bound — the unbounded window returns up to 50 rows (the service list capacity), newest
+  first; it is not a day-count window. `kind` — info/question/approval.
   `featureSlug`. An over-narrow filter returns an empty array, not an error.
 - Delivery marks the notification read (`includeRead` semantics: false matches nothing —
   poll with the default).
@@ -1219,7 +1242,12 @@ No additional prose — the tool description lost nothing.
   artifacts, statuses or versions. Acking an already-acked directive is an idempotent no-op
   success ("already acknowledged — no change").
 - `directiveId` comes from `openDirectives` on `planning_current_task` or
-  `planning_read_feature`.
+  `planning_read_feature`. It accepts a full UUID or a UNIQUE hex prefix (1-31 hex digits, as a
+  relay or `overmind_wave_snapshot` shows it): one open directive matching the prefix is acked;
+  an ambiguous prefix is refused with every candidate spelled out and nothing is acknowledged;
+  no match is refused too, and when the channel holds no open directives the error says the ack
+  you are retrying probably already landed — an acked directive leaves the projection. A full
+  UUID is normalised exactly as before.
 
 ## overmind_briefing
 
