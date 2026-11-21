@@ -10,7 +10,7 @@ import type {
   JournalServerFilters,
   NotePromotionResult,
 } from "@/features/journal/types";
-import { type PromotionRequest } from "@/features/journal/lib/note-promotion";
+import type { PromotionRequest } from "@/features/journal/lib/note-promotion";
 
 export function listJournalNotes(
   projectId: string,
