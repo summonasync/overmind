@@ -76,6 +76,13 @@ public sealed class OvermindApiClient
     public Task<JsonElement> GetAsync(string pathAndQuery, CancellationToken ct) =>
         SendAsync(() => _http.GetAsync(pathAndQuery, HttpCompletionOption.ResponseHeadersRead, ct), "GET " + pathAndQuery, ct);
 
+    // Vocabulary reads for the near-miss hints: same call, no hint enrichment, so a failed hint
+    // read can never recurse into another one.
+    internal Task<JsonElement> GetQuietAsync(string pathAndQuery, CancellationToken ct) =>
+        SendAsync(
+            () => _http.GetAsync(pathAndQuery, HttpCompletionOption.ResponseHeadersRead, ct),
+            "GET " + pathAndQuery, ct, enrich: false);
+
     public Task<JsonElement> PostAsync(string path, object body, CancellationToken ct, Guid? operationId = null) =>
         SendAsync(() => SendJsonAsync(HttpMethod.Post, path, body, operationId, ct), "POST " + path, ct);
 
@@ -104,10 +111,11 @@ public sealed class OvermindApiClient
         return await _http.SendAsync(request, ct);
     }
 
-    private static async Task<JsonElement> SendAsync(
+    private async Task<JsonElement> SendAsync(
         Func<Task<HttpResponseMessage>> send,
         string operation,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool enrich = true)
     {
         HttpResponseMessage response;
         try
@@ -125,7 +133,14 @@ public sealed class OvermindApiClient
             {
                 var problem = await ProblemDetailsReader.ReadAsync(response, ct);
                 var missing = problem?.Detail ?? problem?.Title;
-                throw new ApiNotFoundException(missing ?? $"overmind API resource not found ({operation})");
+                if (missing is null)
+                {
+                    throw new ApiNotFoundException($"overmind API resource not found ({operation})");
+                }
+
+                throw new ApiNotFoundException(enrich && problem?.Title is not null
+                    ? await NearMissHints.AppendAsync(this, missing, problem, operation, ct)
+                    : missing);
             }
 
             if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
