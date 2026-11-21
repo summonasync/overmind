@@ -1,4 +1,8 @@
-import type { JournalBacklink, JournalOutgoingLink } from "../types.ts";
+import type {
+  JournalBacklink,
+  JournalLinkKind,
+  JournalOutgoingLink,
+} from "../types.ts";
 
 export function noteHref(id: string): string {
   return `/journal?note=${encodeURIComponent(id)}`;
@@ -26,18 +30,25 @@ export interface OutgoingGroups {
   notes: JournalOutgoingLink[];
   projects: JournalOutgoingLink[];
   features: JournalOutgoingLink[];
+  tasks: JournalOutgoingLink[];
+  // Kinds the wire grew past this union. The bucket is honest about being unrecognised instead
+  // of guessing a heading — guessing is what made a task read as a feature (review-237-01 M2).
+  other: JournalOutgoingLink[];
 }
 
+// A `Record` over the full kind union, so widening `JournalLinkKind` reddens `tsc` here rather
+// than quietly routing the new member into the fallback bucket at runtime.
+const OUTGOING_BUCKETS: Record<JournalLinkKind, keyof OutgoingGroups> = {
+  entry: "notes",
+  project: "projects",
+  feature: "features",
+  task: "tasks",
+};
+
 export function groupOutgoing(links: readonly JournalOutgoingLink[]): OutgoingGroups {
-  const groups: OutgoingGroups = { notes: [], projects: [], features: [] };
+  const groups: OutgoingGroups = { notes: [], projects: [], features: [], tasks: [], other: [] };
   for (const link of links) {
-    if (link.kind === "entry") {
-      groups.notes.push(link);
-    } else if (link.kind === "project") {
-      groups.projects.push(link);
-    } else {
-      groups.features.push(link);
-    }
+    groups[OUTGOING_BUCKETS[link.kind] ?? "other"].push(link);
   }
   return groups;
 }
@@ -47,11 +58,37 @@ export function groupOutgoing(links: readonly JournalOutgoingLink[]): OutgoingGr
 // DTO, and `/dashboard?project=…&feature=<slug>` cannot be built from what the rail has. The
 // row stays honest and unclickable rather than guessing a link; the missing fields are filed
 // against the backend, not bolted on here.
+//
+// A task row is the same shape of gap and the reason the fallback exists at all: the promotion
+// edge names the task by guid and title, while this app addresses a task as
+// `<feature slug>/T<order>`, and the DTO carries neither half of that address.
 export function outgoingHref(link: JournalOutgoingLink): string | null {
-  if (link.kind === "entry") {
-    return noteHref(link.id);
+  switch (link.kind) {
+    case "entry":
+      return noteHref(link.id);
+    case "project":
+      return projectHref(link.id);
+    case "feature":
+    case "task":
+      return null;
+    default:
+      return null;
   }
-  return link.kind === "project" ? projectHref(link.id) : null;
+}
+
+// The dead rows say why they are dead instead of just refusing the click; `null` means the row
+// has a real link and the rail renders it as one.
+export function outgoingDeadEndReason(link: JournalOutgoingLink): string | null {
+  if (outgoingHref(link) !== null) {
+    return null;
+  }
+  if (link.kind === "task") {
+    return "This note was promoted into a board task. The detail payload labels it by title and guid only — a task is addressed by its feature slug and order, so no URL can be built from what the rail was given.";
+  }
+  if (link.kind === "feature") {
+    return "The detail payload labels this edge by title and guid only — no slug to build a link from.";
+  }
+  return `The Host reported a link kind this build does not know ("${link.kind}"), so the row is labelled rather than guessed.`;
 }
 
 export type DeadEndKind = "note" | "feature" | "project";
