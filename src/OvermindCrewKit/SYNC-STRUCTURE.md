@@ -1,13 +1,13 @@
 # SYNC-STRUCTURE — Quadruple-Edit Contract
 
-This repo maintains one agent crew for four runtimes: **Kimi Code CLI** (`.kimi-code/` incl. `AGENTS.md`), **Claude Code** (`.claude/` incl. `CLAUDE.md`), **Qwen Code** (`.qwen/` incl. `QWEN.md`, deployed to `~/.qwen`), and **OpenAI Codex CLI** (`.codex/` incl. `AGENTS.md`, deployed to `~/.codex`). All four sides must stay semantically identical.
+This repo maintains one agent crew for four runtimes: **Kimi Code CLI** (`.kimi-code/` incl. `AGENTS.md`), **Claude Code** (`.claude/` incl. `CLAUDE.md`), **Qwen Code** (`.qwen/` incl. `QWEN.md`, deployed to `~/.qwen`), and **OpenAI Codex CLI** (`.codex/` incl. `AGENTS.md`, deployed to `~/.codex` — skills to `~/.agents/skills` since the 253 relocation). All four sides must stay semantically identical.
 
 ## Core rule
 
 **Edit one side — edit the other three in the same commit.** No asymmetric changes to crew behavior, policies, workflows, or skill logic. Divergence is allowed ONLY for tool-specific concerns:
 
 - model names, aliases, and selection mechanics (Kimi `K2.7`/`K3` pool vs Claude `sonnet`/`opus` vs Qwen `qwen3.8-flash` pin vs Codex `gpt-6-luna`/`gpt-6.1-sol` tiers)
-- home directory paths (`~/.kimi-code/` vs `~/.claude/` vs `~/.qwen/` vs `~/.codex/`)
+- home directory paths (`~/.kimi-code/` vs `~/.claude/` vs `~/.qwen/` vs `~/.codex/` — codex skills live under `~/.agents/skills` since 253)
 - tool identifier names inside agent `tools:` allowlists (Claude Code `Read`/`Grep`/`Glob`/`Bash`/`WebSearch`/`FetchURL` vs canonical Qwen `read_file`/`grep_search`/`glob`/`run_shell_command`/`web_fetch`) — the *restriction* is mirrored, only the spelling follows the runtime; Codex agent roles are TOML and carry no allowlist at all — there is no `tools` field there and no per-role restriction text either (measured 2026-11-19: zero `mcp__` tokens across the 46 role files), so the restriction lives in `.codex/AGENTS.md` and the skill bodies
 - agent file format (Codex agent roles are standalone TOML files with exactly `name`, `description`, `model`, `developer_instructions` — strict deserialization: any other field drops the role, and the drop is not silent: the loader warns `Ignoring malformed agent role definition` on stderr at session start (measured codex-cli 0.160.1, 2026-11-19; a `tools` key additionally collides with Codex's tool-configuration namespace, so per-role restriction cannot live in the role container — see KIT-MEMBERSHIP "Codex per-role tool restriction"))
 - runtime-specific features (Kimi `AgentSwarm` + config.toml secondary-model pool; Claude Task tool + settings.json; Qwen `agent` tool + `subagent_type: "fork"` + settings.json `permissions`/`hooks`; Codex `spawn_agent` tool + TOML role pins + 4 concurrency slots, full-history forks inherit the parent model)
