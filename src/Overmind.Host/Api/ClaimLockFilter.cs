@@ -25,16 +25,18 @@ public sealed class ClaimLockFilter : IEndpointFilter
         {
             var route = http.Request.RouteValues;
             var claims = http.RequestServices.GetRequiredService<FeatureClaimService>();
+            var preTouch = http.Items.TryGetValue(SessionTouchMiddleware.PreTouchLastSeenKey, out var seen)
+                           && seen is DateTime stamp ? stamp : (DateTime?)null;
             try
             {
                 if (route["id"] is { } rawArtifact && Guid.TryParse(rawArtifact.ToString(), out var artifactId))
                 {
-                    await claims.EnsureHolderForArtifactAsync(artifactId, sessionId, http.RequestAborted);
+                    await claims.EnsureHolderForArtifactAsync(artifactId, sessionId, preTouch, http.RequestAborted);
                 }
                 else if (Guid.TryParse(route["projectId"]?.ToString(), out var projectId)
                          && route["slug"] is { } rawSlug)
                 {
-                    await claims.EnsureHolderAsync(projectId, rawSlug.ToString()!, sessionId, http.RequestAborted);
+                    await claims.EnsureHolderAsync(projectId, rawSlug.ToString()!, sessionId, preTouch, http.RequestAborted);
                 }
             }
             catch (PlanningException ex)

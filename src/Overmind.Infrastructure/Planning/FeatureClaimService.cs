@@ -146,7 +146,10 @@ public sealed class FeatureClaimService
     // to the new pair, one feature log line records the move, and the open span is re-opened under
     // it. Claim time and session binding are untouched — the hold does not restart because the alias
     // did. Returns the slugs that moved, so the caller can echo them.
-    public async Task<IReadOnlyList<string>> ReattributeSessionClaimsAsync(
+    // Re-attribution writes join the caller's ambient transaction (the identity door's alias claim
+    // and this must commit or roll back together — issue ef10a2ff), so the materialization dispatch
+    // moved here would read uncommitted state; the caller dispatches after its commit.
+    public async Task<IReadOnlyList<(Guid ProjectId, string Slug)>> ReattributeSessionClaimsAsync(
         Guid sessionId, string alias, string vendor, CancellationToken ct = default)
     {
         var held = await _db.PlanningFeatures
@@ -154,8 +157,7 @@ public sealed class FeatureClaimService
             .OrderBy(f => f.Slug)
             .ToListAsync(ct);
 
-        List<string> moved = [];
-        List<Guid> movedProjects = [];
+        List<(Guid ProjectId, string Slug)> moved = [];
         var now = DateTime.UtcNow;
 
         foreach (var feature in held)
@@ -172,22 +174,24 @@ public sealed class FeatureClaimService
                 $"claim re-attributed: {formerAlias} by {formerVendor} → {alias} by {vendor}",
                 PlanningLogSource.Agent);
             await ClaimSpanLedger.ReattributeOpenAsync(_db, feature, alias, vendor, now, ct);
-            moved.Add(feature.Slug);
-            movedProjects.Add(feature.ProjectId);
+            moved.Add((feature.ProjectId, feature.Slug));
         }
 
-        if (moved.Count == 0)
+        if (moved.Count > 0)
         {
-            return moved;
-        }
-
-        await _db.SaveChangesAsync(ct);
-        foreach (var projectId in movedProjects.Distinct())
-        {
-            await _materialization.DispatchAsync(projectId, ct);
+            await _db.SaveChangesAsync(ct);
         }
 
         return moved;
+    }
+
+    public async Task DispatchMaterializationAsync(
+        IEnumerable<Guid> projectIds, CancellationToken ct = default)
+    {
+        foreach (var projectId in projectIds.Distinct())
+        {
+            await _materialization.DispatchAsync(projectId, ct);
+        }
     }
 
     public async Task<IReadOnlyDictionary<Guid, AgentSessionLiveness>> ClaimLivenessAsync(
@@ -243,7 +247,8 @@ public sealed class FeatureClaimService
     }
 
     public async Task EnsureHolderAsync(
-        Guid projectId, string slug, Guid? sessionId, CancellationToken ct = default)
+        Guid projectId, string slug, Guid? sessionId, DateTime? observedLastSeenAt = null,
+        CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -251,11 +256,12 @@ public sealed class FeatureClaimService
         }
 
         var feature = await RequireFeatureAsync(projectId, slug, ct);
-        await EnsureHolderCoreAsync(feature, sessionId, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, observedLastSeenAt, ct);
     }
 
     public async Task EnsureHolderForArtifactAsync(
-        Guid artifactId, Guid? sessionId, CancellationToken ct = default)
+        Guid artifactId, Guid? sessionId, DateTime? observedLastSeenAt = null,
+        CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -272,11 +278,12 @@ public sealed class FeatureClaimService
             throw PlanningException.MissingArtifact(artifactId);
         }
 
-        await EnsureHolderCoreAsync(feature, sessionId, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, observedLastSeenAt, ct);
     }
 
     public async Task EnsureImportAllowedAsync(
-        Guid projectId, Guid? sessionId, string slug, CancellationToken ct = default)
+        Guid projectId, Guid? sessionId, string slug, DateTime? observedLastSeenAt = null,
+        CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -290,56 +297,51 @@ public sealed class FeatureClaimService
             return;
         }
 
-        await EnsureHolderCoreAsync(feature, sessionId, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, observedLastSeenAt, ct);
     }
 
-    // Write-path gate behind the ClaimLockFilter. A stale/ended claim held by the caller's own
-    // alias+vendor is adopted on the spot (fresh session binding, feature log line) so an adapter
-    // restart never blocks its own writes; a foreign holder keeps the explicit claim call as the
-    // only takeover door, alive or stale.
-    private async Task EnsureHolderCoreAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
+    // Write-path gate behind the ClaimLockFilter. Claim binding follows the session id: the same
+    // session keeps its claim alive (Touch re-animates a stale row) and gets a logged re-adopt when
+    // the row comes back stale or ended; any other session keeps the explicit claim call as the
+    // only takeover door, alive or stale — matching aliases no longer auto-adopt on writes.
+    // observedLastSeenAt carries the pre-touch liveness the request middleware saw: its own touch
+    // lands before this gate runs, so the row's stored LastSeenAt would always read alive here.
+    private async Task EnsureHolderCoreAsync(
+        PlanningFeature feature, Guid? sessionId, DateTime? observedLastSeenAt, CancellationToken ct)
     {
-        if (feature.ClaimSessionId is not { } holderId || holderId == sessionId)
+        if (feature.ClaimSessionId is not { } holderId)
         {
             return;
         }
 
         var project = await RequireProjectAsync(feature.ProjectId, ct);
         var holder = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == holderId, ct);
-        var liveness = holder?.Liveness(DateTime.UtcNow, project.ClaimStaleThresholdMinutes)
-                       ?? AgentSessionLiveness.Ended;
+        var now = DateTime.UtcNow;
+        // The pre-touch override belongs to the CALLER's row only; a foreign holder's liveness
+        // must read its own stored LastSeenAt, never the caller's freshened timestamp.
+        var liveness = holder is null
+            ? AgentSessionLiveness.Ended
+            : holderId == sessionId
+                ? holder.Liveness(now, project.ClaimStaleThresholdMinutes, observedLastSeenAt)
+                : holder.Liveness(now, project.ClaimStaleThresholdMinutes);
 
-        if (liveness != AgentSessionLiveness.Alive && await TryAdoptAsync(feature, sessionId, ct))
+        if (holderId != sessionId)
+        {
+            throw PlanningException.FeatureClaimHeld(
+                feature.Slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
+        }
+
+        if (liveness == AgentSessionLiveness.Alive || holder is null)
         {
             return;
         }
 
-        throw PlanningException.FeatureClaimHeld(
-            feature.Slug, feature.ClaimedByAlias!, feature.ClaimedByVendor!, liveness);
-    }
-
-    private async Task<bool> TryAdoptAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
-    {
-        if (sessionId is not { } callerId)
-        {
-            return false;
-        }
-
-        var caller = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == callerId, ct);
-        if (caller is null ||
-            !string.Equals(feature.ClaimedByAlias, caller.Alias, StringComparison.Ordinal) ||
-            !string.Equals(feature.ClaimedByVendor, caller.Vendor, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var now = DateTime.UtcNow;
-        feature.Claim(caller.Alias, caller.Vendor, callerId, now);
+        feature.Claim(holder.Alias, holder.Vendor, holderId, now);
         feature.AppendLog(
-            $"session restarted, claim adopted by {caller.Alias} by {caller.Vendor}",
+            $"stale claim re-adopted by resumed session {holder.Alias} by {holder.Vendor}",
             PlanningLogSource.Agent);
-        await PersistAsync(feature, caller.Alias, caller.Vendor, callerId, now, ct);
-        return true;
+        holder.Reactivate();
+        await PersistAsync(feature, holder.Alias, holder.Vendor, holderId, now, ct);
     }
 
     private async Task<(string Alias, string Vendor)> ResolveIdentityAsync(

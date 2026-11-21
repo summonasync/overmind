@@ -236,7 +236,8 @@ public static class AgentPlanningApi
             SessionHeader.TryRead(http, out var sessionId);
             var imported = await importer.ParseFeatureAsync(
                 projectId, project.DiskPath, request.Path.Trim(), ct);
-            await claims.EnsureImportAllowedAsync(projectId, sessionId, imported.Slug, ct);
+            await claims.EnsureImportAllowedAsync(
+                projectId, sessionId, imported.Slug, SessionTouchMiddleware.PreTouchLastSeenOf(http), ct);
 
             var report = await importer.ImportFeatureAsync(projectId, project.DiskPath, request.Path.Trim(), ct);
             return Results.Ok(PlanningMapper.ToImportResponse(report));
