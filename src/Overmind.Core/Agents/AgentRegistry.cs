@@ -1,4 +1,4 @@
-namespace Overmind.Mcp.Registration;
+namespace Overmind.Core.Agents;
 
 public static class AgentRegistry
 {

@@ -18,14 +18,18 @@ export function AgentRouteTraceRow({ traces }: AgentRouteTraceRowProps) {
     <li className="px-2.5 py-1">
       <span className="flex flex-wrap items-center gap-1.5">
         {traces.map((trace, index) => (
-          <RouteChip key={`${trace.target}-${trace.source}-${index}`} trace={trace} />
+          <RouteChip
+            key={`${trace.target}-${trace.source}-${index}`}
+            trace={trace}
+            descId={`route-trace-${index}-desc`}
+          />
         ))}
       </span>
     </li>
   );
 }
 
-function RouteChip({ trace }: { trace: AgentRouteTrace }) {
+function RouteChip({ trace, descId }: { trace: AgentRouteTrace; descId: string }) {
   const visibleSource =
     trace.source === null || trace.source === "structural" ? null : trace.source;
   const hint =
@@ -33,11 +37,17 @@ function RouteChip({ trace }: { trace: AgentRouteTrace }) {
       ? "Routed by the intent router"
       : `Routed by the intent router · ${SOURCE_HINTS[trace.source]}`;
   return (
-    <span
-      title={hint}
-      className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2 py-0.5 font-mono text-xs text-muted"
-    >
-      {visibleSource === null ? `→ ${trace.target}` : `→ ${trace.target} · ${visibleSource}`}
-    </span>
+    <>
+      <span className="sr-only" id={descId}>
+        {hint}
+      </span>
+      <span
+        aria-describedby={descId}
+        title={hint}
+        className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2 py-0.5 font-mono text-xs text-muted"
+      >
+        {visibleSource === null ? `→ ${trace.target}` : `→ ${trace.target} · ${visibleSource}`}
+      </span>
+    </>
   );
 }

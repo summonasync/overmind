@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Overmind.Core.Agents;
+
 namespace Overmind.Mcp.Registration;
 
 public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
