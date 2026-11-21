@@ -619,7 +619,7 @@ public sealed class PlanningArtifact
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 
         var now = DateTime.UtcNow;
-        if (newBody != Body)
+        if (PlanningSections.GatedContentOf(newBody) != PlanningSections.GatedContentOf(Body))
         {
             ContentUpdatedAt = now;
         }

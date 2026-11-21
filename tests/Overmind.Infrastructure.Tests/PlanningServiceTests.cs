@@ -2974,7 +2974,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task PatchAsync_TickingAcAfterReply_ReportsVoidedProof()
+    public async Task PatchAsync_TickingAcAfterReply_PreservesTheProof()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -2997,7 +2997,28 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking after the tap"),
             source: PlanningLogSource.Agent);
 
-        patched.Artifact.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
+        patched.Artifact.ContentUpdatedAt.ShouldBe(patched.Artifact.CreatedAt);
+    }
+
+    [Fact]
+    public async Task PatchAsync_TickingAcOnTask_DoesNotRecordVoidNoise()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "# Task\n\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            task.Id,
+            new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking a task"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
     }
 
     [Fact]
@@ -3324,7 +3345,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task ValidateAsync_AcTickedAfterReply_ThrowsValidationProofRequired()
+    public async Task ValidateAsync_AcTickedAfterReply_ProofStillLive_Validates()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -3343,10 +3364,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         await artifactService.PatchAsync(
             spec.Id, new PlanningArtifactPatch(TickIndex: 1), source: PlanningLogSource.Agent);
 
-        var ex = await Should.ThrowAsync<PlanningException>(
-            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+        var validated = await artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default);
 
-        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+        validated.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        validated.ValidationProofVoided.ShouldBeNull();
     }
 
     [Fact]

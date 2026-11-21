@@ -66,6 +66,7 @@ public sealed class PlanningArtifactService
             if (existing.Body != body || !string.IsNullOrWhiteSpace(logNote))
             {
                 var preMutationContentUpdatedAt = existing.ContentUpdatedAt;
+                var wasValidated = existing.Status == PlanningArtifactStatus.Validated;
                 bool bodyMutated;
                 try
                 {
@@ -78,7 +79,8 @@ public sealed class PlanningArtifactService
 
                 mutated = true;
 
-                if (bodyMutated && existing.ContentUpdatedAt != preMutationContentUpdatedAt)
+                if (bodyMutated && existing.ContentUpdatedAt != preMutationContentUpdatedAt &&
+                    wasValidated)
                 {
                     var voidedProof = await FindLiveApprovalProofAsync(
                         feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, ct);
@@ -439,6 +441,7 @@ public sealed class PlanningArtifactService
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
         GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
         var preMutationContentUpdatedAt = artifact.ContentUpdatedAt;
+        var wasValidated = artifact.Status == PlanningArtifactStatus.Validated;
         var noChange = false;
         int? tickedIndex = null;
         string? tickedText = null;
@@ -510,7 +513,8 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
-        if (!noChange && !wantsBrief && artifact.ContentUpdatedAt != preMutationContentUpdatedAt)
+        if (!noChange && !wantsBrief && artifact.ContentUpdatedAt != preMutationContentUpdatedAt &&
+            wasValidated)
         {
             var voidedProof = await FindLiveApprovalProofAsync(
                 feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, ct);
