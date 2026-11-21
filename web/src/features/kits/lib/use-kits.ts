@@ -10,7 +10,7 @@ import {
   removeKitEntry,
   updateKit,
 } from "@/features/kits/api";
-import { driftQueryOptions, kitKeys, kitListQueryOptions } from "@/features/kits/queries";
+import { driftQueryOptions, globalStateQueryOptions, kitKeys, kitListQueryOptions } from "@/features/kits/queries";
 import type { KitFormValues } from "@/features/kits/types";
 
 export function useKitList() {
@@ -40,8 +40,12 @@ export function useKitMutations() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => deleteKit(id),
-    onSuccess: invalidateKits,
+    mutationFn: ({ id, deployedFiles }: { id: string; deployedFiles?: "keep" | "remove" }) =>
+      deleteKit(id, deployedFiles),
+    onSuccess: () => {
+      invalidateKits();
+      queryClient.invalidateQueries({ queryKey: globalStateQueryOptions().queryKey });
+    },
   });
 
   const addEntry = useMutation({
