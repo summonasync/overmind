@@ -60,11 +60,15 @@ export function drawScene(ctx: PaintTarget, scene: SceneInput): void {
   ctx.restore();
 }
 
-function linkAlpha(scene: SceneInput, incident: boolean): number {
+function linkAlpha(scene: SceneInput, hovered: boolean): number {
   if (scene.hoverKey === null) {
     return 1;
   }
-  return incident ? 1 : HOVER_DIM_ALPHA;
+  return hovered ? 1 : HOVER_DIM_ALPHA;
+}
+
+function touches(key: string | null, source: LayoutNode, target: LayoutNode): boolean {
+  return key !== null && (keyOf(source) === key || keyOf(target) === key);
 }
 
 function drawLinks(ctx: PaintTarget, scene: SceneInput): void {
@@ -72,12 +76,14 @@ function drawLinks(ctx: PaintTarget, scene: SceneInput): void {
   for (const link of scene.links) {
     const source = link.source;
     const target = link.target;
-    const incident =
-      scene.hoverKey !== null &&
-      (keyOf(source) === scene.hoverKey || keyOf(target) === scene.hoverKey);
+    const hovered = touches(scene.hoverKey, source, target);
+    // R3's ladder has two rungs: the hovered node's links strengthen and so do the selected
+    // node's, while the 30% dim stays a hover act — R4 only promises the field dims under the
+    // cursor, so a click must not fade the links it just highlighted.
+    const strong = hovered || touches(scene.selectedKey, source, target);
 
-    ctx.globalAlpha = linkAlpha(scene, incident);
-    ctx.strokeStyle = incident ? scene.colors.edgeStrong : scene.colors.edge;
+    ctx.globalAlpha = linkAlpha(scene, hovered);
+    ctx.strokeStyle = strong ? scene.colors.edgeStrong : scene.colors.edge;
     ctx.lineWidth = link.hasManual ? 1.8 : 1;
     ctx.beginPath();
     ctx.moveTo(toScreenX(source.x, scene.view), toScreenY(source.y, scene.view));

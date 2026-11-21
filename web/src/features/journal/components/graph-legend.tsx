@@ -80,8 +80,8 @@ export function GraphLegend({ field }: GraphLegendProps) {
             className="h-0.5 w-5"
             style={{ backgroundColor: `var(${GRAPH_TOKENS.edgeStrong})` }}
           />
-          A line that strengthens under the cursor is incident to the hovered node; the rest of the
-          field dims.
+          A line that strengthens is incident to the node under the cursor or to the one you
+          picked; only hovering fades the rest of the field.
         </li>
       </ul>
     </section>
