@@ -108,7 +108,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
 
         var moved = await service.ReattributeSessionClaimsAsync(HolderSessionId, "mark-wolff", "claude");
 
-        moved.ShouldBe(["feat-held"]);
+        moved.Select(m => m.Slug).ShouldBe(["feat-held"]);
         held.ClaimedByAlias.ShouldBe("mark-wolff");
         held.ClaimedByVendor.ShouldBe("claude");
         held.ClaimSessionId.ShouldBe(HolderSessionId);
@@ -585,7 +585,80 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureHolder_StaleSelfClaim_AdoptsAndProceeds()
+    public async Task EnsureHolder_StaleClaimOnSameSession_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        readopted.ClaimSessionId.ShouldBe(HolderSessionId);
+        readopted.ClaimedByAlias.ShouldBe("Dan");
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_EndedClaimOnSameSession_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        readopted.ClaimSessionId.ShouldBe(HolderSessionId);
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureImportAllowed_StaleSameSessionClaim_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        await service.EnsureImportAllowedAsync(_projectId, HolderSessionId, "feat-a");
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_ReadoptHealsTheRow_SecondWriteIsSilent()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var healed = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        PlanningLog.Parse(healed.Body)
+            .Count(line => line.Text.StartsWith("stale claim re-adopted", StringComparison.Ordinal))
+            .ShouldBe(1);
+        var row = await _context.AgentSessions.AsNoTracking()
+            .SingleAsync(s => s.Id == HolderSessionId);
+        row.EndedAt.ShouldBeNull();
+        row.LastSeenAt.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    [Fact]
+    public async Task EnsureHolder_StaleSameAliasForeignSession_RequiresExplicitClaim()
     {
         await CreateFeatureAsync();
         var service = CreateClaimService();
@@ -593,32 +666,15 @@ public sealed class FeatureClaimServiceTests : IDisposable
         await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
         var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
 
-        await service.EnsureHolderAsync(_projectId, "feat-a", callerId);
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.EnsureHolderAsync(_projectId, "feat-a", callerId));
 
-        var adopted = await _context.PlanningFeatures.AsNoTracking()
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
+        ex.Message.ShouldContain("Dan by qwen (stale)");
+        var untouched = await _context.PlanningFeatures.AsNoTracking()
             .SingleAsync(f => f.Slug == "feat-a");
-        adopted.ClaimSessionId.ShouldBe(callerId);
-        adopted.ClaimedByAlias.ShouldBe("Dan");
-        PlanningLog.Parse(adopted.Body).Last().Text
-            .ShouldBe("session restarted, claim adopted by Dan by qwen");
-    }
-
-    [Fact]
-    public async Task EnsureHolder_EndedSelfClaim_AdoptsAndProceeds()
-    {
-        await CreateFeatureAsync();
-        var service = CreateClaimService();
-        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
-        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
-        var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
-
-        await service.EnsureHolderAsync(_projectId, "feat-a", callerId);
-
-        var adopted = await _context.PlanningFeatures.AsNoTracking()
-            .SingleAsync(f => f.Slug == "feat-a");
-        adopted.ClaimSessionId.ShouldBe(callerId);
-        PlanningLog.Parse(adopted.Body).Last().Text
-            .ShouldBe("session restarted, claim adopted by Dan by qwen");
+        untouched.ClaimSessionId.ShouldBe(HolderSessionId);
+        PlanningLog.Parse(untouched.Body).Single().Text.ShouldBe("Dan by qwen claimed the feature");
     }
 
     [Fact]

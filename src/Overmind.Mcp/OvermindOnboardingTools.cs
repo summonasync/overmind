@@ -426,7 +426,7 @@ public sealed class OvermindOnboardingTools
         }
 
         output.AppendLine(
-            "If that pair is yours, your next write adopts these claims; if it is not, " +
+            "A claim held by your own session id re-adopts on your next write; if it is not, " +
             "planning_claim_feature is the only take-over door.");
     }
 

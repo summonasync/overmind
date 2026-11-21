@@ -9,9 +9,9 @@ public sealed class AgentSessionLifecycle(HttpClient http)
     public const string SessionsPath = "/api/agent/sessions";
     public static readonly TimeSpan EndTimeout = TimeSpan.FromSeconds(3);
 
-    public async Task<Guid> RegisterAsync(string alias, string vendor, CancellationToken ct)
+    public async Task<Guid> RegisterAsync(string alias, string vendor, Guid? priorSessionId, CancellationToken ct)
     {
-        var response = await http.PostAsJsonAsync(SessionsPath, new { alias, vendor }, ct);
+        var response = await http.PostAsJsonAsync(SessionsPath, new { alias, vendor, priorSessionId }, ct);
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
