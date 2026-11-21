@@ -151,19 +151,22 @@ public sealed class GlobalKitApiTests : IDisposable
     [Fact]
     public async Task Delete_remove_cuts_woven_marker_blocks()
     {
-        var dir = Path.Combine(_sources, "sociality-269");
+        var dir = Path.Combine(_sources, "sociality");
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "SOCIAL_DICTIONARY.md"), "# Tone rules.\n");
-        var kitId = await SeedBundledKitAsync("sociality-269", dir);
+        var kitId = await SeedBundledKitAsync("sociality", dir);
         var entry = Path.Combine(_homeRoot, ".claude", "CLAUDE.md");
+        File.WriteAllText(entry, "# My agent context\n\nOwner content stays.\n");
         (await _client.PostAsync($"/api/kits/{kitId}/global/claude", null))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        File.Exists(entry).ShouldBeTrue();
+        File.ReadAllText(entry).ShouldContain("===OVERMIND");
 
         var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
         delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         File.Exists(entry).ShouldBeTrue();
-        File.ReadAllText(entry).ShouldNotContain("===OVERMIND");
+        var entryBody = File.ReadAllText(entry);
+        entryBody.ShouldNotContain("===OVERMIND");
+        entryBody.ShouldContain("Owner content stays.");
     }
 
     [Fact]
