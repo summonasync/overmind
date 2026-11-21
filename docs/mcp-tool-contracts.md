@@ -257,9 +257,10 @@ on an ended session (an adapter restart) → auto-adopt with a fresh session bin
 themselves when the holder session ends or goes stale past the project threshold.
 
 **Identity.** `alias` and `vendor` are optional (32 characters each) and fall back to the
-identity the session registered with (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`). A claim-locked write
-that finds a stale or ended claim held by the caller's own alias+vendor adopts it and proceeds
-instead of 409ing.
+identity the session registered with (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`). Claims bind by session
+id: a claim-locked write that finds a stale or ended claim held by the caller's own session
+re-adopts it (and logs the re-adopt) instead of 409ing; a different session takes the explicit
+`planning_claim_feature` door even with a matching alias.
 
 **Lane discipline** rides on the claim: a feature whose lane already holds an ALIVE claim by a
 different alias+vendor pair is refused with 409 naming the holder. Unclaimed open features in the
@@ -1179,8 +1180,8 @@ No additional prose — the tool description lost nothing.
     (capped at 10 per holder with the total alongside, 5 holders, freshest death first).
     `sessionsTotal` is the churned-holder count before the 5-row cap, and the renderer turns the
     difference into a `+N more holders not listed, M churned in total` line, so a holder the cap
-    dropped is accounted for instead of vanishing. A pair that
-    is yours adopts on your next write; a foreign one takes `planning_claim_feature`. A holder whose
+    dropped is accounted for instead of vanishing. A claim held by your own session id re-adopts on
+    your next write; any other holder takes `planning_claim_feature`, matching alias or not. A holder whose
     session row was deleted from the registry is not listed here at all — the reconciliation note
     under `planning_rescue_scan` says where it is.
   - **semantic** — search availability, with the verbatim probe reason when down.

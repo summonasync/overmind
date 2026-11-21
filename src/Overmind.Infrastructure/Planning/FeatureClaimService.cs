@@ -243,7 +243,8 @@ public sealed class FeatureClaimService
     }
 
     public async Task EnsureHolderAsync(
-        Guid projectId, string slug, Guid? sessionId, CancellationToken ct = default)
+        Guid projectId, string slug, Guid? sessionId, DateTime? observedLastSeenAt = null,
+        CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -251,11 +252,12 @@ public sealed class FeatureClaimService
         }
 
         var feature = await RequireFeatureAsync(projectId, slug, ct);
-        await EnsureHolderCoreAsync(feature, sessionId, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, observedLastSeenAt, ct);
     }
 
     public async Task EnsureHolderForArtifactAsync(
-        Guid artifactId, Guid? sessionId, CancellationToken ct = default)
+        Guid artifactId, Guid? sessionId, DateTime? observedLastSeenAt = null,
+        CancellationToken ct = default)
     {
         if (sessionId is null)
         {
@@ -272,7 +274,7 @@ public sealed class FeatureClaimService
             throw PlanningException.MissingArtifact(artifactId);
         }
 
-        await EnsureHolderCoreAsync(feature, sessionId, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, observedLastSeenAt, ct);
     }
 
     public async Task EnsureImportAllowedAsync(
@@ -290,14 +292,17 @@ public sealed class FeatureClaimService
             return;
         }
 
-        await EnsureHolderCoreAsync(feature, sessionId, ct);
+        await EnsureHolderCoreAsync(feature, sessionId, null, ct);
     }
 
     // Write-path gate behind the ClaimLockFilter. Claim binding follows the session id: the same
     // session keeps its claim alive (Touch re-animates a stale row) and gets a logged re-adopt when
     // the row comes back stale or ended; any other session keeps the explicit claim call as the
     // only takeover door, alive or stale — matching aliases no longer auto-adopt on writes.
-    private async Task EnsureHolderCoreAsync(PlanningFeature feature, Guid? sessionId, CancellationToken ct)
+    // observedLastSeenAt carries the pre-touch liveness the request middleware saw: its own touch
+    // lands before this gate runs, so the row's stored LastSeenAt would always read alive here.
+    private async Task EnsureHolderCoreAsync(
+        PlanningFeature feature, Guid? sessionId, DateTime? observedLastSeenAt, CancellationToken ct)
     {
         if (feature.ClaimSessionId is not { } holderId)
         {
@@ -306,8 +311,14 @@ public sealed class FeatureClaimService
 
         var project = await RequireProjectAsync(feature.ProjectId, ct);
         var holder = await _db.AgentSessions.FirstOrDefaultAsync(s => s.Id == holderId, ct);
-        var liveness = holder?.Liveness(DateTime.UtcNow, project.ClaimStaleThresholdMinutes)
-                       ?? AgentSessionLiveness.Ended;
+        var now = DateTime.UtcNow;
+        // The pre-touch override belongs to the CALLER's row only; a foreign holder's liveness
+        // must read its own stored LastSeenAt, never the caller's freshened timestamp.
+        var liveness = holder is null
+            ? AgentSessionLiveness.Ended
+            : holderId == sessionId
+                ? holder.Liveness(now, project.ClaimStaleThresholdMinutes, observedLastSeenAt)
+                : holder.Liveness(now, project.ClaimStaleThresholdMinutes);
 
         if (holderId != sessionId)
         {
@@ -320,11 +331,11 @@ public sealed class FeatureClaimService
             return;
         }
 
-        var now = DateTime.UtcNow;
         feature.Claim(holder.Alias, holder.Vendor, holderId, now);
         feature.AppendLog(
             $"stale claim re-adopted by resumed session {holder.Alias} by {holder.Vendor}",
             PlanningLogSource.Agent);
+        holder.Reactivate();
         await PersistAsync(feature, holder.Alias, holder.Vendor, holderId, now, ct);
     }
 

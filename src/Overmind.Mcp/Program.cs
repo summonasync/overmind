@@ -63,8 +63,9 @@ if (prunedIdentityFiles > 0)
 // A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
 // session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
 // and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
-// The same refresher restores the identity this workspace last worked under, so a claim made before
-// the process died reads as an own-alias claim and is adopted on the first mutation (feature 235 D1).
+// The stamped row resume keeps the session id stable across restarts, so a claim made before the
+// process died stays bound to this session; the mutation gate re-adopts it with a board log line
+// when the row reads stale (feature 258 T0/T1, superseding 235 D1's alias-string adopt).
 var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile, workspaceIdentity);
 Guid adapterSessionId = Guid.Empty;
 var alias = AgentIdentity.ResolveAlias();

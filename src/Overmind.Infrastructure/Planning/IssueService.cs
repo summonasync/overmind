@@ -172,7 +172,7 @@ public sealed class IssueService
         var feature = await _db.PlanningFeatures
             .FirstOrDefaultAsync(f => f.ProjectId == issue.ProjectId && f.Slug == featureSlug, ct)
             ?? throw PlanningException.MissingFeature(featureSlug);
-        await _claims.EnsureHolderAsync(feature.ProjectId, feature.Slug, sessionId, ct);
+        await _claims.EnsureHolderAsync(feature.ProjectId, feature.Slug, sessionId, ct: ct);
         var appends = await _db.IssueAppends
             .Where(a => a.IssueId == issue.Id)
             .OrderBy(a => a.CreatedAt)

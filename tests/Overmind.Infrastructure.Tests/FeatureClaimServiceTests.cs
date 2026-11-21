@@ -620,6 +620,28 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureHolder_ReadoptHealsTheRow_SecondWriteIsSilent()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var healed = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        PlanningLog.Parse(healed.Body)
+            .Count(line => line.Text.StartsWith("stale claim re-adopted", StringComparison.Ordinal))
+            .ShouldBe(1);
+        var row = await _context.AgentSessions.AsNoTracking()
+            .SingleAsync(s => s.Id == HolderSessionId);
+        row.EndedAt.ShouldBeNull();
+        row.LastSeenAt.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    [Fact]
     public async Task EnsureHolder_StaleSameAliasForeignSession_RequiresExplicitClaim()
     {
         await CreateFeatureAsync();
