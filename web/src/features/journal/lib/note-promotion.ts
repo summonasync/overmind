@@ -1,4 +1,4 @@
-import type { GraphViewFilters, JournalLinkKind } from "@/features/journal/types";
+import type { GraphViewFilters } from "@/features/journal/types";
 
 // Triage is one act with two answers: the door mints an artifact plus the manual edge that is the
 // record of the act, and the surface has to (a) name what the note became and (b) stale exactly the
@@ -6,9 +6,10 @@ import type { GraphViewFilters, JournalLinkKind } from "@/features/journal/types
 // network in it, so the invalidation set and the refusal copy are measurable in `node --test`
 // instead of by eye in a browser.
 //
-// The vocabulary is the rail's (`JournalLinkKind`), not a fifth union: the door answers
-// `EntryLinkKind` through the Host's camelCase enum converter, and the two promotion targets are
-// `feature` and `task` — the same two arms `note-rails.ts` groups into rails.
+// The target vocabulary is the rail's, not a fifth union: the door answers `EntryLinkKind` through
+// the Host's camelCase enum converter, and the two promotion targets are `feature` and `task` — the
+// same two arms `note-rails.ts` already groups. `PromotionTargetKind` in types.ts is the narrow
+// slice of `JournalLinkKind` a promotion can mint; `entry` and `project` are what a marker writes.
 
 import { graphKeys, journalKeys } from "@/features/journal/queries";
 import { planningKeys } from "@/features/planning";
@@ -319,5 +320,3 @@ export function featureCandidates(
     }))
     .sort((a, b) => (a.done === b.done ? a.label.localeCompare(b.label, "en") : a.done ? 1 : -1));
 }
-
-export type { JournalLinkKind };
