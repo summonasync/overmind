@@ -30,7 +30,7 @@ public sealed class OvermindNotificationTools
         "with overmind_replies; featureSlug and tab make it a deep link.")]
     public async Task<JsonElement> Notify(
         [Description("Notification kind: info, question or approval.")] string kind,
-        [Description("Message body shown to the human, max 2000 chars.")] string text,
+        [Description("Message body shown to the human, soft cap 2000 chars — longer text lands truncated with warnings.")] string text,
         [Description("Optional project id.")] Guid? projectId = null,
         [Description("Feature slug for the deep link.")] string? featureSlug = null,
         [Description("Deep-link tab: spec, plan, tasks or result.")] string? tab = null,

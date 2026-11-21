@@ -70,8 +70,6 @@ public sealed class OvermindTools
     private const string AuthorDescription =
         "Author alias filter, case-insensitive; UI entries never match.";
 
-    private const int FollowUpTextCap = 2000;
-
     private const string SearchDescription =
         "Fulltext search over entries plus planning features and artifact bodies — the cross-surface door " +
         "(list_entries explores entries only). Hits carry ids and a snippet, never full bodies. " +
@@ -314,15 +312,14 @@ public sealed class OvermindTools
     [McpServerTool(Name = "append_entry", Destructive = false, Idempotent = false)]
     [Description("Appends a dated '## Follow-up' block to an entry's tail through the version machinery — " +
         "the cheap door for new information on a note, decision, gate or guard without an update_entry " +
-        "rewrite; the previous version stays readable. text is capped at 2000 chars here. Journal rows " +
+        "rewrite; the previous version stays readable. text is soft-capped at 2000 chars — longer text " +
+        "lands truncated with warnings. Journal rows " +
         "refuse: the agent door stops them with JournalEntryWriteRefused.")]
     public async Task<JsonElement> AppendEntry(
         [Description("Entry id.")] Guid entryId,
-        [Description("Follow-up text, max 2000 chars.")] string text,
+        [Description("Follow-up text, soft cap 2000 chars.")] string text,
         CancellationToken ct = default)
     {
-        TextCapLint.Cap(text, FollowUpTextCap);
-
         var existing = await Guarded(() => _api.GetAsync($"/api/entries/{entryId}", ct));
         if (string.Equals(existing.GetProperty("type").GetString(), "skill", StringComparison.OrdinalIgnoreCase))
         {
@@ -445,6 +442,12 @@ public sealed class OvermindTools
         if (supersededById is not null)
         {
             echo["supersededById"] = supersededById;
+        }
+
+        if (entry.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0)
+        {
+            echo["warnings"] = JsonNode.Parse(warnings.GetRawText());
         }
 
         return echo.Deserialize<JsonElement>();
