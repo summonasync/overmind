@@ -149,6 +149,24 @@ public sealed class GlobalKitApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_remove_cuts_woven_marker_blocks()
+    {
+        var dir = Path.Combine(_sources, "sociality-269");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "SOCIAL_DICTIONARY.md"), "# Tone rules.\n");
+        var kitId = await SeedBundledKitAsync("sociality-269", dir);
+        var entry = Path.Combine(_homeRoot, ".claude", "CLAUDE.md");
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        File.Exists(entry).ShouldBeTrue();
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(entry).ShouldBeTrue();
+        File.ReadAllText(entry).ShouldNotContain("===OVERMIND");
+    }
+
+    [Fact]
     public async Task Delete_of_an_undeployed_kit_ignores_the_flag()
     {
         var kitId = await SeedBundledKitAsync("dotnet-crew", WriteSkillSource("dotnet-crew", "dotnet-coder"));
