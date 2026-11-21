@@ -84,6 +84,48 @@ public class RepliesProjectionContractTests : McpSessionTestBase
         row["replyText"]!.GetValue<string>().ShouldBe("approved via telegram button by @johnbulino");
     }
 
+    // Row 3 ↔ row 8 agreement pin (review-266-04 BLOCKER, fix round): the empty-`since` note may not
+    // claim a window the door does not have. What the caller is told and what the door is asked for
+    // are locked together here: an empty since goes out byte-identical to an omitted one — no since=
+    // parameter at all — so the note's "as if you had omitted it" is a measurement, not prose. What
+    // an omitted since means at the Host (no lower bound, newest first, capped at
+    // NotificationsService.ListCapacity) is pinned by UnknownPropertyProbeApiTests
+    // .Replies_NoSinceFilter_ReturnsTheReply_TheHostHoldsNoWindow; the two rows cannot drift apart
+    // without one of these going red.
+    [Fact]
+    public async Task Replies_EmptySince_GoesOutExactlyLikeOmitted_AndSaysSoWithoutClaimingAWindow()
+    {
+        var empty = await Driver.CallToolAsync("overmind_replies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+            ["since"] = "",
+        });
+
+        var emptyQuery = RepliesQueries().Single();
+        var blocks = Blocks(empty);
+        blocks.Count.ShouldBe(2);
+        var note = blocks[1]!["text"]!.GetValue<string>();
+        note.ShouldContain("'since' arrived empty and was dropped");
+        note.ShouldContain("the call goes out as if you had omitted it");
+        emptyQuery.ShouldNotContain("since=");
+
+        var omitted = await Driver.CallToolAsync("overmind_replies", new JsonObject
+        {
+            ["projectId"] = Canned.ProjectId.ToString(),
+        });
+
+        var both = RepliesQueries();
+        both.Length.ShouldBe(2);
+        both[1].ShouldBe(both[0]);
+        Blocks(omitted).Count.ShouldBe(1);
+    }
+
+    private string[] RepliesQueries() =>
+        [.. Stub.Requests
+            .Where(request => request.Method == "GET"
+                && request.Path.StartsWith("/api/agent/notifications/replies", StringComparison.Ordinal))
+            .Select(request => request.Query)];
+
     [Fact]
     public async Task Replies_FullTrue_ReplaysTheStoredRowsUntouched()
     {
@@ -98,6 +140,9 @@ public class RepliesProjectionContractTests : McpSessionTestBase
             .GetValue<string>().ShouldBe("11111111-1111-1111-1111-111111111111");
         JsonNode.Parse(text)!.AsObject().ContainsKey("projection").ShouldBeFalse();
     }
+
+    private static JsonArray Blocks(JsonNode response) =>
+        response["result"]!["content"]!.AsArray();
 
     private static string ResultText(JsonNode response)
     {

@@ -161,7 +161,7 @@ public class ToolBindingErrorContractTests : McpSessionTestBase
         blocks.Count.ShouldBe(2);
         blocks[1]!["text"]!.GetValue<string>().ShouldContain(
             "'featureSlug' arrived empty and was dropped");
-        blocks[1]!["text"]!.GetValue<string>().ShouldContain("the default its own description documents");
+        blocks[1]!["text"]!.GetValue<string>().ShouldContain("as if you had omitted it");
     }
 
     [Fact]
