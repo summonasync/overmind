@@ -3003,6 +3003,38 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         patched.Artifact.ContentUpdatedAt.ShouldBe(patched.Artifact.CreatedAt);
     }
 
+    // Review-259-01 MAJOR-1 disposition: obstacles content on a gated doc is gated content —
+    // an obstacles-only patch on a validated spec voids the proof like any other section edit.
+    // (The task AC's "obstacles patch preserves" phrasing referred to task artifacts, which hold
+    // no proofs at all.)
+    [Fact]
+    public async Task PatchAsync_ObstaclesOnlyPatchOnValidatedSpec_VoidsWithNamedCause()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\nship it\n</goal>\n\n<obstacles>\n(none)\n</obstacles>\n",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(Section: "obstacles", Content: "found a race", LogNote: "recording a finding"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldNotBeNull();
+        patched.Artifact.ValidationProofVoidCause.ShouldBe("section 'obstacles' changed");
+    }
+
     [Fact]
     public async Task PatchAsync_TickingAcOnTask_DoesNotRecordVoidNoise()
     {
