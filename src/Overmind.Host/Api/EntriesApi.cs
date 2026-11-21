@@ -251,15 +251,28 @@ public static class EntriesApi
 
     private static async Task<IResult> GetById(
         Guid id,
+        HttpRequest http,
         OvermindDbContext db,
         EntryLinkResolver resolver,
         EntryLinkReader links,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
         var entry = await LoadEntryAsync(db, id, ct);
         if (entry is null)
         {
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        // The scope check runs before the link projection: a refused read must not spend the queries the
+        // detail view needs, and the caller must not learn anything about another board's edges either.
+        if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+        {
+            return refused;
         }
 
         var view = await EntryLinkProjection.LoadAsync(resolver, links, entry, ct);
@@ -270,6 +283,7 @@ public static class EntriesApi
         Guid id,
         UpdateEntryRequest request,
         IValidator<UpdateEntryRequest> validator,
+        HttpRequest http,
         OvermindDbContext db,
         EntryIndexingService indexing,
         BundledKitForkService kitFork,
@@ -277,6 +291,11 @@ public static class EntriesApi
         ILoggerFactory writes,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
         var validation = await validator.ValidateAsync(request, ct);
         if (!validation.IsValid)
         {
@@ -299,6 +318,13 @@ public static class EntriesApi
                 if (entry is null)
                 {
                     return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
+                }
+
+                // The rejection channel the wrapper already provides, so the scope check rides the load that
+                // is running and the transaction never mutates an entry from another board.
+                if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+                {
+                    return EntryWriteCommit.Work.Rejected(refused);
                 }
 
                 if (request.SkillFiles is { Length: > 0 } && entry.Type != EntryType.Skill)
@@ -381,10 +407,20 @@ public static class EntriesApi
         EntryIndexingService indexing,
         CancellationToken ct)
     {
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
         var entry = await db.ContextEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
         {
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        if (CallerScopeRefusal(entry.Id, entry.ProjectId, callerProjectId) is { } refused)
+        {
+            return refused;
         }
 
         ContextEntry? tombstone = null;
@@ -567,12 +603,29 @@ public static class EntriesApi
             : $"{session.Alias} ({session.Vendor})";
     }
 
-    private static async Task<IResult> ListVersions(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListVersions(
+        Guid id, HttpRequest http, OvermindDbContext db, CancellationToken ct)
     {
-        var entryExists = await db.ContextEntries.AnyAsync(e => e.Id == id, ct);
-        if (!entryExists)
+        if (!AgentCallerScope.TryReadProjectId(http, out var callerProjectId, out var refusal))
+        {
+            return refusal!;
+        }
+
+        // Reading the owning project off the existence probe keeps the guard free of a second command;
+        // AnyAsync would have answered the same question with one scalar and thrown the answer away.
+        var owningProjectId = await db.ContextEntries
+            .Where(e => e.Id == id)
+            .Select(e => (Guid?)e.ProjectId)
+            .FirstOrDefaultAsync(ct);
+
+        if (owningProjectId is null)
         {
             return HttpErrors.NotFound($"Entry '{id}' was not found.");
+        }
+
+        if (CallerScopeRefusal(id, owningProjectId.Value, callerProjectId) is { } refused)
+        {
+            return refused;
         }
 
         var versions = await db.EntryVersions
@@ -583,6 +636,16 @@ public static class EntriesApi
 
         return Results.Ok(versions);
     }
+
+    // Entries are the one object family whose routes the web UI shares with agents, so the question is
+    // never "is this an entries route" but "did the embedded-agent transport identify a project". No
+    // pair means no comparison: a human reading another project's note is today's behaviour and stays it.
+    private static IResult? CallerScopeRefusal(
+        Guid entryId, Guid owningProjectId, Guid? callerProjectId) =>
+        callerProjectId is { } caller && caller != owningProjectId
+            ? PlanningErrors.Map(PlanningException.EntryOutsideCallerProject(
+                entryId, owningProjectId, caller))
+            : null;
 
     private static async Task<ContextEntry?> LoadEntryAsync(OvermindDbContext db, Guid id, CancellationToken ct)
     {

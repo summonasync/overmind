@@ -55,11 +55,12 @@ public sealed class AgentPromptComposer(IAgentRunSettingsProvider settingsProvid
         builder.AppendLine(projectId is null
             ? """
             - This conversation belongs to no project, so no comparison happens here and nothing is rejected on scope grounds: the projectId in your argument is the only scope a call has, and every tool call of this turn is recorded as global in the tool trail.
-            - Calls that name an object (an artifactId, an entryId, an issueId, a path) sit outside the scope check in every shape; that half is a tracked gap owned by feature 246.
+            - On such a turn an object-addressed call has no owning project to match against either, so feature 246's pass-through applies to it. That is the absence of a comparison, not a permission to work on another board.
             """
             : """
             - Project scope is checked for the calls that name a project in their arguments: send the conversation's own projectId, and a foreign or unreadable one comes back as a refusal instead of being redirected. Filing across boards is what issues_create is for and it still has to present your own project.
-            - That check sees arguments only. Calls that name an object - an artifactId, an entryId, an issueId, a path - are a tracked gap owned by feature 246; never assume one of them is contained.
+            - The host also checks the calls that address a stored object by id - an artifactId, an issueId, an entryId - against the project that owns it, and a foreign one comes back refused without being read or changed (feature 246 closed those doors).
+            - What stays outside both checks is path-addressed kit work and the human UI. A kit is a global library object with no owning project to compare against, so kit_reimport, kit_import and kit_import_scan are a declared gap; the human web door is a different caller and carries no project scope at all.
             """);
         builder.AppendLine(
             """
