@@ -171,6 +171,11 @@ public sealed class OvermindApiClient
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(problem?.Fix))
+        {
+            message += $". Fix: {problem.Fix}";
+        }
+
         return message;
     }
 }

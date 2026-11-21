@@ -2,16 +2,21 @@ namespace Overmind.Core;
 
 public sealed class PlanningException : Exception
 {
-    private PlanningException(PlanningFailureKind kind, PlanningFailureCode code, string message, Exception? inner = null)
+    private PlanningException(
+        PlanningFailureKind kind, PlanningFailureCode code, string message, string? fix = null, Exception? inner = null)
         : base(message, inner)
     {
         Kind = kind;
         Code = code;
+        Fix = fix;
     }
 
     public PlanningFailureKind Kind { get; }
 
     public PlanningFailureCode Code { get; }
+
+    // One-line imperative remedy for state-conflict rejections; mechanical rejections leave it null.
+    public string? Fix { get; }
 
     public static PlanningException MissingProject(Guid projectId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingProject, $"Project '{projectId}' was not found.");
@@ -29,23 +34,28 @@ public sealed class PlanningException : Exception
             $"Artifact '{artifactId}' was not found. {ArtifactNotFoundHint}");
 
     public static PlanningException DuplicateSlug(string slug) =>
-        new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateSlug, $"A feature with slug '{slug}' already exists in this project.");
+        new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateSlug,
+            $"A feature with slug '{slug}' already exists in this project.",
+            "Resend planning_create_feature with a different slug — planning_list_features shows the slugs in use.");
 
     public static PlanningException DuplicateArtifact(PlanningArtifactKind kind, int order) =>
-        new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact, $"An artifact of kind '{kind}' with order {order} already exists.");
+        new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact,
+            $"An artifact of kind '{kind}' with order {order} already exists.",
+            "One artifact per kind and order — resend planning_upsert_artifact with the same kind and order to store the change as a new version.");
 
     public static PlanningException NumberCollision(
         string slug, string collidingSlug, PlanningFeatureStatus collidingStatus, int suggestedNumber) =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.NumberCollision,
             $"Feature number of '{slug}' is already taken by '{collidingSlug}' (status '{collidingStatus.ToString().ToLowerInvariant()}') " +
             "— NNN prefixes are the board's addressing layer and compare numerically (7 = 007). " +
-            $"Rename the slug with the next free number: {suggestedNumber:D3}.");
+            $"Rename the slug with the next free number: {suggestedNumber:D3}.",
+            $"Rebuild the slug with the free number {suggestedNumber:D3} prefix and resend planning_create_feature.");
 
     public static PlanningException TaskBatchItem(int index, PlanningException inner) =>
-        new(inner.Kind, inner.Code, $"tasks[{index}]: {inner.Message}", inner);
+        new(inner.Kind, inner.Code, $"tasks[{index}]: {inner.Message}", inner.Fix, inner);
 
     public static PlanningException BatchOp(int index, PlanningException inner) =>
-        new(inner.Kind, inner.Code, $"ops[{index}]: {inner.Message}", inner);
+        new(inner.Kind, inner.Code, $"ops[{index}]: {inner.Message}", inner.Fix, inner);
 
     public static PlanningException BatchEmpty() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BatchEmpty,
@@ -57,20 +67,26 @@ public sealed class PlanningException : Exception
     public static PlanningException BatchArtifactOutsideFeature(Guid artifactId, string featureSlug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.BatchArtifactOutsideFeature,
             $"Artifact '{artifactId}' does not belong to feature '{featureSlug}': batch ops stay on the batch feature — " +
-            "the route's claim check covers that feature only.");
+            "the route's claim check covers that feature only.",
+            $"Send batch ops only for artifacts of feature '{featureSlug}' — planning_list_artifacts lists them; move the foreign artifact to its own call.");
 
     public static PlanningException TaskBatchConcurrentWrite() =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.DuplicateArtifact,
-            "A concurrent writer claimed a task order while the batch was saving; the whole batch was rolled back — retry the call.");
+            "A concurrent writer claimed a task order while the batch was saving; the whole batch was rolled back — retry the call.",
+            "Retry the planning_upsert_tasks call as-is — orders re-resolve on each attempt and nothing was stored.");
 
     public static PlanningException InvalidSlug(string slug) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidSlug, $"Slug '{slug}' does not match the required pattern (lowercase alphanumeric with hyphens, max 64 chars).");
 
     public static PlanningException ChangeNoteRequired() =>
-        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ChangeNoteRequired, "A logNote is required to modify a validated artifact.");
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ChangeNoteRequired,
+            "A logNote is required to modify a validated artifact.",
+            "Resend the same edit with a logNote explaining the change — validated artifacts edit only with a note.");
 
     public static PlanningException CannotValidateTask() =>
-        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.CannotValidateTask, "Task artifacts cannot be validated.");
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.CannotValidateTask,
+            "Task artifacts cannot be validated.",
+            "Tasks flow through planning_set_status (todo, inProgress, review, done, blocked), not through validation.");
 
     public static PlanningException CannotDeclineTask() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.CannotDeclineTask,
@@ -89,7 +105,8 @@ public sealed class PlanningException : Exception
 
     public static PlanningException AmendmentNoteRequired() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentNoteRequired,
-            "An amendment records the human's pre-approval in the log: pass the logNote carrying that provenance, e.g. 'human pre-approved via notification reply'.");
+            "An amendment records the human's pre-approval in the log: pass the logNote carrying that provenance, e.g. 'human pre-approved via notification reply'.",
+            "Resend the amendment with the logNote carrying the human's pre-approval provenance.");
 
     public static PlanningException AmendmentSectionPairRefused(string name) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentSectionPairRefused,
@@ -103,44 +120,52 @@ public sealed class PlanningException : Exception
 
     public static PlanningException InvalidFeatureTransition(string slug, PlanningFeatureStatus current, PlanningFeatureStatus target) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidFeatureTransition,
-            $"Feature '{slug}' cannot move from '{current}' to '{target}'; allowed targets: {string.Join(", ", PlanningFeatureTransitions.AllowedTargets(current).Select(s => s.ToString().ToLowerInvariant()))}.");
+            $"Feature '{slug}' cannot move from '{current}' to '{target}'; allowed targets: {string.Join(", ", PlanningFeatureTransitions.AllowedTargets(current).Select(s => s.ToString().ToLowerInvariant()))}.",
+            "Resend planning_set_feature_status with one of the allowed targets listed in the detail; every other move belongs to the human UI door.");
 
     public static PlanningException FeatureLogNoteRequired() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.FeatureLogNoteRequired,
-            "A logNote is required to move a feature status; it records who asked for the move.");
+            "A logNote is required to move a feature status; it records who asked for the move.",
+            "Resend planning_set_feature_status with a logNote carrying the provenance, e.g. 'by user request in-session'.");
 
     public static PlanningException FeatureStatusNotAllowedForAgent(PlanningFeatureStatus target) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.FeatureStatusNotAllowedForAgent,
-            $"Agents may move a feature only to 'done' or 'inProgress'; '{target.ToString().ToLowerInvariant()}' is a manual move reserved for the human door in the Overmind UI.");
+            $"Agents may move a feature only to 'done' or 'inProgress'; '{target.ToString().ToLowerInvariant()}' is a manual move reserved for the human door in the Overmind UI.",
+            $"Ask the human to set '{target.ToString().ToLowerInvariant()}' in the Overmind UI; the agent door planning_set_feature_status accepts only done and inProgress.");
 
     public static PlanningException HumanValidationRequired(PlanningArtifactKind kind, string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.HumanValidationRequired,
-            $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.");
+            $"STOP: the {kind.ToString().ToLowerInvariant()} of feature '{slug}' awaits human validation — ask the user to approve it in the Overmind UI.",
+            $"Ask the human to validate the {kind.ToString().ToLowerInvariant()} of feature '{slug}' in the Overmind UI (or send overmind_notify(kind=approval, featureSlug={slug}) and wait for the reply), then re-read it before continuing.");
 
     public static PlanningException ValidationProofRequired(string featureSlug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ValidationProofRequired,
             "Human approval required: send overmind_notify(kind=approval, featureSlug=" + featureSlug +
-            ") and wait for the human's reply in the notification center, or validate via the UI.");
+            ") and wait for the human's reply in the notification center, or validate via the UI.",
+            $"Send overmind_notify(kind=approval, featureSlug={featureSlug}), wait for a human reply newer than the artifact's last content update, then call planning_validate again — any content edit in between voids the reply.");
 
     public static PlanningException FeatureResultRequired(string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureResultRequired,
             $"Feature '{slug}' cannot close as done: the result artifact is missing — write the result " +
             "first via planning_upsert_artifact(kind=result), or in the UI; the result is the readable " +
-            "close-out a done flip requires.");
+            "close-out a done flip requires.",
+            $"Write the result first: planning_upsert_artifact(featureSlug={slug}, kind=result), then retry the done flip on planning_set_feature_status.");
 
     public static PlanningException FeatureDoneTapRequired(string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureDoneTapRequired,
             $"done on '{slug}' needs the human's tap: send overmind_notify(kind=approval, featureSlug=" +
             slug + ") and wait for the reply in the notification center — the reply must be newer than " +
-            "the result's last update; or let the human close the feature in the UI.");
+            "the result's last update; or let the human close the feature in the UI.",
+            $"Send overmind_notify(kind=approval, featureSlug={slug}), wait for a human reply newer than the result's last update, then retry the done flip.");
 
     public static PlanningException MigratedNoteRequired() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.MigratedNoteRequired,
-            "asMigrated requires a logNote: the marker line must record where the pre-approval came from, e.g. 'validated v9 on disk, user-approved before migration'.");
+            "asMigrated requires a logNote: the marker line must record where the pre-approval came from, e.g. 'validated v9 on disk, user-approved before migration'.",
+            "Resend planning_validate with asMigrated and a logNote recording the pre-approval provenance.");
 
     public static PlanningException ImportFailed(string source, Exception? inner = null) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ImportFailed,
-            $"Importing '{source}' failed: {inner?.Message ?? "unknown error"}", inner);
+            $"Importing '{source}' failed: {inner?.Message ?? "unknown error"}", null, inner);
 
     public static PlanningException PatchSectionNotFound(
         string section, IEnumerable<string> presentSections, string? hint = null, string? acceptedSections = null)
@@ -235,29 +260,35 @@ public sealed class PlanningException : Exception
 
     public static PlanningException DependencyCycle(string slug, string blockedBySlug, IReadOnlyList<string> chain) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DependencyCycle,
-            $"Adding '{blockedBySlug}' as a blocker of '{slug}' would create a dependency cycle: {string.Join(" -> ", chain)}.");
+            $"Adding '{blockedBySlug}' as a blocker of '{slug}' would create a dependency cycle: {string.Join(" -> ", chain)}.",
+            $"Lift one existing edge of the chain {string.Join(" -> ", chain)} via planning_remove_feature_dependency, or close a blocker feature first — the new edge was not added.");
 
     public static PlanningException FeatureBlocked(string slug, IReadOnlyList<string> openBlockers) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureBlocked,
             $"STOP: feature '{slug}' is blocked by unclosed features: {string.Join(", ", openBlockers)}. " +
-            "Pinning is refused — work a blocker first or ask the user to clear the link.");
+            "Pinning is refused — work a blocker first or ask the user to clear the link.",
+            $"Work one of the blockers ({string.Join(", ", openBlockers)}) first via planning_current_task there, or ask the user before lifting the link with planning_remove_feature_dependency.");
 
     public static PlanningException FeatureNotInQueue(string slug) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.FeatureNotInQueue,
-            $"Feature '{slug}' is done and no longer part of the queue; only non-done features can be moved.");
+            $"Feature '{slug}' is done and no longer part of the queue; only non-done features can be moved.",
+            "Pick a non-done feature — planning_task_queue lists the live queue.");
 
     public static PlanningException InvalidQueuePosition(string slug, int position, int bandSize) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidQueuePosition,
             $"Position {position} is outside the queue band of '{slug}': the band holds {bandSize} " +
-            $"non-done features, so the valid range is 1..{bandSize}.");
+            $"non-done features, so the valid range is 1..{bandSize}.",
+            $"Resend planning_move_feature with toPosition in 1..{bandSize}, or use move up/down/first/last instead.");
 
     public static PlanningException InvalidQueueReorder(FeaturePriority priority, string discrepancy) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.InvalidQueueReorder,
-            $"Reordering the '{priority.ToString().ToLowerInvariant()}' band failed: {discrepancy}");
+            $"Reordering the '{priority.ToString().ToLowerInvariant()}' band failed: {discrepancy}",
+            "Re-read planning_task_queue and resend the move against the current positions — the band shifted under this call.");
 
     public static PlanningException TaskDependencyCycle(int order, IReadOnlyList<int> chain) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.TaskDependencyCycle,
-            $"Setting blockedBy on task order {order} would create a dependency cycle: {string.Join(" -> ", chain)}.");
+            $"Setting blockedBy on task order {order} would create a dependency cycle: {string.Join(" -> ", chain)}.",
+            $"Re-upsert one task of the chain {string.Join(" -> ", chain)} via planning_upsert_artifact with a blockedBy list that drops one edge — the new edges were not saved.");
 
     public static PlanningException BlockedByOrderUnknown(int order, IReadOnlyList<int> taskOrders) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BlockedByOrderUnknown,
@@ -277,15 +308,21 @@ public sealed class PlanningException : Exception
             $"blockedBy is only allowed on task artifacts; kind '{kind}' cannot carry one.");
 
     public static PlanningException FeatureClaimHeld(
-        string slug, string alias, string vendor, AgentSessionLiveness liveness) =>
-        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureClaimHeld,
+        string slug, string alias, string vendor, AgentSessionLiveness liveness)
+    {
+        var fix = liveness == AgentSessionLiveness.Alive
+            ? $"Coordinate with {alias} by {vendor} in the feature's lane wave room and have the holder release via planning_unclaim_feature, or pick another feature — reads stay open to you."
+            : $"The claim on '{slug}' is {liveness.ToString().ToLowerInvariant()}, not alive — resend planning_claim_feature to take it over after confirming {alias} is gone.";
+        return new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureClaimHeld,
             $"Feature '{slug}': claim held by {alias} by {vendor} ({liveness.ToString().ToLowerInvariant()}). " +
             "The claim acts as a mutation lock: reads stay open, mutations and unclaims belong to the holder session — " +
-            "the human door in the Overmind UI is never locked.");
+            "the human door in the Overmind UI is never locked.", fix);
+    }
 
     public static PlanningException FeatureClaimRefused(string slug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.FeatureClaimRefused,
-            $"Feature '{slug}' is done; claims are refused — reopen it first if work resumes.");
+            $"Feature '{slug}' is done; claims are refused — reopen it first if work resumes.",
+            $"Ask the human to reopen '{slug}' in the Overmind UI, then planning_claim_feature; until then pick a non-done feature.");
 
     public static PlanningException MissingIssue(Guid issueId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingIssue,
@@ -295,18 +332,21 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.InvalidStatus, PlanningFailureCode.IssueInvalidTransition,
             $"Issue cannot move from '{current.ToString().ToLowerInvariant()}' to '{target.ToString().ToLowerInvariant()}'. " +
             "The forward chain is open → triaged → promoted → closed; closed is reachable from any non-closed state; " +
-            "promoted is reached only through issues_promote; there is no reopen.");
+            "promoted is reached only through issues_promote; there is no reopen.",
+            "Move forward only: triaged via issues_set_status, promoted only via issues_promote, closed via issues_set_status from any non-closed state; a re-found bug is a fresh issues_create.");
 
     public static PlanningException AgentDeletionRefused(PlanningArtifactKind kind, PlanningArtifactStatus status) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ArtifactDeletionRefused,
             $"The agent door deletes draft artifacts only: this {kind.ToString().ToLowerInvariant()} sits in status " +
             $"'{status.ToString().ToLowerInvariant()}'. Validated and done artifacts are deletable through the " +
-            "human door in the Overmind UI.");
+            "human door in the Overmind UI.",
+            "Ask the human to delete it in the Overmind UI; the agent door planning_delete_artifact covers drafts only.");
 
     public static PlanningException DeletionBlockedByDependents(IReadOnlyList<string> dependents) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.DeletionBlockedByDependents,
             "Clean up dependencies first: " +
-            $"these tasks still depend on it: {string.Join(", ", dependents)}.");
+            $"these tasks still depend on it: {string.Join(", ", dependents)}.",
+            "Re-upsert each listed task via planning_upsert_artifact with a blockedBy list that drops this artifact, then retry planning_delete_artifact.");
 
     public static PlanningException ExportTargetNotAbsolute(string targetPath) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.ExportTargetNotAbsolute,
@@ -314,12 +354,14 @@ public sealed class PlanningException : Exception
 
     public static PlanningException ExportTargetNotEmpty(string targetDirectory) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ExportTargetNotEmpty,
-            $"Export target '{targetDirectory}' is not empty: export writes a fresh snapshot and refuses an existing tree.");
+            $"Export target '{targetDirectory}' is not empty: export writes a fresh snapshot and refuses an existing tree.",
+            "Point targetPath at an empty or not-yet-existing directory — export never syncs into an occupied tree.");
 
     public static PlanningException ExportTargetInsideMirror(string targetDirectory) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ExportTargetInsideMirror,
             $"Export target '{targetDirectory}' sits inside the materialized mirror (BACKLOG/ or ENTRIES/); " +
-            "export never writes into the mirror itself.");
+            "export never writes into the mirror itself.",
+            "Choose a targetPath outside BACKLOG/ and ENTRIES/ — the mirror is Overmind-owned output.");
 
     public static PlanningException ArtifactVersionNotFound(Guid artifactId, int version, int currentVersion)
     {
@@ -354,18 +396,21 @@ public sealed class PlanningException : Exception
             $"not your [{actor.ToString().ToLowerInvariant()}] marker: your newest " +
             $"[{actor.ToString().ToLowerInvariant()}] line is entry {ownedPosition} of {lineCount}, and an edit " +
             "cannot reach past a newer line. Append a correction line via planning_append_log instead, " +
-            "or let the newer line's door edit its own text.");
+            "or let the newer line's door edit its own text.",
+            "Append a correction line via planning_append_log — the edit reaches only the newest line and cannot cross a newer one.");
 
     public static PlanningException LogEditEmptyLog() =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LogEditNotNewest,
             "The artifact's log holds no lines to edit: the edit reaches the newest line only — " +
-            "append one via planning_append_log first.");
+            "append one via planning_append_log first.",
+            "Append a first line via planning_append_log, then planning_edit_log can correct it.");
 
     public static PlanningException LogEditWrongActor(PlanningLogSource actor, PlanningLogSource? newestMarker) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LogEditWrongActor,
             $"The newest log line carries {MarkerLabel(newestMarker)}, and the log holds no " +
             $"[{actor.ToString().ToLowerInvariant()}] line to edit — only lines carrying your own door marker " +
-            "are yours. Append a new line via planning_append_log instead.");
+            "are yours. Append a new line via planning_append_log instead.",
+            "Append your correction as a new line via planning_append_log — only the newest line is editable and it belongs to another door.");
 
     public static PlanningException LogEditBlankText() =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LogEditBlankText,
@@ -386,7 +431,8 @@ public sealed class PlanningException : Exception
 
     public static PlanningException LaneNameDuplicate(string name) =>
         new(PlanningFailureKind.Duplicate, PlanningFailureCode.LaneNameDuplicate,
-            $"A lane named '{name}' appears more than once in the roster; lane names are unique per project (case-insensitive).");
+            $"A lane named '{name}' appears more than once in the roster; lane names are unique per project (case-insensitive).",
+            "Drop the repeated entry from the lanes payload — the roster carries each name once.");
 
     public static PlanningException LaneRosterTooLarge(int count, int cap) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneRosterTooLarge,
@@ -404,31 +450,36 @@ public sealed class PlanningException : Exception
             "It left the collection on purpose — a client removes a '.' segment before the wire (RFC 3986 reference " +
             "resolution), so a URL whose shape says one-lane surgery arrived as a PUT on the collection and swapped " +
             $"the entire roster. Resend a wholesale write to 'PUT {rosterPath}', " +
-            $"or edit one lane at 'PUT {retiredPath}/{{name}}'.");
+            $"or edit one lane at 'PUT {retiredPath}/{{name}}'.",
+            $"Resend the full roster to 'PUT {rosterPath}', or address the single lane at its granular PUT route by name.");
 
     public static PlanningException LaneNotInRoster(string lane, IReadOnlyList<string> rosterNames) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneNotInRoster,
             $"Lane '{lane}' is not in the project roster; features join a lane only by roster name. " +
             $"Roster present: {(rosterNames.Count == 0 ? "(empty)" : string.Join(", ", rosterNames))}. " +
-            "Extend the roster via planning_set_lanes first.");
+            "Extend the roster via planning_set_lanes first.",
+            "Birth the lane first via planning_create_lane, then reassign the feature.");
 
     public static PlanningException LaneBirthRestricted(string name) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.LaneBirthRestricted,
             $"Lane '{name}' is not in the roster and set_lanes no longer births lanes — a payload may only " +
             "reshape lanes that already exist, and an empty payload is a no-op. Use planning_create_lane " +
-            "(or assignment via planning_update_feature) as the birth door.");
+            "(or assignment via planning_update_feature) as the birth door.",
+            $"Call planning_create_lane(name={name}) as the birth door, or assign the lane via planning_update_feature; set_lanes only reshapes known lanes.");
 
     public static PlanningException LaneStillOccupied(string lane, IReadOnlyList<string> slugs) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneStillOccupied,
             $"Lane '{lane}' still holds open features: {string.Join(", ", slugs)}. Removal is refused — " +
-            "close them as done or move them to another lane first; a lane with work in flight cannot be dropped.");
+            "close them as done or move them to another lane first; a lane with work in flight cannot be dropped.",
+            $"Move the listed features ({string.Join(", ", slugs)}) to another lane via planning_update_feature's lane field or close them done, then retry planning_remove_lane.");
 
     public static PlanningException LaneClaimHeld(
         string lane, string slug, string alias, string vendor, AgentSessionLiveness liveness) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.LaneClaimHeld,
             $"Lane '{lane}' is busy: feature '{slug}' holds an alive claim by {alias} by {vendor} " +
             $"({liveness.ToString().ToLowerInvariant()}). One agent owns a lane at a time — " +
-            "pick a feature outside this lane, or resend with overrideLaneCheck=true to claim anyway.");
+            "pick a feature outside this lane, or resend with overrideLaneCheck=true to claim anyway.",
+            $"Pick a feature outside lane '{lane}', coordinate with {alias} in the lane wave room, or resend planning_claim_feature with overrideLaneCheck=true to take the lane knowingly.");
 
     public static PlanningException MissingLane(string name) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingLane,
@@ -462,7 +513,8 @@ public sealed class PlanningException : Exception
             $"Directive text is {actual} characters; the limit is {limit} and the accept ceiling is {ceiling}. " +
             "Nothing was stored: a directive is a command, so this door never truncates. " +
             $"The tail that would have been lost reads \"{lostTailPreview}\". " +
-            "Compress below the ceiling and resend.");
+            "Compress below the ceiling and resend.",
+            "Split the command into two planning_append_directive calls each under the ceiling, or compress it below the ceiling and resend — a directive is never cut.");
 
     public static PlanningException MissingDirective(Guid directiveId) =>
         new(PlanningFailureKind.NotFound, PlanningFailureCode.MissingDirective,
@@ -483,7 +535,8 @@ public sealed class PlanningException : Exception
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.OperationIdConflict,
             $"Operation id '{operationId}' was already used with a different request (method, path or body differ). " +
             "An operation id replays only its own request: resend the identical payload to get the stored response, " +
-            "or mint a new id for a different operation.");
+            "or mint a new id for a different operation.",
+            "Resend the identical payload under the same operationId to replay the stored response, or mint a fresh operationId for a different operation.");
 
     public static PlanningException ArtifactOutsideCallerProject(
         Guid artifactId, Guid owningProjectId, Guid callerProjectId) =>
@@ -492,7 +545,8 @@ public sealed class PlanningException : Exception
             $"'{callerProjectId}'. The host compared the object you addressed with the conversation's project and " +
             "refused the call, so nothing was read or written and the artifact's content stayed on its own board. " +
             $"Address an artifact of '{callerProjectId}' — planning_list_artifacts lists that project's features — " +
-            $"or say to the owner that this work belongs to '{owningProjectId}'.");
+            $"or say to the owner that this work belongs to '{owningProjectId}'.",
+            $"Address an artifact of this conversation's project '{callerProjectId}' (planning_list_artifacts lists them), or hand the work to the owner of '{owningProjectId}' — do not retry across boards.");
 
     public static PlanningException IssueOutsideCallerProject(
         Guid issueId, Guid owningProjectId, Guid callerProjectId) =>
@@ -502,7 +556,8 @@ public sealed class PlanningException : Exception
             "refused the call, so nothing was read or written and the issue stayed on its own board. " +
             $"Address an issue of '{callerProjectId}' — issues_list reads that board — or file a request on " +
             $"'{owningProjectId}' with issues_create, which is the door that may write to another board while " +
-            "presenting your own project.");
+            "presenting your own project.",
+            $"To ask for the fix on '{owningProjectId}', file it there with issues_create instead of editing that board's issue from this conversation.");
 
     public static PlanningException EntryOutsideCallerProject(
         Guid entryId, Guid owningProjectId, Guid callerProjectId) =>
@@ -512,7 +567,8 @@ public sealed class PlanningException : Exception
             "refused the call, so nothing was read, changed or deleted and the entry stayed on its own board. " +
             $"Address an entry of '{callerProjectId}' — list_entries reads that project's notes, decisions, gates " +
             "and guards. Another project's context is not this conversation's to edit; if the knowledge belongs " +
-            $"there, say so to the owner of '{owningProjectId}'.");
+            $"there, say so to the owner of '{owningProjectId}'.",
+            $"Address an entry of this conversation's project '{callerProjectId}' via list_entries, or tell the owner of '{owningProjectId}' — another project's context is not editable from here.");
 
     public static PlanningException AgentCallerScopeUnverifiable(string defect) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AgentCallerScopeUnverifiable,
@@ -520,5 +576,6 @@ public sealed class PlanningException : Exception
             "belongs to, and refusing beats guessing — nothing was read or written. The agent marker and the caller " +
             "scope travel only as a pair, emitted together by the embedded-agent transport and never assembled by " +
             "hand; a conversation without a project still sends the pair, with the scope written as the literal " +
-            "'global'.");
+            "'global'.",
+            "Re-run overmind_onboard so the session registers its project scope (set OVERMIND_PROJECT_ID for worktree layouts), then retry — the marker pair is transport-emitted, never hand-assembled.");
 }
