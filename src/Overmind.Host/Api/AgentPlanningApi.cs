@@ -591,7 +591,7 @@ public static class AgentPlanningApi
         var section = request.Section.Trim();
 
         var soft = new List<object>();
-        var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft, singleLine: true);
+        var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft);
         var patchLogNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
 
         try
@@ -699,12 +699,17 @@ public static class AgentPlanningApi
                     "upsert_tasks requires every tasks[] entry to be an object carrying a task body."));
             }
 
+            if (SoftCapSoften.IsMultiline(task.Brief))
+            {
+                throw PlanningException.BatchOp(index, PlanningException.InvalidBrief());
+            }
+
             mapped[i] = new PlanningTaskUpsert(
                 task.Body,
                 task.Order,
                 task.Review,
                 SoftCapSoften.Cap(task.LogNote, SoftCapLimits.LogLine, soft),
-                SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true),
+                SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft),
                 task.BlockedBy);
         }
 
@@ -727,17 +732,22 @@ public static class AgentPlanningApi
         }
 
         var op = wirePatch.Op!.Trim();
+        if (SoftCapSoften.IsMultiline(wirePatch.Brief))
+        {
+            throw PlanningException.BatchOp(index, PlanningException.InvalidBrief());
+        }
+
         return new PlanningBatchOp(
             PlanningBatchOpName.Patch,
             ArtifactId: artifactId,
             Patch: new PlanningArtifactPatch(
                 wirePatch.Section, wirePatch.Content, wirePatch.AcIndex, wirePatch.AcText,
-                SoftCapSoften.Cap(wirePatch.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true),
+                SoftCapSoften.Cap(wirePatch.Brief, PlanningArtifact.BriefMaxLength, soft),
                 SoftCapSoften.Cap(wirePatch.LogNote, SoftCapLimits.LogLine, soft),
                 Untick: op == "untick_ac",
                 Amend: op == "amend_result",
                 Remove: op == "remove_section",
-                Reason: SoftCapSoften.Cap(wirePatch.Reason, SoftCapLimits.Reason, soft, singleLine: true)));
+                Reason: SoftCapSoften.Cap(wirePatch.Reason, SoftCapLimits.Reason, soft)));
     }
 
     private static async Task<PlanningBatchOp> MapSetStatusOpAsync(
@@ -1066,10 +1076,17 @@ public static class AgentPlanningApi
             return PlanningErrors.Map(PlanningException.InvalidPatchRequest());
         }
 
+        // Brief is a single-line field: newlines are rejected on the WHOLE payload before the
+        // soft cap runs — truncation of a long multiline brief would launder the violation away.
+        if (SoftCapSoften.IsMultiline(request.Brief))
+        {
+            return PlanningErrors.Map(PlanningException.InvalidBrief());
+        }
+
         var soft = new List<object>();
-        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true);
+        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft);
         var patchLogNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
-        var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft, singleLine: true);
+        var patchReason = SoftCapSoften.Cap(request.Reason, SoftCapLimits.Reason, soft);
 
         try
         {

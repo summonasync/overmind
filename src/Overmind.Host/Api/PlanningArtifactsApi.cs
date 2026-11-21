@@ -71,7 +71,7 @@ public static class PlanningArtifactsApi
         }
 
         var soft = new List<object>();
-        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true);
+        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft);
         var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
 
         try
@@ -137,7 +137,7 @@ public static class PlanningArtifactsApi
                 task.Order,
                 task.Review,
                 SoftCapSoften.Cap(task.LogNote, SoftCapLimits.LogLine, soft),
-                SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true),
+                SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft),
                 task.BlockedBy);
         }
 
@@ -258,7 +258,7 @@ public static class PlanningArtifactsApi
         }
 
         var soft = new List<object>();
-        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft, singleLine: true);
+        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft);
         var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
 
         try
@@ -452,7 +452,7 @@ public static class PlanningArtifactsApi
         }
 
         var soft = new List<object>();
-        var reason = SoftCapSoften.Cap(body.Reason, SoftCapLimits.Reason, soft, singleLine: true);
+        var reason = SoftCapSoften.Cap(body.Reason, SoftCapLimits.Reason, soft);
 
         try
         {

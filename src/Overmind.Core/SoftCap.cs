@@ -14,7 +14,9 @@ public static class SoftCap
 
     public static int Ceiling(int limit) => limit + limit / 5 + limit / 50;
 
-    public static SoftCapOutcome Apply(string? text, int limit, bool singleLine = false)
+    // Zone math only. Field-shape rules (single-line, blankness) belong to the doors and run
+    // BEFORE this call — a prefix can never gain a newline, and capping must not launder one away.
+    public static SoftCapOutcome Apply(string? text, int limit)
     {
         if (text is null)
         {
@@ -36,7 +38,7 @@ public static class SoftCap
             });
         }
 
-        var stored = Cut(text, Keep(limit), singleLine);
+        var stored = Cut(text, Keep(limit));
         return new SoftCapOutcome(stored, new SoftCapWarning
         {
             AcceptedLen = stored.Length,
@@ -46,7 +48,7 @@ public static class SoftCap
         });
     }
 
-    private static string Cut(string text, int keep, bool singleLine)
+    private static string Cut(string text, int keep)
     {
         var end = keep;
         if (end > 0 && end < text.Length &&
@@ -55,17 +57,7 @@ public static class SoftCap
             end--;
         }
 
-        var stored = text[..end];
-        if (singleLine && stored.AsSpan().IndexOfAny('\r', '\n') >= 0)
-        {
-            // A prefix can never gain a newline a truncation did not already leave behind —
-            // reachable only if a door skipped its own newline rule before soft-capping.
-            throw new InvalidOperationException(
-                "Soft-cap truncation produced a multi-line value for a single-line field; " +
-                "the door must validate newlines on the whole payload before capping.");
-        }
-
-        return stored;
+        return text[..end];
     }
 
     private static string? TailPreview(string dropped)

@@ -7,9 +7,11 @@ namespace Overmind.Host.Api;
 // SoftCap only — doors name the limit, never derive band numbers.
 internal static class SoftCapSoften
 {
-    public static string? Cap(string? value, int limit, List<object> warnings, bool singleLine = false)
+    // Field-shape rules run at the door before this helper: single-line fields must have had
+    // their newlines rejected on the WHOLE payload first, or truncation would launder them.
+    public static string? Cap(string? value, int limit, List<object> warnings)
     {
-        var outcome = SoftCap.Apply(value, limit, singleLine);
+        var outcome = SoftCap.Apply(value, limit);
         if (outcome.Warning is { } warning)
         {
             warnings.Add(warning);
@@ -17,6 +19,9 @@ internal static class SoftCapSoften
 
         return outcome.Stored;
     }
+
+    public static bool IsMultiline(string? value) =>
+        value is not null && value.AsSpan().IndexOfAny('\r', '\n') >= 0;
 
     public static IReadOnlyList<object>? Merge(List<object> warnings, IReadOnlyList<string>? domainWarnings = null)
     {
