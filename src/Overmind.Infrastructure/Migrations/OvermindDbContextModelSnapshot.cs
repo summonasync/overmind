@@ -83,6 +83,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime>("LastSeenAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ReplyCursorAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

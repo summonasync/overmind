@@ -290,4 +290,22 @@ public class AgentSessionTests
 
         session.Role.ShouldBe(AgentSession.DefaultRole);
     }
+
+    [Fact]
+    public void AdvanceReplyCursor_MovesForwardOnly()
+    {
+        var session = AgentSession.Create("Dan", "qwen");
+
+        session.ReplyCursorAt.ShouldBeNull();
+
+        var start = DateTime.UtcNow.AddMinutes(-10);
+        session.AdvanceReplyCursor(start);
+        session.ReplyCursorAt.ShouldBe(start);
+
+        session.AdvanceReplyCursor(start.AddMinutes(-5));
+        session.ReplyCursorAt.ShouldBe(start);
+
+        session.AdvanceReplyCursor(start.AddMinutes(5));
+        session.ReplyCursorAt.ShouldBe(start.AddMinutes(5));
+    }
 }

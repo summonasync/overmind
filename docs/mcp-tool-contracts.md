@@ -23,16 +23,16 @@ Advances no watermarks, marks nothing read — safe to poll any time.
 
 **Default windows (omit `since`).**
 
-- Replies: notifications carrying `ReplyText` whose `readAt` is null — a consumed reply leaves
-  the default window immediately. The window looks back 7 days; override with
-  `OVERMIND_WAKE_REPLY_LOOKBACK_DAYS` on the host (values below 1 clamp to 1, values above 365
-  clamp to 365 so one env typo cannot reach a `TimeSpan` overflow). The mention arm never reads
-  that variable.
+- Replies: notifications carrying a reply whose `RepliedAt` is after the session's reply cursor.
+  The cursor advances when `overmind_replies` delivers a final page (see that section), so a
+  reply stays visible until the peek→replies flow completed. A session with no cursor starts at
+  `now` — a fresh session never re-lights older replies.
 - Mentions: messages created after the session's `LastSeenAt` as it stood before this request.
 
 **Explicit `since` is the replay override.** When `since` is present (a bare timestamp or a
-cursor echo), the reply arm also returns consumed (`readAt`) notifications in the window —
-that is how replayed or paged traffic looks complete. The mention arm bounds at the same instant.
+cursor echo) it replaces the reply cursor for this one call, so already-consumed replies come
+back — that is how replayed or paged traffic looks complete. The mention arm bounds at the same
+instant.
 
 **Project scoping.** The adapter appends `projectId=<resolved>` to the wake request whenever its
 own ProjectResolver yields one (env `OVERMIND_PROJECT_ID`, project pin, or host onboard reply —
@@ -43,7 +43,8 @@ foreign-project replies stop showing up. The mention arm has no project filter.
 **Paging.** ≤100 signals per page, ordered by `createdAt` asc, ties broken by `refId`. The cursor
 is the newest `createdAt` seen followed by `'|'` and the newest signal's `refId`, or the request
 `since` on an empty page. Feed the cursor back verbatim as `since` and repeat until an under-cap
-page arrives; the cursor is inclusive-exact, so no loss or duplicates across a tie group.
+page arrives. The cursor is inclusive-exact: the tie group at the cursor instant is refetched and
+everything at or before the cursor's `refId` is dropped, so no loss or duplicates across a tie.
 
 **Session identity.** The adapter stamps its registered session automatically; a headerless or
 unknown session fails with a named error (`POST /api/agent/sessions` registers).
@@ -51,7 +52,7 @@ unknown session fails with a named error (`POST /api/agent/sessions` registers).
 **Host wire shape.** `GET /api/agent/wake` with optional `since` (ISO 8601, optionally
 `|<refId>` — malformed values return 400 naming the expected shape) and optional `projectId`
 (adapter-internal; not a tool parameter). The response JSON above is the agent-facing contract
-and is unchanged by the lookback, consumption and scoping work; only the row set moved.
+and is unchanged by the cursor work; only the reply arm's default window moved.
 
 <!-- append-regions: the two diet batches fill disjoint zones of this file so parallel lanes
      never collide on the same lines. Insert a tool's section INSIDE its own region, above its
@@ -1142,12 +1143,20 @@ No additional prose — the tool description lost nothing.
 - Notifications you sent via `overmind_notify` that carry a reply, newest first; each item's
   `replyText` is the human's decision. Poll it after asking a question or requesting
   approval.
+- **Consumption.** A read from a registered session (the adapter stamps `X-Overmind-Session`)
+  advances that session's reply cursor to the newest `RepliedAt` on the page — forward-only —
+  when the page is complete: a list short of the 50-reply delivery cap. A full page may have
+  more behind it, so the advance is skipped; page through with `since` until a list comes back
+  short and that final read advances the cursor. Headerless or unknown sessions get a
+  read-only listing, and an empty page advances nothing. This advance is what retires replies
+  from `overmind_wake_peek`'s default window — shown there = the peek→replies flow completed.
 - Filters combine (AND): `since` — only replies newer than it, e.g. the artifact's last
   update when hunting a validation proof; the zone offset is optional and offset-less values
   read as UTC, the way artifact timestamps are emitted. `kind` — info/question/approval.
   `featureSlug`. An over-narrow filter returns an empty array, not an error.
-- Delivery marks the notification read (`includeRead` semantics: false matches nothing —
-  poll with the default).
+- `includeRead=false` narrows to notifications the human has not read yet (`ReadAt` null); the
+  default lists replies regardless of read state. Read state is the human's inbox mechanic,
+  not the delivery cursor — the reply cursor is.
 
 ## overmind_onboard
 
