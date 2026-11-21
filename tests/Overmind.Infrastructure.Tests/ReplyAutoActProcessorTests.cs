@@ -63,13 +63,32 @@ public sealed class ReplyAutoActProcessorTests : IDisposable
         info.FeatureSlug.ShouldBe("specs");
     }
 
+    // Feature 259 freshness: a reply covers a never-edited first draft even when it predates the
+    // draft; staleness that skips the auto-act is a gated EDIT after the reply.
     [Fact]
-    public async Task Process_StaleReply_SkipsValidation()
+    public async Task Process_ReplyOlderThanANeverEditedDraft_CoversIt()
     {
         await SetAutoActAsync(true);
         var feature = await CreateFeatureAsync("late-spec");
         var notification = await CreateApprovalAsync("late-spec", "spec", DateTime.UtcNow.AddMinutes(-5));
         await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
+
+        var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
+
+        result.Acted.ShouldBeTrue();
+        var validated = await _context.PlanningArtifacts.SingleAsync(a => a.FeatureId == feature.Id);
+        validated.Status.ShouldBe(PlanningArtifactStatus.Validated);
+    }
+
+    [Fact]
+    public async Task Process_ReplyOlderThanLastGatedEdit_SkipsValidation()
+    {
+        await SetAutoActAsync(true);
+        var feature = await CreateFeatureAsync("late-spec");
+        var artifact = await CreateArtifactAsync(feature.Id, PlanningArtifactKind.Spec);
+        artifact.UpdateBody($"{PlanningArtifactKind.Spec} body edited after the reply", "edited after the tap");
+        await _context.SaveChangesAsync();
+        var notification = await CreateApprovalAsync("late-spec", "spec", DateTime.UtcNow.AddMinutes(-5));
 
         var result = await CreateProcessor().ProcessAsync(notification.Id, CancellationToken.None);
 

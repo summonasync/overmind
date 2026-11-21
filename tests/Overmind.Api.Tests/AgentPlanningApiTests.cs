@@ -484,9 +484,10 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("ValidationProofRequired");
-        problem.Detail!.ShouldBe(
+        problem.Detail!.ShouldStartWith(
             "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
             "and wait for the human's reply in the notification center, or validate via the UI.");
+        problem.Detail!.ShouldContain("One reply validates the spec and the plan together");
     }
 
     [Fact]
@@ -590,9 +591,10 @@ public sealed class AgentPlanningApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem!.Title.ShouldBe("ValidationProofRequired");
-        problem.Detail!.ShouldBe(
+        problem.Detail!.ShouldStartWith(
             "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
             "and wait for the human's reply in the notification center, or validate via the UI.");
+        problem.Detail!.ShouldContain("One reply validates the spec and the plan together");
     }
 
     [Fact]
