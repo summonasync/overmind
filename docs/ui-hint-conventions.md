@@ -30,7 +30,7 @@ Keep the native attribute, change nothing, when the claim is not a claim:
 
 Exception worth naming: `title={maybeUndefined}` on a state branch ships no tooltip at all —
 React omits an undefined `title` attribute, so the affordance is an absent bubble, not an empty
-one. `feature-claim-chip.tsx:57` did that for a stale chip with no `claimedAt` (pre-fix); branch the
+one. `feature-claim-chip.tsx:56` did that for a stale chip with no `claimedAt` (pre-fix); branch the
 text or drop the attribute.
 
 CSS truncation alone never makes a plain title a disclosure gap.
@@ -45,7 +45,7 @@ state or discloses an outcome (who holds a claim, why something is blocked, what
 decision was, whether a folder is readable). T2 converted 10 rows on this test, T1 2 badge rows.
 
 Converting keeps the visible `title=` for mouse users — the fix is an extra AT path, not a swap
-(`feature-claim-chip.tsx:57` still carries the title after `5a7f81ca`).
+(`feature-claim-chip.tsx:56` still carries the title after `5a7f81ca`).
 
 `aria-label` on the same tag clears the harness mouse-only flag but does not clear the visual
 gap: the native bubble still only renders on hover, so a keyboard-only sighted user sees nothing.
