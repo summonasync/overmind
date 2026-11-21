@@ -8,7 +8,6 @@
     <InternalsVisibleTo Include="Overmind.Mcp.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Overmind.Core\Overmind.Core.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="Tomlyn" />
