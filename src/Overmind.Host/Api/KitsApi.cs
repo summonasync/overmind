@@ -118,6 +118,7 @@ public static class KitsApi
         string? deployedFiles,
         OvermindDbContext db,
         HomeKitDeployer deployer,
+        IReadOnlyList<AgentHomeSpec> agentHomes,
         CancellationToken ct)
     {
         var kit = await db.SkillKits.FirstOrDefaultAsync(k => k.Id == id, ct);
@@ -139,6 +140,13 @@ public static class KitsApi
             return await DeleteKitRow(db, kit, ct);
         }
 
+        if (kit.Mandatory)
+        {
+            return HttpErrors.Conflict(
+                $"Mandatory kit '{kit.Name}' cannot be deleted while globally deployed.",
+                title: "MandatoryGlobalKit");
+        }
+
         if (deployedFiles is null)
         {
             return HttpErrors.Conflict(
@@ -154,11 +162,24 @@ public static class KitsApi
 
         if (deployedFiles == "remove")
         {
-            foreach (var platform in fileRows.Select(r => r.Platform)
-                         .Concat(markerRows.Select(r => r.Platform))
-                         .Distinct())
+            try
             {
-                await deployer.DematerializeAsync(id, platform.ToString().ToLowerInvariant(), ct);
+                foreach (var platform in fileRows.Select(r => r.Platform)
+                             .Concat(markerRows.Select(r => r.Platform))
+                             .Distinct())
+                {
+                    var agentName = agentHomes.FirstOrDefault(s => s.Platform == platform)?.AgentName
+                        ?? platform.ToString().ToLowerInvariant();
+                    await deployer.DematerializeAsync(id, agentName, ct);
+                }
+            }
+            catch (MaterializationException ex)
+            {
+                return MaterializationErrors.Map(ex);
+            }
+            catch (KitActivationException ex)
+            {
+                return KitActivationErrors.Map(ex);
             }
 
             fileRows = await db.GlobalMaterializedFiles.Where(f => f.KitId == id).ToListAsync(ct);

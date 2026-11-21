@@ -58,7 +58,7 @@ export function KitsPage() {
 
   const expandedKit = kits.find((kit) => kit.id === expandedKitId) ?? null;
   const deletingDeployed =
-    deleting !== null && (globalState ?? []).some((s) => s.kitId === deleting.id && s.state === "deployed");
+    deleting !== null && (globalState ?? []).some((s) => s.kitId === deleting.id && s.state !== "undeployed");
 
   return (
     <div className="space-y-4">

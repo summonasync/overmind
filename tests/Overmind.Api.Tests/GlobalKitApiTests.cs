@@ -170,6 +170,56 @@ public sealed class GlobalKitApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_rejects_an_invalid_deployed_files_flag()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=whatever");
+        delete.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Delete_refuses_a_deployed_mandatory_kit()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            var kit = await db.SkillKits.FindAsync(kitId);
+            kit!.SetMandatory(true);
+            await db.SaveChangesAsync();
+        }
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=keep");
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Delete_remove_dematerializes_kimi_code_by_its_registry_name()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        var skillFile = Path.Combine(_homeRoot, ".kimi-code", "skills", "dotnet-coder", "SKILL.md");
+        Directory.CreateDirectory(Path.Combine(_homeRoot, ".kimi-code", "skills"));
+        var kimiDeploy = await _client.PostAsync($"/api/kits/{kitId}/global/kimi-code?force=false", null);
+        if (kimiDeploy.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception("KIMI DEPLOY: " + await kimiDeploy.Content.ReadAsStringAsync());
+        }
+        File.Exists(skillFile).ShouldBeTrue();
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(skillFile).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Delete_of_an_undeployed_kit_ignores_the_flag()
     {
         var kitId = await SeedBundledKitAsync("dotnet-crew", WriteSkillSource("dotnet-crew", "dotnet-coder"));
