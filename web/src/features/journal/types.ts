@@ -1,6 +1,15 @@
 import type { EntryType } from "@/shared/api/types";
 
-export type JournalLinkKind = "entry" | "feature" | "project";
+// The rail's outgoing-link vocabulary — the four target kinds the Host can put on the wire as
+// `outgoing[].kind`. It is a mirror of `EntryLinkKind` serialised by the Host's camelCase enum
+// converter (`DependencyInjection.cs`, `ConfigureHttpJsonOptions` →
+// `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)`), so the members are spelled as they
+// arrive: `"entry"`, not `"Entry"`.
+//
+// `task` is the fourth member and it arrived with feature 237's promotion edge: triage points a
+// note at a board task, and a rail that had no arm for it filed the row under features. This is
+// NOT the graph's node vocabulary — see `GraphNodeKind`, which deliberately cannot express `task`.
+export type JournalLinkKind = "entry" | "feature" | "project" | "task";
 
 export interface JournalOutgoingLink {
   kind: JournalLinkKind;

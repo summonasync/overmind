@@ -1,7 +1,11 @@
 "use client";
 
 import { RailHeading } from "@/features/journal/components/backlinks-rail";
-import { groupOutgoing, outgoingHref } from "@/features/journal/lib/note-rails";
+import {
+  groupOutgoing,
+  outgoingDeadEndReason,
+  outgoingHref,
+} from "@/features/journal/lib/note-rails";
 import type { JournalOutgoingLink } from "@/features/journal/types";
 
 interface OutgoingRailProps {
@@ -11,8 +15,8 @@ interface OutgoingRailProps {
 
 // The outgoing half of the graph, read off the Host's resolved edges (R7) — nothing here
 // re-parses the body. Passport §4 groups it as Linked project / Linked features; notes are
-// the third group the grammar allows, and an empty group renders nothing rather than a
-// heading over air.
+// the third group the grammar allows, tasks the fourth that 237's promotion edge made
+// reachable, and an empty group renders nothing rather than a heading over air.
 export function OutgoingRail({ links, onNavigate }: OutgoingRailProps) {
   if (links.length === 0) {
     return null;
@@ -22,6 +26,8 @@ export function OutgoingRail({ links, onNavigate }: OutgoingRailProps) {
     { title: "Linked notes", rows: groups.notes },
     { title: "Linked projects", rows: groups.projects },
     { title: "Linked features", rows: groups.features },
+    { title: "Linked tasks", rows: groups.tasks },
+    { title: "Links this build cannot label", rows: groups.other },
   ].filter((section) => section.rows.length > 0);
 
   return (
@@ -33,18 +39,18 @@ export function OutgoingRail({ links, onNavigate }: OutgoingRailProps) {
             {section.rows.map((link) => {
               const href = outgoingHref(link);
               if (href === null) {
-                // A resolved feature edge carries the feature's guid and title, and every
-                // feature URL in this app is built from `project=<id>&feature=<slug>`
-                // (`feature-dependencies-panel.tsx:39`), which the DTO does not have. Guessing
-                // one would land the owner on the wrong board, so the row shows the truth it
-                // was given and stays a label. Filed as an obstacle on the task.
+                // A row the payload cannot address says so in visible text, not only in a
+                // tooltip: an unclickable row that looks like every other row is how a
+                // mis-filed kind stays unnoticed. The reasons live in `outgoingDeadEndReason`,
+                // next to the href rule that decides them.
                 return (
                   <li key={`${link.kind}:${link.id}`} className="min-w-0">
                     <span
-                      title="The detail payload labels this edge by title and guid only — no slug to build a link from."
-                      className="block truncate text-sm text-foreground"
+                      title={outgoingDeadEndReason(link) ?? undefined}
+                      className="flex min-w-0 items-baseline gap-2 text-sm"
                     >
-                      {label(link)}
+                      <span className="truncate text-foreground">{label(link)}</span>
+                      <span className="shrink-0 text-xs text-muted">no link yet</span>
                     </span>
                   </li>
                 );
@@ -76,5 +82,10 @@ function label(link: JournalOutgoingLink): string {
   if (trimmed.length > 0) {
     return trimmed;
   }
-  return link.kind === "project" ? "Untitled project" : "Untitled note";
+  // Only the two kinds the payload genuinely labels by title get a noun; guessing "note" for a
+  // task row would put a word on screen the edge never carried.
+  if (link.kind === "project") {
+    return "Untitled project";
+  }
+  return link.kind === "entry" ? "Untitled note" : "Untitled target";
 }
