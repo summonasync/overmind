@@ -136,7 +136,7 @@ public static class LanesApi
         return await WriteAsync(
             projectId,
             new LaneUpsert(
-                DecodedName(name),
+                RouteNameDecoder.Decode(name),
                 SoftCapSoften.Cap(request.Contour, PlanningLane.MaxContourLength, soft),
                 request.SerialOrder,
                 request.Priority,
@@ -158,7 +158,7 @@ public static class LanesApi
     {
         try
         {
-            var roster = await lanes.DeleteLaneAsync(projectId, DecodedName(name), ct);
+            var roster = await lanes.DeleteLaneAsync(projectId, RouteNameDecoder.Decode(name), ct);
             return Results.Ok(ToResponse(roster));
         }
         catch (PlanningException ex)
@@ -170,10 +170,6 @@ public static class LanesApi
             return HttpErrors.BadRequest(ex.Message);
         }
     }
-
-    // Routing unescapes every route value except %2F (measured on the deployed Host, see WaveChatApi's
-    // DecodedRoom note), so a lane stored with a real slash arrives as `A%2FB` and only that escape is restored.
-    private static string DecodedName(string name) => name.Replace("%2F", "/", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<IResult> WriteAsync(
         Guid projectId, LaneUpsert lane, LaneWriteMode mode, LaneService lanes, List<object> soft, CancellationToken ct)

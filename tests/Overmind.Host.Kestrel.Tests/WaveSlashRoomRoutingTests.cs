@@ -101,6 +101,100 @@ public sealed class WaveSlashRoomRoutingTests(KestrelApiFactory factory)
         raw.Content.Headers.ContentType.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task DoubleEncodedWireName_LandsInTheLiteralRoom_NeverInTheSpelledTwins()
+    {
+        const string literalRoom = "zz.Cross%20A";
+        const string spacedRoom = "zz.Cross A";
+        using var client = factory.CreateWireClient();
+        var projectId = await CreateProjectAsync(client);
+        await SeedLegacyLaneAsync(projectId, literalRoom);
+        await SeedLegacyLaneAsync(projectId, spacedRoom);
+        await SeedAgentSessionAsync();
+
+        var wire = Uri.EscapeDataString(literalRoom);
+        var posted = await SendAgentAsync(
+            client, HttpMethod.Post, $"/api/agent/projects/{projectId}/wave/rooms/{wire}/messages",
+            new { Text = "cross delivery probe" });
+
+        posted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await posted.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        message.GetProperty("room").GetString().ShouldBe(literalRoom);
+
+        var literalHistory = await SendAgentAsync(
+            client, HttpMethod.Get, $"/api/agent/projects/{projectId}/wave/rooms/{wire}/messages", null);
+        literalHistory.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var literalPage = await literalHistory.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        RoomsOf(literalPage).ShouldBe([literalRoom]);
+
+        var spacedSegment = Uri.EscapeDataString(spacedRoom);
+        var spacedHistory = await SendAgentAsync(
+            client, HttpMethod.Get, $"/api/agent/projects/{projectId}/wave/rooms/{spacedSegment}/messages", null);
+        spacedHistory.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var spacedPage = await spacedHistory.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        RoomsOf(spacedPage).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task LiteralEscapeName_IsShadowedByItsSlashTwin_AndAnswersNamed404WhileTheTwinIsAbsent()
+    {
+        const string shadowedName = "zz.Pair%2FTest";
+        const string twinName = "zz.Pair/Test";
+        var shadowedWire = Uri.EscapeDataString(shadowedName);
+        using var client = factory.CreateWireClient();
+        var projectId = await CreateProjectAsync(client);
+        await SeedLegacyLaneAsync(projectId, shadowedName);
+        await SeedAgentSessionAsync();
+
+        var orphan = await SendAgentAsync(
+            client, HttpMethod.Get, $"/api/agent/projects/{projectId}/wave/rooms/{shadowedWire}/peek", null);
+        orphan.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var orphanProblem = await orphan.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        orphanProblem.GetProperty("title").GetString().ShouldBe("MissingWaveRoom");
+        orphanProblem.GetProperty("detail").GetString()!.ShouldContain(twinName);
+
+        await SeedLegacyLaneAsync(projectId, twinName);
+        var twin = await SendAgentAsync(
+            client, HttpMethod.Get, $"/api/agent/projects/{projectId}/wave/rooms/{shadowedWire}/peek", null);
+        twin.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var twinCounts = await twin.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        twinCounts.GetProperty("room").GetString().ShouldBe(twinName);
+    }
+
+    [Fact]
+    public async Task TrailingPercentName_RoundTripsLiterally_AndAnUnknownGhostAnswersNamed404NotAThrow()
+    {
+        const string percentRoom = "release 50%";
+        var percentWire = Uri.EscapeDataString(percentRoom);
+        using var client = factory.CreateWireClient();
+        var projectId = await CreateProjectAsync(client);
+        await SeedLegacyLaneAsync(projectId, percentRoom);
+        await SeedAgentSessionAsync();
+
+        var posted = await SendAgentAsync(
+            client, HttpMethod.Post, $"/api/agent/projects/{projectId}/wave/rooms/{percentWire}/messages",
+            new { Text = "percent tail survives" });
+
+        posted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await posted.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        message.GetProperty("room").GetString().ShouldBe(percentRoom);
+
+        var peek = await SendAgentAsync(
+            client, HttpMethod.Get, $"/api/agent/projects/{projectId}/wave/rooms/{percentWire}/peek", null);
+        peek.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var counts = await peek.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        counts.GetProperty("room").GetString().ShouldBe(percentRoom);
+        counts.GetProperty("count").GetInt32().ShouldBe(1);
+
+        var ghostWire = Uri.EscapeDataString("zz.Ghost%");
+        var ghost = await SendAgentAsync(
+            client, HttpMethod.Get, $"/api/agent/projects/{projectId}/wave/rooms/{ghostWire}/peek", null);
+        ghost.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var ghostProblem = await ghost.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        ghostProblem.GetProperty("title").GetString().ShouldBe("MissingWaveRoom");
+        ghostProblem.GetProperty("detail").GetString()!.ShouldContain("zz.Ghost%");
+    }
+
     private async Task<HttpResponseMessage> SendAgentAsync(
         HttpClient client, HttpMethod method, string url, object? body)
     {
