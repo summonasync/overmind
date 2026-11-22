@@ -4,15 +4,19 @@
 Both install.sh and install.ps1 delegate here so the merge semantics have one
 implementation: existing entries (foreign hooks included) are never rewritten,
 kit entries are keyed by the kit marker path and are therefore idempotent.
+Installers use `apply`, which builds the entry from the manifest in-process —
+no JSON ever crosses the argv boundary (Windows PowerShell 5.1 mangles quoted
+native args).
 """
 import json
 import os
 import sys
 
 USAGE = """usage:
-  settings_merge.py entry ROOT RUNTIME              print the {event: [group]} hook entry JSON
-  settings_merge.py merge PATH EVENT ENTRY MARKER   merge entry into settings file PATH
-  settings_merge.py unmerge PATH MARKER             remove marker-matched entries from PATH
+  settings_merge.py apply ROOT RUNTIME SETTINGS MARKER  build entry from manifest, merge into SETTINGS
+  settings_merge.py entry ROOT RUNTIME                  print the {event: [group]} hook entry JSON
+  settings_merge.py merge PATH EVENT ENTRY MARKER       merge pre-built entry JSON into PATH
+  settings_merge.py unmerge PATH MARKER                 remove marker-matched entries from PATH
 """
 
 
@@ -119,6 +123,18 @@ def unmerge(path, marker):
     print(f"grimoire-kit: removed {removed} hook entr{'y' if removed == 1 else 'ies'} from {path}")
 
 
+def apply(root, runtime, settings_path, marker):
+    """Build the runtime's hook entry from its manifest and merge it in one go.
+
+    Installers call this instead of ferrying the entry JSON through argv: plain
+    strings only cross the process boundary, which Windows PowerShell 5.1
+    handles without quote mangling.
+    """
+    entry = build_entry(root, runtime)
+    event = next(iter(entry))
+    merge(settings_path, event, entry, marker)
+
+
 def main(argv):
     if len(argv) >= 4 and argv[1] == "entry":
         print(json.dumps(build_entry(argv[2], argv[3])))
@@ -128,6 +144,9 @@ def main(argv):
         return 0
     if len(argv) >= 4 and argv[1] == "unmerge":
         unmerge(argv[2], argv[3])
+        return 0
+    if len(argv) >= 6 and argv[1] == "apply":
+        apply(argv[2], argv[3], argv[4], argv[5])
         return 0
     sys.stderr.write(USAGE)
     return 2

@@ -147,9 +147,7 @@ for rt in claude qwen; do
     if [[ $UNINSTALL == 1 ]]; then
         python3 "$MERGE_TOOL" unmerge "$settings" "$MARKER"
     else
-        entry="$(python3 "$MERGE_TOOL" entry "$ROOT" "$rt")"
-        event="$(manifest_field "m['hooks']['$rt']['event']")"
-        python3 "$MERGE_TOOL" merge "$settings" "$event" "$entry" "$MARKER"
+        python3 "$MERGE_TOOL" apply "$ROOT" "$rt" "$settings" "$MARKER"
     fi
 done
 
