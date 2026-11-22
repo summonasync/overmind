@@ -182,15 +182,19 @@ public sealed class OvermindApiClient
             var errors = ProblemDetailsReader.FormatErrors(problem);
             if (errors.Length > 0)
             {
-                message += $". Errors: {errors}";
+                // host details usually end with a period of their own — never stack two
+                message = EnsurePeriod(message) + $" Errors: {errors}";
             }
         }
 
         if (!string.IsNullOrWhiteSpace(problem?.Fix))
         {
-            message += $". Fix: {problem.Fix}";
+            message = EnsurePeriod(message) + $" Fix: {problem.Fix}";
         }
 
         return message;
     }
+
+    private static string EnsurePeriod(string message) =>
+        message.EndsWith(".", StringComparison.Ordinal) ? message : message + ".";
 }

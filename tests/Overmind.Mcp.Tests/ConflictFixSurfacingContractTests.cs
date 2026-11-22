@@ -39,6 +39,7 @@ public class ConflictFixSurfacingContractTests : McpSessionTestBase
         text.ShouldContain("overmind API returned 409 (POST " + UpdatePath + "): ");
         text.ShouldContain("claim held by Dan by qwen");
         text.ShouldContain(". Fix: Coordinate with Dan by qwen");
+        text.ShouldNotContain(".. Fix:"); // the detail already ends with a period — no stacked dot
         Driver.HasExited.ShouldBeFalse();
     }
 

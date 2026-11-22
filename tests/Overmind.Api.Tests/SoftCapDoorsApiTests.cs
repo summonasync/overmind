@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shouldly;
@@ -322,21 +323,43 @@ public sealed class SoftCapDoorsApiTests : IDisposable
 
     // ---- denominators: prove the table actually ran ----
 
+    // Door HTTP cases a method runs per xUnit case — 1 unless the body fires several
+    // soft-cap doors back to back. nameof() keys are compile-checked, so deleting or
+    // renaming the method breaks the build, not the census silently.
+    private static readonly Dictionary<string, int> MultiDoorCases = new()
+    {
+        [nameof(LaneRosterSet_SoftCapsEveryContour_AndUpdateDoorWarns)] = 2,
+    };
+
     [Fact]
     public void Denominator_PrintsEveryFieldZoneCensus()
     {
-        // keep in sync with the InlineData counts below; the assertion makes a silent shrink loud.
-        int doorCases =
-            3 /* notify */ + 1 + 1 /* notify silent */ + 2 /* issues */ + 2 /* entry */ +
-            3 /* brief theory */ + 1 /* brief multiline */ + 1 /* patch brief */ + 1 /* tasks */ +
-            2 /* decline reason */ + 2 /* lane create */ + 2 /* roster+update */ +
-            2 /* append log */ + 1 /* set status note */ + 2 /* batch */ + 1 /* blank */;
+        // Derived from the attributes xUnit itself expands (theory InlineData rows, facts as
+        // single cases) plus the MultiDoorCases weights — deleting any door case shrinks
+        // this number and the pinned total below goes red.
+        var doors = typeof(SoftCapDoorsApiTests)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(m => m.GetCustomAttribute<FactAttribute>() is not null)
+            .Where(m => m.Name != nameof(Denominator_PrintsEveryFieldZoneCensus))
+            .ToArray();
 
-        _output.WriteLine($"soft-cap door denominators: HTTP door cases={doorCases}, " +
+        foreach (var key in MultiDoorCases.Keys)
+        {
+            doors.ShouldContain(m => m.Name == key, $"census weights point at a removed door: {key}");
+        }
+
+        var doorCases = doors.Sum(m =>
+        {
+            var rows = m.GetCustomAttributes<InlineDataAttribute>().Count();
+            return rows > 0 ? rows : MultiDoorCases.GetValueOrDefault(m.Name, 1);
+        });
+
+        _output.WriteLine($"soft-cap door denominators: HTTP door cases={doorCases} " +
+            $"(across {doors.Length} door methods), " +
             "fields covered=8 (wave, notify, issues, entry, brief, reason, contour, log-line), " +
             "zones per field=silent/warn/truncate, plus 2 wave-cap rewrites in WaveChatApiTests");
 
-        doorCases.ShouldBe(27);
+        doorCases.ShouldBe(25);
     }
 
     // ---- helpers ----
