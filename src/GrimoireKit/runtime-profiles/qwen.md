@@ -47,4 +47,8 @@ STOP-and-ask, never a guess (a wrong tome means lost keys).
 - script: `~/.qwen/hooks/grimoire-kit/guard_hook.py`
 - settings: `~/.qwen/settings.json`, `hooks.SessionStart`, matcher `startup|resume`
 - command: `python3 "$HOME/.qwen/hooks/grimoire-kit/guard_hook.py"`, shell `bash`
+- timeout: `30` — seconds for command hooks since bundle 0.27.x; a value of
+  `1000` or more is read as legacy milliseconds (verified in the 0.27.0 and
+  0.28.0 bundle hook schemas), so the ms-era `30000` form is deprecated and
+  flagged per session in the qwen debug log
 - the hook warns only; it never writes and never blocks a session

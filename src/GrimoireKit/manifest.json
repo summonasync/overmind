@@ -49,7 +49,7 @@
       "matcher": "startup|resume",
       "command": "python3 \"$HOME/.qwen/hooks/grimoire-kit/guard_hook.py\"",
       "shell": "bash",
-      "timeout": 30000,
+      "timeout": 30,
       "name": "grimoire-kit-memory-guard",
       "description": "grimoire-kit: warn when an auto-memory index nears its eviction budget",
       "statusMessage": "grimoire-kit: checking memory index budget"
