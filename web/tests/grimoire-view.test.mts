@@ -4,6 +4,8 @@ import {
   agentOutcomeTone,
   detectionView,
   grimoireUiUrl,
+  installArmHint,
+  installPendingLabel,
   showGrimoireBanner,
   validateBookName,
   wiredView,
@@ -97,4 +99,27 @@ test("agent outcomes get an honest tone per row", () => {
     agentOutcomeTone({ agent: "qwen", outcome: "failed", configPath: null, error: "config not found" }),
     "danger",
   );
+});
+
+test("manual arm hint shows hand steps unconditionally and promises no channel run", () => {
+  const hint = installArmHint("manual");
+  assert.ok(hint.startsWith("Always shows"));
+  assert.match(hint, /install channel never runs/);
+  assert.match(hint, /no agent config is touched/);
+});
+
+test("the 257-era channel-first workaround sentence stays removed", () => {
+  assert.ok(!installArmHint("manual").includes("unless the configured channel"));
+});
+
+test("assisted arm hint keeps the channel-first promise", () => {
+  assert.equal(
+    installArmHint("assisted"),
+    "Runs Grimoire's own install channel when one is configured.",
+  );
+});
+
+test("pending label per arm: manual never says it is checking a channel", () => {
+  assert.equal(installPendingLabel("manual"), "Preparing the hand-install steps…");
+  assert.equal(installPendingLabel("assisted"), "Checking for an install channel…");
 });

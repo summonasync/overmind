@@ -11,6 +11,8 @@ import { Modal } from "@/shared/ui/modal";
 import {
   GRIMOIRE_BOOK_NAME_MAX,
   detectionView,
+  installArmHint,
+  installPendingLabel,
   validateBookName,
   wiredView,
 } from "@/features/grimoire/lib/grimoire-view";
@@ -88,12 +90,12 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
           </p>
           <ChoiceButton
             title="Install it yourself"
-            hint="Shows the hand-install steps unless the configured channel installs it first; no agent config is touched either way."
+            hint={installArmHint("manual")}
             onClick={() => openInstructionsStep("manual")}
           />
           <ChoiceButton
             title="Let Overmind install it"
-            hint="Runs Grimoire's own install channel when one is configured."
+            hint={installArmHint("assisted")}
             onClick={() => openInstructionsStep("assisted")}
           />
           <ChoiceButton
@@ -276,7 +278,7 @@ function InstructionsStep({
   onClose,
 }: InstructionsStepProps) {
   if (pending) {
-    return <LoadingState label="Checking for an install channel…" />;
+    return <LoadingState label={installPendingLabel(intent)} />;
   }
 
   if (error !== null || result === null) {
