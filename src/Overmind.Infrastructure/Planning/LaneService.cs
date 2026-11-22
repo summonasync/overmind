@@ -62,7 +62,15 @@ public sealed class LaneService
         Guid projectId, LaneUpsert lane, LaneWriteMode mode, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(lane);
-        ValidateRoster([lane]);
+        if (mode == LaneWriteMode.Create)
+        {
+            ValidateRoster([lane]);
+        }
+        else
+        {
+            ValidateLaneCaps(lane);
+        }
+
         await RequireProjectAsync(projectId, ct);
 
         var existing = await _db.PlanningLanes
@@ -299,49 +307,55 @@ public sealed class LaneService
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var lane in lanes)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(lane.Name);
+            ValidateLaneCaps(lane);
 
             var name = lane.Name.Trim();
-            if (name.Length > PlanningLane.MaxNameLength)
-            {
-                throw new ArgumentException(
-                    $"Lane name '{name}' exceeds the {PlanningLane.MaxNameLength} character cap.");
-            }
-
             if (!PlanningLane.IsAddressableName(name))
             {
                 throw PlanningException.InvalidLaneName(name);
-            }
-
-            if (lane.Contour is { } contour &&
-                contour.Trim().Length > SoftCap.Ceiling(PlanningLane.MaxContourLength))
-            {
-                throw new ArgumentException(
-                    $"Lane contour exceeds the {SoftCap.Ceiling(PlanningLane.MaxContourLength)} character hard ceiling " +
-                    $"(soft cap {PlanningLane.MaxContourLength}).");
-            }
-
-            if (lane.BoundAlias is { } boundAlias && boundAlias.Trim().Length > PlanningLane.MaxBoundAliasLength)
-            {
-                throw new ArgumentException(
-                    $"Lane boundAlias exceeds the {PlanningLane.MaxBoundAliasLength} character cap.");
-            }
-
-            if (lane.Priority is < 0 or > PlanningLane.MaxPriority)
-            {
-                throw new ArgumentException(
-                    $"Lane priority must be between 0 and {PlanningLane.MaxPriority}.");
-            }
-
-            if (lane.LiveSurfaces is not null)
-            {
-                LiveSurfacesJson.Serialize(lane.LiveSurfaces);
             }
 
             if (!seen.Add(name))
             {
                 throw PlanningException.LaneNameDuplicate(name);
             }
+        }
+    }
+
+    private static void ValidateLaneCaps(LaneUpsert lane)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(lane.Name);
+
+        var name = lane.Name.Trim();
+        if (name.Length > PlanningLane.MaxNameLength)
+        {
+            throw new ArgumentException(
+                $"Lane name '{name}' exceeds the {PlanningLane.MaxNameLength} character cap.");
+        }
+
+        if (lane.Contour is { } contour &&
+            contour.Trim().Length > SoftCap.Ceiling(PlanningLane.MaxContourLength))
+        {
+            throw new ArgumentException(
+                $"Lane contour exceeds the {SoftCap.Ceiling(PlanningLane.MaxContourLength)} character hard ceiling " +
+                $"(soft cap {PlanningLane.MaxContourLength}).");
+        }
+
+        if (lane.BoundAlias is { } boundAlias && boundAlias.Trim().Length > PlanningLane.MaxBoundAliasLength)
+        {
+            throw new ArgumentException(
+                $"Lane boundAlias exceeds the {PlanningLane.MaxBoundAliasLength} character cap.");
+        }
+
+        if (lane.Priority is < 0 or > PlanningLane.MaxPriority)
+        {
+            throw new ArgumentException(
+                $"Lane priority must be between 0 and {PlanningLane.MaxPriority}.");
+        }
+
+        if (lane.LiveSurfaces is not null)
+        {
+            LiveSurfacesJson.Serialize(lane.LiveSurfaces);
         }
     }
 

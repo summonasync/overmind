@@ -566,8 +566,7 @@ public sealed class LaneServiceTests : IDisposable
     [InlineData("web/src")]
     [InlineData(@"infra\win")]
     [InlineData("..")]
-    public async Task UpsertLane_Update_NameTheRouteCannotAddress_ThrowsInvalidLaneNameBeforeTheRosterLookup(
-        string name)
+    public async Task UpsertLane_Update_UnresolvableLocator_ThrowsMissingLane_AndKeepsTheStoredRoster(string name)
     {
         var service = CreateService();
         await SeedLaneAsync("frontend");
@@ -575,8 +574,23 @@ public sealed class LaneServiceTests : IDisposable
         var ex = await Should.ThrowAsync<PlanningException>(() => service.UpsertLaneAsync(
             _projectId, new LaneUpsert(name, "web/src", null), LaneWriteMode.Update));
 
-        ex.Code.ShouldBe(PlanningFailureCode.InvalidLaneName);
+        ex.Code.ShouldBe(PlanningFailureCode.MissingLane);
+        ex.Kind.ShouldBe(PlanningFailureKind.NotFound);
         (await _context.PlanningLanes.SingleAsync(l => l.ProjectId == _projectId)).Name.ShouldBe("frontend");
+    }
+
+    [Fact]
+    public async Task UpsertLane_Update_LocatorNamingALegacySlashLane_EditsTheStoredLane()
+    {
+        var service = CreateService();
+        await SeedLaneAsync("legacy/edge");
+
+        var roster = await service.UpsertLaneAsync(
+            _projectId, new LaneUpsert("legacy/edge", "web/src", null), LaneWriteMode.Update);
+
+        var edge = roster.ShouldHaveSingleItem();
+        edge.Name.ShouldBe("legacy/edge");
+        edge.Contour.ShouldBe("web/src");
     }
 
     [Fact]

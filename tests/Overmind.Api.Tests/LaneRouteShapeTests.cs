@@ -231,9 +231,9 @@ public sealed class LaneRouteShapeTests : IDisposable
             _injectedPath = null;
         }
 
-        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var problem = await ReadProblemAsync(refused);
-        problem!.Title.ShouldBe("InvalidLaneName");
+        problem!.Title.ShouldBe("MissingLane");
         problem.Detail!.ShouldContain("'.'");
         (await RosterNamesAsync(project.Id)).ShouldBe(["frontend"]);
     }
