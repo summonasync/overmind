@@ -49,7 +49,7 @@ public sealed class PlanningMaterializationTools
     public async Task<JsonElement> Materialize(
         [Description("Optional project id.")] Guid? projectId = null,
         [Description("Adopt guarded files instead of refusing.")] bool force = false,
-        [Description("Skip guarded files untouched and report them as quarantined instead of aborting the pass.")] bool quarantine = false,
+        [Description("Skip guarded files untouched and report them as quarantined instead of aborting the pass. force wins when both are set.")] bool quarantine = false,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);

@@ -147,6 +147,53 @@ public sealed class PlanningMaterializerQuarantineTests : IDisposable
         ex.Message.ShouldContain(relative);
     }
 
+    [Fact]
+    public async Task Sync_UntrackedTargetFile_QuarantineSkipsItAndMirrorsTheRest()
+    {
+        var projectId = await SeedProjectAsync();
+        var mirrored = await SeedAndSyncEntriesAsync(projectId, "seated note", "planted note");
+
+        Guid squattingId;
+        using (var seed = _db.CreateContext())
+        {
+            var squatting = ContextEntry.Create(projectId, EntryType.Note, "squatting", "squatting body.");
+            seed.ContextEntries.Add(squatting);
+            await seed.SaveChangesAsync();
+            squattingId = squatting.Id;
+        }
+
+        var squatted = Path.Combine(
+            _projectDir, "ENTRIES", "note", $"squatting-{squattingId.ToString("N")[..8]}.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(squatted)!);
+        await File.WriteAllTextAsync(squatted, "foreign squatter");
+
+        using var ctx = _db.CreateContext();
+        var report = await CreateMaterializer(ctx)
+            .SyncAsync(projectId, quarantine: true, ct: CancellationToken.None);
+
+        report.Quarantined.ShouldHaveSingleItem().RelativePath.ShouldBe(
+            $"ENTRIES/note/squatting-{squattingId.ToString("N")[..8]}.md");
+        (await File.ReadAllTextAsync(squatted)).ShouldBe("foreign squatter");
+        report.Skipped.ShouldContain(s => s.RelativePath == mirrored);
+    }
+
+    [Fact]
+    public async Task StatusRun_OldRunJsonWithoutQuarantined_DeserializesAsNullAndConsumersCoalesce()
+    {
+        var projectId = await SeedProjectAsync();
+        using var ctx = _db.CreateContext();
+        var project = await ctx.Projects.SingleAsync(p => p.Id == projectId);
+        project.RecordMaterializationRun(
+            """{"StartedAt":"2026-11-01T10:00:00Z","FinishedAt":"2026-11-01T10:00:05Z","Atomic":true,"Written":["BACKLOG/x.md"],"Skipped":[],"Refused":[]}""");
+        await ctx.SaveChangesAsync();
+
+        var status = await new PlanningMaterializationStatusReader(
+            ctx, new PlanningPolicy(ctx, new AppSettingsService(ctx)),
+            CreateMaterializer(ctx), _dataDir).ReadAsync(projectId, CancellationToken.None);
+
+        status.LastRun!.Quarantined.ShouldBeNull();
+    }
+
     private async Task<Guid> SeedProjectAsync()
     {
         using var ctx = _db.CreateContext();

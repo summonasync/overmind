@@ -254,7 +254,11 @@ public static partial class PlanningSections
     {
         ArgumentNullException.ThrowIfNull(body);
 
-        if (Find("acceptance-criteria", body) is not { } section)
+        // A glued closer on the real checklist leaves only the tail copy's anchored close, so a
+        // raw-body Find would span both copies and the item lines would still win by filter —
+        // but Replace/Remove against the same pair would splice the span. Locating on the
+        // canonical form keeps the tick door and the write door on one body view.
+        if (Find("acceptance-criteria", PlanningSectionCanonicalizer.Canonicalize(body)) is not { } section)
         {
             return [];
         }
