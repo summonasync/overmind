@@ -535,6 +535,20 @@ test("the server sentence is rendered as it arrived, with no rewriting on the su
     false,
     "the surface started paraphrasing the door's sentence",
   );
+  // The framing + active-filter list is gated to the one refusal shape the copy was written
+  // for (review-237-07 MAJOR-1): an UnknownGraphFocus whose sentence carries the widen tail.
+  // The same code also serves the no-cofilter refusal and the no-such-node refusal, where
+  // filter causality would be a lie; network failures and 500s must keep ErrorText + Retry.
+  assert.match(
+    page,
+    /error\.code === "UnknownGraphFocus"/,
+    "the framing lost its refusal-code gate — it would render on every error again",
+  );
+  assert.match(
+    page,
+    /error\.message\.includes\("the filter to widen"\)/,
+    "the framing gate stopped checking the widen tail — it would contradict the no-cofilter refusal",
+  );
 });
 
 test("the active-filter list reads from the field's own filters", () => {

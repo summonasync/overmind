@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ApiError } from "@/shared/api/client";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageBackLink } from "@/shared/ui/page-back-link";
@@ -61,14 +62,22 @@ function GraphBranch() {
         {/* The server sentence, verbatim: `ErrorText` prints `error.message`, which is the
             problem+json `detail` the endpoint wrote. Nothing here paraphrases or narrows it. */}
         <ErrorText error={error} />
-        <p className="text-sm text-muted" role="status">
-          {FILTER_DETAIL_FRAMING}
-        </p>
-        <p className="text-xs text-muted" role="status">
-          {activeFilterNames(filters).length > 0
-            ? `Active on this field: ${activeFilterNames(filters).join(", ")}.`
-            : "No narrowing filter is active on this field."}
-        </p>
+        {/* The framing belongs to exactly one refusal shape: UnknownGraphFocus whose sentence
+            carries "the filter to widen". The same code also serves the no-cofilter refusal
+            ("no narrowing filter is active") and the no-such-node refusal, where filter
+            causality would be a lie; every other failure keeps ErrorText + Retry alone. */}
+        {error instanceof ApiError && error.code === "UnknownGraphFocus" && error.message.includes("the filter to widen") && (
+          <>
+            <p className="text-sm text-muted" role="status">
+              {FILTER_DETAIL_FRAMING}
+            </p>
+            <p className="text-xs text-muted" role="status">
+              {activeFilterNames(filters).length > 0
+                ? `Active on this field: ${activeFilterNames(filters).join(", ")}.`
+                : "No narrowing filter is active on this field."}
+            </p>
+          </>
+        )}
         <button
           type="button"
           onClick={() => refetch()}

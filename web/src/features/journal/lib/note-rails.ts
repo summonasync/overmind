@@ -94,15 +94,10 @@ export function groupOutgoing(links: readonly JournalOutgoingLink[]): OutgoingGr
   return groups;
 }
 
-// A feature row carries its guid and its title — `EntryLinkReader.LoadTargetLabelsAsync`
-// labels features with `Title`, so neither the slug nor the owning project survives into the
-// DTO, and `/dashboard?project=…&feature=<slug>` cannot be built from what the rail has. The
-// row stays honest and unclickable rather than guessing a link; the missing fields are filed
-// against the backend, not bolted on here.
-//
-// A task row is the same shape of gap and the reason the fallback exists at all: the promotion
-// edge names the task by guid and title, while this app addresses a task as
-// `<feature slug>/T<order>`, and the DTO carries neither half of that address.
+// Feature and task rows carry their card address since T10's TargetLabel: features their own
+// slug and project, tasks their parent card's — both address the parent feature card, the same
+// place the promotion success line sends the owner. The dead-end fallback below stays for rows
+// the reader could not resolve, and states what is missing rather than blaming the payload.
 export function outgoingHref(link: JournalOutgoingLink): string | null {
   switch (link.kind) {
     case "entry":
@@ -111,7 +106,11 @@ export function outgoingHref(link: JournalOutgoingLink): string | null {
       return projectHref(link.id);
     case "feature":
     case "task":
-      return null;
+      // Same address `promotedCardHref` builds; rebuilt here because that module imports
+      // through the `@/` alias, which this file's node-run consumers cannot resolve.
+      return link.slug && link.projectId
+        ? `/dashboard?${new URLSearchParams({ project: link.projectId, feature: link.slug }).toString()}`
+        : null;
     default:
       return null;
   }
@@ -124,10 +123,10 @@ export function outgoingDeadEndReason(link: JournalOutgoingLink): string | null 
     return null;
   }
   if (link.kind === "task") {
-    return "This note was promoted into a board task. The detail payload labels it by title and guid only — a task is addressed by its feature slug and order, so no URL can be built from what the rail was given.";
+    return "This note was promoted into a board task. The payload did not carry the parent card's slug for this row, so no URL can be built from what the rail was given.";
   }
   if (link.kind === "feature") {
-    return "The detail payload labels this edge by title and guid only — no slug to build a link from.";
+    return "The payload did not carry the slug for this row — no card address can be built from what the rail was given.";
   }
   return `The Host reported a link kind this build does not know ("${link.kind}"), so the row is labelled rather than guessed.`;
 }
