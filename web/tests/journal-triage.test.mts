@@ -551,6 +551,23 @@ test("the server sentence is rendered as it arrived, with no rewriting on the su
   );
 });
 
+test("a failed pin write is surfaced and never left silently promising", () => {
+  const page = readFileSync(
+    new URL("../src/pages/journal-graph-page/ui/journal-graph-page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    page,
+    /pinWriter\.error !== null/,
+    "the surface discards the pin mutation's failure — a node would look pinned while the Host stored nothing",
+  );
+  assert.match(
+    page,
+    /pinWriter\.error\.message/,
+    "the pin-failure line lost the server's sentence",
+  );
+});
+
 test("the active-filter list reads from the field's own filters", () => {
   // The default field is narrowed by exactly one thing: Done features stay hidden until widened.
   assert.deepEqual(activeFilterNames(EMPTY_GRAPH_FILTERS), ["Done features hidden"]);

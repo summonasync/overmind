@@ -1118,6 +1118,11 @@ test("the pin door is one PUT on the human prefix, answered by 204 and a refetch
 
   const hooks = sliceFile("lib/use-graph.ts");
   assert.match(hooks, /invalidateQueries\(\{ queryKey: graphKeys\.all \}\)/);
+  assert.match(
+    hooks,
+    /onError: \(\) => queryClient\.invalidateQueries\(\{ queryKey: graphKeys\.all \}\)/,
+    "a failed PUT leaves the canvas promising a pin the Host never stored",
+  );
   assert.ok(!/setQueryData/.test(hooks), "the read projection is the only pin truth the client keeps");
 });
 
