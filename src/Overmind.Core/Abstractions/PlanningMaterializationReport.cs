@@ -14,4 +14,5 @@ public sealed record PlanningMaterializationReport(
     bool Atomic = true,
     DateTime StartedAt = default,
     DateTime FinishedAt = default,
-    PlanningGitHygieneOutcome? GitHygiene = null);
+    PlanningGitHygieneOutcome? GitHygiene = null,
+    IReadOnlyList<PlanningMaterializationSkip>? Quarantined = null);

@@ -16,7 +16,8 @@ public sealed record OnboardMaterializationBlock(
     string? Error,
     DateTime? FailedAt,
     int? SkippedCount,
-    IReadOnlyList<string>? Skipped);
+    IReadOnlyList<string>? Skipped,
+    string? DemotedNotice = null);
 
 public sealed record OnboardValidationBlock(bool HumanGate, string Guidance);
 

@@ -6,4 +6,5 @@ public sealed record MaterializationRunReport(
     bool Atomic,
     string[] Written,
     PlanningMaterializationSkip[] Skipped,
-    PlanningMaterializationSkip[] Refused);
+    PlanningMaterializationSkip[] Refused,
+    PlanningMaterializationSkip[]? Quarantined = null);

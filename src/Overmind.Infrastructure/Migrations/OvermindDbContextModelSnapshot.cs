@@ -1006,6 +1006,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<string>("Manifest")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("MaterializationErrorSeenAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");

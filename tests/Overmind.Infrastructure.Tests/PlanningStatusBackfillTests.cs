@@ -22,7 +22,7 @@ public sealed class PlanningStatusBackfillTests : IDisposable, IAsyncLifetime
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _settings = new AppSettingsService(_context);
@@ -47,7 +47,7 @@ public sealed class PlanningStatusBackfillTests : IDisposable, IAsyncLifetime
         line.Source.ShouldBe(PlanningLogSource.Auto);
 
         await _materializer.Received().SyncAsync(
-            _projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            _projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
