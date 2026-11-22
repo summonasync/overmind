@@ -81,7 +81,8 @@ public static class PlanningArtifactsApi
                 brief: brief,
                 source: PlanningDoorSource.Resolve(request.Source, fallbackSource),
                 blockedBy: request.BlockedBy,
-                dryRun: request.DryRun);
+                dryRun: request.DryRun,
+                independent: request.Independent);
 
             var response = PlanningMapper.ToArtifactResponse(artifact);
             if (request.DryRun)
@@ -138,7 +139,8 @@ public static class PlanningArtifactsApi
                 task.Review,
                 SoftCapSoften.Cap(task.LogNote, SoftCapLimits.LogLine, soft),
                 SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft),
-                task.BlockedBy);
+                task.BlockedBy,
+                task.Independent);
         }
 
         try

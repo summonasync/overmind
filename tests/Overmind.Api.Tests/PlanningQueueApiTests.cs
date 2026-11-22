@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Overmind.Infrastructure.Persistence;
+using Overmind.Infrastructure.Planning;
 using Shouldly;
 using Xunit;
 
@@ -47,6 +51,35 @@ public sealed class PlanningQueueApiTests : IDisposable
         board.Single(f => f.Slug == "board-a").QueuePosition.ShouldBe(1);
         board.Single(f => f.Slug == "board-b").QueuePosition.ShouldBe(2);
         board.Single(f => f.Slug == "board-c").QueuePosition.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task QueueRead_RowsCarryIndependentTaskCounts()
+    {
+        var project = await CreateProjectAsync();
+        await CreateFeature(project.Id, "flagged", "Flagged");
+        await CreateFeature(project.Id, "plain", "Plain");
+
+        await CreateTask(project.Id, "flagged", 0, independent: true);
+        await CreateTask(project.Id, "flagged", 1, independent: false);
+        await CreateTask(project.Id, "plain", 0, independent: false);
+
+        var queue = await GetQueueAsync(project.Id);
+        queue!.Items.Single(i => i.Slug == "flagged").IndependentTasks.ShouldBe(1);
+        queue.Items.Single(i => i.Slug == "plain").IndependentTasks.ShouldBe(0);
+    }
+
+    private async Task CreateTask(Guid projectId, string slug, int order, bool independent)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        var artifacts = scope.ServiceProvider.GetRequiredService<PlanningArtifactService>();
+        var feature = await db.PlanningFeatures.FirstAsync(f => f.ProjectId == projectId && f.Slug == slug);
+        await artifacts.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert($"task {order}", Order: order, Independent: independent)],
+            default);
+        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -892,7 +925,7 @@ public sealed class PlanningQueueApiTests : IDisposable
         TaskCountsJson TaskCounts, int Readiness, string[] BlockedBy, bool IsBlocked,
         DateTime CreatedAt, DateTime UpdatedAt,
         int PendingMutations = 0, DateTime? LastAttemptAt = null, DateTime? LastSuccessAt = null,
-        bool Stale = false);
+        bool Stale = false, int IndependentTasks = 0);
 
     public sealed record TaskCountsJson(int Todo, int InProgress, int Review, int Done, int Blocked);
 

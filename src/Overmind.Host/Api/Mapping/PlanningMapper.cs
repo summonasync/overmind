@@ -100,8 +100,16 @@ public static class PlanningMapper
             lag?.PendingMutations ?? 0,
             lag?.LastAttemptAt,
             lag?.LastSuccessAt,
-            lag?.Stale ?? false);
+            lag?.Stale ?? false,
+            IndependentTasks(artifacts));
     }
+
+    // Issuable independent work only: todo or in-progress tasks the bypass can actually serve.
+    private static int IndependentTasks(IReadOnlyList<PlanningArtifact> artifacts) =>
+        artifacts.Count(a =>
+            a.Kind == PlanningArtifactKind.Task &&
+            a.Independent &&
+            a.Status is PlanningArtifactStatus.Todo or PlanningArtifactStatus.InProgress);
 
     public static OpenDirectiveResponse[] ToOpenDirectives(
         IEnumerable<PlanningDirective> directives) =>
@@ -371,6 +379,7 @@ public static class PlanningMapper
             artifact.Brief,
             blocked,
             blockedBy,
+            artifact.Independent ? true : null,
             pointers);
     }
 
@@ -400,7 +409,8 @@ public static class PlanningMapper
             blocked,
             blockedBy,
             Pointers(artifact),
-            ValidationProofVoided: artifact.ValidationProofVoided);
+            ValidationProofVoided: artifact.ValidationProofVoided,
+            Independent: artifact.Independent ? true : null);
     }
 
     private static PlanningArtifactPointerResponse[] Pointers(PlanningArtifact artifact) =>

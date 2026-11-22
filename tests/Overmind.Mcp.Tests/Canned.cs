@@ -228,7 +228,7 @@ public static class Canned
 
     public const string PlanningCurrentBlockedStopJson =
         """
-        {"state":"stop","feature":{"slug":"blocked-feature","title":"Blocked feature","status":"ready"},"artifact":null,"reason":"STOP: feature 'blocked-feature' is blocked by unclosed features: gate-locked (ready), draft-one (draft). Reads stay open; task issuance stops until every blocker closes (done or review)."}
+        {"state":"stop","feature":{"slug":"blocked-feature","title":"Blocked feature","status":"ready"},"artifact":null,"reason":"STOP: feature 'blocked-feature' is blocked by unclosed features: gate-locked (ready), draft-one (draft). Reads stay open; task issuance stops until every blocker closes (done or review). Tasks marked independent at upsert still issue while the blocker holds."}
         """;
 
     public const string PlanningCurrentTaskBlockedStopJson =
