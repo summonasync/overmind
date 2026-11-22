@@ -499,6 +499,31 @@ namespace Overmind.Infrastructure.Migrations
                     b.ToTable("GlobalMaterializedFiles");
                 });
 
+            modelBuilder.Entity("Overmind.Core.GraphNodePosition", b =>
+                {
+                    b.Property<int>("NodeKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("NodeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Pinned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("X")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("Y")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("NodeKind", "NodeId");
+
+                    b.ToTable("GraphNodePositions");
+                });
+
             modelBuilder.Entity("Overmind.Core.Issue", b =>
                 {
                     b.Property<Guid>("Id")

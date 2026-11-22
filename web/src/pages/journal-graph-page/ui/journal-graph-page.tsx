@@ -1,0 +1,162 @@
+"use client";
+
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ApiError } from "@/shared/api/client";
+import { ErrorText } from "@/shared/ui/error-text";
+import { LoadingState } from "@/shared/ui/loading-state";
+import { PageBackLink } from "@/shared/ui/page-back-link";
+import { PageHeader } from "@/shared/ui/page-header";
+import { emptyGraphField } from "@/features/journal/lib/graph-payload";
+import {
+  FILTER_DETAIL_FRAMING,
+  activeFilterNames,
+  emptyFieldMessage,
+} from "@/features/journal/lib/graph-copy";
+import { withFocus } from "@/features/journal/lib/graph-filters";
+import { GraphCanvas } from "@/features/journal/components/graph-canvas";
+import { GraphFilters } from "@/features/journal/components/graph-filters";
+import { GraphLegend } from "@/features/journal/components/graph-legend";
+import { GraphNodeList } from "@/features/journal/components/graph-node-list";
+import { GraphNodePanel } from "@/features/journal/components/graph-node-panel";
+import {
+  useGraphField,
+  useGraphFilters,
+  useGraphPinWriter,
+  useReducedMotion,
+} from "@/features/journal/lib/use-graph";
+import { noteHrefFromGraph } from "@/features/journal/lib/note-rails";
+import type { GraphField } from "@/features/journal/types";
+
+// The route is the app's first heavy client island under a static export: the shell below is a
+// client component by necessity (the filters are the URL and the canvas needs a DOM), and the
+// page file that mounts it is a server component so the island stays out of every other route's
+// bundle. R4's click rule lives here, not in the canvas: selection is state, never a route.
+function GraphBranch() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { filters, setFilter, clear } = useGraphFilters();
+  const { field, loading, error, refetch } = useGraphField(filters);
+  const pinWriter = useGraphPinWriter();
+  const reducedMotion = useReducedMotion();
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  const shown: GraphField = field ?? emptyGraphField();
+  const selectedNode = useMemo(
+    () => shown.nodes.find((node) => `${node.kind}:${node.id}` === selectedKey) ?? null,
+    [selectedKey, shown.nodes],
+  );
+
+  // A note opened from the field carries the field's filters along, so the note view's back
+  // link brings the owner home to the view they left rather than to the inbox.
+  const openNote = (id: string) =>
+    router.push(noteHrefFromGraph(id, searchParams?.toString() ?? ""));
+
+  if (loading && field === undefined) {
+    return <LoadingState label="Loading the field…" />;
+  }
+  if (error !== null) {
+    return (
+      <div className="space-y-3">
+        {/* A refusal that names filters is only actionable with the filter bar in reach, so the
+            controls stay mounted above the error instead of being replaced by it. */}
+        <GraphFilters filters={filters} onChange={setFilter} onClear={clear} />
+        {/* The server sentence, verbatim: `ErrorText` prints `error.message`, which is the
+            problem+json `detail` the endpoint wrote. Nothing here paraphrases or narrows it. */}
+        <ErrorText error={error} />
+        {/* The framing belongs to exactly one refusal shape: UnknownGraphFocus whose sentence
+            carries "the filter to widen". The same code also serves the no-cofilter refusal
+            ("no narrowing filter is active") and the no-such-node refusal, where filter
+            causality would be a lie; every other failure keeps ErrorText + Retry alone. */}
+        {error instanceof ApiError && error.code === "UnknownGraphFocus" && error.message.includes("the filter to widen") && (
+          <>
+            <p className="text-sm text-muted" role="status">
+              {FILTER_DETAIL_FRAMING}
+            </p>
+            <p className="text-xs text-muted" role="status">
+              {activeFilterNames(filters).length > 0
+                ? `Active on this field: ${activeFilterNames(filters).join(", ")}.`
+                : "No narrowing filter is active on this field."}
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="min-h-[32px] rounded-md px-2 text-sm text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const empty = shown.nodes.length === 0;
+
+  return (
+    <div className="space-y-4">
+      <GraphFilters filters={filters} onChange={setFilter} onClear={clear} />
+
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-[420px] flex-1 space-y-3">
+          <GraphCanvas
+            field={shown}
+            selectedKey={selectedKey}
+            reducedMotion={reducedMotion}
+            onSelect={setSelectedKey}
+            onOpenNote={openNote}
+            onPin={(position) => pinWriter.mutate([{ ...position, pinned: true }])}
+            onUnpinAll={() =>
+              pinWriter.mutate(shown.positions.map((position) => ({ ...position, pinned: false })))
+            }
+          />
+          {pinWriter.error !== null && (
+            <p className="text-sm text-muted" role="status">
+              The pin did not save — the field has re-read the positions the server holds. Drag
+              again to retry ({pinWriter.error.message}).
+            </p>
+          )}
+          <GraphLegend field={shown} />
+        </div>
+
+        <div className="w-[320px] shrink-0 space-y-3">
+          <GraphNodePanel
+            field={shown}
+            node={selectedNode}
+            focusedHandle={filters.focus}
+            filters={filters}
+            onClear={() => setFilter(withFocus(filters, ""))}
+            onCentre={(handle) => setFilter(withFocus(filters, handle))}
+            onOpenNote={openNote}
+          />
+          {empty ? (
+            <p className="text-sm text-muted" role="status">
+              {emptyFieldMessage(filters.search.trim().length > 0, filters.search)}
+            </p>
+          ) : null}
+          <GraphNodeList
+            field={shown}
+            selectedKey={selectedKey}
+            onSelect={setSelectedKey}
+            onOpenNote={openNote}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function JournalGraphPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading…" />}>
+      <div className="space-y-4">
+        <PageBackLink href="/journal" label="Journal inbox" />
+        <PageHeader
+          title="Journal graph"
+          description="Every note, project and feature the links reach, drawn from the same field the filters define."
+        />
+        <GraphBranch />
+      </div>
+    </Suspense>
+  );
+}

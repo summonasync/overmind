@@ -51,7 +51,12 @@ public sealed record EntryResponse(
     IReadOnlyList<string> Unresolved,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
-public sealed record EntryOutgoingLink(EntryLinkKind Kind, Guid Id, string Label);
+public sealed record EntryOutgoingLink(
+    EntryLinkKind Kind,
+    Guid Id,
+    string Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Slug = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ProjectId = null);
 
 public sealed record EntryBacklink(Guid EntryId, string Title, string Snippet);
 

@@ -52,6 +52,7 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<AgentRouteRow> AgentRoutes => Set<AgentRouteRow>();
     public DbSet<FeatureClaimSpan> FeatureClaimSpans => Set<FeatureClaimSpan>();
     public DbSet<UsageRecord> UsageRecords => Set<UsageRecord>();
+    public DbSet<GraphNodePosition> GraphNodePositions => Set<GraphNodePosition>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -586,6 +587,12 @@ public sealed class OvermindDbContext : DbContext
 
             builder.HasIndex(u => u.Ts);
             builder.HasIndex(u => new { u.Alias, u.SessionId });
+        });
+
+        modelBuilder.Entity<GraphNodePosition>(builder =>
+        {
+            builder.HasKey(p => new { p.NodeKind, p.NodeId });
+            builder.Property(p => p.NodeId).ValueGeneratedNever();
         });
     }
 }

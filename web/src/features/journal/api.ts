@@ -1,10 +1,17 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/shared/api/client";
+import { normalizeGraphField } from "@/features/journal/lib/graph-payload";
+import { graphPath } from "@/features/journal/lib/graph-query";
 import { journalStreamPath } from "@/features/journal/lib/stream-query";
 import type {
+  GraphField,
+  GraphPositionWrite,
+  GraphViewFilters,
   JournalNote,
   JournalNoteFormValues,
   JournalServerFilters,
+  NotePromotionResult,
 } from "@/features/journal/types";
+import type { PromotionRequest } from "@/features/journal/lib/note-promotion";
 
 export function listJournalNotes(
   projectId: string,
@@ -50,4 +57,38 @@ export function deleteJournalNote(id: string, reason?: string): Promise<JournalN
   const trimmed = reason?.trim();
   const query = trimmed ? `?reason=${encodeURIComponent(trimmed)}` : "";
   return apiDelete<JournalNote | undefined>(`/entries/${id}${query}`);
+}
+
+// One request for the whole field (R1): nodes, edges, positions and counts in a single payload,
+// so the canvas never issues a per-node follow-up to draw a link. The wire is normalised on the
+// way in rather than inspected at every draw site — that is where "Task is never a node" stops
+// being a comment and becomes a rule.
+export async function getJournalGraph(filters: GraphViewFilters): Promise<GraphField> {
+  const raw: unknown = await apiGet<unknown>(graphPath(filters));
+  return normalizeGraphField(raw);
+}
+
+// The pin door, on the human prefix beside the read (spec R8: moving the owner's dots is the
+// owner's act). One PUT stores the whole batch transactionally; the answer is 204, and the truth
+// arrives through the field query the invalidation refetches — the read projection is the only
+// shape this surface ever trusts.
+export function saveGraphPositions(positions: GraphPositionWrite[]): Promise<void> {
+  return apiPut<void>("/graph/positions", { positions });
+}
+
+// The triage door, on the human prefix (spec R8: promoting one of the owner's thoughts is the
+// owner's act). One POST answers with the artifact it minted and the card to invalidate; the door
+// writes no note and copies no text, so there is nothing to pre-save here.
+//
+// The body is the door's own shape: `{projectId,title,body,priority?}` for a feature,
+// `{featureId,body,brief?}` for a task. Priority is deliberately absent — the door's default is the
+// P2 every un-prioritised card starts on, and the surface that asks for a priority is a later card.
+export function promoteNote(entryId: string, request: PromotionRequest): Promise<NotePromotionResult> {
+  const path = `/entries/${encodeURIComponent(entryId)}/promote-to-${request.target}`;
+  const body =
+    request.target === "feature"
+      ? { projectId: request.projectId, title: request.title, body: request.body }
+      : { featureId: request.featureId, body: request.body, brief: request.brief };
+
+  return apiPost<NotePromotionResult>(path, body);
 }

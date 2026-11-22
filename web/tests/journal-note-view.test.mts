@@ -31,6 +31,7 @@ import {
   groupOutgoing,
   linkedEntryIds,
   noteHref,
+  outgoingDeadEndReason,
   outgoingHref,
   relatedQuery,
   relatedRows,
@@ -43,7 +44,7 @@ import {
   saveBlocker,
   toFormValues,
 } from "../src/features/journal/lib/note-form.ts";
-import type { JournalNote } from "../src/features/journal/types.ts";
+import type { JournalNote, JournalOutgoingLink } from "../src/features/journal/types.ts";
 
 const sliceFile = (path: string) =>
   readFileSync(new URL(`../src/features/journal/${path}`, import.meta.url), "utf8");
@@ -60,6 +61,9 @@ const { BacklinksRail } = await jiti.import(
 );
 const { UnresolvedList } = await jiti.import(
   "../src/features/journal/components/unresolved-list.tsx",
+);
+const { OutgoingRail } = await jiti.import(
+  "../src/features/journal/components/outgoing-rail.tsx",
 );
 const { WikiLinkAutocomplete } = await jiti.import(
   "../src/features/journal/components/wikilink-autocomplete.tsx",
@@ -86,6 +90,27 @@ const T8_SLICE = [
   "lib/note-rails.ts",
   "lib/note-form.ts",
   "lib/use-note-links.ts",
+] as const;
+
+// The graph files 237 T6 shipped. Named once, in the same ledger style as T8_SLICE above, and
+// swept by the hex guard below together with it — R3 asked for the existing pin to be extended,
+// not for a second guard anyone could forget to run. `journal-graph.test.mts` pins this list
+// against its own copy, so the two cannot drift.
+const T6_GRAPH_SLICE = [
+  "components/graph-canvas.tsx",
+  "components/graph-filters.tsx",
+  "components/graph-legend.tsx",
+  "components/graph-node-list.tsx",
+  "components/graph-node-panel.tsx",
+  "lib/graph-copy.ts",
+  "lib/graph-filters.ts",
+  "lib/graph-layout.ts",
+  "lib/graph-paint.ts",
+  "lib/graph-palette.ts",
+  "lib/graph-payload.ts",
+  "lib/graph-query.ts",
+  "lib/graph-view.ts",
+  "lib/use-graph.ts",
 ] as const;
 
 const NOTE: JournalNote = {
@@ -421,6 +446,8 @@ test("the rails read the detail payload and never re-parse the body", () => {
     "notes:1",
     "projects:1",
     "features:1",
+    "tasks:0",
+    "other:0",
   ]);
 
   assert.equal(outgoingHref(note.outgoing[0]), `/journal?note=${encodeURIComponent("e1")}`);
@@ -441,6 +468,86 @@ test("the rails read the detail payload and never re-parse the body", () => {
   assert.equal(creatableTitle("Not Written Yet"), "Not Written Yet");
   assert.equal(creatableTitle("feature:999-missing"), null);
   assert.equal(creatableTitle("Project:Overmind"), null);
+});
+
+// review-237-01 M2, measured red before the fix (audits recorded in the task log): the union had
+// no `task` member, `groupOutgoing`'s trailing `else` filed anything unknown under features, and
+// `outgoingHref` answered null — so T4's promotion edge arrived as a feature row nobody could
+// click. The fixture below is the same shape the probe fed the pre-fix module.
+test("a task link is its own rail group, not a feature in disguise", () => {
+  const links: JournalOutgoingLink[] = [
+    { kind: "feature", id: "f1", label: "Journal graph", slug: "237-journal-graph", projectId: "proj-1" },
+    { kind: "task", id: "6df423e3-da54-4f13-a557-041d4c2580a2", label: "T6 canvas island", slug: "237-journal-graph", projectId: "proj-1" },
+  ];
+  const groups = groupOutgoing(links);
+
+  assert.deepEqual(groups.tasks.map((link) => link.id), ["6df423e3-da54-4f13-a557-041d4c2580a2"]);
+  assert.deepEqual(groups.features.map((link) => link.id), ["f1"], "the task leaked into features");
+  assert.equal(groups.notes.length, 0);
+  assert.equal(groups.projects.length, 0);
+
+  // T10's TargetLabel puts the card address on the wire: both arms link to the parent feature
+  // card, the same place the promotion success line sends the owner (review-237-07 BLOCKER-1).
+  const cardHref = "/dashboard?project=proj-1&feature=237-journal-graph";
+  assert.equal(outgoingHref(links[0]), cardHref);
+  assert.equal(outgoingHref(links[1]), cardHref, "a task row must address its parent card, not a dead end");
+  assert.equal(outgoingDeadEndReason(links[0]), null);
+  assert.equal(outgoingDeadEndReason(links[1]), null);
+
+  // A row missing the address halves stays a stated dead end with an honest reason, not a
+  // guessed link — the fallback exists for rows the reader could not resolve.
+  const bareFeature = { kind: "feature", id: "f2", label: "Unresolved card" } as JournalOutgoingLink;
+  const bareTask = { kind: "task", id: "t9", label: "Unresolved task" } as JournalOutgoingLink;
+  assert.equal(outgoingHref(bareFeature), null);
+  assert.equal(outgoingHref(bareTask), null);
+  const featureReason = outgoingDeadEndReason(bareFeature);
+  const taskReason = outgoingDeadEndReason(bareTask);
+  assert.match(featureReason ?? "", /slug/i);
+  assert.match(taskReason ?? "", /task/i);
+  assert.notEqual(featureReason, taskReason, "two kinds shared one reason string");
+  assert.equal(outgoingDeadEndReason({ kind: "entry", id: "e1", label: "Note" }), null);
+});
+
+test("an unknown kind is labelled, never filed under features", () => {
+  const stray = [{ kind: "artifact", id: "a1", label: "Some future member" }] as unknown as
+    JournalOutgoingLink[];
+  const groups = groupOutgoing(stray);
+  assert.equal(groups.features.length, 0, "the silent else-to-features arm is back");
+  assert.deepEqual(groups.other.map((link) => link.kind), ["artifact"]);
+  assert.match(outgoingDeadEndReason(stray[0]) ?? "", /artifact/);
+});
+
+test("the rail vocabulary carries four target kinds and names the wire spelling", () => {
+  const types = sliceFile("types.ts");
+  assert.match(
+    types,
+    /export type JournalLinkKind = "entry" \| "feature" \| "project" \| "task";/,
+    "the union lost a member — the promotion edge needs its arm",
+  );
+  assert.match(types, /JsonStringEnumConverter\(JsonNamingPolicy\.CamelCase\)/);
+});
+
+test("the rail renders the task group as a labelled row, not a feature row", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(OutgoingRail, {
+      links: [
+        { kind: "feature", id: "f1", label: "Journal graph" },
+        { kind: "task", id: "t1", label: "T6 canvas island" },
+      ],
+      onNavigate: noop,
+    }),
+  );
+  assert.match(html, /aria-label="Linked tasks"/, "the task group never reached the screen");
+  assert.match(html, /T6 canvas island/);
+  assert.match(html, /no link yet/, "the dead row looks clickable — the mislabel was silent");
+  const featuresAt = html.indexOf("Linked features");
+  const tasksAt = html.indexOf("Linked tasks");
+  assert.ok(featuresAt >= 0 && tasksAt > featuresAt, "the two groups lost their separate headings");
+  assert.ok(
+    html.slice(featuresAt, tasksAt).includes("Journal graph") &&
+      !html.slice(featuresAt, tasksAt).includes("T6 canvas island"),
+    "the task row sat under the features heading",
+  );
 });
 
 test("the author line is the boundary ruling made visible", () => {
@@ -616,7 +723,7 @@ test("the note view edits through the shared markdown pair, not a private one", 
 
 test("zero hex literals in the slice", () => {
   const offenders: string[] = [];
-  for (const file of T8_SLICE) {
+  for (const file of [...T8_SLICE, ...T6_GRAPH_SLICE]) {
     sliceFile(file)
       .split("\n")
       .forEach((line, i) => {
@@ -770,4 +877,9 @@ test("the slice file names are the ones the guards above measure", () => {
     assert.ok(sliceFile(file).length > 200, `${file} is missing, empty or wrong`);
   }
   assert.equal(T8_SLICE.length, 13);
+
+  for (const file of T6_GRAPH_SLICE) {
+    assert.ok(sliceFile(file).length > 200, `${file} is missing, empty or wrong`);
+  }
+  assert.equal(T6_GRAPH_SLICE.length, 14);
 });

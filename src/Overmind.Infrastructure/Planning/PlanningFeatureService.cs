@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Overmind.Core;
 using Overmind.Infrastructure.Materialization;
@@ -14,6 +15,7 @@ public sealed partial class PlanningFeatureService
     private readonly BacklogImportSeeder _seeder;
     private readonly TaskDependencyService _taskDependencies;
     private readonly PlanningMaterializationDispatcher _materialization;
+    private readonly PlanningBatchScope? _batchScope;
     private readonly ILogger<PlanningFeatureService> _logger;
 
     public PlanningFeatureService(
@@ -22,7 +24,8 @@ public sealed partial class PlanningFeatureService
         BacklogImportSeeder seeder,
         TaskDependencyService taskDependencies,
         PlanningMaterializationDispatcher materialization,
-        ILogger<PlanningFeatureService> logger)
+        ILogger<PlanningFeatureService> logger,
+        PlanningBatchScope? batchScope = null)
     {
         _db = db;
         _materializer = materializer;
@@ -30,6 +33,7 @@ public sealed partial class PlanningFeatureService
         _taskDependencies = taskDependencies;
         _materialization = materialization;
         _logger = logger;
+        _batchScope = batchScope;
     }
 
     public async Task<PlanningFeature> CreateAsync(
@@ -47,7 +51,13 @@ public sealed partial class PlanningFeatureService
             throw PlanningException.MissingProject(projectId);
         }
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        // The batch scope means another door owns the transaction: the triage promotion stages a feature beside
+        // its provenance edge so both halves commit together. Staging is what the artifact service already does
+        // under the same signal, and it keeps the slug and queue-tail rules in one place.
+        var staged = _batchScope is { Active: true };
+        await using IDbContextTransaction? tx = staged
+            ? null
+            : await _db.Database.BeginTransactionAsync(ct);
 
         var existing = await _db.PlanningFeatures
             .Where(f => f.ProjectId == projectId)
@@ -83,15 +93,22 @@ public sealed partial class PlanningFeatureService
 
         try
         {
-            await _db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
+            if (tx is not null)
+            {
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+            }
         }
         catch (DbUpdateException ex) when (PlanningServiceGuard.IsUniqueViolation(ex))
         {
             throw PlanningException.DuplicateSlug(resolvedSlug);
         }
 
-        await _materialization.DispatchAsync(projectId, ct);
+        if (tx is not null)
+        {
+            await _materialization.DispatchAsync(projectId, ct);
+        }
+
         return feature;
     }
 

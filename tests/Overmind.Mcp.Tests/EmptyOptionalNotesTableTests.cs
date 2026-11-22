@@ -42,8 +42,8 @@ public class EmptyOptionalNotesTableTests
     [InlineData("src/Overmind.Mcp/OvermindTools.cs", 360, "string.IsNullOrWhiteSpace(mode) ? \"fulltext\"")]
     [InlineData("src/Overmind.Mcp/OvermindTools.cs", 362, "mode={Uri.EscapeDataString(effectiveMode)")]
     [InlineData("src/Overmind.Mcp/Planning/PlanningFeatureTools.cs", 170, "!string.IsNullOrWhiteSpace(slug)")]
-    [InlineData("src/Overmind.Infrastructure/Planning/PlanningFeatureService.cs", 59, "string.IsNullOrWhiteSpace(slug)")]
-    [InlineData("src/Overmind.Infrastructure/Planning/PlanningFeatureService.cs", 61, "FeatureSlugGenerator.Compose")]
+    [InlineData("src/Overmind.Infrastructure/Planning/PlanningFeatureService.cs", 69, "string.IsNullOrWhiteSpace(slug)")]
+    [InlineData("src/Overmind.Infrastructure/Planning/PlanningFeatureService.cs", 71, "FeatureSlugGenerator.Compose")]
     public void CitedLines_StillSayWhatTheTableClaims(string repoPath, int line, string expected)
     {
         var lines = File.ReadAllLines(RepoFile(repoPath));

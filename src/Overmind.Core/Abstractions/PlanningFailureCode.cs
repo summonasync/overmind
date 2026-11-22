@@ -94,5 +94,7 @@ public enum PlanningFailureCode
     ArtifactOutsideCallerProject,
     IssueOutsideCallerProject,
     EntryOutsideCallerProject,
-    AgentCallerScopeUnverifiable
+    AgentCallerScopeUnverifiable,
+    TriageAlreadyPromoted,
+    TriageNoteNotPromotable
 }
