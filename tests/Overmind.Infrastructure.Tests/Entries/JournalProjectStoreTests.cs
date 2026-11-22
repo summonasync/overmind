@@ -51,17 +51,19 @@ public sealed class JournalProjectStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureId_FindsAnExistingJournalProjectUnderADifferentCasing()
+    public async Task EnsureId_AdoptsAnExactSpellingRowThatAlreadyExists()
     {
         using var context = _temp.CreateContext();
-        context.Projects.Add(Project.Create("journal", "/tmp/journal", "hand-cased row"));
+        var seeded = Project.Create(JournalProjectStore.ProjectName, "/tmp/journal", "exact seed");
+        context.Projects.Add(seeded);
         await context.SaveChangesAsync();
 
         var store = new JournalProjectStore(context);
         var ensured = await store.EnsureIdAsync();
 
+        ensured.ShouldBe(seeded.Id);
         (await store.FindIdAsync()).ShouldBe(ensured);
-        (await context.Projects.CountAsync(p => p.Name == "journal")).ShouldBe(1);
+        (await context.Projects.CountAsync()).ShouldBe(1);
     }
 
     [Fact]
@@ -72,53 +74,25 @@ public sealed class JournalProjectStoreTests : IDisposable
         (await new JournalProjectStore(context).FindIdAsync()).ShouldBe(null);
     }
 
-    [Theory]
-    [InlineData("journal", "Journal", true)]
-    [InlineData("journal", "JOURNAL", false)]
-    [InlineData("JOURNAL", "journal", false)]
-    public async Task FindId_CaseVariantSpellingsCoexist_ExactReservedNameWinsOtherwiseEarliestCreatedAt(
-        string olderName, string newerName, bool exactIsTheNewerRow)
-    {
-        using var context = _temp.CreateContext();
-        var olderId = await SeedProjectAsync(context, olderName, "2026-01-01 00:00:00");
-        var newerId = await SeedProjectAsync(context, newerName, "2026-06-01 00:00:00");
-
-        var found = await new JournalProjectStore(context).FindIdAsync();
-
-        found.ShouldBe(exactIsTheNewerRow ? newerId : olderId);
-    }
-
     [Fact]
-    public async Task EnsureId_CaseVariantSpellingsCoexistingWithoutTheExactOne_AdoptsTheOldestRow()
+    public async Task ExactJournalContainer_TheProjectMarkerResolvesOntoIt()
     {
         using var context = _temp.CreateContext();
-        var olderId = await SeedProjectAsync(context, "journal", "2026-01-01 00:00:00");
-        await SeedProjectAsync(context, "JOURNAL", "2026-06-01 00:00:00");
-
-        var store = new JournalProjectStore(context);
-
-        (await store.EnsureIdAsync()).ShouldBe(olderId);
-        (await context.Projects.CountAsync()).ShouldBe(2);
-    }
-
-    [Fact]
-    public async Task SameCollisionWithoutTheExactCasing_ContainerAdoptsTheOldestRow_MarkerStaysUnresolved()
-    {
-        using var context = _temp.CreateContext();
-        var oldestId = await SeedProjectAsync(context, "journal", "2026-01-01 00:00:00");
-        await SeedProjectAsync(context, "JOURNAL", "2026-06-01 00:00:00");
+        var container = Project.Create(JournalProjectStore.ProjectName, "/tmp/journal");
+        context.Projects.Add(container);
         var home = Project.Create("Collision Home", "/tmp/collision-home");
         context.Projects.Add(home);
-        var source = ContextEntry.Create(home.Id, EntryType.Note, "collision probe", "seed");
+        var source = ContextEntry.Create(home.Id, EntryType.Note, "journal probe", "seed");
         context.ContextEntries.Add(source);
         await context.SaveChangesAsync();
 
-        var container = await new JournalProjectStore(context).FindIdAsync();
+        var found = await new JournalProjectStore(context).FindIdAsync();
         var marker = await new EntryLinkResolver(context, new JournalProjectStore(context))
             .ResolveForWriteAsync(source.Id, WikiLinkParser.Parse("[[project:Journal]]"));
 
-        container.ShouldBe(oldestId);
-        marker.ShouldBeEmpty();
+        found.ShouldBe(container.Id);
+        marker.ShouldHaveSingleItem();
+        marker[0].ShouldBe(new ResolvedLink(EntryLinkKind.Project, container.Id));
     }
 
     [Fact]
@@ -174,24 +148,6 @@ public sealed class JournalProjectStoreTests : IDisposable
         (await context.EntryLinks.CountAsync(link => link.FromEntryId == source.Id)).ShouldBe(1);
         (await context.Projects.CountAsync(
             p => p.Name == JournalProjectStore.ProjectName)).ShouldBe(0);
-    }
-
-    private static async Task<Guid> SeedProjectAsync(
-        OvermindDbContext context, string name, string createdAt)
-    {
-        var id = Guid.NewGuid();
-        await context.Database.ExecuteSqlRawAsync(
-            """
-            INSERT INTO Projects (Id, Name, DiskPath, Description, CreatedAt)
-            VALUES ({0}, {1}, {2}, {3}, {4})
-            """,
-            id.ToString().ToUpperInvariant(),
-            name,
-            $"/tmp/{name}",
-            "case-variant seed",
-            createdAt);
-
-        return id;
     }
 
     private string DatabasePath()
