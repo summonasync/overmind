@@ -22,6 +22,7 @@ import {
   GRAPH_SEARCH_HINT,
   ceilingMessage,
   clusteredNotice,
+  computingLayoutNotice,
   emptyFieldMessage,
   graphAriaLabel,
   isolatedInViewLabel,
@@ -31,6 +32,7 @@ import {
   orphanLabel,
   precomputedNotice,
   stateLabel,
+  tierName,
   unsupportedRowsNotice,
 } from "../src/features/journal/lib/graph-copy.ts";
 import {
@@ -52,6 +54,7 @@ import {
 import {
   precomputeLayout,
   precomputedPositions,
+  preserveHeldNodes,
 } from "../src/features/journal/lib/graph-precompute.ts";
 import {
   GRAPH_TOKENS,
@@ -59,7 +62,13 @@ import {
   nodeColorName,
   resolvePalette,
 } from "../src/features/journal/lib/graph-palette.ts";
-import { drawScene, truncateLabel } from "../src/features/journal/lib/graph-paint.ts";
+import {
+  HUB_DEGREE_FLOOR,
+  LABEL_SCALE_FLOOR,
+  LABEL_SCALE_NEAR,
+  drawScene,
+  truncateLabel,
+} from "../src/features/journal/lib/graph-paint.ts";
 import {
   asGraphNodeKind,
   graphNodeStates,
@@ -757,6 +766,7 @@ function sceneOf(patch: Partial<Record<string, unknown>> = {}) {
       width: 800,
       height: 600,
       font: "12px ui-sans-serif, system-ui, sans-serif",
+      tier: "simulate",
       ...patch,
     },
   };
@@ -1152,6 +1162,199 @@ test("the frame clock and the pin surface keep the URL out of the click path", (
   assert.match(canvas, /onSelect\(pickAt\(x, y\)\)/, "a click no longer selects what is under it");
   assert.match(canvas, /onDoubleClick/, "double-click lost its door");
   assert.match(canvas, /node\.kind === "entry"/, "double-click no longer checks that a note is a note");
+});
+
+// ── Tier 2 on the canvas: seed first, swap-in, the label ladder ───────────────────────
+
+const HUB_KEY = nodeKey("entry", "hub");
+const LEAF_KEY = nodeKey("entry", "leaf-1");
+
+// One hub over five leaves: at the mid band exactly one node clears the hub gate, so the
+// recorder's fillText count names which rung opened without reading label text.
+const HUB_FIELD = fieldOf(
+  [
+    node("entry", "hub", "Hub note"),
+    node("entry", "leaf-1", "Leaf one"),
+    node("entry", "leaf-2", "Leaf two"),
+    node("entry", "leaf-3", "Leaf three"),
+    node("entry", "leaf-4", "Leaf four"),
+    node("entry", "leaf-5", "Leaf five"),
+  ],
+  [
+    edge("entry", "hub", "entry", "leaf-1"),
+    edge("entry", "hub", "entry", "leaf-2"),
+    edge("entry", "hub", "entry", "leaf-3"),
+    edge("entry", "hub", "entry", "leaf-4"),
+    edge("entry", "hub", "entry", "leaf-5"),
+  ],
+);
+
+function ladderScene(scale: number, patch: Record<string, unknown> = {}) {
+  const nodes = seedPositions(HUB_FIELD.nodes, [], 800, 600);
+  const links = seedLayoutLinks(HUB_FIELD.edges, nodes);
+  return {
+    scene: {
+      nodes,
+      links,
+      view: { scale, tx: 0, ty: 0 },
+      colors: paletteColors,
+      states: graphNodeStates(HUB_FIELD.nodes, HUB_FIELD.edges),
+      hoverKey: null as string | null,
+      selectedKey: null as string | null,
+      neighbours: null as Set<string> | null,
+      width: 800,
+      height: 600,
+      font: "12px ui-sans-serif, system-ui, sans-serif",
+      tier: "precomputed",
+      ...patch,
+    },
+  };
+}
+
+const labelCount = (calls: PaintCall[]) => calls.filter((call) => call.op === "fillText").length;
+
+test("the tier-2 label ladder: floor hides all but the focus, mid zoom lifts hubs, near zoom shows all", () => {
+  assert.equal(HUB_DEGREE_FLOOR, 4);
+
+  const far = recorder();
+  drawScene(far.target as never, ladderScene(0.5).scene as never);
+  assert.equal(labelCount(far.calls), 0, "a zoomed-out tier-2 field sprayed labels with nothing focused");
+
+  const hovered = recorder();
+  drawScene(hovered.target as never, ladderScene(0.5, { hoverKey: LEAF_KEY }).scene as never);
+  assert.equal(labelCount(hovered.calls), 1, "the ladder dropped the hovered node's own label");
+  const picked = recorder();
+  drawScene(picked.target as never, ladderScene(0.5, { selectedKey: HUB_KEY }).scene as never);
+  assert.equal(labelCount(picked.calls), 1, "the ladder dropped the selected node's own label");
+
+  const mid = recorder();
+  drawScene(mid.target as never, ladderScene(1.0).scene as never);
+  assert.equal(labelCount(mid.calls), 1, "mid zoom must label exactly the one hub on this field");
+  const midHover = recorder();
+  drawScene(midHover.target as never, ladderScene(1.0, { hoverKey: LEAF_KEY }).scene as never);
+  assert.equal(labelCount(midHover.calls), 2, "mid zoom dropped the hovered leaf next to its hub");
+
+  const floorEdge = recorder();
+  drawScene(floorEdge.target as never, ladderScene(LABEL_SCALE_FLOOR).scene as never);
+  assert.equal(labelCount(floorEdge.calls), 1, "the hub band did not open at the floor it inherits");
+
+  const nearEdge = recorder();
+  drawScene(nearEdge.target as never, ladderScene(LABEL_SCALE_NEAR).scene as never);
+  assert.equal(labelCount(nearEdge.calls), HUB_FIELD.nodes.length, "near zoom did not open every label");
+
+  const near = recorder();
+  drawScene(near.target as never, ladderScene(1.6).scene as never);
+  assert.equal(labelCount(near.calls), HUB_FIELD.nodes.length);
+});
+
+test("tier 1 keeps its own label rule: everything labels at the old floor", () => {
+  const { target, calls } = recorder();
+  const { scene } = sceneOf({ view: { scale: 1.0, tx: 0, ty: 0 } });
+  drawScene(target as never, scene as never);
+  assert.ok(labelCount(calls) >= SMALL_FIELD.nodes.length, "the tier-1 floor moved");
+});
+
+test("the landed frame keeps the nodes the owner is holding and settles the rest", () => {
+  const standing = seedPositions(SMALL_FIELD.nodes, [], 800, 600);
+  pinNode(standing[2]!, 40, 50);
+
+  const landed = seedPositions(SMALL_FIELD.nodes, [], 800, 600);
+  for (const node of landed) {
+    node.x += 100;
+    node.y += 100;
+  }
+  preserveHeldNodes(landed, standing);
+
+  const merged = landed[2]!;
+  assert.equal(merged.x, 40, "the swap teleported a node the owner was holding");
+  assert.equal(merged.y, 50);
+  assert.equal(merged.fx, 40, "the held node lost its hold across the swap");
+  assert.equal(landed[0]!.x, standing[0]!.x + 100, "a node nobody held lost its settled coordinate");
+});
+
+test("releasing a pin in the settled tier-2 field clears the hold without moving the node", async () => {
+  const field = syntheticField(1200, [{ kind: "entry", id: SYNTHETIC_PIN_ID, x: 77, y: 88 }]);
+  const landed = await precomputeLayout(field, { width: 1200, height: 900 });
+  const pinned = landed.find((n) => n.id === SYNTHETIC_PIN_ID)!;
+  const spot = { x: pinned.x, y: pinned.y };
+
+  releasePinnedNodes(landed);
+
+  assert.equal(pinned.fx, null);
+  assert.equal(pinned.x, spot.x, "release teleported the node in the static field");
+  assert.equal(pinned.y, spot.y);
+});
+
+test("a tier-2 field renders the honest notice and the release sentence, but no computing line", () => {
+  const big = syntheticField(1201);
+  const html = renderToStaticMarkup(
+    React.createElement(GraphCanvas, {
+      field: big,
+      selectedKey: null,
+      reducedMotion: false,
+      onSelect: noop,
+      onOpenNote: noop,
+    }),
+  );
+  assert.match(html, /1201 nodes are above the 1000-node live-simulation ceiling/);
+  assert.match(html, /releasing pinned nodes here leaves them where they stand/);
+  assert.match(html, /runs on the precomputed tier/);
+  assert.ok(!/Laying out /.test(html), "a static render claimed a settle it never kicked");
+
+  const still = renderToStaticMarkup(
+    React.createElement(GraphCanvas, {
+      field: big,
+      selectedKey: null,
+      reducedMotion: true,
+      onSelect: noop,
+      onOpenNote: noop,
+    }),
+  );
+  assert.ok(!/Reduced motion is on/.test(still), "tier 2 has no motion for reduced motion to turn off");
+});
+
+test("tier-2 copy promises only what the slice transport does", () => {
+  const computing = computingLayoutNotice(1500);
+  assert.match(computing, /1500 nodes/);
+  assert.match(computing, /slices/);
+  const settled = precomputedNotice(1500, SIM_CEILING);
+  for (const text of [computing, settled]) {
+    assert.ok(!/background|\bworker\b/i.test(text), `copy promised a transport it does not run: ${text}`);
+  }
+  assert.match(settled, /live-simulation ceiling/);
+});
+
+test("the precomputed branch kicks one settle and runs no frame clock of its own", () => {
+  const canvas = sliceFile("components/graph-canvas.tsx");
+  assert.match(canvas, /setPrecomputing\(true\)/);
+  assert.match(canvas, /void precomputeLayout\(field, forces\)/);
+  assert.match(canvas, /preserveHeldNodes\(landed, nodesRef\.current\)/);
+  assert.match(canvas, /nodesRef\.current = landed/);
+  assert.match(canvas, /precomputing\s*\?\s*computingLayoutNotice/, "the pending state lost its notice slot");
+  assert.equal(
+    (canvas.match(/requestAnimationFrame/g) ?? []).length,
+    2,
+    "the tier-1 loop's two rAF calls grew company — the precomputed branch runs no frame clock",
+  );
+});
+
+test("the aria label names the tier the canvas actually runs", () => {
+  assert.equal(tierName(layoutModeFor(5)), "live simulation");
+  assert.equal(tierName(layoutModeFor(1201)), "precomputed");
+  assert.equal(tierName(layoutModeFor(5001)), "static", "a tier T3 has not shipped must not be named clustered");
+
+  assert.ok(!/tier/.test(graphAriaLabel(SMALL_FIELD.counts)), "the bare label grew a tier sentence");
+
+  const html = renderToStaticMarkup(
+    React.createElement(GraphCanvas, {
+      field: SMALL_FIELD,
+      selectedKey: null,
+      reducedMotion: true,
+      onSelect: noop,
+      onOpenNote: noop,
+    }),
+  );
+  assert.match(html, /runs on the live simulation tier/);
 });
 
 // ── T8: pins are rows on the Host, never bytes in the browser ─────────────────────────

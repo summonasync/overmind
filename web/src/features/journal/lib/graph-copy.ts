@@ -1,3 +1,4 @@
+import type { LayoutMode } from "./graph-layout.ts";
 import type { GraphCounts, GraphNode, GraphNodeState, GraphViewFilters } from "../types.ts";
 
 // Every string the graph surface shows, in one module: the a11y label, the legend, the ceiling
@@ -12,15 +13,26 @@ export const GRAPH_SEARCH_HINT = "Matches the title text as typed.";
 const ASCII_CASE_NOTE =
   "Titles are matched as typed: the store folds case for Latin letters only, so try the exact spelling you used.";
 
-export function graphAriaLabel(counts: GraphCounts): string {
+export function graphAriaLabel(counts: GraphCounts, tier?: string): string {
   const byKind =
     `${counts.entryNodes} entries, ${counts.projectNodes} projects, ${counts.featureNodes} features`;
   const links = counts.edges === 1 ? "1 link" : `${counts.edges} links`;
   return (
     `Graph map: ${counts.nodes} nodes (${byKind}) joined by ${links}. ` +
     `${counts.orphans} nodes carry no links at all, ${counts.isolatedInView} link only to something outside this view. ` +
-    "The list below holds the same data and is the keyboard path."
+    "The list below holds the same data and is the keyboard path." +
+    (tier === undefined ? "" : ` The field runs on the ${tier} tier.`)
   );
+}
+
+// The tier name the canvas is allowed to say out loud. T3 owns clusters; until it ships, a field
+// past the precompute ceiling is drawn as the static seed and named "static" — calling it
+// "clustered" would promise grouping the canvas never paints.
+export function tierName(mode: LayoutMode): string {
+  if (mode === "simulate") {
+    return "live simulation";
+  }
+  return mode === "precomputed" ? "precomputed" : "static";
 }
 
 // A NODE count, never a link count: the dropped-edge tally is not in the payload
@@ -53,11 +65,30 @@ export function ceilingMessage(nodeCount: number, ceiling: number): string {
 // The ladder's per-tier notices. Each names the rung it crossed and what the canvas does about
 // it, and both keep the live-simulation-ceiling phrase — the copy pin sweeps the island for
 // that string, and the honest ladder still leads with it.
+//
+// Tier 2 draws its seed sketch first and swaps in the settled map when the layout lands, so the
+// notice says that order and not "before its first frame". It also promises nothing about
+// background threads: the shipped transport is time-sliced work on the main thread (see the
+// transport comment in graph-precompute.ts), and release in this tier leaves nodes where they
+// stand because there is no simulation left to return them to.
 export function precomputedNotice(nodeCount: number, ceiling: number): string {
   const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
   return (
-    `${head} above the ${ceiling}-node live-simulation ceiling, so the field settles once, ` +
-    "off the render loop, before its first frame. Nothing is animating and the list below stays the primary path."
+    `${head} above the ${ceiling}-node live-simulation ceiling, so the field draws its seed ` +
+    "sketch first and settles once, off the render loop, into the map that replaces it. " +
+    "Nothing is animating, and releasing pinned nodes here leaves them where they stand — " +
+    "this tier has no simulation to return them to. The list below stays the primary path."
+  );
+}
+
+// Shown only while the tier-2 settle is still slicing. The wording keeps to what the transport
+// does: the work runs in bounded slices with input handled between them, which is not the same
+// claim as an idle page, and the field below is the seed sketch until the swap.
+export function computingLayoutNotice(nodeCount: number): string {
+  const noun = nodeCount === 1 ? "node" : "nodes";
+  return (
+    `Laying out ${nodeCount} ${noun}: the settle runs in slices between frames, so input is ` +
+    "handled between them. The field below is the seed sketch until the layout lands."
   );
 }
 

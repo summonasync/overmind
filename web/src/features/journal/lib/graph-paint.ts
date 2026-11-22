@@ -1,6 +1,6 @@
 import type { GraphNodeState } from "../types.ts";
 import { nodeColorName, nodeRadius, type GraphSemanticColor } from "./graph-palette.ts";
-import type { LayoutLink, LayoutNode } from "./graph-layout.ts";
+import type { LayoutLink, LayoutMode, LayoutNode } from "./graph-layout.ts";
 import { nodeKey } from "./graph-payload.ts";
 import { toScreenX, toScreenY, type ViewTransform } from "./graph-view.ts";
 
@@ -38,6 +38,15 @@ export const ORPHAN_ALPHA = 0.6;
 export const LABEL_SCALE_FLOOR = 0.85;
 export const MAX_LABEL_CHARS = 42;
 
+// R3's ladder, tier 2 and up. Between the floor and near zoom only hubs label, because a
+// 5000-node field at arm's length turns every title into ink; a hub is a node whose link count
+// cleared HUB_DEGREE_FLOOR — the degree below which a dot is a leaf in practice, not a
+// landmark. The near-zoom rung stays reachable with three wheel notches from the default view
+// (1.15³ ≈ 1.52), so "show me everything" is always a deliberate zoom away, never a dead end.
+// Tier 1 predates the ladder and keeps the single floor it shipped with.
+export const HUB_DEGREE_FLOOR = 4;
+export const LABEL_SCALE_NEAR = 1.25;
+
 export interface SceneInput {
   nodes: readonly LayoutNode[];
   links: readonly LayoutLink[];
@@ -50,6 +59,7 @@ export interface SceneInput {
   width: number;
   height: number;
   font: string;
+  tier: LayoutMode;
 }
 
 export function drawScene(ctx: PaintTarget, scene: SceneInput): void {
@@ -152,14 +162,45 @@ function drawNodes(ctx: PaintTarget, scene: SceneInput): void {
   drawLabels(ctx, scene);
 }
 
+function hubDegrees(links: readonly LayoutLink[]): Map<string, number> {
+  const degrees = new Map<string, number>();
+  const bump = (node: LayoutNode) => {
+    const key = keyOf(node);
+    degrees.set(key, (degrees.get(key) ?? 0) + 1);
+  };
+  for (const link of links) {
+    bump(link.source);
+    bump(link.target);
+  }
+  return degrees;
+}
+
+function labelShown(scene: SceneInput, key: string, degree: number): boolean {
+  if (key === scene.hoverKey || key === scene.selectedKey) {
+    return true;
+  }
+  if (scene.tier === "simulate") {
+    return scene.view.scale >= LABEL_SCALE_FLOOR;
+  }
+  if (scene.view.scale < LABEL_SCALE_FLOOR) {
+    return false;
+  }
+  if (scene.view.scale < LABEL_SCALE_NEAR) {
+    return degree >= HUB_DEGREE_FLOOR;
+  }
+  return true;
+}
+
 function drawLabels(ctx: PaintTarget, scene: SceneInput): void {
   ctx.font = scene.font;
   ctx.fillStyle = scene.colors.label;
 
+  // One O(links) pass per frame, the same order drawLinks already pays; tier 1 never needs it.
+  const degrees = scene.tier === "simulate" ? null : hubDegrees(scene.links);
+
   for (const node of scene.nodes) {
     const key = keyOf(node);
-    const focused = key === scene.hoverKey || key === scene.selectedKey;
-    if (!focused && scene.view.scale < LABEL_SCALE_FLOOR) {
+    if (!labelShown(scene, key, degrees?.get(key) ?? 0)) {
       continue;
     }
 

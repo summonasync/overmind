@@ -119,3 +119,30 @@ export async function precomputeLayout(
   };
   return settleInSlices(request);
 }
+
+// When the landed frame swaps in, a drag that began on the seed is mid-flight: the owner is
+// holding a node the settle never saw, and swapping the arrays under it would teleport the dot
+// back to its settled coordinate. A held node keeps its hold, and its coordinate is the hold —
+// the hold is what the owner aimed at, whether the drag had time to move x/y or not. Every
+// other node takes its settled one. Server pins need none of this — prepare() already held
+// them through the settle.
+export function preserveHeldNodes(
+  settled: readonly LayoutNode[],
+  standing: readonly LayoutNode[],
+): void {
+  const held = new Map<string, LayoutNode>();
+  for (const node of standing) {
+    if (node.fx != null) {
+      held.set(nodeKey(node.kind, node.id), node);
+    }
+  }
+  for (const node of settled) {
+    const kept = held.get(nodeKey(node.kind, node.id));
+    if (kept !== undefined) {
+      node.x = kept.fx ?? kept.x;
+      node.y = kept.fy ?? kept.y;
+      node.fx = kept.fx;
+      node.fy = kept.fy;
+    }
+  }
+}
