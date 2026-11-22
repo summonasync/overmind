@@ -67,6 +67,9 @@ export function useGraphPinWriter() {
   return useMutation({
     mutationFn: (positions: GraphPositionWrite[]) => saveGraphPositions(positions),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: graphKeys.all }),
+    // A failed PUT must not leave the canvas promising a pin the Host never stored: the same
+    // refetch that confirms a save also restores the server's truth after a refusal.
+    onError: () => queryClient.invalidateQueries({ queryKey: graphKeys.all }),
   });
 }
 

@@ -110,6 +110,12 @@ function GraphBranch() {
               pinWriter.mutate(shown.positions.map((position) => ({ ...position, pinned: false })))
             }
           />
+          {pinWriter.error !== null && (
+            <p className="text-sm text-muted" role="status">
+              The pin did not save — the field has re-read the positions the server holds. Drag
+              again to retry ({pinWriter.error.message}).
+            </p>
+          )}
           <GraphLegend field={shown} />
         </div>
 
