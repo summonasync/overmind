@@ -22,6 +22,8 @@ import {
   GRAPH_SEARCH_HINT,
   ceilingMessage,
   clusteredNotice,
+  computingAnchorsNotice,
+  computingBloomNotice,
   computingLayoutNotice,
   emptyFieldMessage,
   graphAriaLabel,
@@ -1803,4 +1805,55 @@ test("keyboard and pointer cover the visible set, and the anchor is a door on bo
   assert.match(canvas, /const door = tier === "clustered" \? clusterDoor\(pickAt\(x, y\)\) : null;/);
   assert.match(canvas, /onSelect\(pickAt\(x, y\)\);/, "the click that selects a dot lost its shape");
   assert.match(canvas, /node\.id !== UNSORTED_CLUSTER_ID/, "a phantom anchor can reach the pin door");
+});
+
+// ── Review-271-03 fix round: settle bookkeeping and a hover-stable kick ───────────────
+
+test("a bailed-out settle still closes its bookkeeping slot, and the kick ignores hover", () => {
+  const canvas = sliceFile("components/graph-canvas.tsx");
+
+  // MAJOR-1a: the decrement leads every settle exit — a callback whose first statement is a
+  // guard would hold the notice slot open forever the first time a settle was abandoned.
+  const landedFirst = canvas.match(/\(landed\) => \{\n\s*endSettle\(\);/g) ?? [];
+  assert.equal(landedFirst.length, 2, "a settle callback kept its decrement behind its guard");
+  const failedFirst = canvas.match(/\(\) => \{\n\s*endSettle\(\);/g) ?? [];
+  assert.equal(failedFirst.length, 2, "a failure path kept its decrement behind its guard");
+
+  // MAJOR-1b: the anchor kick's effect deps carry no draw identity. Hover restarts any effect
+  // that lists draw, and a restarted kick whose set already "changed" would abandon its
+  // in-flight settle and never run again — the field stranded on the seed spiral.
+  assert.match(
+    canvas,
+    /\[beginSettle, clusters, endSettle, field, recomposeClusterField, size\]/,
+    "the anchor kick's deps grew a hover identity",
+  );
+  assert.match(canvas, /drawRef\.current\(\);\n\s*\}\)\n\s*\.catch\(\(\) => \{\n\s*endSettle\(\);/, "the anchor settle lost the ref-drawn landing");
+  assert.match(
+    canvas,
+    /settledAnchorSetRef\.current = anchorSet;/,
+    "the landed-set guard vanished — an aborted settle would never re-kick",
+  );
+
+  // SUGGESTION-1: the bloom launches from a handler and has no effect cleanup to die with, so
+  // its token and its exits carry the mount flag the kick's `live` provides.
+  assert.match(canvas, /const mountedRef = useRef\(true\)/);
+  assert.match(canvas, /!mountedRef\.current \|\| expansionGenRef\.current !== gen/, "the bloom token ignores unmount");
+});
+
+test("tier-3 settle notices name the subset they lay out, not the whole field", () => {
+  const anchors = computingAnchorsNotice(51);
+  assert.match(anchors, /51 cluster anchors/);
+  assert.match(anchors, /slices/);
+  const bloom = computingBloomNotice(31);
+  assert.match(bloom, /Opening a cluster of 31 nodes/);
+  for (const text of [anchors, bloom]) {
+    assert.ok(!/background|\bworker\b/i.test(text), `tier-3 copy promised a transport it does not run: ${text}`);
+  }
+
+  const canvas = sliceFile("components/graph-canvas.tsx");
+  assert.match(canvas, /layoutWhat === "anchors"/, "the anchor settle lost its own notice wording");
+  assert.match(canvas, /computingAnchorsNotice\(layoutCount\)/);
+  assert.match(canvas, /computingBloomNotice\(layoutCount\)/);
+  assert.match(canvas, /beginSettle\(clusters\.groups\.length, "anchors"\)/);
+  assert.match(canvas, /beginSettle\(group\.members\.length, "bloom"\)/);
 });
