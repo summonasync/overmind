@@ -59,13 +59,15 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         var skipped = new List<PlanningMaterializationSkip>();
         var refused = new List<PlanningMaterializationSkip>();
         var quarantined = new List<PlanningMaterializationSkip>();
+        var quarantinedStalePaths = new HashSet<string>(PathGuard.PathComparer);
         var plans = MirrorPlanRenderer.BuildPlans(root, features, rows);
         plans.AddRange(MirrorPlanRenderer.BuildEntryPlans(root, entries, rows));
         var otherRoot = OtherRoot(project, strategy);
 
         if (strategy == PlanningMaterialization.On)
         {
-            GuardOverwrites(plans, rows, otherRoot, force, warnings, refused, quarantined, quarantine);
+            GuardOverwrites(
+                plans, rows, otherRoot, force, warnings, refused, quarantined, quarantinedStalePaths, quarantine);
         }
 
         var (droppedRows, keptForeignRows) = await FindDroppedOtherRootRowsAsync(rows, strategy, otherRoot, ct);
@@ -74,8 +76,6 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         // Captured before GuardLocalEdits prunes byte-stable plans: those rows stay tracked, not stale.
         var plannedPaths = plans.Select(p => p.RelativePath).ToHashSet(PathGuard.PathComparer);
-
-        var quarantinedStalePaths = new HashSet<string>(PathGuard.PathComparer);
 
         if (strategy == PlanningMaterialization.On)
         {
@@ -415,7 +415,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
     private static void GuardOverwrites(
         List<MirrorFilePlan> plans, List<PlanningMaterializedFile> rows, string otherRoot, bool force,
         List<string> warnings, List<PlanningMaterializationSkip> refused,
-        List<PlanningMaterializationSkip> quarantined, bool quarantine)
+        List<PlanningMaterializationSkip> quarantined, ISet<string> quarantinedStalePaths, bool quarantine)
     {
         for (var i = plans.Count - 1; i >= 0; i--)
         {
@@ -447,6 +447,10 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
             {
                 quarantined.Add(refusal);
                 plans.RemoveAt(i);
+                // A quarantined path must also survive the stale sweep: the row can outlive the
+                // pruned plan (an unreadable other-root copy keeps its row) and removing the
+                // file would betray the report that named it untouched.
+                quarantinedStalePaths.Add(plan.RelativePath);
                 continue;
             }
 
