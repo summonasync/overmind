@@ -118,6 +118,80 @@ public sealed class JournalTriagePromotionApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PromoteToFeature_TheNotesOwnOutgoingListsTheCardOnce()
+    {
+        var noteId = await CreateNoteAsync("Into the rails", "the owner's words");
+        var before = await _client.GetFromJsonAsync<DetailViewJson>($"/api/entries/{noteId}", JsonOptions);
+
+        before!.Outgoing.ShouldBeEmpty("the note names no card of its own before the act");
+
+        var response = await _client.PostAsJsonAsync($"/api/entries/{noteId}/promote-to-feature", new
+        {
+            ProjectId = _boardProjectId,
+            Title = "Rail borne thought",
+            Body = "body",
+            Priority = "P1",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var promotion = await response.Content.ReadFromJsonAsync<PromotionJson>(JsonOptions);
+
+        var view = await _client.GetFromJsonAsync<DetailViewJson>($"/api/entries/{noteId}", JsonOptions);
+        view.ShouldNotBeNull();
+
+        view!.Outgoing.ShouldHaveSingleItem();
+        var row = view.Outgoing[0];
+        row.Kind.ShouldBe("feature");
+        row.Id.ShouldBe(promotion!.TargetId);
+        row.Label.ShouldBe("Rail borne thought");
+        row.Slug.ShouldBe(promotion.FeatureSlug);
+        row.ProjectId.ShouldBe(_boardProjectId);
+
+        view.Content.ShouldBe("the owner's words");
+        view.CurrentVersion.ShouldBe(before.CurrentVersion, "the promotion wrote an edge, not the note");
+    }
+
+    [Fact]
+    public async Task PromoteToTask_TheNotesOwnOutgoingListsTheTaskAndItsFrame()
+    {
+        var feature = await CreateBoardFeatureAsync("021-rails-host", "Rails host");
+        var briefed = await CreateNoteAsync("Briefed into rails", "body");
+
+        var first = await _client.PostAsJsonAsync($"/api/entries/{briefed}/promote-to-task", new
+        {
+            FeatureId = feature.Id,
+            Body = "body",
+            Brief = "From the journal pile",
+        });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var promoted = await first.Content.ReadFromJsonAsync<PromotionJson>(JsonOptions);
+
+        var briefView = await _client.GetFromJsonAsync<DetailViewJson>($"/api/entries/{briefed}", JsonOptions);
+        briefView!.Outgoing.ShouldHaveSingleItem();
+        var briefRow = briefView.Outgoing[0];
+        briefRow.Kind.ShouldBe("task");
+        briefRow.Id.ShouldBe(promoted!.TargetId);
+        briefRow.Label.ShouldBe("From the journal pile");
+        briefRow.Slug.ShouldBe("021-rails-host");
+        briefRow.ProjectId.ShouldBe(_boardProjectId);
+
+        var bare = await CreateNoteAsync("Bare into rails", "body");
+        var second = await _client.PostAsJsonAsync($"/api/entries/{bare}/promote-to-task", new
+        {
+            FeatureId = feature.Id,
+            Body = "body",
+        });
+        second.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var created = await second.Content.ReadFromJsonAsync<PromotionJson>(JsonOptions);
+
+        var bareView = await _client.GetFromJsonAsync<DetailViewJson>($"/api/entries/{bare}", JsonOptions);
+        var bareRow = bareView!.Outgoing.Single();
+        bareRow.Kind.ShouldBe("task");
+        bareRow.Id.ShouldBe(created!.TargetId);
+        bareRow.Label.ShouldBe($"task {await ArtifactOrderAsync(created.TargetId):D2}");
+        bareRow.Slug.ShouldBe("021-rails-host");
+    }
+
+    [Fact]
     public async Task PromoteTwice_Answers409NamingTheCardTheNoteAlreadyBecame()
     {
         var noteId = await CreateNoteAsync("Double click", "body");
@@ -477,6 +551,24 @@ public sealed class JournalTriagePromotionApiTests : IAsyncLifetime
     private sealed record EntryRowJson(Guid Id);
 
     private sealed record ProblemJson(string? Title, string? Detail);
+
+    private sealed record OutgoingView(string Kind, Guid Id, string Label, string? Slug, Guid? ProjectId);
+
+    private sealed record DetailViewJson(
+        string Title,
+        string Content,
+        int CurrentVersion,
+        List<OutgoingView> Outgoing);
+
+    private async Task<int> ArtifactOrderAsync(Guid artifactId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<OvermindDbContext>()
+            .PlanningArtifacts.AsNoTracking()
+            .Where(artifact => artifact.Id == artifactId)
+            .Select(artifact => artifact.Order)
+            .SingleAsync();
+    }
 }
 
 // NON-VACUITY (contract AC 3). Two injections, both recorded in ~/scratch-237 and reverted:

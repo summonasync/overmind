@@ -35,13 +35,32 @@ internal static class EntryLinkProjection
             drafts.Add((new ResolvedLink(outcome.Target.Kind, targetId), outcome.Target.Key));
         }
 
+        // Markers first in document order, then the stored manual edges the door writes. The union is
+        // deliberately uncapped: this view had no bound before the second source existed, and a bound invented
+        // here would drop exactly the row that tells the owner where their thought was sorted.
+        foreach (var link in await links.LoadManualOutgoingAsync(entry.Id, ct))
+        {
+            if (link.ToId == entry.Id || !seen.Add((link.Kind, link.ToId)))
+            {
+                continue;
+            }
+
+            drafts.Add((link, string.Empty));
+        }
+
         var labels = await links.LoadTargetLabelsAsync([.. drafts.Select(draft => draft.Link)], ct);
         List<EntryOutgoingLink> outgoing =
         [
-            .. drafts.Select(draft => new EntryOutgoingLink(
-                draft.Link.Kind,
-                draft.Link.ToId,
-                labels.GetValueOrDefault((draft.Link.Kind, draft.Link.ToId)) ?? draft.Written))
+            .. drafts.Select(draft =>
+            {
+                var label = labels.GetValueOrDefault((draft.Link.Kind, draft.Link.ToId));
+                return new EntryOutgoingLink(
+                    draft.Link.Kind,
+                    draft.Link.ToId,
+                    label?.Label ?? draft.Written,
+                    label?.Slug,
+                    label?.ProjectId);
+            })
         ];
 
         var sources = await links.LoadBacklinkSourcesAsync(entry.Id, ct);

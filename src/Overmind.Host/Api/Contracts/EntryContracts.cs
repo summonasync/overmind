@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
@@ -49,7 +50,12 @@ public sealed record EntryResponse(
     IReadOnlyList<EntryBacklink> Incoming,
     IReadOnlyList<string> Unresolved);
 
-public sealed record EntryOutgoingLink(EntryLinkKind Kind, Guid Id, string Label);
+public sealed record EntryOutgoingLink(
+    EntryLinkKind Kind,
+    Guid Id,
+    string Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Slug = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ProjectId = null);
 
 public sealed record EntryBacklink(Guid EntryId, string Title, string Snippet);
 

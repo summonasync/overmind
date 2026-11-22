@@ -7,10 +7,12 @@ namespace Overmind.Infrastructure.Entries;
 public sealed class EntryLinkReader
 {
     private readonly OvermindDbContext _db;
+    private readonly EntryLinkTriage _triage;
 
-    public EntryLinkReader(OvermindDbContext db)
+    public EntryLinkReader(OvermindDbContext db, EntryLinkTriage triage)
     {
         _db = db;
+        _triage = triage;
     }
 
     public async Task<IReadOnlyList<BacklinkSource>> LoadBacklinkSourcesAsync(
@@ -28,11 +30,26 @@ public sealed class EntryLinkReader
         return await query.AsNoTracking().ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyDictionary<(EntryLinkKind Kind, Guid Id), string>> LoadTargetLabelsAsync(
+    public async Task<IReadOnlyList<ResolvedLink>> LoadManualOutgoingAsync(
+        Guid fromEntryId,
+        CancellationToken ct = default)
+    {
+        return
+        [
+            .. await _triage.Edges()
+                .Where(link => link.FromEntryId == fromEntryId && link.Origin == EntryLinkOrigin.Manual)
+                .OrderBy(link => link.CreatedAt)
+                .ThenBy(link => link.Id)
+                .Select(link => new ResolvedLink(link.ToKind, link.ToId))
+                .ToListAsync(ct)
+        ];
+    }
+
+    public async Task<IReadOnlyDictionary<(EntryLinkKind Kind, Guid Id), TargetLabel>> LoadTargetLabelsAsync(
         IReadOnlyCollection<ResolvedLink> links,
         CancellationToken ct = default)
     {
-        var labels = new Dictionary<(EntryLinkKind, Guid), string>();
+        var labels = new Dictionary<(EntryLinkKind, Guid), TargetLabel>();
         if (links.Count == 0)
         {
             return labels;
@@ -49,7 +66,7 @@ public sealed class EntryLinkReader
 
             foreach (var entry in entries)
             {
-                labels[(EntryLinkKind.Entry, entry.Id)] = entry.Title;
+                labels[(EntryLinkKind.Entry, entry.Id)] = new TargetLabel(entry.Title);
             }
         }
 
@@ -59,12 +76,13 @@ public sealed class EntryLinkReader
             var features = await _db.PlanningFeatures
                 .AsNoTracking()
                 .Where(f => featureIds.Contains(f.Id))
-                .Select(f => new { f.Id, f.Title })
+                .Select(f => new { f.Id, f.Title, f.Slug, f.ProjectId })
                 .ToListAsync(ct);
 
             foreach (var feature in features)
             {
-                labels[(EntryLinkKind.Feature, feature.Id)] = feature.Title;
+                labels[(EntryLinkKind.Feature, feature.Id)] =
+                    new TargetLabel(feature.Title, feature.Slug, feature.ProjectId);
             }
         }
 
@@ -79,7 +97,33 @@ public sealed class EntryLinkReader
 
             foreach (var project in projects)
             {
-                labels[(EntryLinkKind.Project, project.Id)] = project.Name;
+                labels[(EntryLinkKind.Project, project.Id)] = new TargetLabel(project.Name);
+            }
+        }
+
+        var taskIds = links.Where(link => link.Kind == EntryLinkKind.Task).Select(link => link.ToId).ToArray();
+        if (taskIds.Length > 0)
+        {
+            var tasks = await _db.PlanningArtifacts
+                .AsNoTracking()
+                .Where(artifact => taskIds.Contains(artifact.Id) && artifact.Kind == PlanningArtifactKind.Task)
+                .Select(artifact => new { artifact.Id, artifact.Brief, artifact.Order, artifact.FeatureId })
+                .ToListAsync(ct);
+
+            var hostIds = tasks.Select(task => task.FeatureId).Distinct().ToArray();
+            var hosts = await _db.PlanningFeatures
+                .AsNoTracking()
+                .Where(feature => hostIds.Contains(feature.Id))
+                .Select(feature => new { feature.Id, feature.Slug, feature.ProjectId })
+                .ToListAsync(ct);
+
+            foreach (var task in tasks)
+            {
+                var host = hosts.FirstOrDefault(feature => feature.Id == task.FeatureId);
+                labels[(EntryLinkKind.Task, task.Id)] = new TargetLabel(
+                    string.IsNullOrWhiteSpace(task.Brief) ? $"task {task.Order:D2}" : task.Brief,
+                    host?.Slug,
+                    host?.ProjectId);
             }
         }
 
