@@ -34,7 +34,7 @@ public sealed class GraphReader
         var nodes = new List<GraphNode>();
         nodes.AddRange(await ProjectNodes(entries, orphanEntries, ct));
         nodes.AddRange(await ProjectProjects(projects, orphanProjects, ct));
-        nodes.AddRange(await ProjectFeatures(features, orphanFeatures, ct));
+        nodes.AddRange(await ProjectFeatures(features, orphanFeatures, request.Search, ct));
 
         var nodeIds = nodes.Select(node => new GraphNodeId(node.Kind, node.Id)).ToHashSet();
         var pinned = await PinnedPositionsAsync(nodes, ct);
@@ -105,7 +105,7 @@ public sealed class GraphReader
 
         if (LikePattern(request.Search) is { } pattern)
         {
-            query = query.Where(entry => EF.Functions.Like(entry.Title, pattern, "\\"));
+            query = query.Where(entry => EF.Functions.Like(entry.TitleNormalized, pattern, "\\"));
         }
 
         return query;
@@ -122,7 +122,7 @@ public sealed class GraphReader
 
         if (LikePattern(request.Search) is { } pattern)
         {
-            query = query.Where(project => EF.Functions.Like(project.Name, pattern, "\\"));
+            query = query.Where(project => EF.Functions.Like(project.NameNormalized, pattern, "\\"));
         }
 
         return query;
@@ -142,18 +142,18 @@ public sealed class GraphReader
             query = query.Where(feature => feature.ProjectId == projectId);
         }
 
-        if (LikePattern(request.Search) is { } pattern)
-        {
-            query = query.Where(feature => EF.Functions.Like(feature.Title, pattern, "\\"));
-        }
-
+        // Feature search folds in memory after the SQL filters (see ProjectFeatures): a normalized column on
+        // PlanningFeatures would ride the same migration convoy as the entries one and break the migration
+        // tests' EF inserts on historical schemas, and the feature table is small enough that the loaded
+        // rows post-filter is the cheaper honest trade.
         return query;
     }
 
-    // A search term becomes a LIKE pattern matching a substring — case-insensitive for ASCII as SQLite's LIKE is,
-    // case-sensitive otherwise, so a Cyrillic title in the wrong case does not match. Only a blank term yields null
-    // and skips the filter; a term of pure wildcards is escaped and matched literally, so a bare '%' looks for a
-    // percent sign, not for everything. The escape character keeps a real % or _ in the term as itself.
+    // A search term becomes a LIKE pattern against a normalized title column, so the fold happens here
+    // in C# — invariant lower covers Cyrillic where SQLite's LIKE only folds ASCII. Only a blank term
+    // yields null and skips the filter; a term of pure wildcards is escaped and matched literally, so a
+    // bare '%' looks for a percent sign, not for everything. The escape character keeps a real % or _
+    // in the term as itself.
     private static string? LikePattern(string? search)
     {
         var value = search?.Trim();
@@ -162,7 +162,7 @@ public sealed class GraphReader
             return null;
         }
 
-        var escaped = value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+        var escaped = value.ToLowerInvariant().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
         return $"%{escaped}%";
     }
 
@@ -212,13 +212,19 @@ public sealed class GraphReader
     }
 
     private static async Task<IReadOnlyList<GraphNode>> ProjectFeatures(
-        IQueryable<PlanningFeature> features, HashSet<Guid> orphans, CancellationToken ct)
+        IQueryable<PlanningFeature> features, HashSet<Guid> orphans, string? search, CancellationToken ct)
     {
         var rows = await features
             .OrderBy(feature => feature.QueuePosition)
             .ThenBy(feature => feature.Id)
             .Select(feature => new { feature.Id, feature.Title, feature.ProjectId, feature.Status })
             .ToListAsync(ct);
+
+        var fold = search?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(fold))
+        {
+            rows = rows.Where(row => row.Title.ToLowerInvariant().Contains(fold, StringComparison.Ordinal)).ToList();
+        }
 
         return
         [
