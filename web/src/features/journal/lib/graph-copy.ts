@@ -39,12 +39,33 @@ export function nodeCountLabel(counts: GraphCounts): string {
   return `${counts.nodes} nodes · ${counts.edges === 1 ? "1 link" : `${counts.edges} links`}`;
 }
 
-// R9: the ceiling notice names the real count instead of quietly going static.
+// R9: the ceiling notice names the real count instead of quietly going static. Under the ladder
+// (271) the canvas renders this line for every over-ceiling count until each tier ships its own
+// notice below, so the only layout claim it makes is one true across all three modes.
 export function ceilingMessage(nodeCount: number, ceiling: number): string {
   const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
   return (
     `${head} above the ${ceiling}-node live-simulation ceiling, so nothing is animating. ` +
-    "The field is drawn in its settled layout and the list below stays the primary path."
+    "The field is drawn from a computed layout and the list below stays the primary path."
+  );
+}
+
+// The ladder's per-tier notices. Each names the rung it crossed and what the canvas does about
+// it, and both keep the live-simulation-ceiling phrase — the copy pin sweeps the island for
+// that string, and the honest ladder still leads with it.
+export function precomputedNotice(nodeCount: number, ceiling: number): string {
+  const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
+  return (
+    `${head} above the ${ceiling}-node live-simulation ceiling, so the field settles once, ` +
+    "off the render loop, before its first frame. Nothing is animating and the list below stays the primary path."
+  );
+}
+
+export function clusteredNotice(nodeCount: number, ceiling: number): string {
+  const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
+  return (
+    `${head} above the ${ceiling}-node precompute ceiling — past the live-simulation ceiling as well — ` +
+    "so the field is grouped into clusters instead of drawn one dot per node. The list below stays the primary path."
   );
 }
 
