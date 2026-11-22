@@ -18,6 +18,7 @@ public sealed class FakeTelegramApi : HttpMessageHandler
     private readonly object _lock = new();
     private readonly Queue<string> _pendingResponses = new();
     private readonly Dictionary<string, string> _pathFailures = [];
+    private readonly Queue<(int StatusCode, string Json)> _pendingFailures = new();
     private int _autoMessageId = 100;
 
     public List<Captured> Requests { get; } = [];
@@ -31,6 +32,17 @@ public sealed class FakeTelegramApi : HttpMessageHandler
         lock (_lock)
         {
             _pathFailures[pathSuffix] = json;
+        }
+    }
+
+    // A real transport-level answer: non-200 statuses make the Telegram.Bot client throw its
+    // typed exceptions (ApiRequestException with ErrorCode), unlike ok:false bodies wrapped in
+    // HTTP 200 that v22 silently tolerates.
+    public void QueueFailure(int statusCode, string json)
+    {
+        lock (_lock)
+        {
+            _pendingFailures.Enqueue((statusCode, json));
         }
     }
 
@@ -49,12 +61,26 @@ public sealed class FakeTelegramApi : HttpMessageHandler
             ? string.Empty
             : await request.Content.ReadAsStringAsync(cancellationToken);
 
+        (int StatusCode, string Json) failure;
         string json;
         lock (_lock)
         {
-            var failure = _pathFailures.FirstOrDefault(pair =>
+            var pathFailure = _pathFailures.FirstOrDefault(pair =>
                 request.RequestUri!.AbsolutePath.Contains(pair.Key, StringComparison.Ordinal));
-            json = failure.Value
+            if (_pendingFailures.Count > 0)
+            {
+                failure = _pendingFailures.Dequeue();
+                Requests.Add(new Captured(
+                    request.Method.Method, request.RequestUri!.AbsolutePath, request.RequestUri.Query, body,
+                    MessageIdOf(failure.Json)));
+                RequestArrived.Release();
+                return new HttpResponseMessage((HttpStatusCode)failure.StatusCode)
+                {
+                    Content = new StringContent(failure.Json, Encoding.UTF8, "application/json"),
+                };
+            }
+
+            json = pathFailure.Value
                 ?? (_pendingResponses.Count > 0
                     ? _pendingResponses.Dequeue()
                     : Fallback(request.RequestUri!.AbsolutePath));

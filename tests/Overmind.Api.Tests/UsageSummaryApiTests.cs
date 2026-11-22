@@ -90,6 +90,40 @@ public sealed class UsageSummaryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Summary_CarriedClaimedAtTie_BreaksBySpanIdDeterministically()
+    {
+        var firstId = await SeedFeatureAsync("001-tie-a");
+        var secondId = await SeedFeatureAsync("002-tie-b");
+        var claimedAt = DateTime.UtcNow.AddHours(-1);
+
+        var lowId = Guid.NewGuid();
+        var highId = Guid.NewGuid();
+        if (lowId.CompareTo(highId) > 0)
+        {
+            (lowId, highId) = (highId, lowId);
+        }
+
+        await SeedSpanWithIdAsync(lowId, firstId, claimedAt);
+        await SeedSpanWithIdAsync(highId, secondId, claimedAt);
+        await IngestAsync("Dan", _sessionA, DateTime.UtcNow);
+
+        var summary = await GetSummaryAsync();
+
+        var feature = AssertSingleRow(summary.Features);
+        feature.FeatureId.ShouldBe(secondId);
+        feature.Slug.ShouldBe("002-tie-b");
+    }
+
+    private async Task SeedSpanWithIdAsync(Guid spanId, Guid featureId, DateTime claimedAt)
+    {
+        await ExecuteAsync($"""
+            INSERT INTO FeatureClaimSpans (Id, ProjectId, FeatureId, Alias, Vendor, SessionId, ClaimedAt, ReleasedAt, ByHuman)
+            VALUES ('{spanId.ToString().ToUpperInvariant()}', '{_projectId.ToString().ToUpperInvariant()}',
+                    '{featureId.ToString().ToUpperInvariant()}', 'Dan', 'qwen', '{_sessionA.ToString().ToUpperInvariant()}',
+                    '{claimedAt:yyyy-MM-dd HH:mm:ss.fff}', NULL, 0)
+            """);
+    }
+
     public async Task Summary_OverlappingSpansOfOneSession_MostRecentClaimWins()
     {
         var firstId = await SeedFeatureAsync("001-first");
