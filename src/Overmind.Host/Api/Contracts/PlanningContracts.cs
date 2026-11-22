@@ -167,9 +167,12 @@ public sealed record LaneRowResponse(
     LiveSurfaceResponse[]? LiveSurfaces,
     int OpenFeatureCount,
     LaneHolderResponse? Holder,
-    LaneFeatureResponse[] Features);
+    LaneFeatureResponse[] Features,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
-public sealed record LanesResponse(LaneRowResponse[] Lanes);
+public sealed record LanesResponse(
+    LaneRowResponse[] Lanes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record SetPlanningFeatureStatusRequest(PlanningFeatureStatus Status, string LogNote);
 
@@ -205,7 +208,8 @@ public sealed record OpenDirectiveResponse(
     string? AuthorAlias,
     string? AuthorVendor,
     DateTime CreatedAt,
-    bool Ack);
+    bool Ack,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record AppendPlanningDirectiveRequest(string Text);
 
@@ -290,7 +294,8 @@ public sealed record CreatePlanningTasksResponse(
     int Created,
     int Updated,
     PlanningArtifactResponse[] Artifacts,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record SetPlanningArtifactStatusRequest(PlanningArtifactStatus Status, string LogNote);
 
@@ -303,27 +308,30 @@ public sealed record SetPlanningArtifactStatusResponse(
     PlanningArtifactStatus Status,
     int Version,
     string LastLogLine,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeatureStatusChanged = null);
 
 public sealed record PlanningArtifactMutationResponse(
     Guid Id,
     PlanningArtifactStatus Status,
     int Version,
-    string LastLogLine);
+    string LastLogLine,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningFeatureMutationResponse(
     string Slug,
     PlanningFeatureStatus Status,
     int Version,
-    string LastLogLine);
+    string LastLogLine,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningFeatureAgentUpdateResponse(
     string Slug,
     PlanningFeatureStatus Status,
     int Version,
     DateTime UpdatedAt,
-    int BodyChars);
+    int BodyChars,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PatchPlanningFeatureRequest(
     string Section,
@@ -339,7 +347,8 @@ public sealed record PlanningFeaturePatchResponse(
     PlanningFeatureStatus Status,
     int Version,
     int BodyChars,
-    string LastLogLine);
+    string LastLogLine,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record ValidatePlanningArtifactRequest(bool? AsMigrated = null, string? LogNote = null);
 
@@ -379,7 +388,8 @@ public sealed record PlanningArtifactPatchResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TickedText = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? NoChange = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningArtifactReadResponse(
     Guid Id,
@@ -430,7 +440,8 @@ public sealed record PlanningArtifactResponse(
     PlanningArtifactPointerResponse[] Pointers = null!,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 
@@ -474,7 +485,7 @@ public sealed record PlanningBatchPatchRequest(
 public sealed record PlanningBatchResponse(
     string FeatureSlug,
     PlanningBatchOpResultResponse[] Results,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? Warnings = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningBatchOpResultResponse(
     string Op,

@@ -115,7 +115,7 @@ public sealed class SetLanesRequestValidator : AbstractValidator<SetLanesRequest
         RuleForEach(x => x.Lanes).ChildRules(lane =>
         {
             lane.RuleFor(l => l.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
-            lane.RuleFor(l => l.Contour).MaximumLength(PlanningLane.MaxContourLength);
+            // Contour length is soft-capped at the doors (266); LaneService holds the ceiling backstop.
             lane.RuleFor(l => l.BoundAlias).MaximumLength(PlanningLane.MaxBoundAliasLength);
             lane.RuleFor(l => l.SerialOrder).GreaterThanOrEqualTo(0).When(l => l.SerialOrder.HasValue);
             lane.RuleFor(l => l.Priority).InclusiveBetween(0, PlanningLane.MaxPriority)
@@ -151,7 +151,7 @@ public sealed class UpdateLaneRequestValidator : AbstractValidator<UpdateLaneReq
 {
     public UpdateLaneRequestValidator()
     {
-        RuleFor(x => x.Contour).MaximumLength(PlanningLane.MaxContourLength);
+        // Contour length is soft-capped at the doors (266); LaneService holds the ceiling backstop.
         RuleFor(x => x.BoundAlias).MaximumLength(PlanningLane.MaxBoundAliasLength);
         RuleFor(x => x.SerialOrder).GreaterThanOrEqualTo(0).When(x => x.SerialOrder.HasValue);
         RuleFor(x => x.Priority).InclusiveBetween(0, PlanningLane.MaxPriority).When(x => x.Priority.HasValue);
@@ -167,7 +167,7 @@ public sealed class CreateLaneRequestValidator : AbstractValidator<CreateLaneReq
     public CreateLaneRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(PlanningLane.MaxNameLength);
-        RuleFor(x => x.Contour).MaximumLength(PlanningLane.MaxContourLength);
+        // Contour length is soft-capped at the doors (266); LaneService holds the ceiling backstop.
         RuleFor(x => x.BoundAlias).MaximumLength(PlanningLane.MaxBoundAliasLength);
         RuleFor(x => x.Priority).InclusiveBetween(0, PlanningLane.MaxPriority).When(x => x.Priority.HasValue);
     }
@@ -181,7 +181,8 @@ public sealed class CreatePlanningArtifactRequestValidator : AbstractValidator<C
             "Body is required — send the full markdown body, " +
             "e.g. { \"kind\": \"task\", \"body\": \"<goal>Fix the login redirect.</goal>\" }.");
         RuleFor(x => x.Order).GreaterThanOrEqualTo(0).When(x => x.Order.HasValue);
-        RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
+        // Brief length is soft-capped at the doors (266); only the single-line rule stays hard.
+        RuleFor(x => x.Brief).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
             .WithMessage("Brief must be a single line.")
             .When(x => x.Brief is not null);
         RuleForEach(x => x.BlockedBy).GreaterThanOrEqualTo(0)
@@ -194,7 +195,8 @@ public sealed class UpdatePlanningArtifactRequestValidator : AbstractValidator<U
     public UpdatePlanningArtifactRequestValidator()
     {
         RuleFor(x => x.Body).NotEmpty();
-        RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
+        // Brief length is soft-capped at the doors (266); only the single-line rule stays hard.
+        RuleFor(x => x.Brief).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
             .WithMessage("Brief must be a single line.")
             .When(x => x.Brief is not null);
     }
@@ -220,7 +222,8 @@ public sealed class PlanningTaskUpsertRequestValidator : AbstractValidator<Plann
         RuleFor(x => x.Body).NotEmpty().WithMessage(
             "Body is required on every task item — e.g. { \"body\": \"<goal>Fix the login redirect.</goal>\", \"order\": 0 }.");
         RuleFor(x => x.Order).GreaterThanOrEqualTo(0).When(x => x.Order.HasValue);
-        RuleFor(x => x.Brief).MaximumLength(500).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
+        // Brief length is soft-capped at the doors (266); only the single-line rule stays hard.
+        RuleFor(x => x.Brief).Must(b => !b!.Contains('\r') && !b.Contains('\n'))
             .WithMessage("Brief must be a single line.")
             .When(x => x.Brief is not null);
     }
@@ -290,7 +293,8 @@ public sealed class DeclinePlanningArtifactRequestValidator : AbstractValidator<
 {
     public DeclinePlanningArtifactRequestValidator()
     {
-        RuleFor(x => x.Reason).MaximumLength(500).Must(r => !r!.Contains('\r') && !r.Contains('\n'))
+        // Reason length is soft-capped at the door (266); the single-line rule stays hard.
+        RuleFor(x => x.Reason).Must(r => !r!.Contains('\r') && !r.Contains('\n'))
             .WithMessage("Decline reason must be a single line.")
             .When(x => x.Reason is not null);
     }
@@ -386,7 +390,7 @@ public sealed class AppendPlanningDirectiveRequestValidator : AbstractValidator<
 {
     public AppendPlanningDirectiveRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(PlanningDirective.MaxTextLength);
+        RuleFor(x => x.Text).NotEmpty();
     }
 }
 
@@ -394,7 +398,7 @@ public sealed class AppendPlanningDirectiveHumanRequestValidator : AbstractValid
 {
     public AppendPlanningDirectiveHumanRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(PlanningDirective.MaxTextLength);
+        RuleFor(x => x.Text).NotEmpty();
         RuleFor(x => x.Alias).MaximumLength(PlanningDirective.MaxIdentityLength);
         RuleFor(x => x.Vendor).MaximumLength(PlanningDirective.MaxIdentityLength);
     }

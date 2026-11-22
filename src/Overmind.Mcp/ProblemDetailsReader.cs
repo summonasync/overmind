@@ -32,6 +32,7 @@ internal static class ProblemDetailsReader
     private static ProblemDetails Map(JsonElement root) => new(
         TextOrNull(root, "title"),
         TextOrNull(root, "detail"),
+        TextOrNull(root, "fix"),
         Errors(root));
 
     private static string? TextOrNull(JsonElement root, string name) =>

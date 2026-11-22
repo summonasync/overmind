@@ -1065,18 +1065,27 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Theory]
-    [InlineData(501)]
-    [InlineData(2000)]
-    public async Task CreateTask_BriefTooLong_Returns400(int length)
+    [InlineData(501, 501, false)]
+    [InlineData(610, 610, false)]
+    [InlineData(611, 600, true)]
+    [InlineData(2000, 600, true)]
+    public async Task CreateTask_BriefOverCap_IsAcceptedWithWarnings(int sent, int stored, bool truncated)
     {
+        // 266 owner worked example on the task brief door: 501-610 warn whole, 611+ truncates to 600.
         var project = await CreateProjectAsync();
         await CreateFeature(project.Id, "feat", "Feature");
 
         var response = await _client.PostAsJsonAsync(
             $"/api/projects/{project.Id}/planning/features/feat/artifacts",
-            new { Kind = "task", Body = "task body", Brief = new string('x', length) });
+            new { Kind = "task", Body = "task body", Brief = new string('x', sent) });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("brief").GetString()!.Length.ShouldBe(stored);
+        var warning = doc.RootElement.GetProperty("warnings")[0];
+        warning.GetProperty("accepted_len").GetInt32().ShouldBe(stored);
+        warning.GetProperty("limit").GetInt32().ShouldBe(500);
+        warning.GetProperty("truncated").GetBoolean().ShouldBe(truncated);
     }
 
     [Theory]
@@ -1110,8 +1119,9 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdateTask_BriefTooLong_Returns400()
+    public async Task UpdateTask_BriefOverCap_IsAcceptedWithWarnings()
     {
+        // 266: the update door softened with the create door — 501 is a band value now.
         var project = await CreateProjectAsync();
         await CreateFeature(project.Id, "feat", "Feature");
         var created = await CreateTaskWithBrief(project.Id, "first brief");
@@ -1120,7 +1130,10 @@ public sealed class PlanningApiTests : IDisposable
             $"/api/planning/artifacts/{created!.Id}",
             new { Body = "task body v2", Brief = new string('x', 501) });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("brief").GetString()!.Length.ShouldBe(501);
+        doc.RootElement.GetProperty("warnings")[0].GetProperty("truncated").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]
@@ -1407,8 +1420,9 @@ public sealed class PlanningApiTests : IDisposable
     }
 
     [Fact]
-    public async Task DeclineSpec_ReasonOverCap_Returns400()
+    public async Task DeclineSpec_ReasonOverCap_IsAcceptedWithWarnings()
     {
+        // 266: decline reason is a 500-cap field on the soft list — the band stores whole.
         var project = await CreateProjectAsync();
         await CreateFeature(project.Id, "feat", "Feature");
 
@@ -1421,9 +1435,12 @@ public sealed class PlanningApiTests : IDisposable
             $"/api/planning/artifacts/{created!.Id}/decline",
             new { Reason = new string('x', 501) });
 
-        declineResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var problem = await declineResponse.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
-        problem!.Errors.Keys.ShouldContain("Reason");
+        declineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await declineResponse.Content.ReadAsStringAsync());
+        var warning = doc.RootElement.GetProperty("warnings")[0];
+        warning.GetProperty("accepted_len").GetInt32().ShouldBe(501);
+        warning.GetProperty("limit").GetInt32().ShouldBe(500);
+        warning.GetProperty("truncated").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]

@@ -482,7 +482,9 @@ public sealed class PlanningArtifact
             return null;
         }
 
-        if (brief.Contains('\r') || brief.Contains('\n') || brief.Length > BriefMaxLength)
+        // BriefMaxLength is the soft cap enforced at the API doors; the grace ceiling here is
+        // the storage backstop for whole-band values and callers that skip a door.
+        if (brief.Contains('\r') || brief.Contains('\n') || brief.Length > SoftCap.Ceiling(BriefMaxLength))
         {
             throw PlanningException.InvalidBrief();
         }

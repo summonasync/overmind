@@ -70,11 +70,15 @@ public static class PlanningArtifactsApi
             return PlanningErrors.Map(ex);
         }
 
+        var soft = new List<object>();
+        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft);
+        var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             var artifact = await artifactService.UpsertAsync(
-                feature.Id, request.Kind, request.Body, request.Order, request.Review, request.LogNote, ct,
-                brief: request.Brief,
+                feature.Id, request.Kind, request.Body, request.Order, request.Review, logNote, ct,
+                brief: brief,
                 source: PlanningDoorSource.Resolve(request.Source, fallbackSource),
                 blockedBy: request.BlockedBy,
                 dryRun: request.DryRun);
@@ -85,6 +89,7 @@ public static class PlanningArtifactsApi
                 return Results.Ok(response with { DryRun = true });
             }
 
+            response = response with { Warnings = SoftCapSoften.Merge(soft) };
             var isNew = artifact.Version == 1;
             return isNew
                 ? Results.Created($"/api/planning/artifacts/{artifact.Id}", response)
@@ -122,13 +127,25 @@ public static class PlanningArtifactsApi
             return PlanningErrors.Map(ex);
         }
 
+        var soft = new List<object>();
+        var items = new PlanningTaskUpsert[request.Tasks.Length];
+        for (var i = 0; i < request.Tasks.Length; i++)
+        {
+            var task = request.Tasks[i];
+            items[i] = new PlanningTaskUpsert(
+                task.Body,
+                task.Order,
+                task.Review,
+                SoftCapSoften.Cap(task.LogNote, SoftCapLimits.LogLine, soft),
+                SoftCapSoften.Cap(task.Brief, PlanningArtifact.BriefMaxLength, soft),
+                task.BlockedBy);
+        }
+
         try
         {
             var batch = await artifactService.UpsertTasksAsync(
                 feature.Id,
-                request.Tasks.Select(t =>
-                        new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief, t.BlockedBy))
-                    .ToArray(),
+                items,
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent),
                 request.DryRun);
@@ -136,7 +153,7 @@ public static class PlanningArtifactsApi
             var blockedStates = (await taskDependencies.BlockedOrdersAsync(feature.Id, ct))
                 .ToDictionary(s => s.Order);
 
-            var items = batch.Artifacts
+            var artifactItems = batch.Artifacts
                 .Zip(batch.BlockedOrders)
                 .Select(pair => ToBatchItem(pair.First, blockedStates, pair.Second))
                 .ToArray();
@@ -144,8 +161,9 @@ public static class PlanningArtifactsApi
             return Results.Ok(new CreatePlanningTasksResponse(
                 batch.Created,
                 batch.Updated,
-                items,
-                request.DryRun ? true : null));
+                artifactItems,
+                request.DryRun ? true : null,
+                SoftCapSoften.Merge(soft)));
         }
         catch (PlanningException ex)
         {
@@ -239,11 +257,15 @@ public static class PlanningArtifactsApi
             return ArtifactNotFound(id);
         }
 
+        var soft = new List<object>();
+        var brief = SoftCapSoften.Cap(request.Brief, PlanningArtifact.BriefMaxLength, soft);
+        var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             await service.UpsertAsync(
                 artifact.FeatureId, artifact.Kind, request.Body, artifact.Order,
-                null, request.LogNote, ct, brief: request.Brief,
+                null, logNote, ct, brief: brief,
                 source: PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Ui));
         }
         catch (PlanningException ex)
@@ -252,7 +274,7 @@ public static class PlanningArtifactsApi
         }
 
         await db.Entry(artifact).ReloadAsync(ct);
-        return Results.Ok(PlanningMapper.ToArtifactResponse(artifact));
+        return Results.Ok(PlanningMapper.ToArtifactResponse(artifact) with { Warnings = SoftCapSoften.Merge(soft) });
     }
 
     internal static async Task<IResult> DeleteArtifact(
@@ -291,16 +313,19 @@ public static class PlanningArtifactsApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
+        var logNote = SoftCapSoften.Cap(request.LogNote, SoftCapLimits.LogLine, soft);
+
         try
         {
             var result = await service.SetStatusAsync(
-                id, request.Status, PlanningLogSource.Ui, request.LogNote, ct);
+                id, request.Status, PlanningLogSource.Ui, logNote!, ct);
             return Results.Ok(new SetPlanningArtifactStatusResponse(
                 result.ArtifactId,
                 result.Status,
                 result.Version,
                 result.LastLogLine,
-                result.Warnings,
+                SoftCapSoften.Merge(soft, result.Warnings),
                 result.FeatureStatusChanged));
         }
         catch (PlanningException ex)
@@ -338,12 +363,15 @@ public static class PlanningArtifactsApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
+        var note = SoftCapSoften.Cap(request.Note, SoftCapLimits.LogLine, soft);
+
         try
         {
             var artifact = await service.AppendLogAsync(
-                id, request.Note, ct,
+                id, note!, ct,
                 PlanningDoorSource.Resolve(request.Source, fallbackSource), callerProjectId);
-            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact) with { Warnings = SoftCapSoften.Merge(soft) });
         }
         catch (PlanningException ex)
         {
@@ -380,10 +408,13 @@ public static class PlanningArtifactsApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
+        var text = SoftCapSoften.Cap(request.Text, SoftCapLimits.LogLine, soft);
+
         try
         {
-            var artifact = await service.EditNewestLogAsync(id, request.Text, actor, ct, callerProjectId);
-            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
+            var artifact = await service.EditNewestLogAsync(id, text!, actor, ct, callerProjectId);
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact) with { Warnings = SoftCapSoften.Merge(soft) });
         }
         catch (PlanningException ex)
         {
@@ -420,10 +451,13 @@ public static class PlanningArtifactsApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var soft = new List<object>();
+        var reason = SoftCapSoften.Cap(body.Reason, SoftCapLimits.Reason, soft);
+
         try
         {
-            var artifact = await service.DeclineAsync(id, body.Reason, ct);
-            return Results.Ok(PlanningMapper.ToMutationResponse(artifact));
+            var artifact = await service.DeclineAsync(id, reason, ct);
+            return Results.Ok(PlanningMapper.ToMutationResponse(artifact) with { Warnings = SoftCapSoften.Merge(soft) });
         }
         catch (PlanningException ex)
         {

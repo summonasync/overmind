@@ -11,7 +11,6 @@ namespace Overmind.Mcp;
 public sealed class WaveChatTools
 {
     private const int CompactTextLength = 200;
-    private const int SignalTextCap = 500;
 
     private readonly OvermindApiClient _api;
     private readonly MutationGuard _mutations;
@@ -30,11 +29,10 @@ public sealed class WaveChatTools
         "means the addressee must read this; the author is the calling session's alias.")]
     public async Task<CallToolResult> PostMessage(
         [Description("Lane room name or the shared 'all' room.")] string room,
-        [Description("Signal text, max 500 chars; @alias tokens become mentions.")] string text,
+        [Description("Signal text, soft cap 500 chars — longer text lands truncated with warnings; @alias tokens become mentions.")] string text,
         [Description("Optional project id.")] Guid? projectId = null,
         CancellationToken ct = default)
     {
-        TextCapLint.Cap(text, SignalTextCap);
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var message = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/agent/projects/{resolved}/wave/rooms/{Uri.EscapeDataString(room)}/messages",
@@ -48,6 +46,10 @@ public sealed class WaveChatTools
             .Select(m => m.GetString())
             .ToArray();
         var mentionNote = mentions.Length > 0 ? $" Mentions: {string.Join(", ", mentions)}." : string.Empty;
+        var warningNote = message.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0
+            ? $"\nWarnings: {warnings.GetRawText()}"
+            : string.Empty;
 
         return new CallToolResult
         {
@@ -55,7 +57,7 @@ public sealed class WaveChatTools
             [
                 new TextContentBlock
                 {
-                    Text = $"Message {id} posted to '{postedRoom}' as {authorAlias}.{mentionNote}"
+                    Text = $"Message {id} posted to '{postedRoom}' as {authorAlias}.{mentionNote}{warningNote}"
                 }
             ]
         };

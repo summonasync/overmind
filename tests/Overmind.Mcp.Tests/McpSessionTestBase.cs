@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Overmind.Core;
 using Shouldly;
 using Xunit;
 
@@ -304,6 +306,14 @@ public abstract class McpSessionTestBase : IAsyncLifetime
                     result["tickedIndex"] = 1;
                     result["tickedText"] = "expose the endpoints";
                     result["noChange"] = false;
+                }
+
+                // 266: the Host door answers over-cap briefs accepted-with-warnings — the stub
+                // mirrors the real SoftCap arithmetic so adapter contracts pin the same shape.
+                if (submitted["brief"]?.GetValue<string>() is { Length: > 500 } brief)
+                {
+                    var outcome = SoftCap.Apply(brief, 500);
+                    result["warnings"] = new JsonArray(JsonSerializer.SerializeToNode(outcome.Warning)!);
                 }
 
                 return new StubOvermindApi.Response(200, result.ToJsonString());
