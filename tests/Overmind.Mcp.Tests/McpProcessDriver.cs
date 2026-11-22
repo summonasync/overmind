@@ -59,6 +59,11 @@ public sealed class McpProcessDriver : IDisposable
         startInfo.ArgumentList.Add("exec");
         startInfo.ArgumentList.Add(dllPath);
 
+        // The runner's own OVERMIND_MCP_PROFILE (set by a parallel test collection) must not leak
+        // into children: a profile the test did not ask for would refuse at startup or skew the
+        // surface under test. Explicit passes below still win.
+        startInfo.EnvironmentVariables.Remove("OVERMIND_MCP_PROFILE");
+
         if (apiUrl is not null)
         {
             startInfo.EnvironmentVariables["OVERMIND_API_URL"] = apiUrl;
