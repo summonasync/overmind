@@ -91,7 +91,7 @@ public sealed class McpProfileRegistrationTests
         descriptions["journal_append"].ShouldContain("/append");
         descriptions["journal_append"].ShouldContain("2000");
         descriptions["journal_resolve_links"].ShouldContain("resolve-links");
-        descriptions["journal_resolve_links"].ShouldContain("2000");
+        descriptions["journal_resolve_links"].ShouldContain("2440");
     }
 
     private static Dictionary<string, string> JournalDescriptions() =>

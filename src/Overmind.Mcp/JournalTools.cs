@@ -36,7 +36,7 @@ public sealed class JournalTools
 
     private const string ResolveDescription =
         "Dry-resolves [[wiki]] markers via POST /api/entries/resolve-links: resolved targets, " +
-        "unresolved keys, self-references (entryId anchors). Read-only; over 2000 chars refuses. " +
+        "unresolved keys, self-references (entryId anchors). Read-only; over 2440 chars refuses. " +
         "Loopback-only host, no auth.";
 
     private static readonly JsonElement EmptyHits = JsonSerializer.Deserialize<JsonElement>("[]");

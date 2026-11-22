@@ -131,6 +131,7 @@ public sealed class JournalResolveLinksApiTests : IDisposable
         after.Entries.ShouldBe(before.Entries);
         after.Derived.ShouldBe(before.Derived, "the Derived universe stays untouched");
         after.Manual.ShouldBe(before.Manual, "the Manual universe stays untouched — triage owns those rows");
+        after.Projects.ShouldBe(before.Projects, "a read door never mints a container, even for [[project:…]] markers");
     }
 
     private async Task<ResolveJson> ResolveAsync(string content, Guid? entryId = null) =>
@@ -218,14 +219,15 @@ public sealed class JournalResolveLinksApiTests : IDisposable
         await db.SaveChangesAsync();
     }
 
-    private async Task<(int Entries, int Derived, int Manual)> CountRowsAsync()
+    private async Task<(int Entries, int Derived, int Manual, int Projects)> CountRowsAsync()
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
         var entries = await db.ContextEntries.CountAsync();
         var derived = await db.EntryLinks.CountAsync(link => link.Origin == EntryLinkOrigin.Derived);
         var manual = await db.EntryLinks.CountAsync(link => link.Origin == EntryLinkOrigin.Manual);
-        return (entries, derived, manual);
+        var projects = await db.Projects.CountAsync();
+        return (entries, derived, manual, projects);
     }
 
     public sealed record ProjectJson(Guid Id);
