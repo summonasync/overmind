@@ -68,7 +68,8 @@ export function KitGlobalDeploySection() {
         The mandatory kit materializes into global skills of every detected agent — no per-project activation, no
         opt-out. Prose-only kits weave into agent entry files between OVERMIND markers; hand edits between those
         markers are overwritten on the next deploy. If install.sh ran recently, marker blocks may show as drifted —
-        redeploy restores them.
+        redeploy restores them. Rows appear for every detected agent home — the home directory alone is enough, so
+        a runtime you no longer use still lists here; leaving it undeployed is fine.
       </p>
       {isPending && <LoadingState label="Loading global state…" />}
       {error && <ErrorText error={error} />}
@@ -87,12 +88,12 @@ export function KitGlobalDeploySection() {
             </div>
             {rows.map((row) => {
               const badge = stateBadge[row.state];
-              const rowPending = pending === `${row.kitId}:${row.platform}`;
+              const rowPending = pending === `${row.kitId}:${row.agent}`;
               const handEdited = row.drifts.some((d) => d.kind === "modified");
               const canRemove = !first.mandatory && row.state !== "undeployed";
               return (
-                <div key={row.platform} className="flex items-center gap-2 text-sm">
-                  <span className="w-24">{row.platform}</span>
+                <div key={row.agent} className="flex items-center gap-2 text-sm">
+                  <span className="w-24">{row.agent}</span>
                   <Badge tone={badge.tone}>{badge.label}</Badge>
                   {row.state === "drifted" && (
                     <span className="text-muted-foreground">
@@ -109,9 +110,9 @@ export function KitGlobalDeploySection() {
                       disabled={rowPending}
                       onClick={() => {
                         setDeployError(null);
-                        setPending(`${row.kitId}:${row.platform}`);
+                        setPending(`${row.kitId}:${row.agent}`);
                         deploy.mutate(
-                          { kitId: row.kitId, agent: row.platform },
+                          { kitId: row.kitId, agent: row.agent },
                           { onSettled: () => setPending(null) },
                         );
                       }}
@@ -135,14 +136,14 @@ export function KitGlobalDeploySection() {
       })}
 
       <Modal
-        title={removing ? `Remove from ${removing.platform}?` : ""}
+        title={removing ? `Remove from ${removing.agent}?` : ""}
         open={removing !== null}
         onClose={() => setRemoving(null)}
       >
         {removing ? (
           <div className="space-y-4">
             <p className="text-sm text-foreground">
-              Remove kit &quot;{removing.kitName}&quot; from the {removing.platform} home? Only files this door
+              Remove kit &quot;{removing.kitName}&quot; from the {removing.agent} home? Only files this door
               deployed are deleted; marker blocks are cut from the entry file; everything else stays untouched.
             </p>
             <div className="flex justify-end gap-2">
@@ -151,8 +152,8 @@ export function KitGlobalDeploySection() {
               </Button>
               <Button
                 variant="danger"
-                disabled={pending === `${removing.kitId}:${removing.platform}`}
-                onClick={() => run({ kitId: removing.kitId, agent: removing.platform })}
+                disabled={pending === `${removing.kitId}:${removing.agent}`}
+                onClick={() => run({ kitId: removing.kitId, agent: removing.agent })}
               >
                 {pending ? "Removing…" : "Remove"}
               </Button>

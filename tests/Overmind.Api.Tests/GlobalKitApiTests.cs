@@ -83,9 +83,9 @@ public sealed class GlobalKitApiTests : IDisposable
         state.StatusCode.ShouldBe(HttpStatusCode.OK);
         var snapshot = await state.Content.ReadFromJsonAsync<GlobalStateItemJson[]>();
         snapshot.ShouldNotBeNull();
-        var pair = snapshot.Single(s => s.KitId == kitId && s.Platform == "claude");
+        var pair = snapshot.Single(s => s.KitId == kitId && s.Agent == "claude");
         pair.State.ShouldBe("deployed");
-        snapshot.Single(s => s.KitId == kitId && s.Platform == "qwen").State.ShouldBe("undeployed");
+        snapshot.Single(s => s.KitId == kitId && s.Agent == "qwen").State.ShouldBe("undeployed");
 
         var remove = await _client.DeleteAsync($"/api/kits/{kitId}/global/claude");
         remove.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -93,7 +93,27 @@ public sealed class GlobalKitApiTests : IDisposable
 
         var stateAfter = await _client.GetAsync("/api/kits/global/state");
         var snapshotAfter = await stateAfter.Content.ReadFromJsonAsync<GlobalStateItemJson[]>();
-        snapshotAfter!.Single(s => s.KitId == kitId && s.Platform == "claude").State.ShouldBe("undeployed");
+        snapshotAfter!.Single(s => s.KitId == kitId && s.Agent == "claude").State.ShouldBe("undeployed");
+    }
+
+    [Fact]
+    public async Task Global_state_emits_the_registry_agent_name()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        Directory.CreateDirectory(Path.Combine(_homeRoot, ".kimi-code", "skills"));
+        (await _client.PostAsync($"/api/kits/{kitId}/global/kimi-code?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var state = await _client.GetAsync("/api/kits/global/state");
+        var snapshot = await state.Content.ReadFromJsonAsync<GlobalStateItemJson[]>();
+        snapshot.ShouldNotBeNull();
+        var kimi = snapshot.Single(s => s.Agent == "kimi-code");
+        kimi.State.ShouldBe("deployed");
+        snapshot.ShouldNotContain(s => s.Agent == "kimiCode");
+
+        var remove = await _client.DeleteAsync($"/api/kits/{kitId}/global/{kimi.Agent}");
+        remove.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -305,12 +325,12 @@ public sealed class GlobalKitApiTests : IDisposable
         Guid KitId,
         string KitName,
         bool Mandatory,
-        string Platform,
+        string Agent,
         string State,
         string[] Paths,
         GlobalDriftJson[] Drifts);
 
-    public sealed record GlobalDriftJson(Guid KitId, string Platform, string Path, string Kind);
+    public sealed record GlobalDriftJson(Guid KitId, string Agent, string Path, string Kind);
 
     public sealed record KitJson(Guid Id, string Name, int Version);
 
