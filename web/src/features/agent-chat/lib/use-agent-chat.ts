@@ -55,21 +55,7 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
 
   const history = useQuery(agentHistoryQueryOptions(conversationId ?? ""));
   const messages: AgentMessage[] = history.data?.items ?? [];
-
-  // A reload mid-generation lands with no live SSE attached: the Host is still producing the
-  // reply and persists it when the turn completes. While the turn is active, keep refetching the
-  // history so the saved reply shows up as soon as it lands (b88c1bae).
   const turnActive = history.data?.turnActive === true;
-  useEffect(() => {
-    if (!turnActive || conversationId === null) {
-      return;
-    }
-
-    const poll = window.setInterval(() => {
-      void queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
-    }, 1500);
-    return () => window.clearInterval(poll);
-  }, [turnActive, conversationId, queryClient]);
 
   const mutateHistory = (targetId: string, update: (items: AgentMessage[]) => AgentMessage[]) => {
     queryClient.setQueryData<AgentHistoryPayload>(agentChatKeys.history(targetId), (current) => ({
@@ -122,6 +108,24 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
 
   const attachRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
+
+  // A reload mid-generation lands with no live SSE attached: the Host is still producing the
+  // reply and persists it when the turn completes. While the turn is active, keep refetching the
+  // history so the saved reply shows up as soon as it lands (b88c1bae). The interval is gated on
+  // `streaming` on purpose: a stream (sent here or attached after reload) feeds the
+  // pending-assistant cache row with deltas, and a refetch would replace that cache with the
+  // server's persisted (older) copy — wiping streamed text for a frame. The turn-complete and
+  // onFailed paths invalidate history anyway, which also flips turnActive false and ends polling.
+  useEffect(() => {
+    if (!turnActive || conversationId === null || streaming) {
+      return;
+    }
+
+    const poll = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+    }, 1500);
+    return () => window.clearInterval(poll);
+  }, [turnActive, conversationId, queryClient, streaming]);
 
   useEffect(() => {
     if (conversationId === null || sendingRef.current) {

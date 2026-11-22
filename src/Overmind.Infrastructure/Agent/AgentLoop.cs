@@ -334,7 +334,9 @@ public sealed class AgentLoop(
             await AppendAuditAsync(conversation.Id, label, ct);
 
             var result = await tools.InvokeAsync(call.Name, arguments, invocation, ct);
-            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out _))
+            if (result.ValueKind == JsonValueKind.Object &&
+                result.TryGetProperty("error", out var error) &&
+                error.ValueKind == JsonValueKind.String)
             {
                 await AppendAuditAsync(conversation.Id, RefusalLabel(call.Name, result), ct);
             }
@@ -353,10 +355,7 @@ public sealed class AgentLoop(
 
     private static string RefusalLabel(string toolName, JsonElement result)
     {
-        var message = result.TryGetProperty("error", out var error) &&
-                      error.ValueKind == JsonValueKind.String
-            ? error.GetString()
-            : error.ToString();
+        var message = result.GetProperty("error").GetString();
         if (message is { Length: > RefusalExcerptLimit })
         {
             message = message[..RefusalExcerptLimit];

@@ -93,6 +93,10 @@ public sealed class MutationGuard(OvermindApiClient api)
 
     private static string ProbeFailureReason(Exception failure) => failure switch
     {
+        // The probe rides the same budget as the mutation: a timeout here means the Host is
+        // slow-and-alive committing the write, not down — labeling it unreachable would repeat
+        // the exact misclassification the timeout text exists to remove.
+        OperationCanceledException => "the read-back request timed out — the Host is slow and may still commit",
         ApiUnreachableException => "host unreachable",
         ApiNotFoundException => "the read-back address no longer exists",
         ApiStatusException ex => $"host returned status {(int)ex.StatusCode}",

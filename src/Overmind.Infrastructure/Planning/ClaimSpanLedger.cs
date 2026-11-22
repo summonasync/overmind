@@ -53,8 +53,9 @@ internal static class ClaimSpanLedger
         // The session-id skip is an invariant guard, not a reachable branch: the claim door closes
         // the open span whenever the claim leaves the session, so a surviving open span whose
         // session differs from the feature's current claim session cannot be produced by any
-        // write path (review-235-05 NOTE-1). If it ever fires, the correct response is a ledger
-        // audit, not a rename carrying a stale-alias span forward.
+        // write path (review-235-05 NOTE-1). The skip keeps the stale-alias span visible instead
+        // of renaming it forward under the new alias — firing this branch means ledger surgery,
+        // which must be deliberate, not a side effect of a rename.
         if (open is null || open.SessionId != feature.ClaimSessionId)
         {
             return;
