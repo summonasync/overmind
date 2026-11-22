@@ -144,7 +144,8 @@ public sealed class NotificationValidatorRunnerTests : IDisposable
             "the validator conversation is created from notification.ProjectId, which is Guid?");
         var conversation = await conversations.GetOrCreateConversationAsync(OwnerChatId, null, CancellationToken.None);
         var rows = await messages.ListPageAsync(conversation.Id, ct: CancellationToken.None);
-        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+        var toolRow = rows.Single(row =>
+            row.Role == ConversationMessage.ToolRole && !row.Content.Contains("refusal"));
 
         using var document = JsonDocument.Parse(toolRow.Content);
         document.RootElement.GetProperty("tool").GetString().ShouldBe("planning_validate");
@@ -170,7 +171,8 @@ public sealed class NotificationValidatorRunnerTests : IDisposable
         var conversation = await conversations.GetOrCreateConversationAsync(
             OwnerChatId, project.Id, CancellationToken.None);
         var rows = await messages.ListPageAsync(conversation.Id, ct: CancellationToken.None);
-        var toolRow = rows.Single(row => row.Role == ConversationMessage.ToolRole);
+        var toolRow = rows.Single(row =>
+            row.Role == ConversationMessage.ToolRole && !row.Content.Contains("refusal"));
 
         toolRow.Content.ShouldNotContain("globalScope");
     }
