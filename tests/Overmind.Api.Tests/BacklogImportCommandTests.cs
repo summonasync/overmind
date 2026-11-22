@@ -320,7 +320,7 @@ public sealed class BacklogImportCommandTests : IDisposable
         public static readonly NoOpMaterializer Instance = new();
 
         public Task<PlanningMaterializationReport> SyncAsync(
-            Guid projectId, bool force = false, CancellationToken ct = default) =>
+            Guid projectId, bool force = false, bool quarantine = false, CancellationToken ct = default) =>
             Task.FromResult(new PlanningMaterializationReport(projectId, PlanningMaterialization.Off, [], [], []));
 
         public Task<IReadOnlyList<PlanningDriftItem>> DetectDriftAsync(Guid projectId, CancellationToken ct = default) =>

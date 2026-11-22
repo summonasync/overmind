@@ -26,7 +26,7 @@ public sealed class SessionBoundClaimProofTests : IDisposable
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
 
