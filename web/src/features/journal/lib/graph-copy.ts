@@ -92,6 +92,19 @@ export function computingLayoutNotice(nodeCount: number): string {
   );
 }
 
+// The settle threw and stayed abandoned, so the seed sketch is the field and no swap is coming —
+// the settled-tier wording would promise "the map that replaces it", which is exactly the swap
+// that never happened. The sketch is not a broken frame: every node is on it, nothing animates,
+// and the same kick runs again on the next field beat or reload.
+export function settleFailedNotice(nodeCount: number): string {
+  const noun = nodeCount === 1 ? "node" : "nodes";
+  return (
+    `The layout for ${nodeCount} ${noun} did not finish, so the field is showing its seed ` +
+    "sketch: every node is on it, nothing is animating, and the list below stays the primary path. " +
+    "Refetching the graph or reloading retries the layout."
+  );
+}
+
 export function clusteredNotice(nodeCount: number, ceiling: number): string {
   const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
   return (

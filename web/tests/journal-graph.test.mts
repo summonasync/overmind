@@ -31,6 +31,7 @@ import {
   noteExcerpt,
   orphanLabel,
   precomputedNotice,
+  settleFailedNotice,
   stateLabel,
   tierName,
   unsupportedRowsNotice,
@@ -1318,24 +1319,58 @@ test("tier-2 copy promises only what the slice transport does", () => {
   assert.match(computing, /1500 nodes/);
   assert.match(computing, /slices/);
   const settled = precomputedNotice(1500, SIM_CEILING);
-  for (const text of [computing, settled]) {
+  const failed = settleFailedNotice(1500);
+  for (const text of [computing, settled, failed]) {
     assert.ok(!/background|\bworker\b/i.test(text), `copy promised a transport it does not run: ${text}`);
   }
   assert.match(settled, /live-simulation ceiling/);
+  assert.match(failed, /1500 nodes/);
+  assert.match(failed, /seed sketch/, "failure copy must name the frame the owner is actually looking at");
+  assert.ok(
+    !/replaces it/.test(failed),
+    "failure copy promised the settled swap that never happened",
+  );
 });
 
 test("the precomputed branch kicks one settle and runs no frame clock of its own", () => {
   const canvas = sliceFile("components/graph-canvas.tsx");
   assert.match(canvas, /setPrecomputing\(true\)/);
-  assert.match(canvas, /void precomputeLayout\(field, forces\)/);
+  assert.match(canvas, /const SETTLE_KICK_DELAY_MS = 200/, "the resize-noise beat moved or vanished");
+  assert.match(canvas, /void precomputeLayout\(field, forces, \(\) => !live\)/, "the settle must be abandonable mid-flight");
+  assert.match(canvas, /clearTimeout\(kick\)/, "a superseded kick must never start its settle");
   assert.match(canvas, /preserveHeldNodes\(landed, nodesRef\.current\)/);
   assert.match(canvas, /nodesRef\.current = landed/);
   assert.match(canvas, /precomputing\s*\?\s*computingLayoutNotice/, "the pending state lost its notice slot");
+  assert.match(canvas, /settleFailed\s*\?\s*settleFailedNotice/, "the failed settle lost its honest notice");
+  assert.match(canvas, /setSettleFailed\(true\)/, "failure keeps the seed but must not flip to the settled wording");
   assert.equal(
     (canvas.match(/requestAnimationFrame/g) ?? []).length,
     2,
     "the tier-1 loop's two rAF calls grew company — the precomputed branch runs no frame clock",
   );
+});
+
+test("an abandoned settle stops before it spends a tick: the frame comes back the seed", async () => {
+  const field = syntheticField(1500, [{ kind: "entry", id: SYNTHETIC_PIN_ID, x: 77, y: 88 }]);
+  const aborted = await precomputeLayout(field, { width: 1200, height: 900 }, () => true);
+  const seed = seedPositions(field.nodes, field.positions, 1200, 900);
+  const frame = (nodes: LayoutNode[]) => nodes.map((n) => [Math.round(n.x), Math.round(n.y)]);
+  assert.deepEqual(frame(aborted), frame(seed), "an abandoned settle kept slicing");
+});
+
+test("a settle abandoned mid-flight keeps partial progress but never reaches the full frame", async () => {
+  const field = syntheticField(1500);
+  const forces = { width: 1200, height: 900 };
+  const full = await precomputeLayout(field, forces);
+  let checks = 0;
+  const partial = await precomputeLayout(field, forces, () => {
+    checks += 1;
+    return checks > 1;
+  });
+  const frame = (nodes: LayoutNode[]) => nodes.map((n) => [Math.round(n.x), Math.round(n.y)]);
+  const seed = seedPositions(field.nodes, [], 1200, 900);
+  assert.notDeepEqual(frame(partial), frame(seed), "the token tripped before any slice ran");
+  assert.notDeepEqual(frame(partial), frame(full), "the abandoned settle sliced to the end anyway");
 });
 
 test("the aria label names the tier the canvas actually runs", () => {
