@@ -12,11 +12,18 @@ public sealed class McpJournalProfileContractTests : McpSessionTestBase
     protected override void RegisterRoutes(StubOvermindApi stub) => RegisterDefaultRoutes(stub);
 
     [Fact]
-    public async Task Tools_UnderJournalProfile_ExposeZeroPlanningTools()
+    public async Task Tools_UnderJournalProfile_ListExactlyTheJournalFamily()
     {
         var response = await Driver.ListToolsAsync();
 
-        AssertListingCarriesNoPlanningSurface(response, "tools", "tools/list");
+        var listed = response["result"]!["tools"]!.AsArray()
+            .Select(t => t!["name"]!.GetValue<string>())
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        listed.ShouldBe(
+            ToolDescriptionScanner.ExpectedJournalToolNames.OrderBy(n => n, StringComparer.Ordinal).ToList(),
+            "a journal-profiled adapter advertises exactly the journal family — zero planning tools ride along");
     }
 
     [Fact]
@@ -46,9 +53,8 @@ public sealed class McpJournalProfileContractTests : McpSessionTestBase
         var listed = response["result"]?[$"{collection}"]?.AsArray();
         if (listed is null)
         {
-            // Until T1/T2 land, the journal surface registers nothing, so the server advertises no
-            // capability for the family and refuses the listing outright; the journal registrations
-            // then move this assertion onto the normal listing carrying exactly the journal family.
+            // Resources and prompts stay unregistered under the journal profile, so the server
+            // advertises no capability for those families and refuses the listing outright.
             response["error"]!["code"]!.GetValue<int>().ShouldBe(-32601);
             response["error"]!["message"]!.GetValue<string>().ShouldContain(method);
             return;

@@ -9,9 +9,10 @@ public static class McpProfileRegistration
     {
         if (profile == McpProfile.Journal)
         {
-            // T1/T2 register the journal capture/search/link family on this branch; the profile
-            // machinery ships ahead of the tools, so the journal surface runs empty until then.
-            return builder;
+            // T1 landed capture/search/read/list/append; T2 adds journal_resolve_links on this branch.
+            builder.Services.AddSingleton<JournalProjectResolver>();
+
+            return builder.WithTools<JournalTools>();
         }
 
         builder.Services.AddSingleton<MutationGuard>();
