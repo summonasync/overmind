@@ -233,6 +233,12 @@ internal static class PlanningToolResponses
             compact["validationProofVoided"] = validationProofVoided.GetString();
         }
 
+        if (artifact.TryGetProperty("validationProofVoidCause", out var validationProofVoidCause) &&
+            validationProofVoidCause.ValueKind == JsonValueKind.String)
+        {
+            compact["validationProofVoidCause"] = validationProofVoidCause.GetString();
+        }
+
         CarryReplayedFlag(compact, artifact);
         return compact.Deserialize<JsonElement>();
     }

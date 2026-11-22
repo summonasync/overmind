@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Overmind.Core;
 using Overmind.Infrastructure.Materialization;
@@ -82,9 +83,9 @@ public sealed class GlobalKitApiTests : IDisposable
         state.StatusCode.ShouldBe(HttpStatusCode.OK);
         var snapshot = await state.Content.ReadFromJsonAsync<GlobalStateItemJson[]>();
         snapshot.ShouldNotBeNull();
-        var pair = snapshot.Single(s => s.KitId == kitId && s.Platform == "claude");
+        var pair = snapshot.Single(s => s.KitId == kitId && s.Agent == "claude");
         pair.State.ShouldBe("deployed");
-        snapshot.Single(s => s.KitId == kitId && s.Platform == "qwen").State.ShouldBe("undeployed");
+        snapshot.Single(s => s.KitId == kitId && s.Agent == "qwen").State.ShouldBe("undeployed");
 
         var remove = await _client.DeleteAsync($"/api/kits/{kitId}/global/claude");
         remove.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -92,7 +93,186 @@ public sealed class GlobalKitApiTests : IDisposable
 
         var stateAfter = await _client.GetAsync("/api/kits/global/state");
         var snapshotAfter = await stateAfter.Content.ReadFromJsonAsync<GlobalStateItemJson[]>();
-        snapshotAfter!.Single(s => s.KitId == kitId && s.Platform == "claude").State.ShouldBe("undeployed");
+        snapshotAfter!.Single(s => s.KitId == kitId && s.Agent == "claude").State.ShouldBe("undeployed");
+    }
+
+    [Fact]
+    public async Task Global_state_emits_the_registry_agent_name()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        Directory.CreateDirectory(Path.Combine(_homeRoot, ".kimi-code", "skills"));
+        (await _client.PostAsync($"/api/kits/{kitId}/global/kimi-code?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var state = await _client.GetAsync("/api/kits/global/state");
+        var snapshot = await state.Content.ReadFromJsonAsync<GlobalStateItemJson[]>();
+        snapshot.ShouldNotBeNull();
+        var kimi = snapshot.Single(s => s.Agent == "kimi-code");
+        kimi.State.ShouldBe("deployed");
+        snapshot.ShouldNotContain(s => s.Agent == "kimiCode");
+
+        var remove = await _client.DeleteAsync($"/api/kits/{kitId}/global/{kimi.Agent}");
+        remove.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Delete_of_a_deployed_kit_requires_the_files_choice()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        var skillFile = Path.Combine(_homeRoot, ".claude", "skills", "dotnet-coder", "SKILL.md");
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var noChoice = await _client.DeleteAsync($"/api/kits/{kitId}");
+        noChoice.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        File.Exists(skillFile).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_keep_leaves_files_and_removes_the_kit()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        var skillFile = Path.Combine(_homeRoot, ".claude", "skills", "dotnet-coder", "SKILL.md");
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=keep");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(skillFile).ShouldBeTrue();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        (await db.GlobalMaterializedFiles.AnyAsync(f => f.KitId == kitId)).ShouldBeFalse();
+        (await db.SkillKits.AnyAsync(k => k.Id == kitId)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_remove_deletes_files_and_the_kit()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        var skillFile = Path.Combine(_homeRoot, ".claude", "skills", "dotnet-coder", "SKILL.md");
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(skillFile).ShouldBeFalse();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        (await db.GlobalMaterializedFiles.AnyAsync(f => f.KitId == kitId)).ShouldBeFalse();
+        (await db.SkillKits.AnyAsync(k => k.Id == kitId)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_remove_cuts_woven_marker_blocks()
+    {
+        var dir = Path.Combine(_sources, "sociality");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "SOCIAL_DICTIONARY.md"), "# Tone rules.\n");
+        var kitId = await SeedBundledKitAsync("sociality", dir);
+        var entry = Path.Combine(_homeRoot, ".claude", "CLAUDE.md");
+        File.WriteAllText(entry, "# My agent context\n\nOwner content stays.\n");
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        File.ReadAllText(entry).ShouldContain("===OVERMIND");
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(entry).ShouldBeTrue();
+        var entryBody = File.ReadAllText(entry);
+        entryBody.ShouldNotContain("===OVERMIND");
+        entryBody.ShouldContain("Owner content stays.");
+    }
+
+    [Fact]
+    public async Task Delete_rejects_an_invalid_deployed_files_flag()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=whatever");
+        delete.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Delete_refuses_a_deployed_mandatory_kit()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+            var kit = await db.SkillKits.FindAsync(kitId);
+            kit!.SetMandatory(true);
+            await db.SaveChangesAsync();
+        }
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=keep");
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Delete_remove_dematerializes_kimi_code_by_its_registry_name()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        var skillFile = Path.Combine(_homeRoot, ".kimi-code", "skills", "dotnet-coder", "SKILL.md");
+        Directory.CreateDirectory(Path.Combine(_homeRoot, ".kimi-code", "skills"));
+        var kimiDeploy = await _client.PostAsync($"/api/kits/{kitId}/global/kimi-code?force=false", null);
+        if (kimiDeploy.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception("KIMI DEPLOY: " + await kimiDeploy.Content.ReadAsStringAsync());
+        }
+        File.Exists(skillFile).ShouldBeTrue();
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(skillFile).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_of_an_undeployed_kit_ignores_the_flag()
+    {
+        var kitId = await SeedBundledKitAsync("dotnet-crew", WriteSkillSource("dotnet-crew", "dotnet-coder"));
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=remove");
+        delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Delete_active_links_guard_precedes_the_files_choice()
+    {
+        var source = WriteSkillSource("dotnet-crew", "dotnet-coder");
+        var kitId = await SeedBundledKitAsync("dotnet-crew", source);
+        (await _client.PostAsync($"/api/kits/{kitId}/global/claude?force=false", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var project = await SeedProjectAsync();
+
+        var create = await _client.PostAsync($"/api/projects/{project}/kits/{kitId}/activate", null);
+        create.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var delete = await _client.DeleteAsync($"/api/kits/{kitId}?deployedFiles=keep");
+        delete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    private async Task<Guid> SeedProjectAsync()
+    {
+        var disk = Path.Combine(Path.GetTempPath(), $"delete-guard-proj-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(disk);
+        var create = await _client.PostAsJsonAsync(
+            "/api/projects", new { name = "delete-guard-proj", diskPath = disk, description = "" });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var project = await create.Content.ReadFromJsonAsync<ProjectJson>();
+        return project!.Id;
     }
 
     [Fact]
@@ -128,7 +308,8 @@ public sealed class GlobalKitApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Remove_refuses_the_mandatory_kit()    {
+    public async Task Remove_refuses_the_mandatory_kit()
+    {
         var source = WriteSkillSource("overmind-ceremony", "overmind-ceremony");
         var kitId = await SeedBundledKitAsync("overmind-ceremony", source);
         using var scope = _factory.Services.CreateScope();
@@ -145,12 +326,14 @@ public sealed class GlobalKitApiTests : IDisposable
         Guid KitId,
         string KitName,
         bool Mandatory,
-        string Platform,
+        string Agent,
         string State,
         string[] Paths,
         GlobalDriftJson[] Drifts);
 
-    public sealed record GlobalDriftJson(Guid KitId, string Platform, string Path, string Kind);
+    public sealed record GlobalDriftJson(Guid KitId, string Agent, string Path, string Kind);
 
     public sealed record KitJson(Guid Id, string Name, int Version);
+
+    public sealed record ProjectJson(Guid Id, string Name, string DiskPath);
 }

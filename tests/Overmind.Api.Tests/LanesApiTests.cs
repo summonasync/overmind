@@ -89,17 +89,34 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task PutLanes_ContourOverTheCap_Returns400NamingTheField()
+    public async Task PutLanes_ContourOverTheCap_IsAcceptedWithWarnings()
     {
+        // 266: contour length softened at the door — the grace band (2001 ≤ 2440) stores whole
+        // and past-ceiling truncates to 2400, both with the frozen warnings[] shape.
         var project = await CreateProjectAsync();
+        await SeedLaneAsync(project.Id, "frontend");
 
         var put = await _client.PutAsJsonAsync(
             $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = "frontend", Contour = new string('x', PlanningLane.MaxContourLength + 1) } } });
 
-        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var problem = await put.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
-        problem!.Errors.ShouldContainKey("Lanes[0].Contour");
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        var warning = doc.RootElement.GetProperty("warnings")[0];
+        warning.GetProperty("accepted_len").GetInt32().ShouldBe(2001);
+        warning.GetProperty("limit").GetInt32().ShouldBe(2000);
+        warning.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+
+        var overCeiling = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend", Contour = new string('x', 2441) } } });
+
+        overCeiling.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var overDoc = JsonDocument.Parse(await overCeiling.Content.ReadAsStringAsync());
+        overDoc.RootElement.GetProperty("warnings")[0].GetProperty("truncated").GetBoolean().ShouldBeTrue();
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
+        roster!.Lanes.Single(l => l.Name == "frontend").Contour!.Length.ShouldBe(2400);
     }
 
     [Fact]
@@ -333,7 +350,7 @@ public sealed class LanesApiTests : IDisposable
         row.LaneHolder.ShouldNotBeNull();
         row.LaneHolder!.Alias.ShouldBe("Van");
         row.LaneHolder.Vendor.ShouldBe("claude");
-        row.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "released");
+        row.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "ended", "released");
     }
 
     [Fact]
@@ -354,7 +371,7 @@ public sealed class LanesApiTests : IDisposable
         unclaimed.ClaimedByAlias.ShouldBeNull();
         unclaimed.LaneHolder.ShouldNotBeNull();
         unclaimed.LaneHolder!.Alias.ShouldBe("Van");
-        unclaimed.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "released");
+        unclaimed.LaneHolder.ClaimState.ShouldBeOneOf("alive", "stale", "ended", "released");
 
         var board = await _client.GetFromJsonAsync<BoardItemJson[]>(
             $"/api/agent/projects/{project.Id}/planning/features", JsonOptions);
@@ -395,7 +412,7 @@ public sealed class LanesApiTests : IDisposable
         var lane = roster!.Lanes.ShouldHaveSingleItem();
         lane.OpenFeatureCount.ShouldBe(2);
         lane.Holder!.Alias.ShouldBe("Van");
-        lane.Holder.ClaimState.ShouldBeOneOf("alive", "stale", "released");
+        lane.Holder.ClaimState.ShouldBeOneOf("alive", "stale", "ended", "released");
         lane.Features.Select(f => f.Slug).ShouldBe(["011-a", "012-b"]);
         lane.Features[0].ClaimedByAlias.ShouldBe("Van");
         lane.Features[1].ClaimedByAlias.ShouldBeNull();

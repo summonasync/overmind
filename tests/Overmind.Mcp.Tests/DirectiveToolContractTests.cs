@@ -60,7 +60,7 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
         }
         else
         {
-            var acked = await Tool().AckDirective(Canned.PlanningSlug, DirectiveId);
+            var acked = await Tool().AckDirective(Canned.PlanningSlug, DirectiveId.ToString());
             Text(acked).ShouldBe($"Directive {DirectiveId} acknowledged.");
         }
 
@@ -117,7 +117,7 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
         _stub.Route("POST", AckRoute, 200,
             $$"""{"id":"{{DirectiveId}}","ack":true,"ackByAlias":"Dan","ackVendor":"qwen","ackAt":"2026-10-17T12:05:00Z"}""");
 
-        var result = await Tool().AckDirective(Canned.PlanningSlug, DirectiveId, Canned.ProjectId);
+        var result = await Tool().AckDirective(Canned.PlanningSlug, DirectiveId.ToString(), Canned.ProjectId);
 
         var request = _stub.Requests.Single(r => r.Method == "POST");
         request.Path.ShouldBe(AckRoute);
@@ -130,7 +130,7 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
         _stub.Route("POST", AckRoute, 200,
             $$"""{"id":"{{DirectiveId}}","ack":false,"ackByAlias":"Dan","ackVendor":"qwen","ackAt":"2026-10-17T12:05:00Z"}""");
 
-        var result = await Tool().AckDirective(Canned.PlanningSlug, DirectiveId, Canned.ProjectId);
+        var result = await Tool().AckDirective(Canned.PlanningSlug, DirectiveId.ToString(), Canned.ProjectId);
 
         Text(result).ShouldBe($"Directive {DirectiveId} was already acknowledged — no change.");
     }
@@ -147,13 +147,46 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AppendDirective_OverCap_RefusedLocallyBeforeAnyRequest()
+    public async Task AppendDirective_GraceBand_SendsTheWholeCommandAndEchoesWarnings()
     {
-        var ex = await Should.ThrowAsync<McpException>(
-            () => Tool().AppendDirective(Canned.PlanningSlug, new string('x', 2001)));
+        var warned = new JsonObject
+        {
+            ["id"] = DirectiveId,
+            ["text"] = new string('x', 2001),
+            ["authorAlias"] = "Marshal",
+            ["createdAt"] = "2026-10-17T12:00:00Z",
+            ["ack"] = false,
+            ["warnings"] = new JsonArray(new JsonObject
+            {
+                ["accepted_len"] = 2001,
+                ["limit"] = 2000,
+                ["truncated"] = false,
+            })
+        }.ToJsonString();
+        _stub.Route("POST", AppendRoute, 200, warned);
+        var text = new string('x', 2001);
 
-        ex.Message.ShouldBe("text is 2001 chars; cap is 2000; cut 1");
-        _stub.Requests.ShouldBeEmpty();
+        var result = await Tool().AppendDirective(Canned.PlanningSlug, text, Canned.ProjectId);
+
+        _stub.Requests.Single(r => r.Method == "POST").Body.ShouldContain($"\"text\":\"{text}\"");
+        Text(result).ShouldContain("Warnings:");
+        Text(result).ShouldContain("accepted_len");
+    }
+
+    [Fact]
+    public async Task AppendDirective_BeyondCeiling_NoLocalLint_AndTheHostRejectSurfaces()
+    {
+        _stub.Route("POST", AppendRoute, 400,
+            """{"title":"DirectiveTextTooLong","detail":"Directive text is 2441 characters; the limit is 2000 """ +
+            """and the accept ceiling is 2440. Nothing was stored: a directive is a command, so this door """ +
+            """never truncates. The tail that would have been lost reads \"tail\". Compress and resend."}""");
+
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AppendDirective(Canned.PlanningSlug, new string('x', 2441), Canned.ProjectId));
+
+        ex.Message.ShouldContain("is 2441 characters");
+        ex.Message.ShouldContain("limit is 2000");
+        ex.Message.ShouldContain("tail");
     }
 
     [Fact]
@@ -169,6 +202,103 @@ public sealed class DirectiveToolContractTests : IAsyncLifetime
 
     private static string Text(CallToolResult result) =>
         ((TextContentBlock)result.Content[0]).Text;
+
+    // ---- 266/T3 row 6: the ack takes a unique hex prefix, because relays and snapshots show one ----
+
+    private static readonly string CurrentRoute =
+        $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/current";
+
+    private static readonly string AnyAckRoute =
+        $"/api/agent/projects/{Canned.ProjectId}/planning/features/{Canned.PlanningSlug}/directives/[^/]+/ack";
+
+    private static string OpenChannelJson(params Guid[] ids) => new JsonObject
+    {
+        ["openDirectives"] = new JsonArray([.. ids.Select(id => (JsonNode)new JsonObject
+        {
+            ["id"] = id,
+            ["text"] = "HOLD: shared file inbound",
+            ["authorAlias"] = "Marshal",
+            ["createdAt"] = "2026-10-17T12:00:00Z",
+        })]),
+    }.ToJsonString();
+
+    [Fact]
+    public async Task AckDirective_UniqueHexPrefix_ResolvesAgainstTheOpenChannel()
+    {
+        var other = Guid.Parse("27272727-2727-2727-2727-272727272727");
+        _stub.Route("GET", CurrentRoute, 200, OpenChannelJson(DirectiveId, other));
+        _stub.Route("POST", AnyAckRoute, 200,
+            $$"""{"id":"{{DirectiveId}}","ack":true,"ackByAlias":"Dan","ackVendor":"qwen","ackAt":"2026-10-17T12:05:00Z"}""");
+
+        var result = await Tool().AckDirective(Canned.PlanningSlug, "16161616", Canned.ProjectId);
+
+        Text(result).ShouldBe($"Directive {DirectiveId} acknowledged.");
+        _stub.Requests.Single(r => r.Method == "POST").Path.ShouldBe(AckRoute);
+    }
+
+    [Fact]
+    public async Task AckDirective_AmbiguousPrefix_ListsCandidatesAndAcksNothing()
+    {
+        var rival = Guid.Parse("16161616-2222-2222-2222-222222222222");
+        _stub.Route("GET", CurrentRoute, 200, OpenChannelJson(DirectiveId, rival));
+
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AckDirective(Canned.PlanningSlug, "16161616", Canned.ProjectId));
+
+        ex.Message.ShouldContain("is the prefix of 2 open directives on 'demo-feature'");
+        ex.Message.ShouldContain("ambiguous");
+        ex.Message.ShouldContain("nothing was acknowledged");
+        ex.Message.ShouldContain($"Candidates: {DirectiveId}, {rival}");
+        _stub.Requests.ShouldNotContain(r => r.Method == "POST");
+    }
+
+    [Fact]
+    public async Task AckDirective_PrefixOfNothing_OpenIdsAreEchoed()
+    {
+        _stub.Route("GET", CurrentRoute, 200, OpenChannelJson(DirectiveId));
+
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AckDirective(Canned.PlanningSlug, "abcd1234", Canned.ProjectId));
+
+        ex.Message.ShouldContain("no open directive on 'demo-feature' starts with 'abcd1234'");
+        ex.Message.ShouldContain($"Open ids: {DirectiveId}");
+        _stub.Requests.ShouldNotContain(r => r.Method == "POST");
+    }
+
+    [Fact]
+    public async Task AckDirective_ChannelEmpty_TellsTheHolderTheAckProbablyLanded()
+    {
+        _stub.Route("GET", CurrentRoute, 200, OpenChannelJson());
+
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AckDirective(Canned.PlanningSlug, "16161616", Canned.ProjectId));
+
+        ex.Message.ShouldContain("The feature has no open directives");
+        ex.Message.ShouldContain("the ack you are retrying probably already landed");
+    }
+
+    [Fact]
+    public async Task AckDirective_FullUuid_NeedsNoVocabularyRead()
+    {
+        _stub.Route("POST", AckRoute, 200,
+            $$"""{"id":"{{DirectiveId}}","ack":true,"ackByAlias":"Dan","ackVendor":"qwen","ackAt":"2026-10-17T12:05:00Z"}""");
+
+        await Tool().AckDirective(Canned.PlanningSlug, DirectiveId.ToString(), Canned.ProjectId);
+
+        _stub.Requests.ShouldNotContain(r => r.Path == CurrentRoute);
+        _stub.Requests.Single(r => r.Method == "POST").Path.ShouldBe(AckRoute);
+    }
+
+    [Fact]
+    public async Task AckDirective_NeitherUuidNorHex_IsNamedAsSuch()
+    {
+        var ex = await Should.ThrowAsync<McpException>(
+            () => Tool().AckDirective(Canned.PlanningSlug, "the-first-one", Canned.ProjectId));
+
+        ex.Message.ShouldContain("neither a UUID nor a hex prefix");
+        ex.Message.ShouldContain("1-31 hex digits");
+        _stub.Requests.ShouldNotContain(r => r.Method == "POST");
+    }
 
     private DirectiveTools Tool() => new(_api, new MutationGuard(_api), new ProjectResolver(_api));
 }

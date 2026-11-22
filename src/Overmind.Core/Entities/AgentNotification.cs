@@ -4,6 +4,10 @@ public sealed class AgentNotification
 {
     private const string DefaultAgent = "agent";
 
+    // Soft cap (266): the agent notify door accepts over-cap text whole inside the grace
+    // ceiling and truncates beyond it; the number is the limit, not a hard reject any more.
+    public const int MaxTextLength = 2000;
+
     private AgentNotification()
     {
     }

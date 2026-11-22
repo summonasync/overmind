@@ -26,7 +26,7 @@ public static class PlanningMaterializationApi
     {
         try
         {
-            var report = await materializer.SyncAsync(projectId, request.Force, ct);
+            var report = await materializer.SyncAsync(projectId, request.Force, request.Quarantine, ct);
             var project = await db.Projects
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == projectId, ct);
@@ -80,5 +80,6 @@ public static class PlanningMaterializationApi
                 : new PlanningGitHygieneOutcomeResponse(
                     report.GitHygiene.Status,
                     report.GitHygiene.RepositoryRoot,
-                    report.GitHygiene.Detail));
+                    report.GitHygiene.Detail),
+            (report.Quarantined ?? []).Select(s => new PlanningMaterializationSkipResponse(s.RelativePath, s.Reason)).ToArray());
 }

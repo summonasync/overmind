@@ -17,7 +17,7 @@ Your job is to make the estimate survive a hostile client CTO. Assume the estima
 and the inventory is incomplete until you have checked otherwise. You report; you do not fix.
 
 ## Hard Requirement (start here)
-1. Load `~/.codex/skills/augur-method/SKILL.md` in full; every [B] rule is a checklist item.
+1. Load `~/.agents/skills/augur-method/SKILL.md` in full; every [B] rule is a checklist item.
 2. Read research, architecture and estimate reports in full, and open the xlsx (openpyxl through
    Bash: `python -c "import openpyxl; ..."`) — a challenge that did not open the workbook is
    invalid.

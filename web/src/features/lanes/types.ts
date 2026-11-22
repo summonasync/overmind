@@ -1,6 +1,6 @@
 import type { PlanningFeatureStatus } from "@/features/planning";
 
-export type LaneClaimState = "alive" | "stale" | "ended";
+export type LaneClaimState = "alive" | "stale" | "ended" | "released";
 
 export interface LaneHolder {
   alias: string;

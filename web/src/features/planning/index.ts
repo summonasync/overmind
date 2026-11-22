@@ -112,7 +112,6 @@ export type {
   PlanningFeatureStatus,
   PlanningImportScanEntry,
   PlanningImportScanReport,
-  PlanningInboxClaimState,
   PlanningInboxItem,
   PlanningInboxResponse,
   PlanningLogLine,

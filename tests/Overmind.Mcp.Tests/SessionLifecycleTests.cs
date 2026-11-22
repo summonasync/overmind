@@ -42,7 +42,7 @@ public sealed class SessionLifecycleTests : IDisposable
         var http = Client(_ => JsonBody(new { id = sessionId, alias = "Dan", vendor = "qwen" }));
         var lifecycle = new AgentSessionLifecycle(http);
 
-        var returned = await lifecycle.RegisterAsync("Dan", "qwen", CancellationToken.None);
+        var returned = await lifecycle.RegisterAsync("Dan", "qwen", null, CancellationToken.None);
 
         returned.ShouldBe(sessionId);
         var (method, uri, header) = Requests.Single();
@@ -58,7 +58,7 @@ public sealed class SessionLifecycleTests : IDisposable
         var lifecycle = new AgentSessionLifecycle(http);
 
         await Should.ThrowAsync<HttpRequestException>(() =>
-            lifecycle.RegisterAsync("Dan", "qwen", CancellationToken.None));
+            lifecycle.RegisterAsync("Dan", "qwen", null, CancellationToken.None));
     }
 
     [Fact]

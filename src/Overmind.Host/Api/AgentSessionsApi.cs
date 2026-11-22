@@ -10,7 +10,7 @@ public static class AgentSessionsApi
 {
     public static RouteGroupBuilder MapAgentSessionsApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent");
+        var group = routes.MapAgentGroup();
 
         group.MapPost("/sessions", Register);
         group.MapPost("/sessions/{id:guid}/role", SetRole);
@@ -27,6 +27,49 @@ public static class AgentSessionsApi
         if (string.IsNullOrWhiteSpace(request.Alias) || string.IsNullOrWhiteSpace(request.Vendor))
         {
             return HttpErrors.BadRequest("Alias and vendor are required to register an agent session.");
+        }
+
+        var alias = request.Alias.Trim();
+        // Registration liveness door (issue f0e4c26f): two adapters with an explicit OVERMIND_ALIAS
+        // must not both read alive — the second registration names the holder instead of silently
+        // coexisting. Stale or ended holders free the alias, the placeholder path never hits this.
+        var aliveSince = await AliveSinceAsync(db, ct);
+        if (!alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal) &&
+            await FindAliveAliasHolderAsync(db, Guid.Empty, alias, aliveSince, ct) is { } aliveHolder)
+        {
+            return HttpErrors.Conflict(AliasHeldDetail(alias, aliveHolder));
+        }
+
+        if (alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal) &&
+            request.PriorSessionId is { } priorId &&
+            await db.AgentSessions.FirstOrDefaultAsync(s => s.Id == priorId, ct) is { } prior &&
+            !prior.Alias.Equals(AgentSession.PlaceholderAlias, StringComparison.Ordinal))
+        {
+            // Reconnect re-attach: the workspace stamp names the row this adapter registered last
+            // run, so resuming keeps its alias+vendor and its session id — the id claim locks match
+            // on. The rival check rides the same conditional write as the identity door's alias
+            // claim, so a concurrent identity_set loses cleanly and the loser falls through to a
+            // fresh registration. Only the placeholder path resumes; an explicit alias is the
+            // operator's choice and always mints fresh.
+            var now = DateTime.UtcNow;
+            var resumed = await db.AgentSessions
+                .Where(s => s.Id == priorId &&
+                            s.Alias == prior.Alias &&
+                            !db.AgentSessions.Any(h =>
+                                h.Id != priorId &&
+                                h.Alias == prior.Alias &&
+                                h.EndedAt == null &&
+                                h.LastSeenAt >= aliveSince))
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(s => s.StartedAt, now)
+                    .SetProperty(s => s.LastSeenAt, now)
+                    .SetProperty(s => s.EndedAt, (DateTime?)null), ct);
+
+            if (resumed == 1)
+            {
+                await db.Entry(prior).ReloadAsync(ct);
+                return Results.Created($"/api/agent/sessions/{prior.Id}", ToResponse(prior));
+            }
         }
 
         AgentSession session;
@@ -90,6 +133,7 @@ public static class AgentSessionsApi
 
         var identityChanged = !string.Equals(alias, session.Alias, StringComparison.Ordinal) ||
                               !string.Equals(vendor, session.Vendor, StringComparison.Ordinal);
+        var previousAlias = session.Alias;
 
         try
         {
@@ -103,6 +147,10 @@ public static class AgentSessionsApi
         // The pre-check above is only the friendly answer; between it and this write another adapter can
         // land the same alias, so the claim itself carries the guard — SQLite runs the statement as one
         // atomic write, and the loser sees the winner's row and gets 0 rows back.
+        // The alias claim and the held-claim re-attribution share one transaction (issue ef10a2ff):
+        // a re-attribution failure rolls the alias back too, held claims stay functional under the
+        // old pair, and the retry — which still sees identityChanged — heals the move.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         if (!await TryClaimAliasAsync(db, id, session.Alias, session.Vendor, aliveSince, ct))
         {
             var rival = await FindAliveAliasHolderAsync(db, id, session.Alias, aliveSince, ct);
@@ -111,12 +159,31 @@ public static class AgentSessionsApi
                 : $"Alias '{session.Alias}' was claimed while this request was running; set the identity again.");
         }
 
-        IReadOnlyList<string> moved = identityChanged
-            ? await claims.ReattributeSessionClaimsAsync(id, session.Alias, session.Vendor, ct)
-            : [];
+        List<(Guid ProjectId, string Slug)> moved = [];
+        if (identityChanged)
+        {
+            try
+            {
+                moved = [.. await claims.ReattributeSessionClaimsAsync(id, session.Alias, session.Vendor, ct)];
+            }
+            catch (DbUpdateException)
+            {
+                await tx.RollbackAsync(ct);
+                return HttpErrors.Conflict(
+                    $"Re-attribution failed; the identity change was rolled back and '{previousAlias}' " +
+                    "remains in force. Set the identity again.");
+            }
+        }
+
+        await tx.CommitAsync(ct);
+        if (moved.Count > 0)
+        {
+            await claims.DispatchMaterializationAsync(moved.Select(m => m.ProjectId), ct);
+        }
 
         return Results.Ok(new AgentSessionIdentityResponse(
-            ToResponse(session), BuildIdentityWarnings(session.Alias, session.Vendor, moved)));
+            ToResponse(session),
+            BuildIdentityWarnings(session.Alias, session.Vendor, [.. moved.Select(m => m.Slug)])));
     }
 
     // The union of project alive windows: a holder counts as alive while any project would still count it.

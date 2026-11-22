@@ -74,6 +74,7 @@ public sealed class OvermindDbContext : DbContext
         modelBuilder.Entity<Project>(builder =>
         {
             builder.HasIndex(p => p.Name).IsUnique();
+            builder.HasIndex(p => p.NameNormalized).IsUnique();
 
             builder.Property(p => p.ClaimStaleThresholdMinutes)
                 .HasDefaultValue(Project.DefaultClaimStaleThresholdMinutes)
@@ -344,7 +345,7 @@ public sealed class OvermindDbContext : DbContext
                 .HasForeignKey(n => n.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            builder.Property(n => n.Text).HasMaxLength(2000);
+            builder.Property(n => n.Text).HasMaxLength(SoftCap.Ceiling(AgentNotification.MaxTextLength));
 
             builder.HasIndex(n => new { n.ProjectId, n.CreatedAt });
         });
@@ -389,7 +390,7 @@ public sealed class OvermindDbContext : DbContext
         modelBuilder.Entity<PlanningLane>(builder =>
         {
             builder.Property(l => l.Name).HasMaxLength(PlanningLane.MaxNameLength).UseCollation("NOCASE");
-            builder.Property(l => l.Contour).HasMaxLength(PlanningLane.MaxContourLength);
+            builder.Property(l => l.Contour).HasMaxLength(SoftCap.Ceiling(PlanningLane.MaxContourLength));
             builder.Property(l => l.BoundAlias).HasMaxLength(PlanningLane.MaxBoundAliasLength);
             builder.Property(l => l.LiveSurfaces).HasMaxLength(PlanningLane.MaxLiveSurfacesJsonLength);
 
@@ -409,7 +410,7 @@ public sealed class OvermindDbContext : DbContext
                 .HasForeignKey(d => d.PlanningFeatureId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            builder.Property(d => d.Text).HasMaxLength(PlanningDirective.MaxTextLength);
+            builder.Property(d => d.Text).HasMaxLength(SoftCap.Ceiling(PlanningDirective.MaxTextLength));
             builder.Property(d => d.AuthorAlias).HasMaxLength(PlanningDirective.MaxIdentityLength);
             builder.Property(d => d.AuthorVendor).HasMaxLength(PlanningDirective.MaxIdentityLength);
             builder.Property(d => d.AckByAlias).HasMaxLength(PlanningDirective.MaxIdentityLength);
@@ -460,7 +461,7 @@ public sealed class OvermindDbContext : DbContext
             builder.Property(m => m.AuthorAlias).HasMaxLength(WaveMessage.MaxIdentityLength);
             builder.Property(m => m.AuthorRole).HasMaxLength(WaveMessage.MaxIdentityLength)
                 .HasDefaultValue(AgentSession.DefaultRole);
-            builder.Property(m => m.Text).HasMaxLength(WaveMessage.MaxTextLength);
+            builder.Property(m => m.Text).HasMaxLength(SoftCap.Ceiling(WaveMessage.MaxTextLength));
             builder.Property(m => m.Mentions).HasMaxLength(WaveMessage.MaxMentionsLength);
 
             builder.HasIndex(m => new { m.ProjectId, m.Room, m.CreatedAt });

@@ -40,7 +40,7 @@ public sealed class PlanningServiceGuardTests : IDisposable
     {
         var projectId = await SeedProjectAsync();
         var materializer = Substitute.For<IPlanningMaterializer>();
-        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("disk exploded"));
 
         await PlanningServiceGuard.SyncMaterializationAsync(
@@ -55,7 +55,7 @@ public sealed class PlanningServiceGuardTests : IDisposable
     {
         var projectId = await SeedProjectAsync();
         var materializer = Substitute.For<IPlanningMaterializer>();
-        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new OperationCanceledException());
 
         await PlanningServiceGuard.SyncMaterializationAsync(

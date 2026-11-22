@@ -9,7 +9,7 @@ public static class AgentIssuesApi
 {
     public static RouteGroupBuilder MapAgentIssuesApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent/projects/{projectId:guid}/issues");
+        var group = routes.MapGroup("/api/agent/projects/{projectId:guid}/issues").AddEndpointFilter(UnknownPropertyProbeFilter.Instance);
 
         group.MapPost(string.Empty, Create);
         group.MapGet(string.Empty, List);
@@ -18,7 +18,7 @@ public static class AgentIssuesApi
         group.MapPost("/{id:guid}/status", SetStatus);
         group.MapPost("/{id:guid}/promote", Promote);
 
-        var idGroup = routes.MapGroup("/api/agent/issues");
+        var idGroup = routes.MapGroup("/api/agent/issues").AddEndpointFilter(UnknownPropertyProbeFilter.Instance);
 
         idGroup.MapGet("/{id:guid}", GetById);
         idGroup.MapPost("/{id:guid}/append", AppendById);
@@ -134,11 +134,16 @@ public static class AgentIssuesApi
             return callerRefusal!;
         }
 
+        var warnings = new List<object>();
+        var text = SoftCapSoften.Cap(request.Text, SoftCapLimits.FollowUpText, warnings);
         try
         {
-            var append = await service.AppendAsync(id, request.AuthorProjectId, request.Text, ct, callerProjectId);
+            var append = await service.AppendAsync(id, request.AuthorProjectId, text!, ct, callerProjectId);
             return Results.Ok(new IssueAppendItem(
-                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt));
+                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt)
+            {
+                Warnings = SoftCapSoften.Merge(warnings)
+            });
         }
         catch (PlanningException ex)
         {
@@ -190,7 +195,8 @@ public static class AgentIssuesApi
         try
         {
             var (issue, artifact) = await service.PromoteAsync(
-                id, request.FeatureSlug, request.Source, sessionId, ct, callerProjectId);
+                id, request.FeatureSlug, request.Source, sessionId,
+                SessionTouchMiddleware.PreTouchLastSeenOf(http), ct, callerProjectId);
             return Results.Ok(new IssuePromoteResponse(
                 issue.Id, issue.Status, artifact.Id, artifact.FeatureId, artifact.Version));
         }
@@ -207,12 +213,17 @@ public static class AgentIssuesApi
         IssueService service,
         CancellationToken ct)
     {
+        var warnings = new List<object>();
+        var text = SoftCapSoften.Cap(request.Text, SoftCapLimits.FollowUpText, warnings);
         try
         {
             await EnsureIssueOnBoardAsync(service, projectId, id, ct);
-            var append = await service.AppendAsync(id, request.AuthorProjectId, request.Text, ct);
+            var append = await service.AppendAsync(id, request.AuthorProjectId, text!, ct);
             return Results.Ok(new IssueAppendItem(
-                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt));
+                append.Id, append.AuthorProjectId, append.Text, append.CreatedAt)
+            {
+                Warnings = SoftCapSoften.Merge(warnings)
+            });
         }
         catch (PlanningException ex)
         {
@@ -257,7 +268,8 @@ public static class AgentIssuesApi
         {
             await EnsureIssueOnBoardAsync(service, projectId, id, ct);
             var (issue, artifact) = await service.PromoteAsync(
-                id, request.FeatureSlug, request.Source, sessionId, ct);
+                id, request.FeatureSlug, request.Source, sessionId,
+                SessionTouchMiddleware.PreTouchLastSeenOf(http), ct);
             return Results.Ok(new IssuePromoteResponse(
                 issue.Id, issue.Status, artifact.Id, artifact.FeatureId, artifact.Version));
         }

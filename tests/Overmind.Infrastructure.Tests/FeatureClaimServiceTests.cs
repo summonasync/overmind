@@ -24,7 +24,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
 
@@ -108,7 +108,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
 
         var moved = await service.ReattributeSessionClaimsAsync(HolderSessionId, "mark-wolff", "claude");
 
-        moved.ShouldBe(["feat-held"]);
+        moved.Select(m => m.Slug).ShouldBe(["feat-held"]);
         held.ClaimedByAlias.ShouldBe("mark-wolff");
         held.ClaimedByVendor.ShouldBe("claude");
         held.ClaimSessionId.ShouldBe(HolderSessionId);
@@ -585,7 +585,80 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureHolder_StaleSelfClaim_AdoptsAndProceeds()
+    public async Task EnsureHolder_StaleClaimOnSameSession_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        readopted.ClaimSessionId.ShouldBe(HolderSessionId);
+        readopted.ClaimedByAlias.ShouldBe("Dan");
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_EndedClaimOnSameSession_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        readopted.ClaimSessionId.ShouldBe(HolderSessionId);
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureImportAllowed_StaleSameSessionClaim_ReadoptsAndLogs()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
+
+        await service.EnsureImportAllowedAsync(_projectId, HolderSessionId, "feat-a");
+
+        var readopted = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        PlanningLog.Parse(readopted.Body).Last().Text
+            .ShouldBe("stale claim re-adopted by resumed session Dan by qwen");
+    }
+
+    [Fact]
+    public async Task EnsureHolder_ReadoptHealsTheRow_SecondWriteIsSilent()
+    {
+        await CreateFeatureAsync();
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+        await service.EnsureHolderAsync(_projectId, "feat-a", HolderSessionId);
+
+        var healed = await _context.PlanningFeatures.AsNoTracking()
+            .SingleAsync(f => f.Slug == "feat-a");
+        PlanningLog.Parse(healed.Body)
+            .Count(line => line.Text.StartsWith("stale claim re-adopted", StringComparison.Ordinal))
+            .ShouldBe(1);
+        var row = await _context.AgentSessions.AsNoTracking()
+            .SingleAsync(s => s.Id == HolderSessionId);
+        row.EndedAt.ShouldBeNull();
+        row.LastSeenAt.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    [Fact]
+    public async Task EnsureHolder_StaleSameAliasForeignSession_RequiresExplicitClaim()
     {
         await CreateFeatureAsync();
         var service = CreateClaimService();
@@ -593,32 +666,15 @@ public sealed class FeatureClaimServiceTests : IDisposable
         await AgeHolderSessionAsync(DateTime.UtcNow.AddHours(-1));
         var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
 
-        await service.EnsureHolderAsync(_projectId, "feat-a", callerId);
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => service.EnsureHolderAsync(_projectId, "feat-a", callerId));
 
-        var adopted = await _context.PlanningFeatures.AsNoTracking()
+        ex.Code.ShouldBe(PlanningFailureCode.FeatureClaimHeld);
+        ex.Message.ShouldContain("Dan by qwen (stale)");
+        var untouched = await _context.PlanningFeatures.AsNoTracking()
             .SingleAsync(f => f.Slug == "feat-a");
-        adopted.ClaimSessionId.ShouldBe(callerId);
-        adopted.ClaimedByAlias.ShouldBe("Dan");
-        PlanningLog.Parse(adopted.Body).Last().Text
-            .ShouldBe("session restarted, claim adopted by Dan by qwen");
-    }
-
-    [Fact]
-    public async Task EnsureHolder_EndedSelfClaim_AdoptsAndProceeds()
-    {
-        await CreateFeatureAsync();
-        var service = CreateClaimService();
-        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
-        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
-        var callerId = await AddSessionAsync("Dan", "qwen", DateTime.UtcNow);
-
-        await service.EnsureHolderAsync(_projectId, "feat-a", callerId);
-
-        var adopted = await _context.PlanningFeatures.AsNoTracking()
-            .SingleAsync(f => f.Slug == "feat-a");
-        adopted.ClaimSessionId.ShouldBe(callerId);
-        PlanningLog.Parse(adopted.Body).Last().Text
-            .ShouldBe("session restarted, claim adopted by Dan by qwen");
+        untouched.ClaimSessionId.ShouldBe(HolderSessionId);
+        PlanningLog.Parse(untouched.Body).Single().Text.ShouldBe("Dan by qwen claimed the feature");
     }
 
     [Fact]
@@ -676,7 +732,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ClaimLiveness_EndedHolderSession_ProjectsReleased()
+    public async Task ClaimLiveness_EndedHolderSession_ReportsEnded()
     {
         await CreateFeatureAsync();
         var service = CreateClaimService();
@@ -686,11 +742,13 @@ public sealed class FeatureClaimServiceTests : IDisposable
 
         var liveness = await service.ClaimLivenessAsync(_projectId, [feature]);
 
-        liveness.GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Released);
+        liveness.GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Ended);
     }
 
+    // Orphan construction: the holder row itself is gone, the only path the service still
+    // projects Released through.
     [Fact]
-    public async Task ClaimLiveness_MissingHolderSession_ProjectsReleased()
+    public async Task ClaimLiveness_MissingHolderSession_ReportsReleasedOrphan()
     {
         await CreateFeatureAsync();
         var service = CreateClaimService();
@@ -703,6 +761,28 @@ public sealed class FeatureClaimServiceTests : IDisposable
         var liveness = await service.ClaimLivenessAsync(_projectId, [feature]);
 
         liveness.GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Released);
+    }
+
+    [Fact]
+    public async Task ClaimLiveness_DeadHolderAndOrphan_ReportDistinctStates()
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId);
+        await service.ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId);
+        await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
+        _context.AgentSessions.Remove(_context.AgentSessions.Single(s => s.Id == ForeignSessionId));
+        await _context.SaveChangesAsync();
+        var features = await _context.PlanningFeatures.AsNoTracking()
+            .Where(f => f.ClaimSessionId != null).ToListAsync();
+
+        var liveness = await service.ClaimLivenessAsync(_projectId, features);
+
+        liveness.GetValueOrDefault(features.Single(f => f.Slug == "feat-a").Id)
+            .ShouldBe(AgentSessionLiveness.Ended);
+        liveness.GetValueOrDefault(features.Single(f => f.Slug == "feat-b").Id)
+            .ShouldBe(AgentSessionLiveness.Released);
     }
 
     [Fact]
@@ -720,7 +800,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Claim_ReleasedClaim_ForeignTakeOverStillSucceeds()
+    public async Task Claim_EndedHolderClaim_ForeignTakeOverStillSucceeds()
     {
         await CreateFeatureAsync();
         var service = CreateClaimService();
@@ -728,7 +808,7 @@ public sealed class FeatureClaimServiceTests : IDisposable
         await AgeHolderSessionAsync(DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-20));
         var feature = await _context.PlanningFeatures.AsNoTracking().SingleAsync(f => f.Slug == "feat-a");
         (await service.ClaimLivenessAsync(_projectId, [feature]))
-            .GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Released);
+            .GetValueOrDefault(feature.Id).ShouldBe(AgentSessionLiveness.Ended);
 
         var taken = await service.ClaimAsync(_projectId, "feat-a", "Bobby", "claude", ForeignSessionId);
 
@@ -964,6 +1044,55 @@ public sealed class FeatureClaimServiceTests : IDisposable
         ex.Code.ShouldBe(PlanningFailureCode.LaneClaimHeld);
         ex.Message.ShouldContain("Dan by qwen");
         ex.Message.ShouldContain("feat-a");
+    }
+
+    // Blocking-set pin across the liveness vocabulary flip: the guard blocks exactly Alive
+    // mate claims, the identity-different caller included; Stale, Ended and orphaned
+    // (Released) mates never block.
+    [Theory]
+    [InlineData(AgentSessionLiveness.Alive, true)]
+    [InlineData(AgentSessionLiveness.Stale, false)]
+    [InlineData(AgentSessionLiveness.Ended, false)]
+    [InlineData(AgentSessionLiveness.Released, false)]
+    public async Task Claim_LaneMateClaimState_BlocksOnlyAlive(AgentSessionLiveness mateState, bool blocksLane)
+    {
+        await CreateFeatureAsync("feat-a");
+        await CreateFeatureAsync("feat-b");
+        var service = CreateClaimService();
+        await SetLaneAsync("feat-a", "frontend");
+        await SetLaneAsync("feat-b", "frontend");
+        await service.ClaimAsync(_projectId, "feat-a", "Dan", "qwen", HolderSessionId, overrideLaneCheck: true);
+        await AgeLaneMateAsync(mateState);
+
+        if (blocksLane)
+        {
+            var ex = await Should.ThrowAsync<PlanningException>(() => service
+                .ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId));
+
+            ex.Code.ShouldBe(PlanningFailureCode.LaneClaimHeld);
+            ex.Message.ShouldContain("feat-a");
+            return;
+        }
+
+        var claimed = await service.ClaimAsync(_projectId, "feat-b", "Bobby", "claude", ForeignSessionId);
+        claimed.ClaimedByAlias.ShouldBe("Bobby");
+    }
+
+    private async Task AgeLaneMateAsync(AgentSessionLiveness projectedState)
+    {
+        if (projectedState == AgentSessionLiveness.Released)
+        {
+            _context.AgentSessions.Remove(_context.AgentSessions.Single(s => s.Id == HolderSessionId));
+            await _context.SaveChangesAsync();
+            return;
+        }
+
+        var lastSeenAt = projectedState == AgentSessionLiveness.Alive
+            ? DateTime.UtcNow
+            : DateTime.UtcNow.AddHours(-1);
+        await AgeHolderSessionAsync(
+            lastSeenAt,
+            projectedState == AgentSessionLiveness.Ended ? DateTime.UtcNow.AddMinutes(-20) : null);
     }
 
     [Fact]

@@ -26,6 +26,9 @@ public static class ToolBindingErrorFilter
                         ]
                     };
                 }
+
+                return OptionalDefaults.Annotate(
+                    await next(request, cancellationToken), request.Params?.Arguments, tool.ProtocolTool.Name, contract);
             }
 
             return await next(request, cancellationToken);

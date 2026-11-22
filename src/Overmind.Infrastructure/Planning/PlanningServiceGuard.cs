@@ -14,7 +14,7 @@ internal static class PlanningServiceGuard
     {
         try
         {
-            await materializer.SyncAsync(projectId, force: false, ct);
+            await materializer.SyncAsync(projectId, force: false, ct: ct);
         }
         catch (Exception ex)
         {
@@ -31,7 +31,7 @@ internal static class PlanningServiceGuard
     {
         try
         {
-            await materializer.SyncAsync(projectId, force: false, ct);
+            await materializer.SyncAsync(projectId, force: false, ct: ct);
             return false;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

@@ -32,11 +32,15 @@ public sealed partial class WaveMessage
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
+        // MaxTextLength is the soft cap; the API door truncates anything past the grace
+        // ceiling before it reaches here, so this guard only catches bypasses.
+        var hardCeiling = SoftCap.Ceiling(MaxTextLength);
         var trimmed = text.Trim();
-        if (trimmed.Length > MaxTextLength)
+        if (trimmed.Length > hardCeiling)
         {
             throw new ArgumentException(
-                $"Wave message text exceeds the {MaxTextLength} character cap.", nameof(text));
+                $"Wave message text exceeds the {hardCeiling} character hard ceiling (soft cap {MaxTextLength}).",
+                nameof(text));
         }
 
         return new WaveMessage
