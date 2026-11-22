@@ -14,14 +14,15 @@ export {
   JOURNAL_FILTER_KEYS,
   formatJournalStamp,
   isJournalFilterActive,
+  journalActivityWindow,
   journalServerFilters,
   localDayOf,
   parseJournalFilters,
-  selectJournalDay,
   sortByActivityDesc,
   writeJournalFilters,
 } from "./lib/stream-filters";
 export { useCaptureHotkeys } from "./lib/use-capture-hotkeys";
+export type { JournalActivityWindow } from "./lib/stream-filters";
 export { useJournalFilters } from "./lib/use-journal-filters";
 export {
   useJournalContainer,

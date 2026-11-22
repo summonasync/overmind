@@ -5,10 +5,10 @@ import { test } from "node:test";
 import {
   EMPTY_JOURNAL_FILTERS,
   formatJournalStamp,
+  journalActivityWindow,
   journalServerFilters,
   localDayOf,
   parseJournalFilters,
-  selectJournalDay,
   sortByActivityDesc,
   writeJournalFilters,
 } from "../src/features/journal/lib/stream-filters.ts";
@@ -63,13 +63,26 @@ test("an emptied filter deletes its key instead of writing an empty one", () => 
   assert.equal(target.toString(), "");
 });
 
-test("the day never reaches the server query", () => {
+// 249 moved the day cut onto the wire: the URL's `day` never travels as itself — its local
+// boundaries become the UTC activity pair the Host binds to UpdatedAt, and the bare inbox
+// sends no pair at all so the server's default window applies. The exact instants are
+// pinned in the zone tests below; here the wire shape is what matters.
+test("the day rides the query as the activity pair, never as ?day", () => {
   const filters = journalServerFilters(parseJournalFilters(qs("?day=2026-11-17&tag=overmind")));
-  assert.deepEqual(filters, { tag: "overmind", link: "", project: "" });
+  assert.equal(filters.tag, "overmind");
+  assert.match(filters.activitySince, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.match(filters.activityUntil, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.ok(Date.parse(filters.activityUntil) > Date.parse(filters.activitySince));
   const params = journalStreamParams(filters);
   assert.equal(params.get("day"), null);
   assert.equal(params.get("since"), null);
   assert.equal(params.get("until"), null);
+  assert.equal(params.get("activitySince"), filters.activitySince);
+  assert.equal(params.get("activityUntil"), filters.activityUntil);
+
+  const bare = journalStreamParams(journalServerFilters(parseJournalFilters(null)));
+  assert.equal(bare.get("activitySince"), null);
+  assert.equal(bare.get("activityUntil"), null);
 });
 
 // The load-bearing one: link and project are sent to the Host, they are not a cache-key
@@ -79,6 +92,8 @@ test("link and project ride the request the stream makes", () => {
     tag: "overmind",
     link: "linked",
     project: "ff313f29-8144-488c-94e6-5ea5dde57bfd",
+    activitySince: "",
+    activityUntil: "",
   }).toString();
   assert.equal(
     query,
@@ -87,12 +102,20 @@ test("link and project ride the request the stream makes", () => {
 });
 
 test("an unset filter is absent from the request, not sent empty", () => {
-  const query = journalStreamParams({ tag: "", link: "", project: "" }).toString();
+  const query = journalStreamParams({
+    tag: "",
+    link: "",
+    project: "",
+    activitySince: "",
+    activityUntil: "",
+  }).toString();
   assert.equal(query, "type=journal&state=active");
 });
 
 // The card accent must be the same predicate the chip filters on, so it is the same
-// request with the cohort forced — not a browser-side reading of the rails.
+// request with the cohort forced — not a browser-side reading of the rails. The day is
+// part of that predicate since it rides the wire: a cohort without the pair would answer
+// from the server's default window and drop accents for rows older than it.
 test("the accent cohort is the page request with link forced and nothing else changed", () => {
   const page = journalServerFilters(parseJournalFilters(qs("?tag=overmind&day=2026-11-17&project=p9")));
   const cohort = journalStreamParams({ ...page, link: "linked" });
@@ -100,9 +123,17 @@ test("the accent cohort is the page request with link forced and nothing else ch
   assert.equal(cohort.get("tag"), page.tag);
   assert.equal(cohort.get("project"), page.project);
   assert.equal(cohort.get("day"), null);
+  assert.equal(cohort.get("activitySince"), page.activitySince);
+  assert.equal(cohort.get("activityUntil"), page.activityUntil);
   assert.equal(
     cohort.toString(),
-    journalStreamParams({ tag: "overmind", link: "linked", project: "p9" }).toString(),
+    journalStreamParams({
+      tag: "overmind",
+      link: "linked",
+      project: "p9",
+      activitySince: page.activitySince,
+      activityUntil: page.activityUntil,
+    }).toString(),
   );
 });
 
@@ -142,9 +173,11 @@ test("the stamp is the local clock the owner reads", () => {
 });
 
 // AC: a note written at 23:58 belongs to that day; the same note edited past midnight
-// moves to the next one. Both instants are built from the machine's own local midnight so
-// the assertion holds in any zone and fails the moment the boundary goes string-compare.
-test("a note follows its last touch across local midnight", () => {
+// moves to the next one. The property lives on the wire now — the day's activity window
+// must bracket the one instant and exclude the other, both built from the machine's own
+// local midnight so the assertion holds in any zone and fails the moment the boundary
+// goes string-compare.
+test("the day's window brackets a 23:58 touch and hands the next one to tomorrow", () => {
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
   const writtenAt = new Date(midnight.getTime() + (23 * 60 + 58) * 60_000);
@@ -153,13 +186,16 @@ test("a note follows its last touch across local midnight", () => {
   const tomorrow = dayKey(editedAt);
   assert.notEqual(today, tomorrow);
 
-  const note = { id: "n1", updatedAt: naiveUtcStamp(writtenAt) };
-  assert.deepEqual(selectJournalDay([note], today).map((row) => row.id), ["n1"]);
-  assert.deepEqual(selectJournalDay([note], tomorrow), []);
+  const todayWindow = journalActivityWindow(today);
+  const tomorrowWindow = journalActivityWindow(tomorrow);
+  assert.ok(todayWindow && tomorrowWindow);
+  assert.ok(Date.parse(todayWindow.since) <= writtenAt.getTime());
+  assert.ok(writtenAt.getTime() < Date.parse(todayWindow.until));
+  assert.ok(editedAt.getTime() >= Date.parse(todayWindow.until));
 
-  const edited = { id: "n1", updatedAt: naiveUtcStamp(editedAt) };
-  assert.deepEqual(selectJournalDay([edited], tomorrow).map((row) => row.id), ["n1"]);
-  assert.deepEqual(selectJournalDay([edited], today), []);
+  assert.ok(Date.parse(tomorrowWindow.since) <= editedAt.getTime());
+  assert.ok(editedAt.getTime() < Date.parse(tomorrowWindow.until));
+  assert.ok(tomorrowWindow.since === todayWindow.until);
 });
 
 // The teeth of the AC above depend on the machine's zone, and on this box (+03) the 23:58
@@ -167,29 +203,27 @@ test("a note follows its last touch across local midnight", () => {
 // `toISOString().slice(0, 10)` implementation would pass it. The boundary is replayed in
 // two pinned zones on opposite sides of UTC — +14 puts the hours after midnight on the
 // previous UTC day, -11 puts the hours before midnight on the next one — and each leg
-// first proves that the naive string compare really disagrees in that zone.
-test("the local day beats a UTC string compare in both zone directions", () => {
+// pins the exact UTC instant of local midnight, the number that actually reaches the Host.
+test("the window starts at local midnight, on both sides of UTC", () => {
   const inherited = process.env.TZ;
   try {
     process.env.TZ = "Pacific/Kiritimati";
     const afterMidnight = naiveUtcStamp(new Date(2026, 10, 19, 0, 5, 0));
     assert.equal(localDayOf(afterMidnight), "2026-11-19");
     assert.notEqual(localDayOf(afterMidnight), afterMidnight.slice(0, 10));
-    assert.deepEqual(
-      selectJournalDay([{ id: "n1", updatedAt: afterMidnight }], "2026-11-19").map((row) => row.id),
-      ["n1"],
-    );
-    assert.deepEqual(selectJournalDay([{ id: "n1", updatedAt: afterMidnight }], "2026-11-18"), []);
+    assert.deepEqual(journalActivityWindow("2026-11-19"), {
+      since: "2026-11-18T10:00:00.000Z",
+      until: "2026-11-19T10:00:00.000Z",
+    });
 
     process.env.TZ = "Pacific/Midway";
     const beforeMidnight = naiveUtcStamp(new Date(2026, 10, 18, 23, 58, 0));
     assert.equal(localDayOf(beforeMidnight), "2026-11-18");
     assert.notEqual(localDayOf(beforeMidnight), beforeMidnight.slice(0, 10));
-    assert.deepEqual(
-      selectJournalDay([{ id: "n1", updatedAt: beforeMidnight }], "2026-11-18").map((row) => row.id),
-      ["n1"],
-    );
-    assert.deepEqual(selectJournalDay([{ id: "n1", updatedAt: beforeMidnight }], "2026-11-19"), []);
+    assert.deepEqual(journalActivityWindow("2026-11-18"), {
+      since: "2026-11-18T11:00:00.000Z",
+      until: "2026-11-19T11:00:00.000Z",
+    });
   } finally {
     if (inherited === undefined) {
       delete process.env.TZ;
@@ -201,7 +235,20 @@ test("the local day beats a UTC string compare in both zone directions", () => {
 
 test("a malformed timestamp is dropped from the day shelf instead of landing on today", () => {
   assert.equal(localDayOf("not-a-stamp"), null);
-  assert.deepEqual(selectJournalDay([{ id: "n1", updatedAt: "not-a-stamp" }], dayKey(new Date())), []);
+});
+
+// readDay already refuses these at the URL door; the window repeats the refusal so a day
+// that skipped the parse cannot ask the Host for a window whose upper bound rolled into
+// March, and an empty day means "no pair" rather than "a window from epoch".
+test("the window refuses a hand-typed impossible day and passes the bare day through", () => {
+  assert.equal(journalActivityWindow(""), null);
+  assert.equal(journalActivityWindow("2026-02-31"), null);
+  assert.equal(journalActivityWindow("not-a-day"), null);
+  assert.equal(journalServerFilters({ ...EMPTY_JOURNAL_FILTERS, day: "2026-02-31" }).activitySince, "");
+  assert.equal(
+    journalServerFilters({ ...EMPTY_JOURNAL_FILTERS, day: "2026-02-31" }).activityUntil,
+    "",
+  );
 });
 
 test("the stream is newest activity first", () => {
@@ -212,12 +259,13 @@ test("the stream is newest activity first", () => {
     { id: "b", updatedAt: newer },
   ]);
   assert.deepEqual(sorted.map((row) => row.id), ["b", "a"]);
-  assert.deepEqual(selectJournalDay(sorted, "").map((row) => row.id), ["b", "a"]);
 });
 
 // Drift pin: the stream sends names, the Host binds names. If a parameter is renamed on
 // either side this goes red, instead of the filter silently turning into a no-op over
-// unfiltered rows — the exact failure that made the chip a blocker here.
+// unfiltered rows — the exact failure that made the chip a blocker here. The activity pair
+// gets the stricter bound: an unbound name would drop every row the day asked for back
+// into the default window, the silent-loss shape 249 exists to prevent.
 test("the Host binds every parameter the stream sends", () => {
   const api = readFileSync(join("..", "src", "Overmind.Host", "Api", "EntriesApi.cs"), "utf8");
   const handler = /private static async Task<IResult> ListByProject\(([\s\S]*?)\)\s/.exec(api);
@@ -225,6 +273,9 @@ test("the Host binds every parameter the stream sends", () => {
   const bound = handler[1];
   for (const name of ["type", "tag", "state", "link", "project"]) {
     assert.match(bound, new RegExp(`string\\? ${name},`), `${name} is not a bound parameter`);
+  }
+  for (const name of ["activitySince", "activityUntil"]) {
+    assert.match(bound, new RegExp(`DateTime\\? ${name},`), `${name} is not a bound parameter`);
   }
   assert.match(bound, /EntryLinkTriage triage,/);
 });

@@ -23,6 +23,14 @@ export function journalStreamParams(filters: JournalServerFilters): URLSearchPar
   if (project.length > 0) {
     params.set("project", project);
   }
+  // The day filter's wire form: UTC instants bound to UpdatedAt on the Host. Absent pair
+  // means no day selected, and the Host's own default window takes over.
+  if (filters.activitySince.length > 0) {
+    params.set("activitySince", filters.activitySince);
+  }
+  if (filters.activityUntil.length > 0) {
+    params.set("activityUntil", filters.activityUntil);
+  }
   return params;
 }
 

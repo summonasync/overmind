@@ -60,13 +60,12 @@ export interface JournalNoteFormValues {
 
 // The URL grammar of the inbox, one field per parameter, "" meaning unset.
 //
-// Two doors, and the split is measured rather than stylistic. `tag`, `link` and `project`
-// ride the list query and the Host answers them itself — `link` and `project` through
-// EntryStreamFilter over EntryLinkTriage. `day` does not ride it: the endpoint's `since`
-// and `until` bound CreatedAt (EntryQueryFilters.Apply) while the inbox is ordered by
-// UpdatedAt, so a creation-day window would drop the very notes the stream puts on top.
-// The day partitions the fetched rows by local activity day instead — see
-// lib/stream-filters.ts.
+// `tag`, `link` and `project` ride the list query and the Host answers them itself —
+// `link` and `project` through EntryStreamFilter over EntryLinkTriage. `day` rides it
+// too, in its wire form: journalServerFilters turns the day's local-midnight boundaries
+// into the UTC activitySince/activityUntil pair the endpoint binds to UpdatedAt
+// (EntryQueryFilters.Apply) — the server owns the day cut, the browser drops no row.
+// lib/stream-filters.ts holds the grammar and the conversion.
 export interface JournalStreamFilters {
   day: string;
   tag: string;
@@ -83,10 +82,16 @@ export type JournalLinkFilter = "" | "linked" | "unlinked";
 export type JournalLinkAccent = "unsorted" | "linked" | null;
 
 // The subset that reaches the server, and therefore the subset the cache key carries.
+// The activity pair is the day filter's wire form: UTC ISO instants derived from the
+// selected local day, "" meaning absent so the server's default window applies. The pair
+// travels as one unit — journalServerFilters derives both halves or neither — and a
+// changed day is a changed server input, so it changes the cache key with it.
 export interface JournalServerFilters {
   tag: string;
   link: JournalLinkFilter;
   project: string;
+  activitySince: string;
+  activityUntil: string;
 }
 
 // ── The graph field ────────────────────────────────────────────────────────────────────
@@ -210,11 +215,12 @@ export interface FeatureCandidate {
   done: boolean;
 }
 
-// Every field travels, so one shape serves the URL and the request: unlike the stream, where
-// `day` partitions locally and must stay out of the cache key, the graph's filters are all the
-// endpoint's own. `lib/graph-filters.ts` reads and writes it, `lib/graph-query.ts` sends it.
-// `depth` stays a string because the URL keeps the untyped text — an empty depth means "the
-// endpoint's own default of one hop", and coercing it to 0 client-side would ask for nothing.
+// Every field travels, so one shape serves the URL and the request — the same posture the
+// stream's server filters hold now that the day is among them as the activity pair: the
+// graph's filters are all the endpoint's own. `lib/graph-filters.ts` reads and writes it,
+// `lib/graph-query.ts` sends it. `depth` stays a string because the URL keeps the untyped
+// text — an empty depth means "the endpoint's own default of one hop", and coercing it to 0
+// client-side would ask for nothing.
 export interface GraphViewFilters {
   types: GraphEntryType[];
   project: string;

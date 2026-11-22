@@ -9,10 +9,12 @@ export const JOURNAL_RESERVED_PROJECT_NAME = "Journal";
 export const journalKeys = {
   all: ["journal"] as const,
   lists: () => [...journalKeys.all, "list"] as const,
-  // The key is the server's input, not the URL's: tag, link and project ride the query, so
-  // switching one never reuses another combination's cache. `day` stays out on purpose — it
-  // partitions rows this very request already returned, and keying on it would refetch
-  // identical bytes under a new label.
+  // The key is the server's input, not the URL's: tag, link, project and the activity pair
+  // (the day filter's wire form) ride the query, so switching one never reuses another
+  // combination's cache. The pair is why keying on the URL's `day` string is unnecessary
+  // and on its wire form is mandatory — a changed day is a changed answer now that the
+  // server owns the cut, and one shared entry would show one day's rows under another
+  // day's chip.
   list: (projectId: string, filters: JournalServerFilters) =>
     [...journalKeys.lists(), projectId, filters] as const,
   detail: (id: string) => [...journalKeys.all, "detail", id] as const,
@@ -83,6 +85,9 @@ export const journalNoteQueryOptions = (id: string) =>
 // hides notes touched that day but created earlier — the opposite of the activity-ordered
 // inbox. The day partitions locally in lib/stream-filters.ts until the API grows an
 // UpdatedAt window.>
+// <superseded 2026-11-23 — 249 T2: the UpdatedAt window arrived as
+// activitySince/activityUntil, and the local partition ended with it; the day's wire form
+// is journalActivityWindow in lib/stream-filters.ts.>
 
 // Mirrors ProjectNameMatch.PickDeterministic on the Host: the reserved container
 // lookup is deterministic (exact ordinal name wins, else earliest createdAt among
