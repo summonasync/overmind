@@ -53,6 +53,11 @@ public static class EntriesApi
     // a cap without pagination hides rows past the cut, while a window still answers every recent
     // note. An explicit activitySince replaces the floor — enumerating history opts into the cost it
     // names.
+    //
+    // Timezone contract: activitySince/activityUntil bind UpdatedAt as UTC instants. The browser
+    // computes its LOCAL calendar day and sends the day's UTC boundaries; the server stores UTC
+    // instants and owns no timezone logic, so DST transitions are the client's honest job. The 30-day
+    // default floor is the one boundary derived from the server's clock, by definition.
     private static readonly TimeSpan DefaultActivityWindow = TimeSpan.FromDays(30);
 
     private static async Task<IResult> ListByProject(
