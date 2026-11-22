@@ -141,7 +141,9 @@ public sealed class PlanningException : Exception
     public static PlanningException ValidationProofRequired(string featureSlug) =>
         new(PlanningFailureKind.RuleViolation, PlanningFailureCode.ValidationProofRequired,
             "Human approval required: send overmind_notify(kind=approval, featureSlug=" + featureSlug +
-            ") and wait for the human's reply in the notification center, or validate via the UI.",
+            ") and wait for the human's reply in the notification center, or validate via the UI. " +
+            "One reply validates the spec and the plan together — draft both before tapping; a tap also " +
+            "covers a never-edited first draft, and any gated edit after the tap voids it.",
             $"Send overmind_notify(kind=approval, featureSlug={featureSlug}), wait for a human reply newer than the artifact's last content update, then call planning_validate again — any content edit in between voids the reply.");
 
     public static PlanningException FeatureResultRequired(string slug) =>

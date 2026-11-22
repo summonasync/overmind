@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Overmind.Core;
+using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Persistence;
 using Shouldly;
 using Xunit;
@@ -74,6 +75,180 @@ public sealed class ProjectApiTests : IDisposable
         });
 
         conflict.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Create_CaseVariantOfAnExistingName_Returns409NamingTheExistingProject()
+    {
+        await CreateProjectAsync("Grimoire", TestPaths.DiskPath("grimoire"));
+
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = "grimoire",
+            DiskPath = TestPaths.DiskPath("grimoire-lower"),
+            Description = (string?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ProjectNameCollision");
+        problem.Detail.ShouldContain("Grimoire");
+    }
+
+    [Fact]
+    public async Task Create_CaseVariantSeededInReverseOrder_IsRefusedTheSameWay()
+    {
+        await CreateProjectAsync("grimoire", TestPaths.DiskPath("grimoire"));
+
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = "Grimoire",
+            DiskPath = TestPaths.DiskPath("grimoire-upper"),
+            Description = (string?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ProjectNameCollision");
+        problem.Detail.ShouldContain("grimoire");
+    }
+
+    [Theory]
+    [InlineData("Гримоар", "гримоар")]
+    [InlineData("гримоар", "Гримоар")]
+    public async Task Create_CyrillicCaseVariant_IsRefusedInBothSeedOrders(string seeded, string candidate)
+    {
+        await CreateProjectAsync(seeded, TestPaths.DiskPath("grimoire-ru"));
+
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = candidate,
+            DiskPath = TestPaths.DiskPath("grimoire-ru-alt"),
+            Description = (string?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ProjectNameCollision");
+        problem.Detail.ShouldContain(seeded);
+    }
+
+    [Theory]
+    [InlineData("journal")]
+    [InlineData("JOURNAL")]
+    [InlineData("Journal")]
+    public async Task Create_TheReservedJournalName_IsRefusedInAnyCasing(string name)
+    {
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = name,
+            DiskPath = TestPaths.DiskPath("journal-lookalike"),
+            Description = (string?)null,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ReservedProjectProtected");
+    }
+
+    [Fact]
+    public async Task Rename_OntoAnExistingProjectInADifferentCasing_Returns409NamingIt()
+    {
+        var alpha = await CreateProjectAsync("alpha", TestPaths.DiskPath("alpha"));
+        await CreateProjectAsync("beta", TestPaths.DiskPath("beta"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{alpha.Id}", new
+        {
+            Name = "Beta",
+            DiskPath = TestPaths.DiskPath("alpha"),
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ProjectNameCollision");
+        problem.Detail.ShouldContain("beta");
+    }
+
+    [Fact]
+    public async Task Rename_SymmetricalDirectionHitsTheSameRefusal()
+    {
+        var beta = await CreateProjectAsync("beta", TestPaths.DiskPath("beta"));
+        await CreateProjectAsync("alpha", TestPaths.DiskPath("alpha"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{beta.Id}", new
+        {
+            Name = "ALPHA",
+            DiskPath = TestPaths.DiskPath("beta"),
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ProjectNameCollision");
+        problem.Detail.ShouldContain("alpha");
+    }
+
+    [Fact]
+    public async Task Rename_TargetingTheReservedJournalName_Returns409ReservedProjectProtected()
+    {
+        var created = await CreateProjectAsync("wannabe-journal", TestPaths.DiskPath("wannabe-journal"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "journal",
+            DiskPath = TestPaths.DiskPath("wannabe-journal"),
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ReservedProjectProtected");
+    }
+
+    [Fact]
+    public async Task Rename_TheJournalContainerAwayFromItsReservedName_Returns409()
+    {
+        var containerId = ContainerId();
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{containerId}", new
+        {
+            Name = "Diary",
+            DiskPath = ContainerDiskPath(containerId),
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
+        problem!.Title.ShouldBe("ReservedProjectProtected");
+        problem.Detail.ShouldContain("Journal");
+    }
+
+    [Fact]
+    public async Task Update_TheJournalContainer_KeepingItsOwnName_Succeeds()
+    {
+        var containerId = ContainerId();
+        var container = await _client.GetFromJsonAsync<ProjectJson>($"/api/projects/{containerId}", JsonOptions);
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{containerId}", new
+        {
+            Name = container!.Name,
+            DiskPath = container.DiskPath,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Rename_CaseFlipOfItsOwnName_KeepsWorking()
+    {
+        var created = await CreateProjectAsync("caseflip", TestPaths.DiskPath("caseflip"));
+
+        var response = await _client.PutAsJsonAsync($"/api/projects/{created.Id}", new
+        {
+            Name = "CaseFlip",
+            DiskPath = TestPaths.DiskPath("caseflip"),
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ProjectJson>(JsonOptions);
+        updated!.Name.ShouldBe("CaseFlip");
     }
 
     [Fact]
@@ -357,6 +532,27 @@ public sealed class ProjectApiTests : IDisposable
 
         var listed = await _client.GetFromJsonAsync<List<ProjectJson>>("/api/projects", JsonOptions);
         listed!.Single().OpenFeatureCount.ShouldBe(1);
+    }
+
+    private Guid ContainerId()
+    {
+        using var scope = _factory.Services.CreateScope();
+        return scope.ServiceProvider
+            .GetRequiredService<JournalProjectStore>()
+            .EnsureIdAsync()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    private string ContainerDiskPath(Guid containerId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return scope.ServiceProvider
+            .GetRequiredService<OvermindDbContext>()
+            .Projects
+            .Where(p => p.Id == containerId)
+            .Select(p => p.DiskPath)
+            .Single();
     }
 
     private async Task<ProjectJson> CreateProjectAsync(string name, string diskPath)

@@ -136,6 +136,45 @@ public sealed class WorkspaceIdentityRestartContractTests : IDisposable
         Directory.GetFiles(identityDirectory, "workspace-*.json").Length.ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Restart_HostResumesStampedRow_RestoreLegStaysSilentAndReconnectStillResumes()
+    {
+        await SetWorkspaceIdentity("mark-wolff", "claude");
+        var stampedId = _registeredSessions.ToArray()[0];
+
+        _stub.Route("POST", "/api/agent/sessions", request =>
+        {
+            var body = JsonNode.Parse(string.IsNullOrEmpty(request.Body) ? "{}" : request.Body)!;
+            if (body["priorSessionId"]?.GetValue<string>() == stampedId.ToString())
+            {
+                return new StubOvermindApi.Response(201, $$"""{"id":"{{stampedId}}"}""");
+            }
+
+            var id = Guid.NewGuid();
+            _registeredSessions.Enqueue(id);
+            return new StubOvermindApi.Response(201, $$"""{"id":"{{id}}"}""");
+        });
+
+        var second = await StartAdapter();
+        await second.ListToolsAsync();
+
+        _stub.Requests.Count(r => r.Path.EndsWith("/identity", StringComparison.Ordinal))
+            .ShouldBe(1, "only the seeding adapter's identity_set call; a resumed startup must not re-run the identity leg");
+        second.Stderr.ShouldNotContain("workspace identity restored");
+        ReadWorkspaceIdentity()["sessionId"]!.GetValue<string>().ShouldBe(stampedId.ToString());
+
+        await second.InitializeAsync();
+
+        _stub.Requests.Count(r => r.Path.EndsWith("/identity", StringComparison.Ordinal)).ShouldBe(1);
+        second.HasExited.ShouldBeFalse();
+        var resumedRegistrations = _stub.Requests
+            .Where(r => r.Path == "/api/agent/sessions")
+            .Select(r => JsonNode.Parse(string.IsNullOrEmpty(r.Body) ? "{}" : r.Body)!)
+            .Count(b => b["priorSessionId"]?.GetValue<string>() == stampedId.ToString());
+        resumedRegistrations.ShouldBe(2, "startup and the reconnect handshake both resume the stamped row");
+        await second.ListToolsAsync();
+    }
+
     private static string OnboardPayload(string alias, string vendor) =>
         Canned.OnboardAgentIdentityJson
             .Replace("\"alias\":\"agent\"", $"\"alias\":\"{alias}\"")

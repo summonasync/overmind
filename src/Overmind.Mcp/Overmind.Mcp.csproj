@@ -4,6 +4,7 @@
     <AssemblyName>overmind-mcp</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Overmind.Core\Overmind.Core.csproj" />
     <InternalsVisibleTo Include="Overmind.Mcp.Tests" />
   </ItemGroup>
   <ItemGroup>

@@ -21,7 +21,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         _dataDirectory = dataDirectory;
     }
 
-    public async Task<PlanningMaterializationReport> SyncAsync(Guid projectId, bool force = false, CancellationToken ct = default)
+    public async Task<PlanningMaterializationReport> SyncAsync(
+        Guid projectId, bool force = false, bool quarantine = false, CancellationToken ct = default)
     {
         var startedAt = DateTime.UtcNow;
         var project = await LoadProjectAsync(projectId, ct);
@@ -57,13 +58,16 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
         var warnings = new List<string>();
         var skipped = new List<PlanningMaterializationSkip>();
         var refused = new List<PlanningMaterializationSkip>();
+        var quarantined = new List<PlanningMaterializationSkip>();
+        var quarantinedStalePaths = new HashSet<string>(PathGuard.PathComparer);
         var plans = MirrorPlanRenderer.BuildPlans(root, features, rows);
         plans.AddRange(MirrorPlanRenderer.BuildEntryPlans(root, entries, rows));
         var otherRoot = OtherRoot(project, strategy);
 
         if (strategy == PlanningMaterialization.On)
         {
-            GuardOverwrites(plans, rows, otherRoot, force, warnings, refused);
+            GuardOverwrites(
+                plans, rows, otherRoot, force, warnings, refused, quarantined, quarantinedStalePaths, quarantine);
         }
 
         var (droppedRows, keptForeignRows) = await FindDroppedOtherRootRowsAsync(rows, strategy, otherRoot, ct);
@@ -75,8 +79,9 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
         if (strategy == PlanningMaterialization.On)
         {
-            await GuardLocalEditsAsync(plans, rows, force, warnings, skipped, refused, ct);
-            await GuardStaleTrackedFilesAsync(root, rows, plannedPaths, force, refused, ct);
+            await GuardLocalEditsAsync(plans, rows, force, warnings, skipped, refused, quarantined, quarantine, ct);
+            await GuardStaleTrackedFilesAsync(
+                root, rows, plannedPaths, force, refused, quarantined, quarantinedStalePaths, quarantine, ct);
         }
 
         if (refused.Count > 0)
@@ -97,7 +102,7 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 project, droppedRows, keptForeignRows, strategy, otherRoot, warnings, rows, ct);
 
             await RemoveStaleTrackedFilesAsync(
-                root, strategy == PlanningMaterialization.On, rows, plannedPaths, warnings, ct);
+                root, strategy == PlanningMaterialization.On, rows, plannedPaths, warnings, quarantinedStalePaths, ct);
 
             var written = await WritePlansAsync(projectId, root, plans, rows, warnings, ct);
 
@@ -109,7 +114,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 Atomic: complete,
                 written.Select(p => p.RelativePath).ToArray(),
                 skipped.ToArray(),
-                []);
+                [],
+                quarantined.ToArray());
             project.RecordMaterializationRun(MaterializationRunJson.Serialize(run));
             project.MarkMaterialized(skipped);
             await _db.SaveChangesAsync(ct);
@@ -124,12 +130,13 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 Atomic: complete,
                 startedAt,
                 finishedAt,
-                GitHygiene: gitHygiene);
+                GitHygiene: gitHygiene,
+                Quarantined: quarantined.ToArray());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             project.RecordMaterializationRun(MaterializationRunJson.Serialize(new MaterializationRunReport(
-                startedAt, DateTime.UtcNow, Atomic: false, [], skipped.ToArray(), [])));
+                startedAt, DateTime.UtcNow, Atomic: false, [], skipped.ToArray(), [], quarantined.ToArray())));
             project.MarkMaterializationFailed(ex.Message);
             await _db.SaveChangesAsync(ct);
             throw;
@@ -407,10 +414,12 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
 
     private static void GuardOverwrites(
         List<MirrorFilePlan> plans, List<PlanningMaterializedFile> rows, string otherRoot, bool force,
-        List<string> warnings, List<PlanningMaterializationSkip> refused)
+        List<string> warnings, List<PlanningMaterializationSkip> refused,
+        List<PlanningMaterializationSkip> quarantined, ISet<string> quarantinedStalePaths, bool quarantine)
     {
-        foreach (var plan in plans)
+        for (var i = plans.Count - 1; i >= 0; i--)
         {
+            var plan = plans[i];
             if (!File.Exists(plan.AbsolutePath) && !Directory.Exists(plan.AbsolutePath))
             {
                 continue;
@@ -432,8 +441,20 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 continue;
             }
 
-            refused.Add(new PlanningMaterializationSkip(
-                plan.RelativePath, "file exists on disk but is not tracked by Overmind"));
+            var refusal = new PlanningMaterializationSkip(
+                plan.RelativePath, "file exists on disk but is not tracked by Overmind");
+            if (quarantine)
+            {
+                quarantined.Add(refusal);
+                plans.RemoveAt(i);
+                // A quarantined path must also survive the stale sweep: the row can outlive the
+                // pruned plan (an unreadable other-root copy keeps its row) and removing the
+                // file would betray the report that named it untouched.
+                quarantinedStalePaths.Add(plan.RelativePath);
+                continue;
+            }
+
+            refused.Add(refusal);
         }
     }
 
@@ -446,7 +467,8 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
     private static async Task GuardLocalEditsAsync(
         List<MirrorFilePlan> plans, List<PlanningMaterializedFile> rows, bool force,
         List<string> warnings, List<PlanningMaterializationSkip> skipped,
-        List<PlanningMaterializationSkip> refused, CancellationToken ct)
+        List<PlanningMaterializationSkip> refused, List<PlanningMaterializationSkip> quarantined,
+        bool quarantine, CancellationToken ct)
     {
         for (var i = plans.Count - 1; i >= 0; i--)
         {
@@ -486,8 +508,16 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
                 continue;
             }
 
-            refused.Add(new PlanningMaterializationSkip(
-                plan.RelativePath, "tracked file has local edits that are not on the board"));
+            var refusal = new PlanningMaterializationSkip(
+                plan.RelativePath, "tracked file has local edits that are not on the board");
+            if (quarantine)
+            {
+                quarantined.Add(refusal);
+                plans.RemoveAt(i);
+                continue;
+            }
+
+            refused.Add(refusal);
         }
     }
 
@@ -496,25 +526,41 @@ public sealed class PlanningMaterializer : IPlanningMaterializer
     // a planned one would; force passes with the file kept foreign instead of destroyed.
     private static async Task GuardStaleTrackedFilesAsync(
         string root, List<PlanningMaterializedFile> rows, ISet<string> plannedPaths, bool force,
-        List<PlanningMaterializationSkip> refused, CancellationToken ct)
+        List<PlanningMaterializationSkip> refused, List<PlanningMaterializationSkip> quarantined,
+        ISet<string> quarantinedStalePaths, bool quarantine, CancellationToken ct)
     {
         foreach (var row in StaleRows(rows, plannedPaths))
         {
-            if (!force &&
-                await InspectTrackedCopyAsync(root, row, ct) == TrackedCopyRemoval.KeptForeign)
+            if (force ||
+                await InspectTrackedCopyAsync(root, row, ct) != TrackedCopyRemoval.KeptForeign)
             {
-                refused.Add(new PlanningMaterializationSkip(
-                    row.RelativePath, "tracked file has local edits that are not on the board"));
+                continue;
             }
+
+            var refusal = new PlanningMaterializationSkip(
+                row.RelativePath, "tracked file has local edits that are not on the board");
+            if (quarantine)
+            {
+                quarantined.Add(refusal);
+                quarantinedStalePaths.Add(row.RelativePath);
+                continue;
+            }
+
+            refused.Add(refusal);
         }
     }
 
     private async Task RemoveStaleTrackedFilesAsync(
         string root, bool rootIsRepo, List<PlanningMaterializedFile> rows,
-        ISet<string> plannedPaths, List<string> warnings, CancellationToken ct)
+        ISet<string> plannedPaths, List<string> warnings, ISet<string> keptStalePaths, CancellationToken ct)
     {
         foreach (var row in StaleRows(rows, plannedPaths))
         {
+            if (keptStalePaths.Contains(row.RelativePath))
+            {
+                continue;
+            }
+
             var outcome = await RemoveTrackedCopyAsync(root, rootIsRepo, row, warnings, ct);
             if (outcome is TrackedCopyRemoval.NotFound or TrackedCopyRemoval.Removed)
             {

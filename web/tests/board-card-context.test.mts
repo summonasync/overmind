@@ -1,12 +1,16 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createJiti } from "jiti";
 import {
   cardBriefLine,
   cardClaimActive,
   cardClaimLine,
   cardPhaseLabel,
 } from "../src/features/planning/lib/board-card-context.ts";
-import type { PlanningFeatureBoardItem } from "../src/features/planning/types.ts";
+import type { PlanningClaimState, PlanningFeatureBoardItem } from "../src/features/planning/types.ts";
+import type { LaneClaimState } from "../src/features/lanes/types.ts";
 
 const item = (overrides: Partial<PlanningFeatureBoardItem>): PlanningFeatureBoardItem => ({
   slug: "042-demo",
@@ -102,6 +106,10 @@ test("stale and ended claims are not active", () => {
   assert.equal(cardClaimActive(item({ claimedByAlias: "Van", claimedByVendor: "claude", claimState: "ended" })), false);
 });
 
+test("released orphans are not active", () => {
+  assert.equal(cardClaimActive(item({ claimedByAlias: "Van", claimedByVendor: "claude", claimState: "released" })), false);
+});
+
 test("null claim state is not active", () => {
   assert.equal(cardClaimActive(item({ claimedByAlias: "Van", claimedByVendor: "claude", claimState: null })), false);
 });
@@ -113,4 +121,61 @@ test("human-held claim is active regardless of the claim state", () => {
 
 test("unclaimed card is never active", () => {
   assert.equal(cardClaimActive(item({})), false);
+});
+
+const jiti = createJiti(import.meta.url, {
+  jsx: { runtime: "automatic", importSource: "react" },
+  alias: { "@": new URL("../src/", import.meta.url).href },
+});
+const { FeatureClaimChip } = await jiti.import(
+  "../src/features/planning/components/feature-claim-chip.tsx",
+);
+const { LaneClaimChip } = await jiti.import("../src/features/lanes/components/lane-claim-chip.tsx");
+
+const claimed = {
+  slug: "042-demo",
+  claimedByAlias: "Van",
+  claimedByVendor: "claude",
+  claimedAt: "2026-11-21T10:00:00Z",
+  claimedByHuman: false,
+};
+
+const renderFeatureChip = (claimState: PlanningClaimState | null) =>
+  renderToStaticMarkup(React.createElement(FeatureClaimChip, { item: { ...claimed, claimState } }));
+const renderLaneChip = (claimState: LaneClaimState | null) =>
+  renderToStaticMarkup(React.createElement(LaneClaimChip, { alias: "Van", vendor: "claude", claimState }));
+
+test("the feature chip renders released orphans on the dashed released arm, never the alive arm", () => {
+  const html = renderFeatureChip("released");
+  assert.ok(html.includes('data-claim-state="released"'), "the orphan gets its own arm");
+  assert.ok(html.includes("border-dashed"), "released borrows the app's dashed orphan language");
+  assert.ok(html.includes("released"), "the label names the wire vocabulary verbatim");
+  assert.ok(html.includes("can be claimed again"), "the sr-only note explains the orphan semantics");
+  assert.ok(!html.includes("bg-success"), "the alive styling must never dress a released claim");
+  assert.ok(!html.includes('data-claim-state="alive"'), "no live dot for an orphan");
+});
+
+test("the lane chip renders released orphans on the dashed released arm, never the alive arm", () => {
+  const html = renderLaneChip("released");
+  assert.ok(html.includes('data-claim-state="released"'), "the orphan gets its own arm");
+  assert.ok(html.includes("border-dashed"), "released borrows the app's dashed orphan language");
+  assert.ok(html.includes("released"), "the label names the wire vocabulary verbatim");
+  assert.ok(!html.includes("bg-success"), "the alive styling must never dress a released claim");
+  assert.ok(!html.includes('data-claim-state="alive"'), "no live dot for an orphan");
+});
+
+test("dead holders arrive as ended from T0's raw liveness and render the ended arm", () => {
+  const featureHtml = renderFeatureChip("ended");
+  assert.ok(featureHtml.includes("· ended"), "the feature chip ends the holder explicitly");
+  assert.ok(!featureHtml.includes("bg-success"), "a dead holder is never styled alive");
+
+  const laneHtml = renderLaneChip("ended");
+  assert.ok(laneHtml.includes("· ended"), "the lane chip ends the holder explicitly");
+  assert.ok(!laneHtml.includes("bg-success"), "a dead holder is never styled alive");
+});
+
+test("alive claims keep the live arm with its dot", () => {
+  const html = renderFeatureChip("alive");
+  assert.ok(html.includes('data-claim-state="alive"'));
+  assert.ok(html.includes("bg-success"));
 });

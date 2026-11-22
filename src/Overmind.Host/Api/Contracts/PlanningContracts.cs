@@ -388,6 +388,7 @@ public sealed record PlanningArtifactPatchResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TickedText = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? NoChange = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningArtifactReadResponse(
@@ -439,6 +440,7 @@ public sealed record PlanningArtifactResponse(
     PlanningArtifactPointerResponse[] Pointers = null!,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
@@ -514,7 +516,7 @@ public sealed record PlanningCurrentFeature(
     PlanningFeatureStatus Status,
     OpenDirectiveResponse[]? OpenDirectives = null);
 
-public sealed record MaterializePlanningRequest(bool Force);
+public sealed record MaterializePlanningRequest(bool Force, bool Quarantine = false);
 
 public sealed record ImportPlanningFeatureRequest(string Path);
 
@@ -560,7 +562,8 @@ public sealed record PlanningMaterializationReportResponse(
     PlanningMaterializationSkipResponse[] Skipped,
     DateTime? LastSuccess,
     DateTime? LastAttempt,
-    PlanningGitHygieneOutcomeResponse? GitHygiene = null);
+    PlanningGitHygieneOutcomeResponse? GitHygiene = null,
+    PlanningMaterializationSkipResponse[]? Quarantined = null);
 
 public sealed record PlanningGitHygieneOutcomeResponse(string Status, string? RepositoryRoot, string? Detail);
 
@@ -570,7 +573,8 @@ public sealed record PlanningMaterializationStatusRunResponse(
     bool Atomic,
     string[] Written,
     PlanningMaterializationSkipResponse[] Skipped,
-    PlanningMaterializationSkipResponse[] Refused);
+    PlanningMaterializationSkipResponse[] Refused,
+    PlanningMaterializationSkipResponse[]? Quarantined = null);
 
 public sealed record PlanningMaterializationStatusResponse(
     Guid ProjectId,

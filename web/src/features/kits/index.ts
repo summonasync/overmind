@@ -23,3 +23,5 @@ export type {
   KitSourceKind,
   MaterializationReportResponse,
 } from "./types";
+export { KitGlobalDeploySection } from "./components/kit-global-deploy-section";
+export { globalStateQueryOptions } from "./queries";

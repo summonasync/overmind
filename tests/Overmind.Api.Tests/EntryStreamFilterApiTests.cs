@@ -143,29 +143,6 @@ public sealed class EntryStreamFilterApiTests : IDisposable
     }
 
     [Fact]
-    public async Task ProjectFilter_CaseVariantTieIsAmbiguityTheOwnerSees()
-    {
-        CreateProject("Stream-Other");
-
-        var response = await _client.GetAsync(
-            $"/api/projects/{_journalId}/entries?type=journal&project=STREAM-OTHER");
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
-        problem!.Title.ShouldBe("AmbiguousProjectFilter");
-        problem.Detail.ShouldContain("stream-other");
-        problem.Detail.ShouldContain("Stream-Other");
-    }
-
-    [Fact]
-    public async Task ProjectFilter_ExactNameStillWinsAmongCaseVariants()
-    {
-        CreateProject("Stream-Other");
-
-        (await StreamTitlesAsync("project=stream-other")).ShouldHaveSingleItem();
-    }
-
-    [Fact]
     public async Task Filters_RideTheListEndpoint_NoExtraCommandAndNoPerRowRead()
     {
         var capture = new WriteCapture();

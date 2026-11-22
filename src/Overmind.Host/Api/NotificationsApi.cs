@@ -62,6 +62,7 @@ public static class NotificationsApi
 
     internal static async Task<IResult> Replies(
         NotificationsService service,
+        HttpContext context,
         Guid? projectId,
         bool includeRead = true,
         DateTime? since = null,
@@ -83,7 +84,10 @@ public static class NotificationsApi
             kindFilter = parsed;
         }
 
+        Guid? callerSessionId = SessionHeader.TryRead(context.Request, out var sessionId) ? sessionId : null;
+
         var replies = await service.ListRepliesAsync(
+            callerSessionId,
             projectId,
             includeRead,
             since?.ToUniversalTime(),

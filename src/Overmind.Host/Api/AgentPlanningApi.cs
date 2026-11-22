@@ -236,7 +236,8 @@ public static class AgentPlanningApi
             SessionHeader.TryRead(http, out var sessionId);
             var imported = await importer.ParseFeatureAsync(
                 projectId, project.DiskPath, request.Path.Trim(), ct);
-            await claims.EnsureImportAllowedAsync(projectId, sessionId, imported.Slug, ct);
+            await claims.EnsureImportAllowedAsync(
+                projectId, sessionId, imported.Slug, SessionTouchMiddleware.PreTouchLastSeenOf(http), ct);
 
             var report = await importer.ImportFeatureAsync(projectId, project.DiskPath, request.Path.Trim(), ct);
             return Results.Ok(PlanningMapper.ToImportResponse(report));
@@ -275,7 +276,8 @@ public static class AgentPlanningApi
                     status.LastRun.Atomic,
                     status.LastRun.Written,
                     ToSkipResponses(status.LastRun.Skipped),
-                    ToSkipResponses(status.LastRun.Refused)),
+                    ToSkipResponses(status.LastRun.Refused),
+                    ToSkipResponses(status.LastRun.Quarantined ?? [])),
             status.TrackedFiles,
             [.. status.StalePaths],
             status.Strategy,
@@ -954,7 +956,8 @@ public static class AgentPlanningApi
             flipsAc ? result.TickedIndex : null,
             flipsAc ? result.TickedText : null,
             flipsAc ? result.NoChange : null,
-            artifact.ValidationProofVoided);
+            artifact.ValidationProofVoided,
+            artifact.ValidationProofVoidCause);
     }
 
     private static CreatePlanningTasksResponse TasksEcho(PlanningTaskBatchResult result) =>
@@ -1138,6 +1141,7 @@ public static class AgentPlanningApi
                 flipsAc ? result.TickedText : null,
                 flipsAc ? result.NoChange : null,
                 artifact.ValidationProofVoided,
+                artifact.ValidationProofVoidCause,
                 SoftCapSoften.Merge(soft)));
         }
         catch (PlanningException ex)

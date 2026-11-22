@@ -84,7 +84,9 @@ public sealed class WakeDropFanoutTests : IDisposable
     public async Task Reply_RewritesTheNotificationAgentDropFile()
     {
         var alias = "billy";
-        _context.AgentSessions.Add(AgentSession.Create(alias, "claude"));
+        var session = AgentSession.Create(alias, "claude");
+        session.AdvanceReplyCursor(DateTime.UtcNow.AddHours(-3));
+        _context.AgentSessions.Add(session);
         var notification = AgentNotification.Restore(
             Guid.NewGuid(), _projectId, NotificationKind.Question, null, null,
             "gate needs you", alias, DateTime.UtcNow.AddMinutes(-1));
@@ -108,11 +110,14 @@ public sealed class WakeDropFanoutTests : IDisposable
         await WaitUntilAsync(() => File.Exists(file));
         var drop = JsonSerializer.Deserialize<WakeDrop>(await File.ReadAllTextAsync(file), JsonOptions);
         drop.ShouldNotBeNull();
-        drop.Signals.Single().Kind.ShouldBe(AgentWakeService.ReplyKind);
-        drop.Signals.Single().From.ShouldBe("human");
-        drop.Signals.ShouldNotContain(s => s.RefId == notification.Id,
-            "the reply flow stamps ReadAt, and consumed replies leave the default window");
-        drop.Signals.ShouldContain(s => s.RefId == pendingSibling.Id);
+        drop.Signals.Select(s => s.RefId).ShouldBe([pendingSibling.Id, notification.Id]);
+        drop.Signals.Select(s => (s.Kind, s.From)).ShouldBe(
+        [
+            (AgentWakeService.ReplyKind, "human"),
+            (AgentWakeService.ReplyKind, "human")
+        ]);
+        drop.Signals.ShouldContain(s => s.RefId == notification.Id,
+            "readAt no longer gates the wake window — replies ride the session cursor");
     }
 
     [Fact]

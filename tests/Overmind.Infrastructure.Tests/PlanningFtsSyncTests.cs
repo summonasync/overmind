@@ -118,7 +118,7 @@ public sealed class PlanningFtsSyncTests : IDisposable
         var featureId = await SeedFeatureAsync("artifact host delta", "host body");
         var artifactId = await SeedArtifactAsync(featureId, PlanningArtifactKind.Spec, "soft doomed body ibex");
         var materializer = Substitute.For<IPlanningMaterializer>();
-        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
 
         (await ArtifactUnionHitsAsync("ibex")).ShouldBe(1);
@@ -140,7 +140,7 @@ public sealed class PlanningFtsSyncTests : IDisposable
     {
         using var ctx = _db.CreateContext();
         var materializer = Substitute.For<IPlanningMaterializer>();
-        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
         materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));

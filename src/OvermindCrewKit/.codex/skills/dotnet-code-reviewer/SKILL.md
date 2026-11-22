@@ -21,7 +21,7 @@ Before reviewing code, read project documentation in this strict order:
 
 ## Review Checklist (MUST CHECK)
 
-**BP-IDs are the primary checklist.** Load `~/.codex/skills/dotnet-best-practices/SKILL.md` and check every applicable rule; cite violations as `BP-NN (severity)` in the review output. The checklist below complements, not replaces, BP-IDs.
+**BP-IDs are the primary checklist.** Load `~/.agents/skills/dotnet-best-practices/SKILL.md` and check every applicable rule; cite violations as `BP-NN (severity)` in the review output. The checklist below complements, not replaces, BP-IDs.
 
 ### Architecture & Layers
 - [ ] **Clean Architecture respected.** Domain has no infra dependencies. Application has no API dependencies.

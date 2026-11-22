@@ -173,14 +173,15 @@ public sealed class IssueService
     // sessionId null = the human door, which promotes anything.
     public async Task<(Issue Issue, PlanningArtifact Artifact)> PromoteAsync(
         Guid issueId, string featureSlug, PlanningLogSource source, Guid? sessionId = null,
-        CancellationToken ct = default, Guid? callerProjectId = null)
+        DateTime? observedLastSeenAt = null, CancellationToken ct = default, Guid? callerProjectId = null)
     {
         var issue = await RequireIssueAsync(issueId, ct);
         GuardCallerScope(issue, callerProjectId);
         var feature = await _db.PlanningFeatures
             .FirstOrDefaultAsync(f => f.ProjectId == issue.ProjectId && f.Slug == featureSlug, ct)
             ?? throw PlanningException.MissingFeature(featureSlug);
-        await _claims.EnsureHolderAsync(feature.ProjectId, feature.Slug, sessionId, ct);
+        await _claims.EnsureHolderAsync(
+            feature.ProjectId, feature.Slug, sessionId, observedLastSeenAt, ct: ct);
         var appends = await _db.IssueAppends
             .Where(a => a.IssueId == issue.Id)
             .OrderBy(a => a.CreatedAt)

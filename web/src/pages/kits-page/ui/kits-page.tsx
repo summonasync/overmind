@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FolderInput } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
@@ -10,7 +11,8 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { FolderPickerModal } from "@/features/projects";
 import { useInfoPanel } from "@/widgets/app-shell";
 import { KitDetailPanel } from "@/widgets/kit-workspace/ui/kit-detail-panel";
-import { KitForm, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
+import { KitForm, KitGlobalDeploySection, KitImportDialog, KitList, useKitImport, useKitList, useKitMutations } from "@/features/kits";
+import { globalStateQueryOptions } from "@/features/kits/queries";
 import type { KitFormValues, KitResponse } from "@/features/kits";
 import { KitsInfoPanel } from "@/pages/kits-page/ui/kits-info-panel";
 
@@ -18,10 +20,12 @@ export function KitsPage() {
   const { data: kits, loading, error } = useKitList();
   const mutations = useKitMutations();
   const kitImport = useKitImport();
+  const { data: globalState } = useQuery(globalStateQueryOptions());
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<KitResponse | null>(null);
   const [deleting, setDeleting] = useState<KitResponse | null>(null);
+  const [deployedFiles, setDeployedFiles] = useState<"keep" | "remove">("keep");
   const [expandedKitId, setExpandedKitId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -53,6 +57,8 @@ export function KitsPage() {
   };
 
   const expandedKit = kits.find((kit) => kit.id === expandedKitId) ?? null;
+  const deletingDeployed =
+    deleting !== null && (globalState ?? []).some((s) => s.kitId === deleting.id && s.state !== "undeployed");
 
   return (
     <div className="space-y-4">
@@ -81,9 +87,13 @@ export function KitsPage() {
             expandedKitId={expandedKitId}
             onToggle={(kit) => setExpandedKitId((current) => (current === kit.id ? null : kit.id))}
             onEdit={(kit) => { setEditing(kit); setFormOpen(true); }}
-            onDelete={setDeleting}
+            onDelete={(kit) => {
+              setDeployedFiles("keep");
+              setDeleting(kit);
+            }}
           />
           {expandedKit ? <KitDetailPanel kit={expandedKit} /> : null}
+          <KitGlobalDeploySection />
         </>
       )}
 
@@ -106,6 +116,31 @@ export function KitsPage() {
             <p className="text-sm text-foreground">
               Delete kit &quot;{deleting.name}&quot;? Active kits must be deactivated first.
             </p>
+            {deletingDeployed ? (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground">
+                  This kit is globally deployed. What should happen to the deployed files?
+                </p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="deployed-files"
+                    checked={deployedFiles === "keep"}
+                    onChange={() => setDeployedFiles("keep")}
+                  />
+                  Keep deployed files (they stay in agent skill directories)
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="deployed-files"
+                    checked={deployedFiles === "remove"}
+                    onChange={() => setDeployedFiles("remove")}
+                  />
+                  Also remove them from agent homes
+                </label>
+              </div>
+            ) : null}
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setDeleting(null)}>
                 Cancel
@@ -113,7 +148,12 @@ export function KitsPage() {
               <Button
                 variant="danger"
                 disabled={mutations.remove.isPending}
-                onClick={() => mutations.remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })}
+                onClick={() =>
+                  mutations.remove.mutate(
+                    { id: deleting.id, deployedFiles: deletingDeployed ? deployedFiles : undefined },
+                    { onSuccess: () => setDeleting(null) },
+                  )
+                }
               >
                 {mutations.remove.isPending ? "Deleting…" : "Delete"}
               </Button>

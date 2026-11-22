@@ -251,7 +251,7 @@ public sealed class BundledSeedService
         if (_globalDeployer is null)
         {
             _logger.LogWarning(
-                "Mandatory kit(s) {KitNames} have no global door wired into the host; mandatory-global materialization is pending feature 251",
+                "Mandatory kit(s) {KitNames} have no global door supplied (test seam); mandatory-global materialization skipped for this run",
                 string.Join(", ", mandatory.Select(k => k.Name)));
             return;
         }

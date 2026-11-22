@@ -44,7 +44,8 @@ public sealed class SessionIdentityRefresher(
             var (alias, vendor) = slot is not null
                 ? (slot.Alias, slot.Vendor)
                 : (AgentIdentity.ResolveAlias(), AgentIdentity.ResolveVendor());
-            var session = await lifecycle.RegisterAsync(alias, vendor, timeout.Token);
+            var saved = workspaceIdentity.TryRead();
+            var session = await lifecycle.RegisterAsync(alias, vendor, saved?.SessionId, timeout.Token);
             Guid? superseded;
             lock (_swap)
             {
@@ -52,7 +53,28 @@ public sealed class SessionIdentityRefresher(
                 AdapterSession.Id = session;
             }
 
-            (alias, vendor) = await RestoreAndStampAsync(session, alias, vendor, ct);
+            if (saved is { } stamp && session == stamp.SessionId)
+            {
+                // The host re-attached the stamped row: its alias+vendor came back with it, so the
+                // restore leg has nothing to negotiate — refresh the stamp and move on. AdapterIdentityState
+                // stays untouched on purpose: setting it would turn later reconnects into explicit-alias
+                // registrations, and each of those mints a fresh row instead of resuming this one.
+                try
+                {
+                    identityFile.Write(stamp.Alias, stamp.Vendor, session);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    Console.Error.WriteLine(
+                        $"[overmind-mcp] WARN: session {session} is resumed; its identity stamp failed: {ex.Message}");
+                }
+
+                Console.Error.WriteLine($"[overmind-mcp] session {session} resumed on handshake");
+            }
+            else
+            {
+                (alias, vendor) = await RestoreAndStampAsync(session, alias, vendor, ct);
+            }
 
             if (superseded is { } old && old != Guid.Empty && old != session)
             {

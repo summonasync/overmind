@@ -59,16 +59,33 @@ public sealed class OvermindNotificationTools
             payload["from"] = from;
         }
 
-        return await Guarded(() => _api.PostAsync("/api/agent/notifications", payload, ct));
+        var response = await Guarded(() => _api.PostAsync("/api/agent/notifications", payload, ct));
+        if (NormalizeKind(kind) == "approval" && featureSlug is not null)
+        {
+            // The proof recipe: one reply validates spec and plan together, and covers never-edited
+            // first drafts — telling the agent up front is what stops defensive double-tapping.
+            var echo = JsonNode.Parse(response.GetRawText()) as JsonObject;
+            if (echo is not null)
+            {
+                echo["hint"] = "One reply validates the spec AND the plan of this feature — draft both " +
+                    "gated artifacts before tapping if you want both pre-seen. A tap also covers " +
+                    "never-edited first drafts; any gated edit after the tap voids it.";
+                return JsonSerializer.SerializeToElement(echo);
+            }
+        }
+
+        return response;
     }
 
     [McpServerTool(Name = "overmind_replies", ReadOnly = true, Idempotent = true)]
     [Description("Polls the human's replies to your overmind_notify messages, newest first — each item's " +
-        "replyText is the human's decision. Filters combine; an over-narrow filter returns an empty array, " +
-        "not an error. Rows arrive projected (notification text excerpted to 200 chars) unless full=true.")]
+        "replyText is the human's decision. A complete read advances this session's reply cursor, " +
+        "retiring those replies from overmind_wake_peek's default window. Filters combine; an " +
+        "over-narrow filter returns an empty array, not an error. Rows arrive projected (notification " +
+        "text excerpted to 200 chars) unless full=true.")]
     public async Task<JsonElement> Replies(
         [Description("Optional project id.")] Guid? projectId = null,
-        [Description("False matches nothing — replies are consumed on read; keep the default.")] bool? includeRead = null,
+        [Description("False narrows to replies the human has not read yet; keep the default.")] bool? includeRead = null,
         [Description("Only replies after this ISO-8601 instant (offset-less reads as UTC).")] string? since = null,
         [Description("Notification kind: info, question or approval.")] string? kind = null,
         [Description("Feature slug to narrow to.")] string? featureSlug = null,
