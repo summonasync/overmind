@@ -13,21 +13,37 @@ import {
 } from "react";
 import { Button } from "@/shared/ui/button";
 import {
-  ceilingMessage,
+  clusteredNotice,
+  computingAnchorsNotice,
+  computingBloomNotice,
+  computingLayoutNotice,
   GRAPH_CONTROL_LABELS,
   graphAriaLabel,
+  precomputedNotice,
   reducedMotionMessage,
+  settleFailedNotice,
+  tierName,
   unsupportedRowsNotice,
 } from "@/features/journal/lib/graph-copy";
 import {
+  anchorSetField,
+  buildClusters,
+  clusterSubField,
+  composeClusterView,
+  projectedLinks,
+  UNSORTED_CLUSTER_ID,
+  type ClusterModel,
+} from "@/features/journal/lib/graph-cluster";
+import {
   buildNeighbourhoods,
-  isOverCeiling,
+  layoutModeFor,
   pinNode,
   reheat,
   releasePinnedNodes,
   seedLayoutLinks,
   seedPositions,
   settleWithinBudget,
+  PRECOMPUTE_CEILING,
   SIM_CEILING,
   startForceLayout,
   type LayoutHandle,
@@ -35,7 +51,8 @@ import {
   type LayoutNode,
   type Neighbourhood,
 } from "@/features/journal/lib/graph-layout";
-import { nodeRadius } from "@/features/journal/lib/graph-palette";
+import { precomputeLayout, preserveHeldNodes } from "@/features/journal/lib/graph-precompute";
+import { anchorRadius, nodeRadius } from "@/features/journal/lib/graph-palette";
 import { drawScene } from "@/features/journal/lib/graph-paint";
 import { graphNodeStates, nodeKey } from "@/features/journal/lib/graph-payload";
 import { useGraphTheme } from "@/features/journal/lib/use-graph";
@@ -72,6 +89,10 @@ const DRAG_THRESHOLD = 3;
 const REHEAT_ALPHA = 0.35;
 const DRAG_REHEAT = 0.2;
 const RELEASE_REHEAT = 0.6;
+// How long the tier-2 kick waits for the field to stop changing. An edge drag re-fires the
+// ResizeObserver nearly every frame, and settling on each rounded-pixel change would kick a
+// settle per frame; the seed sketch on screen the whole time is why the wait is honest.
+const SETTLE_KICK_DELAY_MS = 200;
 
 // The app's first client-only heavy island (R3). Everything that can be measured without a
 // browser lives in `lib/graph-*.ts`; what is left here is element lifecycle, pointer plumbing
@@ -91,6 +112,34 @@ export function GraphCanvas({
   const nodesRef = useRef<LayoutNode[]>([]);
   const linksRef = useRef<LayoutLink[]>([]);
   const neighbourhoodsRef = useRef<Map<string, Neighbourhood>>(new Map());
+  // Tier 3's own ledger: the grouping derived from the payload, which clusters the owner has
+  // open (view-local by contract — a reload opens the field collapsed), the settled anchor
+  // frame, and the collapsed-anchor map the painter and the pick share.
+  const clustersRef = useRef<ClusterModel | null>(null);
+  const expandedRef = useRef<Set<string>>(new Set());
+  const anchorPosRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const hiddenRef = useRef<Map<string, number>>(new Map());
+  // The anchor key-set whose frame actually LANDED — not the one a kick was scheduled for. A
+  // kick is worth scheduling only for a set that has not landed yet, so a payload beat that
+  // abandons an in-flight settle re-kicks it instead of stranding the field on the seed spiral
+  // (review-271-03 MAJOR-1b, the tier-2 kick's lesson in its clustered shape).
+  const settledAnchorSetRef = useRef("");
+  const settlesRef = useRef(0);
+  // The expansion settle's generation: anything that changes the visible composition — a
+  // collapse, another expansion, a payload beat — bumps it and the slices stop at the next
+  // boundary, the same contract the tier-2 kick's abandon token runs on.
+  const expansionGenRef = useRef(0);
+  // The bloom is launched from an event handler, so it has no effect cleanup to die with the
+  // canvas — this flag is its unmount guard, symmetric with the kick's `live`. The body resets
+  // it because strict mode runs mount → cleanup → mount in dev: a flag only the cleanup writes
+  // would leave the first real session's blooms dead.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const frameRef = useRef<number | null>(null);
   const simRef = useRef<LayoutHandle | null>(null);
   const dragRef = useRef<{ key: string | null; panning: boolean; startX: number; startY: number; moved: boolean }>(
@@ -104,10 +153,17 @@ export function GraphCanvas({
 
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [precomputing, setPrecomputing] = useState(false);
+  const [settleFailed, setSettleFailed] = useState(false);
+  const [layoutCount, setLayoutCount] = useState(0);
+  const [layoutWhat, setLayoutWhat] = useState<"anchors" | "bloom">("anchors");
   const theme = useGraphTheme();
 
-  const overCeiling = isOverCeiling(field.nodes.length);
+  // The ladder rung this field stands on. Tier 2's settle and tier 3's anchor frame hang off
+  // it; tier 1 keeps the frame clock below untouched.
+  const tier = layoutModeFor(field.nodes.length);
   const states = useMemo(() => graphNodeStates(field.nodes, field.edges), [field]);
+  const clusters = useMemo(() => (tier === "clustered" ? buildClusters(field) : null), [field, tier]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -173,17 +229,161 @@ export function GraphCanvas({
       width: size.width,
       height: size.height,
       font: `12px ${theme.font}`,
+      tier,
+      anchors: tier === "clustered" ? hiddenRef.current : undefined,
     });
 
     if (scaleRef.current !== null) {
       scaleRef.current.textContent = scalePercent(view.scale);
     }
-  }, [currentView, hoverKey, selectedKey, size, states, theme]);
+  }, [currentView, hoverKey, selectedKey, size, states, theme, tier]);
+
+  // The tier-2 settle lands from outside the render cycle, so it redraws through this ref
+  // instead of listing draw in its effect's dependencies: draw changes identity on every hover,
+  // and a hover must never restart a settle that takes hundreds of milliseconds of slices.
+  const drawRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    drawRef.current = draw;
+  }, [draw]);
+
+  // Tier 3 recomposes the visible field from the grouping plus whatever the screen already
+  // holds: anchors at their settled coordinates, open clusters' members around the anchor they
+  // bloomed from. Every flow — a payload beat, the anchor settle landing, an expansion, a
+  // collapse — funnels through this one door, which is what keeps the two settle transports
+  // from disagreeing about what is on the field.
+  const recomposeClusterField = useCallback(() => {
+    const model = clustersRef.current;
+    if (model === null || size.width === 0 || size.height === 0) {
+      return;
+    }
+    const standing = new Map(nodesRef.current.map((node) => [nodeKey(node.kind, node.id), node]));
+    const composed = composeClusterView(
+      field,
+      model,
+      expandedRef.current,
+      anchorPosRef.current,
+      standing,
+      size.width,
+      size.height,
+    );
+    nodesRef.current = composed.nodes;
+    hiddenRef.current = composed.hidden;
+    linksRef.current = seedLayoutLinks(projectedLinks(field, model, expandedRef.current), composed.nodes);
+    neighbourhoodsRef.current = buildNeighbourhoods(linksRef.current);
+  }, [field, size]);
+
+  // Both tier-3 settles share one notice slot, so the slot counts the settles in flight rather
+  // than flipping a boolean an overlapping settle would clear early. The kind rides along: a
+  // notice that says "nodes" over a 51-anchor settle would read as the whole field. A kick
+  // clears the failure flag too — an anchor retry that lands must not keep the failure line a
+  // failed predecessor wrote.
+  const beginSettle = useCallback((count: number, what: "anchors" | "bloom") => {
+    settlesRef.current += 1;
+    setLayoutCount(count);
+    setLayoutWhat(what);
+    setSettleFailed(false);
+    setPrecomputing(true);
+  }, []);
+
+  const endSettle = useCallback(() => {
+    settlesRef.current = Math.max(0, settlesRef.current - 1);
+    setPrecomputing(settlesRef.current > 0);
+  }, []);
+
+  // Expand and collapse are one view-local Set. Flipping it recomposes immediately — the bloom
+  // seeds around its anchor the same frame — and only then does the sliced settle refine the
+  // members' positions, reusing the tier-2 transport with its own generation: a collapse, a
+  // second expansion or a payload beat bumps the generation, the slices stop at the next
+  // boundary, and the seeded sketch the flip already painted stays a usable frame.
+  const toggleCluster = (groupKey: string) => {
+    const model = clustersRef.current;
+    if (model === null) {
+      return;
+    }
+    const group = model.groups.find((candidate) => candidate.key === groupKey);
+    if (group === undefined) {
+      return;
+    }
+    const next = new Set(expandedRef.current);
+    if (next.has(groupKey)) {
+      next.delete(groupKey);
+      expandedRef.current = next;
+      expansionGenRef.current += 1;
+      recomposeClusterField();
+      draw();
+      return;
+    }
+    next.add(groupKey);
+    expandedRef.current = next;
+    recomposeClusterField();
+    draw();
+
+    const gen = expansionGenRef.current + 1;
+    expansionGenRef.current = gen;
+    const anchorCoord =
+      anchorPosRef.current.get(group.anchorKey) ?? { x: size.width / 2, y: size.height / 2 };
+    // The bloom's forces centre on the anchor it grew out of — an edge-of-screen cluster must
+    // not migrate toward the middle of the canvas just because the settle's centring has to
+    // point somewhere.
+    const forces = { width: size.width, height: size.height, centreX: anchorCoord.x, centreY: anchorCoord.y };
+    const abandoned = () => !mountedRef.current || expansionGenRef.current !== gen;
+    beginSettle(group.members.length, "bloom");
+    void precomputeLayout(clusterSubField(field, group), forces, abandoned, anchorCoord)
+      // The decrement leads every exit: a settle that was abandoned mid-flight is still a
+      // settle that finished as far as the notice slot is concerned — one that returns before
+      // decrementing leaves the slot held open forever (review-271-03 MAJOR-1a).
+      .then((landed) => {
+        endSettle();
+        if (abandoned()) {
+          return;
+        }
+        const landedCoords = new Map(landed.map((node) => [nodeKey(node.kind, node.id), node]));
+        nodesRef.current = nodesRef.current.map((node) => {
+          const settled = landedCoords.get(nodeKey(node.kind, node.id));
+          if (settled === undefined || node.fx != null) {
+            return node;
+          }
+          return { ...node, x: settled.x, y: settled.y };
+        });
+        recomposeClusterField();
+        drawRef.current();
+      })
+      .catch(() => {
+        endSettle();
+        if (abandoned()) {
+          return;
+        }
+        setSettleFailed(true);
+      });
+  };
+
+  // The anchor door. A collapsed cluster dot opens its cluster and an open one closes it — the
+  // anchor is the cluster's handle, not a row of its own: the project node inside is reachable
+  // as a member once the cluster is open, and the list below reaches it at any time. A project
+  // dot hiding nothing is not a door, so it selects like any other dot.
+  const clusterDoor = (key: string | null): string | null => {
+    const model = clustersRef.current;
+    if (key === null || model === null) {
+      return null;
+    }
+    const group = model.groups.find((candidate) => candidate.anchorKey === key);
+    if (group === undefined || (group.hiddenCount === 0 && !expandedRef.current.has(group.key))) {
+      return null;
+    }
+    return group.key;
+  };
 
   // Rebuilding the field keeps whatever coordinates the owner already sees, so a refetch on the
   // live-sync beat does not re-scatter the map under their cursor. Server pins still win.
   useEffect(() => {
     if (size.width === 0 || size.height === 0) {
+      return;
+    }
+
+    if (clusters !== null) {
+      clustersRef.current = clusters;
+      recomposeClusterField();
+      draw();
       return;
     }
 
@@ -210,25 +410,74 @@ export function GraphCanvas({
     neighbourhoodsRef.current = buildNeighbourhoods(linksRef.current);
 
     draw();
-  }, [draw, field, size]);
+  }, [clusters, draw, field, recomposeClusterField, size]);
 
-  // The frame clock, in three shapes: nothing animates over the ceiling, a single synchronous
-  // settle under reduced motion, and one tick per frame otherwise. Each one stops itself.
+  // The anchor frame settles once per anchor-set that has not landed yet, not per payload beat:
+  // a new note regroups nothing, so the settled coordinates stand while the field around them
+  // moves. This kick is its own effect on purpose — draw changes identity on every hover, and a
+  // kick hosted in an effect that hover restarts would abandon its own settle and never run
+  // again (review-271-03 MAJOR-1b); the landed draw goes through the ref, the way tier 2's
+  // kick already does. The guard reads the last LANDED set, so a payload beat that aborts an
+  // in-flight settle re-kicks it instead of stranding the seed sketch.
+  useEffect(() => {
+    if (clusters === null || size.width === 0 || size.height === 0) {
+      return;
+    }
+
+    const anchorSet = clusters.groups.map((group) => group.anchorKey).join("|");
+    if (anchorSet === settledAnchorSetRef.current) {
+      return;
+    }
+
+    const forces = { width: size.width, height: size.height };
+    let live = true;
+    const kick = setTimeout(() => {
+      if (!live) {
+        return;
+      }
+      beginSettle(clusters.groups.length, "anchors");
+      void precomputeLayout(anchorSetField(field, clusters), forces, () => !live)
+        .then((landed) => {
+          endSettle();
+          if (!live) {
+            return;
+          }
+          for (const node of landed) {
+            anchorPosRef.current.set(nodeKey(node.kind, node.id), { x: node.x, y: node.y });
+          }
+          settledAnchorSetRef.current = anchorSet;
+          recomposeClusterField();
+          drawRef.current();
+        })
+        .catch(() => {
+          endSettle();
+          if (!live) {
+            return;
+          }
+          setSettleFailed(true);
+        });
+    }, SETTLE_KICK_DELAY_MS);
+
+    return () => {
+      live = false;
+      clearTimeout(kick);
+    };
+  }, [beginSettle, clusters, endSettle, field, recomposeClusterField, size]);
+
+  // The tier-1 frame clock, in its two shapes: a single synchronous settle under reduced motion,
+  // and one tick per frame otherwise. Each one stops itself. The ladder's other rungs live
+  // elsewhere on purpose — tier 2's settle is the effect below it, and past the precompute
+  // ceiling the seed frame the rebuild effect painted is the whole show.
   //
   // The field object restarts this on purpose: the live-sync refetch hands over a new identity on
   // a beat, and a fresh layout is what makes the new rows settle. REHEAT_ALPHA is why that settle
   // nudges the field instead of shaking it under the owner's cursor.
   useEffect(() => {
-    if (size.width === 0) {
+    if (size.width === 0 || tier !== "simulate") {
       return;
     }
 
     const forces = { width: size.width, height: size.height };
-
-    if (overCeiling) {
-      draw();
-      return;
-    }
 
     if (reducedMotion) {
       settleWithinBudget(nodesRef.current, linksRef.current, forces);
@@ -261,7 +510,62 @@ export function GraphCanvas({
         frameRef.current = null;
       }
     };
-  }, [draw, field, overCeiling, reducedMotion, size]);
+  }, [draw, field, reducedMotion, size, tier]);
+
+  // Tier 2 has no clock: the seed frame is already on the canvas, this kicks the one-shot settle
+  // for the field's identity and swaps the landed map in whenever the slices finish. Nothing
+  // animates in between — every other frame is an event-driven redraw. The kick deliberately
+  // reads draw through the ref instead of listing it here: draw changes identity on hover, and
+  // restarting a multi-hundred-millisecond settle because the owner moved the cursor across a
+  // dot would be a self-inflicted freeze. A drag that started on the seed survives the swap via
+  // preserveHeldNodes.
+  //
+  // The kick waits out the noise first: an edge drag re-fires the size state nearly every frame,
+  // and each size event used to kick a settle whose first slice runs synchronously — review-271-02
+  // measured that shape as dozens of concurrent settles behind a two-second drag. The seed sketch
+  // is what the owner is looking at during the drag anyway, so the settle runs once, a beat after
+  // the field stops changing. A superseded kick dies in its timer; an in-flight settle stops at
+  // its next slice boundary through the token handed to precomputeLayout, so a dropped identity
+  // never finishes its ticks.
+  useEffect(() => {
+    if (size.width === 0 || size.height === 0 || tier !== "precomputed") {
+      return;
+    }
+
+    const forces = { width: size.width, height: size.height };
+    let live = true;
+    const kick = setTimeout(() => {
+      if (!live) {
+        return;
+      }
+      setPrecomputing(true);
+      setSettleFailed(false);
+      void precomputeLayout(field, forces, () => !live)
+        .then((landed) => {
+          if (!live) {
+            return;
+          }
+          preserveHeldNodes(landed, nodesRef.current);
+          nodesRef.current = landed;
+          linksRef.current = seedLayoutLinks(field.edges, landed);
+          setPrecomputing(false);
+          drawRef.current();
+        })
+        .catch(() => {
+          if (live) {
+            // The seed sketch stays on the canvas — a usable field beats a blank one — and the
+            // notice below must not describe a swap that never happened.
+            setPrecomputing(false);
+            setSettleFailed(true);
+          }
+        });
+    }, SETTLE_KICK_DELAY_MS);
+
+    return () => {
+      live = false;
+      clearTimeout(kick);
+    };
+  }, [field, size, tier]);
 
   useEffect(() => {
     draw();
@@ -278,12 +582,15 @@ export function GraphCanvas({
     (screenX: number, screenY: number): string | null => {
       const view = currentView();
       return pickNode(
-        nodesRef.current.map((node) => ({
-          key: nodeKey(node.kind, node.id),
-          x: node.x,
-          y: node.y,
-          radius: nodeRadius(node),
-        })),
+        nodesRef.current.map((node) => {
+          const hidden = hiddenRef.current.get(nodeKey(node.kind, node.id));
+          return {
+            key: nodeKey(node.kind, node.id),
+            x: node.x,
+            y: node.y,
+            radius: hidden === undefined ? nodeRadius(node) : anchorRadius(hidden),
+          };
+        }),
         toWorldX(screenX, view),
         toWorldY(screenY, view),
         view.scale,
@@ -326,6 +633,12 @@ export function GraphCanvas({
           // The live simulation reads the same datum, so the field reacts while dragging without
           // a second layout; the row is stored when the drag settles, in onPointerUp.
           pinNode(node, toWorldX(x, currentView()), toWorldY(y, currentView()));
+          if (tier !== "simulate") {
+            // A tier with no simulation has no tick to snap the datum onto its hold, so the
+            // drag moves x/y itself — otherwise the dot would ignore the pointer until release.
+            node.x = node.fx ?? node.x;
+            node.y = node.fy ?? node.y;
+          }
           if (simRef.current !== null) {
             reheat(simRef.current.simulation, DRAG_REHEAT);
           }
@@ -361,9 +674,18 @@ export function GraphCanvas({
       if (drag.key !== null) {
         const node = nodeByKey(drag.key);
         if (node !== null) {
-          onPin?.({ kind: node.kind, id: node.id, x: node.x, y: node.y });
+          // The unsorted anchor is this view's own device — no row on the Host stands behind
+          // it, so a drag moves the dot locally and writes nothing.
+          if (node.id !== UNSORTED_CLUSTER_ID) {
+            onPin?.({ kind: node.kind, id: node.id, x: node.x, y: node.y });
+          }
         }
       }
+      return;
+    }
+    const door = tier === "clustered" ? clusterDoor(pickAt(x, y)) : null;
+    if (door !== null) {
+      toggleCluster(door);
       return;
     }
     onSelect(pickAt(x, y));
@@ -395,11 +717,23 @@ export function GraphCanvas({
 
     if (step !== 0) {
       event.preventDefault();
-      const keys = field.nodes.map((node) => nodeKey(node.kind, node.id));
+      // The walk covers what is on the field, and in tier 3 that is the visible set — anchors
+      // plus open clusters' members — not the payload's full node list.
+      const visible = tier === "clustered" ? nodesRef.current : field.nodes;
+      const keys = visible.map((node) => nodeKey(node.kind, node.id));
       const current = selectedKey === null ? null : keys.indexOf(selectedKey);
       const next = nextNodeIndex(current === -1 ? null : current, step, keys.length);
       if (next !== null) {
         onSelect(keys[next]);
+      }
+      return;
+    }
+
+    if (event.key === "Enter" && tier === "clustered") {
+      const door = clusterDoor(selectedKey);
+      if (door !== null) {
+        event.preventDefault();
+        toggleCluster(door);
       }
       return;
     }
@@ -462,13 +796,29 @@ export function GraphCanvas({
         </output>
       </div>
 
-      {overCeiling ? (
-        <p className="text-sm text-warning" role="status">
-          {ceilingMessage(field.nodes.length, SIM_CEILING)}
+      {tier === "clustered" ? (
+        <p className="text-xs text-muted" role="status">
+          {precomputing
+            ? layoutWhat === "anchors"
+              ? computingAnchorsNotice(layoutCount)
+              : computingBloomNotice(layoutCount)
+            : settleFailed
+              ? settleFailedNotice(field.nodes.length)
+              : clusteredNotice(field.nodes.length, PRECOMPUTE_CEILING)}
         </p>
       ) : null}
 
-      {reducedMotion && !overCeiling ? (
+      {tier === "precomputed" ? (
+        <p className="text-xs text-muted" role="status">
+          {precomputing
+            ? computingLayoutNotice(field.nodes.length)
+            : settleFailed
+              ? settleFailedNotice(field.nodes.length)
+              : precomputedNotice(field.nodes.length, SIM_CEILING)}
+        </p>
+      ) : null}
+
+      {reducedMotion && tier === "simulate" ? (
         <p className="text-xs text-muted" role="status">
           {reducedMotionMessage(field.nodes.length)}
         </p>
@@ -487,7 +837,11 @@ export function GraphCanvas({
           ref={canvasRef}
           role="img"
           tabIndex={0}
-          aria-label={graphAriaLabel(field.counts)}
+          aria-label={graphAriaLabel(
+            field.counts,
+            tierName(tier),
+            clusters === null ? undefined : clusters.groups.length,
+          )}
           className="block h-full w-full cursor-crosshair touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -503,7 +857,13 @@ export function GraphCanvas({
         Click a node for its context, double-click a note to open it, drag to move and keep it,
         scroll to zoom. Arrow keys walk the field while the canvas has focus, Escape clears the
         selection. Pins are stored on the Host, so every browser and every reload opens the same
-        field; the release control sends them back to the simulation everywhere.
+        field;{" "}
+        {tier === "simulate"
+          ? "the release control sends them back to the simulation everywhere."
+          : "the release control clears them here and on the Host, and this tier leaves every node where it stands."}
+        {tier === "clustered"
+          ? " In clustered mode a project dot is its cluster's door: click or press Enter to open the group it hides and again to close it, and which groups are open lives only in this view — a reload starts with every cluster closed."
+          : null}
       </p>
     </div>
   );

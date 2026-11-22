@@ -12,9 +12,16 @@ import {
 import type { GraphEdge, GraphNode, GraphPosition } from "../types.ts";
 import { nodeKey } from "./graph-payload.ts";
 
-// R9's tier-1 ceiling. Above it the route stops simulating and shows a settled field with the
-// real count in the UI; tiers 2 and 3 are a spawned card, not a mode switch hidden in here.
+// R9's tier-1 ceiling, now the first rung of the ladder one canvas walks (271): through 1000
+// nodes the simulation runs on the frame clock, through 5000 the field settles once off the
+// render loop before its first frame, past that it draws as clusters. The rung is where live
+// simulation stops, not where the surface ends — the count is stated in the UI either way.
 export const SIM_CEILING = 1000;
+
+// Tier 2's upper rung. Past 5000 even one bounded settle is real work the field would pay again
+// on every refetch beat, and the honest answer is grouping (tier 3) rather than a slower layout.
+// Kept beside SIM_CEILING so the ladder reads as one sentence.
+export const PRECOMPUTE_CEILING = 5000;
 
 // d3 mutates the datum it is handed, so the canvas keeps its own node type and the payload's
 // stays clean — the same array React Query owns would otherwise carry coordinates nobody asked
@@ -30,14 +37,17 @@ export interface LayoutLink extends SimulationLinkDatum<LayoutNode> {
   hasManual: boolean;
 }
 
-export type LayoutMode = "simulate" | "settled";
+export type LayoutMode = "simulate" | "precomputed" | "clustered";
 
 export function isOverCeiling(nodeCount: number): boolean {
   return nodeCount > SIM_CEILING;
 }
 
 export function layoutModeFor(nodeCount: number): LayoutMode {
-  return isOverCeiling(nodeCount) ? "settled" : "simulate";
+  if (nodeCount > PRECOMPUTE_CEILING) {
+    return "clustered";
+  }
+  return isOverCeiling(nodeCount) ? "precomputed" : "simulate";
 }
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
@@ -45,20 +55,23 @@ const SEED_RADIUS_STEP = 9;
 
 // A deterministic first frame: the same payload must land on the same dots after a reload, or
 // "filters survive reload" would mean "the field re-scatters every time". Pinned positions
-// (R5's rows, empty until T8 ships them) win over the seed for the node they name.
+// (R5's rows, empty until T8 ships them) win over the seed for the node they name. The origin
+// is where the spiral starts from — tier 3 grows a cluster's members out of their anchor rather
+// than out of the canvas centre, and a sub-field settle needs that origin to bloom in place.
 export function seedPositions(
   nodes: readonly GraphNode[],
   positions: readonly GraphPosition[],
   width: number,
   height: number,
+  origin?: { x: number; y: number },
 ): LayoutNode[] {
   const pinned = new Map<string, GraphPosition>();
   for (const position of positions) {
     pinned.set(nodeKey(position.kind, position.id), position);
   }
 
-  const centerX = width / 2;
-  const centerY = height / 2;
+  const centerX = origin?.x ?? width / 2;
+  const centerY = origin?.y ?? height / 2;
 
   return nodes.map((node, index) => {
     const pin = pinned.get(nodeKey(node.kind, node.id));
@@ -109,6 +122,11 @@ export interface FieldForces {
   width: number;
   height: number;
   repulsion?: number;
+  // Where the centring pulls toward. Absent, it is the canvas centre — tier 3's cluster bloom
+  // overrides it with the anchor it grew out of, so opening a cluster at the edge does not
+  // migrate the whole group toward the middle of the screen.
+  centreX?: number;
+  centreY?: number;
 }
 
 export function applyFieldForces(
@@ -120,8 +138,8 @@ export function applyFieldForces(
     .force("link", forceLink<LayoutNode, LayoutLink>([...links]).distance(46).strength(0.35))
     .force("charge", forceManyBody().strength(forces.repulsion ?? -60))
     .force("collide", forceCollide(14))
-    .force("centerX", forceX(forces.width / 2).strength(0.04))
-    .force("centerY", forceY(forces.height / 2).strength(0.06));
+    .force("centerX", forceX(forces.centreX ?? forces.width / 2).strength(0.04))
+    .force("centerY", forceY(forces.centreY ?? forces.height / 2).strength(0.06));
 }
 
 export interface LayoutHandle {
