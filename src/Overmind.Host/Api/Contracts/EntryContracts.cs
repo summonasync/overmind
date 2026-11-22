@@ -25,6 +25,13 @@ public sealed record EntryLiftRequest(string Reason, string? Proof = null, Guid?
 
 public sealed record EntryAppendRequest(string Text);
 
+public sealed record EntryResolveLinksRequest(string Content, Guid? EntryId);
+
+public sealed record EntryResolveLinksResponse(
+    IReadOnlyList<EntryOutgoingLink> Resolved,
+    IReadOnlyList<string> Unresolved,
+    IReadOnlyList<string> Self);
+
 public sealed record EntryResponse(
     Guid Id,
     Guid ProjectId,

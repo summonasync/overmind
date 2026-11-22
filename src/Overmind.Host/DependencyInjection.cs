@@ -195,6 +195,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<EntryAckHumanRequest>, EntryAckHumanRequestValidator>();
         services.AddSingleton<IValidator<EntryLiftRequest>, EntryLiftRequestValidator>();
         services.AddSingleton<IValidator<EntryAppendRequest>, EntryAppendRequestValidator>();
+        services.AddSingleton<IValidator<EntryResolveLinksRequest>, EntryResolveLinksRequestValidator>();
         services.AddSingleton<IValidator<PromoteNoteToFeatureRequest>, PromoteNoteToFeatureRequestValidator>();
         services.AddSingleton<IValidator<PromoteNoteToTaskRequest>, PromoteNoteToTaskRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();

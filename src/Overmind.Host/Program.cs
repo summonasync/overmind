@@ -159,6 +159,7 @@ static async Task RunAsync(WebApplicationBuilder builder, bool headless, string[
 
     app.MapProjectsApi();
     app.MapEntriesApi();
+    app.MapResolveLinksApi();
     app.MapGraphApi();
     app.MapJournalTriageApi();
     app.MapSearchApi();

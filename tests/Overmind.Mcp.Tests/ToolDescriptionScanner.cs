@@ -67,10 +67,11 @@ internal static class ToolDescriptionScanner
         "wave_role_set", "write_entry"
     ];
 
-    // The journal pin: the journal profile's own family (T2 adds journal_resolve_links here).
+    // The journal pin: the journal profile's own family.
     public static readonly string[] ExpectedJournalToolNames =
     [
-        "journal_append", "journal_capture", "journal_list", "journal_read", "journal_search",
+        "journal_append", "journal_capture", "journal_list", "journal_read", "journal_resolve_links",
+        "journal_search",
     ];
 
     public static string[] ExpectedUnionToolNames => [.. ExpectedToolNames, .. ExpectedJournalToolNames];

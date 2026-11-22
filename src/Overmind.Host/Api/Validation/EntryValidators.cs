@@ -88,3 +88,11 @@ public sealed class EntryAppendRequestValidator : AbstractValidator<EntryAppendR
         RuleFor(x => x.Text).NotEmpty();
     }
 }
+
+public sealed class EntryResolveLinksRequestValidator : AbstractValidator<EntryResolveLinksRequest>
+{
+    public EntryResolveLinksRequestValidator()
+    {
+        RuleFor(x => x.Content).NotEmpty();
+    }
+}

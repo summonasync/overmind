@@ -39,6 +39,11 @@ public sealed class JournalToolWireContractTests : McpSessionTestBase
         ]
         """;
 
+    private const string ResolveBucketsJson =
+        """
+        {"resolved":[{"kind":"entry","id":"33333333-3333-3333-3333-333333333333","label":"Beta Note"},{"kind":"feature","id":"22222222-2222-2222-2222-222222222222","label":"Read projection","slug":"777-read-projection","projectId":"11111111-1111-1111-1111-111111111111"}],"unresolved":["Nowhere"],"self":["Daily Note"]}
+        """;
+
     protected override IReadOnlyDictionary<string, string>? EnvironmentOverrides =>
         new Dictionary<string, string> { [McpProfileResolver.EnvironmentVariable] = "journal" };
 
@@ -52,6 +57,7 @@ public sealed class JournalToolWireContractTests : McpSessionTestBase
         stub.Route("POST", "/api/entries", CaptureDoor);
         stub.Route("POST", $"/api/entries/{JournalEntryId}/append", AppendDoor);
         stub.Route("POST", $"/api/entries/{MissingEntryId}/append", 404, Canned.NotFoundJson);
+        stub.Route("POST", "/api/entries/resolve-links", ResolveDoor);
     }
 
     [Fact]
@@ -239,6 +245,85 @@ public sealed class JournalToolWireContractTests : McpSessionTestBase
         Stub.Requests.ShouldNotContain(
             r => r.Method == "POST" && r.Path.StartsWith("/api/agent/") && r.Path.Contains("/entries"),
             "the journal door speaks the human prefix only");
+    }
+
+    [Fact]
+    public async Task ResolveLinks_AnchoredContent_ReturnsTheBuckets()
+    {
+        var response = await Driver.CallToolAsync("journal_resolve_links", new JsonObject
+        {
+            ["content"] = "Drafting [[Beta Note]] and [[Nowhere]] with a self [[Daily Note]]",
+            ["entryId"] = JournalEntryId.ToString()
+        });
+
+        response["result"]!["isError"].ShouldBeNull($"resolve failed: {response.ToJsonString()}");
+
+        var payload = ResultPayload(response);
+        payload["resolved"]!.AsArray().Count.ShouldBe(2);
+        payload["resolved"]![0]!["label"]!.GetValue<string>().ShouldBe("Beta Note");
+        payload["unresolved"]![0]!.GetValue<string>().ShouldBe("Nowhere");
+        payload["self"]![0]!.GetValue<string>().ShouldBe("Daily Note");
+
+        var sent = JsonNode.Parse(FindRequest("POST", "/api/entries/resolve-links").Body)!;
+        sent["content"]!.GetValue<string>().ShouldContain("[[Beta Note]]");
+        sent["entryId"]!.GetValue<string>().ShouldBe(JournalEntryId.ToString());
+    }
+
+    [Fact]
+    public async Task ResolveLinks_OmittedEntryId_StaysOmittedOnTheWire()
+    {
+        var response = await Driver.CallToolAsync("journal_resolve_links", new JsonObject
+        {
+            ["content"] = "A fresh thought about [[Beta Note]]"
+        });
+
+        response["result"]!["isError"].ShouldBeNull($"resolve failed: {response.ToJsonString()}");
+
+        var sent = JsonNode.Parse(FindRequest("POST", "/api/entries/resolve-links").Body)!;
+        sent["entryId"].ShouldBeNull("a fresh note has no anchor — the key must stay omitted");
+    }
+
+    [Fact]
+    public async Task ResolveLinks_OversizeRefusal_PassesTheDoorMessageThrough()
+    {
+        var response = await Driver.CallToolAsync("journal_resolve_links", new JsonObject
+        {
+            ["content"] = new string('z', 2500)
+        });
+
+        var text = ToolErrorText(response);
+        text.ShouldContain("2000");
+        text.ShouldContain("Trim the content");
+        text.ShouldContain("Fix:");
+    }
+
+    [Fact]
+    public async Task ResolveLinks_MissingAnchorEntry_RefusesWithTheDoorMessage()
+    {
+        var response = await Driver.CallToolAsync("journal_resolve_links", new JsonObject
+        {
+            ["content"] = "mentions [[Beta Note]]",
+            ["entryId"] = MissingEntryId.ToString()
+        });
+
+        ToolErrorText(response).ShouldContain($"Entry '{MissingEntryId}' was not found.");
+    }
+
+    private StubOvermindApi.Response ResolveDoor(StubOvermindApi.Request request)
+    {
+        var body = (JsonObject)JsonNode.Parse(request.Body)!;
+        if ((body["content"]?.GetValue<string>()?.Length ?? 0) > SoftCap.Ceiling(SoftCapLimits.FollowUpText))
+        {
+            return new StubOvermindApi.Response(400,
+                """{"title":"Bad Request","detail":"Content exceeds the 2000 character soft cap for a resolve preview; nothing was resolved.","fix":"Trim the content to 2000 characters or fewer and retry.","status":400}""");
+        }
+
+        if (body["entryId"]?.GetValue<string>() == MissingEntryId.ToString())
+        {
+            return new StubOvermindApi.Response(404, $$"""{"title":"Not Found","detail":"Entry '{{MissingEntryId}}' was not found.","status":404}""");
+        }
+
+        return new StubOvermindApi.Response(200, ResolveBucketsJson);
     }
 
     private static void AssertCarriedWarning(JsonNode payload, bool expectTruncated)

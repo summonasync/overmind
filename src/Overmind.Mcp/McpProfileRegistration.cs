@@ -9,7 +9,6 @@ public static class McpProfileRegistration
     {
         if (profile == McpProfile.Journal)
         {
-            // T1 landed capture/search/read/list/append; T2 adds journal_resolve_links on this branch.
             builder.Services.AddSingleton<JournalProjectResolver>();
 
             return builder.WithTools<JournalTools>();

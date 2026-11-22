@@ -34,6 +34,11 @@ public sealed class JournalTools
         "2000 chars: within the grace band it stores whole with a warnings[] note, past it the text truncates " +
         "and the response previews the lost tail. Loopback-only host, no auth.";
 
+    private const string ResolveDescription =
+        "Dry-resolves [[wiki]] markers via POST /api/entries/resolve-links: resolved targets, " +
+        "unresolved keys, self-references (entryId anchors). Read-only; over 2000 chars refuses. " +
+        "Loopback-only host, no auth.";
+
     private static readonly JsonElement EmptyHits = JsonSerializer.Deserialize<JsonElement>("[]");
 
     private readonly OvermindApiClient _api;
@@ -197,6 +202,26 @@ public sealed class JournalTools
     {
         var appended = await Guarded(() => _api.PostAsync($"/api/entries/{entryId}/append", new { text }, ct));
         return AppendEcho(appended);
+    }
+
+    [McpServerTool(Name = "journal_resolve_links", ReadOnly = true, Idempotent = true)]
+    [Description(ResolveDescription)]
+    public async Task<JsonElement> ResolveLinks(
+        [Description("Proposed markdown with [[wiki]] markers.")] string content,
+        [Description("Optional entry id anchoring self-references.")] Guid? entryId = null,
+        CancellationToken ct = default)
+    {
+        var body = new JsonObject
+        {
+            ["content"] = content,
+        };
+
+        if (entryId is { } anchor)
+        {
+            body["entryId"] = anchor.ToString("D");
+        }
+
+        return await Guarded(() => _api.PostAsync("/api/entries/resolve-links", body, ct));
     }
 
     internal static (string Since, string Until) DayBounds(string day)
