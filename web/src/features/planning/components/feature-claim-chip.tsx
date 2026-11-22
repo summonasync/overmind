@@ -72,6 +72,24 @@ export function FeatureClaimChip({ item }: FeatureClaimChipProps) {
     );
   }
 
+  if (item.claimState === "released") {
+    const releasedDescId = `claim-chip-released-${item.slug}-desc`;
+    return (
+      <span
+        className={cn(chipBase, "border border-dashed border-border/50 text-muted/70")}
+        aria-describedby={releasedDescId}
+        title={claimedOn}
+        data-claim-state="released"
+      >
+        {holder} · released
+        <span id={releasedDescId} className="sr-only">
+          Released — no holder session row survived for this claim, the feature is orphaned and can
+          be claimed again.
+        </span>
+      </span>
+    );
+  }
+
   const aliveDescId = `claim-chip-alive-${item.slug}-desc`;
   return (
     <span

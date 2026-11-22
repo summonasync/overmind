@@ -74,11 +74,18 @@ public sealed class PlanningArtifact
     public DateTime? ValidationProofVoided { get; private set; }
 
     [NotMapped]
+    public string? ValidationProofVoidCause { get; private set; }
+
+    [NotMapped]
     public string LastLogLine => PlanningLog.Parse(Body).LastOrDefault()?.Text ?? string.Empty;
 
     public void RecordFeatureDemotion() => FeatureStatusChanged = FeatureDemotedStatusEcho;
 
-    public void RecordValidationProofVoided(DateTime? repliedAt) => ValidationProofVoided = repliedAt;
+    public void RecordValidationProofVoided(DateTime? repliedAt, string? cause = null)
+    {
+        ValidationProofVoided = repliedAt;
+        ValidationProofVoidCause = cause;
+    }
 
     public static IReadOnlySet<PlanningArtifactStatus> AllowedStatuses(PlanningArtifactKind kind) => kind switch
     {
@@ -309,6 +316,7 @@ public sealed class PlanningArtifact
         StatusChanged = null;
         FeatureStatusChanged = null;
         ValidationProofVoided = null;
+        ValidationProofVoidCause = null;
 
         amendmentText = PlanningSectionCanonicalizer.Canonicalize(amendmentText);
 
@@ -474,7 +482,9 @@ public sealed class PlanningArtifact
             return null;
         }
 
-        if (brief.Contains('\r') || brief.Contains('\n') || brief.Length > BriefMaxLength)
+        // BriefMaxLength is the soft cap enforced at the API doors; the grace ceiling here is
+        // the storage backstop for whole-band values and callers that skip a door.
+        if (brief.Contains('\r') || brief.Contains('\n') || brief.Length > SoftCap.Ceiling(BriefMaxLength))
         {
             throw PlanningException.InvalidBrief();
         }
@@ -615,11 +625,12 @@ public sealed class PlanningArtifact
         StatusChanged = null;
         FeatureStatusChanged = null;
         ValidationProofVoided = null;
+        ValidationProofVoidCause = null;
 
         Versions.Add(PlanningArtifactVersion.Create(Id, Version, Body));
 
         var now = DateTime.UtcNow;
-        if (newBody != Body)
+        if (PlanningSections.GatedContentOf(newBody) != PlanningSections.GatedContentOf(Body))
         {
             ContentUpdatedAt = now;
         }

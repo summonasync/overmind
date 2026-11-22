@@ -76,28 +76,48 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Post_TextOverCap_Returns400WithNamedCodeAndTheNumbers()
+    public async Task Post_TextOverCap_StoresGraceBandWholeWithWarning()
     {
+        // 266: over-cap wave text is accepted-with-warnings — 501..610 stores whole,
+        // the response carries the frozen {accepted_len, limit, truncated, lost_tail_preview}.
         var projectId = await CreateProjectAsync();
 
         var response = await PostHumanAsync(projectId, "all", "Dan", new string('x', 501));
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await ProblemTitleAsync(response)).ShouldBe("WaveTextTooLong");
-        (await ProblemDetailAsync(response)).ShouldBe("text is 501 chars; cap is 500; cut 1");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var payload = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        payload["text"]!.GetValue<string>().Length.ShouldBe(501);
+        var warning = payload["warnings"]!.AsArray().Single()!.AsObject();
+        warning["accepted_len"]!.GetValue<int>().ShouldBe(501);
+        warning["limit"]!.GetValue<int>().ShouldBe(500);
+        warning["truncated"]!.GetValue<bool>().ShouldBeFalse();
+        // JsonNode maps a JSON null to a C# null — the key is present with a null value
+        warning.ContainsKey("lost_tail_preview").ShouldBeTrue();
+        warning["lost_tail_preview"].ShouldBeNull();
     }
 
     [Fact]
-    public async Task Post_AgentDoor_TextOverCap_CarriesTheSameNumbers()
+    public async Task Post_AgentDoor_PastCeiling_TruncatesWithLostTailPreview()
     {
+        // Owner worked example at the wave door: 611+ lands truncated to 600 with a preview
+        // of the dropped tail; the stored row never exceeds the keep length.
         var projectId = await CreateProjectAsync();
 
         var response = await SendAgentAsync(HttpMethod.Post,
             $"/api/agent/projects/{projectId}/wave/rooms/all/messages", new { Text = new string('x', 614) });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await ProblemTitleAsync(response)).ShouldBe("WaveTextTooLong");
-        (await ProblemDetailAsync(response)).ShouldBe("text is 614 chars; cap is 500; cut 114");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var payload = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        payload["text"]!.GetValue<string>().Length.ShouldBe(600);
+        var warning = payload["warnings"]!.AsArray().Single()!.AsObject();
+        warning["accepted_len"]!.GetValue<int>().ShouldBe(600);
+        warning["limit"]!.GetValue<int>().ShouldBe(500);
+        warning["truncated"]!.GetValue<bool>().ShouldBeTrue();
+        warning["lost_tail_preview"]!.GetValue<string>().Length.ShouldBe(14);
+
+        var pastCeiling = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/all/messages", new { Text = new string('x', 611 + 2_000) });
+        pastCeiling.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

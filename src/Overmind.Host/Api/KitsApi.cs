@@ -113,7 +113,13 @@ public static class KitsApi
         return Results.Ok(KitMapper.ToResponse(kit));
     }
 
-    private static async Task<IResult> Delete(Guid id, OvermindDbContext db, CancellationToken ct)
+    private static async Task<IResult> Delete(
+        Guid id,
+        string? deployedFiles,
+        OvermindDbContext db,
+        HomeKitDeployer deployer,
+        IReadOnlyList<AgentHomeSpec> agentHomes,
+        CancellationToken ct)
     {
         var kit = await db.SkillKits.FirstOrDefaultAsync(k => k.Id == id, ct);
         if (kit is null)
@@ -127,6 +133,66 @@ public static class KitsApi
             return HttpErrors.Conflict($"Kit '{id}' is active for {activeLinks} project(s); deactivate it first.");
         }
 
+        var fileRows = await db.GlobalMaterializedFiles.Where(f => f.KitId == id).ToListAsync(ct);
+        var markerRows = await db.GlobalMarkerDeployments.Where(m => m.KitId == id).ToListAsync(ct);
+        if (fileRows.Count == 0 && markerRows.Count == 0)
+        {
+            return await DeleteKitRow(db, kit, ct);
+        }
+
+        if (kit.Mandatory)
+        {
+            return HttpErrors.Conflict(
+                $"Mandatory kit '{kit.Name}' cannot be deleted while globally deployed.",
+                title: "MandatoryGlobalKit");
+        }
+
+        if (deployedFiles is null)
+        {
+            return HttpErrors.Conflict(
+                $"Kit '{id}' is globally deployed; pass deployedFiles=keep or deployedFiles=remove.",
+                title: "DeployedFilesChoiceRequired");
+        }
+
+        if (deployedFiles != "keep" && deployedFiles != "remove")
+        {
+            return HttpErrors.BadRequest(
+                "deployedFiles must be 'keep' or 'remove'.", title: "InvalidDeployedFiles");
+        }
+
+        if (deployedFiles == "remove")
+        {
+            try
+            {
+                foreach (var platform in fileRows.Select(r => r.Platform)
+                             .Concat(markerRows.Select(r => r.Platform))
+                             .Distinct())
+                {
+                    var agentName = agentHomes.FirstOrDefault(s => s.Platform == platform)?.AgentName
+                        ?? platform.ToString().ToLowerInvariant();
+                    await deployer.DematerializeAsync(id, agentName, ct);
+                }
+            }
+            catch (MaterializationException ex)
+            {
+                return MaterializationErrors.Map(ex);
+            }
+            catch (KitActivationException ex)
+            {
+                return KitActivationErrors.Map(ex);
+            }
+
+            fileRows = await db.GlobalMaterializedFiles.Where(f => f.KitId == id).ToListAsync(ct);
+            markerRows = await db.GlobalMarkerDeployments.Where(m => m.KitId == id).ToListAsync(ct);
+        }
+
+        db.GlobalMaterializedFiles.RemoveRange(fileRows);
+        db.GlobalMarkerDeployments.RemoveRange(markerRows);
+        return await DeleteKitRow(db, kit, ct);
+    }
+
+    private static async Task<IResult> DeleteKitRow(OvermindDbContext db, SkillKit kit, CancellationToken ct)
+    {
         db.SkillKits.Remove(kit);
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
@@ -235,7 +301,7 @@ public static class KitsApi
         try
         {
             var report = await deployer.DeployAsync(kitId, agent, force == true, ct);
-            return Results.Ok(report);
+            return Results.Ok(KitMapper.ToResponse(report));
         }
         catch (MaterializationException ex)
         {
@@ -256,7 +322,7 @@ public static class KitsApi
         try
         {
             var report = await deployer.DematerializeAsync(kitId, agent, ct);
-            return Results.Ok(report);
+            return Results.Ok(KitMapper.ToResponse(report));
         }
         catch (MaterializationException ex)
         {
@@ -268,10 +334,16 @@ public static class KitsApi
         }
     }
 
-    private static async Task<IResult> GlobalState(HomeKitDeployer deployer, CancellationToken ct)
+    private static async Task<IResult> GlobalState(
+        HomeKitDeployer deployer,
+        IReadOnlyList<AgentHomeSpec> agentHomes,
+        CancellationToken ct)
     {
         var snapshot = await deployer.GetGlobalStateAsync(ct);
-        return Results.Ok(snapshot);
+        var names = agentHomes
+            .GroupBy(s => s.Platform)
+            .ToDictionary(g => g.Key, g => g.First().AgentName);
+        return Results.Ok(snapshot.Select(s => KitMapper.ToResponse(s, names)).ToArray());
     }
 
     private static async Task<IResult> Drift(

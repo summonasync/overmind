@@ -10,8 +10,9 @@ public sealed class CreateNotificationRequestValidator : AbstractValidator<Creat
     {
         RuleFor(x => x.Kind).NotEmpty()
             .IsEnumName(typeof(NotificationKind), caseSensitive: false);
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000)
-            .WithMessage(x => $"Text exceeds the 2000 character limit (got {x.Text!.Length}).");
+        // Agent-door notify text is soft-capped (266): the door stores the grace band whole and
+        // truncates beyond it with warnings[]. The human reply door below keeps its hard cap.
+        RuleFor(x => x.Text).NotEmpty();
         RuleFor(x => x.FeatureSlug).MaximumLength(64)
             .When(x => x.FeatureSlug is not null);
         RuleFor(x => x.Tab)

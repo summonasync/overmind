@@ -25,7 +25,8 @@ public sealed record AgentNotificationResponse(
     DateTime? ReadAt,
     string? ReplyText,
     DateTime? RepliedAt,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record NotificationResponse(
     Guid Id,

@@ -727,6 +727,52 @@ Imported kits remember their source (task 02). Re-import is the manual refresh s
         PlanningSections.Insert("log", body, null).ShouldStartWith(body);
     }
 
+    [Fact]
+    public void Find_DuplicateAnchoredPairs_PrefersTheLastNonEmptyCopy()
+    {
+        var poisoned = "<goal>\nreal goal\n</goal>\n\n<goal>\n(none)\n</goal>\n";
+
+        PlanningSections.Find("goal", poisoned)!.Content.ShouldBe("real goal");
+    }
+
+    [Fact]
+    public void Find_AllAnchoredCopiesEmpty_LastPairWins()
+    {
+        var body = "<goal>\n(none)\n</goal>\n\n<goal>\n(none)\n</goal>\n";
+        var secondOpen = body.IndexOf("<goal>", body.IndexOf("<goal>") + 1);
+
+        var section = PlanningSections.Find("goal", body)!;
+        section.Content.ShouldBe("(none)");
+        section.OpenIndex.ShouldBe(secondOpen);
+    }
+
+    [Fact]
+    public void ParseAcceptanceCriteria_PoisonedBody_SeesTheRealChecklist()
+    {
+        var poisoned = "<acceptance-criteria>\n- [ ] build green\n- [x] tests green</acceptance-criteria>\n<acceptance-criteria>\n(none)\n</acceptance-criteria>\n";
+
+        var items = PlanningSections.ParseAcceptanceCriteria(poisoned);
+
+        items.Count.ShouldBe(2);
+        items[0].Checked.ShouldBe(false);
+        items[1].Checked.ShouldBe(true);
+    }
+
+    [Fact]
+    public void ParseAcceptanceCriteria_GluedCloserWithTailCopy_LocatesOnTheRealSection()
+    {
+        var poisoned = "<acceptance-criteria>\n- [ ] build green\n- [x] tests green</acceptance-criteria>\n<acceptance-criteria>\n(none)\n</acceptance-criteria>\n";
+
+        var section = PlanningSections.Find("acceptance-criteria", poisoned)!;
+        section.Content.ShouldContain("(none)");
+
+        var healed = PlanningSectionCanonicalizer.Canonicalize(poisoned);
+        var items = PlanningSections.ParseAcceptanceCriteria(healed);
+        items.Count.ShouldBe(2);
+        items[0].RawText.ShouldBe("[ ] build green");
+        items[1].RawText.ShouldBe("[x] tests green");
+    }
+
     [Theory]
     [InlineData("goal", true)]
     [InlineData("anti-scope", true)]

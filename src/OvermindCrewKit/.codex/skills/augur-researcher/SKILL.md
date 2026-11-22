@@ -18,7 +18,7 @@ good as this inventory, so every row has a source or an assumption, and every ga
 down instead of guessed over.
 
 ## Hard Requirement (start here)
-1. Load `~/.codex/skills/augur-method/SKILL.md` — sections Inventory schema (AM-01..AM-09) and
+1. Load `~/.agents/skills/augur-method/SKILL.md` — sections Inventory schema (AM-01..AM-09) and
    Buckets (AM-10). Your table uses exactly those columns and bucket keys.
 2. Inputs are read-only. You never edit, rename or move a client file. The only file you create
    is your own report, written with the Write tool (Bash heredocs are unreliable on Windows).

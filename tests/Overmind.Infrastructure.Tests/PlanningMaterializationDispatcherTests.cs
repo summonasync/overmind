@@ -18,7 +18,7 @@ public sealed class PlanningMaterializationDispatcherTests : IDisposable
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
     }
 
@@ -52,7 +52,7 @@ public sealed class PlanningMaterializationDispatcherTests : IDisposable
         await dispatcher.DispatchAsync(projectId);
 
         queue.PendingCount.ShouldBe(0);
-        await _materializer.Received(1).SyncAsync(projectId, false, Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(projectId, false, false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class PlanningMaterializationDispatcherTests : IDisposable
         await dispatcher.DispatchAsync(projectId);
 
         queue.PendingCount.ShouldBe(1);
-        await _materializer.Received(1).SyncAsync(projectId, false, Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(projectId, false, false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class PlanningMaterializationDispatcherTests : IDisposable
         await dispatcher.DispatchInlineAsync(projectId);
 
         queue.PendingCount.ShouldBe(0);
-        await _materializer.Received(1).SyncAsync(projectId, false, Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(projectId, false, false, Arg.Any<CancellationToken>());
     }
 
     private PlanningMaterializationDispatcher CreateDispatcher(PlanningMaterializationQueue queue) =>

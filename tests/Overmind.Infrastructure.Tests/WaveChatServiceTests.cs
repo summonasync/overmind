@@ -74,24 +74,35 @@ public sealed class WaveChatServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Post_TextOverCap_ThrowsNamedWaveTextTooLong()
+    public async Task Post_TextOverGraceCeiling_ThrowsNamedWaveTextTooLong()
     {
+        // 266: the service is the storage backstop — whole-band values are legal (the API door
+        // truncates the rest); only past the derived ceiling does it still throw.
+        var ceiling = SoftCap.Ceiling(WaveMessage.MaxTextLength);
         var ex = await Should.ThrowAsync<PlanningException>(() =>
-            Service().PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', WaveMessage.MaxTextLength + 1)));
+            Service().PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', ceiling + 1)));
 
         ex.Code.ShouldBe(PlanningFailureCode.WaveTextTooLong);
         (await CountAsync()).ShouldBe(0);
     }
 
     [Fact]
-    public async Task Post_CapStays500_LiteralBoundary()
+    public async Task Post_GraceBandStoresWhole_BoundaryAt610()
     {
         var atCap = await Service().PostAsync(
             _projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 500));
         atCap.Text.Length.ShouldBe(500);
 
+        var inBand = await Service().PostAsync(
+            _projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 501));
+        inBand.Text.Length.ShouldBe(501);
+
+        var atCeiling = await Service().PostAsync(
+            _projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 610));
+        atCeiling.Text.Length.ShouldBe(610);
+
         var ex = await Should.ThrowAsync<PlanningException>(() =>
-            Service().PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 501)));
+            Service().PostAsync(_projectId, "all", "Dan", AgentSession.DefaultRole, new string('x', 611)));
 
         ex.Code.ShouldBe(PlanningFailureCode.WaveTextTooLong);
     }

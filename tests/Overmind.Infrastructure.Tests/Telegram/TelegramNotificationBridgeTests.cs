@@ -197,7 +197,7 @@ public sealed class TelegramNotificationBridgeTests : IDisposable
     {
         var materializer = Substitute.For<IPlanningMaterializer>();
         materializer
-            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []));
 
         var dispatcher = TestPlanningDispatcher.Create(_context, materializer);

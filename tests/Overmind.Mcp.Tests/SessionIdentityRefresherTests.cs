@@ -394,6 +394,56 @@ public sealed class SessionIdentityRefresherTests : IDisposable
     }
 
     [Fact]
+    public async Task Reconnect_HostResumesTheStampedRow_NoRestoreLegRuns()
+    {
+        AdapterSession.Id = null;
+        var stampedId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", stampedId, DateTime.UtcNow));
+        var refresher = Refresher(_ => JsonBody(new { id = stampedId }));
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        AdapterSession.Id.ShouldBe(stampedId);
+        AdapterIdentityState.TryGet().ShouldBeNull();
+        var registration = JsonNode.Parse(
+            Requests.Single(r => !r.Uri.EndsWith("/identity", StringComparison.Ordinal)).Body)!;
+        registration["alias"]!.GetValue<string>().ShouldBe("agent");
+        registration["priorSessionId"]!.GetValue<string>().ShouldBe(stampedId.ToString());
+        Requests.ShouldNotContain(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal));
+        Requests.ShouldNotContain(r => r.Uri.EndsWith("/end", StringComparison.Ordinal));
+        Workspace().TryRead()!.Alias.ShouldBe("mark-wolff");
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        AdapterSession.Id.ShouldBe(stampedId);
+        Requests.Count(r => !r.Uri.EndsWith("/identity", StringComparison.Ordinal)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Reconnect_HostMintsAFreshRow_RestoreLegStillRuns()
+    {
+        AdapterSession.Id = null;
+        var stampedId = Guid.NewGuid();
+        Workspace().Write(new SessionIdentitySnapshot("mark-wolff", "claude", stampedId, DateTime.UtcNow));
+        var freshId = Guid.NewGuid();
+        var refresher = Refresher(request =>
+            IsIdentityCall(request)
+                ? IdentityEcho(freshId, "mark-wolff", "claude")
+                : JsonBody(new { id = freshId }));
+
+        await refresher.RefreshAsync(CancellationToken.None);
+
+        AdapterSession.Id.ShouldBe(freshId);
+        var registration = JsonNode.Parse(
+            Requests.Single(r => !r.Uri.EndsWith("/identity", StringComparison.Ordinal)).Body)!;
+        registration["priorSessionId"]!.GetValue<string>().ShouldBe(stampedId.ToString());
+        var identity = JsonNode.Parse(
+            Requests.Single(r => r.Uri.EndsWith("/identity", StringComparison.Ordinal)).Body)!;
+        identity["alias"]!.GetValue<string>().ShouldBe("mark-wolff");
+        identity["vendor"]!.GetValue<string>().ShouldBe("claude");
+    }
+
+    [Fact]
     public async Task Handshake_RefusedRestore_PrintsTheHostsHolderDetail()
     {
         AdapterSession.Id = null;

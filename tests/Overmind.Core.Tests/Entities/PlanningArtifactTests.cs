@@ -970,6 +970,14 @@ end
         ex.Code.ShouldBe(PlanningFailureCode.PatchHeadingAmbiguous);
         ex.Message.ShouldContain("2 H2 headings");
         ex.Message.ShouldContain("'## Scope', '## Scope'");
+
+        // 266/T3 row 4 — the frequency leader's wording upgrade: the count alone sent people hunting
+        // for duplicate headings that were never there. The rule the throw actually enforces is that
+        // content is the block under the heading and the heading line itself is byte-stable.
+        ex.Message.ShouldContain("the heading line itself stays byte-stable");
+        ex.Message.ShouldContain("resend with that line stripped from the content");
+        ex.Message.ShouldContain("merge or rename the duplicates");
+
         artifact.Body.ShouldBe(body);
         artifact.Version.ShouldBe(1);
         artifact.Versions.ShouldBeEmpty();
@@ -1872,15 +1880,20 @@ end
     }
 
     [Fact]
-    public void SetBrief_OverCap_ThrowsInvalidBrief()
+    public void SetBrief_GraceBandStoresWhole_OverCeilingThrowsInvalidBrief()
     {
+        // 266: BriefMaxLength is the soft cap enforced at the doors; the entity keeps the
+        // grace ceiling as the storage backstop, so band values are legal here.
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
 
+        artifact.SetBrief(new string('x', PlanningArtifact.BriefMaxLength + 1));
+        artifact.Brief!.Length.ShouldBe(PlanningArtifact.BriefMaxLength + 1);
+
         var ex = Should.Throw<PlanningException>(
-            () => artifact.SetBrief(new string('x', PlanningArtifact.BriefMaxLength + 1)));
+            () => artifact.SetBrief(new string('x', SoftCap.Ceiling(PlanningArtifact.BriefMaxLength) + 1)));
 
         ex.Code.ShouldBe(PlanningFailureCode.InvalidBrief);
-        artifact.Brief.ShouldBeNull();
+        artifact.Brief!.Length.ShouldBe(PlanningArtifact.BriefMaxLength + 1);
     }
 
     [Fact]
@@ -1941,6 +1954,33 @@ end
             updatedAt);
 
         artifact.ContentUpdatedAt.ShouldBe(updatedAt);
+    }
+
+    [Fact]
+    public void AcTextChange_MovesContentUpdatedAt()
+    {
+        var artifact = PlanningArtifact.Create(
+            FeatureId, PlanningArtifactKind.Spec,
+            "# Spec\n\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>\n");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+
+        artifact.UpdateBody(
+            "# Spec\n\n<acceptance-criteria>\n- [ ] hold the line forever\n</acceptance-criteria>\n",
+            logNote: "criterion reworded");
+
+        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+    }
+
+    [Fact]
+    public void LogOnlyBodyResend_LeavesContentUpdatedAtUntouched()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\noriginal\n</goal>\n");
+        var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
+        var withLogLine = PlanningLog.Append(artifact.Body, "service line", source: PlanningLogSource.Agent);
+
+        artifact.UpdateBody(withLogLine, logNote: "resending with the log line merged in");
+
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
     }
 
     [Fact]
@@ -2027,14 +2067,14 @@ end
     }
 
     [Fact]
-    public void TickAc_BumpsContentUpdatedAt()
+    public void TickAc_LeavesContentUpdatedAtUntouched()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, PatchBody);
         var contentUpdatedAtBefore = artifact.ContentUpdatedAt;
 
         artifact.TickAc(1, null);
 
-        artifact.ContentUpdatedAt.ShouldBeGreaterThan(contentUpdatedAtBefore);
+        artifact.ContentUpdatedAt.ShouldBe(contentUpdatedAtBefore);
     }
 
     [Fact]

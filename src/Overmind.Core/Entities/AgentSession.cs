@@ -19,6 +19,7 @@ public sealed class AgentSession
     public DateTime StartedAt { get; private set; }
     public DateTime LastSeenAt { get; private set; }
     public DateTime? EndedAt { get; private set; }
+    public DateTime? ReplyCursorAt { get; private set; }
 
     public static AgentSession Create(string alias, string vendor, string role = DefaultRole)
     {
@@ -67,6 +68,22 @@ public sealed class AgentSession
 
     public void End() => EndedAt ??= DateTime.UtcNow;
 
+    // Un-ends a row whose session came back (claim re-adopt path): Touch stays a no-op on ended
+    // rows by design, so healing needs its own verb; StartedAt stays historical on purpose.
+    public void Reactivate()
+    {
+        EndedAt = null;
+        LastSeenAt = DateTime.UtcNow;
+    }
+
+    public void AdvanceReplyCursor(DateTime at)
+    {
+        if (ReplyCursorAt is null || at > ReplyCursorAt)
+        {
+            ReplyCursorAt = at;
+        }
+    }
+
     public void SetRole(string role) => Role = NormalizeRole(role);
 
     public void RenameAlias(string alias)
@@ -89,14 +106,16 @@ public sealed class AgentSession
         Vendor = normalizedVendor;
     }
 
-    public AgentSessionLiveness Liveness(DateTime now, int staleThresholdMinutes)
+    public AgentSessionLiveness Liveness(
+        DateTime now, int staleThresholdMinutes, DateTime? observedLastSeenAt = null)
     {
         if (EndedAt is not null)
         {
             return AgentSessionLiveness.Ended;
         }
 
-        if (staleThresholdMinutes > 0 && now - LastSeenAt > TimeSpan.FromMinutes(staleThresholdMinutes))
+        var lastSeen = observedLastSeenAt ?? LastSeenAt;
+        if (staleThresholdMinutes > 0 && now - lastSeen > TimeSpan.FromMinutes(staleThresholdMinutes))
         {
             return AgentSessionLiveness.Stale;
         }

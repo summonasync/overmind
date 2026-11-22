@@ -1,7 +1,9 @@
 namespace Overmind.Infrastructure.Entries;
 
-// Spec R3 collision rule, owner ruling 2026-11-17: markers are strict, the reserved container is deterministic.
-// The two modes are separate methods on purpose — a caller cannot inherit the fallback by forgetting a flag.
+// Spec R3 collision rule, owner ruling 2026-11-17: markers stay strict — exact spelling wins,
+// a single case variant is adoptable, a tie is unresolvable. The deterministic fallback that used
+// to live beside it died with the IX_Projects_NameNormalized unique index: the multi-variant world
+// it arbitrated can no longer exist.
 public static class ProjectNameMatch
 {
     public static Guid? PickStrict(
@@ -11,28 +13,6 @@ public static class ProjectNameMatch
         var (exact, variants) = Collect(projects, name);
 
         return exact ?? (variants.Count == 1 ? variants[0].Id : null);
-    }
-
-    public static Guid? PickDeterministic(
-        IEnumerable<(Guid Id, string Name, DateTime CreatedAt)> projects,
-        string name)
-    {
-        var (exact, variants) = Collect(projects, name);
-        if (exact is not null)
-        {
-            return exact;
-        }
-
-        if (variants.Count == 0)
-        {
-            return null;
-        }
-
-        return variants
-            .OrderBy(project => project.CreatedAt)
-            .ThenBy(project => project.Id)
-            .First()
-            .Id;
     }
 
     private static (Guid? Exact, List<(Guid Id, string Name, DateTime CreatedAt)> Variants) Collect(

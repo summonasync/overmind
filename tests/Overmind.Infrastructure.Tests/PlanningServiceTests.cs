@@ -25,7 +25,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
@@ -1164,7 +1164,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             .Count(l => l.Text == "artifact created → ready")
             .ShouldBe(1);
 
-        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -1502,7 +1502,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             .ShouldNotContain(l => l.Text == "artifact created → ready");
 
         await _materializer.DidNotReceive().SyncAsync(
-            Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     private sealed class CompetingWriterInterceptor(Func<bool> armed, Action compete) : SaveChangesInterceptor
@@ -1817,9 +1817,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
-        ex.Message.ShouldBe(
+        ex.Message.ShouldStartWith(
             "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
             "and wait for the human's reply in the notification center, or validate via the UI.");
+        ex.Message.ShouldContain("One reply validates the spec and the plan together");
 
         var persisted = await _context.PlanningArtifacts.FirstAsync(a => a.Id == spec.Id);
         persisted.Status.ShouldBe(PlanningArtifactStatus.Draft);
@@ -2291,7 +2292,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     [Fact]
     public async Task SyncAsync_Throwing_MutationStillSucceeds()
     {
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(MaterializationException.IoFailure("/tmp/test", new System.IO.IOException("disk full")));
 
         var service = CreateFeatureService();
@@ -2802,9 +2803,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
 
         ex.Kind.ShouldBe(PlanningFailureKind.RuleViolation);
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
-        ex.Message.ShouldBe(
+        ex.Message.ShouldStartWith(
             "Human approval required: send overmind_notify(kind=approval, featureSlug=feat) " +
             "and wait for the human's reply in the notification center, or validate via the UI.");
+        ex.Message.ShouldContain("One reply validates the spec and the plan together");
     }
 
     [Fact]
@@ -2974,7 +2976,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
-    public async Task PatchAsync_TickingAcAfterReply_ReportsVoidedProof()
+    public async Task PatchAsync_TickingAcAfterReply_PreservesTheProof()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -2997,7 +2999,60 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking after the tap"),
             source: PlanningLogSource.Agent);
 
-        patched.Artifact.ValidationProofVoided.ShouldBe(notification.RepliedAt);
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
+        patched.Artifact.ContentUpdatedAt.ShouldBe(patched.Artifact.CreatedAt);
+    }
+
+    // Review-259-01 MAJOR-1 disposition: obstacles content on a gated doc is gated content —
+    // an obstacles-only patch on a validated spec voids the proof like any other section edit.
+    // (The task AC's "obstacles patch preserves" phrasing referred to task artifacts, which hold
+    // no proofs at all.)
+    [Fact]
+    public async Task PatchAsync_ObstaclesOnlyPatchOnValidatedSpec_VoidsWithNamedCause()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec,
+            "# Spec\n\n<goal>\nship it\n</goal>\n\n<obstacles>\n(none)\n</obstacles>\n",
+            null, null, null, default);
+        await artifactService.ValidateAsync(spec.Id, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the spec", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var patched = await artifactService.PatchAsync(
+            spec.Id,
+            new PlanningArtifactPatch(Section: "obstacles", Content: "found a race", LogNote: "recording a finding"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldNotBeNull();
+        patched.Artifact.ValidationProofVoidCause.ShouldBe("section 'obstacles' changed");
+    }
+
+    [Fact]
+    public async Task PatchAsync_TickingAcOnTask_DoesNotRecordVoidNoise()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "# Task\n\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>",
+            null, null, null, default);
+
+        var patched = await artifactService.PatchAsync(
+            task.Id,
+            new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking a task"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
     }
 
     [Fact]
@@ -3018,6 +3073,62 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             source: PlanningLogSource.Agent);
 
         patched.Artifact.ValidationProofVoided.ShouldBeNull();
+    }
+
+    // 266/T3 row 7 — a task never holds a validation proof (tasks run todo→review→done; the proof
+    // gate belongs to spec, plan and result), so echoing one after a task write told the caller a
+    // document approval had died when nothing of the sort existed. Suppressed for task mutations;
+    // the spec-side echo above stays exactly as it was.
+    [Fact]
+    public async Task PatchAsync_TickingTaskAcAfterReply_KeepsTheProofFieldSilent()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "<goal>\nwork\n</goal>\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>",
+            order: 1, review: null, logNote: null);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the plan", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var patched = await artifactService.PatchAsync(
+            task.Id,
+            new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking the task item"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
+        patched.Artifact.Body.ShouldContain("- [x] hold the line");
+    }
+
+    [Fact]
+    public async Task UpsertAsync_EditingTaskBodyAfterReply_KeepsTheProofFieldSilent()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "<goal>\noriginal\n</goal>",
+            order: 1, review: null, logNote: null);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the plan", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var rewritten = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "<goal>\nrewritten\n</goal>",
+            order: 1, review: null, logNote: "second shape");
+
+        rewritten.ValidationProofVoided.ShouldBeNull();
+        rewritten.Body.ShouldContain("rewritten");
     }
 
     [Fact]
@@ -3323,8 +3434,50 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
     }
 
+    // The 5b70d40c one-pass sequence: notify -> reply -> draft the plan -> validate spec -> validate
+    // plan, one reply, no 409. The never-edited plan draft is covered by the tap; the first gated
+    // edit after it voids.
     [Fact]
-    public async Task ValidateAsync_AcTickedAfterReply_ThrowsValidationProofRequired()
+    public async Task ValidateAsync_PlanDraftedAfterReply_OneReplyCoversBoth_NextEditVoids()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var spec = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Spec, "# Spec\n\n<goal>\nship it\n</goal>\n",
+            null, null, null, default);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "approve the spec; the plan lands next", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var plan = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Plan, "# Plan\n\n<goal>\nslice it\n</goal>\n",
+            null, null, null, default);
+        plan.CreatedAt.ShouldBeGreaterThan(notification.RepliedAt!.Value);
+
+        var validatedSpec = await artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default);
+        validatedSpec.Status.ShouldBe(PlanningArtifactStatus.Validated);
+
+        var validatedPlan = await artifactService.ValidateAsync(plan.Id, requireHumanProof: true, ct: default);
+        validatedPlan.Status.ShouldBe(PlanningArtifactStatus.Validated);
+
+        var patched = await artifactService.PatchAsync(
+            plan.Id,
+            new PlanningArtifactPatch(Section: "goal", Content: "resliced", LogNote: "scope moved"),
+            source: PlanningLogSource.Agent);
+        patched.Artifact.ValidationProofVoidCause.ShouldBe("section 'goal' changed");
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.ValidateAsync(plan.Id, requireHumanProof: true, ct: default));
+        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AcTickedAfterReply_ProofStillLive_Validates()
     {
         var featureService = CreateFeatureService();
         var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
@@ -3343,10 +3496,10 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         await artifactService.PatchAsync(
             spec.Id, new PlanningArtifactPatch(TickIndex: 1), source: PlanningLogSource.Agent);
 
-        var ex = await Should.ThrowAsync<PlanningException>(
-            () => artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default));
+        var validated = await artifactService.ValidateAsync(spec.Id, requireHumanProof: true, ct: default);
 
-        ex.Code.ShouldBe(PlanningFailureCode.ValidationProofRequired);
+        validated.Status.ShouldBe(PlanningArtifactStatus.Validated);
+        validated.ValidationProofVoided.ShouldBeNull();
     }
 
     [Fact]
@@ -3495,7 +3648,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         snapshot.Version.ShouldBe(1);
         snapshot.Body.ShouldContain("<goal>\nold goal\n</goal>");
 
-        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -3587,7 +3740,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var snapshot = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
         snapshot.Body.ShouldContain("old scope");
 
-        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -4630,7 +4783,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         PlanningLog.Parse(reloaded.Body).ShouldBeEmpty();
 
         await _materializer.DidNotReceive().SyncAsync(
-            _projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            _projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

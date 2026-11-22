@@ -148,6 +148,12 @@ public sealed class IssuesTools
             ["text"] = echo.GetProperty("text").GetString(),
             ["createdAt"] = echo.GetProperty("createdAt").GetString()
         };
+        if (echo.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0)
+        {
+            compact["warnings"] = JsonNode.Parse(warnings.GetRawText());
+        }
+
         return EchoResult(compact.Deserialize<JsonElement>());
     }
 

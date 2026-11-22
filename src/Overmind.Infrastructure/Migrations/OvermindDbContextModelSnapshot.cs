@@ -56,7 +56,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(2000)
+                        .HasMaxLength(2440)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -81,6 +81,9 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReplyCursorAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Role")
@@ -696,7 +699,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(2000)
+                        .HasMaxLength(2440)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -818,7 +821,7 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Contour")
-                        .HasMaxLength(2000)
+                        .HasMaxLength(2440)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
@@ -1003,7 +1006,14 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<string>("Manifest")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("MaterializationErrorSeenAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameNormalized")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -1028,6 +1038,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("NameNormalized")
                         .IsUnique();
 
                     b.ToTable("Projects");
@@ -1311,7 +1324,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(500)
+                        .HasMaxLength(610)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

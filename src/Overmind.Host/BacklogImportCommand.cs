@@ -81,7 +81,10 @@ internal static class BacklogImportCommand
                 return (null, $"--import-backlog: no registered project has id {id}");
             }
 
-            var byName = await db.Projects.Where(p => p.Name == selector).ToListAsync(ct);
+            var normalizedSelector = Project.NormalizeName(selector);
+            var byName = await db.Projects
+                .Where(p => p.NameNormalized == normalizedSelector)
+                .ToListAsync(ct);
             if (byName.Count == 1)
             {
                 return (byName[0], null);

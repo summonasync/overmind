@@ -28,7 +28,7 @@ public sealed class PlanningBatchServiceTests : IDisposable, IAsyncLifetime
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
@@ -240,7 +240,7 @@ public sealed class PlanningBatchServiceTests : IDisposable, IAsyncLifetime
                 LogNote: "task closed"),
         ]);
 
-        await _materializer.Received(1).SyncAsync(_projectId, false, Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, false, false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
