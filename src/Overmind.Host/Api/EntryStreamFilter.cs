@@ -57,10 +57,15 @@ internal static class EntryStreamFilter
                     "UnresolvedProjectFilter"));
         }
 
+        // Indexed fold (IX_Projects_NameNormalized), not a full-table sweep: the unique index
+        // caps candidates at one row, so the strict pick below keeps its shape for free. The
+        // Latin-only store invariant (probed 2026-11-21, recorded on the migration) is what
+        // makes the C# fold queryable — legacy non-ASCII rows would need the in-memory filter.
+        var normalized = Project.NormalizeName(value);
         var candidates = (await db.Projects
+                .Where(project => project.NameNormalized == normalized)
                 .Select(project => new { project.Id, project.Name, project.CreatedAt })
-                .ToListAsync(ct))
-            .Where(row => string.Equals(row.Name, value, StringComparison.OrdinalIgnoreCase))
+                .ToArrayAsync(ct))
             .Select(row => (row.Id, row.Name, row.CreatedAt))
             .ToArray();
 
