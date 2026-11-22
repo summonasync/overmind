@@ -334,10 +334,46 @@ public sealed class AgentLoop(
             await AppendAuditAsync(conversation.Id, label, ct);
 
             var result = await tools.InvokeAsync(call.Name, arguments, invocation, ct);
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out _))
+            {
+                await AppendAuditAsync(conversation.Id, RefusalLabel(call.Name, result), ct);
+            }
+
             results.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(call.CallId, result)]));
         }
 
         return results;
+    }
+
+    // The pre-call row carries only the tool name, so a refusal was invisible in the trail and
+    // evidence-gathering meant coaxing the model into repeating it (13192d5e). A refused call
+    // gets a second row with the bounded refusal — the audit record for the human, not an echo
+    // to the model (review-241-02's rule governs model-facing text, not persisted rows).
+    private const int RefusalExcerptLimit = 1000;
+
+    private static string RefusalLabel(string toolName, JsonElement result)
+    {
+        var message = result.TryGetProperty("error", out var error) &&
+                      error.ValueKind == JsonValueKind.String
+            ? error.GetString()
+            : error.ToString();
+        if (message is { Length: > RefusalExcerptLimit })
+        {
+            message = message[..RefusalExcerptLimit];
+        }
+
+        var label = new Dictionary<string, object>
+        {
+            ["tool"] = toolName,
+            ["refusal"] = message ?? string.Empty
+        };
+        if (result.TryGetProperty("code", out var code) &&
+            code.ValueKind == JsonValueKind.String)
+        {
+            label["code"] = code.GetString() ?? string.Empty;
+        }
+
+        return JsonSerializer.Serialize(label, AgentLoopbackClient.JsonOptions);
     }
 
     private async Task AppendAuditAsync(Guid conversationId, string label, CancellationToken ct)
