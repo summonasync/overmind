@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from "@/shared/api/client";
 import type {
+  GrimoireAssistedInstallInput,
   GrimoireAssistedInstallResponse,
   GrimoireDisconnectResponse,
   GrimoireStatusResponse,
@@ -18,8 +19,11 @@ export function wireGrimoire(input: GrimoireWireInput): Promise<GrimoireWireResp
   });
 }
 
-export function runAssistedInstall(channel: string | null): Promise<GrimoireAssistedInstallResponse> {
-  return apiPost<GrimoireAssistedInstallResponse>("/grimoire/assisted-install", { channel });
+export function runAssistedInstall(input: GrimoireAssistedInstallInput): Promise<GrimoireAssistedInstallResponse> {
+  return apiPost<GrimoireAssistedInstallResponse>("/grimoire/assisted-install", {
+    intent: input.intent,
+    channel: input.channel,
+  });
 }
 
 export function disconnectGrimoire(): Promise<GrimoireDisconnectResponse> {

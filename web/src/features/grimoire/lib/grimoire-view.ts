@@ -1,5 +1,9 @@
 import type { BadgeTone } from "@/shared/ui/badge";
-import type { GrimoireAgentOutcome, GrimoireStatusResponse } from "@/features/grimoire/types";
+import type {
+  GrimoireAgentOutcome,
+  GrimoireInstallIntent,
+  GrimoireStatusResponse,
+} from "@/features/grimoire/types";
 
 export const GRIMOIRE_BOOK_NAME_MAX = 100;
 
@@ -37,6 +41,18 @@ export function grimoireUiUrl(status: GrimoireStatusResponse): string | null {
   return status.status === "running" && status.port !== null
     ? `http://127.0.0.1:${status.port}`
     : null;
+}
+
+export function installArmHint(intent: GrimoireInstallIntent): string {
+  return intent === "manual"
+    ? "Always shows Grimoire's hand-install steps; the install channel never runs and no agent config is touched."
+    : "Runs Grimoire's own install channel when one is configured.";
+}
+
+export function installPendingLabel(intent: GrimoireInstallIntent): string {
+  return intent === "manual"
+    ? "Preparing the hand-install steps…"
+    : "Checking for an install channel…";
 }
 
 export function agentOutcomeTone(outcome: GrimoireAgentOutcome): BadgeTone {

@@ -53,12 +53,17 @@ public static class GrimoireApi
         GrimoireIntegrationService service,
         CancellationToken ct)
     {
-        if (request?.Channel is { Length: > MaxChannelLength })
+        if (request is null || !TryParseIntent(request.Intent, out var intent))
+        {
+            return HttpErrors.BadRequest("intent must be one of: manual, assisted.");
+        }
+
+        if (request.Channel is { Length: > MaxChannelLength })
         {
             return Invalid(nameof(request.Channel), $"Must be at most {MaxChannelLength} characters.");
         }
 
-        var result = await service.AssistedInstallAsync(request?.Channel, ct);
+        var result = await service.AssistedInstallAsync(intent, request.Channel, ct);
         return Results.Ok(new GrimoireAssistedInstallResponse(
             result.Degraded,
             result.Success,
@@ -66,6 +71,22 @@ public static class GrimoireApi
             result.Detection?.BinaryPath,
             result.Instructions,
             result.Error));
+    }
+
+    private static bool TryParseIntent(string? raw, out GrimoireInstallIntent intent)
+    {
+        switch (raw?.Trim().ToLowerInvariant())
+        {
+            case "manual":
+                intent = GrimoireInstallIntent.Manual;
+                return true;
+            case "assisted":
+                intent = GrimoireInstallIntent.Assisted;
+                return true;
+            default:
+                intent = GrimoireInstallIntent.Assisted;
+                return false;
+        }
     }
 
     private static async Task<IResult> Disconnect(GrimoireIntegrationService service, CancellationToken ct)
