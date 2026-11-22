@@ -171,6 +171,7 @@ public sealed class McpProcessDriver : IDisposable
     public async Task<int> WaitForExitAsync(TimeSpan timeout)
     {
         await _process.WaitForExitAsync().WaitAsync(timeout);
+        await Completion.WaitAsync(TimeSpan.FromSeconds(5));
         return _process.ExitCode;
     }
 
