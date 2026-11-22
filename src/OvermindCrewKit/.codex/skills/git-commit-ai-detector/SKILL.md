@@ -61,7 +61,7 @@ Score each commit against these signal families. No single signal is proof — v
 - author/committer mismatch patterns, noreply bot identities mixed into a human author's era
 
 ### Code signals (S1–S7) — by reference
-Apply the S1–S7 catalog from `ai-code-detector` (`~/.codex/skills/ai-code-detector/SKILL.md`, sections S1–S7) to the **added lines of each diff** (`git show <sha>`), not to whole files. Do NOT copy that catalog here — the referenced file is the source of truth. Its tooling-config rule (formatters/linters downgrade S2/S5) applies unchanged.
+Apply the S1–S7 catalog from `ai-code-detector` (`~/.agents/skills/ai-code-detector/SKILL.md`, sections S1–S7) to the **added lines of each diff** (`git show <sha>`), not to whole files. Do NOT copy that catalog here — the referenced file is the source of truth. Its tooling-config rule (formatters/linters downgrade S2/S5) applies unchanged.
 
 ## Scoring Model
 Per commit:

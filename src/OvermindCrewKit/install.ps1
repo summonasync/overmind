@@ -5,16 +5,24 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
 
 $homePaths = @{
-    kimi        = Join-Path $HOME '.kimi-code'
-    claude      = Join-Path $HOME '.claude'
-    qwen        = Join-Path $HOME '.qwen'
-    codex       = Join-Path $HOME '.codex'
+    kimi           = Join-Path $HOME '.kimi-code'
+    claude         = Join-Path $HOME '.claude'
+    qwen           = Join-Path $HOME '.qwen'
+    codex          = Join-Path $HOME '.codex'
+    'codex-skills' = Join-Path $HOME '.agents'
 }
 $homeExists = @{}
 foreach ($key in $homePaths.Keys) {
-    $homeExists[$key] = Test-Path $homePaths[$key]
+    $gate = $homePaths[$key]
+    if ($key -eq 'codex-skills') { $gate = Join-Path $HOME '.codex' }  # runtime marker gates the relocated skills root
+    $homeExists[$key] = Test-Path $gate
     if (-not $homeExists[$key]) {
-        Write-Host "Home $($homePaths[$key]) not found, skipping its entries."
+        Write-Host "Home $gate not found, skipping its entries."
+        continue
+    }
+    if ($key -eq 'codex-skills' -and -not (Test-Path $homePaths[$key])) {
+        if ($DryRun) { Write-Host "Would mkdir -p $($homePaths[$key])" }
+        else { New-Item -ItemType Directory -Path $homePaths[$key] -Force | Out-Null }
     }
 }
 
@@ -59,7 +67,15 @@ foreach ($entry in $manifest.entries) {
         }
         else { Invoke-Mirror $src $dst $DryRun }
     }
-    else { Copy-FileEntry $src $destHome $DryRun }
+    else {
+        # '===OVERMIND' marks the 251 global-deploy managed zone: a live entry doc carrying it
+        # is owned by the app door — a whole-file copy here would erase its marker blocks.
+        $dest = Join-Path $destHome $name
+        if ((Test-Path $dest) -and (Select-String -Path $dest -Pattern '===OVERMIND' -Quiet)) {
+            Write-Host "Skipping ${name}: live entry doc carries an OVERMIND marker block"
+        }
+        else { Copy-FileEntry $src $destHome $DryRun }
+    }
 }
 
 if ($DryRun) { Write-Host 'Dry run complete - no changes made.' }

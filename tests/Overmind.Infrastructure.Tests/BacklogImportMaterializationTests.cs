@@ -80,7 +80,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifet
 
         var taskBytesBefore = await File.ReadAllBytesAsync(pinnedTaskPath);
 
-        var second = await materializer.SyncAsync(projectId, force: false, CancellationToken.None);
+        var second = await materializer.SyncAsync(projectId, force: false, quarantine: false, CancellationToken.None);
         second.Warnings.ShouldBeEmpty();
 
         (await File.ReadAllBytesAsync(pinnedTaskPath)).ShouldBe(taskBytesBefore);
@@ -357,7 +357,7 @@ public sealed class BacklogImportMaterializationTests : IDisposable, IAsyncLifet
         (await ctx.PlanningMaterializedFiles.CountAsync(m => m.ProjectId == projectId)).ShouldBe(3);
 
         var materializer = CreateMaterializer(ctx);
-        var sync = await materializer.SyncAsync(projectId, force: false, CancellationToken.None);
+        var sync = await materializer.SyncAsync(projectId, force: false, quarantine: false, CancellationToken.None);
         sync.Warnings.ShouldBeEmpty();
         (await materializer.DetectDriftAsync(projectId, CancellationToken.None)).ShouldBeEmpty();
     }

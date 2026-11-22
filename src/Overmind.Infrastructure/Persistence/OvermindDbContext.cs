@@ -22,6 +22,9 @@ public sealed class OvermindDbContext : DbContext
     public DbSet<SkillKitEntry> SkillKitEntries => Set<SkillKitEntry>();
     public DbSet<ProjectKit> ProjectKits => Set<ProjectKit>();
     public DbSet<MaterializedFile> MaterializedFiles => Set<MaterializedFile>();
+    public DbSet<GlobalMaterializedFile> GlobalMaterializedFiles => Set<GlobalMaterializedFile>();
+    public DbSet<GlobalMarkerDeployment> GlobalMarkerDeployments => Set<GlobalMarkerDeployment>();
+    public DbSet<GlobalMaterializationRun> GlobalMaterializationRuns => Set<GlobalMaterializationRun>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<PlanningFeature> PlanningFeatures => Set<PlanningFeature>();
     public DbSet<PlanningFeatureDependency> PlanningFeatureDependencies => Set<PlanningFeatureDependency>();
@@ -71,6 +74,7 @@ public sealed class OvermindDbContext : DbContext
         modelBuilder.Entity<Project>(builder =>
         {
             builder.HasIndex(p => p.Name).IsUnique();
+            builder.HasIndex(p => p.NameNormalized).IsUnique();
 
             builder.Property(p => p.ClaimStaleThresholdMinutes)
                 .HasDefaultValue(Project.DefaultClaimStaleThresholdMinutes)
@@ -206,6 +210,31 @@ public sealed class OvermindDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(m => m.ProjectId);
+        });
+
+        modelBuilder.Entity<GlobalMaterializedFile>(builder =>
+        {
+            builder.HasOne<SkillKit>()
+                .WithMany()
+                .HasForeignKey(m => m.KitId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(m => new { m.KitId, m.Platform });
+        });
+
+        modelBuilder.Entity<GlobalMarkerDeployment>(builder =>
+        {
+            builder.HasOne<SkillKit>()
+                .WithMany()
+                .HasForeignKey(m => m.KitId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(m => new { m.KitId, m.Platform }).IsUnique();
+        });
+
+        modelBuilder.Entity<GlobalMaterializationRun>(builder =>
+        {
+            builder.HasIndex(r => r.Kind);
         });
 
         modelBuilder.Entity<PlanningFeature>(builder =>

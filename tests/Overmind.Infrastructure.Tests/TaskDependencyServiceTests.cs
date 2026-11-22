@@ -22,7 +22,7 @@ public sealed class TaskDependencyServiceTests : IDisposable, IAsyncLifetime
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
@@ -82,7 +82,7 @@ public sealed class TaskDependencyServiceTests : IDisposable, IAsyncLifetime
         view.Single().Order.ShouldBe(1);
         BlockerOrders(Tracked(blocked.Id)).ShouldBe([1]);
         await _materializer.Received(1).SyncAsync(
-            _projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            _projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

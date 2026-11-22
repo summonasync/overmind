@@ -105,6 +105,22 @@ public static class OnboardApi
                 SettingDefaults.PlanningMaterializationSync, ct),
             "on", StringComparison.OrdinalIgnoreCase);
 
+        var error = project.LastMaterializationError;
+        string? demotedNotice = null;
+        if (error is not null && project.LastMaterializationFailedAt is { } failedAt)
+        {
+            if (project.MaterializationErrorSeenAt >= failedAt)
+            {
+                error = null;
+                demotedNotice = $"materialization failure already reported at {failedAt:yyyy-MM-dd' 'HH:mm:ss'Z'} — full dump in planning_materialize_status";
+            }
+            else
+            {
+                project.MarkMaterializationErrorSeen();
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
         return Results.Ok(new OnboardResponse(
             project.Id,
             project.Name,
@@ -116,10 +132,11 @@ public static class OnboardApi
                 TriggerText(strategy, inlinePass),
                 project.LastMaterializedAt,
                 project.LastMaterializationAttemptAt,
-                project.LastMaterializationError,
+                error,
                 project.LastMaterializationFailedAt,
                 project.LastMaterializationSkipCount,
-                SkipHeadLines(project.LastMaterializationSkipHead)),
+                SkipHeadLines(project.LastMaterializationSkipHead),
+                demotedNotice),
             new OnboardValidationBlock(humanGate, ValidationGateGuidance(humanGate)),
             new OnboardSemanticBlock(vectorHealth.Up, SemanticUnavailableReason(vectorHealth)),
             new OnboardAgentIdentityBlock(
@@ -313,10 +330,10 @@ public static class OnboardApi
     private static async Task<string> ResolveUniqueNameAsync(
         string baseName, OvermindDbContext db, CancellationToken ct)
     {
-        var existingNames = await db.Projects.Select(p => p.Name).ToListAsync(ct);
+        var takenNormalized = await db.Projects.Select(p => p.NameNormalized).ToListAsync(ct);
         var name = baseName;
         var suffix = 1;
-        while (existingNames.Contains(name, StringComparer.Ordinal))
+        while (takenNormalized.Contains(Project.NormalizeName(name), StringComparer.Ordinal))
         {
             suffix++;
             name = $"{baseName}-{suffix}";

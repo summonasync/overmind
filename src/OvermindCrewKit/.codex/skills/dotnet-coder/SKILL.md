@@ -19,7 +19,7 @@ Before writing or editing ANY code, read project documentation in this strict or
 2. Overmind board — current feature/task state via `overmind_onboard` + `planning_list_features` (ceremony rules: `overmind-ceremony`)
 3. `STRUCTURE.md` — Code style, architecture rules, Do/Don't (English)
 4. `AGENTS.md` — Tech stack, build commands, conventions (English)
-5. `~/.codex/skills/dotnet-best-practices/SKILL.md` — codified BP-IDs; enforceable during implementation. When executing a board task, load this together with the task artifact (`planning_read_artifact`).
+5. `~/.agents/skills/dotnet-best-practices/SKILL.md` — codified BP-IDs; enforceable during implementation. When executing a board task, load this together with the task artifact (`planning_read_artifact`).
 
 ## Tech Stack
 - **Runtime**: .NET 10+ (latest LTS)

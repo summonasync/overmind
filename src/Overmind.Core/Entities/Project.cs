@@ -23,6 +23,7 @@ public sealed partial class Project
 
     public Guid Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
+    public string NameNormalized { get; private set; } = string.Empty;
     public string DiskPath { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
     public PlanningMaterialization PlanningMaterialization { get; private set; }
@@ -32,6 +33,7 @@ public sealed partial class Project
     public DateTime? LastMaterializationAttemptAt { get; private set; }
     public string? LastMaterializationError { get; private set; }
     public DateTime? LastMaterializationFailedAt { get; private set; }
+    public DateTime? MaterializationErrorSeenAt { get; private set; }
     public string? LastMaterializationRun { get; private set; }
     public int? LastMaterializationSkipCount { get; private set; }
     public string? LastMaterializationSkipHead { get; private set; }
@@ -47,15 +49,19 @@ public sealed partial class Project
     public DelegateApprovalsOverride DelegateApprovals { get; private set; }
     public List<PlanningLane> Lanes { get; private set; } = [];
 
+    public static string NormalizeName(string name) => name.Trim().ToLowerInvariant();
+
     public static Project Create(string name, string diskPath, string description = "")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(diskPath);
 
+        var trimmedName = name.Trim();
         return new Project
         {
             Id = Guid.NewGuid(),
-            Name = name.Trim(),
+            Name = trimmedName,
+            NameNormalized = NormalizeName(trimmedName),
             DiskPath = diskPath.Trim(),
             Description = description.Trim(),
             PlanningMaterialization = PlanningMaterialization.Inherit,
@@ -68,6 +74,14 @@ public sealed partial class Project
             RescuePolicy = DefaultRescuePolicy,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    public void Rename(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        Name = name.Trim();
+        NameNormalized = NormalizeName(Name);
     }
 
     public void SetPlanningWorkflow(PlanningMaterialization materialization, HumanValidationOverride validation)
@@ -145,6 +159,7 @@ public sealed partial class Project
         LastMaterializedAt = DateTime.UtcNow;
         LastMaterializationError = null;
         LastMaterializationFailedAt = null;
+        MaterializationErrorSeenAt = null;
         LastMaterializationSkipCount = skips.Count == 0 ? null : skips.Count;
         LastMaterializationSkipHead = skips.Count == 0
             ? null
@@ -166,5 +181,13 @@ public sealed partial class Project
             ? error
             : error[..MaxMaterializationErrorLength];
         LastMaterializationFailedAt = DateTime.UtcNow;
+        MaterializationErrorSeenAt = null;
     }
+
+    // The seen stamp carries the failure's own FailedAt, so "seen" is the explicit comparison
+    // MaterializationErrorSeenAt >= LastMaterializationFailedAt: a newer failure resets the
+    // stamp to null in MarkMaterializationFailed and turns unseen again, a clean pass clears
+    // both. Onboard sets this once it has rendered the full block for the current failure.
+    public void MarkMaterializationErrorSeen() =>
+        MaterializationErrorSeenAt = LastMaterializationFailedAt;
 }

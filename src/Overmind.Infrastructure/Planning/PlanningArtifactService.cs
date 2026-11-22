@@ -66,6 +66,8 @@ public sealed class PlanningArtifactService
             if (existing.Body != body || !string.IsNullOrWhiteSpace(logNote))
             {
                 var preMutationContentUpdatedAt = existing.ContentUpdatedAt;
+                var wasValidated = existing.Status == PlanningArtifactStatus.Validated;
+                var wasNeverEdited = existing.ContentUpdatedAt == existing.CreatedAt;
                 bool bodyMutated;
                 try
                 {
@@ -79,11 +81,11 @@ public sealed class PlanningArtifactService
                 mutated = true;
 
                 if (bodyMutated && existing.Kind != PlanningArtifactKind.Task
-                    && existing.ContentUpdatedAt != preMutationContentUpdatedAt)
+                    && existing.ContentUpdatedAt != preMutationContentUpdatedAt && wasValidated)
                 {
                     var voidedProof = await FindLiveApprovalProofAsync(
-                        feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, ct);
-                    existing.RecordValidationProofVoided(voidedProof?.RepliedAt);
+                        feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, wasNeverEdited, ct);
+                    existing.RecordValidationProofVoided(voidedProof?.RepliedAt, "gated body changed via upsert");
                 }
 
                 if (existing.StatusChanged is not null)
@@ -440,6 +442,8 @@ public sealed class PlanningArtifactService
         var feature = await _db.PlanningFeatures.FirstAsync(f => f.Id == artifact.FeatureId, ct);
         GuardCallerScope(artifact.Id, feature.ProjectId, callerProjectId);
         var preMutationContentUpdatedAt = artifact.ContentUpdatedAt;
+        var wasValidated = artifact.Status == PlanningArtifactStatus.Validated;
+        var wasNeverEdited = artifact.ContentUpdatedAt == artifact.CreatedAt;
         var noChange = false;
         int? tickedIndex = null;
         string? tickedText = null;
@@ -513,13 +517,18 @@ public sealed class PlanningArtifactService
 
         // Row 7: a task can never hold a validation proof (tasks are todo→review→done, the proof
         // gate belongs to spec/plan/result), so echoing one after a task write tells the caller a
-        // document approval died when nothing of the sort existed. Suppressed for task mutations.
+        // document approval died when nothing of the sort existed. Suppressed for task mutations;
+        // a proof can only die on an artifact that was validated.
         if (!noChange && !wantsBrief && artifact.Kind != PlanningArtifactKind.Task
-            && artifact.ContentUpdatedAt != preMutationContentUpdatedAt)
+            && artifact.ContentUpdatedAt != preMutationContentUpdatedAt && wasValidated)
         {
             var voidedProof = await FindLiveApprovalProofAsync(
-                feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, ct);
-            artifact.RecordValidationProofVoided(voidedProof?.RepliedAt);
+                feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, wasNeverEdited, ct);
+            var voidCause = wantsAmend ? "amendment appended"
+                : wantsRemove ? "heading tombstone"
+                : patch.Section is not null ? $"section '{patch.Section}' changed"
+                : "gated body changed";
+            artifact.RecordValidationProofVoided(voidedProof?.RepliedAt, voidCause);
         }
 
         if (!noChange)
@@ -571,27 +580,37 @@ public sealed class PlanningArtifactService
         kind is PlanningArtifactKind.Spec or PlanningArtifactKind.Plan &&
         status == PlanningArtifactStatus.Validated;
 
+    // A live proof: the newest replied approval for the feature still stands — it postdates the
+    // artifact's last gated change, or the artifact has never been gated-edited since creation
+    // and the tap covers first drafts (feature 259).
     private async Task<(Guid NotificationId, DateTime? RepliedAt)?> FindLiveApprovalProofAsync(
-        Guid projectId, string featureSlug, DateTime asOf, CancellationToken ct)
+        Guid projectId, string featureSlug, DateTime contentUpdatedAt, bool neverEdited, CancellationToken ct)
     {
         var proof = await _db.AgentNotifications
             .AsNoTracking()
             .Where(n => n.Kind == NotificationKind.Approval
                 && n.ProjectId == projectId
                 && n.FeatureSlug == featureSlug
-                && n.ReplyText != null && n.ReplyText != string.Empty
-                && n.RepliedAt >= asOf)
+                && n.ReplyText != null && n.ReplyText != string.Empty)
             .OrderByDescending(n => n.RepliedAt)
             .Select(n => new { n.Id, n.RepliedAt })
             .FirstOrDefaultAsync(ct);
 
-        return proof is null ? null : (proof.Id, proof.RepliedAt);
+        if (proof is null)
+        {
+            return null;
+        }
+
+        var covers = proof.RepliedAt >= contentUpdatedAt || neverEdited;
+        return covers ? (proof.Id, proof.RepliedAt) : null;
     }
 
     private async Task<(Guid NotificationId, DateTime? RepliedAt)> RequireLiveApprovalProofAsync(
         Guid projectId, string featureSlug, PlanningArtifact artifact, CancellationToken ct)
     {
-        var proof = await FindLiveApprovalProofAsync(projectId, featureSlug, artifact.ContentUpdatedAt, ct);
+        var proof = await FindLiveApprovalProofAsync(
+            projectId, featureSlug, artifact.ContentUpdatedAt,
+            artifact.ContentUpdatedAt == artifact.CreatedAt, ct);
 
         if (proof is null)
         {

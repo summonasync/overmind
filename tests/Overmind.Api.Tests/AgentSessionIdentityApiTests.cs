@@ -155,6 +155,48 @@ public sealed class AgentSessionIdentityApiTests : IDisposable
         warnings[0].ShouldContain("unknown");
     }
 
+    // The 235 T7 m6 repro (issue ef10a2ff): the alias claim and the held-claim re-attribution must
+    // commit together — a forced re-attribution failure rolls the alias back, and the retry heals.
+    [Fact]
+    public async Task SetIdentity_ReattributionFails_RollsBackAndARetryHeals()
+    {
+        var sessionId = await RegisterAsync("Dan", "claude");
+        var claim = await SeedHeldClaimAsync(sessionId);
+
+        await ExecuteAsync("""
+            CREATE TRIGGER reattribution_abort
+            BEFORE UPDATE OF ClaimedByAlias ON PlanningFeatures
+            FOR EACH ROW WHEN NEW.ClaimedByAlias = 'Van'
+            BEGIN SELECT RAISE(ABORT, 'reattribution forced failure'); END
+            """);
+
+        var failed = await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        failed.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var detail = JsonNode.Parse(await failed.Content.ReadAsStringAsync())!["detail"]!
+            .GetValue<string>();
+        detail.ShouldContain("Re-attribution failed");
+        detail.ShouldContain("Dan");
+        var (aliasAfterFailure, vendorAfterFailure) = await ReadIdentityAsync(sessionId);
+        aliasAfterFailure.ShouldBe("Dan");
+        vendorAfterFailure.ShouldBe("claude");
+        (await ReadClaimAsync(claim)).Alias.ShouldBe("Dan");
+
+        await ExecuteAsync("DROP TRIGGER reattribution_abort");
+        var healed = await SetIdentityAsync(sessionId, "Van", "qwen");
+
+        healed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (alias, vendor) = await ReadIdentityAsync(sessionId);
+        alias.ShouldBe("Van");
+        vendor.ShouldBe("qwen");
+        var claimRow = await ReadClaimAsync(claim);
+        claimRow.Alias.ShouldBe("Van");
+        claimRow.Vendor.ShouldBe("qwen");
+        claimRow.SessionId.ShouldBe(SessionIdText(sessionId));
+        PlanningLog.Parse(claimRow.Body).ShouldContain(line =>
+            line.Text == "claim re-attributed: Dan by claude → Van by qwen");
+    }
+
     [Fact]
     public async Task SetIdentity_MidHoldChange_ReattributesHeldClaimsAndLogsTheMove()
     {

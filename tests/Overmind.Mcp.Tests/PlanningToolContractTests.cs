@@ -2431,15 +2431,56 @@ public class PlanningToolContractTests : McpSessionTestBase
         var description = tools["planning_claim_feature"]!["description"]!.GetValue<string>();
 
         description.ShouldContain("A live foreign holder 409s by name");
-        description.ShouldContain("stale or released claims are take-over-able");
+        description.ShouldContain("stale or ended claims are take-over-able");
+        description.ShouldContain("released marks the orphan whose holder session row is gone");
 
         var section = ContractsDoc.Section("planning_claim_feature");
         section.ShouldContain("a feature whose lane already holds an ALIVE claim by a different alias+vendor pair is refused with 409 naming the holder");
         section.ShouldContain("Unclaimed open features in the lane and the caller's own claims never block");
         section.ShouldContain("reads stay open and the human door in the Overmind UI is never locked");
+        section.ShouldContain("A stale or ended claim by a different session → take-over succeeds and is logged");
+        section.ShouldContain("reads released — the orphan state — and takes over the same way");
 
         description.ShouldNotContain("serial");
         section.ShouldNotContain("serial lock");
+    }
+
+    [Fact]
+    public void ClaimStateVocabulary_ClaimCarryingDocSections_PublishTheShippedBoardVocabulary()
+    {
+        var claimCarrying = new[]
+        {
+            "planning_list_features", "planning_read_feature", "planning_task_queue",
+            "planning_list_lanes", "overmind_wave_snapshot"
+        };
+
+        foreach (var tool in claimCarrying)
+        {
+            var section = ContractsDoc.Section(tool);
+            section.ShouldContain("alive | stale | ended");
+            section.ShouldContain("released only for the orphan whose holder session row is gone");
+        }
+    }
+
+    [Fact]
+    public void ClaimStateVocabulary_DeadHolderReleasedProse_IsGoneFromEveryDocSection()
+    {
+        var deadHolderProse = new[]
+        {
+            "alive | stale | released",
+            "released means the holder session ended",
+            "stale or released claim",
+            "report the same ended holder as released"
+        };
+
+        foreach (var tool in ContractsDoc.Headings())
+        {
+            var section = ContractsDoc.Section(tool);
+            foreach (var prose in deadHolderProse)
+            {
+                section.ShouldNotContain(prose);
+            }
+        }
     }
 
     [Fact]

@@ -35,16 +35,16 @@ Advances no watermarks, marks nothing read — safe to poll any time.
 
 **Default windows (omit `since`).**
 
-- Replies: notifications carrying `ReplyText` whose `readAt` is null — a consumed reply leaves
-  the default window immediately. The window looks back 7 days; override with
-  `OVERMIND_WAKE_REPLY_LOOKBACK_DAYS` on the host (values below 1 clamp to 1, values above 365
-  clamp to 365 so one env typo cannot reach a `TimeSpan` overflow). The mention arm never reads
-  that variable.
+- Replies: notifications carrying a reply whose `RepliedAt` is after the session's reply cursor.
+  The cursor advances when `overmind_replies` delivers a final page (see that section), so a
+  reply stays visible until the peek→replies flow completed. A session with no cursor starts at
+  `now` — a fresh session never re-lights older replies.
 - Mentions: messages created after the session's `LastSeenAt` as it stood before this request.
 
 **Explicit `since` is the replay override.** When `since` is present (a bare timestamp or a
-cursor echo), the reply arm also returns consumed (`readAt`) notifications in the window —
-that is how replayed or paged traffic looks complete. The mention arm bounds at the same instant.
+cursor echo) it replaces the reply cursor for this one call, so already-consumed replies come
+back — that is how replayed or paged traffic looks complete. The mention arm bounds at the same
+instant.
 
 **Project scoping.** The adapter appends `projectId=<resolved>` to the wake request whenever its
 own ProjectResolver yields one (env `OVERMIND_PROJECT_ID`, project pin, or host onboard reply —
@@ -55,7 +55,8 @@ foreign-project replies stop showing up. The mention arm has no project filter.
 **Paging.** ≤100 signals per page, ordered by `createdAt` asc, ties broken by `refId`. The cursor
 is the newest `createdAt` seen followed by `'|'` and the newest signal's `refId`, or the request
 `since` on an empty page. Feed the cursor back verbatim as `since` and repeat until an under-cap
-page arrives; the cursor is inclusive-exact, so no loss or duplicates across a tie group.
+page arrives. The cursor is inclusive-exact: the tie group at the cursor instant is refetched and
+everything at or before the cursor's `refId` is dropped, so no loss or duplicates across a tie.
 
 **Session identity.** The adapter stamps its registered session automatically; a headerless or
 unknown session fails with a named error (`POST /api/agent/sessions` registers).
@@ -63,7 +64,7 @@ unknown session fails with a named error (`POST /api/agent/sessions` registers).
 **Host wire shape.** `GET /api/agent/wake` with optional `since` (ISO 8601, optionally
 `|<refId>` — malformed values return 400 naming the expected shape) and optional `projectId`
 (adapter-internal; not a tool parameter). The response JSON above is the agent-facing contract
-and is unchanged by the lookback, consumption and scoping work; only the row set moved.
+and is unchanged by the cursor work; only the reply arm's default window moved.
 
 <!-- append-regions: the two diet batches fill disjoint zones of this file so parallel lanes
      never collide on the same lines. Insert a tool's section INSIDE its own region, above its
@@ -79,9 +80,9 @@ The full feature board of one project. Read-only and idempotent.
 **Rows.** `slug`, `title`, `status`, `priority`, `lane`, `specStatus`/`planStatus`, task progress
 (`taskTotal`, `taskDone`, `taskCounts`: todo/inProgress/review/done/blocked — the parts sum to
 `taskTotal`), `createdAt`, `updatedAt`, and on claimed entries the claim block
-(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | released).
-`released` means the holder session ended; `stale` and `released` claims are take-over-able
-through `planning_claim_feature`.
+(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | ended, `released`
+only for the orphan whose holder session row is gone). `stale`, `ended` and `released` claims
+are take-over-able through `planning_claim_feature`; only a live holder blocks.
 
 **Filters** (AND, all additive — omit everything for the unchanged full board): `status`
 (draft | ready | inProgress | done | review), `priority` (p0-p3), `lane` (case-insensitive
@@ -104,8 +105,8 @@ tasks, `acTicked`/`acTotal`) without artifact bodies or log lines.
 `planning_list_artifacts` is the cheaper roster, `planning_read_artifact` one body.
 
 **Payload.** The claim block appears when the feature is claimed
-(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | released).
-`review` appears on task payloads only.
+(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | ended, `released`
+only for the orphan whose holder session row is gone). `review` appears on task payloads only.
 
 **Projection knobs**, mutually exclusive: `compact` returns the predefined cheap shape — scalars
 and the claim block stay, the body collapses to `bodyChars`, artifacts become roster rows (kind,
@@ -229,7 +230,8 @@ out. Read-only. The board order IS the queue — this tool is its projection.
 **Rows.** `slug`, `number`, `title`, `priority`, `status`, `queuePosition`, `specStatus`,
 `planStatus`, `taskDone`, `taskTotal`, `taskCounts` (sums to `taskTotal`), `readiness` 0-3,
 `blockedBy`, `isBlocked`, `createdAt`, `updatedAt`, and the claim block when claimed
-(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | released).
+(`claimedByAlias`, `claimedByVendor`, `claimedAt`, `claimState` alive | stale | ended, `released`
+only for the orphan whose holder session row is gone).
 
 **Ceremony context per row.** `phase` — drafting | writing spec | planning | plan validated |
 in progress | review | awaiting-human | done — derived server-side from spec/plan/task/result
@@ -267,14 +269,16 @@ liveness; reads stay open and the human door in the Overmind UI is never locked.
 
 **Outcomes.** Feature done → 409. A live foreign session holding the claim → 409 naming the
 holder, regardless of alias+vendor match — a name collision cannot hijack a live holder. A stale
-or released claim by a different session → take-over succeeds and is logged. Your own alias+vendor
-on an ended session (an adapter restart) → auto-adopt with a fresh session binding. Claims clear
-themselves when the holder session ends or goes stale past the project threshold.
+or ended claim by a different session → take-over succeeds and is logged. A claim whose holder
+session row is gone reads `released` — the orphan state — and takes over the same way. Your own
+alias+vendor on an ended session (an adapter restart) → auto-adopt with a fresh session binding.
+Claims clear themselves when the holder session ends or goes stale past the project threshold.
 
 **Identity.** `alias` and `vendor` are optional (32 characters each) and fall back to the
-identity the session registered with (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`). A claim-locked write
-that finds a stale or ended claim held by the caller's own alias+vendor adopts it and proceeds
-instead of 409ing.
+identity the session registered with (`OVERMIND_ALIAS`/`OVERMIND_VENDOR`). Claims bind by session
+id: a claim-locked write that finds a stale or ended claim held by the caller's own session
+re-adopts it (and logs the re-adopt) instead of 409ing; a different session takes the explicit
+`planning_claim_feature` door even with a matching alias.
 
 **Lane discipline** rides on the claim: a feature whose lane already holds an ALIVE claim by a
 different alias+vendor pair is refused with 409 naming the holder. Unclaimed open features in the
@@ -708,11 +712,11 @@ echoed verbatim — `slug`, `title`, `status`, `claimState`, `claimedByAlias`, `
 `claimedAt`, `claimedByHuman`, `pinnedBranch`, `pinnedWorktreePath`, `updatedAt` — this tool only
 adds fields and renames none. `generatedAt` is the host stamp, copied to the top level.
 
-**Vocabulary.** `claimState` is RAW liveness and only ever `stale` | `ended`. The board projection
-and `overmind_wave_snapshot` report the same ended holder as `released`; the rescue door and this
-scan do not, on purpose — the rescue question is whether anybody still holds the work, and an
-ended holder answers it differently from a claim released on purpose. A consumer must not
-normalize one side into the other.
+**Vocabulary.** `claimState` is RAW liveness and only ever `stale` | `ended` — the orphan whose
+holder session row is gone also reads `ended` here. The board vocabulary adds exactly one value
+to the same three: that orphan reads `released` on the board surfaces. Everything else agrees —
+a dead holder is `ended` on both sides — and a consumer must not collapse the two in either
+direction: `ended` means a dead holder kept its session row, `released` means no row survived.
 
 **Deleted holders, and why the two surfaces differ.** A claim whose holder's `AgentSessions` row is
 gone from the registry reads as `ended` here — the rescue door treats a missing row exactly like an
@@ -998,8 +1002,10 @@ No additional prose — the tool description lost nothing.
   lane watches, shown verbatim; entries whose glob matches a claimant feature's
   `codeSurfaces` surface as informational warnings in `planning_claim_feature` responses);
   `openFeatureCount` (non-done features currently in the lane); `holder` (alias + vendor +
-  claimState of the alive claim on any feature in the lane); and the features themselves
-  (slug, status, claim identity, claimState).
+  claimState, populated only while a claim is `alive` — the one state that makes a lane busy);
+  and the features themselves (slug, status, claim identity, `claimState` — the board
+  vocabulary: alive | stale | ended, `released` only for the orphan whose holder session row is
+  gone).
 - The wave marshal reads this before deciding who moves — a lane is busy when some feature in
   it holds an alive claim by another agent.
 
@@ -1105,7 +1111,8 @@ No additional prose — the tool description lost nothing.
 ## overmind_wave_snapshot
 
 - **Host half** returns: the task queue (`planning_task_queue` rows verbatim), per-claim
-  identity (alias, vendor, claimState, claimedAt, claimedByHuman, last board activity), per
+  identity (alias, vendor, claimState: alive | stale | ended, released only for the orphan whose
+  holder session row is gone, claimedAt, claimedByHuman, last board activity), per
   in-flight feature (claimed or inProgress/review) code pins, open feature blockers rolled up
   per feature, and the latest coordination entries by tag (default `wave-sync`,
   `lane-marshalling`).
@@ -1158,10 +1165,20 @@ No additional prose — the tool description lost nothing.
 - Notifications you sent via `overmind_notify` that carry a reply, newest first; each item's
   `replyText` is the human's decision. Poll it after asking a question or requesting
   approval.
+<<<<<<< HEAD
 - **Compact by default.** Rows are projected to `{id, kind, featureSlug, tab, agent, createdAt,
   text, replyText, repliedAt}` with the stored notification `text` excerpted to 200 chars;
   `textExcerpted` counts the cuts and `fullRows` names the way out. The reply SET is
   unchanged — only the row shape moves. `full=true` returns the stored rows untouched.
+=======
+- **Consumption.** A read from a registered session (the adapter stamps `X-Overmind-Session`)
+  advances that session's reply cursor to the newest `RepliedAt` on the page — forward-only —
+  when the page is complete: a list short of the 50-reply delivery cap. A full page may have
+  more behind it, so the advance is skipped; page through with `since` until a list comes back
+  short and that final read advances the cursor. Headerless or unknown sessions get a
+  read-only listing, and an empty page advances nothing. This advance is what retires replies
+  from `overmind_wake_peek`'s default window — shown there = the peek→replies flow completed.
+>>>>>>> origin/main
 - Filters combine (AND): `since` — only replies newer than it, e.g. the artifact's last
   update when hunting a validation proof; the zone offset is optional and offset-less values
   read as UTC, the way artifact timestamps are emitted. An empty or blank `since` behaves
@@ -1169,8 +1186,9 @@ No additional prose — the tool description lost nothing.
   bound — the unbounded window returns up to 50 rows (the service list capacity), newest
   first; it is not a day-count window. `kind` — info/question/approval.
   `featureSlug`. An over-narrow filter returns an empty array, not an error.
-- Delivery marks the notification read (`includeRead` semantics: false matches nothing —
-  poll with the default).
+- `includeRead=false` narrows to notifications the human has not read yet (`ReadAt` null); the
+  default lists replies regardless of read state. Read state is the human's inbox mechanic,
+  not the delivery cursor — the reply cursor is.
 
 ## overmind_onboard
 
@@ -1202,8 +1220,8 @@ No additional prose — the tool description lost nothing.
     (capped at 10 per holder with the total alongside, 5 holders, freshest death first).
     `sessionsTotal` is the churned-holder count before the 5-row cap, and the renderer turns the
     difference into a `+N more holders not listed, M churned in total` line, so a holder the cap
-    dropped is accounted for instead of vanishing. A pair that
-    is yours adopts on your next write; a foreign one takes `planning_claim_feature`. A holder whose
+    dropped is accounted for instead of vanishing. A claim held by your own session id re-adopts on
+    your next write; any other holder takes `planning_claim_feature`, matching alias or not. A holder whose
     session row was deleted from the registry is not listed here at all — the reconciliation note
     under `planning_rescue_scan` says where it is.
   - **semantic** — search availability, with the verbatim probe reason when down.

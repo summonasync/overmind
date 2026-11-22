@@ -21,7 +21,7 @@ public sealed class PlanningMaterializationWorkerTests
         var bothDone = new TaskCompletionSource();
 
         materializer
-            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []))
             .AndDoes(call =>
             {
@@ -59,7 +59,7 @@ public sealed class PlanningMaterializationWorkerTests
         var recordedMessage = string.Empty;
 
         materializer
-            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("disk exploded"));
         materializer
             .RecordSyncFailureAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -91,7 +91,7 @@ public sealed class PlanningMaterializationWorkerTests
         var secondDone = new TaskCompletionSource();
 
         materializer
-            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []))
             .AndDoes(call =>
             {
@@ -129,12 +129,12 @@ public sealed class PlanningMaterializationWorkerTests
 
         using var cts = new CancellationTokenSource();
         materializer
-            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []))
             .AndDoes(call =>
             {
                 var project = call.ArgAt<Guid>(0);
-                var token = call.ArgAt<CancellationToken>(2);
+                var token = call.ArgAt<CancellationToken>(3);
                 lock (calls)
                 {
                     calls.Add((project, token));
@@ -192,7 +192,7 @@ public sealed class PlanningMaterializationWorkerTests
         var landed = new TaskCompletionSource();
 
         materializer
-            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(Guid.Empty, PlanningMaterialization.Off, [], [], []))
             .AndDoes(_ => landed.TrySetResult());
 

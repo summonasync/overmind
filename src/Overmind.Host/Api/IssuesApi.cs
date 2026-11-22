@@ -152,7 +152,7 @@ public static class IssuesApi
         {
             await AgentIssuesApi.EnsureIssueOnBoardAsync(service, projectId, id, ct);
             var (issue, artifact) = await service.PromoteAsync(
-                id, request.FeatureSlug, PlanningLogSource.Ui, sessionId: null, ct);
+                id, request.FeatureSlug, PlanningLogSource.Ui, sessionId: null, ct: ct);
             return Results.Ok(new IssuePromoteResponse(
                 issue.Id, issue.Status, artifact.Id, artifact.FeatureId, artifact.Version));
         }

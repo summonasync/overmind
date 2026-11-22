@@ -34,6 +34,17 @@ export function LaneClaimChip({ alias, vendor, claimState }: LaneClaimChipProps)
     );
   }
 
+  if (claimState === "released") {
+    return (
+      <span
+        className={cn(chipBase, "border border-dashed border-border/50 text-muted/70")}
+        data-claim-state="released"
+      >
+        {holder} · released
+      </span>
+    );
+  }
+
   return (
     <span
       className={cn(chipBase, "border border-success/30 bg-success/10 text-success")}

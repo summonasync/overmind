@@ -63,15 +63,20 @@ if (prunedIdentityFiles > 0)
 // A reconnect speaks a fresh initialize on a surviving process; the refresher re-registers the
 // session, preferring the runtime identity set via session_identity_set (AdapterIdentityState)
 // and falling back to OVERMIND_ALIAS/OVERMIND_VENDOR (feature 179 spec D1, slot honoring 181).
-// The same refresher restores the identity this workspace last worked under, so a claim made before
-// the process died reads as an own-alias claim and is adopted on the first mutation (feature 235 D1).
+// The stamped row resume keeps the session id stable across restarts, so a claim made before the
+// process died stays bound to this session; the mutation gate re-adopts it with a board log line
+// when the row reads stale (feature 258 T0/T1, superseding 235 D1's alias-string adopt).
 var identityRefresher = new SessionIdentityRefresher(lifecycle, identityFile, workspaceIdentity);
 Guid adapterSessionId = Guid.Empty;
 var alias = AgentIdentity.ResolveAlias();
 var vendor = AgentIdentity.ResolveVendor();
+var stamp = workspaceIdentity.TryRead();
 try
 {
-    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, CancellationToken.None);
+    // The workspace stamp names the row this workspace registered last run; passing it lets the
+    // host resume that row (identity and session id survive the restart) instead of minting a
+    // fresh placeholder row under which held claims strand.
+    adapterSessionId = await lifecycle.RegisterAsync(alias, vendor, stamp?.SessionId, CancellationToken.None);
     AdapterSession.Id = adapterSessionId;
     Console.Error.WriteLine($"[overmind-mcp] session {adapterSessionId} registered");
 }
@@ -80,7 +85,14 @@ catch (Exception ex)
     Console.Error.WriteLine($"[overmind-mcp] WARN: session registration failed, claims will be refused: {ex.Message}");
 }
 
-if (adapterSessionId != Guid.Empty)
+if (adapterSessionId != Guid.Empty && stamp is { } saved && adapterSessionId == saved.SessionId)
+{
+    // The host resumed the stamped row and its identity came back with it, so the restore leg has
+    // nothing to negotiate here. Setting the slot would be worse than useless: an explicit alias
+    // makes later reconnects mint fresh rows instead of resuming this one (review-258-01 B1).
+    identityFile.Write(saved.Alias, saved.Vendor, adapterSessionId);
+}
+else if (adapterSessionId != Guid.Empty)
 {
     await identityRefresher.RestoreAndStampAsync(adapterSessionId, alias, vendor, CancellationToken.None);
 }

@@ -102,6 +102,24 @@ shared     → (nothing above)                    (api client, ui primitives, li
 - `'use client'` only where interactivity/hooks require it; RSC by default. TypeScript strict, no `any`.
 - Brand/design tokens: `web/brand-book.md` is the source of truth for palette, typography, and assets (`shared/assets/brand/`).
 
+## Format verification
+
+`dotnet format --verify-no-changes` is the repository gate, run **per project** (a solution-level `--include` run reports nothing; project scope with a file count is the honest form). The nine projects, all expected exit 0:
+
+```
+dotnet format src/Overmind.Core/Overmind.Core.csproj --verify-no-changes
+dotnet format src/Overmind.Infrastructure/Overmind.Infrastructure.csproj --verify-no-changes
+dotnet format src/Overmind.Host/Overmind.Host.csproj --verify-no-changes
+dotnet format src/Overmind.Mcp/Overmind.Mcp.csproj --verify-no-changes
+dotnet format tests/Overmind.Api.Tests/Overmind.Api.Tests.csproj --verify-no-changes
+dotnet format tests/Overmind.Core.Tests/Overmind.Core.Tests.csproj --verify-no-changes
+dotnet format tests/Overmind.Host.Kestrel.Tests/Overmind.Host.Kestrel.Tests.csproj --verify-no-changes
+dotnet format tests/Overmind.Infrastructure.Tests/Overmind.Infrastructure.Tests.csproj --verify-no-changes
+dotnet format tests/Overmind.Mcp.Tests/Overmind.Mcp.Tests.csproj --verify-no-changes
+```
+
+Namespace style lives in `.editorconfig`: `file_scoped:error` repo-wide, with one exclusion — `[**/Migrations/**/*.cs]` sets `block_scoped:none`. The `dotnet ef migrations add` emitter always writes block-scoped namespaces, so formatting generated migrations once would drift red on the next generated file; the exclusion keeps the gate green for generated code while hand-written code stays under the strict rule. Established by feature 248 (2026-11-22), measured drift was 22× IDE0161 in Infrastructure/Migrations plus two WHITESPACE findings in Api.Tests.
+
 ## AI agent guidelines
 
 - Read `CONTEXT.md` (this system's design), the planning board (the live index — web UI or MCP), and the feature folder before changing anything; check `TECHNICAL-SOLUTIONS.md` before proposing an alternative to an existing pattern. Accepted ADRs are changed only by a new superseding ADR — never a silent edit.

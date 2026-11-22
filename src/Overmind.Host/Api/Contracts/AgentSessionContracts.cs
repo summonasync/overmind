@@ -1,6 +1,7 @@
 namespace Overmind.Host.Api.Contracts;
 
-public sealed record RegisterAgentSessionRequest(string Alias, string Vendor, string? Role = null);
+public sealed record RegisterAgentSessionRequest(
+    string Alias, string Vendor, string? Role = null, Guid? PriorSessionId = null);
 
 public sealed record SetAgentSessionRoleRequest(string Role);
 
