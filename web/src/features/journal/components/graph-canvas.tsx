@@ -13,7 +13,7 @@ import {
 } from "react";
 import { Button } from "@/shared/ui/button";
 import {
-  ceilingMessage,
+  clusteredNotice,
   computingLayoutNotice,
   GRAPH_CONTROL_LABELS,
   graphAriaLabel,
@@ -24,6 +24,15 @@ import {
   unsupportedRowsNotice,
 } from "@/features/journal/lib/graph-copy";
 import {
+  anchorSetField,
+  buildClusters,
+  clusterSubField,
+  composeClusterView,
+  projectedLinks,
+  UNSORTED_CLUSTER_ID,
+  type ClusterModel,
+} from "@/features/journal/lib/graph-cluster";
+import {
   buildNeighbourhoods,
   layoutModeFor,
   pinNode,
@@ -32,6 +41,7 @@ import {
   seedLayoutLinks,
   seedPositions,
   settleWithinBudget,
+  PRECOMPUTE_CEILING,
   SIM_CEILING,
   startForceLayout,
   type LayoutHandle,
@@ -40,7 +50,7 @@ import {
   type Neighbourhood,
 } from "@/features/journal/lib/graph-layout";
 import { precomputeLayout, preserveHeldNodes } from "@/features/journal/lib/graph-precompute";
-import { nodeRadius } from "@/features/journal/lib/graph-palette";
+import { anchorRadius, nodeRadius } from "@/features/journal/lib/graph-palette";
 import { drawScene } from "@/features/journal/lib/graph-paint";
 import { graphNodeStates, nodeKey } from "@/features/journal/lib/graph-payload";
 import { useGraphTheme } from "@/features/journal/lib/use-graph";
@@ -100,6 +110,19 @@ export function GraphCanvas({
   const nodesRef = useRef<LayoutNode[]>([]);
   const linksRef = useRef<LayoutLink[]>([]);
   const neighbourhoodsRef = useRef<Map<string, Neighbourhood>>(new Map());
+  // Tier 3's own ledger: the grouping derived from the payload, which clusters the owner has
+  // open (view-local by contract — a reload opens the field collapsed), the settled anchor
+  // frame, and the collapsed-anchor map the painter and the pick share.
+  const clustersRef = useRef<ClusterModel | null>(null);
+  const expandedRef = useRef<Set<string>>(new Set());
+  const anchorPosRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const hiddenRef = useRef<Map<string, number>>(new Map());
+  const anchorSetRef = useRef("");
+  const settlesRef = useRef(0);
+  // The expansion settle's generation: anything that changes the visible composition — a
+  // collapse, another expansion, a payload beat — bumps it and the slices stop at the next
+  // boundary, the same contract the tier-2 kick's abandon token runs on.
+  const expansionGenRef = useRef(0);
   const frameRef = useRef<number | null>(null);
   const simRef = useRef<LayoutHandle | null>(null);
   const dragRef = useRef<{ key: string | null; panning: boolean; startX: number; startY: number; moved: boolean }>(
@@ -115,12 +138,14 @@ export function GraphCanvas({
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [precomputing, setPrecomputing] = useState(false);
   const [settleFailed, setSettleFailed] = useState(false);
+  const [layoutCount, setLayoutCount] = useState(0);
   const theme = useGraphTheme();
 
-  // The ladder rung this field stands on. Tier 2's settle and the past-ceiling static frame
-  // hang off it; tier 1 keeps the frame clock below untouched.
+  // The ladder rung this field stands on. Tier 2's settle and tier 3's anchor frame hang off
+  // it; tier 1 keeps the frame clock below untouched.
   const tier = layoutModeFor(field.nodes.length);
   const states = useMemo(() => graphNodeStates(field.nodes, field.edges), [field]);
+  const clusters = useMemo(() => (tier === "clustered" ? buildClusters(field) : null), [field, tier]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -187,6 +212,7 @@ export function GraphCanvas({
       height: size.height,
       font: `12px ${theme.font}`,
       tier,
+      anchors: tier === "clustered" ? hiddenRef.current : undefined,
     });
 
     if (scaleRef.current !== null) {
@@ -202,11 +228,184 @@ export function GraphCanvas({
     drawRef.current = draw;
   }, [draw]);
 
+  // Tier 3 recomposes the visible field from the grouping plus whatever the screen already
+  // holds: anchors at their settled coordinates, open clusters' members around the anchor they
+  // bloomed from. Every flow — a payload beat, the anchor settle landing, an expansion, a
+  // collapse — funnels through this one door, which is what keeps the two settle transports
+  // from disagreeing about what is on the field.
+  const recomposeClusterField = useCallback(() => {
+    const model = clustersRef.current;
+    if (model === null || size.width === 0 || size.height === 0) {
+      return;
+    }
+    const standing = new Map(nodesRef.current.map((node) => [nodeKey(node.kind, node.id), node]));
+    const composed = composeClusterView(
+      field,
+      model,
+      expandedRef.current,
+      anchorPosRef.current,
+      standing,
+      size.width,
+      size.height,
+    );
+    nodesRef.current = composed.nodes;
+    hiddenRef.current = composed.hidden;
+    linksRef.current = seedLayoutLinks(projectedLinks(field, model, expandedRef.current), composed.nodes);
+    neighbourhoodsRef.current = buildNeighbourhoods(linksRef.current);
+  }, [field, size]);
+
+  // Both tier-3 settles share one notice slot, so the slot counts the settles in flight rather
+  // than flipping a boolean an overlapping settle would clear early.
+  const beginSettle = useCallback((count: number) => {
+    settlesRef.current += 1;
+    setLayoutCount(count);
+    setPrecomputing(true);
+  }, []);
+
+  const endSettle = useCallback(() => {
+    settlesRef.current = Math.max(0, settlesRef.current - 1);
+    setPrecomputing(settlesRef.current > 0);
+  }, []);
+
+  // Expand and collapse are one view-local Set. Flipping it recomposes immediately — the bloom
+  // seeds around its anchor the same frame — and only then does the sliced settle refine the
+  // members' positions, reusing the tier-2 transport with its own generation: a collapse, a
+  // second expansion or a payload beat bumps the generation, the slices stop at the next
+  // boundary, and the seeded sketch the flip already painted stays a usable frame.
+  const toggleCluster = (groupKey: string) => {
+    const model = clustersRef.current;
+    if (model === null) {
+      return;
+    }
+    const group = model.groups.find((candidate) => candidate.key === groupKey);
+    if (group === undefined) {
+      return;
+    }
+    const next = new Set(expandedRef.current);
+    if (next.has(groupKey)) {
+      next.delete(groupKey);
+      expandedRef.current = next;
+      expansionGenRef.current += 1;
+      recomposeClusterField();
+      draw();
+      return;
+    }
+    next.add(groupKey);
+    expandedRef.current = next;
+    recomposeClusterField();
+    draw();
+
+    const gen = expansionGenRef.current + 1;
+    expansionGenRef.current = gen;
+    const anchorCoord =
+      anchorPosRef.current.get(group.anchorKey) ?? { x: size.width / 2, y: size.height / 2 };
+    // The bloom's forces centre on the anchor it grew out of — an edge-of-screen cluster must
+    // not migrate toward the middle of the canvas just because the settle's centring has to
+    // point somewhere.
+    const forces = { width: size.width, height: size.height, centreX: anchorCoord.x, centreY: anchorCoord.y };
+    beginSettle(group.members.length);
+    void precomputeLayout(
+      clusterSubField(field, group),
+      forces,
+      () => expansionGenRef.current !== gen,
+      anchorCoord,
+    )
+      .then((landed) => {
+        if (expansionGenRef.current !== gen) {
+          return;
+        }
+        const landedCoords = new Map(landed.map((node) => [nodeKey(node.kind, node.id), node]));
+        nodesRef.current = nodesRef.current.map((node) => {
+          const settled = landedCoords.get(nodeKey(node.kind, node.id));
+          if (settled === undefined || node.fx != null) {
+            return node;
+          }
+          return { ...node, x: settled.x, y: settled.y };
+        });
+        recomposeClusterField();
+        endSettle();
+        drawRef.current();
+      })
+      .catch(() => {
+        if (expansionGenRef.current !== gen) {
+          return;
+        }
+        endSettle();
+        setSettleFailed(true);
+      });
+  };
+
+  // The anchor door. A collapsed cluster dot opens its cluster and an open one closes it — the
+  // anchor is the cluster's handle, not a row of its own: the project node inside is reachable
+  // as a member once the cluster is open, and the list below reaches it at any time. A project
+  // dot hiding nothing is not a door, so it selects like any other dot.
+  const clusterDoor = (key: string | null): string | null => {
+    const model = clustersRef.current;
+    if (key === null || model === null) {
+      return null;
+    }
+    const group = model.groups.find((candidate) => candidate.anchorKey === key);
+    if (group === undefined || (group.hiddenCount === 0 && !expandedRef.current.has(group.key))) {
+      return null;
+    }
+    return group.key;
+  };
+
   // Rebuilding the field keeps whatever coordinates the owner already sees, so a refetch on the
   // live-sync beat does not re-scatter the map under their cursor. Server pins still win.
   useEffect(() => {
     if (size.width === 0 || size.height === 0) {
       return;
+    }
+
+    if (clusters !== null) {
+      clustersRef.current = clusters;
+      recomposeClusterField();
+      draw();
+
+      // The anchor frame settles once per anchor-set change, not per payload beat: a new note
+      // regroups nothing, so the settled coordinates stand while the field around them moves.
+      // The kick waits out resize noise on the same beat tier 2 does, and runs the same sliced
+      // transport — the anchor set is small, but it is still main-thread work with a budget.
+      const anchorSet = clusters.groups.map((group) => group.anchorKey).join("|");
+      const setChanged = anchorSet !== anchorSetRef.current;
+      anchorSetRef.current = anchorSet;
+      if (!setChanged) {
+        return;
+      }
+
+      const forces = { width: size.width, height: size.height };
+      let live = true;
+      const kick = setTimeout(() => {
+        if (!live) {
+          return;
+        }
+        beginSettle(clusters.groups.length);
+        void precomputeLayout(anchorSetField(field, clusters), forces, () => !live)
+          .then((landed) => {
+            if (!live) {
+              return;
+            }
+            for (const node of landed) {
+              anchorPosRef.current.set(nodeKey(node.kind, node.id), { x: node.x, y: node.y });
+            }
+            recomposeClusterField();
+            endSettle();
+            drawRef.current();
+          })
+          .catch(() => {
+            if (!live) {
+              return;
+            }
+            endSettle();
+            setSettleFailed(true);
+          });
+      }, SETTLE_KICK_DELAY_MS);
+
+      return () => {
+        live = false;
+        clearTimeout(kick);
+      };
     }
 
     const previous = new Map<string, LayoutNode>();
@@ -232,7 +431,7 @@ export function GraphCanvas({
     neighbourhoodsRef.current = buildNeighbourhoods(linksRef.current);
 
     draw();
-  }, [draw, field, size]);
+  }, [beginSettle, clusters, draw, endSettle, field, recomposeClusterField, size]);
 
   // The tier-1 frame clock, in its two shapes: a single synchronous settle under reduced motion,
   // and one tick per frame otherwise. Each one stops itself. The ladder's other rungs live
@@ -352,12 +551,15 @@ export function GraphCanvas({
     (screenX: number, screenY: number): string | null => {
       const view = currentView();
       return pickNode(
-        nodesRef.current.map((node) => ({
-          key: nodeKey(node.kind, node.id),
-          x: node.x,
-          y: node.y,
-          radius: nodeRadius(node),
-        })),
+        nodesRef.current.map((node) => {
+          const hidden = hiddenRef.current.get(nodeKey(node.kind, node.id));
+          return {
+            key: nodeKey(node.kind, node.id),
+            x: node.x,
+            y: node.y,
+            radius: hidden === undefined ? nodeRadius(node) : anchorRadius(hidden),
+          };
+        }),
         toWorldX(screenX, view),
         toWorldY(screenY, view),
         view.scale,
@@ -441,9 +643,18 @@ export function GraphCanvas({
       if (drag.key !== null) {
         const node = nodeByKey(drag.key);
         if (node !== null) {
-          onPin?.({ kind: node.kind, id: node.id, x: node.x, y: node.y });
+          // The unsorted anchor is this view's own device — no row on the Host stands behind
+          // it, so a drag moves the dot locally and writes nothing.
+          if (node.id !== UNSORTED_CLUSTER_ID) {
+            onPin?.({ kind: node.kind, id: node.id, x: node.x, y: node.y });
+          }
         }
       }
+      return;
+    }
+    const door = tier === "clustered" ? clusterDoor(pickAt(x, y)) : null;
+    if (door !== null) {
+      toggleCluster(door);
       return;
     }
     onSelect(pickAt(x, y));
@@ -475,11 +686,23 @@ export function GraphCanvas({
 
     if (step !== 0) {
       event.preventDefault();
-      const keys = field.nodes.map((node) => nodeKey(node.kind, node.id));
+      // The walk covers what is on the field, and in tier 3 that is the visible set — anchors
+      // plus open clusters' members — not the payload's full node list.
+      const visible = tier === "clustered" ? nodesRef.current : field.nodes;
+      const keys = visible.map((node) => nodeKey(node.kind, node.id));
       const current = selectedKey === null ? null : keys.indexOf(selectedKey);
       const next = nextNodeIndex(current === -1 ? null : current, step, keys.length);
       if (next !== null) {
         onSelect(keys[next]);
+      }
+      return;
+    }
+
+    if (event.key === "Enter" && tier === "clustered") {
+      const door = clusterDoor(selectedKey);
+      if (door !== null) {
+        event.preventDefault();
+        toggleCluster(door);
       }
       return;
     }
@@ -543,8 +766,12 @@ export function GraphCanvas({
       </div>
 
       {tier === "clustered" ? (
-        <p className="text-sm text-warning" role="status">
-          {ceilingMessage(field.nodes.length, SIM_CEILING)}
+        <p className="text-xs text-muted" role="status">
+          {precomputing
+            ? computingLayoutNotice(layoutCount)
+            : settleFailed
+              ? settleFailedNotice(field.nodes.length)
+              : clusteredNotice(field.nodes.length, PRECOMPUTE_CEILING)}
         </p>
       ) : null}
 
@@ -577,7 +804,11 @@ export function GraphCanvas({
           ref={canvasRef}
           role="img"
           tabIndex={0}
-          aria-label={graphAriaLabel(field.counts, tierName(tier))}
+          aria-label={graphAriaLabel(
+            field.counts,
+            tierName(tier),
+            clusters === null ? undefined : clusters.groups.length,
+          )}
           className="block h-full w-full cursor-crosshair touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -597,6 +828,9 @@ export function GraphCanvas({
         {tier === "simulate"
           ? "the release control sends them back to the simulation everywhere."
           : "the release control clears them here and on the Host, and this tier leaves every node where it stands."}
+        {tier === "clustered"
+          ? " In clustered mode a project dot is its cluster's door: click or press Enter to open the group it hides and again to close it, and which groups are open lives only in this view — a reload starts with every cluster closed."
+          : null}
       </p>
     </div>
   );

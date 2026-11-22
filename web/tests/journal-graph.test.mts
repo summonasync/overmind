@@ -60,13 +60,28 @@ import {
 import {
   GRAPH_TOKENS,
   LEGEND_NODE_ROWS,
+  NODE_RADIUS,
+  anchorRadius,
   nodeColorName,
   resolvePalette,
 } from "../src/features/journal/lib/graph-palette.ts";
 import {
+  UNSORTED_CLUSTER_ID,
+  anchorLinkEdges,
+  anchorLinks,
+  anchorSetField,
+  buildClusters,
+  clusterLabel,
+  clusterSubField,
+  composeClusterView,
+  projectedLinks,
+  visibleNodes,
+} from "../src/features/journal/lib/graph-cluster.ts";
+import {
   HUB_DEGREE_FLOOR,
   LABEL_SCALE_FLOOR,
   LABEL_SCALE_NEAR,
+  MAX_LABEL_CHARS,
   drawScene,
   truncateLabel,
 } from "../src/features/journal/lib/graph-paint.ts";
@@ -150,6 +165,7 @@ const GRAPH_SLICE = [
   "components/graph-legend.tsx",
   "components/graph-node-list.tsx",
   "components/graph-node-panel.tsx",
+  "lib/graph-cluster.ts",
   "lib/graph-copy.ts",
   "lib/graph-filters.ts",
   "lib/graph-layout.ts",
@@ -673,6 +689,9 @@ interface PaintCall {
   strokeStyle?: string;
   globalAlpha?: number;
   dash?: number[];
+  // The tier-3 pins read label text off the frame — "honestly labeled Name (N)" is a claim
+  // about the string, not about the count of strings.
+  text?: string;
 }
 
 function recorder(): { calls: PaintCall[]; target: Record<string, unknown> } {
@@ -726,7 +745,10 @@ function recorder(): { calls: PaintCall[]; target: Record<string, unknown> } {
     rect: () => mark("rect"),
     fill: () => mark("fill"),
     stroke: () => mark("stroke"),
-    fillText: () => mark("fillText"),
+    fillText: (text: string) => {
+      mark("fillText");
+      calls[calls.length - 1]!.text = text;
+    },
     setLineDash: (segments: number[]) => {
       state.dash = segments;
       mark("setLineDash");
@@ -1142,7 +1164,7 @@ test("the graph slice file names are the ones the sweeps above measure", () => {
   for (const file of GRAPH_SLICE) {
     assert.ok(sliceFile(file).length > 200, `${file} is missing, empty or wrong`);
   }
-  assert.equal(GRAPH_SLICE.length, 14);
+  assert.equal(GRAPH_SLICE.length, 15);
 });
 
 test("the hex sweep in journal-note-view covers exactly these files", () => {
@@ -1376,7 +1398,7 @@ test("a settle abandoned mid-flight keeps partial progress but never reaches the
 test("the aria label names the tier the canvas actually runs", () => {
   assert.equal(tierName(layoutModeFor(5)), "live simulation");
   assert.equal(tierName(layoutModeFor(1201)), "precomputed");
-  assert.equal(tierName(layoutModeFor(5001)), "static", "a tier T3 has not shipped must not be named clustered");
+  assert.equal(tierName(layoutModeFor(5001)), "clustered", "tier 3 paints clusters, so the aria must say clustered");
 
   assert.ok(!/tier/.test(graphAriaLabel(SMALL_FIELD.counts)), "the bare label grew a tier sentence");
 
@@ -1475,4 +1497,310 @@ test("the Host route table still names exactly one positions verb, on the human 
     ["/graph/positions"],
     "a second positions verb is a boundary move — the route table owns the proof, this names the source",
   );
+});
+
+// ── Tier 3: the field becomes project clusters ────────────────────────────────────────
+
+const fixturePid = (index: number) => `cluster-project-${index}`;
+const fixtureEid = (project: number, index: number) => `cluster-note-${project}-${index}`;
+
+// A synthetic tier-3 field: each project dot anchors its own entries, neighbouring projects
+// share one cross link so anchor aggregation has something to fold, and the rest of the corpus
+// is notes with no project at all.
+const clusteredFixture = (projects: number, perProject: number, loose = 0): GraphField => {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  for (let p = 0; p < projects; p += 1) {
+    nodes.push(node("project", fixturePid(p), `Cluster ${p}`, { projectId: fixturePid(p), entryType: null }));
+    for (let i = 0; i < perProject; i += 1) {
+      nodes.push(node("entry", fixtureEid(p, i), `Note ${p}.${i}`, { projectId: fixturePid(p) }));
+      edges.push(edge("entry", fixtureEid(p, i), "project", fixturePid(p)));
+    }
+  }
+  for (let u = 0; u < loose; u += 1) {
+    nodes.push(node("entry", `loose-${u}`, `Loose ${u}`, { projectId: "" }));
+  }
+  for (let p = 0; p + 1 < projects; p += 1) {
+    edges.push(edge("entry", fixtureEid(p, 0), "entry", fixtureEid(p + 1, 0)));
+  }
+  return fieldOf(nodes, edges);
+};
+
+const frameOf = (nodes: LayoutNode[]) => nodes.map((n) => [Math.round(n.x), Math.round(n.y)]);
+
+test("clusters group by projectId and the project dot anchors its own group", () => {
+  const base = clusteredFixture(2, 2, 2);
+  const dangling = node("entry", "dangling-1", "Dangling note", { projectId: "absent-project" });
+  const zeroed = node("entry", "zeroed-1", "Zero-guid note", {
+    projectId: "00000000-0000-0000-0000-000000000000",
+  });
+  const field = fieldOf([...base.nodes, dangling, zeroed], base.edges);
+  const model = buildClusters(field);
+
+  const named = model.groups.filter((group) => group.key !== UNSORTED_CLUSTER_ID);
+  assert.equal(named.length, 2, "one group per project dot, not one per node");
+  assert.equal(named[0]!.anchor.id, fixturePid(0));
+  assert.equal(named[0]!.members[0]!.id, fixturePid(0), "the project node anchors its own group");
+  assert.equal(named[0]!.members.length, 3, "anchor plus its two entries");
+  assert.equal(named[0]!.hiddenCount, 2, "the hidden count is what the collapsed dot stands in for");
+
+  const unsorted = model.groups[model.groups.length - 1]!;
+  assert.equal(unsorted.key, UNSORTED_CLUSTER_ID, "unanchorable nodes share one explicit cluster");
+  assert.deepEqual(
+    unsorted.members.map((member) => member.id),
+    ["loose-0", "loose-1", "dangling-1", "zeroed-1"],
+    "empty, zero-guid and dangling projectIds all land in the unsorted bucket",
+  );
+  assert.equal(unsorted.anchor.id, UNSORTED_CLUSTER_ID);
+  assert.equal(unsorted.hiddenCount, unsorted.members.length);
+
+  const accounted = model.groups.reduce((sum, group) => sum + group.members.length, 0);
+  assert.equal(accounted, field.nodes.length, "the grouping is a partition, not a selection");
+  assert.ok(model.groups.slice(0, -1).every((group) => group.key !== UNSORTED_CLUSTER_ID), "unsorted stays last");
+});
+
+test("anchor links fold member edges onto unordered anchor pairs and count them", () => {
+  const base = clusteredFixture(3, 2, 0);
+  const back = edge("entry", fixtureEid(1, 0), "entry", fixtureEid(0, 1));
+  const field = fieldOf([...base.nodes], [...base.edges, back]);
+  const rows = anchorLinks(field, buildClusters(field));
+
+  const pair = (from: string, to: string) => rows.find(
+    (row) => (row.from.id === from && row.to.id === to) || (row.from.id === to && row.to.id === from),
+  );
+  assert.equal(pair(fixturePid(0), fixturePid(1))?.count, 2, "two member edges, one of them reversed — one row");
+  assert.equal(pair(fixturePid(1), fixturePid(2))?.count, 1);
+  assert.equal(pair(fixturePid(0), fixturePid(2)), undefined, "unlinked anchors stay unlinked");
+  assert.ok(rows.every((row) => row.from.kind === "project" && row.to.kind === "project"));
+
+  const edges = anchorLinkEdges(rows);
+  assert.ok(edges.every((row) => row.fromKind === "project" && row.toKind === "project"));
+  assert.equal(edges.length, rows.length, "the draw-ready rows are the aggregation, not a second opinion");
+});
+
+test("the same field builds the same clusters and the same anchor frame twice", async () => {
+  const field = clusteredFixture(6, 20, 4);
+  const forces = { width: 1200, height: 900 };
+
+  const firstModel = buildClusters(field);
+  const secondModel = buildClusters(field);
+  assert.deepEqual(firstModel.groups, secondModel.groups);
+  const firstAnchors = anchorLinks(field, firstModel);
+  assert.deepEqual(firstAnchors, anchorLinks(field, secondModel));
+
+  const first = await precomputeLayout(anchorSetField(field, firstModel), forces);
+  const second = await precomputeLayout(anchorSetField(field, secondModel), forces);
+  assert.deepEqual(frameOf(first), frameOf(second), "the anchor layer settled into a different map");
+  assert.equal(first.length, firstModel.groups.length, "the anchor frame is not the full field");
+  assert.ok(first.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y)));
+});
+
+test("clusterLabel keeps the count through truncation and the radius reflects it", () => {
+  const long = "A project whose name runs long enough to threaten the label budget".repeat(2);
+  const label = clusterLabel(long, 1247);
+  assert.ok(label.length <= MAX_LABEL_CHARS, "the label outgrew the painter's truncation budget");
+  assert.match(label, /\(1247\)$/, "the count did not survive truncation");
+  assert.equal(truncateLabel(label), label, "the painter would cut the count off the frame");
+  assert.equal(clusterLabel("Small", 3), "Small (3)");
+
+  assert.equal(anchorRadius(0), NODE_RADIUS.project, "an anchor hiding nothing is a plain project dot");
+  assert.ok(anchorRadius(1) > anchorRadius(0));
+  assert.ok(anchorRadius(40) > anchorRadius(10));
+  assert.equal(anchorRadius(10_000), 24, "the biggest project is still a dot among dots");
+});
+
+test("a 5001-node field paints only collapsed anchors, each honestly labeled Name (N)", () => {
+  const field = clusteredFixture(50, 99, 1);
+  assert.equal(layoutModeFor(field.nodes.length), "clustered", "the fixture left tier 3");
+  const model = buildClusters(field);
+  const composed = composeClusterView(field, model, new Set(), new Map(), new Map(), 1200, 900);
+  const links = seedLayoutLinks(projectedLinks(field, model, new Set()), composed.nodes);
+
+  const { target, calls } = recorder();
+  drawScene(target as never, {
+    nodes: composed.nodes,
+    links,
+    view: { scale: 1, tx: 0, ty: 0 },
+    colors: paletteColors,
+    states: graphNodeStates(field.nodes, field.edges),
+    hoverKey: null,
+    selectedKey: null,
+    neighbours: null,
+    width: 1200,
+    height: 900,
+    font: "12px ui-sans-serif, system-ui, sans-serif",
+    tier: "clustered",
+    anchors: composed.hidden,
+  } as never);
+
+  const paintedDots = calls.filter((call) => call.op === "fill" || call.op === "stroke");
+  assert.ok(paintedDots.length > 0, "the clustered frame drew nothing");
+  assert.equal(composed.nodes.length, model.groups.length, "the composition is not the full field");
+  const labels = calls.filter((call) => call.op === "fillText").map((call) => call.text ?? "");
+  assert.equal(labels.length, model.groups.length, "a collapsed anchor painted without its name");
+  const counts = labels.map((label) => {
+    const match = / \((\d+)\)$/.exec(label);
+    assert.ok(match !== null, `an anchor label without an honest count: ${label}`);
+    return Number(match![1]);
+  });
+  const realAnchors = model.groups.length - 1;
+  assert.equal(
+    counts.reduce((sum, count) => sum + count, 0),
+    field.nodes.length - realAnchors,
+    "the printed counts do not account for every node the anchors stand in for",
+  );
+  assert.equal(composed.hidden.size, model.groups.length, "every closed cluster claims its count");
+});
+
+test("expanding one cluster reveals exactly its members and settles them deterministically", async () => {
+  const field = clusteredFixture(4, 30, 3);
+  const model = buildClusters(field);
+  const group = model.groups[0]!;
+  const open = new Set([group.key]);
+  const forces = { width: 1200, height: 900 };
+  const origin = { x: 400, y: 300 };
+
+  const view = visibleNodes(model, open);
+  const visibleKeys = new Set(view.nodes.map((n) => nodeKey(n.kind, n.id)));
+  const expected = model.groups.reduce(
+    (sum, candidate) => sum + (open.has(candidate.key) ? candidate.members.length : 1),
+    0,
+  );
+  assert.equal(view.nodes.length, expected);
+  for (const member of group.members) {
+    assert.ok(visibleKeys.has(nodeKey(member.kind, member.id)), "an expanded member stayed hidden");
+  }
+  const closed = model.groups[1]!;
+  assert.ok(!visibleKeys.has(nodeKey(closed.members[1]!.kind, closed.members[1]!.id)), "a closed cluster leaked a member");
+  assert.equal(view.hidden.get(group.anchorKey), undefined, "the open cluster still claims to hide members");
+  assert.equal(view.hidden.get(closed.anchorKey), closed.hiddenCount);
+  const openAnchor = view.nodes.find((n) => n.id === group.anchor.id)!;
+  assert.equal(openAnchor.label, group.anchor.label, "the open anchor kept its count label");
+
+  const bloomForces = { ...forces, centreX: origin.x, centreY: origin.y };
+  const first = await precomputeLayout(clusterSubField(field, group), bloomForces, () => false, origin);
+  const second = await precomputeLayout(clusterSubField(field, group), bloomForces, () => false, origin);
+  assert.deepEqual(frameOf(first), frameOf(second), "the same bloom settled into a different map");
+  const anchor = first.find((n) => n.id === group.anchor.id)!;
+  assert.ok(Math.abs(anchor.x - origin.x) < 60 && Math.abs(anchor.y - origin.y) < 60, "the bloom left its anchor behind");
+
+  const collapsed = visibleNodes(model, new Set());
+  assert.equal(collapsed.nodes.length, model.groups.length, "collapse did not return to the anchor-only field");
+  assert.equal(collapsed.hidden.get(group.anchorKey), group.hiddenCount, "collapse lost the count label");
+});
+
+test("an expansion abandoned at the slice boundary leaves the seeded bloom, not a half-settled frame", async () => {
+  const field = clusteredFixture(1, 900, 0);
+  const group = buildClusters(field).groups[0]!;
+  const sub = clusterSubField(field, group);
+  const forces = { width: 1200, height: 900 };
+  const origin = { x: 600, y: 450 };
+
+  const aborted = await precomputeLayout(sub, forces, () => true, origin);
+  const seed = seedPositions(sub.nodes, sub.positions, forces.width, forces.height, origin);
+  assert.deepEqual(frameOf(aborted), frameOf(seed), "an abandoned bloom kept slicing");
+});
+
+test("the composition is a stable map for the same field, the same open set and the same holds", () => {
+  const field = clusteredFixture(3, 6, 2);
+  const model = buildClusters(field);
+  const open = new Set([model.groups[0]!.key, model.groups[2]!.key]);
+  const anchors = new Map([[model.groups[0]!.anchorKey, { x: 100, y: 150 }]]);
+  const standing = new Map([
+    [nodeKey("entry", fixtureEid(0, 1)), { x: 7, y: 9, fx: 7, fy: 9 } as unknown as LayoutNode],
+  ]);
+
+  const first = composeClusterView(field, model, open, anchors, standing, 800, 600);
+  const second = composeClusterView(field, model, open, anchors, standing, 800, 600);
+  assert.deepEqual(frameOf(first.nodes), frameOf(second.nodes));
+
+  const held = first.nodes.find((n) => n.id === fixtureEid(0, 1))!;
+  assert.equal(held.x, 7, "a held dot was moved by the recomposition");
+  const anchored = first.nodes.find((n) => n.id === model.groups[0]!.anchor.id)!;
+  assert.equal(anchored.x, 100, "the settled anchor frame lost to the seed spiral");
+  const fresh = first.nodes.find((n) => n.id === fixtureEid(2, 0))!;
+  assert.ok(Number.isFinite(fresh.x) && Number.isFinite(fresh.y));
+});
+
+test("hover dims the rest of an open cluster to 30 percent and keeps the neighbourhood lit", () => {
+  const field = clusteredFixture(3, 4, 0);
+  const model = buildClusters(field);
+  const open = new Set([model.groups[0]!.key]);
+  const composed = composeClusterView(field, model, open, new Map(), new Map(), 800, 600);
+  const links = seedLayoutLinks(projectedLinks(field, model, open), composed.nodes);
+  const hoverKey = nodeKey("entry", fixtureEid(0, 1));
+  const neighbours = buildNeighbourhoods(links).get(hoverKey);
+
+  const { target, calls } = recorder();
+  drawScene(target as never, {
+    nodes: composed.nodes,
+    links,
+    view: { scale: 1, tx: 0, ty: 0 },
+    colors: paletteColors,
+    states: graphNodeStates(field.nodes, field.edges),
+    hoverKey,
+    neighbours: neighbours?.keys ?? new Set<string>(),
+    width: 800,
+    height: 600,
+    font: "12px ui-sans-serif, system-ui, sans-serif",
+    tier: "clustered",
+    anchors: composed.hidden,
+  } as never);
+
+  const touched = calls.filter((call) => call.op === "fill" || call.op === "stroke");
+  assert.ok(touched.some((call) => call.globalAlpha === 0.3), "nothing dimmed inside the open cluster");
+  assert.ok(touched.some((call) => call.globalAlpha === 1), "the hovered neighbourhood dimmed too");
+  assert.ok(
+    neighbours !== undefined && neighbours.keys.has(nodeKey("project", fixturePid(0))),
+    "the hovered member lost its own anchor edge",
+  );
+});
+
+test("the clustered tier renders honestly at 5001 nodes and never starts a frame clock", () => {
+  const field = clusteredFixture(50, 99, 1);
+  const model = buildClusters(field);
+  const html = renderToStaticMarkup(
+    React.createElement(GraphCanvas, {
+      field,
+      selectedKey: null,
+      reducedMotion: false,
+      onSelect: noop,
+      onOpenNote: noop,
+    }),
+  );
+  assert.match(html, /5001 nodes are above the 5000-node precompute ceiling/);
+  assert.match(html, /grouped into clusters instead of drawn one dot per node/);
+  assert.match(html, /runs on the clustered tier/);
+  assert.match(html, new RegExp(`grouped into ${model.groups.length} clusters`));
+  assert.ok(
+    !/so nothing is animating/.test(html),
+    "the tier-2 bridge wording survived into tier 3's own notice slot",
+  );
+  assert.match(html, /click or press Enter to open the group it hides and again to close it/);
+  assert.match(html, /a reload starts with every cluster closed/);
+
+  const canvas = sliceFile("components/graph-canvas.tsx");
+  assert.equal(
+    (canvas.match(/requestAnimationFrame/g) ?? []).length,
+    2,
+    "tier 3 grew a frame clock — two rAF calls belong to the tier-1 loop and nothing else",
+  );
+  assert.match(canvas, /anchorSetField\(field, clusters\)/, "the anchor settle left the sliced transport");
+  assert.match(canvas, /clusterSubField\(field, group\)/, "the expansion settle left the sliced transport");
+  assert.match(canvas, /expansionGenRef\.current !== gen/, "the expansion settle must be abandonable mid-flight");
+  assert.match(canvas, /\(\) => !live/, "the anchor settle must be abandonable mid-flight");
+  assert.match(canvas, /const SETTLE_KICK_DELAY_MS = 200/, "the resize-noise beat moved or vanished");
+});
+
+test("keyboard and pointer cover the visible set, and the anchor is a door on both paths", () => {
+  const canvas = sliceFile("components/graph-canvas.tsx");
+  assert.match(
+    canvas,
+    /const visible = tier === "clustered" \? nodesRef\.current : field\.nodes;/,
+    "the arrow walk left the full payload list",
+  );
+  assert.match(canvas, /event\.key === "Enter" && tier === "clustered"/, "Enter lost its clustered door");
+  assert.match(canvas, /const door = tier === "clustered" \? clusterDoor\(pickAt\(x, y\)\) : null;/);
+  assert.match(canvas, /onSelect\(pickAt\(x, y\)\);/, "the click that selects a dot lost its shape");
+  assert.match(canvas, /node\.id !== UNSORTED_CLUSTER_ID/, "a phantom anchor can reach the pin door");
 });

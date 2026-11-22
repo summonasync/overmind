@@ -13,7 +13,7 @@ export const GRAPH_SEARCH_HINT = "Matches the title text as typed.";
 const ASCII_CASE_NOTE =
   "Titles are matched as typed: the store folds case for Latin letters only, so try the exact spelling you used.";
 
-export function graphAriaLabel(counts: GraphCounts, tier?: string): string {
+export function graphAriaLabel(counts: GraphCounts, tier?: string, clusters?: number): string {
   const byKind =
     `${counts.entryNodes} entries, ${counts.projectNodes} projects, ${counts.featureNodes} features`;
   const links = counts.edges === 1 ? "1 link" : `${counts.edges} links`;
@@ -21,18 +21,21 @@ export function graphAriaLabel(counts: GraphCounts, tier?: string): string {
     `Graph map: ${counts.nodes} nodes (${byKind}) joined by ${links}. ` +
     `${counts.orphans} nodes carry no links at all, ${counts.isolatedInView} link only to something outside this view. ` +
     "The list below holds the same data and is the keyboard path." +
-    (tier === undefined ? "" : ` The field runs on the ${tier} tier.`)
+    (tier === undefined ? "" : ` The field runs on the ${tier} tier.`) +
+    (clusters === undefined
+      ? ""
+      : ` The field is grouped into ${clusters === 1 ? "1 cluster" : `${clusters} clusters`}, one dot per project.`)
   );
 }
 
-// The tier name the canvas is allowed to say out loud. T3 owns clusters; until it ships, a field
-// past the precompute ceiling is drawn as the static seed and named "static" — calling it
-// "clustered" would promise grouping the canvas never paints.
+// The tier name the canvas is allowed to say out loud. Tier 3 ships clusters, so a field past
+// the precompute ceiling is named for the grouping the canvas actually paints — the old
+// "static" bridge named the seed frame tier 2 drew while T3 was still a plan.
 export function tierName(mode: LayoutMode): string {
   if (mode === "simulate") {
     return "live simulation";
   }
-  return mode === "precomputed" ? "precomputed" : "static";
+  return mode === "precomputed" ? "precomputed" : "clustered";
 }
 
 // A NODE count, never a link count: the dropped-edge tally is not in the payload

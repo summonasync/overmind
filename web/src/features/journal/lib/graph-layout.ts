@@ -55,20 +55,23 @@ const SEED_RADIUS_STEP = 9;
 
 // A deterministic first frame: the same payload must land on the same dots after a reload, or
 // "filters survive reload" would mean "the field re-scatters every time". Pinned positions
-// (R5's rows, empty until T8 ships them) win over the seed for the node they name.
+// (R5's rows, empty until T8 ships them) win over the seed for the node they name. The origin
+// is where the spiral starts from — tier 3 grows a cluster's members out of their anchor rather
+// than out of the canvas centre, and a sub-field settle needs that origin to bloom in place.
 export function seedPositions(
   nodes: readonly GraphNode[],
   positions: readonly GraphPosition[],
   width: number,
   height: number,
+  origin?: { x: number; y: number },
 ): LayoutNode[] {
   const pinned = new Map<string, GraphPosition>();
   for (const position of positions) {
     pinned.set(nodeKey(position.kind, position.id), position);
   }
 
-  const centerX = width / 2;
-  const centerY = height / 2;
+  const centerX = origin?.x ?? width / 2;
+  const centerY = origin?.y ?? height / 2;
 
   return nodes.map((node, index) => {
     const pin = pinned.get(nodeKey(node.kind, node.id));
@@ -119,6 +122,11 @@ export interface FieldForces {
   width: number;
   height: number;
   repulsion?: number;
+  // Where the centring pulls toward. Absent, it is the canvas centre — tier 3's cluster bloom
+  // overrides it with the anchor it grew out of, so opening a cluster at the edge does not
+  // migrate the whole group toward the middle of the screen.
+  centreX?: number;
+  centreY?: number;
 }
 
 export function applyFieldForces(
@@ -130,8 +138,8 @@ export function applyFieldForces(
     .force("link", forceLink<LayoutNode, LayoutLink>([...links]).distance(46).strength(0.35))
     .force("charge", forceManyBody().strength(forces.repulsion ?? -60))
     .force("collide", forceCollide(14))
-    .force("centerX", forceX(forces.width / 2).strength(0.04))
-    .force("centerY", forceY(forces.height / 2).strength(0.06));
+    .force("centerX", forceX(forces.centreX ?? forces.width / 2).strength(0.04))
+    .force("centerY", forceY(forces.centreY ?? forces.height / 2).strength(0.06));
 }
 
 export interface LayoutHandle {
