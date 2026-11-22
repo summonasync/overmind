@@ -237,6 +237,12 @@ public sealed class OvermindOnboardingTools
                 ? $" (failed {failedAt}: {errorText})"
                 : $" (failed: {errorText})";
         }
+        else if (block.TryGetProperty("demotedNotice", out var demoted) &&
+                 demoted.ValueKind == JsonValueKind.String &&
+                 demoted.GetString() is { Length: > 0 } demotedText)
+        {
+            failureSuffix = $" ({demotedText})";
+        }
 
         output.AppendLine(
             $"Materialization: strategy={strategy.GetString()}, targetDir={targetDir ?? "?"}, " +

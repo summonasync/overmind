@@ -384,6 +384,11 @@ public static class Canned
         {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-24T09:00:00Z","lastAttempt":"2026-09-24T09:00:00Z","error":null,"failedAt":null,"skippedCount":2,"skipped":["BACKLOG/foreign/feature.md: content already matches the board","BACKLOG/demo-feature/tasks/01-build.md: content already matches the board"]},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
         """;
 
+    public const string OnboardDemotedMaterializationJson =
+        """
+        {"projectId":"11111111-1111-1111-1111-111111111111","projectName":"alpha","created":false,"board":{"countsByStatus":{"draft":1},"currentSlug":null},"materialization":{"strategy":"on","targetDir":"/repo/BACKLOG","trigger":"Event-driven: enqueued after every planning mutation, runs shortly after in the background — the write returns before the mirror updates.","lastSuccess":"2026-09-24T09:00:00Z","lastAttempt":"2026-09-24T18:00:00Z","error":null,"failedAt":"2026-09-24T18:00:00Z","demotedNotice":"materialization failure already reported at 2026-09-24 18:00:00Z — full dump in planning_materialize_status"},"validation":{"humanGate":false},"quickstart":"Onboarding quickstart from the host — verbatim payload text."}
+        """;
+
     public const string OnboardQuickstartText = "Onboarding quickstart from the host — verbatim payload text.";
 
     public const string NotificationJson =
