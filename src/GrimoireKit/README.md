@@ -18,9 +18,9 @@ runtime, into active memory, or as a read-only answer.
 
 ## Status (0.1.0)
 
-This is the kit skeleton: installer plumbing, manifest, profiles, docs. The
-skill body and the real guard-hook logic land in subsequent releases — the
-packaged `SKILL.md` and `guard_hook.py` are placeholders that do nothing.
+Installer plumbing, manifest, profiles, docs and the session-start guard hook
+(`guard_hook.py`) are real and working. The `memory-ops` skill body
+(`SKILL.md`) is still a placeholder — it lands in a subsequent release.
 
 ## Requirements
 
@@ -90,9 +90,10 @@ otherwise. It never blocks a session.
 
 Runtime profiles are data documents (caps, warn margins, index link format,
 archive tome names, memory paths). The qwen profile constants are VERIFIED
-against qwen bundle 0.27.x; the claude profile ships once its cap constants have
-been measured — until that release, claude-side audit runs drift checks without
-a budget verdict.
+against qwen bundle 0.27.x; the claude profile constants were measured by
+headless probes on 2026-11-22 (`runtime-profiles/claude.md` carries the
+method and the probe matrix) — only values the probes could not settle stay
+flagged UNVERIFIED there.
 
 ## Uninstall
 
