@@ -288,7 +288,8 @@ public sealed class GlobalKitApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Remove_refuses_the_mandatory_kit()    {
+    public async Task Remove_refuses_the_mandatory_kit()
+    {
         var source = WriteSkillSource("overmind-ceremony", "overmind-ceremony");
         var kitId = await SeedBundledKitAsync("overmind-ceremony", source);
         using var scope = _factory.Services.CreateScope();
