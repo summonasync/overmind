@@ -74,6 +74,7 @@ public sealed class OvermindDbContext : DbContext
         modelBuilder.Entity<Project>(builder =>
         {
             builder.HasIndex(p => p.Name).IsUnique();
+            builder.HasIndex(p => p.NameNormalized).IsUnique();
 
             builder.Property(p => p.ClaimStaleThresholdMinutes)
                 .HasDefaultValue(Project.DefaultClaimStaleThresholdMinutes)

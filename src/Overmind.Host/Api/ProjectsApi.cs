@@ -205,7 +205,7 @@ public static class ProjectsApi
         }
 
         var tracked = db.Entry(project);
-        tracked.Property(p => p.Name).CurrentValue = name;
+        project.Rename(name);
         tracked.Property(p => p.DiskPath).CurrentValue = candidateDiskPath;
         tracked.Property(p => p.Description).CurrentValue = request.Description?.Trim() ?? string.Empty;
         if (request.SetManifest)
