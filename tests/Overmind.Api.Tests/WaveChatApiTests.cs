@@ -289,6 +289,52 @@ public sealed class WaveChatApiTests : IDisposable
     }
 
     [Fact]
+    public async Task AgentDoor_DoubleEncodedRoomSegment_LandsInTheLiteralRoom_NeverInTheDecodedTwin()
+    {
+        const string literalRoom = "zz.Twin%20A";
+        const string spacedRoom = "zz.Twin A";
+        var projectId = await CreateProjectAsync();
+        await SeedLegacyLaneAsync(projectId, literalRoom);
+        await SeedLegacyLaneAsync(projectId, spacedRoom);
+        var literalWire = Uri.EscapeDataString(literalRoom);
+
+        var posted = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/{literalWire}/messages", new { Text = "literal landing" });
+
+        posted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var message = await posted.Content.ReadFromJsonAsync<MessageJson>(JsonOptions);
+        message!.Room.ShouldBe(literalRoom);
+
+        var literalHistory = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{literalWire}/messages", null);
+        var literalPage = await literalHistory.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        literalPage!.Items.Select(m => m.Room).ShouldBe([literalRoom]);
+
+        var spacedHistory = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/{Uri.EscapeDataString(spacedRoom)}/messages", null);
+        var spacedPage = await spacedHistory.Content.ReadFromJsonAsync<HistoryJson>(JsonOptions);
+        spacedPage!.Items.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AgentDoor_TrailingPercentSegment_AnswersNamed404_FailLoudInsteadOfAThrow()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var posted = await SendAgentAsync(HttpMethod.Post,
+            $"/api/agent/projects/{projectId}/wave/rooms/zz.Ghost%25/messages", new { Text = "no such room" });
+        posted.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        posted.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        var postProblem = await posted.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        postProblem.GetProperty("title").GetString().ShouldBe("MissingWaveRoom");
+        postProblem.GetProperty("detail").GetString()!.ShouldContain("zz.Ghost%");
+
+        var peek = await SendAgentAsync(HttpMethod.Get,
+            $"/api/agent/projects/{projectId}/wave/rooms/zz.Ghost%25/peek", null);
+        peek.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Post_AgentDoor_WithoutSession_Returns400()
     {
         var projectId = await CreateProjectAsync();
