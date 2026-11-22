@@ -74,13 +74,22 @@ function yieldToMain(): Promise<void> {
 }
 
 // The chunked transport: the same bounded ladder, sliced so the main thread can paint between
-// slices instead of freezing for the whole settle.
-async function settleInSlices(request: PrecomputeRequest): Promise<LayoutNode[]> {
+// slices instead of freezing for the whole settle. The abandon token is checked between slices
+// and never inside one: dropping a settle removes whole slices from the tail, so the tick order
+// any completed settle runs — and the frame it lands on — is exactly the un-aborted run's
+// (test-pinned).
+async function settleInSlices(
+  request: PrecomputeRequest,
+  isAbandoned: () => boolean,
+): Promise<LayoutNode[]> {
   const { nodes, links, forces } = prepare(request);
   const handle = startForceLayout(nodes, links, forces);
   const ticks = settleTicksFor(nodes.length);
   let done = 0;
   while (done < ticks) {
+    if (isAbandoned()) {
+      break;
+    }
     const sliceStart = performance.now();
     let sliceTicks = 0;
     while (done < ticks && sliceTicks < SLICE_TICK_CEILING) {
@@ -109,6 +118,7 @@ async function settleInSlices(request: PrecomputeRequest): Promise<LayoutNode[]>
 export async function precomputeLayout(
   field: GraphField,
   forces: { width: number; height: number },
+  isAbandoned: () => boolean = () => false,
 ): Promise<LayoutNode[]> {
   const request: PrecomputeRequest = {
     nodes: field.nodes,
@@ -117,7 +127,7 @@ export async function precomputeLayout(
     width: forces.width,
     height: forces.height,
   };
-  return settleInSlices(request);
+  return settleInSlices(request, isAbandoned);
 }
 
 // When the landed frame swaps in, a drag that began on the seed is mid-flight: the owner is

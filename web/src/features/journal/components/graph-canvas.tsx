@@ -19,6 +19,7 @@ import {
   graphAriaLabel,
   precomputedNotice,
   reducedMotionMessage,
+  settleFailedNotice,
   tierName,
   unsupportedRowsNotice,
 } from "@/features/journal/lib/graph-copy";
@@ -76,6 +77,10 @@ const DRAG_THRESHOLD = 3;
 const REHEAT_ALPHA = 0.35;
 const DRAG_REHEAT = 0.2;
 const RELEASE_REHEAT = 0.6;
+// How long the tier-2 kick waits for the field to stop changing. An edge drag re-fires the
+// ResizeObserver nearly every frame, and settling on each rounded-pixel change would kick a
+// settle per frame; the seed sketch on screen the whole time is why the wait is honest.
+const SETTLE_KICK_DELAY_MS = 200;
 
 // The app's first client-only heavy island (R3). Everything that can be measured without a
 // browser lives in `lib/graph-*.ts`; what is left here is element lifecycle, pointer plumbing
@@ -109,6 +114,7 @@ export function GraphCanvas({
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [precomputing, setPrecomputing] = useState(false);
+  const [settleFailed, setSettleFailed] = useState(false);
   const theme = useGraphTheme();
 
   // The ladder rung this field stands on. Tier 2's settle and the past-ceiling static frame
@@ -282,7 +288,15 @@ export function GraphCanvas({
   // reads draw through the ref instead of listing it here: draw changes identity on hover, and
   // restarting a multi-hundred-millisecond settle because the owner moved the cursor across a
   // dot would be a self-inflicted freeze. A drag that started on the seed survives the swap via
-  // preserveHeldNodes; a field identity that changed mid-settle is dropped by the cleanup.
+  // preserveHeldNodes.
+  //
+  // The kick waits out the noise first: an edge drag re-fires the size state nearly every frame,
+  // and each size event used to kick a settle whose first slice runs synchronously — review-271-02
+  // measured that shape as dozens of concurrent settles behind a two-second drag. The seed sketch
+  // is what the owner is looking at during the drag anyway, so the settle runs once, a beat after
+  // the field stops changing. A superseded kick dies in its timer; an in-flight settle stops at
+  // its next slice boundary through the token handed to precomputeLayout, so a dropped identity
+  // never finishes its ticks.
   useEffect(() => {
     if (size.width === 0 || size.height === 0 || tier !== "precomputed") {
       return;
@@ -290,35 +304,36 @@ export function GraphCanvas({
 
     const forces = { width: size.width, height: size.height };
     let live = true;
-    // Queued rather than called in the effect body: the settle's first slice runs synchronously
-    // below, and a synchronous setState here would cascade a render out of it. A microtask
-    // still fires before the browser paints, so the pending notice appears without a flash of
-    // the settled line it replaces.
-    queueMicrotask(() => {
-      if (live) {
-        setPrecomputing(true);
+    const kick = setTimeout(() => {
+      if (!live) {
+        return;
       }
-    });
-    void precomputeLayout(field, forces)
-      .then((landed) => {
-        if (!live) {
-          return;
-        }
-        preserveHeldNodes(landed, nodesRef.current);
-        nodesRef.current = landed;
-        linksRef.current = seedLayoutLinks(field.edges, landed);
-        setPrecomputing(false);
-        drawRef.current();
-      })
-      .catch(() => {
-        if (live) {
-          // The seed sketch stays on the canvas — a usable field beats a blank one.
+      setPrecomputing(true);
+      setSettleFailed(false);
+      void precomputeLayout(field, forces, () => !live)
+        .then((landed) => {
+          if (!live) {
+            return;
+          }
+          preserveHeldNodes(landed, nodesRef.current);
+          nodesRef.current = landed;
+          linksRef.current = seedLayoutLinks(field.edges, landed);
           setPrecomputing(false);
-        }
-      });
+          drawRef.current();
+        })
+        .catch(() => {
+          if (live) {
+            // The seed sketch stays on the canvas — a usable field beats a blank one — and the
+            // notice below must not describe a swap that never happened.
+            setPrecomputing(false);
+            setSettleFailed(true);
+          }
+        });
+    }, SETTLE_KICK_DELAY_MS);
 
     return () => {
       live = false;
+      clearTimeout(kick);
     };
   }, [field, size, tier]);
 
@@ -537,7 +552,9 @@ export function GraphCanvas({
         <p className="text-xs text-muted" role="status">
           {precomputing
             ? computingLayoutNotice(field.nodes.length)
-            : precomputedNotice(field.nodes.length, SIM_CEILING)}
+            : settleFailed
+              ? settleFailedNotice(field.nodes.length)
+              : precomputedNotice(field.nodes.length, SIM_CEILING)}
         </p>
       ) : null}
 
