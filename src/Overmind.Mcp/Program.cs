@@ -32,6 +32,14 @@ if (args.Length > 0 && args[0] == "install")
     return await install.RunAsync(installOptions, CancellationToken.None);
 }
 
+if (!McpProfileResolver.TryResolve(args, out var profile, out var profileError))
+{
+    Console.Error.WriteLine(profileError);
+    return 2;
+}
+
+Console.Error.WriteLine($"[overmind-mcp] MCP profile: {McpProfileResolver.Describe(profile)}");
+
 var baseUrl = ApiBaseUrl.Resolve();
 Console.Error.WriteLine($"[overmind-mcp] overmind API base URL: {baseUrl}");
 
@@ -144,33 +152,6 @@ builder.Logging.ClearProviders();
 
 builder.Services.AddSingleton(new OvermindApiClient(http));
 builder.Services.AddSingleton(identityFile);
-builder.Services.AddSingleton<MutationGuard>();
-builder.Services.AddSingleton<IGitCli, GitCli>();
-builder.Services.AddSingleton<ProjectResolver>();
-builder.Services.AddSingleton<OvermindTools>();
-builder.Services.AddSingleton<OvermindBriefingTools>();
-builder.Services.AddSingleton<PlanningFeatureTools>();
-builder.Services.AddSingleton<PlanningArtifactTools>();
-builder.Services.AddSingleton<PlanningBatchTools>();
-builder.Services.AddSingleton<PlanningMaterializationTools>();
-builder.Services.AddSingleton<PlanningArtifactAliasResolver>();
-builder.Services.AddSingleton<FeatureCodeTools>();
-builder.Services.AddSingleton<RescueScanTools>();
-builder.Services.AddSingleton<WaveListingCache>();
-builder.Services.AddSingleton<WaveSnapshotTools>();
-builder.Services.AddSingleton<WaveChatTools>();
-builder.Services.AddSingleton<WaveRoleTools>();
-builder.Services.AddSingleton<SessionIdentityTools>();
-builder.Services.AddSingleton<LaneTools>();
-builder.Services.AddSingleton<DirectiveTools>();
-builder.Services.AddSingleton<EntryAckTools>();
-builder.Services.AddSingleton<IssuesTools>();
-builder.Services.AddSingleton<OvermindOnboardingTools>();
-builder.Services.AddSingleton<OvermindNotificationTools>();
-builder.Services.AddSingleton<AgentWakeTools>();
-builder.Services.AddSingleton<OvermindResources>();
-builder.Services.AddSingleton<OvermindPlanningResources>();
-builder.Services.AddSingleton<SessionBootstrapPrompt>();
 builder.Services.AddSingleton(wakeSlot);
 builder.Services.AddSingleton<IWakeTicker, PeriodicWakeTicker>();
 builder.Services.AddSingleton<IWakeNotifier, McpWakeNotifier>();
@@ -194,28 +175,7 @@ builder.Services
         options.Filters.Request.CallToolFilters.Add(new WakeSlotFilter(wakeSlot).Create());
     })
     .WithStdioServerTransport()
-    .WithTools<OvermindTools>()
-    .WithTools<OvermindBriefingTools>()
-    .WithTools<PlanningFeatureTools>()
-    .WithTools<PlanningArtifactTools>()
-    .WithTools<PlanningBatchTools>()
-    .WithTools<PlanningMaterializationTools>()
-    .WithTools<FeatureCodeTools>()
-    .WithTools<RescueScanTools>()
-    .WithTools<WaveSnapshotTools>()
-    .WithTools<WaveChatTools>()
-    .WithTools<WaveRoleTools>()
-    .WithTools<SessionIdentityTools>()
-    .WithTools<LaneTools>()
-    .WithTools<DirectiveTools>()
-    .WithTools<EntryAckTools>()
-    .WithTools<IssuesTools>()
-    .WithTools<OvermindOnboardingTools>()
-    .WithTools<OvermindNotificationTools>()
-    .WithTools<AgentWakeTools>()
-    .WithResources<OvermindResources>()
-    .WithResources<OvermindPlanningResources>()
-    .WithPrompts<SessionBootstrapPrompt>();
+    .WithProfileSurface(profile);
 
 builder.Services.AddHostedService<AgentWakeWatcher>();
 
