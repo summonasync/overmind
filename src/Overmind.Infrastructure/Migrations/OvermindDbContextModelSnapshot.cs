@@ -1010,6 +1010,10 @@ namespace Overmind.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("NameNormalized")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("NumberPrefix")
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
@@ -1031,6 +1035,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("NameNormalized")
                         .IsUnique();
 
                     b.ToTable("Projects");
