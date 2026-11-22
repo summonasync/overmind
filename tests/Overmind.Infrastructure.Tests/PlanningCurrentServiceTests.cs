@@ -69,8 +69,63 @@ public sealed class PlanningCurrentServiceTests : IDisposable
         result.Actionable.ShouldBeNull();
         result.Reason.ShouldBe(
             "STOP: feature 'feat-a' is blocked by unclosed features: feat-b (draft). " +
-            "Reads stay open; task issuance stops until every blocker closes (done or review).");
+            "Reads stay open; task issuance stops until every blocker closes (done or review). " +
+            "Tasks marked independent at upsert still issue while the blocker holds.");
         result.Feature.Slug.ShouldBe("feat-a");
+    }
+
+    [Fact]
+    public async Task OpenBlocker_IndependentHeadTask_IssuesItWithBypassReason()
+    {
+        var feature = await FeatureAsync("feat-a");
+        await FeatureAsync("feat-b");
+        await Dependencies().AddDependencyAsync(_projectId, "feat-a", "feat-b");
+        var head = await TaskAsync(feature.Id, 0);
+        head.SetIndependent(true);
+        await TaskAsync(feature.Id, 1);
+        await _context.SaveChangesAsync();
+
+        var result = await Service().GetCurrentAsync(_projectId, "feat-a");
+
+        result.State.ShouldBe("task");
+        result.Actionable!.Id.ShouldBe(head.Id);
+        result.Reason.ShouldContain("feat-b (draft)");
+        result.Reason.ShouldContain("marked independent — the author opted in at upsert");
+        result.Reason.ShouldContain("task-level blockedBy edges keep their force");
+    }
+
+    [Fact]
+    public async Task OpenBlocker_NonIndependentHead_StopsUnchanged()
+    {
+        var feature = await FeatureAsync("feat-a");
+        await FeatureAsync("feat-b");
+        await Dependencies().AddDependencyAsync(_projectId, "feat-a", "feat-b");
+        await TaskAsync(feature.Id, 0);
+
+        var result = await Service().GetCurrentAsync(_projectId, "feat-a");
+
+        result.State.ShouldBe("stop");
+        result.Actionable.ShouldBeNull();
+        result.Reason.ShouldEndWith("Tasks marked independent at upsert still issue while the blocker holds.");
+    }
+
+    [Fact]
+    public async Task OpenBlocker_IndependentTaskWithOwnUnclosedEdge_Waits()
+    {
+        var feature = await FeatureAsync("feat-a");
+        await FeatureAsync("feat-b");
+        await Dependencies().AddDependencyAsync(_projectId, "feat-a", "feat-b");
+        var tail = await TaskAsync(feature.Id, 1);
+        var head = await TaskAsync(feature.Id, 0);
+        head.SetIndependent(true);
+        head.ReplaceBlockedEdges([tail.Id]);
+        await _context.SaveChangesAsync();
+
+        var result = await Service().GetCurrentAsync(_projectId, "feat-a");
+
+        result.State.ShouldBe("stop");
+        result.Actionable.ShouldBeNull();
+        result.Reason.ShouldContain("blocked by unclosed features");
     }
 
     [Fact]

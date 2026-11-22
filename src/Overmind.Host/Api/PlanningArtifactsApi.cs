@@ -77,7 +77,8 @@ public static class PlanningArtifactsApi
                 brief: request.Brief,
                 source: PlanningDoorSource.Resolve(request.Source, fallbackSource),
                 blockedBy: request.BlockedBy,
-                dryRun: request.DryRun);
+                dryRun: request.DryRun,
+                independent: request.Independent);
 
             var response = PlanningMapper.ToArtifactResponse(artifact);
             if (request.DryRun)
@@ -127,7 +128,8 @@ public static class PlanningArtifactsApi
             var batch = await artifactService.UpsertTasksAsync(
                 feature.Id,
                 request.Tasks.Select(t =>
-                        new PlanningTaskUpsert(t.Body, t.Order, t.Review, t.LogNote, t.Brief, t.BlockedBy))
+                        new PlanningTaskUpsert(
+                            t.Body, t.Order, t.Review, t.LogNote, t.Brief, t.BlockedBy, t.Independent))
                     .ToArray(),
                 ct,
                 PlanningDoorSource.Resolve(request.Source, PlanningLogSource.Agent),

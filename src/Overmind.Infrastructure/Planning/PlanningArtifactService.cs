@@ -28,7 +28,7 @@ public sealed class PlanningArtifactService
         Guid featureId, PlanningArtifactKind kind, string body, int? order,
         PlanningReviewLevel? review, string? logNote, CancellationToken ct = default,
         string? brief = null, PlanningLogSource? source = null,
-        IReadOnlyList<int>? blockedBy = null, bool dryRun = false)
+        IReadOnlyList<int>? blockedBy = null, bool dryRun = false, bool? independent = null)
     {
         body = PlanningSectionCanonicalizer.Canonicalize(body);
         PointerMarkerGrammar.EnsureValid(body);
@@ -45,6 +45,11 @@ public sealed class PlanningArtifactService
         if (blockedBy is not null && kind != PlanningArtifactKind.Task)
         {
             throw PlanningException.BlockedByNotAllowedForKind(kind);
+        }
+
+        if (independent is not null && kind != PlanningArtifactKind.Task)
+        {
+            throw PlanningException.IndependentNotAllowedForKind(kind);
         }
 
         var feature = await _db.PlanningFeatures.FirstOrDefaultAsync(f => f.Id == featureId, ct);
@@ -103,6 +108,12 @@ public sealed class PlanningArtifactService
             if (brief is not null)
             {
                 existing.SetBrief(brief);
+                mutated = true;
+            }
+
+            if (independent.HasValue)
+            {
+                existing.SetIndependent(independent.Value);
                 mutated = true;
             }
         }
@@ -306,12 +317,23 @@ public sealed class PlanningArtifactService
                 changed = true;
             }
 
+            if (task.Independent.HasValue)
+            {
+                existing.SetIndependent(task.Independent.Value);
+                changed = true;
+            }
+
             return (existing, false, changed);
         }
 
         var artifact = PlanningArtifact.Create(
             featureId, PlanningArtifactKind.Task, task.Body, resolvedOrder,
             task.Review ?? PlanningReviewLevel.Light, task.Brief);
+        if (task.Independent == true)
+        {
+            artifact.SetIndependent(true);
+        }
+
         if (!dryRun)
         {
             _db.PlanningArtifacts.Add(artifact);

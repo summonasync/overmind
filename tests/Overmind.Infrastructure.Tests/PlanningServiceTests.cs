@@ -1267,6 +1267,57 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpsertTasks_IndependentOnItems_EchoesAndPersistsTheFlag()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var batch = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [
+                new PlanningTaskUpsert("opted in", Independent: true),
+                new PlanningTaskUpsert("regular")
+            ],
+            default);
+
+        batch.Created.ShouldBe(2);
+        batch.Artifacts[0].Independent.ShouldBeTrue();
+        batch.Artifacts[1].Independent.ShouldBeFalse();
+
+        _context.ChangeTracker.Clear();
+        var stored = await _context.PlanningArtifacts
+            .Where(a => a.FeatureId == feature.Id)
+            .OrderBy(a => a.Order)
+            .ToListAsync();
+        stored[0].Independent.ShouldBeTrue();
+        stored[1].Independent.ShouldBeFalse();
+
+        var reupsert = await artifactService.UpsertTasksAsync(
+            feature.Id,
+            [new PlanningTaskUpsert("opted in — body edit, flag preserved", Order: 0)],
+            default);
+        reupsert.Updated.ShouldBe(1);
+        reupsert.Artifacts[0].Independent.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task UpsertAsync_IndependentOnNonTaskKind_ThrowsNamedKind()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var ex = await Should.ThrowAsync<PlanningException>(
+            () => artifactService.UpsertAsync(
+                feature.Id, PlanningArtifactKind.Spec, "<goal>x</goal>", null, null, null,
+                default, independent: true));
+
+        ex.Code.ShouldBe(PlanningFailureCode.IndependentNotAllowedForKind);
+        ex.Message.ShouldContain("kind 'Spec'");
+    }
+
+    [Fact]
     public async Task UpsertTasks_BlockedByOnItems_CreatesEdgesInOneSave()
     {
         var featureService = CreateFeatureService();

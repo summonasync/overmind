@@ -1893,6 +1893,27 @@ end
     }
 
     [Fact]
+    public void SetIndependent_TaskKind_FlipsTheFlag()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
+
+        artifact.SetIndependent(true);
+
+        artifact.Independent.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void SetIndependent_NonTaskKind_Throws()
+    {
+        var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Spec, "body content");
+
+        var ex = Should.Throw<InvalidOperationException>(() => artifact.SetIndependent(true));
+
+        ex.Message.ShouldContain("task-only flag");
+        artifact.Independent.ShouldBeFalse();
+    }
+
+    [Fact]
     public void SetBrief_BlankText_ClearsTheBrief()
     {
         var artifact = PlanningArtifact.Create(FeatureId, PlanningArtifactKind.Task, "body content");
