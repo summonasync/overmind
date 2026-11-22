@@ -433,6 +433,65 @@ public sealed class TelegramPollingRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_RepeatedGetUpdatesConflicts_StopThePollerWithNamedError()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueFailure(409, """{"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"}""");
+        rig.Api.QueueFailure(409, """{"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"}""");
+        rig.Api.QueueFailure(409, """{"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"}""");
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            // Conflict cycles are separated by the 5s ErrorDelay, so the third request lands ~10s in.
+            (await WaitForSlowAsync(() => rig.Api.RequestCount >= 3)).ShouldBeTrue();
+            rig.LogSnapshot().ShouldContain(line => line.Contains("polling stopped"));
+
+            (await WaitForAsync(() => run.IsCompletedSuccessfully)).ShouldBeTrue();
+
+            await Task.Delay(300);
+            var requestsAfterStop = rig.Api.RequestCount;
+            await Task.Delay(400);
+            rig.Api.RequestCount.ShouldBe(requestsAfterStop);
+        }
+        finally
+        {
+            cts.Cancel();
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_SingleConflict_WarnsButKeepsPolling()
+    {
+        var rig = CreateRig();
+        await ConfigureAsync(enabled: true, allowlist: "42");
+        rig.Api.QueueFailure(409, """{"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request"}""");
+        rig.Api.QueueUpdate(FakeTelegramApi.TextUpdate(42, "privet", 1));
+
+        var (run, cts) = StartRig(rig);
+        try
+        {
+            (await rig.Handler.Received.WaitAsync(TimeSpan.FromSeconds(10))).ShouldBeTrue();
+            rig.LogSnapshot().ShouldContain(line => line.Contains("getUpdates conflict (1/3)"));
+            rig.LogSnapshot().ShouldNotContain(line => line.Contains("polling stopped"));
+        }
+        finally
+        {
+            await StopRig(run, cts);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_MalformedToken_DoesNotCrashTheLoop()
     {
         var rig = CreateRig();
@@ -479,6 +538,16 @@ public sealed class TelegramPollingRunnerTests : IDisposable
         for (var attempt = 0; attempt < 100 && !condition(); attempt++)
         {
             await Task.Delay(20);
+        }
+
+        return condition();
+    }
+
+    private static async Task<bool> WaitForSlowAsync(Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 150 && !condition(); attempt++)
+        {
+            await Task.Delay(100);
         }
 
         return condition();

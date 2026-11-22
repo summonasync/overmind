@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
@@ -14,9 +15,11 @@ public sealed class TelegramPollingRunner(
     internal static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan ErrorDelay = TimeSpan.FromSeconds(5);
     internal const int LongPollSeconds = 50;
+    internal const int ConflictStopThreshold = 3;
 
     private int _offset;
     private bool _missingHandlerLogged;
+    private int _conflictStreak;
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -25,13 +28,34 @@ public sealed class TelegramPollingRunner(
             try
             {
                 await PollCycleAsync(ct);
+                _conflictStreak = 0;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
             }
+            catch (ApiRequestException ex) when (ex.ErrorCode == 409 && ++_conflictStreak >= ConflictStopThreshold)
+            {
+                // Terminal by design (4bae834f): a getUpdates conflict means a second Host with
+                // the same token is live — the loser of that race just burns API calls and log
+                // volume for hours, and whichever poller wins decides whether owner taps land.
+                logger.LogError(
+                    ex,
+                    "Telegram polling stopped: another Host is polling this bot token ({Count} consecutive getUpdates conflicts) — single-instance guard",
+                    _conflictStreak);
+                break;
+            }
+            catch (ApiRequestException ex) when (ex.ErrorCode == 409)
+            {
+                logger.LogWarning(
+                    "getUpdates conflict ({Count}/{Max}): another Host is likely polling this bot token",
+                    _conflictStreak, ConflictStopThreshold);
+                clientCache.Invalidate();
+                await WaitQuietlyAsync(ErrorDelay, ct);
+            }
             catch (Exception ex)
             {
+                _conflictStreak = 0;
                 logger.LogWarning(ex, "Telegram polling cycle failed; retrying shortly");
                 clientCache.Invalidate();
                 await WaitQuietlyAsync(ErrorDelay, ct);
