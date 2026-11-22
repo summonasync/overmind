@@ -15,6 +15,11 @@ export interface JournalOutgoingLink {
   kind: JournalLinkKind;
   id: string;
   label: string;
+  // Card-address halves the Host resolves for feature and task rows (T10's TargetLabel):
+  // features carry their own slug and project, tasks their parent card's. Absent on rows
+  // the reader could not resolve, and on entry/project rows the rail addresses directly.
+  slug?: string | null;
+  projectId?: string | null;
 }
 
 export interface JournalBacklink {

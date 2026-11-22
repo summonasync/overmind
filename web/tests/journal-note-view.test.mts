@@ -476,8 +476,8 @@ test("the rails read the detail payload and never re-parse the body", () => {
 // click. The fixture below is the same shape the probe fed the pre-fix module.
 test("a task link is its own rail group, not a feature in disguise", () => {
   const links: JournalOutgoingLink[] = [
-    { kind: "feature", id: "f1", label: "Journal graph" },
-    { kind: "task", id: "6df423e3-da54-4f13-a557-041d4c2580a2", label: "T6 canvas island" },
+    { kind: "feature", id: "f1", label: "Journal graph", slug: "237-journal-graph", projectId: "proj-1" },
+    { kind: "task", id: "6df423e3-da54-4f13-a557-041d4c2580a2", label: "T6 canvas island", slug: "237-journal-graph", projectId: "proj-1" },
   ];
   const groups = groupOutgoing(links);
 
@@ -486,17 +486,25 @@ test("a task link is its own rail group, not a feature in disguise", () => {
   assert.equal(groups.notes.length, 0);
   assert.equal(groups.projects.length, 0);
 
-  // The href rule is explicit rather than a fallback: a task address is `<slug>/T<order>` and the
-  // DTO carries neither half, so this row is a stated dead end with a reason attached.
-  assert.equal(outgoingHref(links[1]), null);
-  const taskReason = outgoingDeadEndReason(links[1]);
-  assert.ok(taskReason, "a dead row arrived with no stated reason");
-  assert.match(taskReason ?? "", /task/i);
+  // T10's TargetLabel puts the card address on the wire: both arms link to the parent feature
+  // card, the same place the promotion success line sends the owner (review-237-07 BLOCKER-1).
+  const cardHref = "/dashboard?project=proj-1&feature=237-journal-graph";
+  assert.equal(outgoingHref(links[0]), cardHref);
+  assert.equal(outgoingHref(links[1]), cardHref, "a task row must address its parent card, not a dead end");
+  assert.equal(outgoingDeadEndReason(links[0]), null);
+  assert.equal(outgoingDeadEndReason(links[1]), null);
 
-  // Each dead kind states its own gap, and a row that has a link states nothing.
-  const featureReason = outgoingDeadEndReason(links[0]);
-  assert.ok(featureReason && featureReason !== taskReason, "two kinds shared one reason string");
+  // A row missing the address halves stays a stated dead end with an honest reason, not a
+  // guessed link — the fallback exists for rows the reader could not resolve.
+  const bareFeature = { kind: "feature", id: "f2", label: "Unresolved card" } as JournalOutgoingLink;
+  const bareTask = { kind: "task", id: "t9", label: "Unresolved task" } as JournalOutgoingLink;
+  assert.equal(outgoingHref(bareFeature), null);
+  assert.equal(outgoingHref(bareTask), null);
+  const featureReason = outgoingDeadEndReason(bareFeature);
+  const taskReason = outgoingDeadEndReason(bareTask);
   assert.match(featureReason ?? "", /slug/i);
+  assert.match(taskReason ?? "", /task/i);
+  assert.notEqual(featureReason, taskReason, "two kinds shared one reason string");
   assert.equal(outgoingDeadEndReason({ kind: "entry", id: "e1", label: "Note" }), null);
 });
 
