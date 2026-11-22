@@ -1,3 +1,4 @@
+import type { LayoutMode } from "./graph-layout.ts";
 import type { GraphCounts, GraphNode, GraphNodeState, GraphViewFilters } from "../types.ts";
 
 // Every string the graph surface shows, in one module: the a11y label, the legend, the ceiling
@@ -12,15 +13,29 @@ export const GRAPH_SEARCH_HINT = "Matches the title text as typed.";
 const ASCII_CASE_NOTE =
   "Titles are matched as typed: the store folds case for Latin letters only, so try the exact spelling you used.";
 
-export function graphAriaLabel(counts: GraphCounts): string {
+export function graphAriaLabel(counts: GraphCounts, tier?: string, clusters?: number): string {
   const byKind =
     `${counts.entryNodes} entries, ${counts.projectNodes} projects, ${counts.featureNodes} features`;
   const links = counts.edges === 1 ? "1 link" : `${counts.edges} links`;
   return (
     `Graph map: ${counts.nodes} nodes (${byKind}) joined by ${links}. ` +
     `${counts.orphans} nodes carry no links at all, ${counts.isolatedInView} link only to something outside this view. ` +
-    "The list below holds the same data and is the keyboard path."
+    "The list below holds the same data and is the keyboard path." +
+    (tier === undefined ? "" : ` The field runs on the ${tier} tier.`) +
+    (clusters === undefined
+      ? ""
+      : ` The field is grouped into ${clusters === 1 ? "1 cluster" : `${clusters} clusters`}, one dot per project.`)
   );
+}
+
+// The tier name the canvas is allowed to say out loud. Tier 3 ships clusters, so a field past
+// the precompute ceiling is named for the grouping the canvas actually paints — the old
+// "static" bridge named the seed frame tier 2 drew while T3 was still a plan.
+export function tierName(mode: LayoutMode): string {
+  if (mode === "simulate") {
+    return "live simulation";
+  }
+  return mode === "precomputed" ? "precomputed" : "clustered";
 }
 
 // A NODE count, never a link count: the dropped-edge tally is not in the payload
@@ -39,12 +54,85 @@ export function nodeCountLabel(counts: GraphCounts): string {
   return `${counts.nodes} nodes · ${counts.edges === 1 ? "1 link" : `${counts.edges} links`}`;
 }
 
-// R9: the ceiling notice names the real count instead of quietly going static.
+// R9: the ceiling notice names the real count instead of quietly going static. Under the ladder
+// (271) the canvas renders this line for every over-ceiling count until each tier ships its own
+// notice below, so the only layout claim it makes is one true across all three modes.
 export function ceilingMessage(nodeCount: number, ceiling: number): string {
   const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
   return (
     `${head} above the ${ceiling}-node live-simulation ceiling, so nothing is animating. ` +
-    "The field is drawn in its settled layout and the list below stays the primary path."
+    "The field is drawn from a computed layout and the list below stays the primary path."
+  );
+}
+
+// The ladder's per-tier notices. Each names the rung it crossed and what the canvas does about
+// it, and both keep the live-simulation-ceiling phrase — the copy pin sweeps the island for
+// that string, and the honest ladder still leads with it.
+//
+// Tier 2 draws its seed sketch first and swaps in the settled map when the layout lands, so the
+// notice says that order and not "before its first frame". It also promises nothing about
+// background threads: the shipped transport is time-sliced work on the main thread (see the
+// transport comment in graph-precompute.ts), and release in this tier leaves nodes where they
+// stand because there is no simulation left to return them to.
+export function precomputedNotice(nodeCount: number, ceiling: number): string {
+  const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
+  return (
+    `${head} above the ${ceiling}-node live-simulation ceiling, so the field draws its seed ` +
+    "sketch first and settles once, off the render loop, into the map that replaces it. " +
+    "Nothing is animating, and releasing pinned nodes here leaves them where they stand — " +
+    "this tier has no simulation to return them to. The list below stays the primary path."
+  );
+}
+
+// Shown only while the tier-2 settle is still slicing. The wording keeps to what the transport
+// does: the work runs in bounded slices with input handled between them, which is not the same
+// claim as an idle page, and the field below is the seed sketch until the swap.
+export function computingLayoutNotice(nodeCount: number): string {
+  const noun = nodeCount === 1 ? "node" : "nodes";
+  return (
+    `Laying out ${nodeCount} ${noun}: the settle runs in slices between frames, so input is ` +
+    "handled between them. The field below is the seed sketch until the layout lands."
+  );
+}
+
+// Tier 3's two subset settles reuse the transport but not the wording: on a 5001-node field,
+// "Laying out 51 nodes" reads as the whole field, when it is only the anchor layer — and the
+// bloom's count is one cluster's members, with the rest of the field untouched by the merge.
+export function computingAnchorsNotice(anchorCount: number): string {
+  const noun = anchorCount === 1 ? "anchor" : "anchors";
+  return (
+    `Settling the ${anchorCount} cluster ${noun} the field is grouped into: the frame they fix ` +
+    "runs in slices between frames, so input is handled between them. The dots below are the " +
+    "seed sketch until the anchor frame lands."
+  );
+}
+
+export function computingBloomNotice(memberCount: number): string {
+  const noun = memberCount === 1 ? "node" : "nodes";
+  return (
+    `Opening a cluster of ${memberCount} ${noun}: its members settle in slices between frames, ` +
+    "so input is handled between them. The settle touches only this cluster's nodes."
+  );
+}
+
+// The settle threw and stayed abandoned, so the seed sketch is the field and no swap is coming —
+// the settled-tier wording would promise "the map that replaces it", which is exactly the swap
+// that never happened. The sketch is not a broken frame: every node is on it, nothing animates,
+// and the same kick runs again on the next field beat or reload.
+export function settleFailedNotice(nodeCount: number): string {
+  const noun = nodeCount === 1 ? "node" : "nodes";
+  return (
+    `The layout for ${nodeCount} ${noun} did not finish, so the field is showing its seed ` +
+    "sketch: every node is on it, nothing is animating, and the list below stays the primary path. " +
+    "Refetching the graph or reloading retries the layout."
+  );
+}
+
+export function clusteredNotice(nodeCount: number, ceiling: number): string {
+  const head = nodeCount === 1 ? "1 node is" : `${nodeCount} nodes are`;
+  return (
+    `${head} above the ${ceiling}-node precompute ceiling — past the live-simulation ceiling as well — ` +
+    "so the field is grouped into clusters instead of drawn one dot per node. The list below stays the primary path."
   );
 }
 

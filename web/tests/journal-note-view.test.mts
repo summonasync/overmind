@@ -102,6 +102,7 @@ const T6_GRAPH_SLICE = [
   "components/graph-legend.tsx",
   "components/graph-node-list.tsx",
   "components/graph-node-panel.tsx",
+  "lib/graph-cluster.ts",
   "lib/graph-copy.ts",
   "lib/graph-filters.ts",
   "lib/graph-layout.ts",
@@ -881,5 +882,5 @@ test("the slice file names are the ones the guards above measure", () => {
   for (const file of T6_GRAPH_SLICE) {
     assert.ok(sliceFile(file).length > 200, `${file} is missing, empty or wrong`);
   }
-  assert.equal(T6_GRAPH_SLICE.length, 14);
+  assert.equal(T6_GRAPH_SLICE.length, 15);
 });

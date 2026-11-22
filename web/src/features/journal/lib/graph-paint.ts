@@ -1,6 +1,6 @@
 import type { GraphNodeState } from "../types.ts";
-import { nodeColorName, nodeRadius, type GraphSemanticColor } from "./graph-palette.ts";
-import type { LayoutLink, LayoutNode } from "./graph-layout.ts";
+import { anchorRadius, nodeColorName, nodeRadius, type GraphSemanticColor } from "./graph-palette.ts";
+import type { LayoutLink, LayoutMode, LayoutNode } from "./graph-layout.ts";
 import { nodeKey } from "./graph-payload.ts";
 import { toScreenX, toScreenY, type ViewTransform } from "./graph-view.ts";
 
@@ -38,6 +38,15 @@ export const ORPHAN_ALPHA = 0.6;
 export const LABEL_SCALE_FLOOR = 0.85;
 export const MAX_LABEL_CHARS = 42;
 
+// R3's ladder, tier 2 and up. Between the floor and near zoom only hubs label, because a
+// 5000-node field at arm's length turns every title into ink; a hub is a node whose link count
+// cleared HUB_DEGREE_FLOOR — the degree below which a dot is a leaf in practice, not a
+// landmark. The near-zoom rung stays reachable with three wheel notches from the default view
+// (1.15³ ≈ 1.52), so "show me everything" is always a deliberate zoom away, never a dead end.
+// Tier 1 predates the ladder and keeps the single floor it shipped with.
+export const HUB_DEGREE_FLOOR = 4;
+export const LABEL_SCALE_NEAR = 1.25;
+
 export interface SceneInput {
   nodes: readonly LayoutNode[];
   links: readonly LayoutLink[];
@@ -50,6 +59,11 @@ export interface SceneInput {
   width: number;
   height: number;
   font: string;
+  tier: LayoutMode;
+  // Tier 3 only: collapsed cluster anchors, keyed by node key, carrying the member count each
+  // dot stands in for. Presence switches the radius to the anchor scale and the label rule to
+  // "a closed cluster always names itself"; open clusters leave their members to the ladder.
+  anchors?: ReadonlyMap<string, number>;
 }
 
 export function drawScene(ctx: PaintTarget, scene: SceneInput): void {
@@ -99,12 +113,19 @@ function nodeAlpha(scene: SceneInput, key: string): number {
   return scene.neighbours.has(key) ? 1 : HOVER_DIM_ALPHA;
 }
 
+// One radius rule for both paint passes, so a dot never draws at one size and picks or labels
+// at another: collapsed anchors wear the anchor scale, everything else the kind's own.
+function radiusIn(scene: SceneInput, node: LayoutNode): number {
+  const hidden = scene.anchors?.get(keyOf(node));
+  return hidden === undefined ? nodeRadius(node) : anchorRadius(hidden);
+}
+
 function drawNodes(ctx: PaintTarget, scene: SceneInput): void {
   for (const node of scene.nodes) {
     const key = keyOf(node);
     const state = scene.states.get(key) ?? "linked";
     const color = scene.colors[nodeColorName(node)];
-    const radius = Math.max(2, nodeRadius(node) * scene.view.scale);
+    const radius = Math.max(2, radiusIn(scene, node) * scene.view.scale);
     const x = toScreenX(node.x, scene.view);
     const y = toScreenY(node.y, scene.view);
 
@@ -152,18 +173,52 @@ function drawNodes(ctx: PaintTarget, scene: SceneInput): void {
   drawLabels(ctx, scene);
 }
 
+function hubDegrees(links: readonly LayoutLink[]): Map<string, number> {
+  const degrees = new Map<string, number>();
+  const bump = (node: LayoutNode) => {
+    const key = keyOf(node);
+    degrees.set(key, (degrees.get(key) ?? 0) + 1);
+  };
+  for (const link of links) {
+    bump(link.source);
+    bump(link.target);
+  }
+  return degrees;
+}
+
+function labelShown(scene: SceneInput, key: string, degree: number): boolean {
+  if (key === scene.hoverKey || key === scene.selectedKey) {
+    return true;
+  }
+  if (scene.anchors?.has(key)) {
+    return true;
+  }
+  if (scene.tier === "simulate") {
+    return scene.view.scale >= LABEL_SCALE_FLOOR;
+  }
+  if (scene.view.scale < LABEL_SCALE_FLOOR) {
+    return false;
+  }
+  if (scene.view.scale < LABEL_SCALE_NEAR) {
+    return degree >= HUB_DEGREE_FLOOR;
+  }
+  return true;
+}
+
 function drawLabels(ctx: PaintTarget, scene: SceneInput): void {
   ctx.font = scene.font;
   ctx.fillStyle = scene.colors.label;
 
+  // One O(links) pass per frame, the same order drawLinks already pays; tier 1 never needs it.
+  const degrees = scene.tier === "simulate" ? null : hubDegrees(scene.links);
+
   for (const node of scene.nodes) {
     const key = keyOf(node);
-    const focused = key === scene.hoverKey || key === scene.selectedKey;
-    if (!focused && scene.view.scale < LABEL_SCALE_FLOOR) {
+    if (!labelShown(scene, key, degrees?.get(key) ?? 0)) {
       continue;
     }
 
-    const radius = Math.max(2, nodeRadius(node) * scene.view.scale);
+    const radius = Math.max(2, radiusIn(scene, node) * scene.view.scale);
     ctx.globalAlpha = nodeAlpha(scene, key);
     ctx.fillText(truncateLabel(node.label), toScreenX(node.x, scene.view), toScreenY(node.y, scene.view) + radius + 12);
   }
