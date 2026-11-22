@@ -17,6 +17,7 @@ import {
 import { useGrimoireMutations } from "@/features/grimoire/lib/use-grimoire-mutations";
 import type {
   GrimoireAssistedInstallResponse,
+  GrimoireInstallIntent,
   GrimoireStatusResponse,
 } from "@/features/grimoire/types";
 import { GrimoireAgentOutcomes } from "./grimoire-agent-outcomes";
@@ -47,9 +48,9 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
     setStep({ name: "wire", mode });
   };
 
-  const openInstructionsStep = (intent: "manual" | "assisted") => {
+  const openInstructionsStep = (intent: GrimoireInstallIntent) => {
     assisted.reset();
-    assisted.mutate(null);
+    assisted.mutate({ intent, channel: null });
     setStep({ name: "instructions", intent });
   };
 
@@ -110,7 +111,7 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
           error={assisted.error as Error | null}
           result={assisted.data ?? null}
           onBack={() => setStep({ name: "choice" })}
-          onRetry={() => assisted.mutate(null)}
+          onRetry={() => assisted.mutate({ intent: step.intent, channel: null })}
           onContinue={() => openWireStep("initial")}
           onClose={onClose}
         />

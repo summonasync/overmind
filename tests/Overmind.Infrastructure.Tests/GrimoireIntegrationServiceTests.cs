@@ -167,12 +167,50 @@ public sealed class GrimoireIntegrationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task AssistedInstallAsync_NoChannel_ReturnsDegradedInstructions()
+    public async Task AssistedInstallAsync_ManualIntentWithChannel_NeverRunsEngineAndLeavesChannelUnstored()
     {
         var runner = new FakeRunner();
         var service = Build(runner, new FakeLocator(null), new FakeCli(new GrimoireVersionProbe(false, null)));
 
-        var result = await service.AssistedInstallAsync(null, CancellationToken.None);
+        var result = await service.AssistedInstallAsync(
+            GrimoireInstallIntent.Manual, "dotnet tool install -g Grimoire.Tool", CancellationToken.None);
+
+        result.Degraded.ShouldBeTrue();
+        result.Success.ShouldBeFalse();
+        result.Detection.ShouldBeNull();
+        result.Error.ShouldBeNull();
+        result.Instructions.ShouldNotBeEmpty();
+        runner.Calls.ShouldBeEmpty();
+        await using var context = _temp.CreateContext();
+        (await new AppSettingsService(context).HasAsync(
+            SettingKeys.GrimoireInstallChannel, CancellationToken.None)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AssistedInstallAsync_ManualIntentWithoutChannel_ReturnsDegradedStepsWithoutEngineRun()
+    {
+        var runner = new FakeRunner();
+        var service = Build(runner, new FakeLocator(null), new FakeCli(new GrimoireVersionProbe(false, null)));
+
+        var result = await service.AssistedInstallAsync(
+            GrimoireInstallIntent.Manual, null, CancellationToken.None);
+
+        result.Degraded.ShouldBeTrue();
+        result.Success.ShouldBeFalse();
+        result.Detection.ShouldBeNull();
+        result.Error.ShouldBeNull();
+        result.Instructions.ShouldNotBeEmpty();
+        runner.Calls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AssistedInstallAsync_AssistedIntentWithoutChannel_ReturnsDegradedInstructions()
+    {
+        var runner = new FakeRunner();
+        var service = Build(runner, new FakeLocator(null), new FakeCli(new GrimoireVersionProbe(false, null)));
+
+        var result = await service.AssistedInstallAsync(
+            GrimoireInstallIntent.Assisted, null, CancellationToken.None);
 
         result.Degraded.ShouldBeTrue();
         result.Success.ShouldBeFalse();
@@ -183,7 +221,7 @@ public sealed class GrimoireIntegrationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task AssistedInstallAsync_ChannelProvided_PersistsChannelAndRunsCommand()
+    public async Task AssistedInstallAsync_AssistedIntentWithChannel_PersistsChannelAndRunsCommand()
     {
         var runner = new FakeRunner(new GrimoireEngineRunResult(true, 0, "installed", string.Empty));
         WriteConfig(4770);
@@ -194,7 +232,7 @@ public sealed class GrimoireIntegrationServiceTests : IDisposable
             new FakeHealth(true));
 
         var result = await service.AssistedInstallAsync(
-            "dotnet tool install -g Grimoire.Tool", CancellationToken.None);
+            GrimoireInstallIntent.Assisted, "dotnet tool install -g Grimoire.Tool", CancellationToken.None);
 
         result.Degraded.ShouldBeFalse();
         result.Success.ShouldBeTrue();
@@ -215,7 +253,8 @@ public sealed class GrimoireIntegrationServiceTests : IDisposable
             new GrimoireEngineRunResult(true, 1, string.Empty, "nuget feed unreachable"));
         var service = Build(runner, new FakeLocator(null), new FakeCli(new GrimoireVersionProbe(false, null)));
 
-        var result = await service.AssistedInstallAsync("dotnet tool install -g Grimoire.Tool", CancellationToken.None);
+        var result = await service.AssistedInstallAsync(
+            GrimoireInstallIntent.Assisted, "dotnet tool install -g Grimoire.Tool", CancellationToken.None);
 
         result.Degraded.ShouldBeFalse();
         result.Success.ShouldBeFalse();
@@ -233,7 +272,8 @@ public sealed class GrimoireIntegrationServiceTests : IDisposable
         var runner = new FakeRunner(new GrimoireEngineRunResult(true, 0, "installed", string.Empty));
         var service = Build(runner, new FakeLocator(null), new FakeCli(new GrimoireVersionProbe(false, null)));
 
-        var result = await service.AssistedInstallAsync("dotnet tool install -g Grimoire.Tool", CancellationToken.None);
+        var result = await service.AssistedInstallAsync(
+            GrimoireInstallIntent.Assisted, "dotnet tool install -g Grimoire.Tool", CancellationToken.None);
 
         result.Success.ShouldBeFalse();
         result.Error.ShouldNotBeNull();
