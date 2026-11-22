@@ -1,0 +1,3 @@
+- [Alpha setup notes](notes/alpha-setup.md) — First healthy entry about the project layout decision
+- [Beta release checklist](feedback/beta-release.md) — Second healthy entry about the release checklist
+- [Missing file](reference/missing-file.md) — this index link points at a file that is not on disk
