@@ -36,9 +36,10 @@ public sealed class WaveChatService
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
         var trimmedText = text.Trim();
-        if (trimmedText.Length > WaveMessage.MaxTextLength)
+        var hardCeiling = SoftCap.Ceiling(WaveMessage.MaxTextLength);
+        if (trimmedText.Length > hardCeiling)
         {
-            throw PlanningException.WaveTextTooLong(trimmedText.Length, WaveMessage.MaxTextLength);
+            throw PlanningException.WaveTextTooLong(trimmedText.Length, hardCeiling);
         }
 
         var message = WaveMessage.Create(projectId, normalizedRoom, authorAlias, authorRole, text);

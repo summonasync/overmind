@@ -1,0 +1,3 @@
+- [Alpha setup notes](notes/alpha-setup.md) — First healthy entry about the project layout decision
+- [Dup alpha](notes/dup-a.md) — first copy of the duplicated ruling text
+- [Dup beta](notes/dup-b.md) — second copy of the duplicated ruling text

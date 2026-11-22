@@ -222,12 +222,31 @@ public sealed class EntryLifecycleApiTests : IDisposable
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2001)]
     public async Task Append_BadTextLength_Returns400(int length)
     {
         var entry = await CreateEntryAsync("Note", "bad append", "body");
         var response = await _client.PostAsJsonAsync($"/api/entries/{entry.Id}/append", new { Text = new string('x', length) });
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData(2001, 2001)]
+    [InlineData(2441, 2400)]
+    public async Task Append_OverCap_IsAcceptedWithWarnings(int sent, int stored)
+    {
+        // 266: follow-up text softened at the door — band stores whole, past-ceiling truncates
+        // to 2400, both answer with the frozen warnings[] shape.
+        var entry = await CreateEntryAsync("Note", "soft append", "body");
+        var response = await _client.PostAsJsonAsync(
+            $"/api/entries/{entry.Id}/append", new { Text = new string('x', sent) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var warning = payload.RootElement.GetProperty("warnings")[0];
+        warning.GetProperty("accepted_len").GetInt32().ShouldBe(stored);
+        warning.GetProperty("limit").GetInt32().ShouldBe(2000);
+        warning.GetProperty("truncated").GetBoolean().ShouldBe(sent > 2440);
+        payload.RootElement.GetProperty("content").GetString()!.ShouldContain(new string('x', stored));
     }
 
     private Guid CreateProject(string name)

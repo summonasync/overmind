@@ -3912,7 +3912,32 @@ public class PlanningToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task PlanningPatchArtifact_BriefOverCap_RejectedWithoutHttpCall()
+    public async Task PlanningPatchArtifact_BriefOverCap_ForwardsAndEchoesWarnings()
+    {
+        // 266: the local pre-flight refusal is gone — over-cap brief rides to the door, the
+        // door warns (band) or truncates with a lost_tail_preview (past ceiling), the echo
+        // carries the frozen warnings[] shape through to the agent.
+        var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
+        {
+            ["artifactId"] = Canned.PlanningTaskTwoId.ToString(),
+            ["brief"] = new string('x', 611)
+        });
+
+        response["result"]!["isError"].ShouldBeNull();
+        var request = FindRequest("POST", $"/api/agent/planning/artifacts/{Canned.PlanningTaskTwoId}/patch");
+        request.Body.ShouldContain(new string('x', 611));
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        var warning = echo["warnings"]!.AsArray().Single()!.AsObject();
+        warning["accepted_len"]!.GetValue<int>().ShouldBe(600);
+        warning["limit"]!.GetValue<int>().ShouldBe(500);
+        warning["truncated"]!.GetValue<bool>().ShouldBeTrue();
+        warning["lost_tail_preview"]!.GetValue<string>().Length.ShouldBe(11);
+        Driver.HasExited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PlanningPatchArtifact_BriefInGraceBand_WarnsPassThrough()
     {
         var response = await Driver.CallToolAsync("planning_patch_artifact", new JsonObject
         {
@@ -3920,10 +3945,10 @@ public class PlanningToolContractTests : McpSessionTestBase
             ["brief"] = new string('x', 501)
         });
 
-        ToolErrorText(response).ShouldContain("at most 500 chars");
-        Stub.Requests.ShouldNotContain(r =>
-            r.Method == "POST" && r.Path.EndsWith("/patch", StringComparison.Ordinal));
-        Driver.HasExited.ShouldBeFalse();
+        response["result"]!["isError"].ShouldBeNull();
+        var warning = JsonNode.Parse(Canned.ToolResultText(response))!["warnings"]!.AsArray().Single()!;
+        warning["truncated"]!.GetValue<bool>().ShouldBeFalse();
+        warning["accepted_len"]!.GetValue<int>().ShouldBe(501);
     }
 
     [Fact]

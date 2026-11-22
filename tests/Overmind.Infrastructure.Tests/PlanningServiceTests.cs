@@ -3144,6 +3144,62 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         patched.Artifact.ValidationProofVoided.ShouldBeNull();
     }
 
+    // 266/T3 row 7 — a task never holds a validation proof (tasks run todo→review→done; the proof
+    // gate belongs to spec, plan and result), so echoing one after a task write told the caller a
+    // document approval had died when nothing of the sort existed. Suppressed for task mutations;
+    // the spec-side echo above stays exactly as it was.
+    [Fact]
+    public async Task PatchAsync_TickingTaskAcAfterReply_KeepsTheProofFieldSilent()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        var task = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task,
+            "<goal>\nwork\n</goal>\n<acceptance-criteria>\n- [ ] hold the line\n</acceptance-criteria>",
+            order: 1, review: null, logNote: null);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the plan", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var patched = await artifactService.PatchAsync(
+            task.Id,
+            new PlanningArtifactPatch(TickIndex: 1, LogNote: "ticking the task item"),
+            source: PlanningLogSource.Agent);
+
+        patched.Artifact.ValidationProofVoided.ShouldBeNull();
+        patched.Artifact.Body.ShouldContain("- [x] hold the line");
+    }
+
+    [Fact]
+    public async Task UpsertAsync_EditingTaskBodyAfterReply_KeepsTheProofFieldSilent()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+
+        var artifactService = CreateArtifactService();
+        await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "<goal>\noriginal\n</goal>",
+            order: 1, review: null, logNote: null);
+
+        var notification = AgentNotification.Create(
+            NotificationKind.Approval, "please approve the plan", _projectId, "feat");
+        notification.Reply("lgtm");
+        _context.AgentNotifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var rewritten = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "<goal>\nrewritten\n</goal>",
+            order: 1, review: null, logNote: "second shape");
+
+        rewritten.ValidationProofVoided.ShouldBeNull();
+        rewritten.Body.ShouldContain("rewritten");
+    }
+
     [Fact]
     public async Task UpsertAsync_EditingValidatedSpecAfterReply_ReportsVoidedProof()
     {

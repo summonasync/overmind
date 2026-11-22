@@ -70,8 +70,12 @@ while read -r src home type mode; do
         if [[ "$mode" == "merge" ]]; then
             # Mirror each child separately: third-party content living next to the crew's own
             # entries in the destination (e.g. non-crew skills in ~/.qwen/skills) survives.
-            [[ $DRY == 1 ]] || mkdir -p "$hp/$name"
-            for child in "$ROOT/$src"/*; do
+            if [[ ! -d "$hp/$name" ]]; then
+                if [[ $DRY == 1 ]]; then echo "Would mkdir -p $hp/$name"
+                else mkdir -p "$hp/$name"; fi
+            fi
+            # dot-patterns keep hidden children (dotfiles) in the merge sweep, same as -Force on Windows
+            for child in "$ROOT/$src"/* "$ROOT/$src"/.[!.]* "$ROOT/$src"/..?*; do
                 [[ -e "$child" ]] || continue
                 if [[ -d "$child" ]]; then mirror_dir "$child" "$hp/$name/$(basename "$child")"
                 else copy_file "$child" "$hp/$name"; fi

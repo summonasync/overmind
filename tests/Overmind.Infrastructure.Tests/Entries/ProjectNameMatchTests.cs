@@ -23,6 +23,17 @@ public sealed class ProjectNameMatchTests
     }
 
     [Fact]
+    public void PickStrict_NothingMatches_ReturnsNull()
+    {
+        var rows = new List<(Guid Id, string Name, DateTime CreatedAt)>
+        {
+            (Guid.NewGuid(), "unrelated", Older),
+        };
+
+        ProjectNameMatch.PickStrict(rows, "stream-other").ShouldBeNull();
+    }
+
+    [Fact]
     public void PickStrict_ExactSpellingWinsAmongVariants()
     {
         var variantId = Guid.NewGuid();

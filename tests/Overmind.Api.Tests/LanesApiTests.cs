@@ -89,17 +89,34 @@ public sealed class LanesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task PutLanes_ContourOverTheCap_Returns400NamingTheField()
+    public async Task PutLanes_ContourOverTheCap_IsAcceptedWithWarnings()
     {
+        // 266: contour length softened at the door — the grace band (2001 ≤ 2440) stores whole
+        // and past-ceiling truncates to 2400, both with the frozen warnings[] shape.
         var project = await CreateProjectAsync();
+        await SeedLaneAsync(project.Id, "frontend");
 
         var put = await _client.PutAsJsonAsync(
             $"/api/agent/projects/{project.Id}/planning/lanes-roster",
             new { Lanes = new[] { new { Name = "frontend", Contour = new string('x', PlanningLane.MaxContourLength + 1) } } });
 
-        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var problem = await put.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
-        problem!.Errors.ShouldContainKey("Lanes[0].Contour");
+        put.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        var warning = doc.RootElement.GetProperty("warnings")[0];
+        warning.GetProperty("accepted_len").GetInt32().ShouldBe(2001);
+        warning.GetProperty("limit").GetInt32().ShouldBe(2000);
+        warning.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+
+        var overCeiling = await _client.PutAsJsonAsync(
+            $"/api/agent/projects/{project.Id}/planning/lanes-roster",
+            new { Lanes = new[] { new { Name = "frontend", Contour = new string('x', 2441) } } });
+
+        overCeiling.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var overDoc = JsonDocument.Parse(await overCeiling.Content.ReadAsStringAsync());
+        overDoc.RootElement.GetProperty("warnings")[0].GetProperty("truncated").GetBoolean().ShouldBeTrue();
+
+        var roster = await GetRosterAsync(project.Id, agentDoor: true);
+        roster!.Lanes.Single(l => l.Name == "frontend").Contour!.Length.ShouldBe(2400);
     }
 
     [Fact]

@@ -56,7 +56,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(2000)
+                        .HasMaxLength(2440)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -702,7 +702,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(2000)
+                        .HasMaxLength(2440)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -824,7 +824,7 @@ namespace Overmind.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Contour")
-                        .HasMaxLength(2000)
+                        .HasMaxLength(2440)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
@@ -1327,7 +1327,7 @@ namespace Overmind.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(500)
+                        .HasMaxLength(610)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

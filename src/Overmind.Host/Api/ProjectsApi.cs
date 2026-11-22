@@ -81,7 +81,18 @@ public static class ProjectsApi
 
         var project = Project.Create(name, request.DiskPath, request.Description ?? string.Empty);
         db.Projects.Add(project);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, "Projects.NameNormalized"))
+        {
+            var winner = await db.Projects
+                .Where(p => p.NameNormalized == normalized)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync(ct);
+            return NameCollision(name, winner ?? name);
+        }
 
         return Results.Created($"/api/projects/{project.Id}", ProjectMapper.ToResponse(project));
     }
@@ -298,7 +309,18 @@ public static class ProjectsApi
                 ct);
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, "Projects.NameNormalized"))
+        {
+            var winner = await db.Projects
+                .Where(p => p.NameNormalized == normalized)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync(ct);
+            return NameCollision(name, winner ?? name);
+        }
 
         if (!relocated)
         {

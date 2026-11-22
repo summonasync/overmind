@@ -119,13 +119,33 @@ public sealed class WaveChatToolContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PostMessage_OverCap_RefusedLocallyBeforeAnyRequest()
+    public async Task PostMessage_OverCap_ForwardsWholeTextWithoutLocalRefusal()
     {
-        var ex = await Should.ThrowAsync<McpException>(
-            () => Tool().PostMessage("all", new string('x', 501)));
+        // 266: the soft cap moved to the Host door — the adapter no longer pre-refuses; over-cap
+        // text rides to the wire whole and the door answers accepted-with-warnings.
+        var over = new string('x', 501);
 
-        ex.Message.ShouldBe("text is 501 chars; cap is 500; cut 1");
-        _stub.Requests.ShouldBeEmpty();
+        var posted = await Tool().PostMessage("all", over, Canned.ProjectId);
+
+        Text(posted).ShouldContain("posted to 'all'");
+        _stub.Requests.Single(r => r.Method == "POST").Body.ShouldContain(over);
+        Text(posted).ShouldNotContain("Warnings:");
+    }
+
+    [Fact]
+    public async Task PostMessage_HostTruncationWarnings_SurfacedInTheEcho()
+    {
+        _stub.Route("POST", $"{RoomsRoute}/([^/]+)/messages", req => new StubOvermindApi.Response(
+            200,
+            $$"""
+            {"id":"{{Guid.NewGuid()}}","room":"all","authorAlias":"{{AuthorAlias}}","text":"{{new string('x', 600)}}","mentions":[],"createdAt":"{{Base:O}}","authorRole":"worker","warnings":[{"accepted_len":600,"limit":500,"truncated":true,"lost_tail_preview":"xxxxxxxxxx"}]}
+            """));
+
+        var posted = await Tool().PostMessage("all", new string('x', 611), Canned.ProjectId);
+
+        Text(posted).ShouldContain("Warnings:");
+        Text(posted).ShouldContain("\"truncated\":true");
+        Text(posted).ShouldContain("\"lost_tail_preview\"");
     }
 
     [Fact]

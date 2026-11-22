@@ -21,7 +21,7 @@ public static class AgentWakeApi
 
     public static RouteGroupBuilder MapAgentWakeApi(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/agent");
+        var group = routes.MapAgentGroup();
         group.MapGet("/wake", Wake).WithDescription(Description);
 
         return group;

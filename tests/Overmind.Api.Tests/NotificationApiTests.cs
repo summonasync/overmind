@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shouldly;
 using Xunit;
 
@@ -243,15 +244,20 @@ public sealed class NotificationApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Create_TextOverLimit_Returns400NamingFieldLimitAndActualSize()
+    public async Task Create_TextOverLimit_IsAcceptedWithWarnings()
     {
+        // 266: the agent notify door softened — grace-band text (2143 ≤ 2440) stores whole
+        // and answers with the frozen warnings[] shape instead of a validation problem.
         var response = await _client.PostAsJsonAsync(
             "/api/agent/notifications", new { Kind = "info", Text = new string('x', 2143) });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemJson>(JsonOptions);
-        problem!.Errors.Keys.ShouldContain("Text");
-        problem.Errors["Text"].ShouldBe(["Text exceeds the 2000 character limit (got 2143)."]);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var payload = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        payload["text"]!.GetValue<string>().Length.ShouldBe(2143);
+        var warning = payload["warnings"]!.AsArray().Single()!.AsObject();
+        warning["accepted_len"]!.GetValue<int>().ShouldBe(2143);
+        warning["limit"]!.GetValue<int>().ShouldBe(2000);
+        warning["truncated"]!.GetValue<bool>().ShouldBeFalse();
     }
 
     [Fact]
@@ -533,7 +539,6 @@ public sealed class NotificationApiTests : IDisposable
         { "", "valid text", null },
         { "info", "", null },
         { "info", "   ", null },
-        { "info", new string('x', 2001), null },
         { "info", "valid text", "board" },
     };
 

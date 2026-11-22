@@ -72,28 +72,87 @@ public sealed class PlanningDirectivesApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
-    public async Task Append_AgentDoor_TextOverCap_Returns400()
+    [Theory]
+    [InlineData(2000, false, HttpStatusCode.OK)]
+    [InlineData(2001, true, HttpStatusCode.OK)]
+    [InlineData(2440, true, HttpStatusCode.OK)]
+    [InlineData(2441, false, HttpStatusCode.BadRequest)]
+    public async Task Append_AgentDoor_Zones_AtTheCapAndCeilingEdges(int length, bool warns, HttpStatusCode expected)
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "directed");
 
-        var response = await SendAgentAppendAsync(
-            project.Id, "directed", new string('x', 2001), HolderSessionId);
+        var response = await SendAgentAppendAsync(project.Id, "directed", new string('x', length), HolderSessionId);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(expected);
+        if (expected != HttpStatusCode.OK)
+        {
+            return;
+        }
+
+        var warnings = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["warnings"]?.AsArray() ?? [];
+        warnings.Count.ShouldBe(warns ? 1 : 0);
+        if (warns)
+        {
+            warnings[0]!["accepted_len"]!.GetValue<int>().ShouldBe(length);
+            warnings[0]!["limit"]!.GetValue<int>().ShouldBe(2000);
+            warnings[0]!["truncated"]!.GetValue<bool>().ShouldBeFalse();
+        }
     }
 
     [Fact]
-    public async Task Append_AgentDoor_At2000Chars_IsAccepted()
+    public async Task Append_AgentDoor_GraceBand_StoresTheWholeCommand()
     {
         var project = await CreateProjectAsync();
         await CreateAgentFeatureAsync(project.Id, "directed");
 
         var response = await SendAgentAppendAsync(
-            project.Id, "directed", new string('x', 2000), HolderSessionId);
+            project.Id, "directed", new string('x', 2440), HolderSessionId);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var directive = (await response.Content.ReadFromJsonAsync<DirectiveJson>(JsonOptions))!;
+        directive.Text.Length.ShouldBe(2440);
+        (await CountDirectivesAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Append_AgentDoor_BeyondCeiling_RejectsNamingFieldLimitActualAndPreview()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "directed");
+        var before = await CountDirectivesAsync();
+
+        var text = $"HOLD: {new string('k', 2426)} tail-sentinel";
+        var response = await SendAgentAppendAsync(project.Id, "directed", text, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        problem["title"]!.GetValue<string>().ShouldBe("DirectiveTextTooLong");
+        var detail = problem["detail"]!.GetValue<string>();
+        detail.ShouldContain("Directive text");
+        detail.ShouldContain($"is {text.Length} characters");
+        detail.ShouldContain("limit is 2000");
+        detail.ShouldContain("ceiling is 2440");
+        detail.ShouldContain("tail-sentinel");
+        (await CountDirectivesAsync()).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task Append_AgentDoor_BeyondCeiling_PreviewBacksOffASplitSurrogatePair()
+    {
+        var project = await CreateProjectAsync();
+        await CreateAgentFeatureAsync(project.Id, "directed");
+
+        // 2400 keep chars, then a pair whose LOW half is exactly the 50th-from-last character: without the
+        // engine's one-char back-off the preview would open with an orphaned low surrogate.
+        var text = $"{new string('a', 2400)}\uD83D\uDE80{new string('b', 49)}";
+        var response = await SendAgentAppendAsync(project.Id, "directed", text, HolderSessionId);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var detail = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["detail"]!.GetValue<string>();
+        detail.ShouldContain(new string('b', 49));
+        detail.ShouldNotContain("\uDE80");
+        (await CountDirectivesAsync()).ShouldBe(0);
     }
 
     [Fact]
@@ -359,6 +418,13 @@ public sealed class PlanningDirectivesApiTests : IDisposable
         using var command = _db.CreateCommand();
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task<int> CountDirectivesAsync()
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM PlanningDirectives";
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
     private sealed record ProjectJson(Guid Id, string Name, string DiskPath, string Description);
