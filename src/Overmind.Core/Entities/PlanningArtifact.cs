@@ -486,6 +486,11 @@ public sealed class PlanningArtifact
                 $"independent is a task-only flag; artifact kind is '{Kind}'.");
         }
 
+        if (Independent == independent)
+        {
+            return;
+        }
+
         Independent = independent;
         UpdatedAt = DateTime.UtcNow;
     }

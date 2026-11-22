@@ -394,7 +394,8 @@ public sealed record PlanningArtifactReadResponse(
     string? Brief,
     string Body,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? MissingSections = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? MissingSections = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Independent = null);
 
 public sealed record PlanningArtifactRosterResponse(PlanningArtifactRosterItemResponse[] Artifacts);
 
@@ -411,6 +412,7 @@ public sealed record PlanningArtifactRosterItemResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Brief = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocked = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int[]? BlockedBy = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Independent = null,
     PlanningArtifactPointerResponse[] Pointers = null!);
 
 public sealed record PlanningArtifactResponse(

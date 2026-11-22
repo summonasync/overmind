@@ -71,7 +71,7 @@ public sealed class PlanningCurrentService
         var openBlockers = await _dependencies.OpenBlockersAsync(projectId, slug, ct);
         if (openBlockers.Count > 0)
         {
-            var bypass = await IndependentHeadAsync(feature, ct);
+            var (bypass, headWithoutFlag) = await IndependentHeadAsync(feature, ct);
             if (bypass is not null)
             {
                 return new PlanningCurrentResult(
@@ -84,11 +84,13 @@ public sealed class PlanningCurrentService
                     SpecPlanWarnings(feature));
             }
 
+            var hatch = headWithoutFlag
+                ? " Tasks marked independent at upsert still issue while the blocker holds."
+                : string.Empty;
             return new PlanningCurrentResult(
                 "stop", currentFeature, null,
                 $"STOP: feature '{feature.Slug}' is blocked by unclosed features: {BlockerList(openBlockers)}. " +
-                "Reads stay open; task issuance stops until every blocker closes (done or review). " +
-                "Tasks marked independent at upsert still issue while the blocker holds.");
+                "Reads stay open; task issuance stops until every blocker closes (done or review)." + hatch);
         }
 
         var tasks = feature.Artifacts
@@ -160,9 +162,10 @@ public sealed class PlanningCurrentService
     }
 
     // The bypass head: first actionable task by the ordinary rules (todo/in-progress, task-level
-    // edges respected); it issues only when the author marked it independent. Null under any
-    // other shape — the caller keeps the STOP.
-    private async Task<PlanningArtifact?> IndependentHeadAsync(
+    // edges respected); it issues only when the author marked it independent. The second value
+    // says whether an actionable head exists at all — the STOP tail may only promise the hatch
+    // when flipping a flag could actually change the outcome.
+    private async Task<(PlanningArtifact? Bypass, bool HeadWithoutFlag)> IndependentHeadAsync(
         PlanningFeature feature, CancellationToken ct)
     {
         var candidates = feature.Artifacts
@@ -172,7 +175,7 @@ public sealed class PlanningCurrentService
             .ToList();
         if (candidates.Count == 0)
         {
-            return null;
+            return (null, false);
         }
 
         var blockedStates = await _taskDependencies.BlockedOrdersAsync(feature.Id, ct);
@@ -182,7 +185,12 @@ public sealed class PlanningCurrentService
             .ToHashSet();
 
         var head = candidates.FirstOrDefault(t => !blockedOrders.Contains(t.Order));
-        return head is { Independent: true } ? head : null;
+        if (head is null)
+        {
+            return (null, false);
+        }
+
+        return head.Independent ? (head, false) : (null, true);
     }
 
     private static string UnclosedChain(

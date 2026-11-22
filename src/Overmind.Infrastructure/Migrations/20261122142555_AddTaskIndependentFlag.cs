@@ -21,9 +21,10 @@ namespace Overmind.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Independent",
-                table: "PlanningArtifacts");
+            // Raw SQL on purpose: the generated DropColumn rebuilds the table through a temp
+            // copy, which silently drops the planning FTS triggers living on PlanningArtifacts.
+            migrationBuilder.Sql(
+                """ALTER TABLE "PlanningArtifacts" DROP COLUMN "Independent";""");
         }
     }
 }
