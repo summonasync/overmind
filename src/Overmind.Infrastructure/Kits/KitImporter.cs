@@ -643,9 +643,9 @@ public sealed class KitImporter
 
     private async Task<Guid?> FindLibraryProjectIdAsync(CancellationToken ct)
     {
-        var normalizedName = LibraryProjectName.ToLowerInvariant();
+        var normalized = Project.NormalizeName(LibraryProjectName);
         return await _db.Projects
-            .Where(p => p.Name.ToLower() == normalizedName)
+            .Where(p => p.NameNormalized == normalized)
             .Select(p => (Guid?)p.Id)
             .FirstOrDefaultAsync(ct);
     }

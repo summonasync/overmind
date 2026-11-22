@@ -172,7 +172,7 @@ public static class ProjectsApi
         if (normalized != project.NameNormalized)
         {
             var reserved = Project.NormalizeName(JournalProjectStore.ProjectName);
-            if (Project.NormalizeName(project.Name) == reserved)
+            if (project.NameNormalized == reserved)
             {
                 return HttpErrors.Conflict(
                     $"Project '{project.Name}' is the reserved journal container; it cannot be renamed away from the reserved name.",

@@ -313,10 +313,10 @@ public static class OnboardApi
     private static async Task<string> ResolveUniqueNameAsync(
         string baseName, OvermindDbContext db, CancellationToken ct)
     {
-        var existingNames = await db.Projects.Select(p => p.Name).ToListAsync(ct);
+        var takenNormalized = await db.Projects.Select(p => p.NameNormalized).ToListAsync(ct);
         var name = baseName;
         var suffix = 1;
-        while (existingNames.Contains(name, StringComparer.Ordinal))
+        while (takenNormalized.Contains(Project.NormalizeName(name), StringComparer.Ordinal))
         {
             suffix++;
             name = $"{baseName}-{suffix}";
