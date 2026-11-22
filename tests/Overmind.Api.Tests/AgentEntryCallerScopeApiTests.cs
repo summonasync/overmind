@@ -254,12 +254,13 @@ public sealed class AgentEntryCallerScopeApiTests : IAsyncLifetime
 
     // ---- R6: the comparison must not cost a round-trip ----
 
-    // read_entry's baseline is 2, not the 1 measured at T3: merging origin/main brought feature 184's
-    // link projection into the same handler, so the door now runs one more query for everybody. The claim
-    // under test is that the scope check adds nothing to whatever the door already costs, and the scoped
-    // arm still has to equal the unscoped one.
+    // read_entry's baseline is 3, not the 1 measured at T3: merging origin/main brought feature 184's
+    // link projection into the same handler (1 → 2), and 237/T10 gave that projection its second outgoing
+    // source — the stored manual edge the promotion door writes (2 → 3). Both bumps are one statement each,
+    // paid by every reader of the door, not by the caller pair. The claim under test is that the scope check
+    // adds nothing to whatever the door already costs, and the scoped arm still has to equal the unscoped one.
     [Theory]
-    [InlineData("read_entry", "get", 2)]
+    [InlineData("read_entry", "get", 3)]
     [InlineData("entry_versions", "versions", 2)]
     public async Task CallerScopeComparison_AddsNoQueryToEntryReadDoors(
         string door, string verb, int baseline)

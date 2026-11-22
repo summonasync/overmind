@@ -233,6 +233,109 @@ public sealed class EntryLinkProjectionApiTests : IDisposable
         listed[0].Unresolved.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task Detail_StoredDerivedEdgeWithNoMarker_StillProjectsNothing()
+    {
+        // The second outgoing source is the door's manual edge, not the table in general: a derived row the
+        // note's own text does not name stays invisible to the rails, exactly as it was before this source
+        // existed. A reads-all-edges projection would resurrect markers the owner deleted.
+        var featureId = await CreateFeatureAsync("770-derived-only", "Derived only");
+        var note = await CreateJournalAsync("Derived Only Note", "no marker at all");
+        await InsertDerivedRowAsync(note, featureId);
+
+        var detail = await GetDetailAsync(note);
+
+        detail.Outgoing.ShouldBeEmpty();
+        detail.Unresolved.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Detail_ManualEdgeToAFeature_ListsItOnceWithItsTitle()
+    {
+        var featureId = await CreateFeatureAsync("771-manual-edge", "Manual edge");
+        var note = await CreateJournalAsync("Manual Edge Note", "plain body, no marker");
+        await InsertManualRowAsync(note, EntryLinkKind.Feature, featureId);
+
+        var detail = await GetDetailAsync(note);
+
+        detail.Outgoing.ShouldHaveSingleItem();
+        detail.Outgoing[0].Kind.ShouldBe("feature");
+        detail.Outgoing[0].Id.ShouldBe(featureId);
+        detail.Outgoing[0].Label.ShouldBe("Manual edge");
+    }
+
+    [Fact]
+    public async Task Detail_MarkerAndManualEdgeOnTheSameTarget_CollapseIntoOneRow()
+    {
+        var featureId = await CreateFeatureAsync("772-both-sources", "Both sources");
+        var note = await CreateJournalAsync("Both Sources Note", "plain body");
+        await InsertManualRowAsync(note, EntryLinkKind.Feature, featureId);
+
+        // the write recomputes the derived side of the very pair the door had already claimed,
+        // and the writer keeps the manual row — so the marker and the stored edge name one target
+        var rewritten = await _client.PutAsJsonAsync($"/api/entries/{note}", new
+        {
+            Title = "Both Sources Note",
+            Content = "now reads [[feature:772-both-sources]]",
+        });
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var detail = await GetDetailAsync(note);
+
+        detail.Outgoing.Count.ShouldBe(1, "one pair, one row — the rails must not show it twice");
+        detail.Outgoing[0].Id.ShouldBe(featureId);
+        detail.Outgoing[0].Label.ShouldBe("Both sources");
+    }
+
+    [Fact]
+    public async Task Detail_ManualEdgeToGoneOrBuriedTarget_ContributesNothing()
+    {
+        var note = await CreateJournalAsync("Buried Edge Note", "plain body");
+
+        await InsertManualRowAsync(note, EntryLinkKind.Feature, Guid.NewGuid());
+
+        var buried = await CreateJournalAsync("Buried Target", "target body");
+        await InsertManualRowAsync(note, EntryLinkKind.Entry, buried);
+        (await _client.DeleteAsync($"/api/entries/{buried}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var lifted = await CreateJournalAsync("Lifted Target", "lifted body");
+        await InsertManualRowAsync(note, EntryLinkKind.Entry, lifted);
+        (await _client.PostAsJsonAsync(
+            $"/api/entries/{lifted}/lift",
+            new { Reason = "reconsidered", Proof = (string?)null, SupersededById = (Guid?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var detail = await GetDetailAsync(note);
+
+        detail.Outgoing.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Detail_KeepsEveryRow_MarkersFirstThenStoredEdges()
+    {
+        var beta = await CreateJournalAsync("Beta Note", "beta");
+        var gamma = await CreateJournalAsync("Gamma Note", "gamma");
+        var firstFeature = await CreateFeatureAsync("773-order-probe", "Ordered first");
+        var note = await CreateJournalAsync(
+            "Ordering Note",
+            "first [[Beta Note]] then [[Gamma Note]] and finally [[feature:773-order-probe]]");
+        await RecomputeAsync(note);
+
+        var secondFeature = await CreateFeatureAsync("774-second-edge", "Ordered second");
+        var delta = await CreateJournalAsync("Delta Note", "delta");
+        await InsertManualRowAsync(note, EntryLinkKind.Feature, secondFeature);
+        await InsertManualRowAsync(note, EntryLinkKind.Entry, delta);
+
+        var detail = await GetDetailAsync(note);
+
+        detail.Outgoing.Count.ShouldBe(5, "the outgoing view has no cap to overflow");
+        detail.Outgoing[0].Id.ShouldBe(beta);
+        detail.Outgoing[1].Id.ShouldBe(gamma);
+        detail.Outgoing[2].Id.ShouldBe(firstFeature);
+        detail.Outgoing[3].Id.ShouldBe(secondFeature);
+        detail.Outgoing[4].Id.ShouldBe(delta);
+    }
+
     private Guid EnsureJournalProject()
     {
         using var scope = _factory.Services.CreateScope();
@@ -311,6 +414,22 @@ public sealed class EntryLinkProjectionApiTests : IDisposable
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
         db.EntryLinks.Add(EntryLink.CreateDerived(fromEntryId, EntryLinkKind.Feature, toId));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task InsertManualRowAsync(Guid fromEntryId, EntryLinkKind toKind, Guid toId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        db.EntryLinks.Add(EntryLink.CreateManual(fromEntryId, toKind, toId));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task InsertDerivedRowAsync(Guid fromEntryId, Guid toFeatureId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
+        db.EntryLinks.Add(EntryLink.CreateDerived(fromEntryId, EntryLinkKind.Feature, toFeatureId));
         await db.SaveChangesAsync();
     }
 

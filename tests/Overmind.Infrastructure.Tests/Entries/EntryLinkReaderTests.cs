@@ -105,9 +105,11 @@ public sealed class EntryLinkReaderTests : IDisposable
             new ResolvedLink(EntryLinkKind.Project, _project.Id)
         ]);
 
-        labels[(EntryLinkKind.Entry, _targetId)].ShouldBe("Anchor Note");
-        labels[(EntryLinkKind.Feature, _featureId)].ShouldBe("Reader edges");
-        labels[(EntryLinkKind.Project, _project.Id)].ShouldBe("Overmind");
+        labels[(EntryLinkKind.Entry, _targetId)].Label.ShouldBe("Anchor Note");
+        labels[(EntryLinkKind.Feature, _featureId)].Label.ShouldBe("Reader edges");
+        labels[(EntryLinkKind.Feature, _featureId)].Slug.ShouldBe("184-reader-edges");
+        labels[(EntryLinkKind.Feature, _featureId)].ProjectId.ShouldBe(_project.Id);
+        labels[(EntryLinkKind.Project, _project.Id)].Label.ShouldBe("Overmind");
         _capture.Statements.Count.ShouldBe(3);
 
         _capture.Statements.Clear();
@@ -183,7 +185,113 @@ public sealed class EntryLinkReaderTests : IDisposable
         outcomes[0].ToId.ShouldBe(_targetId);
     }
 
-    private EntryLinkReader Reader() => new(_context);
+    [Fact]
+    public async Task ManualOutgoing_ReturnsOnlyTheStoredEdgesOfThatNote()
+    {
+        (await Reader().LoadManualOutgoingAsync(_firstSourceId)).ShouldBeEmpty();
+
+        var feature = AddFeature("stored-side", "Stored side");
+        AddManualEdge(_firstSourceId, EntryLinkKind.Feature, feature);
+
+        var edges = await Reader().LoadManualOutgoingAsync(_firstSourceId);
+
+        edges.ShouldHaveSingleItem();
+        edges[0].Kind.ShouldBe(EntryLinkKind.Feature);
+        edges[0].ToId.ShouldBe(feature);
+        (await Reader().LoadManualOutgoingAsync(_secondSourceId)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ManualOutgoing_DropsTheEdgesTriageDrops_GoneTargetAndBuriedCounterparty()
+    {
+        var survivor = AddFeature("still-here", "Still here");
+        AddManualEdge(_firstSourceId, EntryLinkKind.Feature, survivor);
+        AddManualEdge(_firstSourceId, EntryLinkKind.Feature, Guid.NewGuid());
+        AddManualEdge(_firstSourceId, EntryLinkKind.Entry, _secondSourceId);
+
+        var buried = _context.ContextEntries.Single(e => e.Id == _secondSourceId);
+        buried.Lift("reconsidered", "ui", null, null);
+        await _context.SaveChangesAsync();
+
+        var edges = await Reader().LoadManualOutgoingAsync(_firstSourceId);
+
+        edges.ShouldHaveSingleItem();
+        edges[0].ToId.ShouldBe(survivor);
+    }
+
+    [Fact]
+    public async Task ManualOutgoing_AnswersTheSameSequenceTwice()
+    {
+        AddManualEdge(_firstSourceId, EntryLinkKind.Feature, AddFeature("stable-one", "Stable one"));
+        AddManualEdge(_firstSourceId, EntryLinkKind.Task, AddTask(_featureId, 3, "Stable task"));
+        AddManualEdge(_firstSourceId, EntryLinkKind.Entry, _secondSourceId);
+
+        var first = await Reader().LoadManualOutgoingAsync(_firstSourceId);
+        var second = await Reader().LoadManualOutgoingAsync(_firstSourceId);
+
+        first.Select(edge => (edge.Kind, edge.ToId)).ToList()
+            .ShouldBe(second.Select(edge => (edge.Kind, edge.ToId)).ToList());
+    }
+
+    [Fact]
+    public async Task Labels_TaskArmNamesTheBriefAndFramesItWithTheParentCard()
+    {
+        var host = AddFeature("task-frame", "Task frame");
+        var task = AddTask(host, 4, "Briefed task");
+
+        var labels = await Reader().LoadTargetLabelsAsync([new ResolvedLink(EntryLinkKind.Task, task)]);
+
+        labels[(EntryLinkKind.Task, task)].Label.ShouldBe("Briefed task");
+        labels[(EntryLinkKind.Task, task)].Slug.ShouldBe("184-task-frame");
+        labels[(EntryLinkKind.Task, task)].ProjectId.ShouldBe(_project.Id);
+    }
+
+    [Fact]
+    public async Task Labels_TaskArmFallsBackToTheOrderAndIgnoresANonTaskRow()
+    {
+        var task = AddTask(_featureId, 7, null);
+        var spec = PlanningArtifact.Create(_featureId, PlanningArtifactKind.Spec, "The frozen what.", 0);
+        _context.PlanningArtifacts.Add(spec);
+        await _context.SaveChangesAsync();
+
+        var labels = await Reader().LoadTargetLabelsAsync(
+        [
+            new ResolvedLink(EntryLinkKind.Task, task),
+            new ResolvedLink(EntryLinkKind.Task, spec.Id)
+        ]);
+
+        labels[(EntryLinkKind.Task, task)].Label.ShouldBe("task 07");
+        labels.ContainsKey((EntryLinkKind.Task, spec.Id)).ShouldBeFalse();
+    }
+
+    private EntryLinkReader Reader() => new(_context, new(_context));
+
+    private void AddManualEdge(Guid fromEntryId, EntryLinkKind toKind, Guid toId)
+    {
+        _context.EntryLinks.Add(EntryLink.CreateManual(fromEntryId, toKind, toId));
+        _context.SaveChanges();
+    }
+
+    private Guid AddFeature(string slug, string title)
+    {
+        var feature = PlanningFeature.Create(_project.Id, $"184-{slug}", title, "body");
+        _context.PlanningFeatures.Add(feature);
+        _context.SaveChanges();
+        return feature.Id;
+    }
+
+    private Guid AddTask(Guid featureId, int order, string? brief)
+    {
+        var task = PlanningArtifact.Create(
+            featureId,
+            PlanningArtifactKind.Task,
+            $"the body of the task {order}",
+            order,
+            brief: brief);
+        _context.PlanningArtifacts.Add(task);
+        _context.SaveChanges();
+        return task.Id;
+    }
 
     private async Task<string> ExplainAsync(CapturedCommand captured)
     {

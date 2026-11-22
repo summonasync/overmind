@@ -733,13 +733,12 @@ test("the note's own text is not an input to the act", () => {
   assert.equal(hook.includes("updateJournalNote"), false, "the mutation path started writing the note");
 });
 
-test("the rails answer the promotion edge is NOT on the detail wire — the act answers it", () => {
-  // Measured 2026-11-21 against the real pipeline: after a 200 promotion the note's `outgoing`
-  // array is still empty (`~/scratch-237/t7-client-body-through-door.log`, `outgoing=0` on both
-  // arms). `EntryLinkProjection` builds that array from `WikiLinkParser.Parse(entry.Content)`, so
-  // the manual edge the door writes cannot reach it without a Host change — outside this task's
-  // anti-scope. The consequence the component has to live with: the rails show the promoted card
-  // only once the note itself names it, so the success answer is rendered from the response.
+test("the promotion edge IS on the detail wire — and the act still answers from the response", () => {
+  // Rewritten 2026-11-22 by T10. This slot used to pin the opposite claim ("the rails cannot show the
+  // promotion edge, `outgoing=0` after a 200"), which the Host change made false — and the old assertion
+  // could not see it, because it grepped `Origin == EntryLinkOrigin.Manual` in the projection file while the
+  // filter lives in the shared reader. It now asserts the new truth where each half of it lives, so a
+  // removal reddens this file instead of letting it sit green while lying.
   const projection = readFileSync(
     new URL("../../src/Overmind.Host/Api/EntryLinkProjection.cs", import.meta.url),
     "utf8",
@@ -747,15 +746,44 @@ test("the rails answer the promotion edge is NOT on the detail wire — the act 
   assert.match(
     projection,
     /WikiLinkParser\.Parse\(entry\.Content\)/,
-    "the projection grew another outgoing source — re-check whether the rails now carry the promotion edge",
+    "the marker source left the projection — the rails no longer show what the owner wrote",
   );
-  assert.equal(
-    /Origin\s*==\s*EntryLinkOrigin\.Manual/.test(projection),
-    false,
-    "manual edges now reach the rails; the promoted answer can come from the payload instead",
+  assert.match(
+    projection,
+    /LoadManualOutgoingAsync\(entry\.Id/,
+    "the projection stopped reading the stored manual edge — a promoted note is invisible in its own rails again (T7 row 2)",
   );
 
-  // And the component's success line reads the response, never a synthesised rail row.
+  // One edge definition, not three: the Manual filter and the counterparty hygiene belong to the shared read
+  // path built on the triage universe, and the projection must not grow its own query over the link table.
+  const reader = readFileSync(
+    new URL("../../src/Overmind.Infrastructure/Entries/EntryLinkReader.cs", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    reader,
+    /_triage\.Edges\(\)[\s\S]{0,200}Origin\s*==\s*EntryLinkOrigin\.Manual/,
+    "the manual-outgoing read no longer rides EntryLinkTriage.Edges() — the rails and the graph can drift apart",
+  );
+  assert.equal(
+    /EntryLinks/.test(projection),
+    false,
+    "the projection queries the link table itself — the third edge copy this lane has already been bitten by twice",
+  );
+
+  // A rail row is only clickable if the payload addresses the card: the outgoing row carries slug + project.
+  const contracts = readFileSync(
+    new URL("../../src/Overmind.Host/Api/Contracts/EntryContracts.cs", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    contracts,
+    /record EntryOutgoingLink\([\s\S]{0,400}string\? Slug[\s\S]{0,200}Guid\? ProjectId/,
+    "the outgoing row lost the href data — note-rails can only keep answering feature and task rows with 'no link yet'",
+  );
+
+  // The act keeps answering from the response: the rails arriving with the edge does not make the success
+  // line read a cache the mutation would have to write first.
   const component = sliceFile("components/promote-note.tsx");
   assert.match(component, /\{promotedLabel\(promoted\)\}/);
   assert.match(component, /promotedCardHref\(form\.projectId, promoted\.featureSlug\)/);
