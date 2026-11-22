@@ -409,7 +409,8 @@ public static class AgentPlanningApi
         {
             return Results.Ok(new PlanningArtifactReadResponse(
                 artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
-                artifact.Order, artifact.UpdatedAt, artifact.Brief, artifact.Body, blockedBy));
+                artifact.Order, artifact.UpdatedAt, artifact.Brief, artifact.Body, blockedBy,
+                Independent: artifact.Independent ? true : null));
         }
 
         var filtered = PlanningSections.FilteredRead(artifact.Body, requested);
@@ -417,7 +418,8 @@ public static class AgentPlanningApi
         return Results.Ok(new PlanningArtifactReadResponse(
             artifact.Id, artifact.Kind, artifact.Status, artifact.Version,
             artifact.Order, artifact.UpdatedAt, artifact.Brief,
-            filtered.Body, blockedBy, [.. filtered.MissingNames]));
+            filtered.Body, blockedBy, [.. filtered.MissingNames],
+            Independent: artifact.Independent ? true : null));
     }
 
     private static async Task<int[]?> BlockedOrdersForReadAsync(

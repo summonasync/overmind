@@ -69,9 +69,29 @@ public sealed class PlanningCurrentServiceTests : IDisposable
         result.Actionable.ShouldBeNull();
         result.Reason.ShouldBe(
             "STOP: feature 'feat-a' is blocked by unclosed features: feat-b (draft). " +
-            "Reads stay open; task issuance stops until every blocker closes (done or review). " +
-            "Tasks marked independent at upsert still issue while the blocker holds.");
+            "Reads stay open; task issuance stops until every blocker closes (done or review).");
         result.Feature.Slug.ShouldBe("feat-a");
+    }
+
+    [Fact]
+    public async Task OpenBlocker_NoActionableHead_StopOmitsTheHatch()
+    {
+        var feature = await FeatureAsync("feat-a");
+        await FeatureAsync("feat-b");
+        await Dependencies().AddDependencyAsync(_projectId, "feat-a", "feat-b");
+
+        var noTasks = await Service().GetCurrentAsync(_projectId, "feat-a");
+        noTasks.Reason!.ShouldNotContain("independent");
+
+        var head = await TaskAsync(feature.Id, 0);
+        await _context.SaveChangesAsync();
+        var regularHead = await Service().GetCurrentAsync(_projectId, "feat-a");
+        regularHead.Reason!.ShouldContain("Tasks marked independent at upsert still issue");
+
+        head.SetStatus(PlanningArtifactStatus.Blocked);
+        await _context.SaveChangesAsync();
+        var headBlocked = await Service().GetCurrentAsync(_projectId, "feat-a");
+        headBlocked.Reason!.ShouldNotContain("independent");
     }
 
     [Fact]

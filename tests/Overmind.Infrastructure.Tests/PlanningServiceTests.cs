@@ -1302,6 +1302,24 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpsertAsync_TaskCreateWithIndependent_PersistsTheFlag()
+    {
+        var featureService = CreateFeatureService();
+        var feature = await featureService.CreateAsync(_projectId, "feat", "Title", "body");
+        var artifactService = CreateArtifactService();
+
+        var artifact = await artifactService.UpsertAsync(
+            feature.Id, PlanningArtifactKind.Task, "<goal>opted in at create</goal>", null, null, null,
+            default, independent: true);
+
+        artifact.Independent.ShouldBeTrue();
+
+        _context.ChangeTracker.Clear();
+        (await _context.PlanningArtifacts.SingleAsync(a => a.Id == artifact.Id))
+            .Independent.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task UpsertAsync_IndependentOnNonTaskKind_ThrowsNamedKind()
     {
         var featureService = CreateFeatureService();

@@ -236,7 +236,7 @@ public sealed class PlanningArtifactTools
         if (item.ValueKind != JsonValueKind.Object)
         {
             throw new McpException(
-                $"each item must be an object with body, order, review, logNote, brief, blockedBy. {TaskItemsAcceptedForm}");
+                $"each item must be an object with body, order, review, logNote, brief, blockedBy, independent. {TaskItemsAcceptedForm}");
         }
 
         if (!item.TryGetProperty("body", out var body) ||

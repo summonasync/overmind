@@ -121,6 +121,11 @@ public sealed class PlanningArtifactService
         {
             created = PlanningArtifact.Create(
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
+            if (independent == true)
+            {
+                created.SetIndependent(true);
+            }
+
             if (!dryRun)
             {
                 _db.PlanningArtifacts.Add(created);
@@ -161,6 +166,11 @@ public sealed class PlanningArtifactService
             resolvedOrder = await ResolveOrderAsync(kind, null, featureId, ct);
             created = PlanningArtifact.Create(
                 featureId, kind, body, resolvedOrder, review ?? PlanningReviewLevel.Light, brief);
+            if (independent == true)
+            {
+                created.SetIndependent(true);
+            }
+
             _db.PlanningArtifacts.Add(created);
 
             if (blockedBy is not null)
@@ -349,7 +359,8 @@ public sealed class PlanningArtifactService
         var row = await _db.PlanningArtifacts
             .Where(a => a.Id == artifactId)
             .Select(a => new PlanningArtifactReadRow(
-                a.Id, a.Kind, a.Status, a.Version, a.Order, a.UpdatedAt, a.Brief, a.Body, a.FeatureId,
+                a.Id, a.Kind, a.Status, a.Version, a.Order, a.UpdatedAt, a.Brief, a.Independent,
+                a.Body, a.FeatureId,
                 _db.PlanningFeatures.Where(f => f.Id == a.FeatureId).Select(f => f.ProjectId).First()))
             .FirstOrDefaultAsync(ct);
 
