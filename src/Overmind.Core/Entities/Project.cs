@@ -61,7 +61,7 @@ public sealed partial class Project
         {
             Id = Guid.NewGuid(),
             Name = trimmedName,
-            NameNormalized = NormalizeName(trimmedName),
+            NameNormalized = NormalizeName(name),
             DiskPath = diskPath.Trim(),
             Description = description.Trim(),
             PlanningMaterialization = PlanningMaterialization.Inherit,

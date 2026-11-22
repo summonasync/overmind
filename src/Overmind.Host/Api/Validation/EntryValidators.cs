@@ -84,6 +84,7 @@ public sealed class EntryAppendRequestValidator : AbstractValidator<EntryAppendR
 {
     public EntryAppendRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(2000);
+        // Append text is soft-capped at the door (266) — whole inside the grace band, truncated beyond.
+        RuleFor(x => x.Text).NotEmpty();
     }
 }

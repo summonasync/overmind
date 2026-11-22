@@ -362,7 +362,7 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task ToolsList_AppendDirective_DescriptionStatesThe2000Cap()
+    public async Task ToolsList_AppendDirective_DescriptionStatesTheImperativeCap()
     {
         var response = await Driver.ListToolsAsync();
 
@@ -374,12 +374,12 @@ public class ToolContractTests : McpSessionTestBase
         description.ShouldNotContain("capped at 500 chars");
 
         ContractsDoc.Section("planning_append_directive")
-            .ShouldContain("text is trimmed, capped at 2000 chars enforced adapter-side");
+            .ShouldContain("the soft cap 2000 never cuts it");
 
         var textProperty = tools["planning_append_directive"]!["inputSchema"]!["properties"]!["text"]!;
         var parameterDescription = textProperty["description"]!.GetValue<string>();
-        parameterDescription.ShouldContain("max 2000 chars");
-        parameterDescription.ShouldNotContain("max 500 chars");
+        parameterDescription.ShouldContain("soft cap 2000 chars");
+        parameterDescription.ShouldNotContain("max 2000 chars");
     }
 
     [Fact]
@@ -650,21 +650,36 @@ public class ToolContractTests : McpSessionTestBase
     }
 
     [Fact]
-    public async Task AppendEntry_OverCap_RefusedBeforeAnyPost()
+    public async Task AppendEntry_OverCap_ForwardsAndEchoesWarnings()
     {
+        // 266: the local 2000-char refusal is gone — the follow-up rides to the Host door,
+        // which answers accepted (truncated past the grace ceiling) with the frozen
+        // {accepted_len, limit, truncated, lost_tail_preview} warnings array.
+        Stub.Route(
+            "POST",
+            $"/api/agent/entries/{Canned.EntryId}/append",
+            200,
+            $$"""
+            {"id":"{{Canned.EntryId}}","projectId":"{{Canned.ProjectId}}","type":"note","title":"Storage choice","content":"We picked SQLite for storage.\n\n## Follow-up 2026-11-21\n{{new string('x', 2000)}}","currentVersion":4,"createdAt":"2026-09-01T10:00:00Z","updatedAt":"2026-11-12T09:00:00Z","tags":[],"skillFiles":[],"state":"active","stateAt":null,"stateBy":null,"stateReason":null,"stateProof":null,"supersededById":null,"enforces":false,"warnings":[{"accepted_len":2000,"limit":2000,"truncated":true,"lost_tail_preview":"xxxxxxxxxx"}]}
+            """);
+
         var response = await Driver.CallToolAsync("append_entry", new JsonObject
         {
             ["entryId"] = Canned.EntryId.ToString(),
-            ["text"] = new string('x', 2001)
+            ["text"] = new string('x', 2441)
         });
 
-        var result = response["result"]!;
-        result["isError"]!.GetValue<bool>().ShouldBeTrue();
-        var text = result["content"]!.AsArray().First()!["text"]!.GetValue<string>();
-        text.ShouldContain("text is 2001 chars; cap is 2000; cut 1");
+        response["result"]!["isError"].ShouldBeNull();
 
-        Stub.Requests.ShouldNotContain(r => r.Path.EndsWith("/append"));
-        Driver.HasExited.ShouldBeFalse();
+        FindRequest("POST", $"/api/agent/entries/{Canned.EntryId}/append").Body
+            .ShouldContain(new string('x', 2441));
+
+        var echo = JsonNode.Parse(Canned.ToolResultText(response))!.AsObject();
+        var warning = echo["warnings"]!.AsArray().Single()!.AsObject();
+        warning["accepted_len"]!.GetValue<int>().ShouldBe(2000);
+        warning["limit"]!.GetValue<int>().ShouldBe(2000);
+        warning["truncated"]!.GetValue<bool>().ShouldBeTrue();
+        warning.ShouldContainKey("lost_tail_preview");
     }
 
     [Fact]

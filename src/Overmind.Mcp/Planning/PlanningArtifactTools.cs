@@ -486,6 +486,12 @@ public sealed class PlanningArtifactTools
             echo["validationProofVoided"] = validationProofVoided.GetString();
         }
 
+        if (patch.TryGetProperty("warnings", out var warnings) &&
+            warnings.ValueKind == JsonValueKind.Array && warnings.GetArrayLength() > 0)
+        {
+            echo["warnings"] = JsonNode.Parse(warnings.GetRawText());
+        }
+
         CarryReplayedFlag(echo, patch);
         return new CallToolResult
         {
@@ -582,9 +588,11 @@ public sealed class PlanningArtifactTools
                 throw new McpException(PatchShapeError);
             }
 
-            if (string.IsNullOrWhiteSpace(brief) || brief.Contains('\r') || brief.Contains('\n') || brief.Length > 500)
+            if (string.IsNullOrWhiteSpace(brief) || brief.Contains('\r') || brief.Contains('\n'))
             {
-                throw new McpException("Setting a brief needs non-blank single-line text of at most 500 chars.");
+                // Length is softened server-side (266): the brief cap answers with warnings[],
+                // only blank and multi-line stay pre-flight rejects here.
+                throw new McpException("Setting a brief needs non-blank single-line text.");
             }
 
             return "set_brief";

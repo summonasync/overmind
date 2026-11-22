@@ -85,8 +85,8 @@ public sealed class PlanningArtifactService
 
                 mutated = true;
 
-                if (bodyMutated && existing.ContentUpdatedAt != preMutationContentUpdatedAt &&
-                    wasValidated)
+                if (bodyMutated && existing.Kind != PlanningArtifactKind.Task
+                    && existing.ContentUpdatedAt != preMutationContentUpdatedAt && wasValidated)
                 {
                     var voidedProof = await FindLiveApprovalProofAsync(
                         feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, wasNeverEdited, ct);
@@ -548,8 +548,12 @@ public sealed class PlanningArtifactService
             throw PlanningException.ChangeNoteRequired();
         }
 
-        if (!noChange && !wantsBrief && artifact.ContentUpdatedAt != preMutationContentUpdatedAt &&
-            wasValidated)
+        // Row 7: a task can never hold a validation proof (tasks are todo→review→done, the proof
+        // gate belongs to spec/plan/result), so echoing one after a task write tells the caller a
+        // document approval died when nothing of the sort existed. Suppressed for task mutations;
+        // a proof can only die on an artifact that was validated.
+        if (!noChange && !wantsBrief && artifact.Kind != PlanningArtifactKind.Task
+            && artifact.ContentUpdatedAt != preMutationContentUpdatedAt && wasValidated)
         {
             var voidedProof = await FindLiveApprovalProofAsync(
                 feature.ProjectId, feature.Slug, preMutationContentUpdatedAt, wasNeverEdited, ct);

@@ -30,7 +30,7 @@ public static class EntriesApi
         group.MapGet("/entries/{id:guid}/versions", ListVersions);
         group.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForHuman);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapPost("/projects/{projectId:guid}/entries/{entryId:guid}/ack", AckForAgent);
 
         // Spec R6 as an invariant rather than a list: every entry mutation registered under the /api/agent prefix
@@ -38,7 +38,7 @@ public static class EntriesApi
         // placement.
         // The route-table test derives its cases from the registered endpoints, so a mutation verb registered
         // anywhere else under this prefix turns that test red without anyone updating a verb list.
-        var agentEntryWrites = routes.MapGroup("/api/agent").AddEndpointFilter(JournalWriteLockFilter.Instance);
+        var agentEntryWrites = routes.MapAgentGroup().AddEndpointFilter(JournalWriteLockFilter.Instance);
         agentEntryWrites.MapPost("/entries", Create);
         agentEntryWrites.MapPut("/entries/{id:guid}", Update);
         agentEntryWrites.MapDelete("/entries/{id:guid}", Delete);
@@ -543,6 +543,9 @@ public static class EntriesApi
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
+        var warnings = new List<object>();
+        var followUpText = SoftCapSoften.Cap(request.Text, SoftCapLimits.FollowUpText, warnings);
+
         ContextEntry? committed = null;
         var outcome = await EntryWriteCommit.RunAsync(
             db,
@@ -556,7 +559,7 @@ public static class EntriesApi
                     return EntryWriteCommit.Work.Rejected(HttpErrors.NotFound($"Entry '{id}' was not found."));
                 }
 
-                entry.AppendFollowUp(request.Text);
+                entry.AppendFollowUp(followUpText!);
                 await kitFork.ForkExclusiveBundledOwnerAsync(entry.Id, attemptCt);
 
                 committed = entry;
@@ -566,7 +569,7 @@ public static class EntriesApi
                     async saveCt =>
                     {
                         await db.SaveChangesAsync(saveCt);
-                        return Results.Ok(EntryMapper.ToResponse(entry));
+                        return Results.Ok(EntryMapper.ToResponse(entry) with { Warnings = SoftCapSoften.Merge(warnings) });
                     });
             },
             ct);

@@ -31,7 +31,8 @@ internal sealed class StubOvermindApi : HttpMessageHandler
         {
             respond(request);
             return Task.CompletedTask;
-        }));
+        }
+        ));
         return this;
     }
 

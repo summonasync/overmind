@@ -30,7 +30,7 @@ public sealed class OvermindNotificationTools
         "with overmind_replies; featureSlug and tab make it a deep link.")]
     public async Task<JsonElement> Notify(
         [Description("Notification kind: info, question or approval.")] string kind,
-        [Description("Message body shown to the human, max 2000 chars.")] string text,
+        [Description("Message body shown to the human, soft cap 2000 chars — longer text lands truncated with warnings.")] string text,
         [Description("Optional project id.")] Guid? projectId = null,
         [Description("Feature slug for the deep link.")] string? featureSlug = null,
         [Description("Deep-link tab: spec, plan, tasks or result.")] string? tab = null,
@@ -81,13 +81,15 @@ public sealed class OvermindNotificationTools
     [Description("Polls the human's replies to your overmind_notify messages, newest first — each item's " +
         "replyText is the human's decision. A complete read advances this session's reply cursor, " +
         "retiring those replies from overmind_wake_peek's default window. Filters combine; an " +
-        "over-narrow filter returns an empty array, not an error.")]
+        "over-narrow filter returns an empty array, not an error. Rows arrive projected (notification " +
+        "text excerpted to 200 chars) unless full=true.")]
     public async Task<JsonElement> Replies(
         [Description("Optional project id.")] Guid? projectId = null,
         [Description("False narrows to replies the human has not read yet; keep the default.")] bool? includeRead = null,
         [Description("Only replies after this ISO-8601 instant (offset-less reads as UTC).")] string? since = null,
         [Description("Notification kind: info, question or approval.")] string? kind = null,
         [Description("Feature slug to narrow to.")] string? featureSlug = null,
+        [Description("True for the stored rows untouched, notification text included.")] bool? full = null,
         CancellationToken ct = default)
     {
         var kindFilter = kind is null ? null : NormalizeKind(kind);
@@ -114,7 +116,16 @@ public sealed class OvermindNotificationTools
             query.Add($"featureSlug={featureSlug.Trim()}");
         }
 
-        return await Guarded(() => _api.GetAsync($"/api/agent/notifications/replies?{string.Join("&", query)}", ct));
+        var payload = await Guarded(() => _api.GetAsync(
+            $"/api/agent/notifications/replies?{string.Join("&", query)}", ct));
+
+        // Row 8: the whole reply backlog in one line. Measured (NotificationsApi.Replies →
+        // NotificationsService.ListRepliesAsync): no `since` means NO lower bound at all, so the
+        // 79KB payload is every reply the project ever had, each carrying its stored notification
+        // text — the text is what the caller wrote, never what it needs back. The rows are
+        // projected by default; the set of replies returned is byte-unchanged, and full=true is
+        // the untouched path.
+        return full == true ? payload : ReplyProjection.Compact(payload);
     }
 
     private static async Task<JsonElement> Guarded(Func<Task<JsonElement>> action)
