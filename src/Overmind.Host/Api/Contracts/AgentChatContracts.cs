@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Overmind.Host.Api.Contracts;
 
 public sealed record CreateConversationRequest(Guid? ProjectId, string? Title);
@@ -19,7 +21,12 @@ public sealed record ConversationsResponse(ConversationResponse[] Items);
 
 public sealed record ConversationMessageResponse(Guid Id, string Role, string Content, DateTime CreatedAt);
 
-public sealed record ConversationHistoryResponse(ConversationMessageResponse[] Items);
+// TurnActive says the Host is still generating this conversation's reply: a reload lands here
+// with no live SSE attached, so the client keeps refetching until it flips false — the persisted
+// reply then shows up without waiting for the next send (b88c1bae).
+public sealed record ConversationHistoryResponse(
+    ConversationMessageResponse[] Items,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool TurnActive = false);
 
 public sealed record ConversationReadStateResponse(Guid ConversationId, Guid? LastReadMessageId);
 

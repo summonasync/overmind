@@ -21,6 +21,7 @@ export interface AgentConversationsPayload {
 
 export interface AgentHistoryPayload {
   items: AgentMessage[];
+  turnActive?: boolean;
 }
 
 export type AgentRoutingSource = "structural" | "learned" | "classification";
