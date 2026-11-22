@@ -14,6 +14,8 @@ import {
 import { Button } from "@/shared/ui/button";
 import {
   clusteredNotice,
+  computingAnchorsNotice,
+  computingBloomNotice,
   computingLayoutNotice,
   GRAPH_CONTROL_LABELS,
   graphAriaLabel,
@@ -117,12 +119,24 @@ export function GraphCanvas({
   const expandedRef = useRef<Set<string>>(new Set());
   const anchorPosRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const hiddenRef = useRef<Map<string, number>>(new Map());
-  const anchorSetRef = useRef("");
+  // The anchor key-set whose frame actually LANDED — not the one a kick was scheduled for. A
+  // kick is worth scheduling only for a set that has not landed yet, so a payload beat that
+  // abandons an in-flight settle re-kicks it instead of stranding the field on the seed spiral
+  // (review-271-03 MAJOR-1b, the tier-2 kick's lesson in its clustered shape).
+  const settledAnchorSetRef = useRef("");
   const settlesRef = useRef(0);
   // The expansion settle's generation: anything that changes the visible composition — a
   // collapse, another expansion, a payload beat — bumps it and the slices stop at the next
   // boundary, the same contract the tier-2 kick's abandon token runs on.
   const expansionGenRef = useRef(0);
+  // The bloom is launched from an event handler, so it has no effect cleanup to die with the
+  // canvas — this flag is its unmount guard, symmetric with the kick's `live`.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const frameRef = useRef<number | null>(null);
   const simRef = useRef<LayoutHandle | null>(null);
   const dragRef = useRef<{ key: string | null; panning: boolean; startX: number; startY: number; moved: boolean }>(
@@ -139,6 +153,7 @@ export function GraphCanvas({
   const [precomputing, setPrecomputing] = useState(false);
   const [settleFailed, setSettleFailed] = useState(false);
   const [layoutCount, setLayoutCount] = useState(0);
+  const [layoutWhat, setLayoutWhat] = useState<"anchors" | "bloom">("anchors");
   const theme = useGraphTheme();
 
   // The ladder rung this field stands on. Tier 2's settle and tier 3's anchor frame hang off
@@ -255,10 +270,12 @@ export function GraphCanvas({
   }, [field, size]);
 
   // Both tier-3 settles share one notice slot, so the slot counts the settles in flight rather
-  // than flipping a boolean an overlapping settle would clear early.
-  const beginSettle = useCallback((count: number) => {
+  // than flipping a boolean an overlapping settle would clear early. The kind rides along: a
+  // notice that says "nodes" over a 51-anchor settle would read as the whole field.
+  const beginSettle = useCallback((count: number, what: "anchors" | "bloom") => {
     settlesRef.current += 1;
     setLayoutCount(count);
+    setLayoutWhat(what);
     setPrecomputing(true);
   }, []);
 
@@ -303,15 +320,15 @@ export function GraphCanvas({
     // not migrate toward the middle of the canvas just because the settle's centring has to
     // point somewhere.
     const forces = { width: size.width, height: size.height, centreX: anchorCoord.x, centreY: anchorCoord.y };
-    beginSettle(group.members.length);
-    void precomputeLayout(
-      clusterSubField(field, group),
-      forces,
-      () => expansionGenRef.current !== gen,
-      anchorCoord,
-    )
+    const abandoned = () => !mountedRef.current || expansionGenRef.current !== gen;
+    beginSettle(group.members.length, "bloom");
+    void precomputeLayout(clusterSubField(field, group), forces, abandoned, anchorCoord)
+      // The decrement leads every exit: a settle that was abandoned mid-flight is still a
+      // settle that finished as far as the notice slot is concerned — one that returns before
+      // decrementing leaves the slot held open forever (review-271-03 MAJOR-1a).
       .then((landed) => {
-        if (expansionGenRef.current !== gen) {
+        endSettle();
+        if (abandoned()) {
           return;
         }
         const landedCoords = new Map(landed.map((node) => [nodeKey(node.kind, node.id), node]));
@@ -323,14 +340,13 @@ export function GraphCanvas({
           return { ...node, x: settled.x, y: settled.y };
         });
         recomposeClusterField();
-        endSettle();
         drawRef.current();
       })
       .catch(() => {
-        if (expansionGenRef.current !== gen) {
+        endSettle();
+        if (abandoned()) {
           return;
         }
-        endSettle();
         setSettleFailed(true);
       });
   };
@@ -362,50 +378,7 @@ export function GraphCanvas({
       clustersRef.current = clusters;
       recomposeClusterField();
       draw();
-
-      // The anchor frame settles once per anchor-set change, not per payload beat: a new note
-      // regroups nothing, so the settled coordinates stand while the field around them moves.
-      // The kick waits out resize noise on the same beat tier 2 does, and runs the same sliced
-      // transport — the anchor set is small, but it is still main-thread work with a budget.
-      const anchorSet = clusters.groups.map((group) => group.anchorKey).join("|");
-      const setChanged = anchorSet !== anchorSetRef.current;
-      anchorSetRef.current = anchorSet;
-      if (!setChanged) {
-        return;
-      }
-
-      const forces = { width: size.width, height: size.height };
-      let live = true;
-      const kick = setTimeout(() => {
-        if (!live) {
-          return;
-        }
-        beginSettle(clusters.groups.length);
-        void precomputeLayout(anchorSetField(field, clusters), forces, () => !live)
-          .then((landed) => {
-            if (!live) {
-              return;
-            }
-            for (const node of landed) {
-              anchorPosRef.current.set(nodeKey(node.kind, node.id), { x: node.x, y: node.y });
-            }
-            recomposeClusterField();
-            endSettle();
-            drawRef.current();
-          })
-          .catch(() => {
-            if (!live) {
-              return;
-            }
-            endSettle();
-            setSettleFailed(true);
-          });
-      }, SETTLE_KICK_DELAY_MS);
-
-      return () => {
-        live = false;
-        clearTimeout(kick);
-      };
+      return;
     }
 
     const previous = new Map<string, LayoutNode>();
@@ -431,7 +404,59 @@ export function GraphCanvas({
     neighbourhoodsRef.current = buildNeighbourhoods(linksRef.current);
 
     draw();
-  }, [beginSettle, clusters, draw, endSettle, field, recomposeClusterField, size]);
+  }, [clusters, draw, field, recomposeClusterField, size]);
+
+  // The anchor frame settles once per anchor-set that has not landed yet, not per payload beat:
+  // a new note regroups nothing, so the settled coordinates stand while the field around them
+  // moves. This kick is its own effect on purpose — draw changes identity on every hover, and a
+  // kick hosted in an effect that hover restarts would abandon its own settle and never run
+  // again (review-271-03 MAJOR-1b); the landed draw goes through the ref, the way tier 2's
+  // kick already does. The guard reads the last LANDED set, so a payload beat that aborts an
+  // in-flight settle re-kicks it instead of stranding the seed sketch.
+  useEffect(() => {
+    if (clusters === null || size.width === 0 || size.height === 0) {
+      return;
+    }
+
+    const anchorSet = clusters.groups.map((group) => group.anchorKey).join("|");
+    if (anchorSet === settledAnchorSetRef.current) {
+      return;
+    }
+
+    const forces = { width: size.width, height: size.height };
+    let live = true;
+    const kick = setTimeout(() => {
+      if (!live) {
+        return;
+      }
+      beginSettle(clusters.groups.length, "anchors");
+      void precomputeLayout(anchorSetField(field, clusters), forces, () => !live)
+        .then((landed) => {
+          endSettle();
+          if (!live) {
+            return;
+          }
+          for (const node of landed) {
+            anchorPosRef.current.set(nodeKey(node.kind, node.id), { x: node.x, y: node.y });
+          }
+          settledAnchorSetRef.current = anchorSet;
+          recomposeClusterField();
+          drawRef.current();
+        })
+        .catch(() => {
+          endSettle();
+          if (!live) {
+            return;
+          }
+          setSettleFailed(true);
+        });
+    }, SETTLE_KICK_DELAY_MS);
+
+    return () => {
+      live = false;
+      clearTimeout(kick);
+    };
+  }, [beginSettle, clusters, endSettle, field, recomposeClusterField, size]);
 
   // The tier-1 frame clock, in its two shapes: a single synchronous settle under reduced motion,
   // and one tick per frame otherwise. Each one stops itself. The ladder's other rungs live
@@ -768,7 +793,9 @@ export function GraphCanvas({
       {tier === "clustered" ? (
         <p className="text-xs text-muted" role="status">
           {precomputing
-            ? computingLayoutNotice(layoutCount)
+            ? layoutWhat === "anchors"
+              ? computingAnchorsNotice(layoutCount)
+              : computingBloomNotice(layoutCount)
             : settleFailed
               ? settleFailedNotice(field.nodes.length)
               : clusteredNotice(field.nodes.length, PRECOMPUTE_CEILING)}

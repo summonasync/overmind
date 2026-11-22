@@ -95,6 +95,26 @@ export function computingLayoutNotice(nodeCount: number): string {
   );
 }
 
+// Tier 3's two subset settles reuse the transport but not the wording: on a 5001-node field,
+// "Laying out 51 nodes" reads as the whole field, when it is only the anchor layer — and the
+// bloom's count is one cluster's members, with the rest of the field untouched by the merge.
+export function computingAnchorsNotice(anchorCount: number): string {
+  const noun = anchorCount === 1 ? "anchor" : "anchors";
+  return (
+    `Settling the ${anchorCount} cluster ${noun} the field is grouped into: the frame they fix ` +
+    "runs in slices between frames, so input is handled between them. The dots below are the " +
+    "seed sketch until the anchor frame lands."
+  );
+}
+
+export function computingBloomNotice(memberCount: number): string {
+  const noun = memberCount === 1 ? "node" : "nodes";
+  return (
+    `Opening a cluster of ${memberCount} ${noun}: its members settle in slices between frames, ` +
+    "so input is handled between them. The settle touches only this cluster's nodes."
+  );
+}
+
 // The settle threw and stayed abandoned, so the seed sketch is the field and no swap is coming —
 // the settled-tier wording would promise "the map that replaces it", which is exactly the swap
 // that never happened. The sketch is not a broken frame: every node is on it, nothing animates,
