@@ -17,6 +17,7 @@ public sealed class ContextEntry
     public Guid ProjectId { get; private set; }
     public EntryType Type { get; private set; }
     public string Title { get; private set; } = string.Empty;
+    public string TitleNormalized { get; private set; } = string.Empty;
     public string Content { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -210,9 +211,14 @@ public sealed class ContextEntry
             ProjectId = projectId,
             Type = type,
             Title = title.Trim(),
+            TitleNormalized = NormalizeTitle(title),
             Content = content,
             CreatedAt = now,
             UpdatedAt = now
         };
     }
+
+    // The search fold: ToLowerInvariant covers Cyrillic where SQLite's lower() only folds ASCII.
+    // Written on every title write so the graph LIKE filter can pattern-match a lowered term.
+    public static string NormalizeTitle(string title) => title.Trim().ToLowerInvariant();
 }

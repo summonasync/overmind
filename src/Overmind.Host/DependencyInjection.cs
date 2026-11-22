@@ -36,6 +36,7 @@ public static class DependencyInjection
     public static IServiceCollection AddOvermind(this IServiceCollection services)
     {
         services.AddBacklogImportPipeline();
+        services.AddHostedService<EntryTitleBackfillService>();
         services.AddHostedService<WaveChatRetentionSweepService>();
 
         services.AddScoped<FtsSearchService>();
