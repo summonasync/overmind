@@ -84,7 +84,8 @@ public sealed class AgentLoopTests : IDisposable
     }
 
     [Fact]
-    public async Task ToolCallRoundTrip_DispatchesStreamsResultAndFinishes()    {
+    public async Task ToolCallRoundTrip_DispatchesStreamsResultAndFinishes()
+    {
         var client = new FakeAgentChatClient(
         [
             FakeAgentChatClient.TextUpdate("Checking the queue. "),
