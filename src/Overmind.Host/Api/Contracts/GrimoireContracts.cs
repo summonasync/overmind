@@ -29,6 +29,7 @@ public sealed record GrimoireWireResponse(
     string? Error);
 
 public sealed record GrimoireAssistedInstallRequest(
+    string? Intent,
     string? Channel);
 
 public sealed record GrimoireAssistedInstallResponse(

@@ -11,12 +11,15 @@ import { Modal } from "@/shared/ui/modal";
 import {
   GRIMOIRE_BOOK_NAME_MAX,
   detectionView,
+  installArmHint,
+  installPendingLabel,
   validateBookName,
   wiredView,
 } from "@/features/grimoire/lib/grimoire-view";
 import { useGrimoireMutations } from "@/features/grimoire/lib/use-grimoire-mutations";
 import type {
   GrimoireAssistedInstallResponse,
+  GrimoireInstallIntent,
   GrimoireStatusResponse,
 } from "@/features/grimoire/types";
 import { GrimoireAgentOutcomes } from "./grimoire-agent-outcomes";
@@ -47,9 +50,9 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
     setStep({ name: "wire", mode });
   };
 
-  const openInstructionsStep = (intent: "manual" | "assisted") => {
+  const openInstructionsStep = (intent: GrimoireInstallIntent) => {
     assisted.reset();
-    assisted.mutate(null);
+    assisted.mutate({ intent, channel: null });
     setStep({ name: "instructions", intent });
   };
 
@@ -87,12 +90,12 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
           </p>
           <ChoiceButton
             title="Install it yourself"
-            hint="Shows the hand-install steps unless the configured channel installs it first; no agent config is touched either way."
+            hint={installArmHint("manual")}
             onClick={() => openInstructionsStep("manual")}
           />
           <ChoiceButton
             title="Let Overmind install it"
-            hint="Runs Grimoire's own install channel when one is configured."
+            hint={installArmHint("assisted")}
             onClick={() => openInstructionsStep("assisted")}
           />
           <ChoiceButton
@@ -110,7 +113,7 @@ export function GrimoireWizard({ status, onClose }: GrimoireWizardProps) {
           error={assisted.error as Error | null}
           result={assisted.data ?? null}
           onBack={() => setStep({ name: "choice" })}
-          onRetry={() => assisted.mutate(null)}
+          onRetry={() => assisted.mutate({ intent: step.intent, channel: null })}
           onContinue={() => openWireStep("initial")}
           onClose={onClose}
         />
@@ -275,7 +278,7 @@ function InstructionsStep({
   onClose,
 }: InstructionsStepProps) {
   if (pending) {
-    return <LoadingState label="Checking for an install channel…" />;
+    return <LoadingState label={installPendingLabel(intent)} />;
   }
 
   if (error !== null || result === null) {
