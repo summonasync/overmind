@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { Input } from "@/shared/ui/input";
 import { PageBackLink } from "@/shared/ui/page-back-link";
+import { PromoteNote } from "@/features/journal/components/promote-note";
 import { BacklinksRail, RailDayRow } from "@/features/journal/components/backlinks-rail";
 import { NoteEditor } from "@/features/journal/components/note-editor";
 import { OutgoingRail } from "@/features/journal/components/outgoing-rail";
@@ -25,6 +26,7 @@ import {
 } from "@/features/journal/lib/note-form";
 import {
   authorLine,
+  backLinkLabelFrom,
   linkedEntryIds,
   noteHref,
   relatedQuery,
@@ -61,7 +63,7 @@ export function NoteView({ noteId, search }: NoteViewProps) {
   if (note.error !== null || loaded === undefined) {
     return (
       <div className="space-y-3">
-        <PageBackLink href={streamHrefFrom(search)} label="Journal" />
+        <PageBackLink href={streamHrefFrom(search)} label={backLinkLabelFrom(search)} />
         <ErrorText error={note.error ?? new Error("The note is not there any more.")} />
         <Button variant="secondary" size="sm" onClick={() => void note.refetch()}>
           Retry
@@ -165,7 +167,7 @@ function NoteSurface({ note, search }: { note: JournalNote; search: string }) {
     // for every focusable in its subtree from the root instead of repeating a class on each
     // primitive.
     <div className="space-y-3 [&_a]:scroll-mt-16 [&_button]:scroll-mt-16 [&_input]:scroll-mt-16 [&_textarea]:scroll-mt-16">
-      <PageBackLink href={streamHrefFrom(search)} label="Journal" />
+      <PageBackLink href={streamHrefFrom(search)} label={backLinkLabelFrom(search)} />
 
       <Input
         aria-label="Note title"
@@ -240,6 +242,12 @@ function NoteSurface({ note, search }: { note: JournalNote; search: string }) {
           aria-label="Note context"
           className="w-full shrink-0 space-y-4 rounded-lg border border-border bg-surface p-3 xl:w-80"
         >
+          {/* Triage sits at the head of the rails, not the foot: it is the act that ends the note's
+              life in the pile, and the provenance row it writes lands in the rails a few pixels
+              below it — the act and its record in one sightline. The graph filters are not threaded
+              in here because no graph field is mounted on this route, which is precisely the case
+              `promotionInvalidations` widens to the graph family for. */}
+          <PromoteNote entryId={note.id} noteTitle={note.title} />
           <BacklinksRail
             backlinks={note.incoming}
             askRelated={askRelated}

@@ -19,7 +19,7 @@ internal static class EmptyOptionalDefaultNotes
         // src/Overmind.Mcp/OvermindTools.cs:360 substitutes it, :362 puts it on the wire.
         ("search", "mode", "mode=fulltext"),
         // src/Overmind.Mcp/Planning/PlanningFeatureTools.cs:170 drops a blank slug; the Host composes
-        // '{NNN}-{title-derived}' at PlanningFeatureService.cs:59-63 (FeatureSlugGenerator.Compose).
+        // '{NNN}-{title-derived}' at PlanningFeatureService.cs:69-73 (FeatureSlugGenerator.Compose).
         ("planning_create_feature", "slug", "the generated '{NNN}-{title-derived}' slug"),
     ];
 

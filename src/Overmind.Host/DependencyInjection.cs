@@ -130,6 +130,9 @@ public static class DependencyInjection
         services.AddScoped<EntryLinkWriter>();
         services.AddScoped<EntryLinkReader>();
         services.AddScoped<EntryLinkTriage>();
+        services.AddScoped<GraphReader>();
+        services.AddScoped<GraphNodePositionWriter>();
+        services.AddScoped<TriagePromotionService>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
         services.AddSingleton(AgentHomeCatalog.Build());
@@ -192,6 +195,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<EntryAckHumanRequest>, EntryAckHumanRequestValidator>();
         services.AddSingleton<IValidator<EntryLiftRequest>, EntryLiftRequestValidator>();
         services.AddSingleton<IValidator<EntryAppendRequest>, EntryAppendRequestValidator>();
+        services.AddSingleton<IValidator<PromoteNoteToFeatureRequest>, PromoteNoteToFeatureRequestValidator>();
+        services.AddSingleton<IValidator<PromoteNoteToTaskRequest>, PromoteNoteToTaskRequestValidator>();
         services.AddSingleton<IValidator<CreateKitRequest>, CreateKitRequestValidator>();
         services.AddSingleton<IValidator<UpdateKitRequest>, UpdateKitRequestValidator>();
         services.AddSingleton<IValidator<KitScanRequest>, KitScanRequestValidator>();

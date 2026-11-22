@@ -37,6 +37,29 @@ public sealed class EntryLinkTriage
                 && link.ToKind == EntryLinkKind.Project
                 && link.ToId == projectId));
 
+    // The same edge universe the predicates above correlate against, handed to the graph read so it draws its
+    // links from one definition instead of restating the counterparty hygiene. An edge here is an edge there,
+    // and an edge T4 teaches the predicate about lands on both surfaces at once.
+    public IQueryable<EntryLink> Edges() => CountingEdges;
+
+    // Projects and features sit only on the target end of an edge — FromEntryId is an entry foreign key — so
+    // their linked arm is the single target predicate, not the two-arm exists the notes need.
+    public IQueryable<Project> WhereLinkedProjects(IQueryable<Project> projects) =>
+        projects.Where(project =>
+            CountingEdges.Any(link => link.ToKind == EntryLinkKind.Project && link.ToId == project.Id));
+
+    public IQueryable<Project> WhereUnlinkedProjects(IQueryable<Project> projects) =>
+        projects.Where(project =>
+            !CountingEdges.Any(link => link.ToKind == EntryLinkKind.Project && link.ToId == project.Id));
+
+    public IQueryable<PlanningFeature> WhereLinkedFeatures(IQueryable<PlanningFeature> features) =>
+        features.Where(feature =>
+            CountingEdges.Any(link => link.ToKind == EntryLinkKind.Feature && link.ToId == feature.Id));
+
+    public IQueryable<PlanningFeature> WhereUnlinkedFeatures(IQueryable<PlanningFeature> features) =>
+        features.Where(feature =>
+            !CountingEdges.Any(link => link.ToKind == EntryLinkKind.Feature && link.ToId == feature.Id));
+
     private IQueryable<EntryLink> CountingEdges =>
         from link in _db.EntryLinks
         join source in _db.ContextEntries on link.FromEntryId equals source.Id
@@ -50,6 +73,9 @@ public sealed class EntryLinkTriage
                   || link.ToKind == EntryLinkKind.Project
                       && _db.Projects.Any(project => project.Id == link.ToId)
                   || link.ToKind == EntryLinkKind.Feature
-                      && _db.PlanningFeatures.Any(feature => feature.Id == link.ToId))
+                      && _db.PlanningFeatures.Any(feature => feature.Id == link.ToId)
+                  || link.ToKind == EntryLinkKind.Task
+                      && _db.PlanningArtifacts.Any(artifact =>
+                          artifact.Id == link.ToId && artifact.Kind == PlanningArtifactKind.Task))
         select link;
 }

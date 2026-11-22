@@ -32,6 +32,10 @@ public sealed class EntryLinkTriageTests : IDisposable
     private readonly Guid _manualNoteId;
     private readonly Guid _manualCounterpartId;
     private readonly Guid _projectLinkId;
+    private readonly Guid _taskPromotedId;
+    private readonly Guid _taskGoneId;
+    private readonly Guid _taskWrongKindId;
+    private readonly Guid _taskId;
 
     public EntryLinkTriageTests(ITestOutputHelper output)
     {
@@ -43,6 +47,15 @@ public sealed class EntryLinkTriageTests : IDisposable
         var feature = PlanningFeature.Create(other.Id, "184-triage", "Triage pin", "edges");
         _context.Projects.AddRange(journal, other);
         _context.PlanningFeatures.Add(feature);
+        _context.SaveChanges();
+
+        // The artifact ends of a promotion: one real task, one spec the task kind must not accidentally cover.
+        var task = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Task, "task body", 0);
+        var spec = PlanningArtifact.Create(feature.Id, PlanningArtifactKind.Spec, "spec body", 0);
+        _context.PlanningArtifacts.AddRange(task, spec);
+        _context.SaveChanges();
+        _taskId = task.Id;
+        var specId = spec.Id;
 
         var unlinked = AddNote(journal.Id, "Unlinked Note", "no edge anywhere");
         var outgoing = AddNote(journal.Id, "Outgoing Only", "links [[feature:184]]");
@@ -55,6 +68,9 @@ public sealed class EntryLinkTriageTests : IDisposable
         var manualNote = AddNote(journal.Id, "Manual Note", "edge inserted by hand");
         var manualCounterpart = AddNote(journal.Id, "Manual Counterpart", "hand-linked back");
         var projectLinker = AddNote(journal.Id, "Project Linker", "links [[project:triage-other]]");
+        var taskPromoted = AddNote(journal.Id, "Task Promoted", "sorted into a task on the board");
+        var taskGone = AddNote(journal.Id, "Task Gone", "its task row is no longer on the board");
+        var taskWrongKind = AddNote(journal.Id, "Task Wrong Kind", "claims a task edge onto a spec artifact");
         var doomed = AddNote(journal.Id, "Deleted Target", "row the fixture removes");
         _context.SaveChanges();
 
@@ -71,6 +87,9 @@ public sealed class EntryLinkTriageTests : IDisposable
         _manualNoteId = manualNote.Id;
         _manualCounterpartId = manualCounterpart.Id;
         _projectLinkId = projectLinker.Id;
+        _taskPromotedId = taskPromoted.Id;
+        _taskGoneId = taskGone.Id;
+        _taskWrongKindId = taskWrongKind.Id;
 
         var doomedId = doomed.Id;
         _context.ContextEntries.Remove(doomed);
@@ -94,7 +113,13 @@ public sealed class EntryLinkTriageTests : IDisposable
         _context.EntryLinks.Add(EntryLink.CreateDerived(inactiveSource.Id, EntryLinkKind.Entry, namedByInactive.Id));
         _context.SaveChanges();
 
-        ManualEdge(manualNote.Id, manualCounterpart.Id);
+        ManualEdge(manualNote.Id, EntryLinkKind.Entry, manualCounterpart.Id);
+
+        // The kinds a triage promotion actually writes: the promoted task is a live row, the second note points
+        // at a task that is not on the board, the third claims a task edge onto an artifact of another kind.
+        ManualEdge(taskPromoted.Id, EntryLinkKind.Task, _taskId);
+        ManualEdge(taskGone.Id, EntryLinkKind.Task, Guid.NewGuid());
+        ManualEdge(taskWrongKind.Id, EntryLinkKind.Task, specId);
     }
 
     public void Dispose()
@@ -124,6 +149,27 @@ public sealed class EntryLinkTriageTests : IDisposable
 
         linked.ShouldContain(_manualNoteId);
         linked.ShouldContain(_manualCounterpartId);
+    }
+
+    [Fact]
+    public async Task ManualEdgeOntoATask_SortsTheNoteOutOfThePile()
+    {
+        var linked = await LinkedIds();
+
+        linked.ShouldContain(_taskPromotedId);
+        (await UnlinkedIds()).ShouldNotContain(_taskPromotedId);
+    }
+
+    [Fact]
+    public async Task TaskEdgeWhoseArtifactIsGone_LeavesTheSourceUnsorted()
+    {
+        (await UnlinkedIds()).ShouldContain(_taskGoneId);
+    }
+
+    [Fact]
+    public async Task TaskEdgePointingAtAnotherKindsArtifact_LinksNothing()
+    {
+        (await UnlinkedIds()).ShouldContain(_taskWrongKindId);
     }
 
     [Fact]
@@ -227,7 +273,7 @@ public sealed class EntryLinkTriageTests : IDisposable
         return note;
     }
 
-    private void ManualEdge(Guid fromEntryId, Guid toEntryId) =>
+    private void ManualEdge(Guid fromEntryId, EntryLinkKind toKind, Guid toId) =>
         _context.Database.ExecuteSqlRaw(
             """
             INSERT INTO EntryLinks (Id, FromEntryId, ToKind, ToId, Origin, CreatedAt)
@@ -235,8 +281,8 @@ public sealed class EntryLinkTriageTests : IDisposable
             """,
             Guid.NewGuid().ToString().ToUpperInvariant(),
             fromEntryId.ToString().ToUpperInvariant(),
-            (int)EntryLinkKind.Entry,
-            toEntryId.ToString().ToUpperInvariant(),
+            (int)toKind,
+            toId.ToString().ToUpperInvariant(),
             (int)EntryLinkOrigin.Manual,
             DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff"));
 

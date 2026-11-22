@@ -1,4 +1,8 @@
-import type { JournalBacklink, JournalOutgoingLink } from "../types.ts";
+import type {
+  JournalBacklink,
+  JournalLinkKind,
+  JournalOutgoingLink,
+} from "../types.ts";
 
 export function noteHref(id: string): string {
   return `/journal?note=${encodeURIComponent(id)}`;
@@ -12,46 +16,119 @@ export function dayHref(day: string): string {
   return `/journal?day=${encodeURIComponent(day)}`;
 }
 
-// The back link goes home with the filters the owner arrived on, minus `note` — losing the
-// day or tag chip they had set is the kind of thing that makes a stream feel like it is
-// fighting back.
-export function streamHrefFrom(search: string): string {
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+// The graph route records itself in the note address it navigates to, and `gq` carries the
+// filters the field was showing. Without the pair, "double-click a note, read it, tap back"
+// lands the owner in the inbox with the map's filters gone — the round trip the graph's own
+// acceptance row asks for. Kept to the two names this app owns: no arbitrary origin URL is
+// accepted, so the param cannot be steered anywhere else.
+export const GRAPH_ORIGIN = "journal-graph";
+
+export function graphHrefFrom(graphSearch: string): string {
+  const params = new URLSearchParams(graphSearch.startsWith("?") ? graphSearch.slice(1) : graphSearch);
   params.delete("note");
   const query = params.toString();
+  return query.length > 0 ? `/journal/graph?${query}` : "/journal/graph";
+}
+
+export function noteHrefFromGraph(id: string, graphSearch: string): string {
+  const carried = new URLSearchParams(graphSearch.startsWith("?") ? graphSearch.slice(1) : graphSearch);
+  carried.delete("note");
+  const target = new URLSearchParams({ note: id, from: GRAPH_ORIGIN });
+  const query = carried.toString();
+  if (query.length > 0) {
+    target.set("gq", query);
+  }
+  return `/journal?${target.toString()}`;
+}
+
+// The back link goes home with the filters the owner arrived on, minus `note` — losing the
+// day or tag chip they had set is the kind of thing that makes a stream feel like it is
+// fighting back. A note opened from the graph goes back to the graph instead, with the field
+// it was showing.
+export function streamHrefFrom(search: string): string {
+  const params = paramsOf(search);
+  params.delete("note");
+  if (params.get("from") === GRAPH_ORIGIN) {
+    const carried = params.get("gq") ?? "";
+    return graphHrefFrom(carried);
+  }
+  const query = params.toString();
   return query.length > 0 ? `/journal?${query}` : "/journal";
+}
+
+// The label has to answer the same question the href answers. A note opened off the canvas came
+// from the map, and a back link that says "Journal" while it takes the owner to `/journal/graph`
+// is the surface lying about where it is standing.
+export function backLinkLabelFrom(search: string): string {
+  return paramsOf(search).get("from") === GRAPH_ORIGIN ? "Back to graph map" : "Journal";
+}
+
+function paramsOf(search: string): URLSearchParams {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
 }
 
 export interface OutgoingGroups {
   notes: JournalOutgoingLink[];
   projects: JournalOutgoingLink[];
   features: JournalOutgoingLink[];
+  tasks: JournalOutgoingLink[];
+  // Kinds the wire grew past this union. The bucket is honest about being unrecognised instead
+  // of guessing a heading — guessing is what made a task read as a feature (review-237-01 M2).
+  other: JournalOutgoingLink[];
 }
 
+// A `Record` over the full kind union, so widening `JournalLinkKind` reddens `tsc` here rather
+// than quietly routing the new member into the fallback bucket at runtime.
+const OUTGOING_BUCKETS: Record<JournalLinkKind, keyof OutgoingGroups> = {
+  entry: "notes",
+  project: "projects",
+  feature: "features",
+  task: "tasks",
+};
+
 export function groupOutgoing(links: readonly JournalOutgoingLink[]): OutgoingGroups {
-  const groups: OutgoingGroups = { notes: [], projects: [], features: [] };
+  const groups: OutgoingGroups = { notes: [], projects: [], features: [], tasks: [], other: [] };
   for (const link of links) {
-    if (link.kind === "entry") {
-      groups.notes.push(link);
-    } else if (link.kind === "project") {
-      groups.projects.push(link);
-    } else {
-      groups.features.push(link);
-    }
+    groups[OUTGOING_BUCKETS[link.kind] ?? "other"].push(link);
   }
   return groups;
 }
 
-// A feature row carries its guid and its title — `EntryLinkReader.LoadTargetLabelsAsync`
-// labels features with `Title`, so neither the slug nor the owning project survives into the
-// DTO, and `/dashboard?project=…&feature=<slug>` cannot be built from what the rail has. The
-// row stays honest and unclickable rather than guessing a link; the missing fields are filed
-// against the backend, not bolted on here.
+// Feature and task rows carry their card address since T10's TargetLabel: features their own
+// slug and project, tasks their parent card's — both address the parent feature card, the same
+// place the promotion success line sends the owner. The dead-end fallback below stays for rows
+// the reader could not resolve, and states what is missing rather than blaming the payload.
 export function outgoingHref(link: JournalOutgoingLink): string | null {
-  if (link.kind === "entry") {
-    return noteHref(link.id);
+  switch (link.kind) {
+    case "entry":
+      return noteHref(link.id);
+    case "project":
+      return projectHref(link.id);
+    case "feature":
+    case "task":
+      // Same address `promotedCardHref` builds; rebuilt here because that module imports
+      // through the `@/` alias, which this file's node-run consumers cannot resolve.
+      return link.slug && link.projectId
+        ? `/dashboard?${new URLSearchParams({ project: link.projectId, feature: link.slug }).toString()}`
+        : null;
+    default:
+      return null;
   }
-  return link.kind === "project" ? projectHref(link.id) : null;
+}
+
+// The dead rows say why they are dead instead of just refusing the click; `null` means the row
+// has a real link and the rail renders it as one.
+export function outgoingDeadEndReason(link: JournalOutgoingLink): string | null {
+  if (outgoingHref(link) !== null) {
+    return null;
+  }
+  if (link.kind === "task") {
+    return "This note was promoted into a board task. The payload did not carry the parent card's slug for this row, so no URL can be built from what the rail was given.";
+  }
+  if (link.kind === "feature") {
+    return "The payload did not carry the slug for this row — no card address can be built from what the rail was given.";
+  }
+  return `The Host reported a link kind this build does not know ("${link.kind}"), so the row is labelled rather than guessed.`;
 }
 
 export type DeadEndKind = "note" | "feature" | "project";

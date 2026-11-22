@@ -1,11 +1,25 @@
 import type { EntryType } from "@/shared/api/types";
 
-export type JournalLinkKind = "entry" | "feature" | "project";
+// The rail's outgoing-link vocabulary — the four target kinds the Host can put on the wire as
+// `outgoing[].kind`. It is a mirror of `EntryLinkKind` serialised by the Host's camelCase enum
+// converter (`DependencyInjection.cs`, `ConfigureHttpJsonOptions` →
+// `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)`), so the members are spelled as they
+// arrive: `"entry"`, not `"Entry"`.
+//
+// `task` is the fourth member and it arrived with feature 237's promotion edge: triage points a
+// note at a board task, and a rail that had no arm for it filed the row under features. This is
+// NOT the graph's node vocabulary — see `GraphNodeKind`, which deliberately cannot express `task`.
+export type JournalLinkKind = "entry" | "feature" | "project" | "task";
 
 export interface JournalOutgoingLink {
   kind: JournalLinkKind;
   id: string;
   label: string;
+  // Card-address halves the Host resolves for feature and task rows (T10's TargetLabel):
+  // features carry their own slug and project, tasks their parent card's. Absent on rows
+  // the reader could not resolve, and on entry/project rows the rail addresses directly.
+  slug?: string | null;
+  projectId?: string | null;
 }
 
 export interface JournalBacklink {
@@ -73,4 +87,140 @@ export interface JournalServerFilters {
   tag: string;
   link: JournalLinkFilter;
   project: string;
+}
+
+// ── The graph field ────────────────────────────────────────────────────────────────────
+//
+// Two vocabularies live in this slice and they are NOT the same union (review-237-03 m6).
+// `JournalLinkKind` above is the rail's four target kinds. A graph NODE is one of three:
+// `task` is an edge target the promotion door writes, never a dot the canvas can draw —
+// `GraphQueryFilter.ValidateFocus` refuses `focus=task:*` and `GraphReader.BuildEdgesAsync`
+// drops any edge whose endpoint is not in the node set. Reusing `JournalLinkKind` here would
+// make the payload lie in the other direction and ask the renderer for a shape that cannot
+// exist, so the narrower union is the type and `lib/graph-payload.ts` refuses a fourth kind
+// at the door instead of drawing it.
+//
+// Every member is spelled the way the wire spells it: the Host registers
+// `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)` in `DependencyInjection.cs`
+// (`ConfigureHttpJsonOptions`), so `kind` arrives `"entry"`, never `"Entry"`. The switch arms
+// in `lib/graph-payload.ts` are the executable statement of that posture.
+export type GraphNodeKind = "entry" | "project" | "feature";
+
+// R1's node universe: Journal, Decision and Idea entries. Audit/Note/Skill/Tombstone/Gate and
+// Guard rows are not nodes in v1, and `GraphQueryFilter.ValidateEntryTypes` 400s anything else.
+export type GraphEntryType = "journal" | "decision" | "idea";
+
+export type GraphFeatureStatus = "draft" | "ready" | "inProgress" | "review" | "done";
+
+export interface GraphNode {
+  kind: GraphNodeKind;
+  id: string;
+  label: string;
+  projectId: string;
+  entryType: GraphEntryType | null;
+  featureStatus: GraphFeatureStatus | null;
+  // True means this row carries no link anywhere; `lib/graph-payload.ts` derives the third
+  // state (linked, but with every link leaving this view) from this flag plus the edge set.
+  orphan: boolean;
+}
+
+export type GraphNodeState = "linked" | "orphan" | "offView";
+
+export interface GraphEdge {
+  fromKind: GraphNodeKind;
+  fromId: string;
+  toKind: GraphNodeKind;
+  toId: string;
+  hasManual: boolean;
+}
+
+export interface GraphPosition {
+  kind: GraphNodeKind;
+  id: string;
+  x: number;
+  y: number;
+}
+
+// One row the canvas sends when a drag settles (pinned: true) or the reset control lifts pins
+// (pinned: false). The server, not the browser, is the only place these live — R5 forbids a
+// client-side copy, which is why this type has no storage besides the door.
+export interface GraphPositionWrite {
+  kind: GraphNodeKind;
+  id: string;
+  x: number;
+  y: number;
+  pinned: boolean;
+}
+
+// `isolatedInView` is a NODE count, not a link count: the dropped-edge tally is not
+// reconstructible from this payload (`GraphContracts.cs` says so), so the legend may say "N
+// notes here link to something outside this view" and must never say "N links lead outside".
+export interface GraphCounts {
+  nodes: number;
+  edges: number;
+  orphans: number;
+  entryNodes: number;
+  projectNodes: number;
+  featureNodes: number;
+  isolatedInView: number;
+}
+
+export interface GraphField {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  positions: GraphPosition[];
+  counts: GraphCounts;
+  // Rows the wire carried that this build cannot draw, counted rather than dropped silently —
+  // an empty array is the normal case, a non-empty one says the endpoint grew past the union.
+  unsupported: { nodes: number; edges: number };
+}
+
+// ── Triage: the note becoming board work ───────────────────────────────────────────────
+//
+// `NotePromotionResult` is `NotePromotionResponse` on the wire — the door's whole answer, in the
+// fields the surface can act on. `featureSlug` is what the board cache addresses a card by, and
+// `targetKind`/`targetId` name the artifact the provenance edge points at, which for a task is the
+// task and not its parent.
+export interface NotePromotionResult {
+  entryId: string;
+  targetKind: PromotionTargetKind;
+  targetId: string;
+  featureId: string;
+  featureSlug: string;
+}
+
+// The two targets the owner can sort a thought into, spelled as the wire spells them. Narrower
+// than `JournalLinkKind` on purpose: `entry` and `project` are what a note links to by writing a
+// marker, never what a promotion mints.
+export type PromotionTargetKind = "feature" | "task";
+
+// The form state, as opposed to the door's body: a task names itself with a brief and carries the
+// contract in the body, a feature names itself with a title, and both need a board to land on.
+export interface PromotionForm {
+  target: PromotionTargetKind;
+  projectId: string;
+  featureId: string;
+  name: string;
+  body: string;
+}
+
+export interface FeatureCandidate {
+  id: string;
+  label: string;
+  done: boolean;
+}
+
+// Every field travels, so one shape serves the URL and the request: unlike the stream, where
+// `day` partitions locally and must stay out of the cache key, the graph's filters are all the
+// endpoint's own. `lib/graph-filters.ts` reads and writes it, `lib/graph-query.ts` sends it.
+// `depth` stays a string because the URL keeps the untyped text — an empty depth means "the
+// endpoint's own default of one hop", and coercing it to 0 client-side would ask for nothing.
+export interface GraphViewFilters {
+  types: GraphEntryType[];
+  project: string;
+  focus: string;
+  depth: string;
+  orphansOnly: boolean;
+  includeDone: boolean;
+  search: string;
 }

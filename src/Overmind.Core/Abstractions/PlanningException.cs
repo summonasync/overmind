@@ -602,4 +602,22 @@ public sealed class PlanningException : Exception
             "hand; a conversation without a project still sends the pair, with the scope written as the literal " +
             "'global'.",
             "Re-run overmind_onboard so the session registers its project scope (set OVERMIND_PROJECT_ID for worktree layouts), then retry — the marker pair is transport-emitted, never hand-assembled.");
+
+    public static PlanningException TriageAlreadyPromoted(
+        Guid entryId, EntryLinkKind kind, Guid targetId, string? targetLabel = null)
+    {
+        var named = targetLabel ?? $"'{targetId}'";
+
+        return new(PlanningFailureKind.RuleViolation, PlanningFailureCode.TriageAlreadyPromoted,
+            $"Entry '{entryId}' already carries a promotion edge to {kind.ToString().ToLowerInvariant()} " +
+            $"{named} ('{targetId}'). The promotion edge is the triage state, so one note is sorted by one " +
+            "board artifact: open the artifact it became and continue the thought there, or remove that edge " +
+            "first if the note really is a second, separate piece of work.");
+    }
+
+    public static PlanningException TriageNoteNotPromotable(Guid entryId, string state) =>
+        new(PlanningFailureKind.RuleViolation, PlanningFailureCode.TriageNoteNotPromotable,
+            $"Entry '{entryId}' is in state '{state}' and cannot be promoted. Only a live note leaves a trace on " +
+            "the board: a lifted, superseded or buried note would gain a provenance edge nothing reads, and the " +
+            "note itself stays as it is.");
 }
