@@ -136,7 +136,7 @@ public static class LanesApi
         return await WriteAsync(
             projectId,
             new LaneUpsert(
-                name,
+                RouteNameDecoder.Decode(name),
                 SoftCapSoften.Cap(request.Contour, PlanningLane.MaxContourLength, soft),
                 request.SerialOrder,
                 request.Priority,
@@ -158,7 +158,7 @@ public static class LanesApi
     {
         try
         {
-            var roster = await lanes.DeleteLaneAsync(projectId, name, ct);
+            var roster = await lanes.DeleteLaneAsync(projectId, RouteNameDecoder.Decode(name), ct);
             return Results.Ok(ToResponse(roster));
         }
         catch (PlanningException ex)

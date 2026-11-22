@@ -323,7 +323,7 @@ public static class WaveChatApi
             // Soft cap 266: over-cap signal text is stored whole inside the grace band and
             // truncated to the keep length beyond it; both cases answer with warnings[].
             var capped = SoftCapSoften.Cap(text, WaveMessage.MaxTextLength, warnings);
-            var message = await chat.PostAsync(projectId, DecodedRoom(room), authorAlias, authorRole, capped!, ct);
+            var message = await chat.PostAsync(projectId, RouteNameDecoder.Decode(room), authorAlias, authorRole, capped!, ct);
             return Results.Ok(ToResponse(message) with { Warnings = SoftCapSoften.Merge(warnings) });
         }
         catch (PlanningException ex)
@@ -348,7 +348,7 @@ public static class WaveChatApi
     {
         try
         {
-            var page = await chat.ListUnreadAsync(projectId, alias, DecodedRoom(room), since, limit, replayMentions, ct);
+            var page = await chat.ListUnreadAsync(projectId, alias, RouteNameDecoder.Decode(room), since, limit, replayMentions, ct);
             return Results.Ok(new WaveUnreadResponse(
             [
                 .. page.Messages.Select(ToResponse)
@@ -369,7 +369,7 @@ public static class WaveChatApi
     {
         try
         {
-            var peek = await chat.PeekAsync(projectId, alias, DecodedRoom(room), ct);
+            var peek = await chat.PeekAsync(projectId, alias, RouteNameDecoder.Decode(room), ct);
             return Results.Ok(new WavePeekResponse(peek.Room, peek.Count, [.. peek.Ids]));
         }
         catch (PlanningException ex)
@@ -392,7 +392,7 @@ public static class WaveChatApi
     {
         try
         {
-            var messages = await chat.ListHistoryAsync(projectId, DecodedRoom(room), limit, before, ct);
+            var messages = await chat.ListHistoryAsync(projectId, RouteNameDecoder.Decode(room), limit, before, ct);
             return Results.Ok(new WaveHistoryResponse(
             [
                 .. messages.Select(ToResponse)
@@ -403,13 +403,6 @@ public static class WaveChatApi
             return PlanningErrors.Map(ex);
         }
     }
-
-    // Routing hands the single-segment {room} value over still percent-encoded: %2F is not
-    // turned into a separator and is not decoded on the way in — measured on the deployed
-    // v1.9.1 Host (real Kestrel, 2026-11-16), where `rooms/zz.Test%2FSweep/messages` reached
-    // the handler as `zz.Test%2FSweep` and the roster row `zz.Test/Sweep` never matched.
-    // Legacy slash lanes are stored with the real slash, so the wire name comes back to it here.
-    private static string DecodedRoom(string room) => Uri.UnescapeDataString(room);
 
     private static WaveMessageResponse ToResponse(WaveMessage message) =>
         new(message.Id,
