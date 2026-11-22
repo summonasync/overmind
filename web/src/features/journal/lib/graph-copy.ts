@@ -143,7 +143,7 @@ export const GRAPH_CONTROL_LABELS = {
   zoomIn: "Zoom in",
   zoomOut: "Zoom out",
   fit: "Fit field",
-  reset: "Release dragged nodes",
+  reset: "Release pinned nodes",
   centre: "Centre on this node",
   clearCentre: "Clear centre",
   orphansOnly: "Unlinked only",

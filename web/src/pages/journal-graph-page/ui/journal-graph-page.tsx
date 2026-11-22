@@ -22,6 +22,7 @@ import { GraphNodePanel } from "@/features/journal/components/graph-node-panel";
 import {
   useGraphField,
   useGraphFilters,
+  useGraphPinWriter,
   useReducedMotion,
 } from "@/features/journal/lib/use-graph";
 import { noteHrefFromGraph } from "@/features/journal/lib/note-rails";
@@ -36,6 +37,7 @@ function GraphBranch() {
   const searchParams = useSearchParams();
   const { filters, setFilter, clear } = useGraphFilters();
   const { field, loading, error, refetch } = useGraphField(filters);
+  const pinWriter = useGraphPinWriter();
   const reducedMotion = useReducedMotion();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -103,6 +105,10 @@ function GraphBranch() {
             reducedMotion={reducedMotion}
             onSelect={setSelectedKey}
             onOpenNote={openNote}
+            onPin={(position) => pinWriter.mutate([{ ...position, pinned: true }])}
+            onUnpinAll={() =>
+              pinWriter.mutate(shown.positions.map((position) => ({ ...position, pinned: false })))
+            }
           />
           <GraphLegend field={shown} />
         </div>

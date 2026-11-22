@@ -37,11 +37,12 @@ public sealed class GraphReader
         nodes.AddRange(await ProjectFeatures(features, orphanFeatures, ct));
 
         var nodeIds = nodes.Select(node => new GraphNodeId(node.Kind, node.Id)).ToHashSet();
+        var pinned = await PinnedPositionsAsync(nodes, ct);
 
         if (request.OrphansOnly)
         {
             var orphanNodes = nodes.Where(node => node.IsOrphan).ToList();
-            return new GraphField(orphanNodes, [], [], CountsOf(orphanNodes, edges: 0));
+            return new GraphField(orphanNodes, [], FilterPositions(pinned, orphanNodes), CountsOf(orphanNodes, edges: 0));
         }
 
         var edges = await BuildEdgesAsync(nodeIds, ct);
@@ -54,7 +55,28 @@ public sealed class GraphReader
             edges = [.. edges.Where(edge => kept.Contains(edge.From) && kept.Contains(edge.To))];
         }
 
-        return new GraphField(nodes, edges, [], CountsOf(nodes, edges.Count));
+        return new GraphField(nodes, edges, FilterPositions(pinned, nodes), CountsOf(nodes, edges.Count));
+    }
+
+    // A pin the field cannot draw is a row for a node that no longer exists, or one a filter hid —
+    // either way it must not reach the canvas, whose seed treats every returned row as a pin.
+    private async Task<IReadOnlyList<GraphPosition>> PinnedPositionsAsync(
+        IReadOnlyList<GraphNode> nodes, CancellationToken ct)
+    {
+        var rows = await _db.GraphNodePositions
+            .AsNoTracking()
+            .Where(position => position.Pinned)
+            .Select(position => new { position.NodeKind, position.NodeId, position.X, position.Y })
+            .ToListAsync(ct);
+
+        return [.. rows.Select(row => new GraphPosition(row.NodeKind, row.NodeId, row.X, row.Y))];
+    }
+
+    private static List<GraphPosition> FilterPositions(
+        IReadOnlyList<GraphPosition> positions, IReadOnlyList<GraphNode> nodes)
+    {
+        var present = nodes.Select(node => new GraphNodeId(node.Kind, node.Id)).ToHashSet();
+        return [.. positions.Where(position => present.Contains(new GraphNodeId(position.Kind, position.Id)))];
     }
 
     private static EntryType[] EffectiveEntryTypes(IReadOnlyList<EntryType>? requested)

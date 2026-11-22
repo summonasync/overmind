@@ -1071,3 +1071,83 @@ test("the frame clock and the pin surface keep the URL out of the click path", (
   assert.match(canvas, /onDoubleClick/, "double-click lost its door");
   assert.match(canvas, /node\.kind === "entry"/, "double-click no longer checks that a note is a note");
 });
+
+// ── T8: pins are rows on the Host, never bytes in the browser ─────────────────────────
+
+// The files the pin door touched beyond the slice ledger: the wire module, the shared types and
+// the hook that owns the mutation. Swept together with the slice below; the page joins by name
+// at the end of the sweep.
+const T8_PIN_FILES = [
+  "api.ts",
+  "queries.ts",
+  "types.ts",
+  "lib/use-graph.ts",
+] as const;
+
+const pinFile = (path: string) =>
+  readFileSync(new URL(`../src/features/journal/${path}`, import.meta.url), "utf8");
+
+const pageFile = () =>
+  readFileSync(
+    new URL("../src/pages/journal-graph-page/ui/journal-graph-page.tsx", import.meta.url),
+    "utf8",
+  );
+
+test("no graph file and no pin-door file touches browser storage", () => {
+  const offenders: string[] = [];
+  for (const file of [...GRAPH_SLICE, ...T8_PIN_FILES]) {
+    const source = sliceFile(file);
+    if (/localStorage|sessionStorage|indexedDB/.test(source)) {
+      offenders.push(file);
+    }
+  }
+  if (/localStorage|sessionStorage|indexedDB/.test(pageFile())) {
+    offenders.push("pages/journal-graph-page/ui/journal-graph-page.tsx");
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    "a position stored in the browser is a layout only that browser sees — R5 puts the rows on the Host",
+  );
+});
+
+test("the pin door is one PUT on the human prefix, answered by 204 and a refetch", () => {
+  const api = pinFile("api.ts");
+  assert.match(api, /apiPut<void>\("\/graph\/positions", \{ positions \}\)/);
+  assert.ok(!/localStorage|sessionStorage/.test(api));
+
+  const hooks = sliceFile("lib/use-graph.ts");
+  assert.match(hooks, /invalidateQueries\(\{ queryKey: graphKeys\.all \}\)/);
+  assert.ok(!/setQueryData/.test(hooks), "the read projection is the only pin truth the client keeps");
+});
+
+test("the canvas stores the pin when the drag settles, not while it moves", () => {
+  const canvas = sliceFile("components/graph-canvas.tsx");
+  assert.match(canvas, /onPin\?\.\(\{ kind: node\.kind, id: node\.id, x: node\.x, y: node\.y \}\)/);
+  const up = /const onPointerUp = [\s\S]*?onSelect\(pickAt\(x, y\)\);/;
+  assert.match(canvas, up, "the settle handler lost its shape");
+  const movePin = /const onPointerMove = [\s\S]*?pinNode\(node, toWorldX\(x, currentView\(\)\), toWorldY\(y, currentView\(\)\)\);[\s\S]*?const onPointerUp/;
+  assert.match(canvas, movePin, "the drag loop must not be the place a row is written from");
+  assert.match(canvas, /field\.positions\.length > 0[\s\S]{0,80}onUnpinAll\?\.\(\)/);
+});
+
+test("an unpin leaves the node where its simulation stood instead of reseeding it", () => {
+  const canvas = sliceFile("components/graph-canvas.tsx");
+  assert.match(canvas, /before\.fx == null/, "only null or undefined fx preserves the standing spot");
+  assert.ok(!/before\.fx === undefined/.test(canvas), "a released pin (fx: null) would teleport to the seed");
+});
+
+test("the Host route table still names exactly one positions verb, on the human group", () => {
+  const api = readFileSync(
+    new URL("../../src/Overmind.Host/Api/GraphApi.cs", import.meta.url),
+    "utf8",
+  );
+  assert.match(api, /group\.MapPut\("\/graph\/positions", SavePositions\)/);
+  const mapCalls = [...api.matchAll(/Map(?:Get|Put|Post|Delete|Patch)\("([^"]*positions[^"]*)"/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(
+    mapCalls,
+    ["/graph/positions"],
+    "a second positions verb is a boundary move — the route table owns the proof, this names the source",
+  );
+});

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Overmind.Core;
+using Overmind.Host.Api.Contracts;
 using Overmind.Host.Api.Mapping;
 using Overmind.Infrastructure.Entries;
 using Overmind.Infrastructure.Persistence;
@@ -10,7 +11,8 @@ namespace Overmind.Host.Api;
 // positions and counts — with the filters living in the URL so a reload reproduces the view. It sits outside
 // /api/agent deliberately (spec R8): the field is the owner's own journal context, never an agent verb, and the
 // route-table invariant that derives its cases from the agent prefix stays green because nothing here is a
-// mutation under that prefix.
+// mutation under that prefix. The position write shares the placement: moving the owner's dots is the owner's
+// act, so the PUT lives on this group too and AgentWriteSurfaceCoverageApiTests keeps the agent twin unmapped.
 public static class GraphApi
 {
     public static RouteGroupBuilder MapGraphApi(this IEndpointRouteBuilder routes)
@@ -18,8 +20,23 @@ public static class GraphApi
         var group = routes.MapGroup("/api");
 
         group.MapGet("/graph", ReadGraph);
+        group.MapPut("/graph/positions", SavePositions);
 
         return group;
+    }
+
+    private static async Task<IResult> SavePositions(
+        GraphPositionsRequest? request,
+        GraphNodePositionWriter writer,
+        CancellationToken ct)
+    {
+        if (GraphPositionsParser.Parse(request, out var writes) is { } failure)
+        {
+            return failure;
+        }
+
+        await writer.SaveAsync(writes, ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> ReadGraph(

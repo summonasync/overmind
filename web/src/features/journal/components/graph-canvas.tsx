@@ -50,7 +50,7 @@ import {
   zoomAt,
   type ViewTransform,
 } from "@/features/journal/lib/graph-view";
-import type { GraphField } from "@/features/journal/types";
+import type { GraphField, GraphNode } from "@/features/journal/types";
 
 interface GraphCanvasProps {
   field: GraphField;
@@ -58,6 +58,8 @@ interface GraphCanvasProps {
   reducedMotion: boolean;
   onSelect: (key: string | null) => void;
   onOpenNote: (id: string) => void;
+  onPin?: (position: { kind: GraphNode["kind"]; id: string; x: number; y: number }) => void;
+  onUnpinAll?: () => void;
 }
 
 interface CanvasSize {
@@ -81,6 +83,8 @@ export function GraphCanvas({
   reducedMotion,
   onSelect,
   onOpenNote,
+  onPin,
+  onUnpinAll,
 }: GraphCanvasProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -192,7 +196,10 @@ export function GraphCanvas({
     const pinned = new Set(field.positions.map((position) => nodeKey(position.kind, position.id)));
     for (const node of seeded) {
       const before = previous.get(nodeKey(node.kind, node.id));
-      if (before !== undefined && !pinned.has(nodeKey(node.kind, node.id)) && before.fx === undefined) {
+      // `fx == null` keeps a just-unpinned node at the spot its simulation left it, so "unpin
+      // returns the node to the simulation" means it drifts from where it stands, not that it
+      // teleports back to the seed spiral. A server pin wins below and reseeds it deliberately.
+      if (before !== undefined && !pinned.has(nodeKey(node.kind, node.id)) && before.fx == null) {
         node.x = before.x;
         node.y = before.y;
       }
@@ -316,9 +323,8 @@ export function GraphCanvas({
       if (drag.moved) {
         const node = nodeByKey(drag.key);
         if (node !== null) {
-          // Dragging pins locally: R5's server-side rows are T8's door, so nothing here is
-          // saved, and a reload returns the node to the simulation. The live simulation — if
-          // one is running — reads the same datum, so the field reacts without a second layout.
+          // The live simulation reads the same datum, so the field reacts while dragging without
+          // a second layout; the row is stored when the drag settles, in onPointerUp.
           pinNode(node, toWorldX(x, currentView()), toWorldY(y, currentView()));
           if (simRef.current !== null) {
             reheat(simRef.current.simulation, DRAG_REHEAT);
@@ -352,6 +358,12 @@ export function GraphCanvas({
     event.currentTarget.releasePointerCapture(event.pointerId);
 
     if (drag.moved) {
+      if (drag.key !== null) {
+        const node = nodeByKey(drag.key);
+        if (node !== null) {
+          onPin?.({ kind: node.kind, id: node.id, x: node.x, y: node.y });
+        }
+      }
       return;
     }
     onSelect(pickAt(x, y));
@@ -399,6 +411,9 @@ export function GraphCanvas({
 
   const releasePins = () => {
     releasePinnedNodes(nodesRef.current);
+    if (field.positions.length > 0) {
+      onUnpinAll?.();
+    }
     if (simRef.current !== null) {
       reheat(simRef.current.simulation, RELEASE_REHEAT);
     }
@@ -485,9 +500,10 @@ export function GraphCanvas({
       </div>
 
       <p className="text-xs text-muted">
-        Click a node for its context, double-click a note to open it, drag to move it, scroll to
-        zoom. Arrow keys walk the field while the canvas has focus, Escape clears the selection.
-        The list below holds the same nodes and is the keyboard path R7 asks for.
+        Click a node for its context, double-click a note to open it, drag to move and keep it,
+        scroll to zoom. Arrow keys walk the field while the canvas has focus, Escape clears the
+        selection. Pins are stored on the Host, so every browser and every reload opens the same
+        field; the release control sends them back to the simulation everywhere.
       </p>
     </div>
   );

@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EMPTY_GRAPH_FILTERS,
   parseGraphFilters,
   writeGraphFilters,
 } from "@/features/journal/lib/graph-filters";
 import { paletteForDocument, type ResolvedPalette } from "@/features/journal/lib/graph-palette";
-import { graphQueryOptions } from "@/features/journal/queries";
-import type { GraphViewFilters } from "@/features/journal/types";
+import { graphKeys, graphQueryOptions } from "@/features/journal/queries";
+import { saveGraphPositions } from "@/features/journal/api";
+import type { GraphPositionWrite, GraphViewFilters } from "@/features/journal/types";
 
 // The same posture as the inbox: the URL is the filter store, nothing mirrors it into state, so
 // a reload, a back gesture and a pasted link open the identical field. `replace` because a chip
@@ -56,6 +57,17 @@ export function useGraphField(filters: GraphViewFilters) {
     error: query.error,
     refetch: query.refetch,
   };
+}
+
+// The write half of the pin door: the canvas mutates through here and the field query refetches
+// as the confirmation. No optimistic cache surgery — the read projection already answered "which
+// dots are pinned", and a hand-patched cache is a second place for that truth to drift.
+export function useGraphPinWriter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (positions: GraphPositionWrite[]) => saveGraphPositions(positions),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: graphKeys.all }),
+  });
 }
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";

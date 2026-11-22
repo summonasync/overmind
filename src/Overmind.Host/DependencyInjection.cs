@@ -131,6 +131,7 @@ public static class DependencyInjection
         services.AddScoped<EntryLinkReader>();
         services.AddScoped<EntryLinkTriage>();
         services.AddScoped<GraphReader>();
+        services.AddScoped<GraphNodePositionWriter>();
         services.AddScoped<TriagePromotionService>();
 
         services.AddSingleton(PlatformDirectoryMap.Load());
