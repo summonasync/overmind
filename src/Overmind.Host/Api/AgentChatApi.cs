@@ -137,6 +137,7 @@ public static class AgentChatApi
         [FromQuery] DateTime? before,
         ConversationStore conversations,
         ConversationMessageStore messages,
+        ConversationTurnRegistry turns,
         CancellationToken ct)
     {
         if (await conversations.GetAsync(id, ct) is null)
@@ -145,7 +146,9 @@ public static class AgentChatApi
         }
 
         var page = await messages.ListPageAsync(id, limit, before, ct);
-        return Results.Ok(new ConversationHistoryResponse([.. page.Select(ToMessageResponse)]));
+        return Results.Ok(new ConversationHistoryResponse(
+            [.. page.Select(ToMessageResponse)],
+            TurnActive: turns.Find(id) is not null));
     }
 
     private static async Task<IResult> StreamForHuman(

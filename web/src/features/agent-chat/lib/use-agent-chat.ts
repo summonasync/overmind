@@ -56,6 +56,21 @@ export function useAgentChat({ conversationId, projectId, onConversationCreated 
   const history = useQuery(agentHistoryQueryOptions(conversationId ?? ""));
   const messages: AgentMessage[] = history.data?.items ?? [];
 
+  // A reload mid-generation lands with no live SSE attached: the Host is still producing the
+  // reply and persists it when the turn completes. While the turn is active, keep refetching the
+  // history so the saved reply shows up as soon as it lands (b88c1bae).
+  const turnActive = history.data?.turnActive === true;
+  useEffect(() => {
+    if (!turnActive || conversationId === null) {
+      return;
+    }
+
+    const poll = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: agentChatKeys.history(conversationId) });
+    }, 1500);
+    return () => window.clearInterval(poll);
+  }, [turnActive, conversationId, queryClient]);
+
   const mutateHistory = (targetId: string, update: (items: AgentMessage[]) => AgentMessage[]) => {
     queryClient.setQueryData<AgentHistoryPayload>(agentChatKeys.history(targetId), (current) => ({
       items: update(current?.items ?? []),
