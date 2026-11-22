@@ -1,5 +1,5 @@
 import type { GraphNodeState } from "../types.ts";
-import { nodeColorName, nodeRadius, type GraphSemanticColor } from "./graph-palette.ts";
+import { anchorRadius, nodeColorName, nodeRadius, type GraphSemanticColor } from "./graph-palette.ts";
 import type { LayoutLink, LayoutMode, LayoutNode } from "./graph-layout.ts";
 import { nodeKey } from "./graph-payload.ts";
 import { toScreenX, toScreenY, type ViewTransform } from "./graph-view.ts";
@@ -60,6 +60,10 @@ export interface SceneInput {
   height: number;
   font: string;
   tier: LayoutMode;
+  // Tier 3 only: collapsed cluster anchors, keyed by node key, carrying the member count each
+  // dot stands in for. Presence switches the radius to the anchor scale and the label rule to
+  // "a closed cluster always names itself"; open clusters leave their members to the ladder.
+  anchors?: ReadonlyMap<string, number>;
 }
 
 export function drawScene(ctx: PaintTarget, scene: SceneInput): void {
@@ -109,12 +113,19 @@ function nodeAlpha(scene: SceneInput, key: string): number {
   return scene.neighbours.has(key) ? 1 : HOVER_DIM_ALPHA;
 }
 
+// One radius rule for both paint passes, so a dot never draws at one size and picks or labels
+// at another: collapsed anchors wear the anchor scale, everything else the kind's own.
+function radiusIn(scene: SceneInput, node: LayoutNode): number {
+  const hidden = scene.anchors?.get(keyOf(node));
+  return hidden === undefined ? nodeRadius(node) : anchorRadius(hidden);
+}
+
 function drawNodes(ctx: PaintTarget, scene: SceneInput): void {
   for (const node of scene.nodes) {
     const key = keyOf(node);
     const state = scene.states.get(key) ?? "linked";
     const color = scene.colors[nodeColorName(node)];
-    const radius = Math.max(2, nodeRadius(node) * scene.view.scale);
+    const radius = Math.max(2, radiusIn(scene, node) * scene.view.scale);
     const x = toScreenX(node.x, scene.view);
     const y = toScreenY(node.y, scene.view);
 
@@ -179,6 +190,9 @@ function labelShown(scene: SceneInput, key: string, degree: number): boolean {
   if (key === scene.hoverKey || key === scene.selectedKey) {
     return true;
   }
+  if (scene.anchors?.has(key)) {
+    return true;
+  }
   if (scene.tier === "simulate") {
     return scene.view.scale >= LABEL_SCALE_FLOOR;
   }
@@ -204,7 +218,7 @@ function drawLabels(ctx: PaintTarget, scene: SceneInput): void {
       continue;
     }
 
-    const radius = Math.max(2, nodeRadius(node) * scene.view.scale);
+    const radius = Math.max(2, radiusIn(scene, node) * scene.view.scale);
     ctx.globalAlpha = nodeAlpha(scene, key);
     ctx.fillText(truncateLabel(node.label), toScreenX(node.x, scene.view), toScreenY(node.y, scene.view) + radius + 12);
   }

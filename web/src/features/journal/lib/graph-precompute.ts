@@ -14,13 +14,18 @@ import { nodeKey } from "./graph-payload.ts";
 
 // What crosses the worker boundary: the field parts the settle reads, nothing else. Positions
 // are the server pins — pins stay the only server-side coordinates the ladder inherits, which is
-// the spec's anti-scope restated as a wire shape.
+// the spec's anti-scope restated as a wire shape. seedOrigin moves the seed spiral for tier 3's
+// cluster-expansion settle (members bloom out of their anchor, not the canvas centre); absent,
+// every frame is the centre spiral the tiers above ship.
 export interface PrecomputeRequest {
   nodes: GraphNode[];
   edges: GraphEdge[];
   positions: GraphPosition[];
   width: number;
   height: number;
+  seedOrigin?: { x: number; y: number };
+  centreX?: number;
+  centreY?: number;
 }
 
 interface PreparedField {
@@ -30,7 +35,13 @@ interface PreparedField {
 }
 
 function prepare(request: PrecomputeRequest): PreparedField {
-  const nodes = seedPositions(request.nodes, request.positions, request.width, request.height);
+  const nodes = seedPositions(
+    request.nodes,
+    request.positions,
+    request.width,
+    request.height,
+    request.seedOrigin,
+  );
   const byKey = new Map(nodes.map((node) => [nodeKey(node.kind, node.id), node]));
   for (const position of request.positions) {
     const node = byKey.get(nodeKey(position.kind, position.id));
@@ -44,7 +55,12 @@ function prepare(request: PrecomputeRequest): PreparedField {
   return {
     nodes,
     links: seedLayoutLinks(request.edges, nodes),
-    forces: { width: request.width, height: request.height },
+    forces: {
+      width: request.width,
+      height: request.height,
+      centreX: request.centreX,
+      centreY: request.centreY,
+    },
   };
 }
 
@@ -117,8 +133,9 @@ async function settleInSlices(
 // bundler can emit the worker chunk, and re-run the build probe in the same commit.
 export async function precomputeLayout(
   field: GraphField,
-  forces: { width: number; height: number },
+  forces: { width: number; height: number; centreX?: number; centreY?: number },
   isAbandoned: () => boolean = () => false,
+  seedOrigin?: { x: number; y: number },
 ): Promise<LayoutNode[]> {
   const request: PrecomputeRequest = {
     nodes: field.nodes,
@@ -126,6 +143,9 @@ export async function precomputeLayout(
     positions: field.positions,
     width: forces.width,
     height: forces.height,
+    centreX: forces.centreX,
+    centreY: forces.centreY,
+    seedOrigin,
   };
   return settleInSlices(request, isAbandoned);
 }

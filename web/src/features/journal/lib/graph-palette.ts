@@ -93,6 +93,14 @@ export function nodeRadius(node: GraphNode): number {
   return NODE_RADIUS[node.kind];
 }
 
+// Tier 3 sizes a collapsed cluster by what it stands in for, on the same token-driven terms as
+// the base radii: the growth follows the hidden count's square root — twice the nodes read
+// visibly wider without letting a thousand-member project swallow the frame — and the cap keeps
+// even the biggest project a dot among dots.
+export function anchorRadius(hiddenCount: number): number {
+  return Math.min(24, NODE_RADIUS.project + Math.sqrt(Math.max(hiddenCount, 0)) * 1.6);
+}
+
 // Which token paints which dot, in one place: the canvas, the legend swatches and the list
 // markers all ask here, so the legend cannot describe a colour the field does not wear. The
 // legend counts its own rows off this function rather than restating the predicate, which is
