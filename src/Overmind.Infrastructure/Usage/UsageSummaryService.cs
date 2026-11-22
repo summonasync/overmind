@@ -118,7 +118,9 @@ public sealed class UsageSummaryService
         {
             var inside = span.ClaimedAt <= ts &&
                          (span.ReleasedAt is null || ts < span.ReleasedAt);
-            if (inside && (match is null || span.ClaimedAt > match.ClaimedAt))
+            if (inside && (match is null ||
+                           span.ClaimedAt > match.ClaimedAt ||
+                           (span.ClaimedAt == match.ClaimedAt && span.Id.CompareTo(match.Id) > 0)))
             {
                 match = span;
             }
