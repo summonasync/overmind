@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Overmind.Core;
 using Overmind.Host.Api.Contracts;
 
@@ -33,4 +34,37 @@ public static class KitMapper
     {
         return new DriftItemResponse(item.Platform, item.RelativePath, item.Kind);
     }
+
+    public static GlobalDeployReportResponse ToResponse(GlobalDeployReport report)
+    {
+        return new GlobalDeployReportResponse(
+            report.KitId,
+            report.Agent,
+            report.StartedAt,
+            report.FinishedAt,
+            report.Entries.Select(e => new GlobalDeployEntryResponse(
+                Camel(e.Kind), report.Agent, e.Path, Camel(e.Outcome), e.Reason)).ToArray(),
+            report.Warnings,
+            report.Success);
+    }
+
+    public static GlobalKitStateItemResponse ToResponse(
+        GlobalKitStateItem item, IReadOnlyDictionary<AgentPlatform, string> agentNames)
+    {
+        return new GlobalKitStateItemResponse(
+            item.KitId,
+            item.KitName,
+            item.Mandatory,
+            AgentName(item.Platform, agentNames),
+            item.State,
+            item.Paths,
+            item.Drifts.Select(d => new GlobalDriftItemResponse(
+                d.KitId, AgentName(d.Platform, agentNames), d.Path, Camel(d.Kind))).ToArray());
+    }
+
+    private static string AgentName(AgentPlatform platform, IReadOnlyDictionary<AgentPlatform, string> agentNames) =>
+        agentNames.GetValueOrDefault(platform, Camel(platform));
+
+    private static string Camel(Enum value) =>
+        JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
 }
