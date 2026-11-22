@@ -122,9 +122,19 @@ public sealed class OvermindApiClient
         {
             response = await send();
         }
-        catch (Exception ex) when (ex is HttpRequestException || ex is OperationCanceledException && !ct.IsCancellationRequested)
+        catch (HttpRequestException ex)
         {
             throw new ApiUnreachableException($"{RetryableMarker} overmind API is unreachable ({operation}): {ex.Message}");
+        }
+        catch (Exception ex) when (ex is OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            // A client timeout is a different failure class from an unreachable host: the server
+            // may have committed the mutation after the budget elapsed (2d5912f5 measured a
+            // successful 201 at ~10.03s against this 10s budget). The message must never invite
+            // a blind retry — that turned one review into five duplicate rows.
+            throw new ApiUnreachableException(
+                $"client timeout: the request did not come back within the adapter budget ({operation}). " +
+                "The server MAY have committed — read the state back before retrying; a blind retry can duplicate the row.");
         }
 
         try
