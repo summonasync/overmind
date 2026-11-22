@@ -23,6 +23,15 @@ public sealed class EntryTitleBackfillService(
             await using var scope = scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<OvermindDbContext>();
 
+            // Hosts built without the Program.cs migration step can point at a store the migration
+            // has not reached yet; the fold pass is meaningless there and must not fail the boot.
+            if (!await HasColumnAsync(db, "ContextEntries", "TitleNormalized", cancellationToken))
+            {
+                logger.LogWarning(
+                    "TitleNormalized is missing on ContextEntries; migrations have not reached this store, skipping the backfill");
+                return;
+            }
+
             var entries = await db.ContextEntries
                 .Select(entry => new { entry.Id, entry.Title, entry.TitleNormalized })
                 .ToListAsync(cancellationToken);
@@ -55,4 +64,28 @@ public sealed class EntryTitleBackfillService(
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private static async Task<bool> HasColumnAsync(
+        OvermindDbContext db, string table, string column, CancellationToken ct)
+    {
+        var connection = (Microsoft.Data.Sqlite.SqliteConnection)db.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await connection.OpenAsync(ct);
+        }
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({table})";
+        var reader = await command.ExecuteReaderAsync(ct);
+        await using var borrowed = reader;
+        while (await reader.ReadAsync(ct))
+        {
+            if (reader.GetString(1) == column)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
