@@ -10,10 +10,10 @@ using Xunit;
 
 namespace Overmind.Api.Tests;
 
-// The search ceiling on the graph door, pinned rather than left to surprise: the projection matches with SQLite's
-// LIKE, which folds case for ASCII letters only. An owner whose corpus is Cyrillic gets case-insensitive hits on
-// Latin titles and case-SENSITIVE hits on Cyrillic ones — so the door documents the limit instead of promising a
-// normalisation it cannot deliver, and these tests hold the exact behaviour to it.
+// The graph door folds search case for every corpus: the term is lowered in C# (invariant lower covers
+// Cyrillic where SQLite's LIKE only folds ASCII) and matched against normalized title columns written on
+// every save and re-folded by the startup backfill. These tests hold the promise — a Cyrillic term finds
+// its title in either casing, wildcards stay literal, projects answer through their normalized name.
 public sealed class GraphSearchCaseApiTests : IAsyncLifetime
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -23,6 +23,8 @@ public sealed class GraphSearchCaseApiTests : IAsyncLifetime
 
     private Guid _cyrUpper, _cyrLower;
     private Guid _asciiUpper, _asciiLower;
+    private Guid _percent;
+    private Guid _projectId;
 
     public GraphSearchCaseApiTests() => _client = _factory.CreateClient();
 
@@ -33,11 +35,13 @@ public sealed class GraphSearchCaseApiTests : IAsyncLifetime
 
         var project = Project.Create("searchcase", "/tmp/graph/searchcase");
         db.Projects.Add(project);
+        _projectId = project.Id;
 
         _cyrUpper = Add(db, project.Id, "Заметка Один", "cyrillic title, capital first letter");
         _cyrLower = Add(db, project.Id, "заметка два", "cyrillic title, lowercase first letter");
         _asciiUpper = Add(db, project.Id, "Relay Plan", "ascii title, capital");
         _asciiLower = Add(db, project.Id, "relay plan", "ascii title, lowercase");
+        _percent = Add(db, project.Id, "100% надёжно", "percent-sign title");
         await db.SaveChangesAsync();
     }
 
@@ -60,19 +64,35 @@ public sealed class GraphSearchCaseApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Search_Cyrillic_IsCaseSensitive_OnlyTheExactCaseMatches()
+    public async Task Search_Cyrillic_IsCaseInsensitive_BothCasesMatch()
     {
-        // The documented ceiling: a Cyrillic term in the wrong case returns nothing, because SQLite LIKE does not
-        // fold non-ASCII. Searching the lowercase form matches only the lowercase title, not the capitalised one.
         var lower = await Search("заметка");
-        lower.ShouldBe([_cyrLower],
-            customMessage: "Cyrillic search is case-sensitive; the capitalised title does not answer");
+        lower.ShouldBe([_cyrUpper, _cyrLower], ignoreOrder: true,
+            customMessage: "the C# fold covers Cyrillic; both titles answer either casing");
 
         var upper = await Search("Заметка");
-        upper.ShouldBe([_cyrUpper]);
+        upper.ShouldBe(lower);
+    }
 
-        lower.ShouldNotContain(_cyrUpper);
-        upper.ShouldNotContain(_cyrLower);
+    [Fact]
+    public async Task Search_Wildcards_MatchLiterally()
+    {
+        var hits = await Search("%");
+
+        hits.ShouldBe([_percent],
+            customMessage: "a bare % finds the percent-sign title, not everything");
+    }
+
+    [Fact]
+    public async Task Search_Projects_AnswerThroughTheNormalizedName()
+    {
+        var response = await _client.GetAsync($"/api/graph?search={Uri.EscapeDataString("SEARCHCASE")}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+
+        var payload = await response.Content.ReadFromJsonAsync<GraphEnvelope>(JsonOptions);
+        payload!.Nodes.ShouldContain(node => node.Kind == "project" && node.Id == _projectId,
+            customMessage: "the project answers its name in any casing through NameNormalized");
     }
 
     private async Task<List<Guid>> Search(string term)
