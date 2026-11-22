@@ -14,14 +14,17 @@ import {
 import { Button } from "@/shared/ui/button";
 import {
   ceilingMessage,
+  computingLayoutNotice,
   GRAPH_CONTROL_LABELS,
   graphAriaLabel,
+  precomputedNotice,
   reducedMotionMessage,
+  tierName,
   unsupportedRowsNotice,
 } from "@/features/journal/lib/graph-copy";
 import {
   buildNeighbourhoods,
-  isOverCeiling,
+  layoutModeFor,
   pinNode,
   reheat,
   releasePinnedNodes,
@@ -35,6 +38,7 @@ import {
   type LayoutNode,
   type Neighbourhood,
 } from "@/features/journal/lib/graph-layout";
+import { precomputeLayout, preserveHeldNodes } from "@/features/journal/lib/graph-precompute";
 import { nodeRadius } from "@/features/journal/lib/graph-palette";
 import { drawScene } from "@/features/journal/lib/graph-paint";
 import { graphNodeStates, nodeKey } from "@/features/journal/lib/graph-payload";
@@ -104,9 +108,12 @@ export function GraphCanvas({
 
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [precomputing, setPrecomputing] = useState(false);
   const theme = useGraphTheme();
 
-  const overCeiling = isOverCeiling(field.nodes.length);
+  // The ladder rung this field stands on. Tier 2's settle and the past-ceiling static frame
+  // hang off it; tier 1 keeps the frame clock below untouched.
+  const tier = layoutModeFor(field.nodes.length);
   const states = useMemo(() => graphNodeStates(field.nodes, field.edges), [field]);
 
   useEffect(() => {
@@ -173,12 +180,21 @@ export function GraphCanvas({
       width: size.width,
       height: size.height,
       font: `12px ${theme.font}`,
+      tier,
     });
 
     if (scaleRef.current !== null) {
       scaleRef.current.textContent = scalePercent(view.scale);
     }
-  }, [currentView, hoverKey, selectedKey, size, states, theme]);
+  }, [currentView, hoverKey, selectedKey, size, states, theme, tier]);
+
+  // The tier-2 settle lands from outside the render cycle, so it redraws through this ref
+  // instead of listing draw in its effect's dependencies: draw changes identity on every hover,
+  // and a hover must never restart a settle that takes hundreds of milliseconds of slices.
+  const drawRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    drawRef.current = draw;
+  }, [draw]);
 
   // Rebuilding the field keeps whatever coordinates the owner already sees, so a refetch on the
   // live-sync beat does not re-scatter the map under their cursor. Server pins still win.
@@ -212,23 +228,20 @@ export function GraphCanvas({
     draw();
   }, [draw, field, size]);
 
-  // The frame clock, in three shapes: nothing animates over the ceiling, a single synchronous
-  // settle under reduced motion, and one tick per frame otherwise. Each one stops itself.
+  // The tier-1 frame clock, in its two shapes: a single synchronous settle under reduced motion,
+  // and one tick per frame otherwise. Each one stops itself. The ladder's other rungs live
+  // elsewhere on purpose — tier 2's settle is the effect below it, and past the precompute
+  // ceiling the seed frame the rebuild effect painted is the whole show.
   //
   // The field object restarts this on purpose: the live-sync refetch hands over a new identity on
   // a beat, and a fresh layout is what makes the new rows settle. REHEAT_ALPHA is why that settle
   // nudges the field instead of shaking it under the owner's cursor.
   useEffect(() => {
-    if (size.width === 0) {
+    if (size.width === 0 || tier !== "simulate") {
       return;
     }
 
     const forces = { width: size.width, height: size.height };
-
-    if (overCeiling) {
-      draw();
-      return;
-    }
 
     if (reducedMotion) {
       settleWithinBudget(nodesRef.current, linksRef.current, forces);
@@ -261,7 +274,53 @@ export function GraphCanvas({
         frameRef.current = null;
       }
     };
-  }, [draw, field, overCeiling, reducedMotion, size]);
+  }, [draw, field, reducedMotion, size, tier]);
+
+  // Tier 2 has no clock: the seed frame is already on the canvas, this kicks the one-shot settle
+  // for the field's identity and swaps the landed map in whenever the slices finish. Nothing
+  // animates in between — every other frame is an event-driven redraw. The kick deliberately
+  // reads draw through the ref instead of listing it here: draw changes identity on hover, and
+  // restarting a multi-hundred-millisecond settle because the owner moved the cursor across a
+  // dot would be a self-inflicted freeze. A drag that started on the seed survives the swap via
+  // preserveHeldNodes; a field identity that changed mid-settle is dropped by the cleanup.
+  useEffect(() => {
+    if (size.width === 0 || size.height === 0 || tier !== "precomputed") {
+      return;
+    }
+
+    const forces = { width: size.width, height: size.height };
+    let live = true;
+    // Queued rather than called in the effect body: the settle's first slice runs synchronously
+    // below, and a synchronous setState here would cascade a render out of it. A microtask
+    // still fires before the browser paints, so the pending notice appears without a flash of
+    // the settled line it replaces.
+    queueMicrotask(() => {
+      if (live) {
+        setPrecomputing(true);
+      }
+    });
+    void precomputeLayout(field, forces)
+      .then((landed) => {
+        if (!live) {
+          return;
+        }
+        preserveHeldNodes(landed, nodesRef.current);
+        nodesRef.current = landed;
+        linksRef.current = seedLayoutLinks(field.edges, landed);
+        setPrecomputing(false);
+        drawRef.current();
+      })
+      .catch(() => {
+        if (live) {
+          // The seed sketch stays on the canvas — a usable field beats a blank one.
+          setPrecomputing(false);
+        }
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [field, size, tier]);
 
   useEffect(() => {
     draw();
@@ -326,6 +385,12 @@ export function GraphCanvas({
           // The live simulation reads the same datum, so the field reacts while dragging without
           // a second layout; the row is stored when the drag settles, in onPointerUp.
           pinNode(node, toWorldX(x, currentView()), toWorldY(y, currentView()));
+          if (tier !== "simulate") {
+            // A tier with no simulation has no tick to snap the datum onto its hold, so the
+            // drag moves x/y itself — otherwise the dot would ignore the pointer until release.
+            node.x = node.fx ?? node.x;
+            node.y = node.fy ?? node.y;
+          }
           if (simRef.current !== null) {
             reheat(simRef.current.simulation, DRAG_REHEAT);
           }
@@ -462,13 +527,21 @@ export function GraphCanvas({
         </output>
       </div>
 
-      {overCeiling ? (
+      {tier === "clustered" ? (
         <p className="text-sm text-warning" role="status">
           {ceilingMessage(field.nodes.length, SIM_CEILING)}
         </p>
       ) : null}
 
-      {reducedMotion && !overCeiling ? (
+      {tier === "precomputed" ? (
+        <p className="text-xs text-muted" role="status">
+          {precomputing
+            ? computingLayoutNotice(field.nodes.length)
+            : precomputedNotice(field.nodes.length, SIM_CEILING)}
+        </p>
+      ) : null}
+
+      {reducedMotion && tier === "simulate" ? (
         <p className="text-xs text-muted" role="status">
           {reducedMotionMessage(field.nodes.length)}
         </p>
@@ -487,7 +560,7 @@ export function GraphCanvas({
           ref={canvasRef}
           role="img"
           tabIndex={0}
-          aria-label={graphAriaLabel(field.counts)}
+          aria-label={graphAriaLabel(field.counts, tierName(tier))}
           className="block h-full w-full cursor-crosshair touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -503,7 +576,10 @@ export function GraphCanvas({
         Click a node for its context, double-click a note to open it, drag to move and keep it,
         scroll to zoom. Arrow keys walk the field while the canvas has focus, Escape clears the
         selection. Pins are stored on the Host, so every browser and every reload opens the same
-        field; the release control sends them back to the simulation everywhere.
+        field;{" "}
+        {tier === "simulate"
+          ? "the release control sends them back to the simulation everywhere."
+          : "the release control clears them here and on the Host, and this tier leaves every node where it stands."}
       </p>
     </div>
   );
