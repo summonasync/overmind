@@ -100,8 +100,15 @@ public static class PlanningMapper
             lag?.PendingMutations ?? 0,
             lag?.LastAttemptAt,
             lag?.LastSuccessAt,
-            lag?.Stale ?? false);
+            lag?.Stale ?? false,
+            IndependentTasks(artifacts));
     }
+
+    private static int IndependentTasks(IReadOnlyList<PlanningArtifact> artifacts) =>
+        artifacts.Count(a =>
+            a.Kind == PlanningArtifactKind.Task &&
+            a.Independent &&
+            a.Status is not PlanningArtifactStatus.Done);
 
     public static OpenDirectiveResponse[] ToOpenDirectives(
         IEnumerable<PlanningDirective> directives) =>
@@ -400,7 +407,8 @@ public static class PlanningMapper
             blocked,
             blockedBy,
             Pointers(artifact),
-            ValidationProofVoided: artifact.ValidationProofVoided);
+            ValidationProofVoided: artifact.ValidationProofVoided,
+            Independent: artifact.Independent ? true : null);
     }
 
     private static PlanningArtifactPointerResponse[] Pointers(PlanningArtifact artifact) =>

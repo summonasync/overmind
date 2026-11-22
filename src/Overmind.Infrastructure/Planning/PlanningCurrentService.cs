@@ -44,20 +44,13 @@ public sealed class PlanningCurrentService
             feature.Slug, feature.Title, feature.Status,
             await _directives.ListOpenAsync(feature.Id, ct));
 
-        var openBlockers = await _dependencies.OpenBlockersAsync(projectId, slug, ct);
-        if (openBlockers.Count > 0)
-        {
-            return new PlanningCurrentResult(
-                "stop", currentFeature, null,
-                $"STOP: feature '{feature.Slug}' is blocked by unclosed features: {BlockerList(openBlockers)}. " +
-                "Reads stay open; task issuance stops until every blocker closes (done or review).");
-        }
-
         var gated = await _policy.ResolveValidationGateAsync(projectId, ct);
 
         var spec = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Spec);
         var plan = feature.Artifacts.FirstOrDefault(a => a.Kind == PlanningArtifactKind.Plan);
 
+        // Validation gates run before the blocker branch: an independent task must not smuggle
+        // work onto a feature whose spec or plan never passed the human door.
         if (gated && (spec is null || spec.Status == PlanningArtifactStatus.Draft))
         {
             return new PlanningCurrentResult(
@@ -73,6 +66,29 @@ public sealed class PlanningCurrentService
                 "stop", currentFeature, null,
                 $"STOP: plan awaits human validation — it cannot be approved through MCP. " +
                 $"Send overmind_notify(kind=approval, featureSlug={feature.Slug}) and wait for the human's reply — validation is never agent-approvable.");
+        }
+
+        var openBlockers = await _dependencies.OpenBlockersAsync(projectId, slug, ct);
+        if (openBlockers.Count > 0)
+        {
+            var bypass = await IndependentHeadAsync(feature, ct);
+            if (bypass is not null)
+            {
+                return new PlanningCurrentResult(
+                    "task",
+                    currentFeature,
+                    bypass,
+                    $"Issued despite the feature blocker ({BlockerList(openBlockers)}): " +
+                    "the task is marked independent — the author opted in at upsert. " +
+                    "The feature itself stays blocked; task-level blockedBy edges keep their force.",
+                    SpecPlanWarnings(feature));
+            }
+
+            return new PlanningCurrentResult(
+                "stop", currentFeature, null,
+                $"STOP: feature '{feature.Slug}' is blocked by unclosed features: {BlockerList(openBlockers)}. " +
+                "Reads stay open; task issuance stops until every blocker closes (done or review). " +
+                "Tasks marked independent at upsert still issue while the blocker holds.");
         }
 
         var tasks = feature.Artifacts
@@ -141,6 +157,32 @@ public sealed class PlanningCurrentService
             blocked,
             "The next task is blocked.",
             SpecPlanWarnings(feature));
+    }
+
+    // The bypass head: first actionable task by the ordinary rules (todo/in-progress, task-level
+    // edges respected); it issues only when the author marked it independent. Null under any
+    // other shape — the caller keeps the STOP.
+    private async Task<PlanningArtifact?> IndependentHeadAsync(
+        PlanningFeature feature, CancellationToken ct)
+    {
+        var candidates = feature.Artifacts
+            .Where(a => a.Kind == PlanningArtifactKind.Task)
+            .Where(a => a.Status is PlanningArtifactStatus.Todo or PlanningArtifactStatus.InProgress)
+            .OrderBy(a => a.Order)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var blockedStates = await _taskDependencies.BlockedOrdersAsync(feature.Id, ct);
+        var blockedOrders = blockedStates
+            .Where(s => s.Blocked)
+            .Select(s => s.Order)
+            .ToHashSet();
+
+        var head = candidates.FirstOrDefault(t => !blockedOrders.Contains(t.Order));
+        return head is { Independent: true } ? head : null;
     }
 
     private static string UnclosedChain(

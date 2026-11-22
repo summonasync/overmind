@@ -62,7 +62,8 @@ public sealed record PlanningQueueItem(
     int PendingMutations = 0,
     DateTime? LastAttemptAt = null,
     DateTime? LastSuccessAt = null,
-    bool Stale = false);
+    bool Stale = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int IndependentTasks = 0);
 
 public sealed record PlanningTaskCounts(int Todo, int InProgress, int Review, int Done, int Blocked);
 
@@ -267,7 +268,8 @@ public sealed record CreatePlanningArtifactRequest(
     string? Brief = null,
     string? Source = null,
     IReadOnlyList<int>? BlockedBy = null,
-    bool DryRun = false);
+    bool DryRun = false,
+    bool? Independent = null);
 
 public sealed record UpdatePlanningArtifactRequest(
     string Body,
@@ -281,7 +283,8 @@ public sealed record PlanningTaskUpsertRequest(
     PlanningReviewLevel? Review = null,
     string? LogNote = null,
     string? Brief = null,
-    IReadOnlyList<int>? BlockedBy = null);
+    IReadOnlyList<int>? BlockedBy = null,
+    bool? Independent = null);
 
 public sealed record CreatePlanningTasksRequest(
     PlanningTaskUpsertRequest[] Tasks, string? Source = null, bool DryRun = false);
@@ -430,7 +433,8 @@ public sealed record PlanningArtifactResponse(
     PlanningArtifactPointerResponse[] Pointers = null!,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DryRun = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ValidationProofVoided = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ValidationProofVoidCause = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Independent = null);
 
 public sealed record PlanningLogLineResponse(string? Date, string Text);
 

@@ -20,7 +20,8 @@ internal static class PlanningFieldProjection
     internal static readonly string[] BoardFields =
     [
         "slug", "number", "title", "priority", "status", "queuePosition", "specStatus", "planStatus",
-        "taskDone", "taskTotal", "taskCounts", "readiness", "blockedBy", "isBlocked", "phase", "briefExcerpt",
+        "taskDone", "taskTotal", "taskCounts", "independentTasks", "readiness", "blockedBy", "isBlocked",
+        "phase", "briefExcerpt",
         "claimedByAlias", "claimedByVendor", "claimedAt", "claimState", "lane", "createdAt", "updatedAt"
     ];
 

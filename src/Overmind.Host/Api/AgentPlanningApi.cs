@@ -676,7 +676,7 @@ public static class AgentPlanningApi
             }
 
             mapped[i] = new PlanningTaskUpsert(
-                task.Body, task.Order, task.Review, task.LogNote, task.Brief, task.BlockedBy);
+                task.Body, task.Order, task.Review, task.LogNote, task.Brief, task.BlockedBy, task.Independent);
         }
 
         return mapped;

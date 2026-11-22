@@ -8,4 +8,5 @@ public sealed record PlanningTaskUpsert(
     PlanningReviewLevel? Review = null,
     string? LogNote = null,
     string? Brief = null,
-    IReadOnlyList<int>? BlockedBy = null);
+    IReadOnlyList<int>? BlockedBy = null,
+    bool? Independent = null);
