@@ -130,9 +130,12 @@ export function GraphCanvas({
   // boundary, the same contract the tier-2 kick's abandon token runs on.
   const expansionGenRef = useRef(0);
   // The bloom is launched from an event handler, so it has no effect cleanup to die with the
-  // canvas — this flag is its unmount guard, symmetric with the kick's `live`.
+  // canvas — this flag is its unmount guard, symmetric with the kick's `live`. The body resets
+  // it because strict mode runs mount → cleanup → mount in dev: a flag only the cleanup writes
+  // would leave the first real session's blooms dead.
   const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
@@ -271,11 +274,14 @@ export function GraphCanvas({
 
   // Both tier-3 settles share one notice slot, so the slot counts the settles in flight rather
   // than flipping a boolean an overlapping settle would clear early. The kind rides along: a
-  // notice that says "nodes" over a 51-anchor settle would read as the whole field.
+  // notice that says "nodes" over a 51-anchor settle would read as the whole field. A kick
+  // clears the failure flag too — an anchor retry that lands must not keep the failure line a
+  // failed predecessor wrote.
   const beginSettle = useCallback((count: number, what: "anchors" | "bloom") => {
     settlesRef.current += 1;
     setLayoutCount(count);
     setLayoutWhat(what);
+    setSettleFailed(false);
     setPrecomputing(true);
   }, []);
 
