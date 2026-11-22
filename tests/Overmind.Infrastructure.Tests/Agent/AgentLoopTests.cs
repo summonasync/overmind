@@ -44,6 +44,46 @@ public sealed class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task RefusedToolCall_PersistsBoundedRefusalExcerptInTheTrail()
+    {
+        var refusal = JsonSerializer.SerializeToElement(new
+        {
+            error = "'planning_task_queue' is project-scoped: this conversation belongs to project 'a', " +
+                    "but the projectId this call carries names project 'b'. " + new string('x', 1400),
+            code = "projectScopeMismatch"
+        }, AgentLoopbackClient.JsonOptions);
+        _tools.InvokeAsync(
+                "planning_task_queue",
+                Arg.Any<JsonElement>(),
+                Arg.Any<AgentToolInvocation>(),
+                Arg.Any<CancellationToken>())
+            .Returns(refusal);
+
+        var client = new FakeAgentChatClient(
+        [
+            FakeAgentChatClient.ToolCallUpdate("c1", "planning_task_queue", """{"projectId":"b"}"""),
+            FakeAgentChatClient.UsageUpdate(90)
+        ],
+        [
+            FakeAgentChatClient.TextUpdate("Scope refused — stopping."),
+            FakeAgentChatClient.UsageUpdate(30)
+        ]);
+        var loop = CreateLoop(client, perTurnMaxTokens: 1_000);
+
+        await CollectAsync(loop);
+
+        var trail = await _messages.ListPageAsync(_conversation.Id, ct: CancellationToken.None);
+        var refusalRows = trail.Where(row =>
+            row.Role == ConversationMessage.ToolRole && row.Content.Contains("refusal")).ToList();
+        refusalRows.Count.ShouldBe(1);
+        refusalRows[0].Content.ShouldContain("projectScopeMismatch");
+        refusalRows[0].Content.ShouldContain("is project-scoped");
+        refusalRows[0].Content.Length.ShouldBeLessThan(1400);
+        trail.Count(row => row.Role == ConversationMessage.ToolRole &&
+            row.Content.Contains("planning_task_queue")).ShouldBe(2);
+    }
+
+    [Fact]
     public async Task ToolCallRoundTrip_DispatchesStreamsResultAndFinishes()
     {
         var client = new FakeAgentChatClient(

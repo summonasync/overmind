@@ -50,6 +50,12 @@ internal static class ClaimSpanLedger
         var open = await db.FeatureClaimSpans
             .FirstOrDefaultAsync(s => s.FeatureId == feature.Id && s.ReleasedAt == null, ct);
 
+        // The session-id skip is an invariant guard, not a reachable branch: the claim door closes
+        // the open span whenever the claim leaves the session, so a surviving open span whose
+        // session differs from the feature's current claim session cannot be produced by any
+        // write path (review-235-05 NOTE-1). The skip keeps the stale-alias span visible instead
+        // of renaming it forward under the new alias — firing this branch means ledger surgery,
+        // which must be deliberate, not a side effect of a rename.
         if (open is null || open.SessionId != feature.ClaimSessionId)
         {
             return;
@@ -57,6 +63,7 @@ internal static class ClaimSpanLedger
 
         open.Close(now);
         db.FeatureClaimSpans.Add(FeatureClaimSpan.Open(
-            feature.ProjectId, feature.Id, alias, vendor, open.SessionId, open.ClaimedAt, open.ByHuman));
+            feature.ProjectId, feature.Id, alias, vendor, open.SessionId, open.ClaimedAt,
+            feature.ClaimedByHuman));
     }
 }
