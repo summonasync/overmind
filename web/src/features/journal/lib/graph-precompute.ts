@@ -56,10 +56,16 @@ export function precomputedPositions(request: PrecomputeRequest): LayoutNode[] {
   return nodes;
 }
 
-// Ticks per macrotask slice. The size cannot move the result — every tick reads the state the
-// previous one wrote, in the order the worker runs them — which is why the fallback and the
-// worker land on identical frames for the same field.
-const FALLBACK_TICKS_PER_SLICE = 8;
+// Slices are budgeted by time, not by count: one settle tick costs ~10 ms at 1500 nodes and
+// ~63 ms at 5000 on the review box, so a fixed tick count would block the main thread for
+// hundreds of milliseconds on big fields while yielding pointlessly on small ones. The budget
+// decides only where the macrotask boundaries fall — every tick still runs, in the settle's
+// order — which is why the frames stay identical to the worker entry's synchronous settle
+// (test-pinned). A slice ends after ~50 ms of work or 8 ticks, whichever comes first, so the
+// worst slice overshoots the budget by one long tick; the tick ceiling keeps small fields from
+// spending their whole settle on yields.
+const SLICE_TIME_BUDGET_MS = 50;
+const SLICE_TICK_CEILING = 8;
 
 function yieldToMain(): Promise<void> {
   return new Promise((resolve) => {
@@ -67,16 +73,23 @@ function yieldToMain(): Promise<void> {
   });
 }
 
-// The chunked fallback: the same bounded ladder, sliced so the main thread can paint between
+// The chunked transport: the same bounded ladder, sliced so the main thread can paint between
 // slices instead of freezing for the whole settle.
 async function settleInSlices(request: PrecomputeRequest): Promise<LayoutNode[]> {
   const { nodes, links, forces } = prepare(request);
   const handle = startForceLayout(nodes, links, forces);
   const ticks = settleTicksFor(nodes.length);
-  for (let done = 0; done < ticks; done += FALLBACK_TICKS_PER_SLICE) {
-    const slice = Math.min(FALLBACK_TICKS_PER_SLICE, ticks - done);
-    for (let tick = 0; tick < slice; tick += 1) {
+  let done = 0;
+  while (done < ticks) {
+    const sliceStart = performance.now();
+    let sliceTicks = 0;
+    while (done < ticks && sliceTicks < SLICE_TICK_CEILING) {
       handle.simulation.tick();
+      done += 1;
+      sliceTicks += 1;
+      if (performance.now() - sliceStart >= SLICE_TIME_BUDGET_MS) {
+        break;
+      }
     }
     await yieldToMain();
   }
