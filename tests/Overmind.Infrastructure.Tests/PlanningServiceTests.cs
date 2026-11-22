@@ -25,7 +25,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     {
         _context = _db.CreateContext();
         _materializer = Substitute.For<IPlanningMaterializer>();
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new PlanningMaterializationReport(
                 Guid.Empty, PlanningMaterialization.Off, [], [], []));
         _materializer.ClearAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
@@ -1164,7 +1164,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             .Count(l => l.Text == "artifact created → ready")
             .ShouldBe(1);
 
-        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -1502,7 +1502,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
             .ShouldNotContain(l => l.Text == "artifact created → ready");
 
         await _materializer.DidNotReceive().SyncAsync(
-            Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     private sealed class CompetingWriterInterceptor(Func<bool> armed, Action compete) : SaveChangesInterceptor
@@ -2292,7 +2292,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
     [Fact]
     public async Task SyncAsync_Throwing_MutationStillSucceeds()
     {
-        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        _materializer.SyncAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(MaterializationException.IoFailure("/tmp/test", new System.IO.IOException("disk full")));
 
         var service = CreateFeatureService();
@@ -3592,7 +3592,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         snapshot.Version.ShouldBe(1);
         snapshot.Body.ShouldContain("<goal>\nold goal\n</goal>");
 
-        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -3684,7 +3684,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         var snapshot = await _context.PlanningArtifactVersions.SingleAsync(v => v.ArtifactId == artifact.Id);
         snapshot.Body.ShouldContain("old scope");
 
-        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _materializer.Received(1).SyncAsync(_projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -4727,7 +4727,7 @@ public sealed class PlanningServiceTests : IDisposable, IAsyncLifetime
         PlanningLog.Parse(reloaded.Body).ShouldBeEmpty();
 
         await _materializer.DidNotReceive().SyncAsync(
-            _projectId, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            _projectId, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -330,4 +330,65 @@ public class PlanningSectionCanonicalizerTests
         PlanningSectionCanonicalizer.Canonicalize("<note>x</note><goal>g</goal>")
             .ShouldBe("<note>\nx\n</note>\n<goal>\ng\n</goal>");
     }
+
+    // The measured 5b846b1a repro: authored task bodies whose closing tags are glued to the
+    // last content line. The anchored-close parser misses those sections, the task skeleton
+    // appends empty (none) tail copies, and last-anchored-pair resolution serves the empty
+    // copies — AC ticks 400 and acTotal reads 0.
+    [Fact]
+    public void Canonicalize_GluedClosers_HealOntoTheirOwnLines()
+    {
+        var body = "<goal>\nGive the product one numeric grammar.</goal>\n\n<scope>\n- line one\n</scope>\n\n<anti-scope>\nNo doors here.</anti-scope>\n";
+
+        var healed = PlanningSectionCanonicalizer.Canonicalize(body);
+
+        healed.ShouldBe(
+            "<goal>\nGive the product one numeric grammar.\n</goal>\n\n<scope>\n- line one\n</scope>\n\n<anti-scope>\nNo doors here.\n</anti-scope>\n");
+        PlanningSections.TryFind("goal", healed, out _).ShouldBeTrue();
+        PlanningSections.TryFind("scope", healed, out _).ShouldBeTrue();
+        PlanningSections.TryFind("anti-scope", healed, out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Canonicalize_GluedClosers_HealedBodyIsIdempotent()
+    {
+        var body = "<acceptance-criteria>\n- [ ] build green\n- [ ] tests green</acceptance-criteria>\n";
+
+        var healed = PlanningSectionCanonicalizer.Canonicalize(body);
+
+        healed.ShouldBe("<acceptance-criteria>\n- [ ] build green\n- [ ] tests green\n</acceptance-criteria>\n");
+        PlanningSectionCanonicalizer.Canonicalize(healed).ShouldBe(healed);
+    }
+
+    [Fact]
+    public void Canonicalize_GluedCloserInsideFence_StaysRaw()
+    {
+        var body = "<goal>\nopen\n```\nnot a section</goal>\n```\n</goal>\n";
+
+        var healed = PlanningSectionCanonicalizer.Canonicalize(body);
+
+        healed.ShouldContain("not a section</goal>");
+        healed.ShouldNotContain("not a section\n</goal>");
+    }
+
+    [Fact]
+    public void Canonicalize_GluedCloserWithTrailingProse_StaysRaw()
+    {
+        var body = "<goal>\ncontent</goal> and more\n</goal>\n";
+
+        PlanningSectionCanonicalizer.Canonicalize(body).ShouldBe(body);
+    }
+
+    [Fact]
+    public void WithSkeleton_GluedCloserBody_GetsNoDuplicateTailSections()
+    {
+        var poisoned = "<goal>\nreal goal.</goal>\n\n<anti-scope>\nreal scope.</anti-scope>\n\n<acceptance-criteria>\n- [ ] build green\n- [ ] tests green</acceptance-criteria>\n";
+
+        var skeleton = PlanningTaskSections.WithSkeleton(PlanningSectionCanonicalizer.Canonicalize(poisoned));
+
+        PlanningSections.CountAnchoredBlocks("goal", skeleton).ShouldBe(1);
+        PlanningSections.CountAnchoredBlocks("anti-scope", skeleton).ShouldBe(1);
+        PlanningSections.CountAnchoredBlocks("acceptance-criteria", skeleton).ShouldBe(1);
+        PlanningSections.ParseAcceptanceCriteria(skeleton).Count.ShouldBe(2);
+    }
 }

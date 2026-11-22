@@ -254,7 +254,11 @@ public static partial class PlanningSections
     {
         ArgumentNullException.ThrowIfNull(body);
 
-        if (Find("acceptance-criteria", body) is not { } section)
+        // A glued closer on the real checklist leaves only the tail copy's anchored close, so a
+        // raw-body Find would span both copies and the item lines would still win by filter —
+        // but Replace/Remove against the same pair would splice the span. Locating on the
+        // canonical form keeps the tick door and the write door on one body view.
+        if (Find("acceptance-criteria", PlanningSectionCanonicalizer.Canonicalize(body)) is not { } section)
         {
             return [];
         }
@@ -298,10 +302,15 @@ public static partial class PlanningSections
         return false;
     }
 
+    // Duplicate anchored pairs of one name only arise from legacy bodies the skeleton once
+    // poisoned with an empty `(none)` tail copy: the true-last rule would serve that empty
+    // copy and hide the real acceptance-criteria. The last pair whose content is not the
+    // empty marker wins; an all-empty body keeps the true-last pair.
     private static (int OpenIndex, int OpenLength, int CloseIndex)? FindLastAnchoredPair(string name, string body)
     {
         var opens = OpenTagPattern().Matches(body);
         var closes = CloseTagPattern().Matches(body);
+        (int OpenIndex, int OpenLength, int CloseIndex)? fallback = null;
 
         for (var i = opens.Count - 1; i >= 0; i--)
         {
@@ -311,17 +320,22 @@ public static partial class PlanningSections
                 continue;
             }
 
-            for (var j = closes.Count - 1; j >= 0; j--)
+            foreach (Match close in closes)
             {
-                var close = closes[j];
                 if (close.Index > open.Index && close.Groups["name"].Value == name)
                 {
-                    return (open.Index, open.Length, close.Index);
+                    fallback ??= (open.Index, open.Length, close.Index);
+                    if (ExtractContent(body, open.Index + open.Length, close.Index).Trim() != EmptyMarker)
+                    {
+                        return (open.Index, open.Length, close.Index);
+                    }
+
+                    break;
                 }
             }
         }
 
-        return null;
+        return fallback;
     }
 
     private static string ExtractContent(string body, int openEnd, int closeIndex)
