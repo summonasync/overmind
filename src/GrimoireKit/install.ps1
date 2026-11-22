@@ -46,7 +46,7 @@ function Copy-MirrorDir([string]$Src, [string]$Dst) {
     if ($DryRun) { Write-Host "Would mirror $Src -> $Dst"; return }
     if (Test-Path $Dst) { Remove-Item $Dst -Recurse -Force }
     New-Item -ItemType Directory -Path $Dst -Force | Out-Null
-    Copy-Item (Join-Path $Src '*') $Dst -Force
+    Copy-Item (Join-Path $Src '*') $Dst -Force -Recurse
 }
 
 function Copy-FileEntry([string]$Src, [string]$DstDir) {
@@ -110,8 +110,7 @@ foreach ($rt in @('claude', 'qwen')) {
         & python3 $mergeTool unmerge $settings $marker
     }
     else {
-        $entryJson = (& python3 $mergeTool entry $root $rt) -join ''
-        & python3 $mergeTool merge $settings $manifest.hooks.$rt.event $entryJson $marker
+        & python3 $mergeTool apply $root $rt $settings $marker
     }
     if ($LASTEXITCODE -ne 0) { Write-Host "settings merge failed for $settings (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
 }

@@ -17,7 +17,10 @@ cp "$ROOT/manifest.json" "$ROOT/install.sh" "$ROOT/install.ps1" "$ROOT/pack.sh" 
    "$ROOT/README.md" "$ROOT/CHANGELOG.md" "$DIST/$NAME/"
 cp -r "$ROOT/skills" "$ROOT/scripts" "$ROOT/runtime-profiles" "$ROOT/tools" "$DIST/$NAME/"
 
-tar -czf "$DIST/$NAME.tar.gz" -C "$DIST" "$NAME"
+# machine-local bytecode never ships to clients
+find "$DIST/$NAME" -name __pycache__ -type d -exec rm -rf {} +
+
+tar --exclude='__pycache__' -czf "$DIST/$NAME.tar.gz" -C "$DIST" "$NAME"
 
 echo "Packed $NAME:"
 echo "  dir    $DIST/$NAME"
