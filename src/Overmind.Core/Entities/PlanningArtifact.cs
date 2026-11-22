@@ -47,6 +47,7 @@ public sealed class PlanningArtifact
     public PlanningReviewLevel Review { get; private set; }
     public string Body { get; private set; } = string.Empty;
     public string? Brief { get; private set; }
+    public bool Independent { get; private set; }
     public int Order { get; private set; }
     public DateTime? FrozenAt { get; private set; }
     public int Version { get; private set; }
@@ -473,6 +474,25 @@ public sealed class PlanningArtifact
 
         Brief = normalized;
         UpdatedAt = now;
+    }
+
+    // Author opt-in for current_task issuance while a feature-level blocker holds. Not a gated
+    // edit: flipping the flag is a scheduling decision, not spec/plan content.
+    public void SetIndependent(bool independent)
+    {
+        if (Kind != PlanningArtifactKind.Task)
+        {
+            throw new InvalidOperationException(
+                $"independent is a task-only flag; artifact kind is '{Kind}'.");
+        }
+
+        if (Independent == independent)
+        {
+            return;
+        }
+
+        Independent = independent;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     private static string? NormalizeBrief(string? brief)

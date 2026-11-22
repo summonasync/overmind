@@ -98,6 +98,9 @@ public sealed class PlanningException : Exception
     public static PlanningException BriefNotAllowedForKind(PlanningArtifactKind kind) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.BriefNotAllowedForKind, $"A brief is only allowed on task artifacts; kind '{kind}' cannot carry one.");
 
+    public static PlanningException IndependentNotAllowedForKind(PlanningArtifactKind kind) =>
+        new(PlanningFailureKind.InvalidInput, PlanningFailureCode.IndependentNotAllowedForKind, $"independent is only allowed on task artifacts; kind '{kind}' cannot carry it.");
+
     public static PlanningException AmendmentNotAllowedForKind(PlanningArtifactKind kind) =>
         new(PlanningFailureKind.InvalidInput, PlanningFailureCode.AmendmentNotAllowedForKind,
             $"The amendment door appends to result artifacts only; kind '{kind}' is refused — " +

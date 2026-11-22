@@ -607,6 +607,9 @@ namespace Overmind.Infrastructure.Migrations
                     b.Property<DateTime?>("FrozenAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Independent")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 

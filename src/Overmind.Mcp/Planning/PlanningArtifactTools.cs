@@ -102,6 +102,7 @@ public sealed class PlanningArtifactTools
         [Description("Required when editing a validated artifact.")] string? logNote = null,
         [Description("One-line task summary.")] string? brief = null,
         [Description("Sibling task orders this task waits on.")] int[]? blockedBy = null,
+        [Description("Task only: planning_current_task issues this task even while the feature carries an open feature-level blocker.")] bool? independent = null,
         [Description("Validate without persisting anything.")] bool? dryRun = null,
         [Description("Optional project id.")] Guid? projectId = null,
         [Description(OperationIdDescription)] Guid? operationId = null,
@@ -129,6 +130,11 @@ public sealed class PlanningArtifactTools
         if (blockedBy is not null)
         {
             payload["blockedBy"] = new JsonArray([.. blockedBy.Select(o => JsonValue.Create(o))]);
+        }
+
+        if (independent is not null)
+        {
+            payload["independent"] = independent;
         }
 
         if (dryRun == true)
@@ -230,7 +236,7 @@ public sealed class PlanningArtifactTools
         if (item.ValueKind != JsonValueKind.Object)
         {
             throw new McpException(
-                $"each item must be an object with body, order, review, logNote, brief, blockedBy. {TaskItemsAcceptedForm}");
+                $"each item must be an object with body, order, review, logNote, brief, blockedBy, independent. {TaskItemsAcceptedForm}");
         }
 
         if (!item.TryGetProperty("body", out var body) ||
@@ -281,6 +287,12 @@ public sealed class PlanningArtifactTools
             payload["blockedBy"] = JsonNode.Parse(blockedBy.GetRawText());
         }
 
+        if (item.TryGetProperty("independent", out var independent) &&
+            independent.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            payload["independent"] = independent.GetBoolean();
+        }
+
         return payload;
     }
 
@@ -307,6 +319,12 @@ public sealed class PlanningArtifactTools
                 blockedBy.ValueKind == JsonValueKind.Array)
             {
                 compact["blockedBy"] = JsonNode.Parse(blockedBy.GetRawText());
+            }
+
+            if (artifact.TryGetProperty("independent", out var independent) &&
+                independent.ValueKind == JsonValueKind.True)
+            {
+                compact["independent"] = true;
             }
 
             tasks.Add(compact);

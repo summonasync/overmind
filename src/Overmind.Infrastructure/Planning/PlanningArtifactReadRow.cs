@@ -13,6 +13,7 @@ public sealed record PlanningArtifactReadRow(
     int Order,
     DateTime UpdatedAt,
     string? Brief,
+    bool Independent,
     string Body,
     Guid FeatureId,
     Guid OwningProjectId);
