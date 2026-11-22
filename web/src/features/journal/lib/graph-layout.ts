@@ -12,9 +12,16 @@ import {
 import type { GraphEdge, GraphNode, GraphPosition } from "../types.ts";
 import { nodeKey } from "./graph-payload.ts";
 
-// R9's tier-1 ceiling. Above it the route stops simulating and shows a settled field with the
-// real count in the UI; tiers 2 and 3 are a spawned card, not a mode switch hidden in here.
+// R9's tier-1 ceiling, now the first rung of the ladder one canvas walks (271): through 1000
+// nodes the simulation runs on the frame clock, through 5000 the field settles once off the
+// render loop before its first frame, past that it draws as clusters. The rung is where live
+// simulation stops, not where the surface ends — the count is stated in the UI either way.
 export const SIM_CEILING = 1000;
+
+// Tier 2's upper rung. Past 5000 even one bounded settle is real work the field would pay again
+// on every refetch beat, and the honest answer is grouping (tier 3) rather than a slower layout.
+// Kept beside SIM_CEILING so the ladder reads as one sentence.
+export const PRECOMPUTE_CEILING = 5000;
 
 // d3 mutates the datum it is handed, so the canvas keeps its own node type and the payload's
 // stays clean — the same array React Query owns would otherwise carry coordinates nobody asked
@@ -30,14 +37,17 @@ export interface LayoutLink extends SimulationLinkDatum<LayoutNode> {
   hasManual: boolean;
 }
 
-export type LayoutMode = "simulate" | "settled";
+export type LayoutMode = "simulate" | "precomputed" | "clustered";
 
 export function isOverCeiling(nodeCount: number): boolean {
   return nodeCount > SIM_CEILING;
 }
 
 export function layoutModeFor(nodeCount: number): LayoutMode {
-  return isOverCeiling(nodeCount) ? "settled" : "simulate";
+  if (nodeCount > PRECOMPUTE_CEILING) {
+    return "clustered";
+  }
+  return isOverCeiling(nodeCount) ? "precomputed" : "simulate";
 }
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));

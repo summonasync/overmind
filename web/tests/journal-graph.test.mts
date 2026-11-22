@@ -21,6 +21,7 @@ import {
 import {
   GRAPH_SEARCH_HINT,
   ceilingMessage,
+  clusteredNotice,
   emptyFieldMessage,
   graphAriaLabel,
   isolatedInViewLabel,
@@ -28,10 +29,13 @@ import {
   nodeKindLabel,
   noteExcerpt,
   orphanLabel,
+  precomputedNotice,
   stateLabel,
   unsupportedRowsNotice,
 } from "../src/features/journal/lib/graph-copy.ts";
 import {
+  type LayoutNode,
+  PRECOMPUTE_CEILING,
   SIM_CEILING,
   buildNeighbourhoods,
   isOverCeiling,
@@ -45,6 +49,10 @@ import {
   settleWithinBudget,
   startForceLayout,
 } from "../src/features/journal/lib/graph-layout.ts";
+import {
+  precomputeLayout,
+  precomputedPositions,
+} from "../src/features/journal/lib/graph-precompute.ts";
 import {
   GRAPH_TOKENS,
   LEGEND_NODE_ROWS,
@@ -72,6 +80,7 @@ import type {
   GraphEdge,
   GraphField,
   GraphNode,
+  GraphPosition,
   GraphViewFilters,
 } from "../src/features/journal/types.ts";
 
@@ -201,6 +210,23 @@ const SMALL_FIELD = fieldOf(
   ],
   [edge("entry", NOTE_ID, "project", PROJECT_ID), edge("entry", NOTE_ID, "feature", FEATURE_ID)],
 );
+
+// A synthetic field parked in tier 2: a chain, so the settle has links to obey, in enough count
+// to cross the 1000-node rung, with one server pin that has to survive the settle.
+const SYNTHETIC_PIN_ID = "a0700";
+
+const syntheticField = (nodeCount: number, positions: GraphPosition[] = []): GraphField => {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const id = (index: number) => `a${index.toString().padStart(4, "0")}`;
+  for (let index = 0; index < nodeCount; index += 1) {
+    nodes.push(node("entry", id(index), `Note ${index}`));
+    if (index > 0) {
+      edges.push(edge("entry", id(index - 1), "entry", id(index)));
+    }
+  }
+  return { ...fieldOf(nodes, edges), positions };
+};
 
 // ── The two vocabularies stay apart ────────────────────────────────────────────────────
 
@@ -514,12 +540,68 @@ test("the synchronous settle is bounded by node count, not left to block the tab
   assert.ok(before.length === many.length);
 });
 
-test("the ceiling is 1000 nodes and the mode flips above it", () => {
+test("the ceiling ladder flips at 1000 and 5000", () => {
   assert.equal(SIM_CEILING, 1000);
+  assert.equal(PRECOMPUTE_CEILING, 5000);
   assert.equal(layoutModeFor(1000), "simulate");
-  assert.equal(layoutModeFor(1001), "settled");
+  assert.equal(layoutModeFor(1001), "precomputed");
+  assert.equal(layoutModeFor(5000), "precomputed");
+  assert.equal(layoutModeFor(5001), "clustered");
   assert.equal(isOverCeiling(1200), true);
+  assert.match(
+    precomputedNotice(1204, SIM_CEILING),
+    /1204 nodes are above the 1000-node live-simulation ceiling/,
+  );
+  assert.match(
+    clusteredNotice(5001, PRECOMPUTE_CEILING),
+    /5001 nodes are above the 5000-node precompute ceiling/,
+  );
   assert.match(ceilingMessage(1204, SIM_CEILING), /1204 nodes are above the 1000-node/);
+});
+
+test("the tier-2 precompute settles the same map twice, pins win, every coordinate finite", async () => {
+  const field = syntheticField(1500, [{ kind: "entry", id: SYNTHETIC_PIN_ID, x: 77, y: 88 }]);
+  assert.equal(layoutModeFor(field.nodes.length), "precomputed", "the fixture left tier 2");
+
+  const first = await precomputeLayout(field, { width: 1200, height: 900 });
+  const second = await precomputeLayout(field, { width: 1200, height: 900 });
+  const frame = (nodes: LayoutNode[]) => nodes.map((n) => [Math.round(n.x), Math.round(n.y)]);
+  assert.deepEqual(frame(first), frame(second), "the same field settled into a different map");
+
+  const pinned = first.find((n) => n.id === SYNTHETIC_PIN_ID);
+  assert.equal(pinned?.x, 77);
+  assert.equal(pinned?.y, 88);
+  assert.ok(first.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y)));
+});
+
+test("the slice transport lands on the frame the worker's one-shot settle produces", async () => {
+  // The shipped transport is the chunked slices; precomputedPositions is verbatim what the
+  // worker entry calls once the bundler flip lands. This pair is the guard that the flip
+  // cannot change what the owner sees — same field, same frame, whichever transport runs it.
+  const field = syntheticField(1500, [{ kind: "entry", id: SYNTHETIC_PIN_ID, x: 77, y: 88 }]);
+  const workerFrame = precomputedPositions({
+    nodes: field.nodes,
+    edges: field.edges,
+    positions: field.positions,
+    width: 1200,
+    height: 900,
+  });
+  const fallbackFrame = await precomputeLayout(field, { width: 1200, height: 900 });
+  const frame = (nodes: LayoutNode[]) => nodes.map((n) => [Math.round(n.x), Math.round(n.y)]);
+  assert.deepEqual(frame(fallbackFrame), frame(workerFrame), "the transports disagreed");
+  const pinned = fallbackFrame.find((n) => n.id === SYNTHETIC_PIN_ID);
+  assert.equal(pinned?.x, 77);
+  assert.equal(pinned?.y, 88);
+});
+
+test("the worker entry calls the lib and carries no layout math of its own", () => {
+  const source = sliceFile("lib/graph-layout.worker.ts");
+  assert.match(source, /precomputedPositions/);
+  assert.ok(!/d3-force/.test(source), "d3 crept into the worker entry");
+  assert.ok(
+    !/Math\.(sqrt|cos|sin|pow|atan2|random)/.test(source),
+    "trigonometry crept into the worker entry",
+  );
 });
 
 test("neighbourhoods are built from links, not rescanned per frame", () => {
