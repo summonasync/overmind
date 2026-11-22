@@ -1,0 +1,58 @@
+{
+  "version": "0.1.0",
+  "format": 1,
+  "modeValues": {
+    "mirror": "whole-directory mirror: rsync -a --delete (Unix) / robocopy /MIR (Windows). Deletes anything in the destination that is not in the source. Use only for kit-owned directories (dest is a grimoire-kit subpath, e.g. hooks/grimoire-kit).",
+    "merge": "per-child mirror: each immediate child of the source is mirrored separately into dest, so third-party content sitting next to it in the destination home survives. Required for destinations that host non-kit content (skills dirs, hooks dirs)."
+  },
+  "entries": [
+    {
+      "source": "skills/memory-ops",
+      "home": "claude",
+      "type": "dir",
+      "mode": "merge",
+      "dest": "skills/memory-ops"
+    },
+    {
+      "source": "skills/memory-ops",
+      "home": "qwen",
+      "type": "dir",
+      "mode": "merge",
+      "dest": "skills/memory-ops"
+    },
+    {
+      "source": "scripts/guard_hook.py",
+      "home": "claude",
+      "type": "file",
+      "mode": "mirror",
+      "dest": "hooks/grimoire-kit/guard_hook.py"
+    },
+    {
+      "source": "scripts/guard_hook.py",
+      "home": "qwen",
+      "type": "file",
+      "mode": "mirror",
+      "dest": "hooks/grimoire-kit/guard_hook.py"
+    }
+  ],
+  "hooks": {
+    "claude": {
+      "settings": "settings.json",
+      "event": "SessionStart",
+      "matcher": "startup|resume",
+      "command": "python3 \"$HOME/.claude/hooks/grimoire-kit/guard_hook.py\"",
+      "timeout": 30
+    },
+    "qwen": {
+      "settings": "settings.json",
+      "event": "SessionStart",
+      "matcher": "startup|resume",
+      "command": "python3 \"$HOME/.qwen/hooks/grimoire-kit/guard_hook.py\"",
+      "shell": "bash",
+      "timeout": 30000,
+      "name": "grimoire-kit-memory-guard",
+      "description": "grimoire-kit: warn when an auto-memory index nears its eviction budget",
+      "statusMessage": "grimoire-kit: checking memory index budget"
+    }
+  }
+}
