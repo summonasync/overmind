@@ -4,6 +4,7 @@ import { graphPath } from "@/features/journal/lib/graph-query";
 import { journalStreamPath } from "@/features/journal/lib/stream-query";
 import type {
   GraphField,
+  GraphPositionWrite,
   GraphViewFilters,
   JournalNote,
   JournalNoteFormValues,
@@ -65,6 +66,14 @@ export function deleteJournalNote(id: string, reason?: string): Promise<JournalN
 export async function getJournalGraph(filters: GraphViewFilters): Promise<GraphField> {
   const raw: unknown = await apiGet<unknown>(graphPath(filters));
   return normalizeGraphField(raw);
+}
+
+// The pin door, on the human prefix beside the read (spec R8: moving the owner's dots is the
+// owner's act). One PUT stores the whole batch transactionally; the answer is 204, and the truth
+// arrives through the field query the invalidation refetches — the read projection is the only
+// shape this surface ever trusts.
+export function saveGraphPositions(positions: GraphPositionWrite[]): Promise<void> {
+  return apiPut<void>("/graph/positions", { positions });
 }
 
 // The triage door, on the human prefix (spec R8: promoting one of the owner's thoughts is the

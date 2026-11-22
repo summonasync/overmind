@@ -229,12 +229,53 @@ public sealed class GraphReaderTests : IDisposable
             "the Journal container holds notes but no edge names it, so it is an orphan — home is not link");
     }
 
+    // <removed 2026-11-22 — Positions_AreEmptyUntilTheEntityLands: T8 landed the entity, so the
+    // placeholder gave way to the pinned-row tests below.>
     [Fact]
-    public async Task Positions_AreEmptyUntilTheEntityLands()
+    public async Task PinnedRows_ReachTheField_UnpinnedRowsAndForeignNodesDoNot()
     {
+        _db.GraphNodePositions.AddRange(
+            GraphNodePosition.Write(EntryLinkKind.Entry, _j1, 10, 20, pinned: true, DateTime.UtcNow),
+            GraphNodePosition.Write(EntryLinkKind.Entry, _j4, 30, 40, pinned: false, DateTime.UtcNow),
+            GraphNodePosition.Write(EntryLinkKind.Feature, Guid.NewGuid(), 50, 60, pinned: true, DateTime.UtcNow));
+        _db.SaveChanges();
+
         var field = await Reader().LoadAsync(new GraphReadRequest());
 
-        field.Positions.ShouldBeEmpty();
+        field.Positions.ShouldHaveSingleItem("an unpinned row and a pin for a node outside the field stay out");
+        field.Positions[0].Kind.ShouldBe(EntryLinkKind.Entry);
+        field.Positions[0].Id.ShouldBe(_j1);
+        field.Positions[0].X.ShouldBe(10);
+        field.Positions[0].Y.ShouldBe(20);
+    }
+
+    [Fact]
+    public async Task PinnedOrphans_KeepTheirPinInTheOrphansOnlyView()
+    {
+        _db.GraphNodePositions.AddRange(
+            GraphNodePosition.Write(EntryLinkKind.Entry, _j4, 30, 40, pinned: true, DateTime.UtcNow),
+            GraphNodePosition.Write(EntryLinkKind.Entry, _j1, 10, 20, pinned: true, DateTime.UtcNow));
+        _db.SaveChanges();
+
+        var field = await Reader().LoadAsync(new GraphReadRequest { OrphansOnly = true });
+
+        field.Positions.ShouldHaveSingleItem("J1 is linked, so its pin has no node to land on in this view");
+        field.Positions[0].Id.ShouldBe(_j4);
+    }
+
+    [Fact]
+    public async Task FocusWindow_DropsThePinsOfNodesOutsideIt()
+    {
+        _db.GraphNodePositions.AddRange(
+            GraphNodePosition.Write(EntryLinkKind.Entry, _j1, 10, 20, pinned: true, DateTime.UtcNow),
+            GraphNodePosition.Write(EntryLinkKind.Entry, _j3, 30, 40, pinned: true, DateTime.UtcNow));
+        _db.SaveChanges();
+
+        var field = await Reader().LoadAsync(
+            new GraphReadRequest { Focus = Node(EntryLinkKind.Entry, _j1), Depth = 1 });
+
+        field.Positions.ShouldHaveSingleItem();
+        field.Positions[0].Id.ShouldBe(_j1);
     }
 
     [Fact]

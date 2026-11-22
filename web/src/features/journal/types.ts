@@ -141,6 +141,17 @@ export interface GraphPosition {
   y: number;
 }
 
+// One row the canvas sends when a drag settles (pinned: true) or the reset control lifts pins
+// (pinned: false). The server, not the browser, is the only place these live — R5 forbids a
+// client-side copy, which is why this type has no storage besides the door.
+export interface GraphPositionWrite {
+  kind: GraphNodeKind;
+  id: string;
+  x: number;
+  y: number;
+  pinned: boolean;
+}
+
 // `isolatedInView` is a NODE count, not a link count: the dropped-edge tally is not
 // reconstructible from this payload (`GraphContracts.cs` says so), so the legend may say "N
 // notes here link to something outside this view" and must never say "N links lead outside".

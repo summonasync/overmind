@@ -1,3 +1,7 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Overmind.Host.Api;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -142,18 +146,85 @@ public sealed class AgentWriteSurfaceCoverageApiTests : IDisposable
     }
 
     [Fact]
-    public void PositionsVerb_IsNotMappedYet_AgentOrHuman()
+    public void PositionsVerb_IsMappedOnTheHumanDoorAndNowhereElse()
     {
-        // T8 owns the position write. Until it lands there is nothing to attack, and a deny-status test against an
-        // unmapped route would read as a guard while measuring a 404. When T8 maps PUT /api/graph/positions it
-        // converts into the attack shape: same verb, registered route, typed refusal from the agent door.
+        // T8 landed PUT /api/graph/positions on the human door. The conversion this row promised: the human route
+        // is named once here, and the agent prefix carries no positions write at all — a twin appearing under
+        // /api/agent redds JournalOwnedWrites_AreNotReachableUnderTheAgentPrefix above, and this assertion is what
+        // catches a second, non-agent registration.
         var mapped = AllEndpoints()
             .Where(endpoint => endpoint.RoutePattern.RawText!.Contains("positions", StringComparison.Ordinal))
-            .Select(endpoint => endpoint.RoutePattern.RawText!)
-            .Distinct()
+            .Select(endpoint => new
+            {
+                Pattern = endpoint.RoutePattern.RawText!,
+                Methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.ToArray() ?? [],
+            })
             .ToList();
 
-        mapped.ShouldBeEmpty();
+        mapped.ShouldHaveSingleItem();
+        mapped[0].Pattern.ShouldBe("/api/graph/positions");
+        mapped[0].Methods.ShouldContain("PUT");
+
+        AgentWrites()
+            .Where(write => write.Pattern.Contains("positions", StringComparison.Ordinal))
+            .ShouldBeEmpty("the agent door has no position verb and must never grow one");
+    }
+
+    [Fact]
+    public async Task PositionsBody_ThroughTheRegisteredAgentEntryDoor_IsRefusedByShape_TheHumanDoorAcceptsTheSameBytes()
+    {
+        // The attack shape T5 pinned the duty for: the same PUT verb with a positions payload, against a route that
+        // is really registered on the agent door (never a fabricated URL — a 404 on an unmapped twin proves a
+        // missing route, not a guard). The gate classifies the target from the route's id before any body is read,
+        // so a journal note answers the type rule's typed refusal and the positions payload is never interpreted.
+        // The non-vacuity arm sends the very same bytes to the door they belong to, where they pin.
+        using var client = _factory.CreateClient();
+        var created = await client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = "positions-attack",
+            DiskPath = TestPaths.DiskPath("positions-attack"),
+        });
+        created.EnsureSuccessStatusCode();
+        var project = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var projectId = project.GetProperty("id").GetString()!;
+
+        var note = await client.PostAsJsonAsync("/api/entries", new
+        {
+            projectId = Guid.Parse(projectId),
+            type = "journal",
+            title = "Owned dot",
+            content = "the agent tried to move me",
+        });
+        note.EnsureSuccessStatusCode();
+        var entry = await note.Content.ReadFromJsonAsync<JsonElement>();
+        var noteId = entry.GetProperty("id").GetString()!;
+
+        var positionsBody =
+            $$"""{"positions":[{"kind":"entry","id":"{{noteId}}","x":11,"y":22,"pinned":true}]}""";
+        var forged = await client.PutAsync(
+            $"/api/agent/entries/{noteId}",
+            new StringContent(positionsBody, Encoding.UTF8, "application/json"));
+
+        var refusalBody = await forged.Content.ReadAsStringAsync();
+        forged.StatusCode.ShouldBe(HttpStatusCode.BadRequest, refusalBody);
+        var refusal = await forged.Content.ReadFromJsonAsync<JsonElement>();
+        refusal.GetProperty("title").GetString().ShouldBe("JournalEntryWriteRefused");
+        refusalBody.ShouldContain("Journal entries are the human surface");
+
+        var untouched = await client.GetAsync($"/api/entries/{noteId}");
+        untouched.EnsureSuccessStatusCode();
+        (await untouched.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("content").GetString()
+            .ShouldBe("the agent tried to move me", "the refusal arrives before any handler runs");
+
+        var pinned = await client.PutAsync(
+            "/api/graph/positions",
+            new StringContent(positionsBody, Encoding.UTF8, "application/json"));
+        pinned.StatusCode.ShouldBe(HttpStatusCode.NoContent,
+            await pinned.Content.ReadAsStringAsync());
+
+        var field = await client.GetFromJsonAsync<JsonElement>("/api/graph");
+        field.GetProperty("positions").EnumerateArray().ShouldHaveSingleItem();
     }
 
     private sealed record AgentWrite(

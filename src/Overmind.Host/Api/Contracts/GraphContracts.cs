@@ -31,6 +31,13 @@ public sealed record GraphPositionDto(
     double X,
     double Y);
 
+// One write the canvas sends when a drag settles or a pin is lifted. Kind rides as the wire's
+// camelCase name ("entry", "project", "feature") and is parsed, not bound, so an unknown kind
+// answers a named refusal instead of a binder's generic 400.
+public sealed record GraphPositionWriteDto(string Kind, Guid Id, double X, double Y, bool Pinned);
+
+public sealed record GraphPositionsRequest(IReadOnlyList<GraphPositionWriteDto> Positions);
+
 public sealed record GraphCountsDto(
     int Nodes,
     int Edges,
