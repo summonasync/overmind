@@ -16,27 +16,48 @@ public static class PlanningSectionCanonicalizer
         var expanded = new List<string>(lines.Length);
         var changed = false;
         char? fence = null;
+        var pendingOpens = new List<string>();
 
         foreach (var line in lines)
         {
-            if (IsFencedLine(line, ref fence) ||
-                !TrySplitGroups(StripCarriageReturn(line, out var carriageReturn), out var indent, out var groups))
+            if (IsFencedLine(line, ref fence))
             {
                 expanded.Add(line);
                 continue;
             }
 
-            changed = true;
-            for (var i = 0; i < groups.Count; i++)
+            var stripped = StripCarriageReturn(line, out var carriageReturn);
+            if (TrySplitGroups(stripped, out var indent, out var groups))
             {
-                Expand(
-                    expanded,
-                    indent,
-                    groups[i].Name,
-                    groups[i].Content,
-                    carriageReturn: carriageReturn && i == groups.Count - 1,
-                    depth: 0);
+                changed = true;
+                for (var i = 0; i < groups.Count; i++)
+                {
+                    Expand(
+                        expanded,
+                        indent,
+                        groups[i].Name,
+                        groups[i].Content,
+                        carriageReturn: carriageReturn && i == groups.Count - 1,
+                        depth: 0);
+                }
+
+                continue;
             }
+
+            // A multi-line section whose closing tag is glued to its last content line never
+            // matches the anchored-close parser, so section reads and the task skeleton treat
+            // it as absent. Split the close onto its own line; the result is stable because
+            // the split close is already anchored on the next pass.
+            if (TryHealGluedClose(stripped, pendingOpens, out var contentLine, out var closeLine))
+            {
+                changed = true;
+                expanded.Add(carriageReturn ? string.Concat(contentLine, "\r") : contentLine);
+                expanded.Add(carriageReturn ? string.Concat(closeLine, "\r") : closeLine);
+                continue;
+            }
+
+            TrackAnchoredTag(stripped, pendingOpens);
+            expanded.Add(line);
         }
 
         return changed ? string.Join("\n", expanded) : body;
@@ -113,6 +134,81 @@ public static class PlanningSectionCanonicalizer
         }
 
         return ParseGroups(text, start, groups) && groups.Count > 0;
+    }
+
+    // Heals `content</name>` lines for a section whose own-line open is still pending: content
+    // keeps its line, the close moves to the next line with the same indent. Only a line-suffix
+    // close heals — anything after the tag stays raw. Empty content means the close was already
+    // on its own line, which is tracking, not healing.
+    private static bool TryHealGluedClose(
+        string line, List<string> pendingOpens, out string contentLine, out string closeLine)
+    {
+        contentLine = line;
+        closeLine = string.Empty;
+        if (pendingOpens.Count == 0)
+        {
+            return false;
+        }
+
+        var indentLength = 0;
+        while (indentLength < line.Length && line[indentLength] is ' ' or '\t')
+        {
+            indentLength++;
+        }
+
+        var trimmedEnd = line.TrimEnd();
+        for (var i = pendingOpens.Count - 1; i >= 0; i--)
+        {
+            var close = string.Concat("</", pendingOpens[i], ">");
+            if (!trimmedEnd.EndsWith(close, StringComparison.Ordinal) ||
+                trimmedEnd.Length == close.Length)
+            {
+                continue;
+            }
+
+            var closeStart = trimmedEnd.Length - close.Length;
+            contentLine = line[..closeStart];
+            closeLine = string.Concat(line[..indentLength], close);
+            pendingOpens.RemoveAt(i);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Own-line `<name>` opens and `</name>` closes drive the pending stack the heal reads;
+    // lines that ParseGroups already consumed never reach here.
+    private static void TrackAnchoredTag(string line, List<string> pendingOpens)
+    {
+        var trimmed = line.Trim();
+        if (trimmed.Length < 3 || trimmed[0] != '<')
+        {
+            return;
+        }
+
+        if (trimmed[1] == '/')
+        {
+            var name = trimmed[2..^1];
+            if (IsValidName(name, out _))
+            {
+                for (var i = pendingOpens.Count - 1; i >= 0; i--)
+                {
+                    if (pendingOpens[i] == name)
+                    {
+                        pendingOpens.RemoveAt(i);
+                        return;
+                    }
+                }
+            }
+
+            return;
+        }
+
+        var openEnd = trimmed.IndexOf('>');
+        if (openEnd == trimmed.Length - 1 && IsValidName(trimmed[1..openEnd], out _))
+        {
+            pendingOpens.Add(trimmed[1..openEnd]);
+        }
     }
 
     private static int CountClosers(string text)
