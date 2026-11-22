@@ -49,9 +49,10 @@ public sealed class GrimoireApiTests : IDisposable
     }
 
     [Fact]
-    public async Task AssistedInstall_WithoutChannel_ReturnsDegradedInstructions()
+    public async Task AssistedInstall_AssistedIntentWithoutChannel_ReturnsDegradedInstructions()
     {
-        using var response = await _client.PostAsJsonAsync("/api/grimoire/assisted-install", new { channel = (string?)null });
+        using var response = await _client.PostAsJsonAsync(
+            "/api/grimoire/assisted-install", new { intent = "assisted", channel = (string?)null });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -59,5 +60,33 @@ public sealed class GrimoireApiTests : IDisposable
         document.RootElement.GetProperty("degraded").GetBoolean().ShouldBeTrue();
         document.RootElement.GetProperty("success").GetBoolean().ShouldBeFalse();
         document.RootElement.GetProperty("instructions").EnumerateArray().ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task AssistedInstall_ManualIntent_ReturnsDegradedInstructions()
+    {
+        using var response = await _client.PostAsJsonAsync(
+            "/api/grimoire/assisted-install", new { intent = "manual", channel = (string?)null });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        document.RootElement.GetProperty("degraded").GetBoolean().ShouldBeTrue();
+        document.RootElement.GetProperty("success").GetBoolean().ShouldBeFalse();
+        document.RootElement.GetProperty("instructions").EnumerateArray().ShouldNotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("telepathy")]
+    public async Task AssistedInstall_MissingOrUnknownIntent_ReturnsBadRequest(string? intent)
+    {
+        using var response = await _client.PostAsJsonAsync(
+            "/api/grimoire/assisted-install", new { intent, channel = (string?)null });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        document.RootElement.GetProperty("detail").GetString()!.ShouldContain("intent");
     }
 }

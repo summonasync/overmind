@@ -30,6 +30,13 @@ export interface GrimoireWireResponse {
   error: string | null;
 }
 
+export type GrimoireInstallIntent = "manual" | "assisted";
+
+export interface GrimoireAssistedInstallInput {
+  intent: GrimoireInstallIntent;
+  channel: string | null;
+}
+
 export interface GrimoireAssistedInstallResponse {
   degraded: boolean;
   success: boolean;

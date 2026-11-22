@@ -66,8 +66,15 @@ public sealed class GrimoireIntegrationService
         return new GrimoireWireResult(true, true, agents, null);
     }
 
-    public async Task<GrimoireAssistedInstallResult> AssistedInstallAsync(string? channel, CancellationToken ct)
+    public async Task<GrimoireAssistedInstallResult> AssistedInstallAsync(
+        GrimoireInstallIntent intent, string? channel, CancellationToken ct)
     {
+        if (intent == GrimoireInstallIntent.Manual)
+        {
+            return new GrimoireAssistedInstallResult(
+                true, false, null, GrimoireManualInstructions.Steps, null);
+        }
+
         if (!string.IsNullOrWhiteSpace(channel))
         {
             await _settings.SetAsync(SettingKeys.GrimoireInstallChannel, channel.Trim(), ct);
