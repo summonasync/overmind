@@ -45,16 +45,17 @@ public sealed class PlanningMaterializationTools
     }
 
     [McpServerTool(Name = "planning_materialize", Destructive = false, Idempotent = false)]
-    [Description("Runs a materialization pass inline and returns the report; board mutations already enqueue one. force adopts guarded files instead of refusing.")]
+    [Description("Runs a materialization pass inline and returns the report; board mutations already enqueue one. force adopts guarded files instead of refusing. quarantine skips guarded files untouched (hand edits survive), reports them as quarantined, and mirrors everything else.")]
     public async Task<JsonElement> Materialize(
         [Description("Optional project id.")] Guid? projectId = null,
         [Description("Adopt guarded files instead of refusing.")] bool force = false,
+        [Description("Skip guarded files untouched and report them as quarantined instead of aborting the pass.")] bool quarantine = false,
         CancellationToken ct = default)
     {
         var resolved = await _projects.ResolveAsync(projectId, create: false, "for the working directory", ct);
         var report = await _mutations.SendAsync(() => _api.PostAsync(
             $"/api/projects/{resolved}/planning/materialize",
-            new { force },
+            new { force, quarantine },
             ct), readback: null, ct);
         return CompactMaterialization(report, force);
     }
@@ -134,6 +135,22 @@ public sealed class PlanningMaterializationTools
             }
 
             compact["skippedHead"] = head;
+        }
+
+        if (report.TryGetProperty("quarantined", out var quarantined) &&
+            quarantined.ValueKind == JsonValueKind.Array)
+        {
+            compact["quarantined"] = quarantined.GetArrayLength();
+            if (quarantined.GetArrayLength() > 0)
+            {
+                var head = new JsonArray();
+                foreach (var skip in quarantined.EnumerateArray().Take(SkipHeadLimit))
+                {
+                    head.Add($"{skip.GetProperty("relativePath").GetString()}: {skip.GetProperty("reason").GetString()}");
+                }
+
+                compact["quarantinedHead"] = head;
+            }
         }
 
         return compact.Deserialize<JsonElement>();
