@@ -99,10 +99,10 @@ public sealed class GraphNodePositionWriterTests : IDisposable
             new(EntryLinkKind.Entry, second, 3, 4, Pinned: false),
         ], CancellationToken.None);
 
-        var rows = db.GraphNodePositions.OrderBy(position => position.NodeId).ToList();
+        var rows = db.GraphNodePositions.ToList();
         rows.Count.ShouldBe(2);
-        rows[0].Pinned.ShouldBeTrue();
-        rows[1].Pinned.ShouldBeFalse();
+        rows.Single(row => row.NodeId == first).Pinned.ShouldBeTrue();
+        rows.Single(row => row.NodeId == second).Pinned.ShouldBeFalse();
         rows.Select(row => row.UpdatedAt).Distinct().ShouldHaveSingleItem();
     }
 

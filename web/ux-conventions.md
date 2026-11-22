@@ -47,6 +47,15 @@ Run: `node --test tests/back-link-convention.test.mts tests/action-buttons-tree-
 
 Two more pins live beside them: `tests/journal-stream.test.mts` fails when a feature imports a sibling feature's internals (the barrel rule in `STRUCTURE.md`), and `tests/primary-cta-contrast.test.mts` fails when the primary CTA's label/fill pair drops below 4.5:1 in **either** state — rest and hover are measured separately, because no single static label colour passes both fills.
 
+### 4.2 Journal graph route (237)
+
+`tests/journal-graph.test.mts` pins the route's grammar the same source-text way:
+
+- **Orphans-first is a first-class filter, not a buried toggle.** The day-one field is mostly a pile of unlinked nodes, so `orphansOnly` sits beside the other filters at the top level. It is mutually exclusive with `focus`: turning one on clears the other client-side (`withOrphansOnly`/`withFocus`), because the endpoint refuses the pair outright (`OrphansWithFocus`).
+- **The filters are the URL.** The seven query keys (`GRAPH_QUERY_KEYS` in `lib/graph-filters.ts`) are the endpoint's own parameter names, committed with `router.replace` — a chip click is not a history entry the owner backs out of one by one — so a reload, a back gesture and a pasted link open the identical field. The drift pin reads both the filter grammar and the query builder off disk and fails when the two lists diverge.
+- **Canvas island conventions.** Click selects (component state, never a route change); double-click on a note navigates to `/journal?note=<id>` carrying `from=journal-graph` plus the field's filters (`gq`), so the note view's back link returns to the same field, and its label says "Back to graph map"; drag pins server-side and a failed PUT re-reads the Host's positions instead of promising a pin; hover dims the rest of the field to 30%; a server refusal names its filters — the sentence renders verbatim with a framing line that says the list is a superset, never culprit-only.
+- **Reduced motion and keyboard parity.** `prefers-reduced-motion: reduce` settles the whole field before the first frame — same links, same list, nothing animating; above the 1000-node ceiling the field renders settled with the real count stated instead of pretending to animate. The canvas is focusable and keyboard-operable (arrows walk nodes, Enter opens the panel), and the node list below it holds the same data as the explicit keyboard path — the list is the guarantee, the map is the augmentation.
+
 Run all of them: `node --test "tests/**/*.test.mts"` from `web/`.
 
 Header-shape consolidation (`PageHeader`/`TabHeader`/hand-rolled workspace header → one primitive) and other follow-up candidates are catalogued in the research doc, not covered here.
