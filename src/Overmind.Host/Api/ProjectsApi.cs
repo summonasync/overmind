@@ -62,10 +62,21 @@ public static class ProjectsApi
         }
 
         var name = request.Name.Trim();
-        var conflict = await db.Projects.AnyAsync(p => p.Name == name, ct);
-        if (conflict)
+        var normalized = Project.NormalizeName(name);
+        if (normalized == Project.NormalizeName(JournalProjectStore.ProjectName))
         {
-            return HttpErrors.Conflict($"A project named '{name}' already exists.");
+            return HttpErrors.Conflict(
+                $"The name '{name}' is reserved for the journal container; new projects may not claim it in any casing.",
+                "ReservedProjectProtected");
+        }
+
+        var colliding = await db.Projects
+            .Where(p => p.NameNormalized == normalized)
+            .Select(p => p.Name)
+            .FirstOrDefaultAsync(ct);
+        if (colliding is not null)
+        {
+            return NameCollision(name, colliding);
         }
 
         var project = Project.Create(name, request.DiskPath, request.Description ?? string.Empty);
@@ -157,10 +168,32 @@ public static class ProjectsApi
         }
 
         var name = request.Name.Trim();
-        var conflict = await db.Projects.AnyAsync(p => p.Name == name && p.Id != id, ct);
-        if (conflict)
+        var normalized = Project.NormalizeName(name);
+        if (normalized != project.NameNormalized)
         {
-            return HttpErrors.Conflict($"A project named '{name}' already exists.");
+            var reserved = Project.NormalizeName(JournalProjectStore.ProjectName);
+            if (Project.NormalizeName(project.Name) == reserved)
+            {
+                return HttpErrors.Conflict(
+                    $"Project '{project.Name}' is the reserved journal container; it cannot be renamed away from the reserved name.",
+                    "ReservedProjectProtected");
+            }
+
+            if (normalized == reserved)
+            {
+                return HttpErrors.Conflict(
+                    $"The name '{name}' is reserved for the journal container; projects may not be renamed onto it in any casing.",
+                    "ReservedProjectProtected");
+            }
+
+            var colliding = await db.Projects
+                .Where(p => p.NameNormalized == normalized && p.Id != id)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync(ct);
+            if (colliding is not null)
+            {
+                return NameCollision(name, colliding);
+            }
         }
 
         var candidateDiskPath = request.DiskPath.Trim();
@@ -321,6 +354,11 @@ public static class ProjectsApi
 
     private static IResult InvalidValue(string field, string message) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [message] });
+
+    private static IResult NameCollision(string candidate, string existing) =>
+        HttpErrors.Conflict(
+            $"Project name '{candidate}' collides with '{existing}': project names are unique ignoring casing.",
+            "ProjectNameCollision");
 
     private static async Task<IResult> Delete(
         Guid id,
