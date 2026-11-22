@@ -10,6 +10,7 @@ public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
     private const string ServersPropertyName = "mcpServers";
     private const string CommandPropertyName = "command";
     private const string ArgsPropertyName = "args";
+    private const string EnvPropertyName = "env";
     private const int DefaultIndentSize = 2;
 
     private readonly ConfigBackupTracker _backupTracker;
@@ -100,6 +101,21 @@ public sealed class JsonConfigUpsertEngine : IConfigUpsertEngine
 
     private static JsonObject BuildDesiredEntry(ManagedServerKey key, string commandPath)
     {
+        if (key == ManagedServerKey.OvermindJournal)
+        {
+            var env = new JsonObject();
+            foreach (var (name, value) in ManagedServerKeys.JournalEnvironment)
+            {
+                env[name] = value;
+            }
+
+            return new JsonObject
+            {
+                [CommandPropertyName] = commandPath,
+                [EnvPropertyName] = env,
+            };
+        }
+
         if (key == ManagedServerKey.Overmind)
         {
             return new JsonObject { [CommandPropertyName] = commandPath };

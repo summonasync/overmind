@@ -4,4 +4,5 @@ public enum ManagedServerKey
 {
     Overmind = 0,
     Grimoire = 1,
+    OvermindJournal = 2,
 }
