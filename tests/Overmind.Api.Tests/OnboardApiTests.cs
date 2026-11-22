@@ -656,6 +656,56 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
     }
 
     [Fact]
+    public async Task Onboard_MaterializationBlock_SeenFailure_DemotesToOneLinerUntilNewFailure()
+    {
+        var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-demote-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(sandbox);
+        try
+        {
+            var name = $"demote-{Guid.NewGuid():N}";
+            var project = await CreateProjectAsync(name, sandbox);
+            await SetWorkflowAsync(project.Id, materialization: "on");
+            await CreateFeatureAsync(project.Id, "feat", "Feat");
+
+            var featureDoc = Path.Combine(sandbox, "BACKLOG", "feat", "feature.md");
+            var pristine = await File.ReadAllTextAsync(featureDoc);
+            await File.AppendAllTextAsync(featureDoc, "\nhand edit\n");
+
+            await CreateFeatureAsync(project.Id, "second", "Second");
+
+            var first = await OnboardAsync(new { Cwd = sandbox });
+            var firstError = first.Materialization.Error;
+            firstError.ShouldNotBeNull();
+            first.Materialization.FailedAt.ShouldNotBeNull();
+            first.Materialization.DemotedNotice.ShouldBeNull();
+
+            var second = await OnboardAsync(new { Cwd = sandbox });
+            second.Materialization.Error.ShouldBeNull();
+            second.Materialization.DemotedNotice.ShouldNotBeNull();
+            second.Materialization.DemotedNotice.ShouldContain("already reported");
+            second.Materialization.DemotedNotice.ShouldContain("planning_materialize_status");
+            second.Materialization.FailedAt.ShouldBe(first.Materialization.FailedAt);
+
+            await CreateFeatureAsync(project.Id, "third", "Third");
+
+            var third = await OnboardAsync(new { Cwd = sandbox });
+            third.Materialization.Error.ShouldNotBeNull();
+            third.Materialization.DemotedNotice.ShouldBeNull();
+
+            await File.WriteAllTextAsync(featureDoc, pristine);
+            await CreateFeatureAsync(project.Id, "fourth", "Fourth");
+
+            var clean = await OnboardAsync(new { Cwd = sandbox });
+            clean.Materialization.Error.ShouldBeNull();
+            clean.Materialization.DemotedNotice.ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(sandbox, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Onboard_MaterializationBlock_RefusedSync_CarriesErrorAndClearsOnCleanPass()
     {
         var sandbox = Path.Combine(Path.GetTempPath(), $"overmind-onboard-skip-{Guid.NewGuid():N}");
@@ -835,7 +885,8 @@ public sealed class OnboardApiTests : IDisposable, IAsyncLifetime
 
     public sealed record OnboardMaterializationJson(
         string Strategy, string TargetDir, string Trigger, DateTime? LastSuccess, DateTime? LastAttempt,
-        string? Error, DateTime? FailedAt, int? SkippedCount, IReadOnlyList<string>? Skipped);
+        string? Error, DateTime? FailedAt, int? SkippedCount, IReadOnlyList<string>? Skipped,
+        string? DemotedNotice = null);
 
     public sealed record OnboardValidationJson(bool HumanGate, string Guidance);
 

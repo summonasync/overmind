@@ -303,6 +303,21 @@ public class OnboardingToolContractTests : McpSessionTestBase
     }
 
     [Fact]
+    public async Task Onboard_DemotedMaterialization_ShowsOneLinerInsteadOfDump()
+    {
+        Stub.Route("POST", "/api/onboard", 200, Canned.OnboardDemotedMaterializationJson);
+
+        var response = await Driver.CallToolAsync("overmind_onboard", new JsonObject());
+
+        var text = Canned.ToolResultText(response);
+        text.ShouldContain(
+            "Materialization: strategy=on, targetDir=/repo/BACKLOG, " +
+            "lastSuccess=2026-09-24T09:00:00Z, lastAttempt=2026-09-24T18:00:00Z " +
+            "(materialization failure already reported at 2026-09-24 18:00:00Z — full dump in planning_materialize_status)");
+        text.ShouldNotContain("Refusing");
+    }
+
+    [Fact]
     public async Task Onboard_FailedMaterialization_ShowsSuccessAttemptSplitWithFailureReason()
     {
         Stub.Route("POST", "/api/onboard", 200, Canned.OnboardFailedMaterializationJson);
