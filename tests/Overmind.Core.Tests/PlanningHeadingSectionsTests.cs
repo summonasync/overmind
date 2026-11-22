@@ -204,6 +204,24 @@ end
         Regex.IsMatch(line, @"^<removed \d{4}-\d{2}-\d{2} — scope cut in review>$").ShouldBeTrue();
     }
 
+    // 266/T3 row 9 — the reason rides a one-line marker, so a newline is not formatting but an
+    // unreadable record. Ruled: single-line, and the doors refuse it before the soft cap can cut a
+    // long reason into compliance.
+    [Theory]
+    [InlineData("two\nlines")]
+    [InlineData("two\r\nlines")]
+    [InlineData("trailing newline\n")]
+    public void TombstoneLine_MultilineReason_IsRefusedAsASingleLineField(string reason)
+    {
+        var ex = Should.Throw<PlanningException>(() => PlanningHeadingSections.TombstoneLine(reason));
+
+        ex.Code.ShouldBe(PlanningFailureCode.RemoveReasonMultiline);
+        ex.Kind.ShouldBe(PlanningFailureKind.InvalidInput);
+        ex.Message.ShouldContain("must be single-line text");
+        ex.Message.ShouldContain("<removed yyyy-MM-dd — reason>");
+        ex.Message.ShouldContain("Resend with the reason collapsed to one line.");
+    }
+
     [Theory]
     [InlineData("goal", false)]
     [InlineData("anti-scope", false)]

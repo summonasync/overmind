@@ -26,13 +26,21 @@ public sealed class WaveMessageTests
     }
 
     [Fact]
-    public void Create_RejectsBlankAndOverCapText()
+    public void Create_RejectsBlank_AndTextOverGraceCeiling()
     {
+        // 266: MaxTextLength became the soft cap — the entity stores the whole grace band
+        // (the API door does the truncation) and rejects only past the derived ceiling.
         Should.Throw<ArgumentException>(() => WaveMessage.Create(Guid.NewGuid(), "all", "Dan", "worker", "   "));
 
-        var overCap = Should.Throw<ArgumentException>(() =>
+        var ceiling = SoftCap.Ceiling(WaveMessage.MaxTextLength);
+        Should.NotThrow(() =>
             WaveMessage.Create(Guid.NewGuid(), "all", "Dan", "worker", new string('x', WaveMessage.MaxTextLength + 1)));
-        overCap.Message.ShouldContain("500");
+        Should.NotThrow(() =>
+            WaveMessage.Create(Guid.NewGuid(), "all", "Dan", "worker", new string('x', ceiling)));
+
+        var overCeiling = Should.Throw<ArgumentException>(() =>
+            WaveMessage.Create(Guid.NewGuid(), "all", "Dan", "worker", new string('x', ceiling + 1)));
+        overCeiling.Message.ShouldContain("610");
     }
 
     [Fact]

@@ -13,7 +13,10 @@ internal static class ToolBindingValidator
             {
                 if (contract.Closed && !contract.Parameters.ContainsKey(name))
                 {
-                    return new ToolBindingViolation(name, "is not a parameter of this tool");
+                    var near = NearestName.Suggest(name, contract.Parameters.Keys);
+                    return new ToolBindingViolation(name, near is null
+                        ? "is not a parameter of this tool"
+                        : $"is not a parameter of this tool; did you mean '{near}'?");
                 }
             }
 
@@ -36,7 +39,13 @@ internal static class ToolBindingValidator
         {
             if (arguments is null || !arguments.ContainsKey(name))
             {
-                return new ToolBindingViolation(name, "is required but was not provided");
+                var mistaken = arguments is null || arguments.Count == 0
+                    ? null
+                    : NearestName.Suggest(name, arguments.Keys.Where(key => !contract.Required.Contains(key)));
+                return new ToolBindingViolation(name, mistaken is null
+                    ? "is required but was not provided"
+                    : $"is required but was not provided — the call carries '{mistaken}' instead; " +
+                      $"put the value under '{name}'");
             }
         }
 

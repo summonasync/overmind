@@ -313,10 +313,12 @@ public sealed class LaneService
                 throw PlanningException.InvalidLaneName(name);
             }
 
-            if (lane.Contour is { } contour && contour.Trim().Length > PlanningLane.MaxContourLength)
+            if (lane.Contour is { } contour &&
+                contour.Trim().Length > SoftCap.Ceiling(PlanningLane.MaxContourLength))
             {
                 throw new ArgumentException(
-                    $"Lane contour exceeds the {PlanningLane.MaxContourLength} character cap.");
+                    $"Lane contour exceeds the {SoftCap.Ceiling(PlanningLane.MaxContourLength)} character hard ceiling " +
+                    $"(soft cap {PlanningLane.MaxContourLength}).");
             }
 
             if (lane.BoundAlias is { } boundAlias && boundAlias.Trim().Length > PlanningLane.MaxBoundAliasLength)

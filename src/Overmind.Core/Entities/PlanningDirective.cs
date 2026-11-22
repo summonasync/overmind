@@ -26,17 +26,23 @@ public sealed class PlanningDirective
         Guid planningFeatureId, string text, string? authorAlias, string? authorVendor, Guid? authorSessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        if (text.Trim().Length > MaxTextLength)
+
+        // MaxTextLength is the soft cap of an imperative text — the API door rejects anything past
+        // the grace ceiling with a preview instead of cutting, so this guard only catches bypasses.
+        var hardCeiling = SoftCap.Ceiling(MaxTextLength);
+        var trimmed = text.Trim();
+        if (trimmed.Length > hardCeiling)
         {
             throw new ArgumentException(
-                $"Directive text exceeds the {MaxTextLength} character cap.", nameof(text));
+                $"Directive text exceeds the {hardCeiling} character hard ceiling (soft cap {MaxTextLength}).",
+                nameof(text));
         }
 
         return new PlanningDirective
         {
             Id = Guid.NewGuid(),
             PlanningFeatureId = planningFeatureId,
-            Text = text.Trim(),
+            Text = trimmed,
             AuthorAlias = NormalizeIdentity(authorAlias),
             AuthorVendor = NormalizeIdentity(authorVendor),
             AuthorSessionId = authorSessionId,

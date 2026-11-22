@@ -27,7 +27,7 @@ public static class WaveChatApi
         human.MapGet("/projects/{projectId:guid}/wave/rooms", RoomsForHuman);
         human.MapGet("/projects/{projectId:guid}/wave/stream", StreamForHuman);
 
-        var agent = routes.MapGroup("/api/agent");
+        var agent = routes.MapAgentGroup();
         agent.MapPost("/projects/{projectId:guid}/wave/rooms/{room}/messages", PostForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/unread", UnreadForAgent);
         agent.MapGet("/projects/{projectId:guid}/wave/rooms/{room}/peek", PeekForAgent);
@@ -317,10 +317,14 @@ public static class WaveChatApi
     private static async Task<IResult> PostAsync(
         Guid projectId, string room, string authorAlias, string authorRole, string text, WaveChatService chat, CancellationToken ct)
     {
+        var warnings = new List<object>();
         try
         {
-            var message = await chat.PostAsync(projectId, DecodedRoom(room), authorAlias, authorRole, text, ct);
-            return Results.Ok(ToResponse(message));
+            // Soft cap 266: over-cap signal text is stored whole inside the grace band and
+            // truncated to the keep length beyond it; both cases answer with warnings[].
+            var capped = SoftCapSoften.Cap(text, WaveMessage.MaxTextLength, warnings);
+            var message = await chat.PostAsync(projectId, DecodedRoom(room), authorAlias, authorRole, capped!, ct);
+            return Results.Ok(ToResponse(message) with { Warnings = SoftCapSoften.Merge(warnings) });
         }
         catch (PlanningException ex)
         {

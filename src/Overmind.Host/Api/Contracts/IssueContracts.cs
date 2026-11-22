@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Overmind.Core;
 
 namespace Overmind.Host.Api.Contracts;
@@ -47,7 +48,8 @@ public sealed record IssueAppendItem(
     Guid Id,
     Guid AuthorProjectId,
     string Text,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<object>? Warnings = null);
 
 public sealed record IssueCard(
     Guid Id,

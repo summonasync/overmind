@@ -124,13 +124,23 @@ public static class PlanningHeadingSections
         return string.Concat(body.AsSpan(0, block.Start), replacement, body.AsSpan(block.End));
     }
 
-    public static string TombstoneLine(string reason) =>
-        string.Concat(
+    public static string TombstoneLine(string reason)
+    {
+        // The marker is one line; a reason carrying a newline would bury it from every reader that
+        // recognises '<removed yyyy-MM-dd — reason>'. Doors check this before the soft cap runs (so
+        // truncation can never launder the shape away); this is the backstop shared by both doors.
+        if (reason.AsSpan().IndexOfAny('\r', '\n') >= 0)
+        {
+            throw PlanningException.RemoveReasonMultiline();
+        }
+
+        return string.Concat(
             "<removed ",
             DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             " — ",
             reason.Trim(),
             ">");
+    }
 
     private static IReadOnlyList<string> ContentLines(string content)
     {
