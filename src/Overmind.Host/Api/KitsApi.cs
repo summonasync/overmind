@@ -301,7 +301,7 @@ public static class KitsApi
         try
         {
             var report = await deployer.DeployAsync(kitId, agent, force == true, ct);
-            return Results.Ok(report);
+            return Results.Ok(KitMapper.ToResponse(report));
         }
         catch (MaterializationException ex)
         {
@@ -322,7 +322,7 @@ public static class KitsApi
         try
         {
             var report = await deployer.DematerializeAsync(kitId, agent, ct);
-            return Results.Ok(report);
+            return Results.Ok(KitMapper.ToResponse(report));
         }
         catch (MaterializationException ex)
         {
@@ -334,10 +334,16 @@ public static class KitsApi
         }
     }
 
-    private static async Task<IResult> GlobalState(HomeKitDeployer deployer, CancellationToken ct)
+    private static async Task<IResult> GlobalState(
+        HomeKitDeployer deployer,
+        IReadOnlyList<AgentHomeSpec> agentHomes,
+        CancellationToken ct)
     {
         var snapshot = await deployer.GetGlobalStateAsync(ct);
-        return Results.Ok(snapshot);
+        var names = agentHomes
+            .GroupBy(s => s.Platform)
+            .ToDictionary(g => g.Key, g => g.First().AgentName);
+        return Results.Ok(snapshot.Select(s => KitMapper.ToResponse(s, names)).ToArray());
     }
 
     private static async Task<IResult> Drift(
