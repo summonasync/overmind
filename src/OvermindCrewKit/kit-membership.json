@@ -326,6 +326,7 @@
     ".claude/skills/python-best-practices",
     ".claude/skills/python-code-reviewer",
     ".claude/skills/python-coder",
+    ".claude/skills/release-docs-sync",
     ".claude/skills/squeezr-ops",
     ".claude/skills/tutor-master",
     ".claude/skills/umbraco-sensei",
