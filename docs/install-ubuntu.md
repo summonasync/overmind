@@ -415,7 +415,7 @@ Run 2 — the direct-exec alternative (`ExecStart=%h/.local/share/overmind/run.s
 ```console
 $ systemd-analyze verify overmind-host-direct.service; echo "rc=$?"
 /etc/systemd/system/hoptodesk.service:9: PIDFile= references a path below legacy directory /var/run/, updating /var/run/hoptodesk.pid → /run/hoptodesk.pid; please update the unit file accordingly.
-overmind-host-direct.service: Command /home/johan-boolman/.local/share/overmind/run.sh is not executable: No such file or directory
+overmind-host-direct.service: Command /home/<user>/.local/share/overmind/run.sh is not executable: No such file or directory
 rc=1
 ```
 

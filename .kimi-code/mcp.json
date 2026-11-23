@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "overmind": {
-      "command": "/home/johan-boolman/apps/overmind/mcp/overmind-mcp"
+      "command": "/opt/overmind/mcp/overmind-mcp"
     }
   }
 }

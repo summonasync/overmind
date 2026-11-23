@@ -412,3 +412,7 @@ src/OvermindCrewKit/.claude/settings.local.json
 # Overmind materialized mirrors (board-owned; the board is the source of truth)
 BACKLOG/
 ENTRIES/
+
+# Internal crew artifacts (agent skill outputs, wave lanes) — kept local, never published
+audits/
+.lanes/
