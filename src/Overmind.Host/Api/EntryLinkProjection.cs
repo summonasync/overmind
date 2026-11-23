@@ -81,4 +81,62 @@ internal static class EntryLinkProjection
         EntryLinkKind.Project => "project:" + target.Key,
         _ => target.Key
     };
+
+    // The dry preview the resolve-links door serves: the same outcome walk the detail view runs, minus the
+    // persisted entry — no stored edges, no backlinks, and the self bucket answers instead of being dropped.
+    // The anchor is the entry whose content the caller is redrafting (an append); without one the proposed
+    // note does not exist yet, so nothing can be a self-reference and the bucket stays empty.
+    public static async Task<EntryResolveLinksResponse> ResolveProposedAsync(
+        EntryLinkResolver resolver,
+        EntryLinkReader links,
+        string content,
+        Guid? sourceEntryId,
+        CancellationToken ct)
+    {
+        var outcomes = await resolver.ResolveOutcomesForReadAsync(
+            sourceEntryId ?? Guid.Empty, WikiLinkParser.Parse(content), ct);
+
+        var drafts = new List<(ResolvedLink Link, string Written)>();
+        var unresolved = new List<string>();
+        var self = new List<string>();
+        var seen = new HashSet<(EntryLinkKind, Guid)>();
+
+        foreach (var outcome in outcomes)
+        {
+            if (outcome.ToId is not { } targetId)
+            {
+                unresolved.Add(Verbatim(outcome.Target));
+                continue;
+            }
+
+            if (targetId == sourceEntryId)
+            {
+                self.Add(Verbatim(outcome.Target));
+                continue;
+            }
+
+            if (seen.Add((outcome.Target.Kind, targetId)))
+            {
+                drafts.Add((new ResolvedLink(outcome.Target.Kind, targetId), outcome.Target.Key));
+            }
+        }
+
+        var labels = await links.LoadTargetLabelsAsync([.. drafts.Select(draft => draft.Link)], ct);
+
+        List<EntryOutgoingLink> resolved =
+        [
+            .. drafts.Select(draft =>
+            {
+                var label = labels.GetValueOrDefault((draft.Link.Kind, draft.Link.ToId));
+                return new EntryOutgoingLink(
+                    draft.Link.Kind,
+                    draft.Link.ToId,
+                    label?.Label ?? draft.Written,
+                    label?.Slug,
+                    label?.ProjectId);
+            })
+        ];
+
+        return new EntryResolveLinksResponse(resolved, unresolved, self);
+    }
 }

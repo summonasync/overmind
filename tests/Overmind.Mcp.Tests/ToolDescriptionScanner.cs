@@ -37,12 +37,14 @@ internal sealed record ToolMeasurement(
 
 internal static class ToolDescriptionScanner
 {
-    public const int ExpectedToolTypeCount = 19;
+    public const int ExpectedToolTypeCount = 20;
 
     private const BindingFlags ToolMethodFlags =
         BindingFlags.Public | BindingFlags.NonPublic
         | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
+    // The planning pin: the frozen planning surface. Journal-only tools must never enter this list —
+    // the planning profile is asserted byte-identical against it.
     public static readonly string[] ExpectedToolNames =
     [
         "ack_entry", "append_entry", "delete_entry", "issues_append", "issues_create", "issues_get",
@@ -64,6 +66,15 @@ internal static class ToolDescriptionScanner
         "session_identity_set", "update_entry", "wave_chat_peek", "wave_chat_post", "wave_chat_unread",
         "wave_role_set", "write_entry"
     ];
+
+    // The journal pin: the journal profile's own family.
+    public static readonly string[] ExpectedJournalToolNames =
+    [
+        "journal_append", "journal_capture", "journal_list", "journal_read", "journal_resolve_links",
+        "journal_search",
+    ];
+
+    public static string[] ExpectedUnionToolNames => [.. ExpectedToolNames, .. ExpectedJournalToolNames];
 
     public static Snapshot Scan() => Scan(typeof(WaveRoleTools).Assembly);
 

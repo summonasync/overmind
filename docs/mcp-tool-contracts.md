@@ -20,6 +20,12 @@ The `warnings[]` rows come in two shapes: soft-cap grace (`accepted_len`, `limit
 top-level field no bound request type reads is named there instead of vanishing silently;
 fields that do bind behave byte-identically, and non-accepted results leave untouched.
 
+The journal family (`journal_*`) is the journal profile's entire surface: `OVERMIND_MCP_PROFILE=journal`
+gates the registered tools client-side, and `overmind-mcp install --profile journal` writes that pin
+into a dedicated `overmind-journal` client entry so a bot started from it cannot boot the planning
+surface. All six tools ride the loopback-only host's human doors (`/api/...`, not the `/api/agent/...`
+twins) — the owner's journal is a human surface, so captures and appends land where the owner writes.
+
 ## overmind_wake_peek
 
 Wake ritual for the calling session: a side-effect-free read of the two pending-signal arms.
@@ -1344,5 +1350,53 @@ No additional prose — the tool description lost nothing.
 ## wave_role_set
 
 No additional prose — the tool description lost nothing.
+
+## journal_capture
+
+`POST /api/entries` — the same create door the web UI uses. The body type is forced to `journal`:
+a capture can never file a note, decision or gate (and `write_entry` refuses `journal` on the
+agent door symmetrically). `projectId` omitted files the entry into the reserved Journal
+container — the first capture births it — while a guid files it into that project. The title is
+validated at 500 characters (a longer one is refused); content is stored whole, no soft cap on
+the create door; tags cannot contain commas. The response echoes `{id, projectId, title,
+updatedAt, bodyChars}` plus `warnings[]` when the door attaches any. Loopback-only host, no auth.
+
+## journal_search
+
+`GET /api/search`. `mode=fulltext` (default) or `semantic` — a semantic call answers 503 with a
+fix hint when the vector store is down, fulltext keeps working. `limit` clamps to 1..100 at the
+door (default 20). `projectId` restricts hits to one project; omitted, the search runs wide.
+The tool returns the response's `hits` array verbatim, or `[]` when the payload carries none.
+Loopback-only host, no auth.
+
+## journal_read
+
+`GET /api/entries/{id}` projected to `{id, title, type, updatedAt, tags, content, outgoing,
+incoming, unresolved}` — the link rails ride along: outgoing and incoming wiki edges plus the
+unresolved `[[key]]` markers the store could not bind. An unknown id is the door's 404, surfaced
+as a tool error. Loopback-only host, no auth.
+
+## journal_list
+
+`GET /api/projects/{id}/entries`. `projectId` omitted resolves the reserved Journal container;
+explicit means that project's whole entry stream. Filters: `tag` (exact tag name), `project`
+(linked-board name), `day` (YYYY-MM-DD, that day in UTC — sent to the door as
+`since`/`until` bounds). `limit` caps the returned rows client-side; the stream itself is
+newest-first and never truncated by the tool. Loopback-only host, no auth.
+
+## journal_append
+
+`POST /api/entries/{id}/append` — the human follow-up door. `text` soft-caps at 2000 characters:
+within the grace band the whole text stores with a `warnings[]` note; past the ceiling it
+truncates and the response previews the lost tail. The echo carries `{id, title, version,
+updatedAt, bodyChars}` plus `warnings[]` — `version` is the entry's `currentVersion` after the
+append. Loopback-only host, no auth.
+
+## journal_resolve_links
+
+`POST /api/entries/resolve-links` — a read-only dry preview of what `[[wiki]]` markers would bind
+to: resolved targets, unresolved keys, and self-references (anchored by `entryId` when passed).
+Nothing is written. `content` over 2440 characters (the 2000 soft cap's grace ceiling) refuses
+with nothing resolved. Loopback-only host, no auth.
 
 <!-- region:others:end -->

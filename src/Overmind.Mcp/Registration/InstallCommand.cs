@@ -89,6 +89,9 @@ public sealed class InstallCommand
         var grimoireOperation = PlanGrimoireOperation(options);
         var grimoire = new UpsertTally();
         var runOvermindOperation = !options.RemoveGrimoire;
+        var overmindKey = options.Profile == McpProfile.Journal
+            ? ManagedServerKey.OvermindJournal
+            : ManagedServerKey.Overmind;
 
         var selection = PlanSelection(options).ToList();
         foreach (var (agent, selected) in selection)
@@ -110,9 +113,11 @@ public sealed class InstallCommand
             if (runOvermindOperation)
             {
                 var result = await InvokeEngineAsync(
-                    agent, configPath, commandPath, options.Remove, options.DryRun, ManagedServerKey.Overmind, cancellationToken);
+                    agent, configPath, commandPath, options.Remove, options.DryRun, overmindKey, cancellationToken);
                 overmind.Add(result);
-                await _output.WriteLineAsync(FormatLine(agent.Name, configPath, result, options.DryRun));
+                await _output.WriteLineAsync(FormatLine(
+                    agent.Name, configPath, result, options.DryRun,
+                    options.Profile == McpProfile.Journal ? ManagedServerKeys.Journal : null));
             }
 
             if (grimoireOperation is not null)

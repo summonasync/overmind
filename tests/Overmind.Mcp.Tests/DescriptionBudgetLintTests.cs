@@ -9,6 +9,7 @@ internal static class DescriptionBudgets
     public const int ParameterDescriptionMax = 120;
     public const int PerToolTotalMax = 800;
     public const int RepoTotalMax = 24_000;
+    public const int JournalFamilyTotalMax = 2_000;
 }
 
 public class DescriptionBudgetLintTests
@@ -24,7 +25,7 @@ public class DescriptionBudgetLintTests
             .ShouldBe(ToolDescriptionScanner.ExpectedToolTypeCount,
                 $"the scan walked {snapshot.ToolTypes.Count} [McpServerToolType] types: {string.Join(", ", snapshot.ToolTypes)}");
 
-        var frozenInventory = ToolDescriptionScanner.ExpectedToolNames
+        var frozenInventory = ToolDescriptionScanner.ExpectedUnionToolNames
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
@@ -75,7 +76,7 @@ public class DescriptionBudgetLintTests
     public void Scan_ReportsMissingAndDuplicatedToolsByName()
     {
         var scanned = ToolDescriptionScanner.Scan().Tools.Select(t => t.ToolName).ToList();
-        var frozen = ToolDescriptionScanner.ExpectedToolNames;
+        var frozen = ToolDescriptionScanner.ExpectedUnionToolNames;
 
         scanned
             .GroupBy(n => n, StringComparer.Ordinal)
@@ -85,7 +86,7 @@ public class DescriptionBudgetLintTests
             .ShouldBeEmpty("a tool name can only be issued once per adapter");
 
         scanned.Except(frozen, StringComparer.Ordinal).ToList()
-            .ShouldBeEmpty($"not in the frozen inventory of {frozen.Length} tools");
+            .ShouldBeEmpty($"not in the frozen inventory of {frozen.Length} tools (planning + journal pins)");
 
         frozen.Except(scanned, StringComparer.Ordinal).ToList()
             .ShouldBeEmpty("the scan never saw these");
@@ -98,10 +99,34 @@ public class DescriptionBudgetLintTests
         var snapshot = ToolDescriptionScanner.Scan();
 
         snapshot.Tools.Count
-            .ShouldBe(ToolDescriptionScanner.ExpectedToolNames.Length,
+            .ShouldBe(ToolDescriptionScanner.ExpectedUnionToolNames.Length,
                 "the budget report would be vacuous — the scan did not see the full tool surface; run Scan_SeesTheWholeToolSurfaceOnce first");
 
-        DescriptionDietReport.ViolatedBudgets(snapshot)
-            .ShouldBeEmpty(DescriptionDietReport.Violations(snapshot));
+        var planning = snapshot.Tools
+            .Where(t => !t.ToolName.StartsWith("journal_", StringComparison.Ordinal))
+            .ToList();
+        var journal = snapshot.Tools
+            .Where(t => t.ToolName.StartsWith("journal_", StringComparison.Ordinal))
+            .ToList();
+
+        planning.Count.ShouldBe(ToolDescriptionScanner.ExpectedToolNames.Length,
+            "the planning budget subset drifted from the frozen inventory");
+        journal.Count.ShouldBe(ToolDescriptionScanner.ExpectedJournalToolNames.Length,
+            "the journal budget subset drifted from the journal pin");
+
+        DescriptionDietReport.ViolatedBudgets(new ToolDescriptionScanner.Snapshot(planning, snapshot.ToolTypes))
+            .ShouldBeEmpty("the planning surface is frozen at its own 24000-char ceiling — " +
+                DescriptionDietReport.Violations(new ToolDescriptionScanner.Snapshot(planning, snapshot.ToolTypes)));
+
+        var journalBudgets = DescriptionDietReport
+            .ViolatedBudgets(new ToolDescriptionScanner.Snapshot(journal, snapshot.ToolTypes))
+            .Where(line => !line.StartsWith("repo total", StringComparison.Ordinal))
+            .ToList();
+        journalBudgets.ShouldBeEmpty("per-tool budgets apply to the journal family too — " +
+            string.Join(" | ", journalBudgets));
+
+        journal.Sum(t => t.TotalChars).ShouldBeLessThanOrEqualTo(DescriptionBudgets.JournalFamilyTotalMax,
+            $"the journal family grew to {journal.Sum(t => t.TotalChars)} chars — " +
+            $"the lean door is its own reason to exist (spec 238 R6); raise JournalFamilyTotalMax deliberately, with T2 in mind");
     }
 }

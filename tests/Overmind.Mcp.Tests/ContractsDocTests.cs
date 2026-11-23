@@ -17,14 +17,14 @@ public class ContractsDocTests
             .ToArray();
         duplicates.ShouldBeEmpty($"duplicated '## ' anchors in {ContractsDoc.DocSource}: {string.Join(", ", duplicates)}");
 
-        foreach (var toolName in ToolDescriptionScanner.ExpectedToolNames)
+        foreach (var toolName in ToolDescriptionScanner.ExpectedUnionToolNames)
         {
             headings.Count(head => string.Equals(head, toolName, StringComparison.Ordinal))
                 .ShouldBe(1, $"expected exactly one '## {toolName}' anchor in {ContractsDoc.DocSource}");
             ContractsDoc.Section(toolName).ShouldNotBeNullOrWhiteSpace();
         }
 
-        headings.Count.ShouldBe(ToolDescriptionScanner.ExpectedToolNames.Length,
+        headings.Count.ShouldBe(ToolDescriptionScanner.ExpectedUnionToolNames.Length,
             $"{ContractsDoc.DocSource} carries anchors for tools the frozen roster does not list");
     }
 

@@ -11,6 +11,7 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
     private const string ServersTableName = "mcp_servers";
     private const string CommandKey = "command";
     private const string ArgsKey = "args";
+    private const string EnvKey = "env";
 
     private readonly ConfigBackupTracker _backupTracker;
 
@@ -152,6 +153,21 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
 
     private static TomlTable BuildDesiredEntry(ManagedServerKey key, string commandPath)
     {
+        if (key == ManagedServerKey.OvermindJournal)
+        {
+            var env = new TomlTable();
+            foreach (var (name, value) in ManagedServerKeys.JournalEnvironment)
+            {
+                env[name] = value;
+            }
+
+            return new TomlTable
+            {
+                [CommandKey] = commandPath,
+                [EnvKey] = env,
+            };
+        }
+
         if (key == ManagedServerKey.Overmind)
         {
             return new TomlTable { [CommandKey] = commandPath };
@@ -172,7 +188,11 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
 
     private static bool MatchesDesiredEntry(TomlTable existing, ManagedServerKey key, string commandPath)
     {
-        var desired = BuildDesiredEntry(key, commandPath);
+        return MatchesTable(existing, BuildDesiredEntry(key, commandPath));
+    }
+
+    private static bool MatchesTable(TomlTable existing, TomlTable desired)
+    {
         if (existing.Count != desired.Count)
         {
             return false;
@@ -183,6 +203,16 @@ public sealed class TomlConfigUpsertEngine : IConfigUpsertEngine
             if (!existing.TryGetValue(pair.Key, out var value))
             {
                 return false;
+            }
+
+            if (pair.Value is TomlTable desiredTable)
+            {
+                if (value is not TomlTable nested || !MatchesTable(nested, desiredTable))
+                {
+                    return false;
+                }
+
+                continue;
             }
 
             if (pair.Value is TomlArray desiredArgs)

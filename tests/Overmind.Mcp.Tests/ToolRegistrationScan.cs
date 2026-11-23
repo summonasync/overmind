@@ -4,7 +4,7 @@ namespace Overmind.Mcp.Tests;
 
 internal static class ToolRegistrationScan
 {
-    private const string ProgramSource = "src/Overmind.Mcp/Program.cs";
+    private const string ProgramSource = "src/Overmind.Mcp/McpProfileRegistration.cs";
     private const string RegistrationMarker = ".WithTools<";
 
     public static IReadOnlyList<string> RegisteredToolTypeNames()
