@@ -10,7 +10,7 @@ import {
   JournalStream,
   NoteView,
   journalServerFilters,
-  selectJournalDay,
+  sortByActivityDesc,
   useJournalContainer,
   useJournalFilters,
   useJournalLinkAccents,
@@ -30,10 +30,7 @@ function JournalStreamBranch({ containerId }: { containerId: string }) {
   const server = useMemo(() => journalServerFilters(filters), [filters]);
   const stream = useJournalStream(containerId, server);
   const tagColors = useTagColorMap();
-  const notes = useMemo(
-    () => selectJournalDay(stream.data, filters.day),
-    [filters.day, stream.data],
-  );
+  const notes = useMemo(() => sortByActivityDesc(stream.data), [stream.data]);
   const accents = useJournalLinkAccents(containerId, server, stream.data);
   const mutations = useJournalMutations(containerId);
   const [deletingId, setDeletingId] = useState<string | null>(null);

@@ -15,7 +15,13 @@ import type { JournalServerFilters } from "@/features/journal/types";
 // The notes arm is the inbox's own stream query under the inbox's own key: arriving from the
 // list costs one cache hit, and the beat that keeps the stream honest also makes a note an
 // agent captured a moment ago linkable without a reload.
-const NO_SERVER_FILTERS: JournalServerFilters = { tag: "", link: "", project: "" };
+const NO_SERVER_FILTERS: JournalServerFilters = {
+  tag: "",
+  link: "",
+  project: "",
+  activitySince: "",
+  activityUntil: "",
+};
 
 export interface LinkCandidates {
   candidates: CandidateSet;

@@ -21,7 +21,14 @@ export const JOURNAL_FILTER_KEYS = ["day", "tag", "link", "project"] as const;
 const DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function journalServerFilters(filters: JournalStreamFilters): JournalServerFilters {
-  return { tag: filters.tag, link: filters.link, project: filters.project };
+  const window = journalActivityWindow(filters.day);
+  return {
+    tag: filters.tag,
+    link: filters.link,
+    project: filters.project,
+    activitySince: window?.since ?? "",
+    activityUntil: window?.until ?? "",
+  };
 }
 
 export function isJournalFilterActive(filters: JournalStreamFilters): boolean {
@@ -90,6 +97,33 @@ export function localDayOf(instant: string): string | null {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+export interface JournalActivityWindow {
+  since: string;
+  until: string;
+}
+
+// The wire form of a selected day: the UTC instants of the LOCAL calendar day's boundaries,
+// sent as the list endpoint's activitySince/activityUntil pair (both bound to UpdatedAt).
+// The window is built from the day string through the Date constructor rather than by adding
+// 24 hours to the start instant — on a DST day the day is 23 or 25 wall hours long, and the
+// platform knows which; the server owns no timezone logic, so the honest boundary is the
+// browser's job. Null for "" (no day selected, the server's default window applies) and for
+// a day readDay would have rejected anyway, in case a caller skips the URL parse.
+export function journalActivityWindow(day: string): JournalActivityWindow | null {
+  if (!DAY_SHAPE.test(day)) {
+    return null;
+  }
+  const [year, month, dayOfMonth] = day.split("-").map(Number);
+  const start = new Date(year, month - 1, dayOfMonth);
+  if (start.getMonth() !== month - 1 || start.getDate() !== dayOfMonth) {
+    return null;
+  }
+  return {
+    since: start.toISOString(),
+    until: new Date(year, month - 1, dayOfMonth + 1).toISOString(),
+  };
+}
+
 export function formatJournalStamp(instant: string): string {
   const at = parseInstant(instant);
   if (at === null) {
@@ -113,12 +147,9 @@ export function sortByActivityDesc<T extends ActivityStamped>(notes: readonly T[
   });
 }
 
-export function selectJournalDay<T extends ActivityStamped>(
-  notes: readonly T[],
-  day: string,
-): T[] {
-  if (day.length === 0) {
-    return sortByActivityDesc(notes);
-  }
-  return sortByActivityDesc(notes.filter((note) => localDayOf(note.updatedAt) === day));
-}
+// <removed 2026-11-23 — 249 T2: the client-side day cut. selectJournalDay filtered fetched
+// rows by localDayOf(note.updatedAt) === day, correct only while the list endpoint was
+// unbounded; any pagination or cap past that point would have turned the cut into silent
+// data loss (the day renders empty while its notes sit on a later page). The day now rides
+// the wire as journalActivityWindow's activitySince/activityUntil pair and the server owns
+// the cut. localDayOf stays the single day-key; sortByActivityDesc keeps the reading order.>

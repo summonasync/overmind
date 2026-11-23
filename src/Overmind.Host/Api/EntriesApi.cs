@@ -48,6 +48,18 @@ public static class EntriesApi
         return group;
     }
 
+    // The journal stream and its linked-cohort accent poll this endpoint every live-sync beat, so an
+    // unfiltered read is an unbounded one. The bound is a rolling UpdatedAt floor rather than a cap:
+    // a cap without pagination hides rows past the cut, while a window still answers every recent
+    // note. An explicit activitySince replaces the floor — enumerating history opts into the cost it
+    // names.
+    //
+    // Timezone contract: activitySince/activityUntil bind UpdatedAt as UTC instants. The browser
+    // computes its LOCAL calendar day and sends the day's UTC boundaries; the server stores UTC
+    // instants and owns no timezone logic, so DST transitions are the client's honest job. The 30-day
+    // default floor is the one boundary derived from the server's clock, by definition.
+    private static readonly TimeSpan DefaultActivityWindow = TimeSpan.FromDays(30);
+
     private static async Task<IResult> ListByProject(
         Guid projectId,
         string? type,
@@ -56,6 +68,8 @@ public static class EntriesApi
         DateTime? since,
         DateTime? until,
         string? author,
+        DateTime? activitySince,
+        DateTime? activityUntil,
         string? q,
         string? link,
         string? project,
@@ -88,6 +102,8 @@ public static class EntriesApi
             return projectFailure;
         }
 
+        var activityFrom = activitySince ?? DateTime.UtcNow - DefaultActivityWindow;
+
         if (!string.IsNullOrWhiteSpace(q))
         {
             var hits = await search.SearchAsync(projectId, q, 100, ct);
@@ -107,7 +123,7 @@ public static class EntriesApi
                 .Where(e => type is null || (Enum.TryParse<EntryType>(type, ignoreCase: true, out var parsed) && e.Type == parsed))
                 .Where(e => stateFilter == EntryStateFilter.All || e.State == stateFilter)
                 .Where(e => tag is null || e.EntryTags.Any(t => string.Equals(t.Tag.Name, tag, StringComparison.OrdinalIgnoreCase)))
-                .Where(e => EntryQueryFilters.Matches(e, since, until, author))
+                .Where(e => EntryQueryFilters.Matches(e, since, until, author, activityFrom, activityUntil))
                 .OrderByDescending(e => e.UpdatedAt)
                 .Select(EntryMapper.ToResponse)
                 .ToArray();
@@ -138,7 +154,7 @@ public static class EntriesApi
             query = query.Where(e => e.EntryTags.Any(t => t.Tag.Name == tag));
         }
 
-        query = EntryQueryFilters.Apply(query, since, until, author);
+        query = EntryQueryFilters.Apply(query, since, until, author, activityFrom, activityUntil);
         query = EntryStreamFilter.Apply(query, triage, linked, projectFilter);
 
         var listed = await query
