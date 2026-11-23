@@ -1,4 +1,4 @@
-// The URL is the inbox's only state: reading these four params back must reproduce the
+// The URL is the inbox's only state: reading these five params back must reproduce the
 // same list, so the grammar lives here, away from the components, where node --test can
 // reach it. Deep relative import with a spelled-out extension is deliberate — the test
 // runner loads this module without the bundler's `@/` alias map.
@@ -14,9 +14,10 @@ export const EMPTY_JOURNAL_FILTERS: JournalStreamFilters = {
   tag: "",
   link: "",
   project: "",
+  q: "",
 };
 
-export const JOURNAL_FILTER_KEYS = ["day", "tag", "link", "project"] as const;
+export const JOURNAL_FILTER_KEYS = ["day", "tag", "link", "project", "q"] as const;
 
 const DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -26,6 +27,7 @@ export function journalServerFilters(filters: JournalStreamFilters): JournalServ
     tag: filters.tag,
     link: filters.link,
     project: filters.project,
+    q: filters.q,
     activitySince: window?.since ?? "",
     activityUntil: window?.until ?? "",
   };
@@ -62,6 +64,7 @@ export function parseJournalFilters(source: URLSearchParams | null): JournalStre
     tag: source?.get("tag")?.trim() ?? "",
     link: readLink(source?.get("link") ?? null),
     project: source?.get("project")?.trim() ?? "",
+    q: source?.get("q")?.trim() ?? "",
   };
 }
 

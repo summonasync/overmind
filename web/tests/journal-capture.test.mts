@@ -136,7 +136,7 @@ test("the shortcut glyph follows the platform", () => {
     save: "⌘↵",
   });
   assert.deepEqual(formatCaptureShortcut("Mozilla/5.0 (X11; Linux x86_64)"), {
-    open: "⌃⇧Space",
-    save: "Ctrl+↵",
+    open: "Ctrl+Shift+Space",
+    save: "Ctrl+Enter",
   });
 });

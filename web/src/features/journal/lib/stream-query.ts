@@ -23,6 +23,13 @@ export function journalStreamParams(filters: JournalServerFilters): URLSearchPar
   if (project.length > 0) {
     params.set("project", project);
   }
+  // The search draft goes out as the list endpoint's q — the Host runs it through FTS and
+  // intersects the hits with every other filter, so a searched stream is still a filtered
+  // stream, not a separate result page.
+  const q = filters.q.trim();
+  if (q.length > 0) {
+    params.set("q", q);
+  }
   // The day filter's wire form: UTC instants bound to UpdatedAt on the Host. Absent pair
   // means no day selected, and the Host's own default window takes over.
   if (filters.activitySince.length > 0) {

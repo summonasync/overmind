@@ -12,6 +12,7 @@ import {
   journalLinkedCohortQueryOptions,
   journalNoteQueryOptions,
   journalStreamQueryOptions,
+  journalTagCountsQueryOptions,
   pickJournalContainerId,
 } from "@/features/journal/queries";
 import type {
@@ -44,6 +45,17 @@ export function useJournalStream(projectId: string, filters: JournalServerFilter
     loading: query.isPending && projectId.length > 0,
     error: query.error,
     refetch: query.refetch,
+  };
+}
+
+// Rail numbers live on the same live-sync cadence as the stream: a tag added through the
+// editor must not leave the rail counting a world the list no longer shows.
+export function useJournalTagCounts(projectId: string) {
+  const query = useQuery(journalTagCountsQueryOptions(projectId));
+  return {
+    counts: query.data ?? [],
+    loading: query.isPending && projectId.length > 0,
+    error: query.error,
   };
 }
 

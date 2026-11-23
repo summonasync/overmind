@@ -90,6 +90,75 @@ public sealed class TagApiTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task GetCounts_CountsLivingJournalNotesPerTagForTheProject()
+    {
+        await CreateEntryWithTags("alpha", "gamma");
+        await CreateJournalEntryWithTags("alpha", "beta");
+        var lifted = await CreateJournalEntryWithTags("beta", "delta");
+
+        var lift = await _client.PostAsJsonAsync($"/api/entries/{lifted}/lift", new { Reason = "counts test lift" });
+        lift.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var counts = await _client.GetFromJsonAsync<List<TagCountJson>>(
+            $"/api/tags/counts?projectId={_projectId}",
+            JsonOptions);
+
+        counts.ShouldNotBeNull();
+        // alpha lives on one active journal note; beta on the same note plus the lifted one
+        // that no longer counts; gamma on a Note entry the journal definition ignores; delta
+        // only on the lifted note, so its count dropped to zero.
+        counts.Single(c => c.Name == "alpha").Count.ShouldBe(1);
+        counts.Single(c => c.Name == "beta").Count.ShouldBe(1);
+        counts.Single(c => c.Name == "gamma").Count.ShouldBe(0);
+        counts.Single(c => c.Name == "delta").Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task GetCounts_SameTagInTwoProjects_CountsOnlyTheScopedProject()
+    {
+        var secondProject = CreateProject("tags-counts-second");
+        await CreateJournalEntryWithTags("shared");
+        await CreateJournalEntryIn(secondProject, "shared");
+
+        var scoped = await _client.GetFromJsonAsync<List<TagCountJson>>(
+            $"/api/tags/counts?projectId={_projectId}",
+            JsonOptions);
+        var away = await _client.GetFromJsonAsync<List<TagCountJson>>(
+            $"/api/tags/counts?projectId={secondProject}",
+            JsonOptions);
+
+        scoped!.Single(c => c.Name == "shared").Count.ShouldBe(1);
+        away!.Single(c => c.Name == "shared").Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task GetCounts_UnknownProject_ReturnsNotFound()
+    {
+        var response = await _client.GetAsync($"/api/tags/counts?projectId={Guid.NewGuid()}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private async Task<Guid> CreateJournalEntryWithTags(params string[] tags) =>
+        await CreateJournalEntryIn(_projectId, tags);
+
+    private async Task<Guid> CreateJournalEntryIn(Guid projectId, params string[] tags)
+    {
+        var response = await _client.PostAsJsonAsync("/api/entries", new
+        {
+            ProjectId = projectId,
+            Type = "Journal",
+            Title = "journal seed",
+            Content = "journal seed content",
+            Tags = tags,
+            SkillFiles = (object[]?)null,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<CreatedEntryJson>(JsonOptions);
+        return created!.Id;
+    }
+
     private async Task CreateEntryWithTags(params string[] tags)
     {
         var response = await _client.PostAsJsonAsync("/api/entries", new
@@ -128,5 +197,9 @@ public sealed class TagApiTests : IDisposable
 
     public sealed record ProjectJson(Guid Id);
 
+    public sealed record CreatedEntryJson(Guid Id);
+
     public sealed record TagJson(Guid Id, string Name, string? Color);
+
+    public sealed record TagCountJson(Guid TagId, string Name, int Count);
 }

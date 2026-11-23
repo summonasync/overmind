@@ -19,6 +19,7 @@ const NO_SERVER_FILTERS: JournalServerFilters = {
   tag: "",
   link: "",
   project: "",
+  q: "",
   activitySince: "",
   activityUntil: "",
 };

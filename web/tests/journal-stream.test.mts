@@ -16,15 +16,18 @@ import { journalStreamParams } from "../src/features/journal/lib/stream-query.ts
 
 const qs = (search: string) => new URLSearchParams(search);
 
-test("all four inbox filters are read off the URL", () => {
+test("all five inbox filters are read off the URL", () => {
   const filters = parseJournalFilters(
-    qs("?day=2026-11-17&tag=overmind&link=unlinked&project=ff313f29-8144-488c-94e6-5ea5dde57bfd"),
+    qs(
+      "?day=2026-11-17&tag=overmind&link=unlinked&project=ff313f29-8144-488c-94e6-5ea5dde57bfd&q=gachi",
+    ),
   );
   assert.deepEqual(filters, {
     day: "2026-11-17",
     tag: "overmind",
     link: "unlinked",
     project: "ff313f29-8144-488c-94e6-5ea5dde57bfd",
+    q: "gachi",
   });
 });
 
@@ -92,6 +95,7 @@ test("link and project ride the request the stream makes", () => {
     tag: "overmind",
     link: "linked",
     project: "ff313f29-8144-488c-94e6-5ea5dde57bfd",
+    q: "",
     activitySince: "",
     activityUntil: "",
   }).toString();
@@ -101,11 +105,36 @@ test("link and project ride the request the stream makes", () => {
   );
 });
 
+// The search draft is a server input like any other: FTS on the Host, hits intersected
+// with the rest of the filters — so it rides the same request, not a separate endpoint.
+test("the search draft rides the request as q", () => {
+  const query = journalStreamParams({
+    tag: "",
+    link: "",
+    project: "",
+    q: "  gachi  ",
+    activitySince: "",
+    activityUntil: "",
+  }).toString();
+  assert.equal(query, "type=journal&state=active&q=gachi");
+
+  const bare = journalStreamParams({
+    tag: "",
+    link: "",
+    project: "",
+    q: "",
+    activitySince: "",
+    activityUntil: "",
+  }).toString();
+  assert.equal(bare, "type=journal&state=active");
+});
+
 test("an unset filter is absent from the request, not sent empty", () => {
   const query = journalStreamParams({
     tag: "",
     link: "",
     project: "",
+    q: "",
     activitySince: "",
     activityUntil: "",
   }).toString();
@@ -131,6 +160,7 @@ test("the accent cohort is the page request with link forced and nothing else ch
       tag: "overmind",
       link: "linked",
       project: "p9",
+      q: page.q,
       activitySince: page.activitySince,
       activityUntil: page.activityUntil,
     }).toString(),

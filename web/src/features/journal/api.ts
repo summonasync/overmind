@@ -10,6 +10,7 @@ import type {
   JournalNoteFormValues,
   JournalServerFilters,
   NotePromotionResult,
+  TagCount,
 } from "@/features/journal/types";
 import type { PromotionRequest } from "@/features/journal/lib/note-promotion";
 
@@ -18,6 +19,10 @@ export function listJournalNotes(
   filters: JournalServerFilters,
 ): Promise<JournalNote[]> {
   return apiGet<JournalNote[]>(journalStreamPath(projectId, filters));
+}
+
+export function listJournalTagCounts(projectId: string): Promise<TagCount[]> {
+  return apiGet<TagCount[]>(`/tags/counts?projectId=${encodeURIComponent(projectId)}`);
 }
 
 export function getJournalNote(id: string): Promise<JournalNote> {

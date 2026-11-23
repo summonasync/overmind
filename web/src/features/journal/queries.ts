@@ -1,5 +1,10 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
-import { getJournalGraph, getJournalNote, listJournalNotes } from "@/features/journal/api";
+import {
+  getJournalGraph,
+  getJournalNote,
+  listJournalNotes,
+  listJournalTagCounts,
+} from "@/features/journal/api";
 import type { GraphViewFilters, JournalServerFilters } from "@/features/journal/types";
 import type { ProjectResponse } from "@/features/projects";
 import { LIVE_SYNC_INTERVAL_MS } from "@/shared/lib/live-sync";
@@ -25,12 +30,21 @@ export const journalKeys = {
   // whole shelf, which costs a refetch only for what is mounted. Task 8's rail-keeping fix;
   // see features/journal/components/note-view.tsx.
   detailsRoot: () => [...journalKeys.all, "detail"] as const,
+  counts: (projectId: string) => [...journalKeys.all, "counts", projectId] as const,
 };
 
 export const journalStreamQueryOptions = (projectId: string, filters: JournalServerFilters) =>
   queryOptions({
     queryKey: journalKeys.list(projectId, filters),
     queryFn: () => listJournalNotes(projectId, filters),
+    enabled: projectId.length > 0,
+    refetchInterval: LIVE_SYNC_INTERVAL_MS,
+  });
+
+export const journalTagCountsQueryOptions = (projectId: string) =>
+  queryOptions({
+    queryKey: journalKeys.counts(projectId),
+    queryFn: () => listJournalTagCounts(projectId),
     enabled: projectId.length > 0,
     refetchInterval: LIVE_SYNC_INTERVAL_MS,
   });

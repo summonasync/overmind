@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import background from "@/shared/assets/brand/background.png";
-import { CaptureOverlay, useCaptureHotkeys } from "@/features/journal";
+import { CaptureOpenProvider, CaptureOverlay, useCaptureHotkeys } from "@/features/journal";
 import { InfoPanelProvider } from "@/widgets/app-shell/lib/info-panel-context";
 import { AgentChatBubble } from "@/widgets/agent-chat-bubble";
 import { ApprovalBubble } from "@/widgets/app-shell/ui/approval-bubble";
@@ -42,35 +42,37 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <InfoPanelProvider>
-      <div className="min-h-screen bg-background text-foreground">
-        <img
-          src={background.src}
-          alt=""
-          aria-hidden
-          className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-[0.07]"
-        />
-        <div className="relative z-10 flex min-h-screen flex-col">
-          <AppTopbar />
-          <MobileNav />
-          <DegradedBanner />
-          <div className="flex flex-1">
-            <Suspense fallback={null}>
-              <ProjectsRailMount />
-            </Suspense>
-            <main className="min-w-0 flex-1 p-4 lg:p-6">
-              <ProjectTabs />
-              {children}
-            </main>
-            <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />
+      <CaptureOpenProvider onOpen={openCapture}>
+        <div className="min-h-screen bg-background text-foreground">
+          <img
+            src={background.src}
+            alt=""
+            aria-hidden
+            className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-[0.07]"
+          />
+          <div className="relative z-10 flex min-h-screen flex-col">
+            <AppTopbar />
+            <MobileNav />
+            <DegradedBanner />
+            <div className="flex flex-1">
+              <Suspense fallback={null}>
+                <ProjectsRailMount />
+              </Suspense>
+              <main className="min-w-0 flex-1 p-4 lg:p-6">
+                <ProjectTabs />
+                {children}
+              </main>
+              <InfoPanel collapsed={panelCollapsed} onToggle={togglePanel} />
+            </div>
           </div>
+          <Suspense fallback={null}>
+            <ApprovalBubble />
+          </Suspense>
+          <AttentionSurfaces />
+          <AgentChatBubble />
+          <CaptureOverlay open={captureOpen} onClose={closeCapture} />
         </div>
-        <Suspense fallback={null}>
-          <ApprovalBubble />
-        </Suspense>
-        <AttentionSurfaces />
-        <AgentChatBubble />
-        <CaptureOverlay open={captureOpen} onClose={closeCapture} />
-      </div>
+      </CaptureOpenProvider>
     </InfoPanelProvider>
   );
 }
