@@ -130,7 +130,7 @@ export function CaptureOverlay({ open, onClose }: CaptureOverlayProps) {
     <>
       <Modal title="Capture a thought" open={open} onClose={onClose} size="xl">
         <form ref={formRef} onSubmit={handleSubmit} className="flex h-full flex-col gap-3" aria-describedby={toast ? "journal-capture-status" : undefined}>
-          <Field label="Thought" htmlFor="journal-capture-body">
+          <Field label="Thought" htmlFor="journal-capture-body" fill>
             <Textarea
               id="journal-capture-body"
               autoFocus
