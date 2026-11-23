@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
@@ -9,36 +9,19 @@ import { useProjectList } from "@/features/projects";
 import { isJournalFilterActive } from "@/features/journal/lib/stream-filters";
 import type { JournalLinkFilter, JournalStreamFilters } from "@/features/journal/types";
 
-interface FilterGroupProps {
-  id: string;
-  label: string;
-  children: ReactNode;
-}
-
-function FilterGroup({ id, label, children }: FilterGroupProps) {
-  return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="block text-xs font-medium text-muted">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
 const TRIAGE_OPTIONS: { value: JournalLinkFilter; label: string }[] = [
   { value: "", label: "Everything" },
   { value: "unlinked", label: "Unsorted" },
   { value: "linked", label: "Linked" },
 ];
 
-interface JournalFiltersProps {
+interface JournalToolbarProps {
   filters: JournalStreamFilters;
   onChange: (patch: Partial<JournalStreamFilters>) => void;
   onClear: () => void;
 }
 
-export function JournalFilters({ filters, onChange, onClear }: JournalFiltersProps) {
+export function JournalToolbar({ filters, onChange, onClear }: JournalToolbarProps) {
   const tags = useTagList();
   const projects = useProjectList();
   const tagNames = tags.data.map((tag) => tag.name).sort((a, b) => a.localeCompare(b));
@@ -54,21 +37,61 @@ export function JournalFilters({ filters, onChange, onClear }: JournalFiltersPro
     options.unshift({ id: filters.project, name: filters.project });
   }
 
+  // Every keystroke is a server round-trip (FTS) and a URL replace, so the draft waits for
+  // 300ms of quiet before it becomes the query. An external q change (URL navigation, Clear)
+  // replaces the draft outright — the render-phase guard below is React's endorsed recipe for
+  // that, not a mirrored copy of the prop. The comparison runs against the trimmed draft:
+  // the commit sends the trim, so the input's own echo must not read as an external change
+  // and wipe a trailing space mid-word.
+  const [draft, setDraft] = useState(filters.q);
+  const [lastExternalQ, setLastExternalQ] = useState(filters.q);
+  if (filters.q !== lastExternalQ) {
+    setLastExternalQ(filters.q);
+    if (filters.q !== draft.trim()) {
+      setDraft(filters.q);
+    }
+  }
+
+  useEffect(() => {
+    if (draft === filters.q) {
+      return;
+    }
+    const timer = setTimeout(() => onChange({ q: draft.trim() }), 300);
+    return () => clearTimeout(timer);
+  }, [draft, filters.q, onChange]);
+
   return (
-    <aside className="w-[200px] shrink-0 space-y-4">
-      <FilterGroup id="journal-filter-day" label="Day">
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="w-64">
+        <label htmlFor="journal-search" className="mb-1 block text-xs font-medium text-muted">
+          Search
+        </label>
+        <Input
+          id="journal-search"
+          type="search"
+          placeholder="Title or content…"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      </div>
+      <div className="w-[150px]">
+        <label htmlFor="journal-filter-day" className="mb-1 block text-xs font-medium text-muted">
+          Day
+        </label>
         <Input
           id="journal-filter-day"
           type="date"
           value={filters.day}
           onChange={(event) => onChange({ day: event.target.value })}
         />
-      </FilterGroup>
-
-      <FilterGroup id="journal-filter-triage" label="Triage">
+      </div>
+      <div className="w-[130px]">
+        <label htmlFor="journal-filter-triage" className="mb-1 block text-xs font-medium text-muted">
+          Triage
+        </label>
         <Select
           id="journal-filter-triage"
-          size="sm"
+          className="w-full"
           value={filters.link}
           onChange={(event) => onChange({ link: event.target.value as JournalLinkFilter })}
         >
@@ -78,12 +101,14 @@ export function JournalFilters({ filters, onChange, onClear }: JournalFiltersPro
             </option>
           ))}
         </Select>
-      </FilterGroup>
-
-      <FilterGroup id="journal-filter-project" label="Linked project">
+      </div>
+      <div className="w-[200px]">
+        <label htmlFor="journal-filter-project" className="mb-1 block text-xs font-medium text-muted">
+          Linked project
+        </label>
         <Select
           id="journal-filter-project"
-          size="sm"
+          className="w-full"
           value={filters.project}
           onChange={(event) => onChange({ project: event.target.value })}
         >
@@ -94,12 +119,14 @@ export function JournalFilters({ filters, onChange, onClear }: JournalFiltersPro
             </option>
           ))}
         </Select>
-      </FilterGroup>
-
-      <FilterGroup id="journal-filter-tag" label="Tag">
+      </div>
+      <div className="w-[170px]">
+        <label htmlFor="journal-filter-tag" className="mb-1 block text-xs font-medium text-muted">
+          Tag
+        </label>
         <Select
           id="journal-filter-tag"
-          size="sm"
+          className="w-full"
           value={filters.tag}
           onChange={(event) => onChange({ tag: event.target.value })}
         >
@@ -110,13 +137,12 @@ export function JournalFilters({ filters, onChange, onClear }: JournalFiltersPro
             </option>
           ))}
         </Select>
-      </FilterGroup>
-
+      </div>
       {isJournalFilterActive(filters) ? (
-        <Button size="xs" variant="ghost" onClick={onClear}>
+        <Button size="md" variant="ghost" onClick={onClear}>
           Clear filters
         </Button>
       ) : null}
-    </aside>
+    </div>
   );
 }

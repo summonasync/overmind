@@ -60,9 +60,10 @@ export interface JournalNoteFormValues {
 
 // The URL grammar of the inbox, one field per parameter, "" meaning unset.
 //
-// `tag`, `link` and `project` ride the list query and the Host answers them itself —
-// `link` and `project` through EntryStreamFilter over EntryLinkTriage. `day` rides it
-// too, in its wire form: journalServerFilters turns the day's local-midnight boundaries
+// `tag`, `link`, `project` and `q` ride the list query and the Host answers them itself —
+// `link` and `project` through EntryStreamFilter over EntryLinkTriage, `q` through the
+// endpoint's FTS branch (hits intersected with every other filter server-side). `day` rides
+// it too, in its wire form: journalServerFilters turns the day's local-midnight boundaries
 // into the UTC activitySince/activityUntil pair the endpoint binds to UpdatedAt
 // (EntryQueryFilters.Apply) — the server owns the day cut, the browser drops no row.
 // lib/stream-filters.ts holds the grammar and the conversion.
@@ -71,6 +72,7 @@ export interface JournalStreamFilters {
   tag: string;
   link: JournalLinkFilter;
   project: string;
+  q: string;
 }
 
 // Exactly the vocabulary the server validates; anything else answers 400 UnknownLinkFilter.
@@ -90,8 +92,17 @@ export interface JournalServerFilters {
   tag: string;
   link: JournalLinkFilter;
   project: string;
+  q: string;
   activitySince: string;
   activityUntil: string;
+}
+
+// One rail row of /tags/counts: how many living journal notes in the container carry the
+// tag — the number clicking that row produces as the stream's length.
+export interface TagCount {
+  tagId: string;
+  name: string;
+  count: number;
 }
 
 // ── The graph field ────────────────────────────────────────────────────────────────────

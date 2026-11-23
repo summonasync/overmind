@@ -2,13 +2,15 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/shared/ui/button";
 import { ErrorText } from "@/shared/ui/error-text";
 import { LoadingState } from "@/shared/ui/loading-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import {
-  JournalFilters,
   JournalStream,
+  JournalToolbar,
   NoteView,
+  TagRail,
   journalServerFilters,
   sortByActivityDesc,
   useJournalContainer,
@@ -16,6 +18,7 @@ import {
   useJournalLinkAccents,
   useJournalMutations,
   useJournalStream,
+  useOpenCapture,
   useTagColorMap,
 } from "@/features/journal";
 import type { JournalNote } from "@/features/journal";
@@ -47,15 +50,21 @@ function JournalStreamBranch({ containerId }: { containerId: string }) {
   };
 
   return (
-    <div className="flex items-start gap-6">
-      <JournalFilters filters={filters} onChange={setFilter} onClear={clear} />
-      <div className="min-w-0 max-w-3xl flex-1 space-y-2">
+    <div className="flex items-start gap-4">
+      <TagRail
+        containerId={containerId}
+        tagColors={tagColors}
+        activeTag={filters.tag}
+        onSelect={(tag) => setFilter({ tag })}
+      />
+      <div className="min-w-0 flex-1 space-y-3">
         {accents.cohortFailed ? (
           <p className="text-xs text-warning" role="status">
             The server could not say which notes are linked, so the colour coding is off
             for now. The list below is still the real one.
           </p>
         ) : null}
+        <JournalToolbar filters={filters} onChange={setFilter} onClear={clear} />
         <JournalStream
           notes={notes}
           loading={stream.loading}
@@ -74,6 +83,7 @@ function JournalStreamBranch({ containerId }: { containerId: string }) {
 }
 
 function JournalPageContent() {
+  const openCapture = useOpenCapture();
   const searchParams = useSearchParams();
   const noteId = searchParams?.get("note") ?? "";
   const { containerId, loading: containerLoading, error: containerError } = useJournalContainer();
@@ -104,7 +114,15 @@ function JournalPageContent() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Journal" description="Your notes, links and days." />
+      <PageHeader
+        title="Journal"
+        description="Your notes, links and days."
+        actions={
+          <Button size="sm" onClick={openCapture}>
+            New note
+          </Button>
+        }
+      />
       <JournalStreamBranch containerId={containerId} />
     </div>
   );

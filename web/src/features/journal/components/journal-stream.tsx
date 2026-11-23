@@ -5,6 +5,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorText } from "@/shared/ui/error-text";
 import { JournalCard } from "@/features/journal/components/journal-card";
 import { formatCaptureShortcut } from "@/features/journal/lib/capture";
+import { useOpenCapture } from "@/features/journal/lib/capture-open-context";
 import type { JournalLinkAccent, JournalNote } from "@/features/journal/types";
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4];
@@ -58,6 +59,7 @@ export function JournalStream({
   onOpen,
   onDelete,
 }: JournalStreamProps) {
+  const openCapture = useOpenCapture();
   // The degraded leg of passport §7 — Qdrant down, warning tint, sleeping zerling at 64px,
   // dismissible, list stays usable — is already rendered for every route by
   // widgets/degraded-banner, which the root layout puts around this page. It is not
@@ -85,11 +87,21 @@ export function JournalStream({
       <EmptyState
         title="Nothing in the journal yet"
         hint={`Throw a thought down — ${shortcut.open} from anywhere. The first one opens the Journal shelf.`}
+        action={
+          <Button size="sm" onClick={openCapture}>
+            New note
+          </Button>
+        }
       />
     ) : (
       <EmptyState
         title="No note matches these filters"
         hint={`Widen the window, or capture anyway — ${shortcut.open} works from here too.`}
+        action={
+          <Button size="sm" onClick={openCapture}>
+            New note
+          </Button>
+        }
       />
     );
   }

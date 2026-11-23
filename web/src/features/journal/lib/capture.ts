@@ -81,5 +81,5 @@ export function isQuickCaptureKey(event: CaptureKeyProbe, pathname: string): boo
 
 export function formatCaptureShortcut(userAgent: string): { open: string; save: string } {
   const apple = /Mac|iPhone|iPad|iPod/.test(userAgent);
-  return apple ? { open: "⌘⇧Space", save: "⌘↵" } : { open: "⌃⇧Space", save: "Ctrl+↵" };
+  return apple ? { open: "⌘⇧Space", save: "⌘↵" } : { open: "Ctrl+Shift+Space", save: "Ctrl+Enter" };
 }

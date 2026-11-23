@@ -6,9 +6,10 @@
 
 export { CaptureOverlay } from "./components/capture-overlay";
 export { JournalCard } from "./components/journal-card";
-export { JournalFilters } from "./components/journal-filters";
 export { JournalStream } from "./components/journal-stream";
+export { JournalToolbar } from "./components/journal-toolbar";
 export { NoteView } from "./components/note-view";
+export { TagRail } from "./components/tag-rail";
 export {
   EMPTY_JOURNAL_FILTERS,
   JOURNAL_FILTER_KEYS,
@@ -21,6 +22,7 @@ export {
   sortByActivityDesc,
   writeJournalFilters,
 } from "./lib/stream-filters";
+export { CaptureOpenProvider, useOpenCapture } from "./lib/capture-open-context";
 export { useCaptureHotkeys } from "./lib/use-capture-hotkeys";
 export type { JournalActivityWindow } from "./lib/stream-filters";
 export { useJournalFilters } from "./lib/use-journal-filters";
