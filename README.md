@@ -16,8 +16,8 @@
 **The board each project thinks on.**  
 *The circle you draw around one summoning.*
 
-`await SummonAsync();` — part of the summoner's kit  
-**▸ overmind** · grimoire · squeezr · mindlash studio
+`await SummonAsync();` — part of the summoner's kit
+overmind · **▸ overmind** · grimoire · squeezr · synchro · summonasync studio
 
 ---
 
@@ -253,25 +253,26 @@ The ready installer — `overmind-<version>-setup.exe` (Inno Setup), built by
 
 ## Status
 
-Alpha. The MVP is shipped (`001-overmind-mvp`, 9 tasks: HTTP API, skill
-kits with materialization, FTS + optional semantics, the MCP adapter, the
-web UI, the tray host), with `004-projects-tree-view` and
-`005-tree-workspace` on top. `006-planning` is in flight — the feature →
-spec → plan → task → result ceremony as a first-class entity (3 of 11
-tasks done: domain, schema, the human door API). Next: `002-kit-library`,
-then `003-bundled-installer`. The live slice is the planning board (web UI
-or MCP); `BACKLOG/` is the materialized mirror of the contracts.
+v1.9.0, in active daily use by its author. What started as an MVP — context
+store, kit materialization, the MCP adapter — is now an agent operations
+console: 260+ shipped features on the internal board. Beyond the basics:
 
-The latest wave (`137`) shipped parallel-wave coordination — lane rosters,
-claim-time lane checks, a one-call wave snapshot, the directive channel and
-entry read-acks — bringing the MCP surface to 55 tools.
-
-Token-cost attribution is landing slice by slice: `POST /api/usage` ingests
-token records and `GET /api/usage/summary` rolls them up per feature through
-claim spans and per agent. Dollars are computed at read time from the pricing
-table in `GET/PUT /api/settings/usage-pricing` — the defaults cover the Claude
-rows (opus/sonnet/haiku, 2026 prices) and the table is meant to be edited for
-any other model you run.
+- **Planning ceremony** — feature → spec → plan → tasks → results as
+  first-class DB entities with validation gates, repo materialization
+  (on/off/archive) and import of an existing `BACKLOG/` tree.
+- **Parallel waves** — lane rosters, claim-time collision checks, one-call
+  wave snapshots, a cross-agent directive channel.
+- **Wave chat** — rooms where agents post signals and @mention each other,
+  plus a Telegram bridge: talk to the swarm from the phone, notification
+  replies act as proofs.
+- **Agent chat** — an embedded agent in the web UI (SSE streaming, approval
+  gates), every token attributed to the feature it worked on.
+- **Memory** — optional Grimoire companion for personal/relational memory,
+  two-tome routing, self-compaction.
+- **Journal** — the project's event journal as a queryable graph with MCP
+  access.
+- **Installers** — Windows (Inno Setup, per-user) and Linux (portable
+  tarball + autostart). macOS runs from source today.
 
 ## Token usage attribution
 
@@ -335,32 +336,24 @@ that spend to the feature the session was claiming. The pieces:
 
 ## Roadmap
 
-| Prio | Scope | Status |
-|------|-------|--------|
-| v1 (MVP) | Multi-project context store, notes/decisions/gates/guards/skills, FTS + optional semantics, tray + web UI, stdio MCP adapter, kit materialization into projects | ✅ shipped (`001`) |
-| Projects tree | Sidebar tree of real folders, register-in-place, user roots + active project | ✅ shipped (`004`, `005`) |
-| Planning ceremony | feature → spec → plan → task → result in the DB, agent door + MCP surface, web editor, repo materialization (off/on/archive), import of an existing `BACKLOG/` | 🔄 in work (`006`, 3/11) |
-| Kit library | Import kits from a local folder or a git reference (private repos included, credentials preserved) | ⬜ planned (`002`) |
-| Installer | win/mac installer with curated kits bundled, rides the `002` import pipeline | 🔒 blocked (`003`) |
-| P1 | Kit materialization into an external folder + an agent launcher (`claude --add-dir`, `kimi --skills-dir`) | ⬜ deferred |
-| P2 | Runtime skill delivery over MCP (`get_skill`, `overmind://skills/`, a bootstrap skill) | ⬜ deferred |
-| P2/P3 | Agent initialization flow, project onboarding | ⬜ deferred |
+| Horizon | Scope |
+|---------|-------|
+| Now | Journal graph scale tiers; fullscreen capture UX for the agent chat |
+| Next | Routing 2.0 for the embedded agent (vector-assisted, telemetry-driven); clean-environment verification for global kit materialization |
+| Later | Telegram wave-bridge polish after real-life dogfooding; macOS packaging |
 
 ## Repository layout
 
 ```
-BACKLOG/nnn-slug/             one folder per feature
-  feature.md                  what and why
-  spec.md                     validated design decisions and requirements (frozen)
-  plan.md                     validated implementation plan (frozen)
-  tasks/NN-slug.md            execution contract per task
 CONTEXT.md                    system design: components, communication rules, AI framework
 STRUCTURE.md                  layout + architecture rules + code conventions (read before writing code)
 TECHNICAL-SOLUTIONS.md        ADRs: what was chosen over what, and why
-audits/                       skill-produced reports, named <skill>-*.md
+build/                        packaging: pack.sh / install.sh / run.sh (unix), Inno Setup channel (windows)
 design/                       brand and sprite sources
+docs/                         platform install guides, agent connection, MCP tool contracts
+scripts/                      helper scripts (usage stop hook, tooling)
 src/Overmind.Core/            domain: entities, enums, abstractions — zero dependencies
-src/Overmind.Infrastructure/  EF Core (SQLite + FTS5), vector search (Qdrant), embeddings, materialization, planning services
+src/Overmind.Infrastructure/  EF Core (SQLite + FTS5), vector search (Qdrant), embeddings, materialization, planning services, wave chat, telegram bridge, grimoire integration
 src/Overmind.Host/            composition root: loopback Kestrel, minimal APIs, tray, SPA hosting
 src/Overmind.Mcp/             stdio MCP adapter — no project references, talks HTTP to the Host
 tests/                        mirrors src: Core / Infrastructure / Api / Mcp tests
@@ -374,7 +367,7 @@ Apache-2.0 — see [LICENSE](LICENSE). SPDX identifier: `Apache-2.0`.
 ---
 
 *summonasync — one dev, a swarm of agents, nothing leaves the machine.*  
-overmind · grimoire · squeezr · mindlash studio
+overmind · grimoire · squeezr · synchro · summonasync studio
 
 Everything here runs on your machine: the database lives in `~/.overmind`,
 the HTTP face binds loopback only. If it does not — that is a bug, file it.
