@@ -253,7 +253,7 @@ The ready installer — `overmind-<version>-setup.exe` (Inno Setup), built by
 
 ## Status
 
-v1.9.0, in active daily use by its author. What started as an MVP — context
+v1.9.5, in active daily use by its author. What started as an MVP — context
 store, kit materialization, the MCP adapter — is now an agent operations
 console: 260+ shipped features on the internal board. Beyond the basics:
 
@@ -270,7 +270,9 @@ console: 260+ shipped features on the internal board. Beyond the basics:
 - **Memory** — optional Grimoire companion for personal/relational memory,
   two-tome routing, self-compaction.
 - **Journal** — the project's event journal as a queryable graph with MCP
-  access.
+  access, and a human inbox over it: fullscreen quick capture (drafts
+  survive a crash), FTS search, a tag rail with live counts — plus
+  attention cards that let you answer agent questions inline.
 - **Installers** — Windows (Inno Setup, per-user) and Linux (portable
   tarball + autostart). macOS runs from source today.
 
