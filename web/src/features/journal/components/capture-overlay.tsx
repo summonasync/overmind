@@ -128,13 +128,13 @@ export function CaptureOverlay({ open, onClose }: CaptureOverlayProps) {
 
   return (
     <>
-      <Modal title="Capture a thought" open={open} onClose={onClose}>
-        <form ref={formRef} onSubmit={handleSubmit} className="space-y-3" aria-describedby={toast ? "journal-capture-status" : undefined}>
+      <Modal title="Capture a thought" open={open} onClose={onClose} size="xl">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex h-full flex-col gap-3" aria-describedby={toast ? "journal-capture-status" : undefined}>
           <Field label="Thought" htmlFor="journal-capture-body">
             <Textarea
               id="journal-capture-body"
               autoFocus
-              rows={5}
+              className="min-h-0 flex-1 resize-none"
               value={body}
               onChange={(event) => {
                 setBody(event.target.value);
@@ -151,8 +151,8 @@ export function CaptureOverlay({ open, onClose }: CaptureOverlayProps) {
             />
           </Field>
           <p id="journal-capture-hint" className="text-xs text-muted">
-            {shortcut.save} saves and clears the field, the overlay stays open for the next thought. Text you abandon
-            waits for {shortcut.open} on this tab.
+            {shortcut.save} saves and clears the field, the overlay stays open for the next thought. Esc or Cancel drops
+            you out — text you abandon waits for {shortcut.open} on this tab.
           </p>
           <Field label="Title (optional)" htmlFor="journal-capture-title">
             <Input
@@ -172,6 +172,9 @@ export function CaptureOverlay({ open, onClose }: CaptureOverlayProps) {
                 Retry
               </Button>
             ) : null}
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={saveDisabled}>
               {create.isPending ? "Saving…" : "Save"}
             </Button>
