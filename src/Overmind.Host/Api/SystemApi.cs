@@ -2,12 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using Overmind.Host.Api.Contracts;
 using Overmind.Infrastructure.Configuration;
 using Overmind.Infrastructure.Persistence;
+using System.Text;
 
 namespace Overmind.Host.Api;
 
 public static class SystemApi
 {
     private const int MaxDirectoryEntries = 500;
+
+    private static readonly string[] RealFilesystemTypes =
+    [
+        "ext2", "ext3", "ext4", "btrfs", "bcachefs", "xfs", "zfs", "f2fs",
+        "ntfs", "ntfs3", "vfat", "exfat", "udf", "fuseblk",
+    ];
 
     public static RouteGroupBuilder MapSystemApi(this IEndpointRouteBuilder routes)
     {
@@ -154,6 +161,13 @@ public static class SystemApi
                 AddBrowseRoot(roots, volume, "volume");
             }
         }
+        else if (OperatingSystem.IsLinux())
+        {
+            foreach (var volume in ListLinuxVolumes())
+            {
+                AddBrowseRoot(roots, volume, "volume");
+            }
+        }
     }
 
     private static string GetDriveLabel(DriveInfo drive) =>
@@ -169,6 +183,65 @@ public static class SystemApi
         {
             return [];
         }
+    }
+
+    private static IReadOnlyList<string> ListLinuxVolumes()
+    {
+        try
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var volumes = new List<string>();
+            foreach (var line in File.ReadLines("/proc/mounts"))
+            {
+                var fields = line.Split(' ');
+                if (fields.Length < 3 || !fields[1].StartsWith('/') || !RealFilesystemTypes.Contains(fields[2]))
+                {
+                    continue;
+                }
+
+                var mountPoint = UnescapeMountPath(fields[1]);
+                if (seen.Add(mountPoint))
+                {
+                    volumes.Add(mountPoint);
+                }
+            }
+
+            return volumes;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private static string UnescapeMountPath(string raw)
+    {
+        var decoded = new StringBuilder(raw.Length);
+        for (var i = 0; i < raw.Length;)
+        {
+            var decodedChar = raw[i] == '\\' && i + 4 <= raw.Length
+                ? raw.Substring(i + 1, 3) switch
+                {
+                    "040" => ' ',
+                    "011" => '\t',
+                    "012" => '\n',
+                    "134" => '\\',
+                    _ => null,
+                }
+                : null;
+
+            if (decodedChar is { } ch)
+            {
+                decoded.Append(ch);
+                i += 4;
+            }
+            else
+            {
+                decoded.Append(raw[i++]);
+            }
+        }
+
+        return decoded.ToString();
     }
 
     private static void AddBrowseRoot(List<BrowseRootEntry> roots, string path, string kind, string? name = null)
