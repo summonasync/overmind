@@ -17,8 +17,9 @@ export function addTreeRoot(path: string): Promise<TreeRootsResponse> {
   return apiPost<TreeRootsResponse>("/system/tree-roots", { path });
 }
 
-export function removeTreeRoot(path: string): Promise<TreeRootsResponse> {
-  return apiDelete<TreeRootsResponse>(`/system/tree-roots?path=${encodeURIComponent(path)}`);
+export function removeTreeRoot(path: string, force = false): Promise<TreeRootsResponse> {
+  const forceParam = force ? "&force=true" : "";
+  return apiDelete<TreeRootsResponse>(`/system/tree-roots?path=${encodeURIComponent(path)}${forceParam}`);
 }
 
 export function listDirectory(path: string): Promise<ListDirectoryResponse> {

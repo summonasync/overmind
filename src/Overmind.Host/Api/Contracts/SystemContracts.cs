@@ -1,6 +1,6 @@
 namespace Overmind.Host.Api.Contracts;
 
-public sealed record TreeRootResponse(string Name, string Path, bool ContainsProjects);
+public sealed record TreeRootResponse(string Name, string Path, bool ContainsProjects, IReadOnlyList<string> ProjectNames);
 
 public sealed record TreeRootsResponse(TreeRootResponse[] Roots);
 

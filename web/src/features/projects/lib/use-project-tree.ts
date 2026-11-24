@@ -32,7 +32,7 @@ export function useAddTreeRoot() {
 export function useRemoveTreeRoot() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: removeTreeRoot,
+    mutationFn: ({ path, force }: { path: string; force?: boolean }) => removeTreeRoot(path, force),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKeys.tree("roots") }),
   });
 }
