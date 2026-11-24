@@ -92,7 +92,8 @@ public static class SystemRootsApi
         string? path,
         AppSettingsService settings,
         OvermindDbContext db,
-        CancellationToken ct)
+        bool force = false,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -118,12 +119,20 @@ public static class SystemRootsApi
             return HttpErrors.NotFound($"'{normalized}' is not a root folder.");
         }
 
-        var projectPaths = await GetProjectPathsAsync(db, ct);
-        if (projectPaths.Any(p => IsSameOrUnder(p, roots[index], comparison)))
+        if (!force)
         {
-            return HttpErrors.Conflict(
-                $"'{roots[index]}' contains registered projects and cannot be removed.",
-                title: "RootContainsProjects");
+            var projects = await GetProjectLocationsAsync(db, ct);
+            var contained = projects
+                .Where(p => IsSameOrUnder(p.Path, roots[index], comparison))
+                .Select(p => p.Name)
+                .ToList();
+            if (contained.Count > 0)
+            {
+                var names = string.Join(", ", contained);
+                return HttpErrors.Conflict(
+                    $"'{roots[index]}' contains registered projects ({names}) and cannot be removed. Repeat the request with force=true to remove it anyway.",
+                    title: "RootContainsProjects");
+            }
         }
 
         roots.RemoveAt(index);
@@ -138,13 +147,20 @@ public static class SystemRootsApi
         CancellationToken ct)
     {
         var comparison = PathComparison;
-        var projectPaths = await GetProjectPathsAsync(db, ct);
+        var projects = await GetProjectLocationsAsync(db, ct);
 
         return new TreeRootsResponse(roots.Select(root =>
         {
             var name = Path.GetFileName(root);
-            var containsProjects = projectPaths.Any(p => IsSameOrUnder(p, root, comparison));
-            return new TreeRootResponse(string.IsNullOrEmpty(name) ? root : name, root, containsProjects);
+            var projectNames = projects
+                .Where(p => IsSameOrUnder(p.Path, root, comparison))
+                .Select(p => p.Name)
+                .ToArray();
+            return new TreeRootResponse(
+                string.IsNullOrEmpty(name) ? root : name,
+                root,
+                projectNames.Length > 0,
+                projectNames);
         }).ToArray());
     }
 
@@ -156,11 +172,11 @@ public static class SystemRootsApi
             : JsonSerializer.Deserialize<List<string>>(raw, JsonOptions) ?? [];
     }
 
-    private static async Task<List<string>> GetProjectPathsAsync(OvermindDbContext db, CancellationToken ct)
+    private static async Task<List<(string Name, string Path)>> GetProjectLocationsAsync(OvermindDbContext db, CancellationToken ct)
     {
         var projects = await db.Projects.AsNoTracking().ToListAsync(ct);
         return projects
-            .Select(p => SystemApi.NormalizePath(p.DiskPath))
+            .Select(p => (p.Name, SystemApi.NormalizePath(p.DiskPath)))
             .ToList();
     }
 

@@ -52,6 +52,7 @@ public sealed class SystemApiTests : IDisposable
         roots.Roots[0].Path.ShouldBe(Normalize(_sandboxDir));
         roots.Roots[0].Name.ShouldBe(new DirectoryInfo(_sandboxDir).Name);
         roots.Roots[0].ContainsProjects.ShouldBeFalse();
+        roots.Roots[0].ProjectNames.ShouldBeEmpty();
     }
 
     [Fact]
@@ -168,9 +169,47 @@ public sealed class SystemApiTests : IDisposable
         var problem = await response.Content.ReadFromJsonAsync<ProblemJson>(JsonOptions);
         problem.ShouldNotBeNull();
         problem!.Title.ShouldBe("RootContainsProjects");
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("root-guard");
+        problem.Detail.ShouldContain("force=true");
 
         var roots = await GetRootsAsync(_client);
         roots.Roots.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task TreeRoots_DeleteRootWithProjects_ForceTrue_RemovesRoot()
+    {
+        var projectDir = Path.Combine(_sandboxDir, "registered");
+        Directory.CreateDirectory(projectDir);
+        await CreateProjectAsync("root-guard", projectDir);
+        await AddRootAsync(_sandboxDir);
+
+        var response = await _client.DeleteAsync(
+            $"/api/system/tree-roots?path={Uri.EscapeDataString(_sandboxDir)}&force=true");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var roots = await response.Content.ReadFromJsonAsync<TreeRootsJson>(JsonOptions);
+        roots.ShouldNotBeNull();
+        roots!.Roots.ShouldBeEmpty();
+
+        var remaining = await GetRootsAsync(_client);
+        remaining.Roots.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task TreeRoots_ResponseListsProjectNamesNestedUnderRoot()
+    {
+        var nestedDir = Path.Combine(_sandboxDir, "nested");
+        Directory.CreateDirectory(nestedDir);
+        await CreateProjectAsync("deep-project", nestedDir);
+        await AddRootAsync(_sandboxDir);
+
+        var roots = await GetRootsAsync(_client);
+
+        var root = roots.Roots.Single(r => r.Path == Normalize(_sandboxDir));
+        root.ContainsProjects.ShouldBeTrue();
+        root.ProjectNames.ShouldBe(["deep-project"]);
     }
 
     [Fact]
@@ -486,7 +525,7 @@ public sealed class SystemApiTests : IDisposable
 
     public sealed record TreeRootsJson(TreeRootJson[] Roots);
 
-    public sealed record TreeRootJson(string Name, string Path, bool ContainsProjects);
+    public sealed record TreeRootJson(string Name, string Path, bool ContainsProjects, string[] ProjectNames);
 
     public sealed record ProblemJson(string? Title, string? Detail);
 

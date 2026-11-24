@@ -45,6 +45,7 @@ export interface TreeRoot {
   name: string;
   path: string;
   containsProjects: boolean;
+  projectNames: string[];
 }
 
 export interface TreeRootsResponse {

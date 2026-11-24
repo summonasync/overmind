@@ -201,25 +201,12 @@ function RootRemoveButton({ root }: { root: TreeRoot }) {
   const removeRoot = useRemoveTreeRoot();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (root.containsProjects) {
-    return (
-      <button
-        type="button"
-        disabled
-        aria-label={`${root.name} contains registered projects`}
-        title="Contains registered projects"
-        className="shrink-0 rounded p-0.5 opacity-40"
-      >
-        <X size={13} aria-hidden />
-      </button>
-    );
-  }
+  const hasProjects = root.containsProjects && root.projectNames.length > 0;
 
   const handleConfirm = async () => {
     setError(null);
     try {
-      await removeRoot.mutateAsync(root.path);
+      await removeRoot.mutateAsync({ path: root.path, force: hasProjects });
       setConfirming(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove root folder.");
@@ -249,6 +236,19 @@ function RootRemoveButton({ root }: { root: TreeRoot }) {
           Remove <span className="font-medium">{root.name}</span> from the tree?
         </p>
         <p className="mt-1 break-all text-xs text-muted">{root.path}</p>
+        {hasProjects ? (
+          <div className="mt-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs">
+            <p className="text-foreground">This root contains registered projects:</p>
+            <ul className="mt-1 list-disc pl-4 text-warning">
+              {root.projectNames.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+            <p className="mt-1 text-muted">
+              Removing the root only removes it from the tree. The projects themselves are not deleted and stay on the board.
+            </p>
+          </div>
+        ) : null}
         {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setConfirming(false)}>
