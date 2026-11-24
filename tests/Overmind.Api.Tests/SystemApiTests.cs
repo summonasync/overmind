@@ -219,6 +219,19 @@ public sealed class SystemApiTests : IDisposable
     }
 
     [Fact]
+    public async Task BrowseRoots_OnLinux_IncludesMountedRealFilesystems()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var roots = await GetBrowseRootsAsync(_client);
+
+        roots.Roots.ShouldContain(r => r.Kind == "volume" && r.Path.StartsWith('/'));
+    }
+
+    [Fact]
     public async Task BrowseRoots_ReflectsConfiguredTreeRoots()
     {
         await AddRootAsync(_sandboxDir);
