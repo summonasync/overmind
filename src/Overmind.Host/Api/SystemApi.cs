@@ -219,7 +219,7 @@ public static class SystemApi
         var decoded = new StringBuilder(raw.Length);
         for (var i = 0; i < raw.Length;)
         {
-            var decodedChar = raw[i] == '\\' && i + 4 <= raw.Length
+            char? decodedChar = raw[i] == '\\' && i + 4 <= raw.Length
                 ? raw.Substring(i + 1, 3) switch
                 {
                     "040" => ' ',
