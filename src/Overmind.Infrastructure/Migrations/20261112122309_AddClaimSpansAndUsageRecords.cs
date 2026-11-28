@@ -97,8 +97,8 @@ namespace Overmind.Infrastructure.Migrations
                 """
                 INSERT INTO "FeatureClaimSpans"
                     ("Id", "ProjectId", "FeatureId", "Alias", "Vendor", "SessionId", "ClaimedAt", "ReleasedAt", "ByHuman")
-                SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' ||
-                       lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))),
+                SELECT upper(hex(randomblob(4))) || '-' || upper(hex(randomblob(2))) || '-' || upper(hex(randomblob(2))) || '-' ||
+                       upper(hex(randomblob(2))) || '-' || upper(hex(randomblob(6))),
                        "ProjectId", "Id", "ClaimedByAlias", "ClaimedByVendor", "ClaimSessionId",
                        COALESCE("ClaimedAt", strftime('%Y-%m-%d %H:%M:%f', 'now')),
                        NULL,
